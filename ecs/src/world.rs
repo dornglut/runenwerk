@@ -1,67 +1,96 @@
+// src/world.rs
+use std::any::TypeId;
 use std::collections::HashMap;
-use crate::archetype::Archetype;
-use crate::component::Component;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Entity(pub usize);
+use crate::{ComponentTable, ComponentTableTrait, Entity, Fk, Pk};
 
 pub struct World {
-    next_entity: usize,
-    pub archetypes: Vec<Archetype>,
-    pub entity_archetype: HashMap<Entity, usize>,
+    tables: HashMap<TypeId, Box<dyn ComponentTableTrait>>,
+    next_fk: Fk, // internal FK allocator
 }
 
 impl World {
     pub fn new() -> Self {
         Self {
-            next_entity: 0,
-            archetypes: Vec::new(),
-            entity_archetype: HashMap::new(),
+            tables: HashMap::new(),
+            next_fk: 0,
         }
     }
 
-    pub fn spawn(&mut self) -> Entity {
-        let entity = Entity(self.next_entity);
-        self.next_entity += 1;
-
-        let index = self.archetypes.iter().position(|a| a.entities.is_empty())
-          .unwrap_or_else(|| {
-              self.archetypes.push(Archetype::new());
-              self.archetypes.len() - 1
-          });
-
-        self.archetypes[index].entities.push(entity);
-        self.entity_archetype.insert(entity, index);
-        entity
+    /// Spawn a new entity, returning its FK
+    pub fn spawn_entity(&mut self) -> Entity {
+        let e = Entity { id: self.next_fk };
+        self.next_fk += 1;
+        e
     }
 
-    pub fn add_component<T: Component + 'static>(&mut self, entity: Entity, component: T) {
-        let index = *self.entity_archetype.get(&entity).expect("Entity not found");
-        let archetype = &mut self.archetypes[index];
+    /// Add a new table for a component type
+    pub fn add_table<T: 'static>(&mut self) {
+        let type_id = TypeId::of::<T>();
+        if self.tables.contains_key(&type_id) {
+            panic!("Table for this component type already exists");
+        }
+        self.tables.insert(type_id, Box::new(ComponentTable::<T>::new()));
+    }
 
-        if !archetype.has_component::<T>() {
-            archetype.add_component_vec::<T>(vec![component]);
+    /// Add a component row to a table for a given entity
+    pub fn add_component<T: 'static>(&mut self, entity: Entity, data: T) -> Pk {
+        // Get or create the table automatically
+        let table = self.tables
+          .entry(TypeId::of::<T>())
+          .or_insert_with(|| Box::new(ComponentTable::<T>::new()))
+          .as_any_mut()
+          .downcast_mut::<ComponentTable<T>>()
+          .expect("Failed to downcast table");
+
+        table.add(entity.id, data)
+    }
+
+    /// Get mutable access to a table
+    pub fn get_table_mut<T: 'static>(&mut self) -> Option<&mut ComponentTable<T>> {
+        let type_id = TypeId::of::<T>();
+        self.tables.get_mut(&type_id)
+          .and_then(|tbl| tbl.as_any_mut().downcast_mut::<ComponentTable<T>>())
+    }
+
+    /// Get immutable access to a table
+    pub fn get_table<T: 'static>(&self) -> Option<&ComponentTable<T>> {
+        let type_id = TypeId::of::<T>();
+        self.tables.get(&type_id)
+          .and_then(|tbl| tbl.as_any().downcast_ref::<ComponentTable<T>>())
+    }
+
+    /// Returns all component rows of type T
+    pub fn query<T: 'static>(&self) -> Vec<&crate::ComponentRow<T>> {
+        if let Some(table) = self.get_table::<T>() {
+            table.rows.iter().collect()
         } else {
-            archetype.get_component_vec_mut::<T>().unwrap().push(component);
+            Vec::new()
         }
     }
 
-    pub fn query_mut2<T: Component, U: Component>(&mut self) -> Vec<(Entity, &mut T, &U)> {
-        let mut results = Vec::new();
-
-        for archetype in &mut self.archetypes {
-            // split borrow: mutable for T, immutable for U
-            let entities = &archetype.entities;
-            let t_vec_opt = archetype.get_component_vec_mut::<T>();
-            let u_vec_opt = archetype.get_component_vec::<U>();
-
-            if let (Some(t_vec), Some(u_vec)) = (t_vec_opt, u_vec_opt) {
-                for i in 0..t_vec.len() {
-                    results.push((entities[i], &mut t_vec[i], &u_vec[i]));
-                }
-            }
+    /// Returns all component rows of type T for a specific entity
+    pub fn query_entity<T: 'static>(&self, entity: Entity) -> Vec<&crate::ComponentRow<T>> {
+        if let Some(table) = self.get_table::<T>() {
+            table.get_by_fk(entity.id).unwrap_or_default()
+        } else {
+            Vec::new()
         }
-
-        results
     }
+}
+
+/// Spawns a new entity in the world and attaches any number of components
+#[macro_export]
+macro_rules! spawn_entity {
+    ($world:expr, $($comp:expr),+ $(,)?) => {{
+        // create the entity
+        let e = $world.spawn_entity();
+
+        // add all components
+        $(
+            $world.add_component(e, $comp);
+        )+
+
+        // return the entity
+        e
+    }};
 }
