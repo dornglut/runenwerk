@@ -1,43 +1,59 @@
 // main.rs
-use ecs::{query3, spawn_entity, World};
+use ecs::{AIState, BehaviorFn, Chunk, ChunkBuilder};
 
-#[derive(Debug)]
-struct Position { x: f32, y: f32 }
+// src/main.rs
+use std::sync::Arc;
+use glam::Vec3;
 
-#[derive(Debug)]
-struct Velocity { dx: f32, dy: f32 }
+// Example behavior functions
+fn player_input(chunk: &mut Chunk, i: usize, dt: f32) {
+	if let Some(input) = chunk.input[i] {
+		chunk.velocities[i] += input * dt * 5.0;
+	}
+}
 
-#[derive(Debug)]
-struct Health { value: f32 }
+fn enemy_ai(chunk: &mut Chunk, i: usize, dt: f32) {
+	if let Some(ai) = &mut chunk.ai_state[i] {
+		let target_pos = chunk.positions[ai.target_idx];
+		let dir = (target_pos - chunk.positions[i]).normalize();
+		chunk.velocities[i] = dir * dt * 2.0; // simple chase
+		ai.cooldown -= dt;
+	}
+}
 
 fn main() {
-	let mut world = World::new();
+	let mut world = Chunk::new();
 
-	// spawn entities directly via the world
-	let e1 = spawn_entity!(
-		world,
-		Position { x: 0.0, y: 0.0 },
-		Velocity { dx: 0.0, dy: 0.0 },
-		Health { value: 100.0 },
-	);
+	// Shared pipelines
+	let player_pipeline: Arc<Vec<BehaviorFn>> = Arc::new(vec![player_input]);
+	let enemy_pipeline: Arc<Vec<BehaviorFn>> = Arc::new(vec![enemy_ai]);
 
-	let e2 = spawn_entity!(
-		world,
-		Position { x: 5.0, y: 10.0 },
-		Velocity { dx: 4.0, dy: 2.0 },
-		Health { value: 29.0 },
-	);
+	// Spawn player at the center
+	let player_idx = ChunkBuilder::new(&mut world)
+		.position(Vec3::new(50.0, 50.0, 0.0))
+		.pipeline(player_pipeline.clone())
+		.input(Vec3::new(1.0, 0.0, 0.0)) // example input vector
+		.build();
 
-	let e3 = spawn_entity!(
-		world,
-		Position { x: 12.0, y: 4.0 },
-		Velocity { dx: 9.0, dy: 8.0 },
-		Health { value: 80.0 },
-	);
+	// Spawn 5 enemies around the player
+	for i in 0..5 {
+		ChunkBuilder::new(&mut world)
+			.position(Vec3::new(50.0 + i as f32 * 5.0, 60.0, 0.0))
+			.pipeline(enemy_pipeline.clone())
+			.ai_state(AIState { target_idx: player_idx, cooldown: 0.0 })
+			.build();
+	}
 
-	let results = query3::<Position, Velocity, Health>(&world);
+	// Run update loop for 10 frames
+	let dt = 0.2; // ~60 FPS
+	for frame in 0..10 {
+		world.update(dt);
 
-	for (entity, (pos, vel, health)) in results {
-		println!("{:?} {:?} {:?} {:?}", entity, pos, vel, health);
+		// Print positions after this frame
+		println!("Frame {}:", frame + 1);
+		println!("  Player position: {:?}", world.positions[player_idx]);
+		for i in 1..=5 {
+			println!("  Enemy {} position: {:?}", i, world.positions[i]);
+		}
 	}
 }

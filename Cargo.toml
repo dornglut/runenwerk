@@ -2,5 +2,5 @@
 resolver = "3"
 members = [
   "game",
-  "ecs",
+  "ecs", "ecs_macros",
 ]
