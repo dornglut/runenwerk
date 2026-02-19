@@ -1,11 +1,18 @@
 
 mod utils;
-mod chunk;
+mod archetype;
+mod entity;
+mod component_storage;
+mod world;
 mod entity_builder;
-mod resource_registry;
-mod storage;
+mod query;
 
 pub use utils::*;
-pub use chunk::*;
+pub use archetype::*;
+pub use component_storage::*;
+pub use entity::*;
+pub use world::*;
+pub use query::*;
 pub use entity_builder::*;
-pub use storage::*;
+
+

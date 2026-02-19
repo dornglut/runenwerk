@@ -1,59 +1,95 @@
-// main.rs
-use ecs::{AIState, BehaviorFn, Chunk, ChunkBuilder};
-
-// src/main.rs
-use std::sync::Arc;
+use ecs::*;
 use glam::Vec3;
+use tracing::{info, debug};
 
-// Example behavior functions
-fn player_input(chunk: &mut Chunk, i: usize, dt: f32) {
-	if let Some(input) = chunk.input[i] {
-		chunk.velocities[i] += input * dt * 5.0;
-	}
-}
+#[derive(Debug)]
+struct Position(Vec3);
 
-fn enemy_ai(chunk: &mut Chunk, i: usize, dt: f32) {
-	if let Some(ai) = &mut chunk.ai_state[i] {
-		let target_pos = chunk.positions[ai.target_idx];
-		let dir = (target_pos - chunk.positions[i]).normalize();
-		chunk.velocities[i] = dir * dt * 2.0; // simple chase
-		ai.cooldown -= dt;
-	}
-}
+#[derive(Debug)]
+struct Velocity(Vec3);
 
 fn main() {
-	let mut world = Chunk::new();
+	init_tracing();
 
-	// Shared pipelines
-	let player_pipeline: Arc<Vec<BehaviorFn>> = Arc::new(vec![player_input]);
-	let enemy_pipeline: Arc<Vec<BehaviorFn>> = Arc::new(vec![enemy_ai]);
+	// 1️⃣ Create world
+	let mut world = World::new();
 
-	// Spawn player at the center
-	let player_idx = ChunkBuilder::new(&mut world)
-		.position(Vec3::new(50.0, 50.0, 0.0))
-		.pipeline(player_pipeline.clone())
-		.input(Vec3::new(1.0, 0.0, 0.0)) // example input vector
+	// 2️⃣ Register component types
+	world.register_component::<Position>();
+	world.register_component::<Velocity>();
+
+	// 3️⃣ Spawn initial entities manually
+	let e1 = world
+		.entity()
+		.with(Position(Vec3::new(0.0, 0.0, 0.0)))
+		.with(Velocity(Vec3::new(1.0, 0.0, 0.0)))
 		.build();
 
-	// Spawn 5 enemies around the player
-	for i in 0..5 {
-		ChunkBuilder::new(&mut world)
-			.position(Vec3::new(50.0 + i as f32 * 5.0, 60.0, 0.0))
-			.pipeline(enemy_pipeline.clone())
-			.ai_state(AIState { target_idx: player_idx, cooldown: 0.0 })
-			.build();
+	let e2 = world
+		.entity()
+		.with(Position(Vec3::new(10.0, 5.0, 0.0)))
+		.with(Velocity(Vec3::new(0.0, -1.0, 0.0)))
+		.build();
+
+	info!("Created initial entities: {:?}, {:?}", e1, e2);
+
+	// 4️⃣ Query before any updates
+	info!("=== Initial ECS state ===");
+	for (entity, (pos, vel)) in world.query()
+		.with::<Position>()
+		.with::<Velocity>()
+		.iter()
+	{
+		info!("Entity {:?}: Position={:?}, Velocity={:?}", entity, pos, vel);
 	}
 
-	// Run update loop for 10 frames
-	let dt = 0.2; // ~60 FPS
-	for frame in 0..10 {
-		world.update(dt);
+	world.spawn_many(5, |builder| {
+		builder
+			.with(Position(Vec3::new(
+				rand::random::<f32>() * 10.0,
+				rand::random::<f32>() * 10.0,
+				0.0,
+			)))
+			.with(Velocity(Vec3::new(
+				rand::random::<f32>() - 0.5,
+				rand::random::<f32>() - 0.5,
+				0.0,
+			)))
+	});
 
-		// Print positions after this frame
-		println!("Frame {}:", frame + 1);
-		println!("  Player position: {:?}", world.positions[player_idx]);
-		for i in 1..=5 {
-			println!("  Enemy {} position: {:?}", i, world.positions[i]);
-		}
+
+	// 6️⃣ Query after spawning
+	info!("=== After spawn_many ===");
+	for (entity, (pos, vel)) in world.query()
+		.with::<Position>()
+		.with::<Velocity>()
+		.iter()
+	{
+		info!("Entity {:?}: Position={:?}, Velocity={:?}", entity, pos, vel);
+	}
+
+	// 7️⃣ Remove a component
+	if let Some(removed_velocity) = world.remove_component::<Velocity>(e1) {
+		info!(?e1, ?removed_velocity, "Removed Velocity component");
+	}
+
+	// 8️⃣ Query after removal
+	info!("=== After removing Velocity from e1 ===");
+	for (entity, (pos, vel)) in world.query()
+		.with::<Position>()
+		.with::<Velocity>()
+		.iter()
+	{
+		info!("Entity {:?}: Position={:?}, Velocity={:?}", entity, pos, vel);
+	}
+
+	// 9️⃣ Final query
+	info!("=== Final ECS state ===");
+	for (entity, (pos, vel)) in world.query()
+		.with::<Position>()
+		.with::<Velocity>()
+		.iter()
+	{
+		info!("Entity {:?}: Position={:?}, Velocity={:?}", entity, pos, vel);
 	}
 }
