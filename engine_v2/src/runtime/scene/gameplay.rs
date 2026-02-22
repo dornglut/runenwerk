@@ -1,6 +1,7 @@
 use super::{
-    AgentCombat, AgentHealth, AgentMoveIntent, AgentPosition, AgentState, AgentTarget, AgentTeam,
-    AgentVelocity, GameplayConfig, PendingDamage, QuestState, SceneId, WorldDebugPosition,
+    AgentCombat, AgentHealth, AgentMoveIntent, AgentPosition, AgentPrevPosition, AgentState,
+    AgentTarget, AgentTeam, AgentVelocity, GameplayConfig, PendingDamage, QuestState, SceneId,
+    WorldDebugPosition,
     WorldSceneContext, WorldToOverlayMessage,
 };
 use anyhow::Result;
@@ -10,6 +11,7 @@ pub fn gameplay_scene_bootstrap(world: &mut World, config: &GameplayConfig) {
     world.register_component::<AgentTeam>();
     world.register_component::<AgentState>();
     world.register_component::<AgentPosition>();
+    world.register_component::<AgentPrevPosition>();
     world.register_component::<AgentVelocity>();
     world.register_component::<AgentHealth>();
     world.register_component::<AgentTarget>();
@@ -20,6 +22,10 @@ pub fn gameplay_scene_bootstrap(world: &mut World, config: &GameplayConfig) {
         Box::new(AgentTeam::Player) as Box<dyn std::any::Any>,
         Box::new(AgentState::Idle) as Box<dyn std::any::Any>,
         Box::new(AgentPosition {
+            x: config.player_spawn_x,
+            y: config.player_spawn_y,
+        }) as Box<dyn std::any::Any>,
+        Box::new(AgentPrevPosition {
             x: config.player_spawn_x,
             y: config.player_spawn_y,
         }) as Box<dyn std::any::Any>,
@@ -46,6 +52,10 @@ pub fn gameplay_scene_bootstrap(world: &mut World, config: &GameplayConfig) {
             Box::new(AgentTeam::Enemy) as Box<dyn std::any::Any>,
             Box::new(AgentState::Idle) as Box<dyn std::any::Any>,
             Box::new(AgentPosition {
+                x: config.enemy_start_x + offset,
+                y: config.enemy_start_y + (idx as f32 * config.enemy_spacing),
+            }) as Box<dyn std::any::Any>,
+            Box::new(AgentPrevPosition {
                 x: config.enemy_start_x + offset,
                 y: config.enemy_start_y + (idx as f32 * config.enemy_spacing),
             }) as Box<dyn std::any::Any>,
@@ -255,6 +265,15 @@ pub fn gameplay_move_system(ctx: &mut WorldSceneContext) -> Result<()> {
             .get_component::<AgentMoveIntent>(entity)
             .copied()
             .unwrap_or(AgentMoveIntent { dx: 0.0, dy: 0.0 });
+        let previous = ctx
+            .world
+            .get_component::<AgentPosition>(entity)
+            .copied()
+            .unwrap_or(AgentPosition { x: 0.0, y: 0.0 });
+        if let Some(prev) = ctx.world.get_component_mut::<AgentPrevPosition>(entity) {
+            prev.x = previous.x;
+            prev.y = previous.y;
+        }
         if let Some(position) = ctx.world.get_component_mut::<AgentPosition>(entity) {
             position.x = (position.x + intent.dx * sim_step)
                 .clamp(ctx.gameplay_config.bounds.min_x, ctx.gameplay_config.bounds.max_x);

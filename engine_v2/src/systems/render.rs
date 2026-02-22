@@ -1,5 +1,5 @@
 use crate::runtime::EngineData;
-use crate::runtime::{AgentHealth, AgentPosition, AgentTeam};
+use crate::runtime::{AgentHealth, AgentPosition, AgentPrevPosition, AgentTeam};
 use crate::render::{MAX_WORLD_RENDER_AGENTS, WorldRenderAgent};
 use wgpu::SurfaceError;
 
@@ -17,11 +17,22 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
     }
 
     let world = &data.scene.world_runtime.ctx.world;
+    let fixed_dt = data.scene.world_runtime.ctx.fixed_step_seconds.max(1.0 / 240.0);
+    let interp_alpha = (data.scene.world_runtime.ctx.fixed_step_accumulator / fixed_dt).clamp(0.0, 1.0);
     let entities: Vec<_> = world.entities_with::<AgentPosition>().collect();
     for entity in entities.into_iter().take(MAX_WORLD_RENDER_AGENTS) {
         let Some(position) = world.get_component::<AgentPosition>(entity).copied() else {
             continue;
         };
+        let prev = world
+            .get_component::<AgentPrevPosition>(entity)
+            .copied()
+            .unwrap_or(AgentPrevPosition {
+                x: position.x,
+                y: position.y,
+            });
+        let render_x = prev.x + (position.x - prev.x) * interp_alpha;
+        let render_y = prev.y + (position.y - prev.y) * interp_alpha;
         let health = world
             .get_component::<AgentHealth>(entity)
             .copied()
@@ -40,8 +51,8 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
             AgentTeam::Enemy => 1,
         };
         frame.agents.push(WorldRenderAgent {
-            x: position.x,
-            y: position.y,
+            x: render_x,
+            y: render_y,
             radius: 0.95,
             health_ratio,
             team: team_id,

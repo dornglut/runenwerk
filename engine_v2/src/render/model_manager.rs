@@ -91,6 +91,7 @@ pub struct ModelTextureData {
 pub struct ModelMaterial {
     pub base_color_factor: [f32; 4],
     pub base_color_texture: Option<ModelTextureData>,
+    pub nearest_sampling: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -467,6 +468,7 @@ fn collect_node_geometry(
             let material = ModelMaterial {
                 base_color_factor: [base[0], base[1], base[2], base[3]],
                 base_color_texture,
+                nearest_sampling: false,
             };
 
             let mut min = Vec3::splat(f32::INFINITY);

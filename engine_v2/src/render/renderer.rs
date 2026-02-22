@@ -183,6 +183,7 @@ struct MeshPass {
     material_bind_group_layout: BindGroupLayout,
     default_texture_view: TextureView,
     default_sampler: Sampler,
+    nearest_sampler: Sampler,
 }
 
 #[derive(Debug)]
@@ -199,6 +200,7 @@ struct MeshPreparedDrawItem {
 #[derive(Debug)]
 struct MeshPreparedDraw {
     draws: Vec<MeshPreparedDrawItem>,
+    surface_size: (u32, u32),
 }
 
 #[derive(Debug)]
@@ -269,6 +271,7 @@ fn ground_mesh_for_bounds(world_bounds: [f32; 4]) -> ModelMesh {
         material: ModelMaterial {
             base_color_factor: [1.0, 1.0, 1.0, 1.0],
             base_color_texture: Some(checker_texture_rgba(64)),
+            nearest_sampling: true,
         },
     }
 }
@@ -389,6 +392,7 @@ fn agent_cube_meshes(agents: &[WorldRenderAgent]) -> Vec<ModelMesh> {
             material: ModelMaterial {
                 base_color_factor: color,
                 base_color_texture: None,
+                nearest_sampling: false,
             },
         });
     }
@@ -408,6 +412,7 @@ pub struct Renderer {
     rect_pass_shader_revision: u64,
     text_renderer: Option<TextRenderer>,
     text_renderer_format: Option<TextureFormat>,
+    camera_focus: Option<Vec3>,
 }
 
 impl Renderer {
@@ -424,6 +429,7 @@ impl Renderer {
             rect_pass_shader_revision: 0,
             text_renderer: None,
             text_renderer_format: None,
+            camera_focus: None,
         }
     }
 
@@ -549,7 +555,10 @@ impl Renderer {
                 conservative: false,
             },
             depth_stencil: None,
-            multisample: MultisampleState::default(),
+            multisample: MultisampleState {
+                count: 4,
+                ..MultisampleState::default()
+            },
             multiview: None,
             cache: None,
         });
@@ -598,6 +607,16 @@ impl Renderer {
             mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
+        let nearest_sampler = device.create_sampler(&SamplerDescriptor {
+            label: Some("engine_v2_mesh_nearest_sampler"),
+            address_mode_u: AddressMode::Repeat,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
+            mag_filter: FilterMode::Nearest,
+            min_filter: FilterMode::Nearest,
+            mipmap_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
 
         self.mesh_pass = Some(MeshPass {
             pipeline,
@@ -606,6 +625,7 @@ impl Renderer {
             material_bind_group_layout,
             default_texture_view,
             default_sampler,
+            nearest_sampler,
         });
         self.mesh_pass_format = Some(format);
     }
@@ -902,7 +922,7 @@ impl Renderer {
     }
 
     fn prepare_mesh_draw(
-        &self,
+        &mut self,
         device: &Device,
         queue: &Queue,
         world_frame: &WorldRenderFrame,
@@ -918,7 +938,13 @@ impl Renderer {
             meshes
         };
         if meshes.is_empty() {
-            return MeshPreparedDraw { draws: Vec::new() };
+            return MeshPreparedDraw {
+                draws: Vec::new(),
+                surface_size: (
+                    surface_width.max(1.0).round() as u32,
+                    surface_height.max(1.0).round() as u32,
+                ),
+            };
         }
 
         if let Some(mesh_pass) = self.mesh_pass.as_ref() {
@@ -930,8 +956,13 @@ impl Renderer {
                 .or_else(|| world_frame.agents.first())
                 .map(|agent| Vec3::new(agent.x, 0.0, agent.y))
                 .unwrap_or(Vec3::ZERO);
-            let eye = player_target + Vec3::new(5.0, 5.0, 5.0);
-            let target = player_target;
+            let target = if let Some(prev) = self.camera_focus {
+                prev.lerp(player_target, 0.18)
+            } else {
+                player_target
+            };
+            self.camera_focus = Some(target);
+            let eye = target + Vec3::new(5.0, 5.0, 5.0);
             let up = Vec3::Y;
             let view = Mat4::look_at_rh(eye, target, up);
             let proj = Mat4::perspective_rh_gl(55.0f32.to_radians(), aspect, 0.01, 200.0);
@@ -942,11 +973,20 @@ impl Renderer {
         }
 
         let Some(mesh_pass) = self.mesh_pass.as_ref() else {
-            return MeshPreparedDraw { draws: Vec::new() };
+            return MeshPreparedDraw {
+                draws: Vec::new(),
+                surface_size: (
+                    surface_width.max(1.0).round() as u32,
+                    surface_height.max(1.0).round() as u32,
+                ),
+            };
         };
 
         let mut draws = Vec::new();
         for (mesh_idx, mesh) in meshes.into_iter().enumerate() {
+            if mesh.vertices.is_empty() || mesh.indices.is_empty() {
+                continue;
+            }
             let vertices: Vec<MeshVertexRaw> = mesh
                 .vertices
                 .into_iter()
@@ -955,9 +995,6 @@ impl Renderer {
                     uv: v.uv,
                 })
                 .collect();
-            if vertices.is_empty() || mesh.indices.is_empty() {
-                continue;
-            }
 
             let vertex_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
                 label: Some("engine_v2_mesh_vertices"),
@@ -1004,7 +1041,11 @@ impl Renderer {
                     },
                     BindGroupEntry {
                         binding: 2,
-                        resource: BindingResource::Sampler(&mesh_pass.default_sampler),
+                        resource: BindingResource::Sampler(if mesh.material.nearest_sampling {
+                            &mesh_pass.nearest_sampler
+                        } else {
+                            &mesh_pass.default_sampler
+                        }),
                     },
                 ],
             });
@@ -1020,11 +1061,18 @@ impl Renderer {
             });
         }
 
-        MeshPreparedDraw { draws }
+        MeshPreparedDraw {
+            draws,
+            surface_size: (
+                surface_width.max(1.0).round() as u32,
+                surface_height.max(1.0).round() as u32,
+            ),
+        }
     }
 
     fn encode_mesh_pass(
         &self,
+        device: &Device,
         encoder: &mut CommandEncoder,
         frame_view: &TextureView,
         prepared: &MeshPreparedDraw,
@@ -1036,12 +1084,28 @@ impl Renderer {
             return;
         };
 
+        let msaa_target = device.create_texture(&TextureDescriptor {
+            label: Some("engine_v2_mesh_msaa_target"),
+            size: Extent3d {
+                width: prepared.surface_size.0.max(1),
+                height: prepared.surface_size.1.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: TextureDimension::D2,
+            format: self.mesh_pass_format.unwrap_or(TextureFormat::Bgra8UnormSrgb),
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let msaa_view = msaa_target.create_view(&TextureViewDescriptor::default());
+
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("engine_v2_mesh_pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: frame_view,
+                view: &msaa_view,
                 depth_slice: None,
-                resolve_target: None,
+                resolve_target: Some(frame_view),
                 ops: Operations {
                     load: LoadOp::Load,
                     store: StoreOp::Store,
@@ -1268,7 +1332,7 @@ impl Renderer {
                 continue;
             }
             if handle == mesh_pass {
-                self.encode_mesh_pass(&mut encoder, frame_view, &prepared_mesh);
+                self.encode_mesh_pass(device, &mut encoder, frame_view, &prepared_mesh);
                 continue;
             }
             if handle == ui_pass {

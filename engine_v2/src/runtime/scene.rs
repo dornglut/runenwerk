@@ -149,6 +149,12 @@ pub struct AgentPosition {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub struct AgentPrevPosition {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct AgentVelocity {
     pub speed: f32,
 }
