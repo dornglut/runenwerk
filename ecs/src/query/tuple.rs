@@ -63,7 +63,9 @@ impl<'a, A: 'static, B: 'static, C: 'static> ComponentTuple<'a> for (C, (B, (A, 
     }
 }
 
-impl<'a, A: 'static, B: 'static, C: 'static, D: 'static> ComponentTuple<'a> for (D, (C, (B, (A, ())))) {
+impl<'a, A: 'static, B: 'static, C: 'static, D: 'static> ComponentTuple<'a>
+    for (D, (C, (B, (A, ()))))
+{
     type Output = (&'a A, &'a B, &'a C, &'a D);
 
     fn fetch(archetype: &'a Archetype, row: usize, type_ids: &[TypeId]) -> Option<Self::Output> {

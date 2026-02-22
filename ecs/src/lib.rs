@@ -1,10 +1,10 @@
-mod utils;
+mod component_registry;
 mod entity;
-mod world;
 mod entity_builder;
 mod query;
-mod component_registry;
 mod table;
+mod utils;
+mod world;
 
 pub use component_registry::{ComponentKey, ComponentRegistry};
 pub use entity::{EntityAllocator, EntityHandle};

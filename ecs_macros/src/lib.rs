@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
+use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 #[proc_macro_derive(ComponentBundle)]
 pub fn component_bundle_derive(input: TokenStream) -> TokenStream {
@@ -11,16 +11,19 @@ pub fn component_bundle_derive(input: TokenStream) -> TokenStream {
         match data.fields {
             Fields::Named(fields_named) => {
                 let fields: Vec<_> = fields_named.named.iter().collect();
-                fields.iter().map(|f| {
-                    let field_name = &f.ident;
-                    let ty = &f.ty;
-                    quote! {
-                        vec.push((
-                            std::any::TypeId::of::<#ty>(),
-                            Box::new(self.#field_name) as Box<dyn std::any::Any>
-                        ));
-                    }
-                }).collect::<Vec<_>>()
+                fields
+                    .iter()
+                    .map(|f| {
+                        let field_name = &f.ident;
+                        let ty = &f.ty;
+                        quote! {
+                            vec.push((
+                                std::any::TypeId::of::<#ty>(),
+                                Box::new(self.#field_name) as Box<dyn std::any::Any>
+                            ));
+                        }
+                    })
+                    .collect::<Vec<_>>()
             }
             _ => unimplemented!("Only named fields are supported"),
         }

@@ -10,12 +10,16 @@
 - UI stage graph: `ui_input -> ui_layout -> ui_build_batches -> ui_render_extract -> ui_render_submit`.
 - Console milestone with shared submit behavior (`Enter` and confirm button).
 - Establish extensible material/shader path.
+- Scene foundation for world + overlay composition (`SceneManager`, transition queue, layered execution).
+- ECS-to-GPU world rendering bridge (extract world scene ECS data and render via wgpu compute before UI overlay).
+- Frame-graph render orchestration with dynamic pass-pipeline selection.
 
 ### 0.5 Exit Criteria
 - ECS-driven panel/input/button rendered through UI stage pipeline.
 - Enter and button click produce identical submit behavior.
 - Deterministic scheduler ordering for UI stages.
 - No obvious per-frame unbounded allocation in hot UI path.
+- Runtime scene switching works without engine restart and supports UI overlay on top of world scene.
 
 ### 0.5 Deferred
 - IME composition and full text-editing parity.

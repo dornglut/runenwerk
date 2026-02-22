@@ -34,7 +34,8 @@ fn test_query_two_components_filters_entities() {
     ]);
 
     let mut seen = Vec::new();
-    for (entity, (position, velocity)) in world.query().with::<Position>().with::<Velocity>().iter() {
+    for (entity, (position, velocity)) in world.query().with::<Position>().with::<Velocity>().iter()
+    {
         seen.push((entity.id, *position, *velocity));
     }
     seen.sort_by_key(|(id, _, _)| *id);

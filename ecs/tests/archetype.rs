@@ -42,10 +42,14 @@ fn test_add_row() {
 
     assert_eq!(archetype.len(), 1);
 
-    let pos_col = archetype.column::<Position>(TypeId::of::<Position>()).unwrap();
+    let pos_col = archetype
+        .column::<Position>(TypeId::of::<Position>())
+        .unwrap();
     assert_eq!(pos_col.get(0), Some(&Position { x: 1.0, y: 2.0 }));
 
-    let vel_col = archetype.column::<Velocity>(TypeId::of::<Velocity>()).unwrap();
+    let vel_col = archetype
+        .column::<Velocity>(TypeId::of::<Velocity>())
+        .unwrap();
     assert_eq!(vel_col.get(0), Some(&Velocity { dx: 0.5, dy: 1.0 }));
 }
 
@@ -85,8 +89,12 @@ fn test_add_and_remove_row() {
     assert_eq!(removed, entity1);
     assert_eq!(archetype.len(), 1);
 
-    let pos_col = archetype.column::<Position>(TypeId::of::<Position>()).unwrap();
-    let vel_col = archetype.column::<Velocity>(TypeId::of::<Velocity>()).unwrap();
+    let pos_col = archetype
+        .column::<Position>(TypeId::of::<Position>())
+        .unwrap();
+    let vel_col = archetype
+        .column::<Velocity>(TypeId::of::<Velocity>())
+        .unwrap();
     assert_eq!(pos_col.get(0), Some(&Position { x: 3.0, y: 4.0 }));
     assert_eq!(vel_col.get(0), Some(&Velocity { dx: 1.5, dy: 2.0 }));
 

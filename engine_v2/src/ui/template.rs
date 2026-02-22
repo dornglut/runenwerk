@@ -1,4 +1,4 @@
-use super::{ConsoleUiState, UiStyle, UiText};
+use super::{ConsoleUiState, UiNode, UiStyle, UiText};
 use anyhow::Context;
 use ecs::{EntityHandle, World};
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,7 @@ pub enum UiNodeKind {
 pub struct UiNodeTemplate {
     pub id: String,
     pub kind: Option<UiNodeKind>,
+    pub visible: Option<bool>,
     pub style: Option<UiStyleTemplate>,
     pub text: Option<UiTextTemplate>,
     pub children: Vec<UiNodeTemplate>,
@@ -78,6 +79,13 @@ pub struct UiLayoutTemplate {
     pub input_height: Option<f32>,
     pub button_width: Option<f32>,
     pub input_button_gap: Option<f32>,
+    pub logs_width_ratio: Option<f32>,
+    pub logs_height_ratio: Option<f32>,
+    pub logs_min_width: Option<f32>,
+    pub logs_min_height: Option<f32>,
+    pub logs_margin: Option<f32>,
+    pub show_scroll_indicators: Option<bool>,
+    pub show_scroll_hints: Option<bool>,
 }
 
 fn canonical_existing_path(path: &str) -> Option<PathBuf> {
@@ -161,6 +169,27 @@ fn apply_layout(ui: &mut ConsoleUiState, patch: UiLayoutTemplate) {
     if let Some(v) = patch.input_button_gap {
         ui.layout.input_button_gap = v.max(0.0);
     }
+    if let Some(v) = patch.logs_width_ratio {
+        ui.layout.logs_width_ratio = v.clamp(0.1, 1.0);
+    }
+    if let Some(v) = patch.logs_height_ratio {
+        ui.layout.logs_height_ratio = v.clamp(0.1, 1.0);
+    }
+    if let Some(v) = patch.logs_min_width {
+        ui.layout.logs_min_width = v.max(1.0);
+    }
+    if let Some(v) = patch.logs_min_height {
+        ui.layout.logs_min_height = v.max(1.0);
+    }
+    if let Some(v) = patch.logs_margin {
+        ui.layout.logs_margin = v.max(0.0);
+    }
+    if let Some(v) = patch.show_scroll_indicators {
+        ui.layout.show_scroll_indicators = v;
+    }
+    if let Some(v) = patch.show_scroll_hints {
+        ui.layout.show_scroll_hints = v;
+    }
 }
 
 fn entity_for_id(ui: &ConsoleUiState, id: &str) -> Option<EntityHandle> {
@@ -193,6 +222,11 @@ fn apply_single_node_template(world: &mut World, ui: &ConsoleUiState, node: &UiN
             return;
         }
     }
+    if let Some(visible) = node.visible
+        && let Some(ui_node) = world.get_component_mut::<UiNode>(entity)
+    {
+        ui_node.visible = visible;
+    }
 
     if let Some(style_patch) = node.style {
         if let Some(style) = world.get_component_mut::<UiStyle>(entity) {
@@ -211,6 +245,7 @@ fn node_local_hash(node: &UiNodeTemplate) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     node.id.hash(&mut hasher);
     node.kind.hash(&mut hasher);
+    node.visible.hash(&mut hasher);
     format!("{:?}", node.style).hash(&mut hasher);
     format!("{:?}", node.text).hash(&mut hasher);
     hasher.finish()
@@ -336,6 +371,18 @@ pub fn reload_console_template_if_changed(
     Ok(true)
 }
 
+pub fn load_console_template(
+    world: &mut World,
+    ui: &mut ConsoleUiState,
+    path: &Path,
+) -> anyhow::Result<()> {
+    ui.template_path = Some(path.to_path_buf());
+    // Force re-parse/apply even when switching back to a template with identical file timestamp.
+    ui.template_modified = None;
+    let _ = reload_console_template_if_changed(world, ui, true)?;
+    Ok(())
+}
+
 fn serialize_style(style: &UiStyle) -> UiStyleTemplate {
     UiStyleTemplate {
         bg_color: Some((
@@ -396,6 +443,13 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
         input_height: Some(ui.layout.input_height),
         button_width: Some(ui.layout.button_width),
         input_button_gap: Some(ui.layout.input_button_gap),
+        logs_width_ratio: Some(ui.layout.logs_width_ratio),
+        logs_height_ratio: Some(ui.layout.logs_height_ratio),
+        logs_min_width: Some(ui.layout.logs_min_width),
+        logs_min_height: Some(ui.layout.logs_min_height),
+        logs_margin: Some(ui.layout.logs_margin),
+        show_scroll_indicators: Some(ui.layout.show_scroll_indicators),
+        show_scroll_hints: Some(ui.layout.show_scroll_hints),
     };
 
     ConsoleUiTemplate {
@@ -411,12 +465,16 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
         nodes: Some(vec![UiNodeTemplate {
             id: "root".to_string(),
             kind: Some(UiNodeKind::Panel),
+            visible: world.get_component::<UiNode>(ui.root).map(|n| n.visible),
             style: None,
             text: None,
             children: vec![
                 UiNodeTemplate {
                     id: "scrollback".to_string(),
                     kind: Some(UiNodeKind::Scrollback),
+                    visible: world
+                        .get_component::<UiNode>(ui.scrollback)
+                        .map(|n| n.visible),
                     style: None,
                     text: None,
                     children: Vec::new(),
@@ -424,6 +482,7 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
                 UiNodeTemplate {
                     id: "input".to_string(),
                     kind: Some(UiNodeKind::Input),
+                    visible: world.get_component::<UiNode>(ui.input).map(|n| n.visible),
                     style: None,
                     text: None,
                     children: Vec::new(),
@@ -431,6 +490,9 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
                 UiNodeTemplate {
                     id: "confirm_button".to_string(),
                     kind: Some(UiNodeKind::Button),
+                    visible: world
+                        .get_component::<UiNode>(ui.confirm_button)
+                        .map(|n| n.visible),
                     style: None,
                     text: None,
                     children: Vec::new(),

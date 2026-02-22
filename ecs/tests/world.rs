@@ -15,14 +15,23 @@ fn test_register_and_spawn_entity() {
     world.register_component::<Velocity>();
 
     let e1 = world.spawn_entity_typed(Position(1.0, 2.0));
-    assert_eq!(world.get_component::<Position>(e1).unwrap(), &Position(1.0, 2.0));
+    assert_eq!(
+        world.get_component::<Position>(e1).unwrap(),
+        &Position(1.0, 2.0)
+    );
 
     let e2 = world.spawn_entity(vec![
         Box::new(Position(3.0, 4.0)) as Box<dyn Any>,
         Box::new(Velocity(0.5, 0.5)) as Box<dyn Any>,
     ]);
-    assert_eq!(world.get_component::<Position>(e2).unwrap(), &Position(3.0, 4.0));
-    assert_eq!(world.get_component::<Velocity>(e2).unwrap(), &Velocity(0.5, 0.5));
+    assert_eq!(
+        world.get_component::<Position>(e2).unwrap(),
+        &Position(3.0, 4.0)
+    );
+    assert_eq!(
+        world.get_component::<Velocity>(e2).unwrap(),
+        &Velocity(0.5, 0.5)
+    );
 }
 
 #[test]
@@ -64,7 +73,10 @@ fn test_remove_entity() {
     assert!(world.get_component::<Position>(e2).is_none());
     assert!(world.get_component::<Velocity>(e2).is_none());
 
-    assert_eq!(world.get_component::<Position>(e1).unwrap(), &Position(0.0, 0.0));
+    assert_eq!(
+        world.get_component::<Position>(e1).unwrap(),
+        &Position(0.0, 0.0)
+    );
 }
 
 #[test]
@@ -75,10 +87,22 @@ fn test_add_entity_with_components() {
     world.register_component::<Velocity>();
 
     let mut components = std::collections::HashMap::new();
-    components.insert(TypeId::of::<Position>(), Box::new(Position(5.0, 5.0)) as Box<dyn Any>);
-    components.insert(TypeId::of::<Velocity>(), Box::new(Velocity(1.0, 1.0)) as Box<dyn Any>);
+    components.insert(
+        TypeId::of::<Position>(),
+        Box::new(Position(5.0, 5.0)) as Box<dyn Any>,
+    );
+    components.insert(
+        TypeId::of::<Velocity>(),
+        Box::new(Velocity(1.0, 1.0)) as Box<dyn Any>,
+    );
 
     let e = world.add_entity_with_components(components);
-    assert_eq!(world.get_component::<Position>(e).unwrap(), &Position(5.0, 5.0));
-    assert_eq!(world.get_component::<Velocity>(e).unwrap(), &Velocity(1.0, 1.0));
+    assert_eq!(
+        world.get_component::<Position>(e).unwrap(),
+        &Position(5.0, 5.0)
+    );
+    assert_eq!(
+        world.get_component::<Velocity>(e).unwrap(),
+        &Velocity(1.0, 1.0)
+    );
 }

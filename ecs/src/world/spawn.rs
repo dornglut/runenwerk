@@ -3,7 +3,10 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
 impl World {
-    pub fn spawn_entity(&mut self, components: impl IntoIterator<Item = Box<dyn Any>>) -> EntityHandle {
+    pub fn spawn_entity(
+        &mut self,
+        components: impl IntoIterator<Item = Box<dyn Any>>,
+    ) -> EntityHandle {
         let components: Vec<(TypeId, Box<dyn Any>)> = components
             .into_iter()
             .map(|component| {
@@ -18,7 +21,9 @@ impl World {
                 self.component_registry
                     .get_key_by_type(*type_id)
                     .cloned()
-                    .unwrap_or_else(|| panic!("Component with TypeId {:?} is not registered", type_id))
+                    .unwrap_or_else(|| {
+                        panic!("Component with TypeId {:?} is not registered", type_id)
+                    })
             })
             .collect();
 
@@ -53,7 +58,9 @@ impl World {
                 self.component_registry
                     .get_key_by_type(type_id)
                     .cloned()
-                    .unwrap_or_else(|| panic!("Component with TypeId {:?} is not registered", type_id))
+                    .unwrap_or_else(|| {
+                        panic!("Component with TypeId {:?} is not registered", type_id)
+                    })
             })
             .collect();
 

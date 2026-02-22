@@ -84,10 +84,11 @@ impl ApplicationHandler for App {
                 if event.state == ElementState::Pressed
                     && event.physical_key == PhysicalKey::Code(KeyCode::Escape)
                 {
-                    if engine.data.ui.editor.enabled {
-                        engine.data.ui.editor.enabled = false;
-                        engine.data.ui.editor.dragging = false;
-                        engine.data.ui.editor.status = "editor: off (F1 to toggle)".to_string();
+                    if engine.data.scene.overlay_runtime.ui.editor.enabled {
+                        engine.data.scene.overlay_runtime.ui.editor.enabled = false;
+                        engine.data.scene.overlay_runtime.ui.editor.dragging = false;
+                        engine.data.scene.overlay_runtime.ui.editor.status =
+                            "editor: off (F1 to toggle)".to_string();
                     }
                 }
             }

@@ -1,0 +1,33 @@
+(
+  player: (
+    speed: 1.6,
+    health: 120,
+    attack_range: 5.5,
+    attack_damage: 18,
+    cooldown_ticks: 22,
+  ),
+  enemy: (
+    speed: 1.35,
+    health: 72,
+    attack_range: 4.0,
+    attack_damage: 10,
+    cooldown_ticks: 28,
+  ),
+  enemy_count: 3,
+  enemy_spacing: 8.0,
+  enemy_start_x: 22.0,
+  enemy_start_y: -10.0,
+  player_spawn_x: -20.0,
+  player_spawn_y: 0.0,
+  enemy_respawn_base_x: 28.0,
+  enemy_respawn_base_y: -12.0,
+  enemy_respawn_x_step: 7.0,
+  enemy_respawn_y_step: 9.0,
+  crit_modulo: 13,
+  bounds: (
+    min_x: -100.0,
+    max_x: 100.0,
+    min_y: -60.0,
+    max_y: 60.0,
+  ),
+)

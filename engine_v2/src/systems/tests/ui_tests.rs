@@ -10,6 +10,7 @@ use crate::systems::ui::point_in_rect;
 use crate::systems::ui::snap_to_grid;
 use crate::systems::ui::visible_line_capacity;
 use crate::systems::ui::wrap_editor_rows;
+use crate::systems::ui::scrollback_line_style;
 use crate::ui::EditorBuffer;
 use crate::ui::UiEditorNode;
 use crate::ui::UiTextMetrics;
@@ -148,6 +149,18 @@ fn build_scrollback_view_text_takes_visible_window_from_bottom_offset() {
     ];
     let view = build_scrollback_view_text(&lines, 1, 2, 200.0, 14.0);
     assert_eq!(view, "l2\nl3");
+}
+
+#[test]
+fn scrollback_line_style_applies_category_colors() {
+    let default = [0.5, 0.5, 0.5, 1.0];
+    let (combat_color, combat_text) = scrollback_line_style("[combat] hit for 12", default);
+    assert_eq!(combat_text, "hit for 12");
+    assert_ne!(combat_color, default);
+
+    let (normal_color, normal_text) = scrollback_line_style("grotto> hello", default);
+    assert_eq!(normal_text, "grotto> hello");
+    assert_eq!(normal_color, default);
 }
 
 #[test]

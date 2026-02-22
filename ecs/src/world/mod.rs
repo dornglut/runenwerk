@@ -43,7 +43,10 @@ impl World {
     }
 
     /// Register a component type `T` with an explicit display name.
-    pub fn register_component_named<T: 'static>(&mut self, name: impl Into<String>) -> ComponentKey {
+    pub fn register_component_named<T: 'static>(
+        &mut self,
+        name: impl Into<String>,
+    ) -> ComponentKey {
         let key = self.component_registry.register::<T>(name);
         debug!("registered component '{}'", key.name);
         key

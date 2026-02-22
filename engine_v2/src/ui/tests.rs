@@ -12,6 +12,9 @@ fn console_ui_template_parses_from_ron() {
   layout: Some((
     panel_width_ratio: Some(0.72),
     outer_margin: Some(20.0),
+    logs_width_ratio: Some(0.40),
+    show_scroll_indicators: Some(true),
+    show_scroll_hints: Some(true),
   )),
   confirm_button: Some((
     text: Some((
@@ -23,10 +26,17 @@ fn console_ui_template_parses_from_ron() {
 
     let tpl: ConsoleUiTemplate = ron::from_str(raw).expect("template should parse");
     assert_eq!(tpl.max_lines, Some(250));
+    let layout = tpl.layout.expect("layout should exist");
     assert_eq!(
-        tpl.layout.expect("layout should exist").panel_width_ratio,
+        layout.panel_width_ratio,
         Some(0.72)
     );
+    assert_eq!(
+        layout.logs_width_ratio,
+        Some(0.40)
+    );
+    assert_eq!(layout.show_scroll_indicators, Some(true));
+    assert_eq!(layout.show_scroll_hints, Some(true));
     assert_eq!(
         tpl.root_style.expect("root style should exist").bg_color,
         Some((0.1, 0.2, 0.3, 1.0))
@@ -179,5 +189,10 @@ fn export_console_template_contains_editor_node_tree() {
     assert_eq!(nodes[0].id, "root");
     assert_eq!(nodes[0].children.len(), 3);
     assert!(template.layout.is_some());
+    let layout = template.layout.expect("layout should exist");
+    assert!(layout.logs_width_ratio.is_some());
+    assert!(layout.logs_height_ratio.is_some());
+    assert!(layout.show_scroll_indicators.is_some());
+    assert!(layout.show_scroll_hints.is_some());
     assert!(template.confirm_button.is_some());
 }

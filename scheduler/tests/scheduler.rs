@@ -4,7 +4,9 @@ use scheduler::{Node, SchedulerBuilder};
 
 fn push_node(log: Arc<Mutex<Vec<String>>>, name: &'static str) -> Node<()> {
     Node::new(name, move |_ctx: &mut ()| {
-        log.lock().expect("log lock poisoned").push(name.to_string());
+        log.lock()
+            .expect("log lock poisoned")
+            .push(name.to_string());
         Ok(())
     })
 }
@@ -19,13 +21,19 @@ fn runs_nodes_in_dependency_order() {
 
     let mut scheduler = SchedulerBuilder::<()>::new()
         .add_node("input", push_node(log.clone(), "input"))
-        .add_node_with_edges("simulation", push_node(log.clone(), "simulation"), &["input"])
+        .add_node_with_edges(
+            "simulation",
+            push_node(log.clone(), "simulation"),
+            &["input"],
+        )
         .add_node_with_edges("render", push_node(log.clone(), "render"), &["simulation"])
         .build()
         .expect("scheduler should build");
 
     let mut ctx = ();
-    scheduler.run(&mut ctx).expect("scheduler run should succeed");
+    scheduler
+        .run(&mut ctx)
+        .expect("scheduler run should succeed");
 
     let entries = log.lock().expect("log lock poisoned").clone();
     assert_eq!(entries, vec!["input", "simulation", "render"]);
@@ -46,7 +54,10 @@ fn detects_cycles_when_running() {
         .run(&mut ctx)
         .expect_err("cycle should cause scheduler run failure");
     let message = format!("{err:#}");
-    assert!(message.contains("Cycle detected"), "unexpected error: {message}");
+    assert!(
+        message.contains("Cycle detected"),
+        "unexpected error: {message}"
+    );
 }
 
 #[test]

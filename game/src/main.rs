@@ -1,4 +1,4 @@
-use ecs::{init_tracing, World, WorldQueryExt};
+use ecs::{World, WorldQueryExt, init_tracing};
 use glam::Vec3;
 use tracing::info;
 
@@ -39,7 +39,12 @@ fn main() {
     for tick in 0..5 {
         movement_system(&mut world, dt);
 
-        let visible_count = world.query().with::<Position>().with::<Velocity>().iter().count();
+        let visible_count = world
+            .query()
+            .with::<Position>()
+            .with::<Velocity>()
+            .iter()
+            .count();
         info!(tick, visible_count, "simulation step");
     }
 

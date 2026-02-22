@@ -17,6 +17,7 @@ Build Grotto Quest as a modular, testable ECS-driven action RPG with scheduler-d
 
 ## Non-Negotiables
 - Deterministic behavior for scheduler and UI stage ordering.
+- Deterministic scene transition ordering with explicit stage boundaries.
 - Renderer-resource logic separated from ECS data representation.
 - Favor fallible APIs and typed errors in runtime paths.
 - No hidden side effects in builder/setup APIs.
@@ -37,6 +38,7 @@ Build Grotto Quest as a modular, testable ECS-driven action RPG with scheduler-d
 ## Core Reference Docs
 - Execution plan: `docs/project/execution-plan.md`
 - Roadmap: `docs/project/product-roadmap.md`
+- Scene architecture: `docs/project/scene-architecture.md`
 - UI architecture: `docs/project/ui-architecture.md`
 - ECS design goals: `docs/ecs/design-goals.md`
 - Scheduler design goals: `docs/scheduler/design-goals.md`

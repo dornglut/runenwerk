@@ -11,6 +11,13 @@
     input_height: Some(28.0),
     button_width: Some(100.0),
     input_button_gap: Some(8.0),
+    logs_width_ratio: Some(0.36),
+    logs_height_ratio: Some(0.30),
+    logs_min_width: Some(320.0),
+    logs_min_height: Some(180.0),
+    logs_margin: Some(18.0),
+    show_scroll_indicators: Some(true),
+    show_scroll_hints: Some(true),
   )),
   nodes: Some([
     (

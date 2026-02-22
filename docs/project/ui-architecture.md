@@ -7,6 +7,7 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
 - Approach B (retained ECS UI) is active.
 - UI state is ECS-owned and renderer-agnostic.
 - Renderer resources/pipelines remain isolated from ECS internals.
+- UI should run as a scene layer (`OverlayUi`) so gameplay/world scenes can coexist under the same frame.
 
 ## Stage Graph
 - `ui_input`
@@ -38,7 +39,11 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
   - Click selects UI node (`root`, `scrollback`, `input`, `confirm_button`).
   - Click-drag moves selected node (Shift enables grid snapping).
   - Arrow keys nudge selected node (hold Shift for larger steps).
+  - `X` hides selected node, `A` restores hidden nodes.
   - `Cmd/Ctrl+S` exports and saves current UI template.
+- Scene-aware UI template switching baseline:
+  - scene template mapping (`console` and `hud`) with runtime switching.
+  - node visibility persisted in template node data.
 
 ## Current Constraints
 - Selection/copy-paste not complete.
@@ -46,10 +51,11 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
 - Advanced rich text/layout not in scope yet.
 
 ## Near-Term Implementation Priorities
-1. Selection model and interactions.
-2. Clipboard copy/cut/paste.
-3. Editor behavior polish and additional tests.
-4. Lightweight dev diagnostics for template reload failures.
+1. Break `ui_input_system` into smaller input subsystems (text edit, pointer/focus, scroll routing) with explicit stage boundaries.
+2. Break `ui_build_batches_system` into composable batch builders (console, logs, controls, debug overlays).
+3. Consolidate shared viewport/scroll utility logic used by scene + command systems.
+4. Keep logs window and scroll UX fully template-driven and editor-friendly.
+5. Continue editor improvements (selection model, clipboard copy/cut/paste, diagnostics polish).
 
 ## Risks And Mitigations
 - Risk: ECS/render coupling drift.

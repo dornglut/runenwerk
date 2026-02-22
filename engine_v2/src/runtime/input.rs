@@ -20,6 +20,15 @@ pub struct InputState {
     pub page_down: bool,
     pub toggle_ui_editor_mode: bool,
     pub save_ui_template: bool,
+    pub editor_hide_selected: bool,
+    pub editor_restore_all: bool,
+    pub scene_next: bool,
+    pub scene_prev: bool,
+    pub scene_console: bool,
+    pub scene_hud: bool,
+    pub scene_overlay_push: bool,
+    pub scene_overlay_pop: bool,
+    pub overlay_consumed: bool,
     pub mouse_delta: (f32, f32),
     pub mouse_position: (f32, f32),
     pub scroll_delta: f32,
@@ -85,6 +94,32 @@ impl InputState {
                             if code == KeyCode::KeyS && (self.super_down() || self.ctrl_down()) {
                                 self.save_ui_template = true;
                             }
+                            if code == KeyCode::KeyX {
+                                self.editor_hide_selected = true;
+                            }
+                            if code == KeyCode::KeyA {
+                                self.editor_restore_all = true;
+                            }
+                            if code == KeyCode::F2 {
+                                if self.shift_down() {
+                                    self.scene_prev = true;
+                                } else {
+                                    self.scene_next = true;
+                                }
+                            }
+                            if code == KeyCode::F3 {
+                                self.scene_console = true;
+                            }
+                            if code == KeyCode::F4 {
+                                self.scene_hud = true;
+                            }
+                            if code == KeyCode::F5 {
+                                if self.shift_down() {
+                                    self.scene_overlay_pop = true;
+                                } else {
+                                    self.scene_overlay_push = true;
+                                }
+                            }
                         }
                         ElementState::Released => {
                             self.keys_down.remove(&code);
@@ -148,6 +183,15 @@ impl InputState {
         self.page_down = false;
         self.toggle_ui_editor_mode = false;
         self.save_ui_template = false;
+        self.editor_hide_selected = false;
+        self.editor_restore_all = false;
+        self.scene_next = false;
+        self.scene_prev = false;
+        self.scene_console = false;
+        self.scene_hud = false;
+        self.scene_overlay_push = false;
+        self.scene_overlay_pop = false;
+        self.overlay_consumed = false;
         self.mouse_delta = (0.0, 0.0);
         self.scroll_delta = 0.0;
         self.left_mouse_pressed = false;
