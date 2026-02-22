@@ -1,5 +1,5 @@
 #[derive(Copy, Clone, Eq, Hash, PartialEq, Debug)]
-pub struct Entity {
+pub struct EntityHandle {
 	pub id: u32,
 	pub generation: u32,
 }
@@ -19,24 +19,24 @@ impl EntityAllocator {
 		}
 	}
 
-	pub fn allocate(&mut self) -> Entity {
+	pub fn allocate(&mut self) -> EntityHandle {
 		if let Some(id) = self.free_list.pop() {
 			let generation = self.generations[id as usize];
-			Entity { id, generation }
+			EntityHandle { id, generation }
 		} else {
 			let id = self.next_id;
 			self.next_id += 1;
 			self.generations.push(0);
-			Entity { id, generation: 0 }
+			EntityHandle { id, generation: 0 }
 		}
 	}
 
-	pub fn free(&mut self, entity: Entity) {
+	pub fn free(&mut self, entity: EntityHandle) {
 		self.generations[entity.id as usize] += 1;
 		self.free_list.push(entity.id);
 	}
 
-	pub fn generation(&self, entity: Entity) -> u32 {
+	pub fn generation(&self, entity: EntityHandle) -> u32 {
 		self.generations[entity.id as usize]
 	}
 }

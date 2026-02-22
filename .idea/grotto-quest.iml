@@ -5,6 +5,11 @@
       <sourceFolder url="file://$MODULE_DIR$/ecs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/game/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ecs_macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ecs/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/engine/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/engine_v2/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/scheduler/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/scheduler/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

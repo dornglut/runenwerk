@@ -1,11 +1,12 @@
-use crate::{ArchetypeKey, ComponentStorage, Entity, World};
-use std::any::TypeId;
-use tracing::{debug, info};
+use crate::{EntityHandle, World};
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
+use tracing::debug;
 
 /// Builder for creating an entity with multiple components
 pub struct EntityBuilder<'a> {
-	pub world: &'a mut World,
-	components: Vec<(TypeId, Box<dyn FnOnce(&mut World, Entity, &ArchetypeKey) + 'a>)>,
+	world: &'a mut World,
+	components: HashMap<TypeId, Box<dyn Any>>,
 }
 
 impl<'a> EntityBuilder<'a> {
@@ -13,58 +14,21 @@ impl<'a> EntityBuilder<'a> {
 	pub fn new(world: &'a mut World) -> Self {
 		Self {
 			world,
-			components: Vec::new(),
+			components: HashMap::new(),
 		}
 	}
 
 	/// Add a component to the builder
 	pub fn with<T: 'static>(mut self, component: T) -> Self {
-		let type_id = TypeId::of::<T>();
-
-		self.components.push((
-			type_id,
-			Box::new(move |world: &mut World, entity: Entity, _key: &ArchetypeKey| {
-				// Insert component into the appropriate archetype storage
-				if let Some(comp) = world.get_component_mut::<T>(entity) {
-					*comp = component;
-					debug!(?entity, "Updated existing component {:?}", type_id);
-				} else {
-					world.add_entity(entity, component);
-					debug!(?entity, "Inserted new component {:?}", type_id);
-				}
-			}),
-		));
-
+		self.world.ensure_component_registered::<T>();
+		self.components.insert(TypeId::of::<T>(), Box::new(component));
 		self
 	}
 
-	/// Finalize entity creation and insert all components
-	/// Finalize entity creation and insert all components
-	pub fn build(mut self) -> Entity {
-		// 1️⃣ Allocate entity ID first
-		let entity = self.world.allocate_entity();
-
-		// 2️⃣ Sort type IDs to match archetype layout
-		let mut sorted_types: Vec<_> = self.components.iter().map(|(ty, _)| *ty).collect();
-		sorted_types.sort();
-		let key = ArchetypeKey::new(sorted_types.clone());
-
-		// 3️⃣ Ensure the archetype exists
-		self.world.get_or_create_archetype(&sorted_types); // mutable borrow ends immediately
-
-		// 4️⃣ Apply all component closures
-		// Each closure borrows &mut World separately, no overlapping borrow
-		for (_type_id, add_fn) in self.components {
-			add_fn(self.world, entity, &key);
-		}
-
-		// 5️⃣ Now insert entity into the archetype
-		let archetype = self.world.get_or_create_archetype(&sorted_types);
-		archetype.add_entity(entity);
-		let row_index = archetype.len() - 1;
-		self.world.entity_locations.insert(entity, (key, row_index));
-
-		debug!(?entity, ?sorted_types, "Entity created successfully");
+	/// Finalize entity creation and insert all components atomically
+	pub fn build(self) -> EntityHandle {
+		let entity = self.world.add_entity_with_components(self.components);
+		debug!(?entity, "Entity built successfully");
 		entity
 	}
 }
@@ -88,8 +52,8 @@ impl World {
 	{
 		for _ in 0..count {
 			let builder = self.entity();
-			let builder = builder_fn(builder); // builder returned
-			builder.build(); // build happens here
+			let builder = builder_fn(builder); // let user add components
+			builder.build(); // atomic insertion via add_entity_with_components
 		}
 	}
 }
