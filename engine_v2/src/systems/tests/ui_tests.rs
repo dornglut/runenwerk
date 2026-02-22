@@ -51,6 +51,6 @@ fn build_scrollback_view_text_takes_visible_window_from_bottom_offset() {
         "l3".to_string(),
         "l4".to_string(),
     ];
-    let view = build_scrollback_view_text(&lines, 1, 2);
+    let view = build_scrollback_view_text(&lines, 1, 2, 200.0, 14.0);
     assert_eq!(view, "l2\nl3");
 }

@@ -1,0 +1,42 @@
+(
+  max_lines: Some(500),
+  layout: Some((
+    panel_width_ratio: Some(0.60),
+    panel_height_ratio: Some(0.45),
+    panel_min_width: Some(480.0),
+    panel_min_height: Some(280.0),
+    outer_margin: Some(24.0),
+    inner_padding: Some(12.0),
+    footer_offset: Some(40.0),
+    input_height: Some(28.0),
+    button_width: Some(100.0),
+    input_button_gap: Some(8.0),
+  )),
+  root_style: Some((
+    bg_color: Some((0.08, 0.09, 0.11, 1.0)),
+    border_color: Some((0.20, 0.22, 0.28, 1.0)),
+    border_width: Some(1.0),
+    radius: Some(6.0),
+  )),
+  scrollback_text: Some((
+    color: Some((0.78, 0.86, 0.94, 1.0)),
+    size: Some(14.0),
+  )),
+  input_text: Some((
+    color: Some((0.95, 0.95, 0.95, 1.0)),
+    size: Some(14.0),
+  )),
+  confirm_button: Some((
+    style: Some((
+      bg_color: Some((0.16, 0.30, 0.22, 1.0)),
+      border_color: Some((0.32, 0.56, 0.42, 1.0)),
+      border_width: Some(1.0),
+      radius: Some(4.0),
+    )),
+    text: Some((
+      content: Some("Confirm"),
+      color: Some((0.95, 0.96, 0.95, 1.0)),
+      size: Some(13.0),
+    )),
+  )),
+)

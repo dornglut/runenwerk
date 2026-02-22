@@ -1,4 +1,12 @@
+mod template;
+
+pub use template::*;
+
 use ecs::{EntityHandle, World, WorldBuilderExt};
+use std::path::PathBuf;
+use std::time::SystemTime;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Copy, Clone)]
 pub struct UiNode {
@@ -109,6 +117,37 @@ pub struct UiBatchList {
     pub commands: Vec<UiBatchCmd>,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct UiLayoutConfig {
+    pub panel_width_ratio: f32,
+    pub panel_height_ratio: f32,
+    pub panel_min_width: f32,
+    pub panel_min_height: f32,
+    pub outer_margin: f32,
+    pub inner_padding: f32,
+    pub footer_offset: f32,
+    pub input_height: f32,
+    pub button_width: f32,
+    pub input_button_gap: f32,
+}
+
+impl Default for UiLayoutConfig {
+    fn default() -> Self {
+        Self {
+            panel_width_ratio: 0.6,
+            panel_height_ratio: 0.45,
+            panel_min_width: 480.0,
+            panel_min_height: 280.0,
+            outer_margin: 24.0,
+            inner_padding: 12.0,
+            footer_offset: 40.0,
+            input_height: 28.0,
+            button_width: 100.0,
+            input_button_gap: 8.0,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ConsoleUiState {
     pub root: EntityHandle,
@@ -122,6 +161,9 @@ pub struct ConsoleUiState {
     pub scroll_lines_from_bottom: usize,
     pub caret_blink_timer: f32,
     pub caret_visible: bool,
+    pub layout: UiLayoutConfig,
+    pub template_path: Option<PathBuf>,
+    pub template_modified: Option<SystemTime>,
     pub screen_size: (f32, f32),
     pub scale: f32,
     pub layout_dirty: bool,
@@ -249,6 +291,9 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         scroll_lines_from_bottom: 0,
         caret_blink_timer: 0.0,
         caret_visible: true,
+        layout: UiLayoutConfig::default(),
+        template_path: None,
+        template_modified: None,
         screen_size: (1280.0, 720.0),
         scale: 1.0,
         layout_dirty: true,

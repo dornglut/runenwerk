@@ -1,10 +1,11 @@
 use crate::render::Gfx;
 use crate::systems::{
     clear_input_system, game_command_apply_system, game_command_execute_system, time_system,
-    ui_build_batches_system, ui_input_system, ui_layout_system, ui_render_extract_system,
+    ui_build_batches_system, ui_hot_reload_system, ui_input_system, ui_layout_system,
+    ui_render_extract_system,
     ui_render_submit_system,
 };
-use crate::ui::{initialize_console_ui, ConsoleUiState};
+use crate::ui::{ConsoleUiState, initialize_console_ui, reload_console_template_if_changed};
 use anyhow::Result;
 use ecs::World;
 use scheduler::{Node, Scheduler, SchedulerBuilder};
@@ -35,6 +36,7 @@ impl Engine {
         let gfx = Gfx::new(window.clone())?;
         let mut world = World::new();
         let mut ui = initialize_console_ui(&mut world);
+        let _ = reload_console_template_if_changed(&mut world, &mut ui, true);
         ui.screen_size = (
             gfx.ctx.surface_config.width as f32,
             gfx.ctx.surface_config.height as f32,
@@ -51,7 +53,16 @@ impl Engine {
 
         let scheduler = SchedulerBuilder::<EngineData>::new()
             .add_node("time", Node::new("time", time_system))
-            .add_node_with_edges("ui_input", Node::new("ui_input", ui_input_system), &["time"])
+            .add_node_with_edges(
+                "ui_hot_reload",
+                Node::new("ui_hot_reload", ui_hot_reload_system),
+                &["time"],
+            )
+            .add_node_with_edges(
+                "ui_input",
+                Node::new("ui_input", ui_input_system),
+                &["ui_hot_reload"],
+            )
             .add_node_with_edges(
                 "game_command_apply",
                 Node::new("game_command_apply", game_command_apply_system),

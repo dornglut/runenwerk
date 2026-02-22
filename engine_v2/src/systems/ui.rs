@@ -1,5 +1,6 @@
 use crate::runtime::EngineData;
 use crate::ui::{
+    reload_console_template_if_changed,
     UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiInputField, UiInteraction, UiStyle,
     UiSubmitEvent, UiText, UiTransform,
 };
@@ -50,6 +51,35 @@ fn fit_text_with_ellipsis_from_left(text: &str, size: f32, max_width: f32) -> St
     }
 }
 
+fn fit_text_with_ellipsis_from_right(text: &str, size: f32, max_width: f32) -> String {
+    if text.is_empty() || estimate_text_width(text, size) <= max_width {
+        return text.to_string();
+    }
+
+    let ellipsis = "...";
+    if estimate_text_width(ellipsis, size) >= max_width {
+        return String::new();
+    }
+
+    let mut head = text.to_string();
+    while !head.is_empty() && estimate_text_width(&format!("{head}{ellipsis}"), size) > max_width {
+        head.pop();
+    }
+
+    if head.is_empty() {
+        String::new()
+    } else {
+        format!("{head}{ellipsis}")
+    }
+}
+
+fn constrain_text_width(mut text: String, size: f32, max_width: f32) -> String {
+    while !text.is_empty() && estimate_text_width(&text, size) > max_width {
+        text.pop();
+    }
+    text
+}
+
 pub(super) fn visible_input_text(full_line: &str, size: f32, max_width: f32) -> String {
     if estimate_text_width(full_line, size) <= max_width {
         return full_line.to_string();
@@ -65,7 +95,7 @@ pub(super) fn visible_input_text(full_line: &str, size: f32, max_width: f32) -> 
     }
 
     let clipped = fit_text_with_ellipsis_from_left(rest, size, max_width - prompt_width);
-    format!("{CONSOLE_PROMPT}{clipped}")
+    constrain_text_width(format!("{CONSOLE_PROMPT}{clipped}"), size, max_width)
 }
 
 fn line_height(size: f32) -> f32 {
@@ -81,6 +111,8 @@ pub(super) fn build_scrollback_view_text(
     lines: &[String],
     lines_from_bottom: usize,
     visible_capacity: usize,
+    max_line_width: f32,
+    text_size: f32,
 ) -> String {
     if lines.is_empty() {
         return String::new();
@@ -88,7 +120,11 @@ pub(super) fn build_scrollback_view_text(
 
     let end = lines.len().saturating_sub(lines_from_bottom);
     let start = end.saturating_sub(visible_capacity);
-    lines[start..end].join("\n")
+    lines[start..end]
+        .iter()
+        .map(|line| fit_text_with_ellipsis_from_right(line, text_size, max_line_width))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn clamp_panel_dimension(target: f32, min_size: f32, max_size: f32) -> f32 {
@@ -97,6 +133,47 @@ fn clamp_panel_dimension(target: f32, min_size: f32, max_size: f32) -> f32 {
     } else {
         target.clamp(min_size, max_size)
     }
+}
+
+fn adaptive_footer_metrics(
+    panel_available_w: f32,
+    panel_h: f32,
+    inner_padding: f32,
+    scale: f32,
+    base_footer_offset: f32,
+    base_input_height: f32,
+    base_button_width: f32,
+    base_input_button_gap: f32,
+) -> (f32, f32, f32, f32) {
+    let min_input_h = (12.0 * scale).max(10.0);
+    let input_h = (base_input_height * scale)
+        .min((panel_h - inner_padding * 2.0).max(min_input_h))
+        .max(min_input_h);
+
+    let min_gap = (3.0 * scale).max(2.0);
+    let min_button_w = (36.0 * scale).max(24.0);
+    let footer_w = panel_available_w.max(1.0);
+    let gap = (base_input_button_gap * scale).min((footer_w * 0.08).max(min_gap));
+
+    // Keep the button usable while guaranteeing room for at least a small input width.
+    let button_cap_by_footer = (footer_w - min_gap - min_button_w).max(min_button_w);
+    let button_w = (base_button_width * scale)
+        .min(button_cap_by_footer)
+        .max(min_button_w);
+    let input_w = (footer_w - button_w - gap).max(min_button_w);
+
+    let footer_y = (base_footer_offset * scale)
+        .min((panel_h - inner_padding - input_h).max(inner_padding))
+        .max(inner_padding);
+
+    (footer_y, input_h, button_w, input_w)
+}
+
+pub fn ui_hot_reload_system(data: &mut EngineData) -> anyhow::Result<()> {
+    if let Err(err) = reload_console_template_if_changed(&mut data.world, &mut data.ui, false) {
+        tracing::warn!(?err, "ui hot reload failed");
+    }
+    Ok(())
 }
 
 pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
@@ -258,18 +335,34 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
 
     let (screen_w, screen_h) = data.ui.screen_size;
     let s = data.ui.scale.max(1.0);
-    let outer_margin = 24.0 * s;
+    let outer_margin = data.ui.layout.outer_margin * s;
     let available_w = (screen_w - (outer_margin * 2.0)).max(1.0);
     let available_h = (screen_h - (outer_margin * 2.0)).max(1.0);
-    let panel_w = clamp_panel_dimension(screen_w * 0.6, 480.0 * s, available_w);
-    let panel_h = clamp_panel_dimension(screen_h * 0.45, 280.0 * s, available_h);
+    let panel_w = clamp_panel_dimension(
+        screen_w * data.ui.layout.panel_width_ratio,
+        data.ui.layout.panel_min_width * s,
+        available_w,
+    );
+    let panel_h = clamp_panel_dimension(
+        screen_h * data.ui.layout.panel_height_ratio,
+        data.ui.layout.panel_min_height * s,
+        available_h,
+    );
     let panel_x = (screen_w - panel_w - outer_margin).max(outer_margin);
     let panel_y = (screen_h - panel_h - outer_margin).max(outer_margin);
-    let inner_padding = 12.0 * s;
-    let footer_y = 40.0 * s;
-    let input_h = 28.0 * s;
-    let button_w = 100.0 * s;
-    let input_button_gap = 8.0 * s;
+    let inner_padding = data.ui.layout.inner_padding * s;
+    let panel_inner_w = (panel_w - inner_padding * 2.0).max(1.0);
+    let (footer_y, input_h, button_w, input_w) =
+        adaptive_footer_metrics(
+            panel_inner_w,
+            panel_h,
+            inner_padding,
+            s,
+            data.ui.layout.footer_offset,
+            data.ui.layout.input_height,
+            data.ui.layout.button_width,
+            data.ui.layout.input_button_gap,
+        );
 
     if let Some(root) = data.world.get_component_mut::<UiTransform>(data.ui.root) {
         root.x = panel_x;
@@ -281,14 +374,14 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
     if let Some(scroll) = data.world.get_component_mut::<UiTransform>(data.ui.scrollback) {
         scroll.x = panel_x + inner_padding;
         scroll.y = panel_y + inner_padding;
-        scroll.w = panel_w - (inner_padding * 2.0);
+        scroll.w = panel_inner_w;
         scroll.h = panel_h - footer_y - inner_padding;
     }
 
     if let Some(input) = data.world.get_component_mut::<UiTransform>(data.ui.input) {
         input.x = panel_x + inner_padding;
         input.y = panel_y + panel_h - footer_y;
-        input.w = panel_w - (inner_padding * 2.0) - button_w - input_button_gap;
+        input.w = input_w;
         input.h = input_h;
     }
 
@@ -332,10 +425,13 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
         let visible_capacity = visible_line_capacity(transform.h, text_size);
         let max_scroll = data.ui.lines.len().saturating_sub(visible_capacity);
         data.ui.scroll_lines_from_bottom = data.ui.scroll_lines_from_bottom.min(max_scroll);
+        let line_max_w = (transform.w - (8.0 * ui_scale)).max(1.0);
         let view = build_scrollback_view_text(
             &data.ui.lines,
             data.ui.scroll_lines_from_bottom,
             visible_capacity,
+            line_max_w,
+            text_size,
         );
         commands.push(UiBatchCmd::Text {
             x: transform.x,
@@ -372,21 +468,22 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
     ) {
         let scaled_text_size = text.size * ui_scale;
         let padded_x = transform.x + (6.0 * ui_scale);
-        let content_max_w = (transform.w - (10.0 * ui_scale)).max(1.0);
+        let content_max_w = (transform.w - (14.0 * ui_scale)).max(1.0);
         let content = visible_input_text(&text.content, scaled_text_size, content_max_w);
+        let text_y = transform.y + ((transform.h - scaled_text_size) * 0.5).max(0.0);
         commands.push(UiBatchCmd::Text {
             x: padded_x,
-            y: transform.y,
+            y: text_y,
             content: content.clone(),
             color: text.color,
             size: scaled_text_size,
         });
 
         if data.ui.caret_visible && input_field.focused {
-            let caret_x = (padded_x + estimate_text_width(&content, scaled_text_size) + ui_scale)
+            let caret_x = (padded_x + estimate_text_width(&content, scaled_text_size))
                 .min(transform.x + transform.w - (2.0 * ui_scale));
-            let caret_h = (scaled_text_size * 0.92).min(transform.h);
-            let caret_y = transform.y + ((transform.h - caret_h) * 0.5).max(0.0);
+            let caret_h = (scaled_text_size * 0.9).min(transform.h);
+            let caret_y = text_y + (scaled_text_size - caret_h) * 0.5;
             commands.push(UiBatchCmd::Rect {
                 x: caret_x,
                 y: caret_y,
