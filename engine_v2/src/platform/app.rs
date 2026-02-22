@@ -27,8 +27,13 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let attrs: WindowAttributes = Window::default_attributes().with_title("Grotto Quest - Engine v2");
-        let window = Arc::new(event_loop.create_window(attrs).expect("failed to create window"));
+        let attrs: WindowAttributes =
+            Window::default_attributes().with_title("Grotto Quest - Engine v2");
+        let window = Arc::new(
+            event_loop
+                .create_window(attrs)
+                .expect("failed to create window"),
+        );
 
         let mut engine = Engine::new(window.clone()).expect("failed to create engine");
         // Keep UI sizing aligned with the display scale from the first frame.

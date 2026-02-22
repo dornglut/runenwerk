@@ -12,31 +12,49 @@
     button_width: Some(100.0),
     input_button_gap: Some(8.0),
   )),
-  root_style: Some((
-    bg_color: Some((0.08, 0.09, 0.11, 1.0)),
-    border_color: Some((0.20, 0.22, 0.28, 1.0)),
-    border_width: Some(1.0),
-    radius: Some(6.0),
-  )),
-  scrollback_text: Some((
-    color: Some((0.78, 0.86, 0.94, 1.0)),
-    size: Some(14.0),
-  )),
-  input_text: Some((
-    color: Some((0.95, 0.95, 0.95, 1.0)),
-    size: Some(14.0),
-  )),
-  confirm_button: Some((
-    style: Some((
-      bg_color: Some((0.16, 0.30, 0.22, 1.0)),
-      border_color: Some((0.32, 0.56, 0.42, 1.0)),
-      border_width: Some(1.0),
-      radius: Some(4.0),
-    )),
-    text: Some((
-      content: Some("Confirm"),
-      color: Some((0.95, 0.96, 0.95, 1.0)),
-      size: Some(13.0),
-    )),
-  )),
+  nodes: Some([
+    (
+      id: "root",
+      kind: Some(Panel),
+      style: Some((
+        bg_color: Some((0.08, 0.09, 0.11, 1.0)),
+        border_color: Some((0.20, 0.22, 0.28, 1.0)),
+        border_width: Some(1.0),
+        radius: Some(6.0),
+      )),
+      children: [
+        (
+          id: "scrollback",
+          kind: Some(Scrollback),
+          text: Some((
+            color: Some((0.78, 0.86, 0.94, 1.0)),
+            size: Some(14.0),
+          )),
+        ),
+        (
+          id: "input",
+          kind: Some(Input),
+          text: Some((
+            color: Some((0.95, 0.95, 0.95, 1.0)),
+            size: Some(14.0),
+          )),
+        ),
+        (
+          id: "confirm_button",
+          kind: Some(Button),
+          style: Some((
+            bg_color: Some((0.16, 0.30, 0.22, 1.0)),
+            border_color: Some((0.32, 0.56, 0.42, 1.0)),
+            border_width: Some(1.0),
+            radius: Some(4.0),
+          )),
+          text: Some((
+            content: Some("Confirm"),
+            color: Some((0.95, 0.96, 0.95, 1.0)),
+            size: Some(13.0),
+          )),
+        ),
+      ],
+    ),
+  ]),
 )

@@ -1,10 +1,10 @@
 mod clear_input;
 mod game_commands;
 mod render;
-mod time;
-mod ui;
 #[cfg(test)]
 mod tests;
+mod time;
+mod ui;
 
 pub use clear_input::*;
 pub use game_commands::*;

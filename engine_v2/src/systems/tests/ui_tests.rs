@@ -1,9 +1,24 @@
+use crate::systems::ui::WrappedEditorRow;
+use crate::systems::ui::adaptive_footer_metrics;
 use crate::systems::ui::build_scrollback_view_text;
+use crate::systems::ui::build_visible_multiline_input;
 use crate::systems::ui::estimate_text_width;
+use crate::systems::ui::move_cursor_vertical;
 use crate::systems::ui::point_in_rect;
-use crate::systems::ui::visible_input_text;
 use crate::systems::ui::visible_line_capacity;
+use crate::systems::ui::wrap_editor_rows;
+use crate::ui::EditorBuffer;
+use crate::ui::UiTextMetrics;
 use crate::ui::UiTransform;
+use std::collections::HashMap;
+
+fn mono_metrics() -> UiTextMetrics {
+    UiTextMetrics {
+        glyphs: HashMap::new(),
+        base_size: 10.0,
+        fallback_advance: 10.0,
+    }
+}
 
 #[test]
 fn point_in_rect_bounds_check_works() {
@@ -30,11 +45,87 @@ fn estimate_text_width_scales_with_size_and_length() {
 }
 
 #[test]
-fn visible_input_text_keeps_prompt_and_tail() {
-    let full = "grotto> this is a very long command";
-    let clipped = visible_input_text(full, 14.0, 120.0);
-    assert!(clipped.starts_with("grotto> "));
-    assert!(clipped.len() < full.len());
+fn wrap_editor_rows_keeps_explicit_empty_lines() {
+    let rows = wrap_editor_rows("ab\n\ncd", &mono_metrics(), 10.0, 220.0);
+    assert_eq!(rows.len(), 3);
+    assert_eq!(
+        rows[0],
+        WrappedEditorRow {
+            start_char: 0,
+            end_char: 2
+        }
+    );
+    assert_eq!(
+        rows[1],
+        WrappedEditorRow {
+            start_char: 3,
+            end_char: 3
+        }
+    );
+    assert_eq!(
+        rows[2],
+        WrappedEditorRow {
+            start_char: 4,
+            end_char: 6
+        }
+    );
+}
+
+#[test]
+fn visible_multiline_input_wraps_with_prompt_budget_on_first_row() {
+    let mut editor = EditorBuffer {
+        text: "abcdefghijklmno".to_string(),
+        cursor_chars: 15,
+        ..EditorBuffer::default()
+    };
+    let layout = build_visible_multiline_input(&mut editor, &mono_metrics(), 10.0, 120.0, 80.0);
+    let lines: Vec<&str> = layout.content.lines().collect();
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0], "grotto> abcd");
+    assert_eq!(lines[1], "efghijklmno");
+}
+
+#[test]
+fn move_cursor_vertical_preserves_visual_column_between_wrapped_rows() {
+    let metrics = mono_metrics();
+    let mut editor = EditorBuffer {
+        text: "abcdefghijklmnopqrstuvwxyz12".to_string(),
+        cursor_chars: 9,
+        ..EditorBuffer::default()
+    };
+
+    assert!(move_cursor_vertical(
+        &mut editor,
+        &metrics,
+        10.0,
+        120.0,
+        true
+    ));
+    assert_eq!(editor.cursor_chars, 21);
+    assert!(move_cursor_vertical(
+        &mut editor,
+        &metrics,
+        10.0,
+        120.0,
+        false
+    ));
+    assert_eq!(editor.cursor_chars, 9);
+}
+
+#[test]
+fn multiline_input_viewport_tracks_caret_row() {
+    let mut editor = EditorBuffer {
+        text: "abcdefghijklmnopqrstuvwxyz1234567890ABCD".to_string(),
+        cursor_chars: 40,
+        ..EditorBuffer::default()
+    };
+    let layout = build_visible_multiline_input(&mut editor, &mono_metrics(), 10.0, 120.0, 25.0);
+    let lines: Vec<&str> = layout.content.lines().collect();
+
+    assert_eq!(layout.visible_rows, 2);
+    assert_eq!(editor.viewport_row, 2);
+    assert_eq!(lines.len(), 2);
+    assert!(!lines[0].starts_with("grotto> "));
 }
 
 #[test]
@@ -53,4 +144,14 @@ fn build_scrollback_view_text_takes_visible_window_from_bottom_offset() {
     ];
     let view = build_scrollback_view_text(&lines, 1, 2, 200.0, 14.0);
     assert_eq!(view, "l2\nl3");
+}
+
+#[test]
+fn adaptive_footer_metrics_keep_controls_inside_footer_width() {
+    let footer_w = 90.0;
+    let (_, _, button_w, input_w) =
+        adaptive_footer_metrics(footer_w, 120.0, 10.0, 1.0, 40.0, 28.0, 100.0, 8.0);
+    assert!(button_w > 0.0);
+    assert!(input_w > 0.0);
+    assert!(button_w + input_w <= footer_w);
 }

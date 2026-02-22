@@ -7,7 +7,15 @@ pub struct InputState {
     keys_down: HashSet<KeyCode>,
     pub typed_text: String,
     pub submitted: bool,
+    pub insert_newline: bool,
     pub backspace: bool,
+    pub delete: bool,
+    pub move_left: bool,
+    pub move_right: bool,
+    pub move_up: bool,
+    pub move_down: bool,
+    pub move_home: bool,
+    pub move_end: bool,
     pub page_up: bool,
     pub page_down: bool,
     pub mouse_delta: (f32, f32),
@@ -30,11 +38,38 @@ impl InputState {
                     match event.state {
                         ElementState::Pressed => {
                             self.keys_down.insert(code);
-                            if code == KeyCode::Enter {
-                                self.submitted = true;
+                            if matches!(code, KeyCode::Enter | KeyCode::NumpadEnter) {
+                                let shift_down = self.keys_down.contains(&KeyCode::ShiftLeft)
+                                    || self.keys_down.contains(&KeyCode::ShiftRight);
+                                if shift_down {
+                                    self.insert_newline = true;
+                                } else {
+                                    self.submitted = true;
+                                }
                             }
                             if code == KeyCode::Backspace {
                                 self.backspace = true;
+                            }
+                            if code == KeyCode::Delete {
+                                self.delete = true;
+                            }
+                            if code == KeyCode::ArrowLeft {
+                                self.move_left = true;
+                            }
+                            if code == KeyCode::ArrowRight {
+                                self.move_right = true;
+                            }
+                            if code == KeyCode::ArrowUp {
+                                self.move_up = true;
+                            }
+                            if code == KeyCode::ArrowDown {
+                                self.move_down = true;
+                            }
+                            if code == KeyCode::Home {
+                                self.move_home = true;
+                            }
+                            if code == KeyCode::End {
+                                self.move_end = true;
                             }
                             if code == KeyCode::PageUp {
                                 self.page_up = true;
@@ -92,7 +127,15 @@ impl InputState {
     pub fn clear_frame(&mut self) {
         self.typed_text.clear();
         self.submitted = false;
+        self.insert_newline = false;
         self.backspace = false;
+        self.delete = false;
+        self.move_left = false;
+        self.move_right = false;
+        self.move_up = false;
+        self.move_down = false;
+        self.move_home = false;
+        self.move_end = false;
         self.page_up = false;
         self.page_down = false;
         self.mouse_delta = (0.0, 0.0);

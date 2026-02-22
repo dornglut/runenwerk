@@ -1,7 +1,7 @@
 use crate::ui::{UiDrawCmd, UiDrawList};
 use bytemuck::{Pod, Zeroable};
 use image::GenericImageView;
-use rusttype::{point, Font, Scale};
+use rusttype::{Font, Scale, point};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -182,7 +182,10 @@ pub struct FileFontProvider;
 impl FileFontProvider {
     fn msdf_paths() -> [(&'static str, &'static str); 2] {
         [
-            ("assets/fonts/console_msdf.png", "assets/fonts/console_msdf.json"),
+            (
+                "assets/fonts/console_msdf.png",
+                "assets/fonts/console_msdf.json",
+            ),
             (
                 "engine_v2/assets/console_msdf.png",
                 "engine_v2/assets/console_msdf.json",
@@ -246,7 +249,10 @@ impl FileFontProvider {
                         let uv_right = atlas.right / atlas_w as f32;
 
                         let (uv_top, uv_bottom) = if y_origin_bottom {
-                            (1.0 - (atlas.top / atlas_h as f32), 1.0 - (atlas.bottom / atlas_h as f32))
+                            (
+                                1.0 - (atlas.top / atlas_h as f32),
+                                1.0 - (atlas.bottom / atlas_h as f32),
+                            )
                         } else {
                             (atlas.top / atlas_h as f32, atlas.bottom / atlas_h as f32)
                         };
@@ -463,19 +469,20 @@ impl TextRenderer {
             mapped_at_creation: false,
         });
 
-        let screen_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("engine_v2_text_screen_bgl"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
+        let screen_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("engine_v2_text_screen_bgl"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
         let atlas_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("engine_v2_text_atlas_bgl"),
             entries: &[
@@ -656,7 +663,12 @@ impl TextRenderer {
         Some((buffer, instances.len() as u32))
     }
 
-    pub fn encode_draw<'a>(&'a self, pass: &mut RenderPass<'a>, instance_buffer: &'a Buffer, count: u32) {
+    pub fn encode_draw<'a>(
+        &'a self,
+        pass: &mut RenderPass<'a>,
+        instance_buffer: &'a Buffer,
+        count: u32,
+    ) {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.screen_bind_group, &[]);
         pass.set_bind_group(1, &self.atlas_bind_group, &[]);
@@ -836,6 +848,7 @@ pub fn build_glyph_instances(
             content,
             color,
             size,
+            ..
         } = cmd
         else {
             continue;
@@ -868,7 +881,12 @@ pub fn build_glyph_instances(
 
                 instances.push(GlyphInstanceRaw {
                     rect: [rect_x, rect_y, rect_w, rect_h],
-                    uv: [glyph.uv_min[0], glyph.uv_min[1], glyph.uv_max[0], glyph.uv_max[1]],
+                    uv: [
+                        glyph.uv_min[0],
+                        glyph.uv_min[1],
+                        glyph.uv_max[0],
+                        glyph.uv_max[1],
+                    ],
                     color: *color,
                 });
             }
@@ -882,7 +900,7 @@ pub fn build_glyph_instances(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_glyph_instances, GlyphMetrics};
+    use super::{GlyphMetrics, build_glyph_instances};
     use crate::ui::{UiDrawCmd, UiDrawList};
     use std::collections::HashMap;
 
@@ -927,6 +945,7 @@ mod tests {
                 content: "ab".to_string(),
                 color: [1.0, 1.0, 1.0, 1.0],
                 size: 14.0,
+                clip: None,
             }],
         };
 

@@ -2,7 +2,9 @@ mod template;
 
 pub use template::*;
 
+use crate::render::{FileFontProvider, FontAtlasProvider, GlyphMetrics};
 use ecs::{EntityHandle, World, WorldBuilderExt};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 #[cfg(test)]
@@ -85,6 +87,7 @@ pub enum UiDrawCmd {
         content: String,
         color: [f32; 4],
         size: f32,
+        clip: Option<[f32; 4]>,
     },
 }
 
@@ -109,12 +112,28 @@ pub enum UiBatchCmd {
         content: String,
         color: [f32; 4],
         size: f32,
+        clip: Option<[f32; 4]>,
     },
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UiBatchList {
     pub commands: Vec<UiBatchCmd>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct EditorBuffer {
+    pub text: String,
+    pub cursor_chars: usize,
+    pub viewport_row: usize,
+    pub preferred_caret_x: Option<f32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UiTextMetrics {
+    pub glyphs: HashMap<char, GlyphMetrics>,
+    pub base_size: f32,
+    pub fallback_advance: f32,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -156,6 +175,8 @@ pub struct ConsoleUiState {
     pub confirm_button: EntityHandle,
     pub batches: UiBatchList,
     pub draw_list: UiDrawList,
+    pub input_editor: EditorBuffer,
+    pub text_metrics: UiTextMetrics,
     pub lines: Vec<String>,
     pub max_lines: usize,
     pub scroll_lines_from_bottom: usize,
@@ -164,15 +185,32 @@ pub struct ConsoleUiState {
     pub layout: UiLayoutConfig,
     pub template_path: Option<PathBuf>,
     pub template_modified: Option<SystemTime>,
+    pub template_node_hashes: HashMap<String, u64>,
     pub screen_size: (f32, f32),
     pub scale: f32,
     pub layout_dirty: bool,
 }
 
 pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
+    let font_provider = FileFontProvider;
+    let atlas = font_provider.load_default_font();
+    let fallback_advance = atlas
+        .glyphs
+        .get(&' ')
+        .map(|glyph| glyph.advance_px)
+        .unwrap_or(8.0);
+    let text_metrics = UiTextMetrics {
+        glyphs: atlas.glyphs,
+        base_size: atlas.base_size.max(1.0),
+        fallback_advance,
+    };
+
     let root = world
         .entity()
-        .with(UiNode { visible: true, z: 0 })
+        .with(UiNode {
+            visible: true,
+            z: 0,
+        })
         .with(UiTransform {
             x: 32.0,
             y: 32.0,
@@ -194,7 +232,10 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
 
     let scrollback = world
         .entity()
-        .with(UiNode { visible: true, z: 1 })
+        .with(UiNode {
+            visible: true,
+            z: 1,
+        })
         .with(UiTransform {
             x: 44.0,
             y: 52.0,
@@ -215,7 +256,10 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
 
     let input = world
         .entity()
-        .with(UiNode { visible: true, z: 1 })
+        .with(UiNode {
+            visible: true,
+            z: 1,
+        })
         .with(UiTransform {
             x: 44.0,
             y: 338.0,
@@ -247,7 +291,10 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
 
     let confirm_button = world
         .entity()
-        .with(UiNode { visible: true, z: 2 })
+        .with(UiNode {
+            visible: true,
+            z: 2,
+        })
         .with(UiTransform {
             x: 556.0,
             y: 338.0,
@@ -286,6 +333,8 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         confirm_button,
         batches: UiBatchList::default(),
         draw_list: UiDrawList::default(),
+        input_editor: EditorBuffer::default(),
+        text_metrics,
         lines: vec!["grotto> boot complete".to_string()],
         max_lines: 500,
         scroll_lines_from_bottom: 0,
@@ -294,6 +343,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         layout: UiLayoutConfig::default(),
         template_path: None,
         template_modified: None,
+        template_node_hashes: HashMap::new(),
         screen_size: (1280.0, 720.0),
         scale: 1.0,
         layout_dirty: true,

@@ -254,6 +254,30 @@ impl Renderer {
         instances
     }
 
+    fn full_scissor(surface_width: u32, surface_height: u32) -> (u32, u32, u32, u32) {
+        (0, 0, surface_width.max(1), surface_height.max(1))
+    }
+
+    fn clip_to_scissor(
+        clip: [f32; 4],
+        surface_width: u32,
+        surface_height: u32,
+    ) -> Option<(u32, u32, u32, u32)> {
+        let max_x = surface_width.max(1) as i32;
+        let max_y = surface_height.max(1) as i32;
+
+        let x0 = (clip[0].floor() as i32).clamp(0, max_x);
+        let y0 = (clip[1].floor() as i32).clamp(0, max_y);
+        let x1 = ((clip[0] + clip[2]).ceil() as i32).clamp(0, max_x);
+        let y1 = ((clip[1] + clip[3]).ceil() as i32).clamp(0, max_y);
+
+        if x1 <= x0 || y1 <= y0 {
+            return None;
+        }
+
+        Some((x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32))
+    }
+
     fn ensure_text_renderer(&mut self, device: &Device, queue: &Queue, format: TextureFormat) {
         if self.text_renderer.is_some() && self.text_renderer_format == Some(format) {
             return;
@@ -297,13 +321,39 @@ impl Renderer {
         };
         queue.write_buffer(&rect_pass.screen_buffer, 0, bytemuck::bytes_of(&screen));
 
-        let text_instances = self
-            .text_renderer
-            .as_ref()
-            .and_then(|renderer| {
-                renderer.write_screen_uniform(queue, surface_width, surface_height);
-                renderer.build_instance_buffer(device, draw_list)
-            });
+        if let Some(renderer) = self.text_renderer.as_ref() {
+            renderer.write_screen_uniform(queue, surface_width, surface_height);
+        }
+
+        let surface_width_u32 = surface_width.max(1.0).round() as u32;
+        let surface_height_u32 = surface_height.max(1.0).round() as u32;
+        let text_draws = if let Some(text_renderer) = self.text_renderer.as_ref() {
+            let full_scissor = Self::full_scissor(surface_width_u32, surface_height_u32);
+            let mut draws = Vec::new();
+
+            for cmd in &draw_list.commands {
+                let UiDrawCmd::Text { clip, .. } = cmd else {
+                    continue;
+                };
+
+                let scissor = clip
+                    .and_then(|clip| {
+                        Self::clip_to_scissor(clip, surface_width_u32, surface_height_u32)
+                    })
+                    .unwrap_or(full_scissor);
+                let single = UiDrawList {
+                    commands: vec![cmd.clone()],
+                };
+                if let Some((buffer, count)) = text_renderer.build_instance_buffer(device, &single)
+                {
+                    draws.push((buffer, count, scissor));
+                }
+            }
+
+            draws
+        } else {
+            Vec::new()
+        };
 
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("engine_v2_render_encoder"),
@@ -333,13 +383,37 @@ impl Renderer {
                 pass.draw(0..6, 0..instances.len() as u32);
             }
 
-            if let (Some(text_renderer), Some((text_buffer, text_count))) =
-                (self.text_renderer.as_ref(), text_instances.as_ref())
-            {
-                text_renderer.encode_draw(&mut pass, text_buffer, *text_count);
+            if let Some(text_renderer) = self.text_renderer.as_ref() {
+                let full_scissor = Self::full_scissor(surface_width_u32, surface_height_u32);
+                pass.set_scissor_rect(
+                    full_scissor.0,
+                    full_scissor.1,
+                    full_scissor.2,
+                    full_scissor.3,
+                );
+
+                for (text_buffer, text_count, scissor) in &text_draws {
+                    pass.set_scissor_rect(scissor.0, scissor.1, scissor.2, scissor.3);
+                    text_renderer.encode_draw(&mut pass, text_buffer, *text_count);
+                }
             }
         }
 
         queue.submit(std::iter::once(encoder.finish()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Renderer;
+
+    #[test]
+    fn clip_to_scissor_clamps_and_rejects_empty() {
+        let clipped = Renderer::clip_to_scissor([-10.0, 4.0, 20.0, 10.0], 100, 80)
+            .expect("clip should intersect");
+        assert_eq!(clipped, (0, 4, 10, 10));
+
+        let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
+        assert!(none.is_none());
     }
 }
