@@ -2,6 +2,7 @@ use crate::ui::{ConsoleUiState, initialize_console_ui, load_console_template};
 use anyhow::Result;
 use ecs::{EntityHandle, World};
 use scheduler::{Node, Scheduler, SchedulerBuilder};
+use std::collections::BTreeSet;
 use std::time::SystemTime;
 
 mod config;
@@ -15,8 +16,9 @@ pub use config::{
 };
 pub use gameplay::gameplay_apply_live_config;
 use gameplay::{
-    gameplay_combat_system, gameplay_decide_system, gameplay_emit_ui_system, gameplay_move_system,
-    gameplay_resolve_system, gameplay_scene_bootstrap, gameplay_sense_system,
+    gameplay_chunk_spawn_system, gameplay_combat_system, gameplay_decide_system,
+    gameplay_emit_ui_system, gameplay_move_system, gameplay_resolve_system,
+    gameplay_scene_bootstrap, gameplay_sense_system,
 };
 pub use lifecycle::{SceneLifecycleEvent, SceneLifecyclePhase};
 pub use manager::SceneManager;
@@ -194,10 +196,16 @@ pub struct WorldSceneContext {
     pub gameplay_config_modified: Option<SystemTime>,
     pub overlay_consumed: bool,
     pub overlay_scene: SceneId,
+    pub player_move_x: f32,
+    pub player_move_y: f32,
+    pub camera_yaw: f32,
+    pub camera_pitch: f32,
+    pub camera_distance: f32,
     pub tick_entity: EntityHandle,
     pub debug_entity: EntityHandle,
     pub frame_count: u64,
     pub enemy_kills: u32,
+    pub discovered_chunks: BTreeSet<(i32, i32)>,
     pub pending_damage: Vec<PendingDamage>,
     pub outbound_notifications: Vec<WorldToOverlayMessage>,
 }
@@ -385,6 +393,9 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
     let ctx = WorldSceneContext {
         world,
         scene,
+        camera_yaw: gameplay_config.camera.initial_yaw,
+        camera_pitch: gameplay_config.camera.initial_pitch,
+        camera_distance: gameplay_config.camera.initial_distance,
         gameplay_config,
         delta_seconds: 1.0 / 60.0,
         fixed_step_seconds: 1.0 / 60.0,
@@ -392,10 +403,13 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
         gameplay_config_modified,
         overlay_consumed: false,
         overlay_scene: SceneId::ConsoleUi,
+        player_move_x: 0.0,
+        player_move_y: 0.0,
         tick_entity,
         debug_entity,
         frame_count: 0,
         enemy_kills: 0,
+        discovered_chunks: BTreeSet::new(),
         pending_damage: Vec::new(),
         outbound_notifications: Vec::new(),
     };
@@ -431,9 +445,14 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
             &["gameplay_decide"],
         )
         .add_node_with_edges(
+            "gameplay_chunk_spawn",
+            Node::new("gameplay_chunk_spawn", gameplay_chunk_spawn_system),
+            &["gameplay_move"],
+        )
+        .add_node_with_edges(
             "gameplay_combat",
             Node::new("gameplay_combat", gameplay_combat_system),
-            &["gameplay_move"],
+            &["gameplay_chunk_spawn"],
         )
         .add_node_with_edges(
             "gameplay_resolve",
@@ -454,8 +473,8 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
 mod tests {
     use super::{
         OverlaySceneRuntime, SceneCommand, SceneId, SceneLifecyclePhase, SceneManager,
-        WorldDebugPosition,
-        WorldFrameCounter, WorldToOverlayMessage, build_world_scene_runtime, load_gameplay_config,
+        WorldDebugPosition, WorldFrameCounter, WorldToOverlayMessage, build_world_scene_runtime,
+        load_gameplay_config,
     };
     use crate::ui::initialize_console_ui;
     use ecs::World;
@@ -536,7 +555,8 @@ mod tests {
         let cfg = load_gameplay_config();
         assert!(cfg.player.health > 0);
         assert!(cfg.enemy.health > 0);
-        assert!(cfg.enemy_count > 0);
+        assert!(cfg.enemies_per_chunk > 0);
+        assert!(cfg.chunk_size > 0.0);
         assert!(cfg.bounds.max_x > cfg.bounds.min_x);
         assert!(cfg.bounds.max_y > cfg.bounds.min_y);
     }
@@ -572,8 +592,8 @@ mod tests {
 
     #[test]
     fn world_scene_runtime_blocks_when_overlay_consumed() {
-        let mut runtime = build_world_scene_runtime(SceneId::GameplayStub)
-            .expect("runtime should build");
+        let mut runtime =
+            build_world_scene_runtime(SceneId::GameplayStub).expect("runtime should build");
         runtime.ctx.overlay_consumed = true;
         let initial_pos = runtime
             .ctx
@@ -619,8 +639,8 @@ mod tests {
 
     #[test]
     fn world_scene_runtime_emits_notifications_on_tick_boundaries() {
-        let mut runtime = build_world_scene_runtime(SceneId::GameplayStub)
-            .expect("runtime should build");
+        let mut runtime =
+            build_world_scene_runtime(SceneId::GameplayStub).expect("runtime should build");
         runtime.ctx.overlay_consumed = false;
         for _ in 0..60 {
             runtime

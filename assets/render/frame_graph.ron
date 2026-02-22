@@ -1,0 +1,35 @@
+(
+  passes: [
+    (
+      name: "world_compute",
+      kind: compute,
+      slot: Some(world_compute),
+      reads: [world_params, world_agents],
+      writes: [world_color],
+    ),
+    (
+      name: "world_compose",
+      kind: render,
+      slot: Some(world_compose),
+      reads: [world_color],
+      writes: [surface_color],
+      depends_on: ["world_compute"],
+    ),
+    (
+      name: "mesh_overlay",
+      kind: render,
+      pipeline: Some(world_compose_fullscreen),
+      reads: [mesh_data],
+      writes: [surface_color],
+      depends_on: ["world_compose"],
+    ),
+    (
+      name: "ui_composite",
+      kind: render,
+      slot: Some(ui_composite),
+      reads: [ui_draw_list],
+      writes: [surface_color],
+      depends_on: ["mesh_overlay"],
+    ),
+  ],
+)

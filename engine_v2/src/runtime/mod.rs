@@ -139,14 +139,14 @@ impl Engine {
                 &["overlay_ui_build_batches"],
             )
             .add_node_with_edges(
-                "overlay_ui_render_submit",
-                Node::new("overlay_ui_render_submit", ui_render_submit_system),
+                "frame_render_submit",
+                Node::new("frame_render_submit", ui_render_submit_system),
                 &["overlay_ui_render_extract"],
             )
             .add_node_with_edges(
                 "clear_input",
                 Node::new("clear_input", clear_input_system),
-                &["overlay_ui_render_submit"],
+                &["frame_render_submit"],
             )
             .build()?;
 

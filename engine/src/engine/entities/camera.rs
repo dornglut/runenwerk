@@ -31,7 +31,7 @@ impl Camera {
 
 		// ---- Mouse look ----
 		let sensitivity = 0.5;
-		camera.target_yaw -= input.mouse_delta.0 * sensitivity;   // rotate around Y
+		camera.target_yaw = input.mouse_delta.0 * sensitivity;   // rotate around Y
 		camera.target_pitch -= input.mouse_delta.1 * sensitivity; // rotate around local X
 		camera.target_pitch = camera.target_pitch.clamp(-89.9, 89.9);   // prevent gimbal lock
 

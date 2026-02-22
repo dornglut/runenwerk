@@ -20,6 +20,16 @@ pub struct GameplayConfig {
     pub enemy_respawn_x_step: f32,
     pub enemy_respawn_y_step: f32,
     pub crit_modulo: u64,
+    pub max_combat_notifications_per_tick: u32,
+    pub chunk_size: f32,
+    pub enemies_per_chunk: u32,
+    pub chunk_load_radius: u32,
+    pub chunk_sim_radius: u32,
+    pub ai_interval_ticks: u32,
+    pub combat_interval_ticks: u32,
+    pub max_catchup_steps: u32,
+    pub infinite_world: bool,
+    pub camera: GameplayCameraConfig,
     pub bounds: GameplayBoundsConfig,
 }
 
@@ -40,7 +50,7 @@ impl Default for GameplayConfig {
                 attack_damage: 10,
                 cooldown_ticks: 28,
             },
-            enemy_count: 3,
+            enemy_count: 0,
             enemy_spacing: 8.0,
             enemy_start_x: 22.0,
             enemy_start_y: -10.0,
@@ -51,7 +61,55 @@ impl Default for GameplayConfig {
             enemy_respawn_x_step: 7.0,
             enemy_respawn_y_step: 9.0,
             crit_modulo: 13,
+            max_combat_notifications_per_tick: 24,
+            chunk_size: 24.0,
+            enemies_per_chunk: 5,
+            chunk_load_radius: 2,
+            chunk_sim_radius: 1,
+            ai_interval_ticks: 3,
+            combat_interval_ticks: 2,
+            max_catchup_steps: 4,
+            infinite_world: true,
+            camera: GameplayCameraConfig::default(),
             bounds: GameplayBoundsConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct GameplayCameraConfig {
+    pub initial_yaw: f32,
+    pub initial_pitch: f32,
+    pub initial_distance: f32,
+    pub rotate_sensitivity: f32,
+    pub zoom_sensitivity: f32,
+    pub invert_x: bool,
+    pub invert_y: bool,
+    pub invert_zoom: bool,
+    pub pitch_min: f32,
+    pub pitch_max: f32,
+    pub distance_min: f32,
+    pub distance_max: f32,
+    pub follow_dampening: f32,
+}
+
+impl Default for GameplayCameraConfig {
+    fn default() -> Self {
+        Self {
+            initial_yaw: std::f32::consts::PI,
+            initial_pitch: 0.45,
+            initial_distance: 10.0,
+            rotate_sensitivity: 0.0045,
+            zoom_sensitivity: 0.35,
+            invert_x: false,
+            invert_y: false,
+            invert_zoom: false,
+            pitch_min: -1.15,
+            pitch_max: 1.15,
+            distance_min: 3.0,
+            distance_max: 48.0,
+            follow_dampening: 0.12,
         }
     }
 }

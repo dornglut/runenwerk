@@ -1,11 +1,34 @@
 use super::{
     AgentCombat, AgentHealth, AgentMoveIntent, AgentPosition, AgentPrevPosition, AgentState,
     AgentTarget, AgentTeam, AgentVelocity, GameplayConfig, PendingDamage, QuestState, SceneId,
-    WorldDebugPosition,
-    WorldSceneContext, WorldToOverlayMessage,
+    WorldDebugPosition, WorldSceneContext, WorldToOverlayMessage,
 };
 use anyhow::Result;
 use ecs::{EntityHandle, World};
+
+fn spawn_enemy_at(world: &mut World, cfg: &GameplayConfig, x: f32, y: f32) -> EntityHandle {
+    world.spawn_entity(vec![
+        Box::new(AgentTeam::Enemy) as Box<dyn std::any::Any>,
+        Box::new(AgentState::Idle) as Box<dyn std::any::Any>,
+        Box::new(AgentPosition { x, y }) as Box<dyn std::any::Any>,
+        Box::new(AgentPrevPosition { x, y }) as Box<dyn std::any::Any>,
+        Box::new(AgentVelocity {
+            speed: cfg.enemy.speed,
+        }) as Box<dyn std::any::Any>,
+        Box::new(AgentHealth {
+            current: cfg.enemy.health,
+            max: cfg.enemy.health,
+        }) as Box<dyn std::any::Any>,
+        Box::new(AgentTarget { entity: None }) as Box<dyn std::any::Any>,
+        Box::new(AgentMoveIntent { dx: 0.0, dy: 0.0 }) as Box<dyn std::any::Any>,
+        Box::new(AgentCombat {
+            attack_range: cfg.enemy.attack_range,
+            attack_damage: cfg.enemy.attack_damage,
+            cooldown_ticks: cfg.enemy.cooldown_ticks,
+            cooldown_remaining: 0,
+        }) as Box<dyn std::any::Any>,
+    ])
+}
 
 pub fn gameplay_scene_bootstrap(world: &mut World, config: &GameplayConfig) {
     world.register_component::<AgentTeam>();
@@ -48,33 +71,12 @@ pub fn gameplay_scene_bootstrap(world: &mut World, config: &GameplayConfig) {
 
     for idx in 0..config.enemy_count {
         let offset = idx as f32 * config.enemy_spacing;
-        let _enemy = world.spawn_entity(vec![
-            Box::new(AgentTeam::Enemy) as Box<dyn std::any::Any>,
-            Box::new(AgentState::Idle) as Box<dyn std::any::Any>,
-            Box::new(AgentPosition {
-                x: config.enemy_start_x + offset,
-                y: config.enemy_start_y + (idx as f32 * config.enemy_spacing),
-            }) as Box<dyn std::any::Any>,
-            Box::new(AgentPrevPosition {
-                x: config.enemy_start_x + offset,
-                y: config.enemy_start_y + (idx as f32 * config.enemy_spacing),
-            }) as Box<dyn std::any::Any>,
-            Box::new(AgentVelocity {
-                speed: config.enemy.speed,
-            }) as Box<dyn std::any::Any>,
-            Box::new(AgentHealth {
-                current: config.enemy.health,
-                max: config.enemy.health,
-            }) as Box<dyn std::any::Any>,
-            Box::new(AgentTarget { entity: None }) as Box<dyn std::any::Any>,
-            Box::new(AgentMoveIntent { dx: 0.0, dy: 0.0 }) as Box<dyn std::any::Any>,
-            Box::new(AgentCombat {
-                attack_range: config.enemy.attack_range,
-                attack_damage: config.enemy.attack_damage,
-                cooldown_ticks: config.enemy.cooldown_ticks,
-                cooldown_remaining: 0,
-            }) as Box<dyn std::any::Any>,
-        ]);
+        let _enemy = spawn_enemy_at(
+            world,
+            config,
+            config.enemy_start_x + offset,
+            config.enemy_start_y + (idx as f32 * config.enemy_spacing),
+        );
     }
 }
 
@@ -108,10 +110,44 @@ pub fn gameplay_apply_live_config(ctx: &mut WorldSceneContext) {
     }
 }
 
+fn player_position(ctx: &WorldSceneContext) -> Option<AgentPosition> {
+    ctx.world.entities_with::<AgentTeam>().find_map(|entity| {
+        let team = ctx.world.get_component::<AgentTeam>(entity).copied()?;
+        if team == AgentTeam::Player {
+            ctx.world.get_component::<AgentPosition>(entity).copied()
+        } else {
+            None
+        }
+    })
+}
+
+fn enemy_active_in_sim_radius(
+    cfg: &GameplayConfig,
+    player_pos: AgentPosition,
+    enemy_pos: AgentPosition,
+) -> bool {
+    let chunk_size = cfg.chunk_size.max(4.0);
+    let sim_radius = cfg.chunk_sim_radius as i32;
+    let player_chunk_x = (player_pos.x / chunk_size).floor() as i32;
+    let player_chunk_y = (player_pos.y / chunk_size).floor() as i32;
+    let enemy_chunk_x = (enemy_pos.x / chunk_size).floor() as i32;
+    let enemy_chunk_y = (enemy_pos.y / chunk_size).floor() as i32;
+    (enemy_chunk_x - player_chunk_x).abs() <= sim_radius
+        && (enemy_chunk_y - player_chunk_y).abs() <= sim_radius
+}
+
 pub fn gameplay_sense_system(ctx: &mut WorldSceneContext) -> Result<()> {
     if ctx.overlay_consumed || ctx.scene != SceneId::GameplayStub {
         return Ok(());
     }
+    let interval = ctx.gameplay_config.ai_interval_ticks.max(1) as u64;
+    if ctx.frame_count % interval != 0 {
+        return Ok(());
+    }
+    let player_pos = player_position(ctx).unwrap_or(AgentPosition {
+        x: ctx.gameplay_config.player_spawn_x,
+        y: ctx.gameplay_config.player_spawn_y,
+    });
 
     let entities: Vec<EntityHandle> = ctx.world.entities_with::<AgentTeam>().collect();
     let snapshots = entities
@@ -120,6 +156,11 @@ pub fn gameplay_sense_system(ctx: &mut WorldSceneContext) -> Result<()> {
             let team = *ctx.world.get_component::<AgentTeam>(*entity)?;
             let hp = *ctx.world.get_component::<AgentHealth>(*entity)?;
             let pos = *ctx.world.get_component::<AgentPosition>(*entity)?;
+            if team == AgentTeam::Enemy
+                && !enemy_active_in_sim_radius(&ctx.gameplay_config, player_pos, pos)
+            {
+                return None;
+            }
             Some((*entity, team, hp.current, pos.x, pos.y))
         })
         .collect::<Vec<_>>();
@@ -143,6 +184,18 @@ pub fn gameplay_sense_system(ctx: &mut WorldSceneContext) -> Result<()> {
         let Some(origin) = ctx.world.get_component::<AgentPosition>(entity).copied() else {
             continue;
         };
+        if team == AgentTeam::Enemy
+            && !enemy_active_in_sim_radius(&ctx.gameplay_config, player_pos, origin)
+        {
+            if let Some(target) = ctx.world.get_component_mut::<AgentTarget>(entity) {
+                target.entity = None;
+            }
+            if let Some(intent) = ctx.world.get_component_mut::<AgentMoveIntent>(entity) {
+                intent.dx = 0.0;
+                intent.dy = 0.0;
+            }
+            continue;
+        }
 
         let mut best: Option<(EntityHandle, f32)> = None;
         for (candidate, other_team, hp, x, y) in &snapshots {
@@ -176,6 +229,14 @@ pub fn gameplay_decide_system(ctx: &mut WorldSceneContext) -> Result<()> {
     if ctx.overlay_consumed || ctx.scene != SceneId::GameplayStub {
         return Ok(());
     }
+    let interval = ctx.gameplay_config.ai_interval_ticks.max(1) as u64;
+    if ctx.frame_count % interval != 0 {
+        return Ok(());
+    }
+    let player_pos = player_position(ctx).unwrap_or(AgentPosition {
+        x: ctx.gameplay_config.player_spawn_x,
+        y: ctx.gameplay_config.player_spawn_y,
+    });
 
     let entities: Vec<EntityHandle> = ctx.world.entities_with::<AgentTeam>().collect();
     for entity in entities {
@@ -189,6 +250,20 @@ pub fn gameplay_decide_system(ctx: &mut WorldSceneContext) -> Result<()> {
         let Some(origin) = ctx.world.get_component::<AgentPosition>(entity).copied() else {
             continue;
         };
+        let team = ctx
+            .world
+            .get_component::<AgentTeam>(entity)
+            .copied()
+            .unwrap_or(AgentTeam::Enemy);
+        if team == AgentTeam::Enemy
+            && !enemy_active_in_sim_radius(&ctx.gameplay_config, player_pos, origin)
+        {
+            if let Some(intent) = ctx.world.get_component_mut::<AgentMoveIntent>(entity) {
+                intent.dx = 0.0;
+                intent.dy = 0.0;
+            }
+            continue;
+        }
         let target_entity = ctx
             .world
             .get_component::<AgentTarget>(entity)
@@ -201,7 +276,10 @@ pub fn gameplay_decide_system(ctx: &mut WorldSceneContext) -> Result<()> {
             continue;
         };
 
-        let Some(target_pos) = ctx.world.get_component::<AgentPosition>(target_entity).copied()
+        let Some(target_pos) = ctx
+            .world
+            .get_component::<AgentPosition>(target_entity)
+            .copied()
         else {
             continue;
         };
@@ -214,7 +292,11 @@ pub fn gameplay_decide_system(ctx: &mut WorldSceneContext) -> Result<()> {
             continue;
         }
 
-        let Some(speed) = ctx.world.get_component::<AgentVelocity>(entity).map(|v| v.speed) else {
+        let Some(speed) = ctx
+            .world
+            .get_component::<AgentVelocity>(entity)
+            .map(|v| v.speed)
+        else {
             continue;
         };
         let Some(range) = ctx
@@ -252,6 +334,10 @@ pub fn gameplay_move_system(ctx: &mut WorldSceneContext) -> Result<()> {
 
     let entities: Vec<EntityHandle> = ctx.world.entities_with::<AgentMoveIntent>().collect();
     let sim_step = ctx.delta_seconds.clamp(0.0, 0.25);
+    let player_pos = player_position(ctx).unwrap_or(AgentPosition {
+        x: ctx.gameplay_config.player_spawn_x,
+        y: ctx.gameplay_config.player_spawn_y,
+    });
     let mut first_player_pos: Option<AgentPosition> = None;
     for entity in entities {
         let Some(health) = ctx.world.get_component::<AgentHealth>(entity).copied() else {
@@ -260,11 +346,54 @@ pub fn gameplay_move_system(ctx: &mut WorldSceneContext) -> Result<()> {
         if health.current <= 0 {
             continue;
         }
+        let team = ctx
+            .world
+            .get_component::<AgentTeam>(entity)
+            .copied()
+            .unwrap_or(AgentTeam::Enemy);
+        let current_pos = ctx
+            .world
+            .get_component::<AgentPosition>(entity)
+            .copied()
+            .unwrap_or(AgentPosition { x: 0.0, y: 0.0 });
+        if team == AgentTeam::Enemy
+            && !enemy_active_in_sim_radius(&ctx.gameplay_config, player_pos, current_pos)
+        {
+            continue;
+        }
         let intent = ctx
             .world
             .get_component::<AgentMoveIntent>(entity)
             .copied()
             .unwrap_or(AgentMoveIntent { dx: 0.0, dy: 0.0 });
+        let speed = ctx
+            .world
+            .get_component::<AgentVelocity>(entity)
+            .map(|v| v.speed)
+            .unwrap_or(0.0);
+        let intent = if team == AgentTeam::Player {
+            let local_x = ctx.player_move_x;
+            let local_y = ctx.player_move_y;
+            // Camera-relative on XZ plane based on orbit camera yaw.
+            // Forward points from camera towards pivot.
+            let cam_forward_x = -ctx.camera_yaw.sin();
+            let cam_forward_y = -ctx.camera_yaw.cos();
+            let cam_right_x = -cam_forward_y;
+            let cam_right_y = cam_forward_x;
+            let world_x = (cam_right_x * local_x) + (cam_forward_x * local_y);
+            let world_y = (cam_right_y * local_x) + (cam_forward_y * local_y);
+            let len = (world_x * world_x + world_y * world_y).sqrt();
+            if len > f32::EPSILON {
+                AgentMoveIntent {
+                    dx: (world_x / len) * speed,
+                    dy: (world_y / len) * speed,
+                }
+            } else {
+                AgentMoveIntent { dx: 0.0, dy: 0.0 }
+            }
+        } else {
+            intent
+        };
         let previous = ctx
             .world
             .get_component::<AgentPosition>(entity)
@@ -275,10 +404,21 @@ pub fn gameplay_move_system(ctx: &mut WorldSceneContext) -> Result<()> {
             prev.y = previous.y;
         }
         if let Some(position) = ctx.world.get_component_mut::<AgentPosition>(entity) {
-            position.x = (position.x + intent.dx * sim_step)
-                .clamp(ctx.gameplay_config.bounds.min_x, ctx.gameplay_config.bounds.max_x);
-            position.y = (position.y + intent.dy * sim_step)
-                .clamp(ctx.gameplay_config.bounds.min_y, ctx.gameplay_config.bounds.max_y);
+            let next_x = position.x + intent.dx * sim_step;
+            let next_y = position.y + intent.dy * sim_step;
+            if ctx.gameplay_config.infinite_world {
+                position.x = next_x;
+                position.y = next_y;
+            } else {
+                position.x = next_x.clamp(
+                    ctx.gameplay_config.bounds.min_x,
+                    ctx.gameplay_config.bounds.max_x,
+                );
+                position.y = next_y.clamp(
+                    ctx.gameplay_config.bounds.min_y,
+                    ctx.gameplay_config.bounds.max_y,
+                );
+            }
         }
         if let Some(move_intent) = ctx.world.get_component_mut::<AgentMoveIntent>(entity) {
             move_intent.dx = 0.0;
@@ -304,10 +444,111 @@ pub fn gameplay_move_system(ctx: &mut WorldSceneContext) -> Result<()> {
     Ok(())
 }
 
+pub fn gameplay_chunk_spawn_system(ctx: &mut WorldSceneContext) -> Result<()> {
+    if ctx.overlay_consumed || ctx.scene != SceneId::GameplayStub {
+        return Ok(());
+    }
+    let chunk_size = ctx.gameplay_config.chunk_size.max(4.0);
+    let enemies_per_chunk = ctx.gameplay_config.enemies_per_chunk.max(1);
+    let load_radius = ctx.gameplay_config.chunk_load_radius.min(12) as i32;
+
+    let player_pos = ctx
+        .world
+        .entities_with::<AgentTeam>()
+        .find_map(|entity| {
+            let team = ctx.world.get_component::<AgentTeam>(entity).copied()?;
+            if team != AgentTeam::Player {
+                return None;
+            }
+            ctx.world.get_component::<AgentPosition>(entity).copied()
+        })
+        .unwrap_or(AgentPosition {
+            x: ctx.gameplay_config.player_spawn_x,
+            y: ctx.gameplay_config.player_spawn_y,
+        });
+
+    let chunk_x = (player_pos.x / chunk_size).floor() as i32;
+    let chunk_y = (player_pos.y / chunk_size).floor() as i32;
+
+    let mut spawned_chunks: u32 = 0;
+    let mut spawned_enemies: u32 = 0;
+    for cy in (chunk_y - load_radius)..=(chunk_y + load_radius) {
+        for cx in (chunk_x - load_radius)..=(chunk_x + load_radius) {
+            let chunk = (cx, cy);
+            if !ctx.discovered_chunks.insert(chunk) {
+                continue;
+            }
+
+            let base_x = (cx as f32) * chunk_size;
+            let base_y = (cy as f32) * chunk_size;
+            let center_x = base_x + (chunk_size * 0.5);
+            let center_y = base_y + (chunk_size * 0.5);
+            if !ctx.gameplay_config.infinite_world
+                && (center_x < ctx.gameplay_config.bounds.min_x
+                    || center_x > ctx.gameplay_config.bounds.max_x
+                    || center_y < ctx.gameplay_config.bounds.min_y
+                    || center_y > ctx.gameplay_config.bounds.max_y)
+            {
+                continue;
+            }
+
+            let max_index = enemies_per_chunk;
+            for i in 0..max_index {
+                let fx = ((i % 3) as f32 + 0.5) / 3.0;
+                let fy = ((i / 3) as f32 + 0.5) / 3.0;
+                let spawn_x = (base_x + (fx * chunk_size)).clamp(
+                    if ctx.gameplay_config.infinite_world {
+                        f32::MIN
+                    } else {
+                        ctx.gameplay_config.bounds.min_x
+                    },
+                    if ctx.gameplay_config.infinite_world {
+                        f32::MAX
+                    } else {
+                        ctx.gameplay_config.bounds.max_x
+                    },
+                );
+                let spawn_y = (base_y + (fy * chunk_size)).clamp(
+                    if ctx.gameplay_config.infinite_world {
+                        f32::MIN
+                    } else {
+                        ctx.gameplay_config.bounds.min_y
+                    },
+                    if ctx.gameplay_config.infinite_world {
+                        f32::MAX
+                    } else {
+                        ctx.gameplay_config.bounds.max_y
+                    },
+                );
+                let _ = spawn_enemy_at(&mut ctx.world, &ctx.gameplay_config, spawn_x, spawn_y);
+            }
+            spawned_chunks = spawned_chunks.saturating_add(1);
+            spawned_enemies = spawned_enemies.saturating_add(enemies_per_chunk);
+        }
+    }
+    if spawned_chunks > 0 {
+        ctx.outbound_notifications
+            .push(WorldToOverlayMessage::Loot {
+                item: format!("chunks+{}", spawned_chunks),
+                amount: spawned_enemies,
+                rarity: "spawn".to_string(),
+            });
+    }
+    Ok(())
+}
+
 pub fn gameplay_combat_system(ctx: &mut WorldSceneContext) -> Result<()> {
     if ctx.overlay_consumed || ctx.scene != SceneId::GameplayStub {
         return Ok(());
     }
+    let interval = ctx.gameplay_config.combat_interval_ticks.max(1) as u64;
+    if ctx.frame_count % interval != 0 {
+        return Ok(());
+    }
+    let player_pos = player_position(ctx).unwrap_or(AgentPosition {
+        x: ctx.gameplay_config.player_spawn_x,
+        y: ctx.gameplay_config.player_spawn_y,
+    });
 
     let entities: Vec<EntityHandle> = ctx.world.entities_with::<AgentCombat>().collect();
     for entity in entities {
@@ -337,7 +578,20 @@ pub fn gameplay_combat_system(ctx: &mut WorldSceneContext) -> Result<()> {
         let Some(origin) = ctx.world.get_component::<AgentPosition>(entity).copied() else {
             continue;
         };
-        let Some(target_pos) = ctx.world.get_component::<AgentPosition>(target_entity).copied()
+        let team = ctx
+            .world
+            .get_component::<AgentTeam>(entity)
+            .copied()
+            .unwrap_or(AgentTeam::Enemy);
+        if team == AgentTeam::Enemy
+            && !enemy_active_in_sim_radius(&ctx.gameplay_config, player_pos, origin)
+        {
+            continue;
+        }
+        let Some(target_pos) = ctx
+            .world
+            .get_component::<AgentPosition>(target_entity)
+            .copied()
         else {
             continue;
         };
@@ -400,6 +654,9 @@ pub fn gameplay_resolve_system(ctx: &mut WorldSceneContext) -> Result<()> {
     }
 
     let pending = std::mem::take(&mut ctx.pending_damage);
+    let max_combat_logs = ctx.gameplay_config.max_combat_notifications_per_tick.max(1);
+    let mut emitted_combat_logs: u32 = 0;
+    let mut dropped_combat_logs: u32 = 0;
     for damage in pending {
         let source_team = ctx
             .world
@@ -419,13 +676,18 @@ pub fn gameplay_resolve_system(ctx: &mut WorldSceneContext) -> Result<()> {
                 AgentTeam::Enemy => "Enemy",
             })
             .unwrap_or("Unknown");
-        ctx.outbound_notifications
-            .push(WorldToOverlayMessage::Combat {
-                source: source_name.to_string(),
-                target: target_name.to_string(),
-                damage: damage.amount.max(0) as u32,
-                critical: damage.critical,
-            });
+        if emitted_combat_logs < max_combat_logs {
+            ctx.outbound_notifications
+                .push(WorldToOverlayMessage::Combat {
+                    source: source_name.to_string(),
+                    target: target_name.to_string(),
+                    damage: damage.amount.max(0) as u32,
+                    critical: damage.critical,
+                });
+            emitted_combat_logs = emitted_combat_logs.saturating_add(1);
+        } else {
+            dropped_combat_logs = dropped_combat_logs.saturating_add(1);
+        }
 
         let mut killed = false;
         let mut target_team = AgentTeam::Enemy;
@@ -441,58 +703,71 @@ pub fn gameplay_resolve_system(ctx: &mut WorldSceneContext) -> Result<()> {
         }
 
         if killed {
-            if let Some(state) = ctx.world.get_component_mut::<AgentState>(damage.target) {
-                *state = AgentState::Dead;
-            }
-            let respawn_x = if target_team == AgentTeam::Player {
-                ctx.gameplay_config.player_spawn_x
+            if target_team == AgentTeam::Player {
+                if let Some(state) = ctx.world.get_component_mut::<AgentState>(damage.target) {
+                    *state = AgentState::Dead;
+                }
+                if let Some(pos) = ctx.world.get_component_mut::<AgentPosition>(damage.target) {
+                    pos.x = ctx.gameplay_config.player_spawn_x;
+                    pos.y = ctx.gameplay_config.player_spawn_y;
+                }
+                if let Some(prev) = ctx
+                    .world
+                    .get_component_mut::<AgentPrevPosition>(damage.target)
+                {
+                    prev.x = ctx.gameplay_config.player_spawn_x;
+                    prev.y = ctx.gameplay_config.player_spawn_y;
+                }
+                if let Some(state) = ctx.world.get_component_mut::<AgentState>(damage.target) {
+                    *state = AgentState::Idle;
+                }
             } else {
-                ctx.gameplay_config.enemy_respawn_base_x
-                    + ((ctx.enemy_kills % 3) as f32 * ctx.gameplay_config.enemy_respawn_x_step)
-            };
-            let respawn_y = if target_team == AgentTeam::Player {
-                ctx.gameplay_config.player_spawn_y
-            } else {
-                ctx.gameplay_config.enemy_respawn_base_y
-                    + ((ctx.enemy_kills % 3) as f32 * ctx.gameplay_config.enemy_respawn_y_step)
-            };
-            if let Some(pos) = ctx.world.get_component_mut::<AgentPosition>(damage.target) {
-                pos.x = respawn_x;
-                pos.y = respawn_y;
-            }
-            if let Some(state) = ctx.world.get_component_mut::<AgentState>(damage.target) {
-                *state = AgentState::Idle;
+                ctx.world.remove_entity(damage.target);
             }
 
             if source_team == AgentTeam::Player && target_team == AgentTeam::Enemy {
                 ctx.enemy_kills = ctx.enemy_kills.saturating_add(1);
-                ctx.outbound_notifications.push(WorldToOverlayMessage::Loot {
-                    item: "Fang".to_string(),
-                    amount: 1,
-                    rarity: "common".to_string(),
-                });
-                if ctx.enemy_kills == 1 {
-                    ctx.outbound_notifications.push(WorldToOverlayMessage::Quest {
-                        quest: "Cull The Nest".to_string(),
-                        state: QuestState::Started,
+                ctx.outbound_notifications
+                    .push(WorldToOverlayMessage::Loot {
+                        item: "Fang".to_string(),
+                        amount: 1,
+                        rarity: "common".to_string(),
                     });
+                if ctx.enemy_kills == 1 {
+                    ctx.outbound_notifications
+                        .push(WorldToOverlayMessage::Quest {
+                            quest: "Cull The Nest".to_string(),
+                            state: QuestState::Started,
+                        });
                 }
                 let progress = (ctx.enemy_kills % 5).max(1);
-                ctx.outbound_notifications.push(WorldToOverlayMessage::Quest {
-                    quest: "Cull The Nest".to_string(),
-                    state: QuestState::Progress {
-                        current: progress,
-                        goal: 5,
-                    },
-                });
-                if progress == 5 {
-                    ctx.outbound_notifications.push(WorldToOverlayMessage::Quest {
+                ctx.outbound_notifications
+                    .push(WorldToOverlayMessage::Quest {
                         quest: "Cull The Nest".to_string(),
-                        state: QuestState::Completed,
+                        state: QuestState::Progress {
+                            current: progress,
+                            goal: 5,
+                        },
                     });
+                if progress == 5 {
+                    ctx.outbound_notifications
+                        .push(WorldToOverlayMessage::Quest {
+                            quest: "Cull The Nest".to_string(),
+                            state: QuestState::Completed,
+                        });
                 }
             }
         }
+    }
+
+    if dropped_combat_logs > 0 {
+        ctx.outbound_notifications
+            .push(WorldToOverlayMessage::Combat {
+                source: "sim".to_string(),
+                target: "log-throttle".to_string(),
+                damage: dropped_combat_logs,
+                critical: false,
+            });
     }
 
     Ok(())

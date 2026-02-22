@@ -4,7 +4,7 @@ use engine_v2::utils::setup_tracing;
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() -> Result<()> {
-    setup_tracing();
+    let _tracing_guard = setup_tracing();
     tracing::info!("starting engine_v2");
 
     let event_loop = EventLoop::new()?;

@@ -1,5 +1,7 @@
 use crate::render::{PassSlot, PipelineKey};
-use crate::runtime::{EngineData, OverlayCommandInput, OverlaySubmitMessage, SceneCommand, SceneId};
+use crate::runtime::{
+    EngineData, OverlayCommandInput, OverlaySubmitMessage, SceneCommand, SceneId,
+};
 use crate::ui::UiDirty;
 
 const CONSOLE_PROMPT: &str = "grotto> ";
@@ -268,7 +270,7 @@ pub(super) fn parse_command_line(line: &str) -> Option<GameCommand> {
                 _ => {
                     return Some(GameCommand::Invalid(
                         "usage: push_overlay [console|hud|pause]".to_string(),
-                    ))
+                    ));
                 }
             };
             Some(GameCommand::PushOverlay(overlay))
@@ -316,7 +318,9 @@ pub(super) fn parse_command_line(line: &str) -> Option<GameCommand> {
             match mode.to_ascii_lowercase().as_str() {
                 "on" => Some(GameCommand::ShaderWatch(true)),
                 "off" => Some(GameCommand::ShaderWatch(false)),
-                _ => Some(GameCommand::Invalid("usage: shader_watch <on|off>".to_string())),
+                _ => Some(GameCommand::Invalid(
+                    "usage: shader_watch <on|off>".to_string(),
+                )),
             }
         }
         "shader_status" => Some(GameCommand::ShaderStatus),
@@ -331,7 +335,9 @@ pub(super) fn parse_command_line(line: &str) -> Option<GameCommand> {
             match mode.to_ascii_lowercase().as_str() {
                 "on" => Some(GameCommand::ModelWatch(true)),
                 "off" => Some(GameCommand::ModelWatch(false)),
-                _ => Some(GameCommand::Invalid("usage: model_watch <on|off>".to_string())),
+                _ => Some(GameCommand::Invalid(
+                    "usage: model_watch <on|off>".to_string(),
+                )),
             }
         }
         "model_status" => Some(GameCommand::ModelStatus),
@@ -350,11 +356,10 @@ fn parse_pipeline_slot(raw: &str) -> Option<PassSlot> {
 
 fn parse_pipeline_key(raw: &str) -> Option<PipelineKey> {
     match raw.to_ascii_lowercase().as_str() {
-        "world_compute_basic" | "compute_basic" | "basic" => {
-            Some(PipelineKey::WorldComputeBasic)
+        "world_compute_basic" | "compute_basic" | "basic" => Some(PipelineKey::WorldComputeBasic),
+        "world_compute_high_contrast" | "compute_high_contrast" | "high_contrast" | "contrast" => {
+            Some(PipelineKey::WorldComputeHighContrast)
         }
-        "world_compute_high_contrast" | "compute_high_contrast" | "high_contrast"
-        | "contrast" => Some(PipelineKey::WorldComputeHighContrast),
         "world_compose_fullscreen" | "compose_fullscreen" | "fullscreen" => {
             Some(PipelineKey::WorldComposeFullscreen)
         }
@@ -450,11 +455,7 @@ pub(super) fn apply_game_command(lines: &mut Vec<String>, command: GameCommand) 
             );
         }
         GameCommand::SetPipeline { slot, key } => {
-            lines.push(format!(
-                "set pipeline: {} -> {}",
-                slot.label(),
-                key.label()
-            ));
+            lines.push(format!("set pipeline: {} -> {}", slot.label(), key.label()));
         }
         GameCommand::ReloadShaders => {
             lines.push("shader reload requested".to_string());
@@ -475,7 +476,10 @@ pub(super) fn apply_game_command(lines: &mut Vec<String>, command: GameCommand) 
             lines.push("model reload requested".to_string());
         }
         GameCommand::ModelWatch(enabled) => {
-            lines.push(format!("model_watch {}", if enabled { "on" } else { "off" }));
+            lines.push(format!(
+                "model_watch {}",
+                if enabled { "on" } else { "off" }
+            ));
         }
         GameCommand::ModelStatus => {
             lines.push("model status requested".to_string());
@@ -549,18 +553,16 @@ pub fn game_command_execute_system(data: &mut EngineData) -> anyhow::Result<()> 
                     data.scene.queue(SceneCommand::PauseWorld(false));
                 }
                 GameCommand::ToggleTime => {
-                    data.scene.queue(SceneCommand::PauseWorld(!data.scene.world.paused));
+                    data.scene
+                        .queue(SceneCommand::PauseWorld(!data.scene.world.paused));
                 }
                 GameCommand::SetPipeline { slot, key } => {
                     if let Err(err) = data.gfx.set_pipeline_for_slot(*slot, *key) {
                         command_to_apply =
                             GameCommand::Invalid(format!("set_pipeline failed: {err}"));
                     } else {
-                        data.scene.overlay_runtime.ui.editor.status = format!(
-                            "editor: pipeline {} -> {}",
-                            slot.label(),
-                            key.label()
-                        );
+                        data.scene.overlay_runtime.ui.editor.status =
+                            format!("editor: pipeline {} -> {}", slot.label(), key.label());
                     }
                 }
                 GameCommand::ReloadShaders => {

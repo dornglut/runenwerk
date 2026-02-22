@@ -6,6 +6,15 @@ use crate::runtime::{
 use crate::ui::UiDirty;
 
 pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
+    if data.input.toggle_pause_menu {
+        let show_overlay = !data.scene.overlay_visible();
+        data.scene.set_active_overlay_visible(show_overlay);
+        data.scene.queue(SceneCommand::PauseWorld(show_overlay));
+        if show_overlay && data.scene.active_overlay() != SceneId::HudUi {
+            data.scene
+                .queue(SceneCommand::ReplaceOverlay(SceneId::HudUi));
+        }
+    }
     if data.input.scene_next {
         let next = data.scene.active_overlay().next_overlay();
         data.scene.queue(SceneCommand::ReplaceOverlay(next));
@@ -71,9 +80,48 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
     }
 
     let active_overlay = data.scene.active_overlay();
+    let overlay_visible = data.scene.overlay_visible();
+    let world_paused = data.scene.world.paused;
     let runtime = &mut data.scene.world_runtime;
     runtime.ctx.overlay_consumed = data.input.overlay_consumed;
     runtime.ctx.overlay_scene = active_overlay;
+    runtime.ctx.player_move_x = (if data.input.world_move_right {
+        1.0
+    } else {
+        0.0
+    }) - (if data.input.world_move_left { 1.0 } else { 0.0 });
+    runtime.ctx.player_move_y = (if data.input.world_move_up { 1.0 } else { 0.0 })
+        - (if data.input.world_move_down { 1.0 } else { 0.0 });
+    if !overlay_visible && !world_paused {
+        let camera_cfg = &runtime.ctx.gameplay_config.camera;
+        let rotate_sensitivity = camera_cfg.rotate_sensitivity.max(0.0);
+        let yaw_sign = if camera_cfg.invert_x { 1.0 } else { -1.0 };
+        let pitch_sign = if camera_cfg.invert_y { -1.0 } else { 1.0 };
+        runtime.ctx.camera_yaw += data.input.mouse_delta.0 * rotate_sensitivity * yaw_sign;
+        runtime.ctx.camera_pitch += data.input.mouse_delta.1 * rotate_sensitivity * pitch_sign;
+    }
+    if !overlay_visible && data.input.scroll_delta.abs() > f32::EPSILON {
+        let camera_cfg = &runtime.ctx.gameplay_config.camera;
+        let zoom_sensitivity = camera_cfg.zoom_sensitivity.max(0.0);
+        let zoom_sign = if camera_cfg.invert_zoom { 1.0 } else { -1.0 };
+        runtime.ctx.camera_distance += data.input.scroll_delta * zoom_sensitivity * zoom_sign;
+    }
+    let camera_cfg = &runtime.ctx.gameplay_config.camera;
+    let pitch_min = camera_cfg.pitch_min.min(camera_cfg.pitch_max);
+    let pitch_max = camera_cfg.pitch_min.max(camera_cfg.pitch_max);
+    let distance_min = camera_cfg
+        .distance_min
+        .min(camera_cfg.distance_max)
+        .max(0.1);
+    let distance_max = camera_cfg
+        .distance_min
+        .max(camera_cfg.distance_max)
+        .max(distance_min);
+    runtime.ctx.camera_pitch = runtime.ctx.camera_pitch.clamp(pitch_min, pitch_max);
+    runtime.ctx.camera_distance = runtime
+        .ctx
+        .camera_distance
+        .clamp(distance_min, distance_max);
 
     let latest_modified = gameplay_config_modified();
     if latest_modified != runtime.ctx.gameplay_config_modified {
@@ -86,13 +134,17 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
         );
     }
 
-    let fixed_dt = runtime.ctx.fixed_step_seconds.clamp(1.0 / 240.0, 1.0 / 30.0);
+    let fixed_dt = runtime
+        .ctx
+        .fixed_step_seconds
+        .clamp(1.0 / 240.0, 1.0 / 30.0);
+    let max_steps = runtime.ctx.gameplay_config.max_catchup_steps.clamp(1, 4) as usize;
     runtime.ctx.fixed_step_accumulator = (runtime.ctx.fixed_step_accumulator
         + data.time.delta_seconds.min(0.25))
-    .min(fixed_dt * 8.0);
+    .min(fixed_dt * max_steps as f32);
 
     let mut steps = 0usize;
-    while runtime.ctx.fixed_step_accumulator + f32::EPSILON >= fixed_dt && steps < 8 {
+    while runtime.ctx.fixed_step_accumulator + f32::EPSILON >= fixed_dt && steps < max_steps {
         runtime.ctx.delta_seconds = fixed_dt;
         runtime.scheduler.run(&mut runtime.ctx)?;
         runtime.ctx.fixed_step_accumulator -= fixed_dt;
@@ -100,7 +152,7 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
         data.scene.channels.world_to_overlay.extend(outbound);
         steps = steps.saturating_add(1);
     }
-    if steps == 8 && runtime.ctx.fixed_step_accumulator >= fixed_dt {
+    if steps == max_steps && runtime.ctx.fixed_step_accumulator >= fixed_dt {
         runtime.ctx.fixed_step_accumulator = 0.0;
         tracing::warn!("world fixed-step loop saturated, dropping accumulated time");
     }

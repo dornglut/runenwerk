@@ -45,22 +45,84 @@ Track the active implementation state for the retained ECS console UI foundation
 - Scene lifecycle events added (`enter`, `exit`, `pause`, `resume`) and emitted through scene channels.
 - Logs window layout and scroll UX flags moved into UI template layout config.
 - World compute rendering foundation added: ECS world data extraction stage (`world_render_extract`) plus compute-to-texture world pass composited before overlay UI.
-- Frame graph baseline added for mixed compute/render execution (`world_compute -> world_compose -> ui_composite`) with cycle checks and inferred resource dependencies.
+- Frame graph baseline added for mixed compute/render execution (`world_compute -> world_compose -> mesh_overlay -> ui_composite`) with cycle checks and inferred resource dependencies.
 - Pipeline registry added with slot/key validation plus runtime pipeline switching commands (`pipelines`, `set_pipeline ...`).
+- Renderer frame flow split into explicit packet stages (`prepare_packet` and `render_packet`) to separate extraction/prepare work from encode/submit.
+- Mesh overlay pass now reuses persistent MSAA/depth targets by surface size/format instead of recreating them each frame.
+- Added `FramePassExecutor` abstraction and migrated `world_compute`/`world_compose` dispatch to executor-based routing.
+- Migrated `mesh_overlay` and `ui_composite` dispatch to executor routing so frame-graph pass execution is now registry-driven.
+- Frame graph pass definitions now load from `assets/render/frame_graph.ron` with built-in defaults as fallback when config is missing/invalid.
+- Scene-aware frame graph overlays now load from `assets/render/frame_graph_overlays.ron` and append passes by world/overlay scene label.
 
 ## Next (Active)
-- Abstraction/generalization pass to reduce coupling and improve maintainability.
-- Generalize world render extraction from gameplay-specific components to reusable ECS render components (`RenderGlyph`, `RenderMaterial`, `RenderLayer`).
-- Add camera extraction/resource path so compute rendering uses explicit scene camera state.
-- Let scenes contribute graph nodes/resources so world scene type controls render graph composition.
+- Render/scene/mesh simplification pass with explicit abstraction seams.
 
-## Recommended Breakdown For Next
-1. Split `engine_v2/src/runtime/scene.rs` into focused modules (`manager`, `lifecycle`, `gameplay`, `config`) while preserving behavior.
-2. Add scene registry/descriptor layer so world/overlay construction is data-driven and not hardcoded in `SceneManager`.
-3. Decouple lifecycle event generation from UI log formatting (typed lifecycle channel consumer remains optional/debug-only).
-4. Split `ui_input_system` and `ui_build_batches_system` into smaller systems with stable contracts (text input, scroll routing, logs rendering, diagnostics rendering).
-5. Consolidate shared UI utilities (scrollback clamping + viewport helpers) to remove duplication across scene/command systems.
-6. Add focused tests around scene registry transitions, lifecycle ordering, and refactored UI subsystem boundaries.
+## Architecture Findings (Code Scan)
+- `engine_v2/src/render/renderer.rs` is a monolithic orchestrator (1766 LOC) that still owns pass creation, asset polling, mesh extraction, camera solve, frame graph build, graph execution, and command submission.
+- `prepare_mesh_draw` in `engine_v2/src/render/renderer.rs` mixes four responsibilities: model/chunk collection, cache policy, GPU uploads, and draw packet assembly.
+- `encode_mesh_pass` in `engine_v2/src/render/renderer.rs` recreates MSAA/depth textures per frame, making pass execution carry resource lifecycle work.
+- `world_scene_update_system` in `engine_v2/src/systems/scene.rs` combines input mapping, camera controls, gameplay config hot reload, fixed-step stepping, and world->overlay message forwarding.
+- Scene construction remains hardcoded across `engine_v2/src/runtime/scene.rs` and `engine_v2/src/runtime/scene/manager.rs` instead of descriptor/registry-driven.
+- `engine_v2/src/render/model_manager.rs` bundles discovery, Blender conversion, glTF import, watch state, and status/logging in one module.
+- `engine_v2/src/render/world_compute.rs` still combines pipeline build/rebuild, frame upload, and pass encode in one type (`WorldComputeRenderer`).
+
+## Refactor Principles
+- Make frame extraction and frame execution separate phases with typed handoff data.
+- Move pass-specific behavior behind per-pass executors instead of `if handle == ...` chains.
+- Keep GPU resource lifetime persistent and resize/reload driven.
+- Make scene creation data-driven through descriptors and builders.
+- Keep hot-reload services generic (same pattern for shaders, models, gameplay configs).
+
+## Execution Program
+### Phase A: Render Packet Boundary
+1. Introduce `RenderPacket` (`world packet`, `mesh packet`, `ui packet`) as the only input to rendering.
+2. Move world/mesh/ui extraction out of `Renderer::render` into dedicated extractor systems/services.
+3. Keep `Renderer` focused on encode/submit only.
+4. Add tests that extraction output is deterministic for a fixed world snapshot.
+
+### Phase B: Pass Executor Registry
+1. Add `FramePassExecutor` trait with `prepare` and `encode` methods.
+2. Register executors per pass slot (`world_compute`, `world_compose`, `mesh_overlay`, `ui_composite`).
+3. Replace handle identity checks in `Renderer::render` with executor dispatch from graph node metadata.
+4. Keep `FrameGraph` as scheduler; move pass behavior into executors.
+
+### Phase C: Resource Lifetime and Upload Policy
+1. Add a small resource cache for persistent MSAA/depth targets keyed by surface size/format.
+2. Split mesh upload path into:
+   - static geometry/material cache (rare rebuild),
+   - per-frame instance stream (agent transforms/colors).
+3. Keep `MeshCacheEntry` internals in a dedicated module; renderer uses a narrow API.
+4. Add cache hit/miss and upload-bytes counters per executor.
+
+### Phase D: Scene Runtime Decomposition
+1. Add `SceneDescriptor` + `SceneRegistry` for world and overlay scene builders.
+2. Split `world_scene_update_system` into deterministic stages:
+   - `world_input_apply`,
+   - `world_camera_apply`,
+   - `world_config_hot_reload`,
+   - `world_fixed_step_run`,
+   - `world_outbox_flush`.
+3. Keep lifecycle events typed and consumed by optional debug/UI subscribers.
+4. Add transition/lifecycle ordering tests against the registry path.
+
+### Phase E: Unified Hot Reload Services
+1. Introduce shared file-watch/reload utility used by shader/model/gameplay config.
+2. Normalize status payloads (`revision`, `last_error`, `source_path`, `reload_reason`).
+3. Add runtime controls for profiling verbosity levels without recompiling.
+
+## Recommended First Slice (Low Risk)
+1. Implement Phase A only for mesh path:
+   - extract `MeshPacket` from `prepare_mesh_draw`,
+   - keep current rendering behavior.
+2. Add persistent MSAA/depth cache for mesh overlay.
+3. Wire profiling fields to the new cache policy so regressions are obvious.
+
+## Definition Of Done For Current Phase
+- Renderer no longer owns extraction logic; it consumes packets.
+- Frame-graph execution uses pass executors instead of hardcoded handle checks.
+- World update path is split into composable systems with fixed ordering.
+- Scene construction is descriptor-driven for world and overlay kinds.
+- Existing gameplay/UI behavior remains stable with added coverage for the new seams.
 
 ## Later
 - Data-driven scene manifest (`assets/scenes/*.ron`) mapping scene IDs to templates/bootstrap assets.
@@ -68,9 +130,3 @@ Track the active implementation state for the retained ECS console UI foundation
 - Template diagnostics and reload feedback tooling.
 - UI diff/rebuild and batching performance pass.
 - Scene stack diagnostics panel in editor/debug overlay.
-
-## Definition Of Done For Current Phase
-- Scene manager/runtime code is modularized without behavior regressions.
-- Scene construction and switching are descriptor-driven for world/overlay kinds.
-- UI input/build paths are split into smaller systems with deterministic ordering.
-- Existing scene, gameplay, and UI tests remain green with additional coverage for new abstraction seams.

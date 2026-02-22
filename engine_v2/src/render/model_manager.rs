@@ -96,6 +96,7 @@ pub struct ModelMaterial {
 
 #[derive(Debug, Clone)]
 pub struct ModelMesh {
+    pub name: String,
     pub vertices: Vec<ModelMeshVertex>,
     pub indices: Vec<u32>,
     pub material: ModelMaterial,
@@ -369,7 +370,9 @@ fn upsert_model_candidate(
     candidate: DiscoveredModel,
 ) {
     let replace = match files.get(&candidate.id) {
-        Some(existing) => source_priority(candidate.source_kind) > source_priority(existing.source_kind),
+        Some(existing) => {
+            source_priority(candidate.source_kind) > source_priority(existing.source_kind)
+        }
         None => true,
     };
     if replace {
@@ -398,7 +401,9 @@ fn import_model_data(path: &Path) -> Result<ImportedModelData, String> {
     let mut proxies = Vec::new();
     let mut meshes = Vec::new();
 
-    let default_scene = document.default_scene().or_else(|| document.scenes().next());
+    let default_scene = document
+        .default_scene()
+        .or_else(|| document.scenes().next());
     let Some(scene) = default_scene else {
         return Err("model has no scene".to_string());
     };
@@ -433,8 +438,9 @@ fn collect_node_geometry(
     let world_transform = parent_transform * local_transform;
 
     if let Some(mesh) = node.mesh() {
-        for primitive in mesh.primitives() {
-            let reader = primitive.reader(|buffer| buffers.get(buffer.index()).map(|b| b.0.as_slice()));
+        for (primitive_idx, primitive) in mesh.primitives().enumerate() {
+            let reader =
+                primitive.reader(|buffer| buffers.get(buffer.index()).map(|b| b.0.as_slice()));
             let Some(positions) = reader.read_positions() else {
                 continue;
             };
@@ -494,6 +500,7 @@ fn collect_node_geometry(
             });
 
             meshes.push(ModelMesh {
+                name: build_mesh_name(&node, mesh.name(), primitive_idx),
                 vertices,
                 indices,
                 material,
@@ -504,6 +511,16 @@ fn collect_node_geometry(
     for child in node.children() {
         collect_node_geometry(child, world_transform, buffers, images, proxies, meshes);
     }
+}
+
+fn build_mesh_name(node: &gltf::Node<'_>, mesh_name: Option<&str>, primitive_idx: usize) -> String {
+    if let Some(name) = node.name().filter(|s| !s.is_empty()) {
+        return name.to_string();
+    }
+    if let Some(name) = mesh_name.filter(|s| !s.is_empty()) {
+        return name.to_string();
+    }
+    format!("mesh_primitive_{primitive_idx}")
 }
 
 fn convert_image_to_rgba8(image: &gltf::image::Data) -> Option<ModelTextureData> {
@@ -727,14 +744,22 @@ fn load_editor_config_blender_bin() -> Option<PathBuf> {
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(err) => {
-            tracing::warn!(?err, path = EDITOR_CONFIG_PATH, "failed reading editor config");
+            tracing::warn!(
+                ?err,
+                path = EDITOR_CONFIG_PATH,
+                "failed reading editor config"
+            );
             return None;
         }
     };
     let cfg = match ron::from_str::<EditorConfig>(&raw) {
         Ok(cfg) => cfg,
         Err(err) => {
-            tracing::warn!(?err, path = EDITOR_CONFIG_PATH, "failed parsing editor config");
+            tracing::warn!(
+                ?err,
+                path = EDITOR_CONFIG_PATH,
+                "failed parsing editor config"
+            );
             return None;
         }
     };

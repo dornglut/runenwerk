@@ -2,9 +2,8 @@ use crate::runtime::Engine;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalSize};
-use winit::event::{DeviceEvent, ElementState, WindowEvent};
+use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 pub struct App {
@@ -79,18 +78,6 @@ impl ApplicationHandler for App {
                 engine.set_ui_scale_from_window_factor(scale_factor);
                 engine.resize(physical.width, physical.height);
                 window.request_redraw();
-            }
-            WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed
-                    && event.physical_key == PhysicalKey::Code(KeyCode::Escape)
-                {
-                    if engine.data.scene.overlay_runtime.ui.editor.enabled {
-                        engine.data.scene.overlay_runtime.ui.editor.enabled = false;
-                        engine.data.scene.overlay_runtime.ui.editor.dragging = false;
-                        engine.data.scene.overlay_runtime.ui.editor.status =
-                            "editor: off (F1 to toggle)".to_string();
-                    }
-                }
             }
             WindowEvent::RedrawRequested => {
                 engine.update();

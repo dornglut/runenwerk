@@ -15,7 +15,7 @@ pub struct PassHandle(pub usize);
 
 #[derive(Debug, Clone)]
 pub struct PassNode {
-    pub name: &'static str,
+    pub name: String,
     pub kind: PassKind,
     pub pipeline: PipelineKey,
     pub reads: Vec<ResourceId>,
@@ -39,7 +39,7 @@ impl FrameGraph {
 
     pub fn compute_pass(
         &mut self,
-        name: &'static str,
+        name: impl Into<String>,
         pipeline: PipelineKey,
     ) -> PassBuilder<'_> {
         PassBuilder::new(self, PassKind::Compute, name, pipeline)
@@ -47,7 +47,7 @@ impl FrameGraph {
 
     pub fn render_pass(
         &mut self,
-        name: &'static str,
+        name: impl Into<String>,
         pipeline: PipelineKey,
     ) -> PassBuilder<'_> {
         PassBuilder::new(self, PassKind::Render, name, pipeline)
@@ -103,7 +103,7 @@ impl FrameGraph {
         if output.len() != node_count {
             let stuck = (0..node_count)
                 .filter(|idx| indegree[*idx] > 0)
-                .map(|idx| self.nodes[idx].name)
+                .map(|idx| self.nodes[idx].name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
             bail!("frame graph contains a dependency cycle: {stuck}");
@@ -154,11 +154,16 @@ pub struct PassBuilder<'a> {
 }
 
 impl<'a> PassBuilder<'a> {
-    fn new(graph: &'a mut FrameGraph, kind: PassKind, name: &'static str, pipeline: PipelineKey) -> Self {
+    fn new(
+        graph: &'a mut FrameGraph,
+        kind: PassKind,
+        name: impl Into<String>,
+        pipeline: PipelineKey,
+    ) -> Self {
         Self {
             graph,
             node: PassNode {
-                name,
+                name: name.into(),
                 kind,
                 pipeline,
                 reads: Vec::new(),

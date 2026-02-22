@@ -5,5 +5,6 @@ members = [
   "ecs",
   "ecs_macros",
   "scheduler",
-  "engine_v2"
+  "engine_v2",
+  "grid"
 ]

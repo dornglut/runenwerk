@@ -1,4 +1,4 @@
-use crate::runtime::{EngineData, OverlaySubmitMessage};
+use crate::runtime::{AgentHealth, AgentPosition, AgentTeam, EngineData, OverlaySubmitMessage};
 use crate::ui::{
     UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiEditorNode, UiInputField, UiInteraction, UiNode,
     UiStyle, UiText, UiTransform, reload_console_template_if_changed,
@@ -30,8 +30,10 @@ fn compute_log_window_rect(
     ui_scale: f32,
 ) -> LogWindowRect {
     let log_margin = layout.logs_margin * ui_scale;
-    let log_w = (screen_size.0 * layout.logs_width_ratio)
-        .clamp(layout.logs_min_width * ui_scale, (screen_size.0 - (log_margin * 2.0)).max(1.0));
+    let log_w = (screen_size.0 * layout.logs_width_ratio).clamp(
+        layout.logs_min_width * ui_scale,
+        (screen_size.0 - (log_margin * 2.0)).max(1.0),
+    );
     let log_h = (screen_size.1 * layout.logs_height_ratio).clamp(
         layout.logs_min_height * ui_scale,
         (screen_size.1 - (log_margin * 2.0)).max(1.0),
@@ -53,6 +55,81 @@ fn compute_log_window_rect(
         body_w,
         body_h,
     }
+}
+
+fn world_hud_stats(data: &EngineData) -> Option<(f32, f32, usize, u32)> {
+    let world = &data.scene.world_runtime.ctx.world;
+    let mut player_pos: Option<(f32, f32)> = None;
+    let mut enemy_count: usize = 0;
+    for entity in world.entities_with::<AgentTeam>() {
+        let Some(team) = world.get_component::<AgentTeam>(entity).copied() else {
+            continue;
+        };
+        if team == AgentTeam::Enemy {
+            let alive = world
+                .get_component::<AgentHealth>(entity)
+                .map(|h| h.current > 0)
+                .unwrap_or(false);
+            if alive {
+                enemy_count = enemy_count.saturating_add(1);
+            }
+        } else if player_pos.is_none()
+            && let Some(pos) = world.get_component::<AgentPosition>(entity).copied()
+        {
+            player_pos = Some((pos.x, pos.y));
+        }
+    }
+    player_pos.map(|(x, y)| (x, y, enemy_count, data.scene.world_runtime.ctx.enemy_kills))
+}
+
+fn push_world_stats_panel(commands: &mut Vec<UiBatchCmd>, data: &EngineData, ui_scale: f32) {
+    let Some((px, py, enemies, slain)) = world_hud_stats(data) else {
+        return;
+    };
+
+    let margin = 10.0 * ui_scale;
+    let panel_w = 300.0 * ui_scale;
+    let panel_h = 74.0 * ui_scale;
+    let panel_x = margin;
+    let panel_y = margin;
+    let panel_w =
+        panel_w.min((data.scene.overlay_runtime.ui.screen_size.0 - (margin * 2.0)).max(80.0));
+    let panel_h =
+        panel_h.min((data.scene.overlay_runtime.ui.screen_size.1 - (margin * 2.0)).max(40.0));
+    let clip = Some([panel_x, panel_y, panel_w, panel_h]);
+
+    commands.push(UiBatchCmd::Rect {
+        x: panel_x,
+        y: panel_y,
+        w: panel_w,
+        h: panel_h,
+        color: [0.05, 0.08, 0.12, 0.86],
+        radius: 8.0 * ui_scale,
+    });
+    commands.push(UiBatchCmd::Text {
+        x: panel_x + (10.0 * ui_scale),
+        y: panel_y + (10.0 * ui_scale),
+        content: "World Stats".to_string(),
+        color: [0.88, 0.95, 1.0, 1.0],
+        size: 12.0 * ui_scale,
+        clip,
+    });
+    commands.push(UiBatchCmd::Text {
+        x: panel_x + (10.0 * ui_scale),
+        y: panel_y + (30.0 * ui_scale),
+        content: format!("player=({:.1}, {:.1})", px, py),
+        color: [0.56, 0.94, 0.66, 1.0],
+        size: 11.0 * ui_scale,
+        clip,
+    });
+    commands.push(UiBatchCmd::Text {
+        x: panel_x + (10.0 * ui_scale),
+        y: panel_y + (48.0 * ui_scale),
+        content: format!("enemies={} slain={}", enemies, slain),
+        color: [0.98, 0.74, 0.42, 1.0],
+        size: 11.0 * ui_scale,
+        clip,
+    });
 }
 
 pub(super) fn point_in_rect(point: (f32, f32), rect: &UiTransform) -> bool {
@@ -239,8 +316,8 @@ fn push_scroll_indicators(
         let thumb_w = ((visible_char_estimate as f32 / total_chars as f32) * inner_w)
             .clamp(16.0 * ui_scale, inner_w);
         let track_space = (inner_w - thumb_w).max(0.0);
-        let thumb_x = rect.x
-            + ((horizontal_chars as f32 / max_horizontal_chars.max(1) as f32) * track_space);
+        let thumb_x =
+            rect.x + ((horizontal_chars as f32 / max_horizontal_chars.max(1) as f32) * track_space);
         commands.push(UiBatchCmd::Rect {
             x: rect.x,
             y: rect.y + rect.h - track_h,
@@ -1100,7 +1177,13 @@ fn process_input_text_edit(
                 moved_cursor = true;
             }
             if data.input.move_down
-                && move_cursor_vertical(editor, &text_metrics, input_text_size, input_content_w, true)
+                && move_cursor_vertical(
+                    editor,
+                    &text_metrics,
+                    input_text_size,
+                    input_content_w,
+                    true,
+                )
             {
                 moved_cursor = true;
             }
@@ -1418,6 +1501,9 @@ fn process_scroll_routing(
 
 pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
     data.input.overlay_consumed = false;
+    if !data.scene.overlay_visible() {
+        return Ok(());
+    }
 
     if data.input.toggle_ui_editor_mode {
         data.scene.overlay_runtime.ui.editor.enabled =
@@ -1466,7 +1552,8 @@ pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
         None
     };
     let mut overlay_consumed = false;
-    overlay_consumed |= process_input_text_edit(data, input_entity, input_visible, input_nav_metrics);
+    overlay_consumed |=
+        process_input_text_edit(data, input_entity, input_visible, input_nav_metrics);
     overlay_consumed |= process_submit_and_pointer(
         data,
         input_entity,
@@ -1488,6 +1575,9 @@ pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
 }
 
 pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
+    if !data.scene.overlay_visible() {
+        return Ok(());
+    }
     if !data.scene.overlay_runtime.ui.layout_dirty {
         return Ok(());
     }
@@ -1575,6 +1665,13 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
 }
 
 pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
+    if !data.scene.overlay_visible() {
+        let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
+        let mut commands: Vec<UiBatchCmd> = Vec::new();
+        push_world_stats_panel(&mut commands, data, ui_scale);
+        data.scene.overlay_runtime.ui.batches.commands = commands;
+        return Ok(());
+    }
     let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
     let mut commands: Vec<UiBatchCmd> = Vec::new();
 
@@ -1939,6 +2036,8 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
             clip: Some([transform.x, transform.y, transform.w, transform.h]),
         });
     }
+
+    push_world_stats_panel(&mut commands, data, ui_scale);
 
     if data.scene.overlay_runtime.ui.editor.enabled {
         if let Some(selected_entity) = selected_editor_entity(&data.scene.overlay_runtime.ui)

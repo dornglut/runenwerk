@@ -27,14 +27,8 @@ fn console_ui_template_parses_from_ron() {
     let tpl: ConsoleUiTemplate = ron::from_str(raw).expect("template should parse");
     assert_eq!(tpl.max_lines, Some(250));
     let layout = tpl.layout.expect("layout should exist");
-    assert_eq!(
-        layout.panel_width_ratio,
-        Some(0.72)
-    );
-    assert_eq!(
-        layout.logs_width_ratio,
-        Some(0.40)
-    );
+    assert_eq!(layout.panel_width_ratio, Some(0.72));
+    assert_eq!(layout.logs_width_ratio, Some(0.40));
     assert_eq!(layout.show_scroll_indicators, Some(true));
     assert_eq!(layout.show_scroll_hints, Some(true));
     assert_eq!(

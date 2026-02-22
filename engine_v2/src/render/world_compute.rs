@@ -277,8 +277,21 @@ pub struct WorldRenderModelProxy {
 
 #[derive(Debug, Clone)]
 pub struct WorldRenderFrame {
+    pub world_scene_label: String,
+    pub overlay_scene_label: String,
     pub world_bounds: [f32; 4],
     pub world_paused: bool,
+    pub chunk_size: f32,
+    pub chunk_load_radius: u32,
+    pub infinite_world: bool,
+    pub camera_yaw: f32,
+    pub camera_pitch: f32,
+    pub camera_distance: f32,
+    pub camera_pitch_min: f32,
+    pub camera_pitch_max: f32,
+    pub camera_distance_min: f32,
+    pub camera_distance_max: f32,
+    pub camera_follow_dampening: f32,
     pub agents: Vec<WorldRenderAgent>,
     pub model_proxies: Vec<WorldRenderModelProxy>,
 }
@@ -294,8 +307,21 @@ pub struct WorldShaderSources<'a> {
 impl Default for WorldRenderFrame {
     fn default() -> Self {
         Self {
+            world_scene_label: "gameplay_stub".to_string(),
+            overlay_scene_label: "console_ui".to_string(),
             world_bounds: [-32.0, -18.0, 32.0, 18.0],
             world_paused: false,
+            chunk_size: 24.0,
+            chunk_load_radius: 2,
+            infinite_world: true,
+            camera_yaw: std::f32::consts::PI,
+            camera_pitch: 0.45,
+            camera_distance: 10.0,
+            camera_pitch_min: -1.15,
+            camera_pitch_max: 1.15,
+            camera_distance_min: 3.0,
+            camera_distance_max: 48.0,
+            camera_follow_dampening: 0.12,
             agents: Vec::new(),
             model_proxies: Vec::new(),
         }
@@ -428,51 +454,52 @@ impl WorldComputeRenderer {
             ..Default::default()
         });
 
-        let compute_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("engine_v2_world_compute_bind_group_layout"),
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::StorageTexture {
-                        access: StorageTextureAccess::WriteOnly,
-                        format: TextureFormat::Rgba8Unorm,
-                        view_dimension: TextureViewDimension::D2,
+        let compute_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("engine_v2_world_compute_bind_group_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::StorageTexture {
+                            access: StorageTextureAccess::WriteOnly,
+                            format: TextureFormat::Rgba8Unorm,
+                            view_dimension: TextureViewDimension::D2,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-            ],
-        });
+                ],
+            });
 
         let compute_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("engine_v2_world_compute_bind_group"),
@@ -512,35 +539,36 @@ impl WorldComputeRenderer {
         });
         let compute_pipeline_high_contrast =
             device.create_compute_pipeline(&ComputePipelineDescriptor {
-            label: Some("engine_v2_world_compute_pipeline_high_contrast"),
-            layout: Some(&compute_pipeline_layout),
-            module: &compute_shader_high_contrast,
-            entry_point: Some("cs_main"),
-            compilation_options: PipelineCompilationOptions::default(),
-            cache: None,
-        });
+                label: Some("engine_v2_world_compute_pipeline_high_contrast"),
+                layout: Some(&compute_pipeline_layout),
+                module: &compute_shader_high_contrast,
+                entry_point: Some("cs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
+                cache: None,
+            });
 
-        let compose_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("engine_v2_world_compose_bind_group_layout"),
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        sample_type: TextureSampleType::Float { filterable: true },
-                        view_dimension: TextureViewDimension::D2,
-                        multisampled: false,
+        let compose_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("engine_v2_world_compose_bind_group_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
         let compose_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("engine_v2_world_compose_bind_group"),
@@ -692,11 +720,7 @@ impl WorldComputeRenderer {
         }
     }
 
-    pub fn encode_compute_pass(
-        &self,
-        encoder: &mut CommandEncoder,
-        pipeline: PipelineKey,
-    ) {
+    pub fn encode_compute_pass(&self, encoder: &mut CommandEncoder, pipeline: PipelineKey) {
         let Some(pass) = self.pass.as_ref() else {
             return;
         };

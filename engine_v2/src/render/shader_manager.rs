@@ -109,7 +109,11 @@ impl ShaderManager {
         )];
         for id in ALL_SHADERS {
             let asset = self.asset(id);
-            let loaded = if asset.source.is_some() { "loaded" } else { "fallback" };
+            let loaded = if asset.source.is_some() {
+                "loaded"
+            } else {
+                "fallback"
+            };
             if let Some(err) = &asset.last_error {
                 lines.push(format!(
                     "shader {} rev={} {} error={}",
@@ -158,7 +162,9 @@ impl ShaderManager {
 
         for id in ALL_SHADERS {
             let path = Path::new(id.path());
-            let modified = fs::metadata(path).ok().and_then(|meta| meta.modified().ok());
+            let modified = fs::metadata(path)
+                .ok()
+                .and_then(|meta| meta.modified().ok());
             let idx = Self::index(id);
             let asset = &mut self.assets[idx];
             let changed = force || modified != asset.modified;

@@ -1,5 +1,6 @@
-mod gfx;
+mod chunk_mesher;
 mod frame_graph;
+mod gfx;
 mod model_manager;
 mod pipeline_registry;
 mod renderer;
@@ -8,8 +9,9 @@ mod text;
 mod wgpu_ctx;
 mod world_compute;
 
-pub use gfx::*;
+pub use chunk_mesher::*;
 pub use frame_graph::*;
+pub use gfx::*;
 pub use model_manager::*;
 pub use pipeline_registry::*;
 pub use renderer::*;

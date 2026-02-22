@@ -18,6 +18,11 @@ pub struct InputState {
     pub move_end: bool,
     pub page_up: bool,
     pub page_down: bool,
+    pub world_move_left: bool,
+    pub world_move_right: bool,
+    pub world_move_up: bool,
+    pub world_move_down: bool,
+    pub toggle_pause_menu: bool,
     pub toggle_ui_editor_mode: bool,
     pub save_ui_template: bool,
     pub editor_hide_selected: bool,
@@ -90,6 +95,9 @@ impl InputState {
                             }
                             if code == KeyCode::F1 {
                                 self.toggle_ui_editor_mode = true;
+                            }
+                            if code == KeyCode::Escape {
+                                self.toggle_pause_menu = true;
                             }
                             if code == KeyCode::KeyS && (self.super_down() || self.ctrl_down()) {
                                 self.save_ui_template = true;
@@ -173,14 +181,19 @@ impl InputState {
         self.insert_newline = false;
         self.backspace = false;
         self.delete = false;
-        self.move_left = false;
-        self.move_right = false;
-        self.move_up = false;
-        self.move_down = false;
-        self.move_home = false;
-        self.move_end = false;
-        self.page_up = false;
-        self.page_down = false;
+        self.move_left = self.keys_down.contains(&KeyCode::ArrowLeft);
+        self.move_right = self.keys_down.contains(&KeyCode::ArrowRight);
+        self.move_up = self.keys_down.contains(&KeyCode::ArrowUp);
+        self.move_down = self.keys_down.contains(&KeyCode::ArrowDown);
+        self.move_home = self.keys_down.contains(&KeyCode::Home);
+        self.move_end = self.keys_down.contains(&KeyCode::End);
+        self.page_up = self.keys_down.contains(&KeyCode::PageUp);
+        self.page_down = self.keys_down.contains(&KeyCode::PageDown);
+        self.world_move_left = self.keys_down.contains(&KeyCode::KeyA);
+        self.world_move_right = self.keys_down.contains(&KeyCode::KeyD);
+        self.world_move_up = self.keys_down.contains(&KeyCode::KeyW);
+        self.world_move_down = self.keys_down.contains(&KeyCode::KeyS);
+        self.toggle_pause_menu = false;
         self.toggle_ui_editor_mode = false;
         self.save_ui_template = false;
         self.editor_hide_selected = false;
@@ -200,6 +213,10 @@ impl InputState {
 
     pub fn left_mouse_down(&self) -> bool {
         self.mouse_buttons_down.contains(&MouseButton::Left)
+    }
+
+    pub fn right_mouse_down(&self) -> bool {
+        self.mouse_buttons_down.contains(&MouseButton::Right)
     }
 
     pub fn left_mouse_pressed(&self) -> bool {

@@ -91,7 +91,10 @@ impl PipelineRegistry {
         matches!(
             (slot, key),
             (PassSlot::WorldCompute, PipelineKey::WorldComputeBasic)
-                | (PassSlot::WorldCompute, PipelineKey::WorldComputeHighContrast)
+                | (
+                    PassSlot::WorldCompute,
+                    PipelineKey::WorldComputeHighContrast
+                )
                 | (PassSlot::WorldCompose, PipelineKey::WorldComposeFullscreen)
                 | (PassSlot::UiComposite, PipelineKey::UiCompositeSdf)
         )

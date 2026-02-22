@@ -96,7 +96,10 @@ fn parse_command_line_recognizes_builtins() {
         parse_command_line("grotto> shader_status"),
         Some(GameCommand::ShaderStatus)
     );
-    assert_eq!(parse_command_line("grotto> models"), Some(GameCommand::Models));
+    assert_eq!(
+        parse_command_line("grotto> models"),
+        Some(GameCommand::Models)
+    );
     assert_eq!(
         parse_command_line("grotto> reload_models"),
         Some(GameCommand::ReloadModels)
@@ -129,11 +132,15 @@ fn parse_command_line_maps_unknown_command() {
     );
     assert_eq!(
         parse_command_line("grotto> shader_watch maybe"),
-        Some(GameCommand::Invalid("usage: shader_watch <on|off>".to_string()))
+        Some(GameCommand::Invalid(
+            "usage: shader_watch <on|off>".to_string()
+        ))
     );
     assert_eq!(
         parse_command_line("grotto> model_watch maybe"),
-        Some(GameCommand::Invalid("usage: model_watch <on|off>".to_string()))
+        Some(GameCommand::Invalid(
+            "usage: model_watch <on|off>".to_string()
+        ))
     );
     assert_eq!(parse_command_line("grotto>   "), None);
 }

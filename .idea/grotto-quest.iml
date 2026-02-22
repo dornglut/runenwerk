@@ -10,6 +10,8 @@
       <sourceFolder url="file://$MODULE_DIR$/engine_v2/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scheduler/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scheduler/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/grid/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/grid/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

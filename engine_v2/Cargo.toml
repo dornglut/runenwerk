@@ -3,12 +3,18 @@ name = "engine_v2"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+tracy = ["dep:tracing-tracy"]
+
 [dependencies]
 anyhow = "1.0.100"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 pollster = "0.4.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
+tracing-appender = "0.2.3"
+tracing-tracy = { version = "0.11.4", optional = true }
 wgpu = "27.0.1"
 winit = "0.30.9"
 rusttype = "0.9.3"
@@ -21,3 +27,4 @@ glam = "0.30.8"
 
 ecs = { path = "../ecs" }
 scheduler = { path = "../scheduler" }
+gridcore = { path = "../grid" }

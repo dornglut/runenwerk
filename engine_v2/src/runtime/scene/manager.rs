@@ -1,7 +1,7 @@
 use super::{
     OverlaySceneRuntime, SceneCommand, SceneId, SceneLayer, SceneLifecycleEvent,
-    SceneLifecyclePhase, SceneSlot, SceneTransitionResult, WorldSceneRuntime, build_overlay_runtime,
-    build_world_scene_runtime,
+    SceneLifecyclePhase, SceneSlot, SceneTransitionResult, WorldSceneRuntime,
+    build_overlay_runtime, build_world_scene_runtime,
 };
 use anyhow::Result;
 
@@ -32,7 +32,11 @@ impl SceneManager {
             overlay_runtime,
             overlay_back_stack: Vec::new(),
             channels: super::SceneChannels::default(),
-            overlays: vec![SceneSlot::new(SceneId::ConsoleUi)],
+            overlays: vec![SceneSlot {
+                active: SceneId::ConsoleUi,
+                paused: false,
+                visible: false,
+            }],
             pending: Vec::new(),
         };
         manager.emit_lifecycle(world_scene, SceneLifecyclePhase::Enter);
@@ -49,6 +53,16 @@ impl SceneManager {
 
     pub fn queue(&mut self, command: SceneCommand) {
         self.pending.push(command);
+    }
+
+    pub fn overlay_visible(&self) -> bool {
+        self.overlays.last().map(|s| s.visible).unwrap_or(false)
+    }
+
+    pub fn set_active_overlay_visible(&mut self, visible: bool) {
+        if let Some(slot) = self.overlays.last_mut() {
+            slot.visible = visible;
+        }
     }
 
     fn overlay_viewport(&self) -> ((f32, f32), f32) {
