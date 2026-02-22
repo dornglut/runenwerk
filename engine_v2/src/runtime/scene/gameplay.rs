@@ -68,6 +68,36 @@ pub fn gameplay_scene_bootstrap(world: &mut World, config: &GameplayConfig) {
     }
 }
 
+pub fn gameplay_apply_live_config(ctx: &mut WorldSceneContext) {
+    let entities: Vec<EntityHandle> = ctx.world.entities_with::<AgentTeam>().collect();
+    for entity in entities {
+        let Some(team) = ctx.world.get_component::<AgentTeam>(entity).copied() else {
+            continue;
+        };
+        let archetype = match team {
+            AgentTeam::Player => &ctx.gameplay_config.player,
+            AgentTeam::Enemy => &ctx.gameplay_config.enemy,
+        };
+
+        if let Some(velocity) = ctx.world.get_component_mut::<AgentVelocity>(entity) {
+            velocity.speed = archetype.speed.max(0.0);
+        }
+        if let Some(combat) = ctx.world.get_component_mut::<AgentCombat>(entity) {
+            combat.attack_range = archetype.attack_range.max(0.0);
+            combat.attack_damage = archetype.attack_damage.max(0);
+            combat.cooldown_ticks = archetype.cooldown_ticks.max(1);
+            combat.cooldown_remaining = combat.cooldown_remaining.min(combat.cooldown_ticks);
+        }
+        if let Some(health) = ctx.world.get_component_mut::<AgentHealth>(entity) {
+            health.max = archetype.health.max(1);
+            health.current = health.current.clamp(0, health.max);
+            if health.current == 0 {
+                health.current = health.max;
+            }
+        }
+    }
+}
+
 pub fn gameplay_sense_system(ctx: &mut WorldSceneContext) -> Result<()> {
     if ctx.overlay_consumed || ctx.scene != SceneId::GameplayStub {
         return Ok(());
@@ -211,6 +241,7 @@ pub fn gameplay_move_system(ctx: &mut WorldSceneContext) -> Result<()> {
     }
 
     let entities: Vec<EntityHandle> = ctx.world.entities_with::<AgentMoveIntent>().collect();
+    let sim_step = ctx.delta_seconds.clamp(0.0, 0.25);
     let mut first_player_pos: Option<AgentPosition> = None;
     for entity in entities {
         let Some(health) = ctx.world.get_component::<AgentHealth>(entity).copied() else {
@@ -225,9 +256,9 @@ pub fn gameplay_move_system(ctx: &mut WorldSceneContext) -> Result<()> {
             .copied()
             .unwrap_or(AgentMoveIntent { dx: 0.0, dy: 0.0 });
         if let Some(position) = ctx.world.get_component_mut::<AgentPosition>(entity) {
-            position.x = (position.x + intent.dx)
+            position.x = (position.x + intent.dx * sim_step)
                 .clamp(ctx.gameplay_config.bounds.min_x, ctx.gameplay_config.bounds.max_x);
-            position.y = (position.y + intent.dy)
+            position.y = (position.y + intent.dy * sim_step)
                 .clamp(ctx.gameplay_config.bounds.min_y, ctx.gameplay_config.bounds.max_y);
         }
         if let Some(move_intent) = ctx.world.get_component_mut::<AgentMoveIntent>(entity) {

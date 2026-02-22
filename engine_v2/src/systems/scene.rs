@@ -1,6 +1,7 @@
 use crate::runtime::{
     EngineData, QuestState, SceneCommand, SceneId, SceneLifecycleEvent, SceneLifecyclePhase,
-    WorldToOverlayMessage, template_path_for_scene,
+    WorldToOverlayMessage, gameplay_apply_live_config, gameplay_config_modified,
+    load_gameplay_config_with_modified, template_path_for_scene,
 };
 use crate::ui::UiDirty;
 
@@ -69,14 +70,40 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    data.scene.world_runtime.ctx.overlay_consumed = data.input.overlay_consumed;
-    data.scene.world_runtime.ctx.overlay_scene = data.scene.active_overlay();
-    data.scene
-        .world_runtime
-        .scheduler
-        .run(&mut data.scene.world_runtime.ctx)?;
-    let outbound = std::mem::take(&mut data.scene.world_runtime.ctx.outbound_notifications);
-    data.scene.channels.world_to_overlay.extend(outbound);
+    let active_overlay = data.scene.active_overlay();
+    let runtime = &mut data.scene.world_runtime;
+    runtime.ctx.overlay_consumed = data.input.overlay_consumed;
+    runtime.ctx.overlay_scene = active_overlay;
+
+    let latest_modified = gameplay_config_modified();
+    if latest_modified != runtime.ctx.gameplay_config_modified {
+        let (config, modified) = load_gameplay_config_with_modified();
+        runtime.ctx.gameplay_config = config;
+        runtime.ctx.gameplay_config_modified = modified;
+        gameplay_apply_live_config(&mut runtime.ctx);
+        data.scene.channels.overlay_console_lines.push(
+            "[world] gameplay config hot reloaded (assets/gameplay/gameplay_stub.ron)".to_string(),
+        );
+    }
+
+    let fixed_dt = runtime.ctx.fixed_step_seconds.clamp(1.0 / 240.0, 1.0 / 30.0);
+    runtime.ctx.fixed_step_accumulator = (runtime.ctx.fixed_step_accumulator
+        + data.time.delta_seconds.min(0.25))
+    .min(fixed_dt * 8.0);
+
+    let mut steps = 0usize;
+    while runtime.ctx.fixed_step_accumulator + f32::EPSILON >= fixed_dt && steps < 8 {
+        runtime.ctx.delta_seconds = fixed_dt;
+        runtime.scheduler.run(&mut runtime.ctx)?;
+        runtime.ctx.fixed_step_accumulator -= fixed_dt;
+        let outbound = std::mem::take(&mut runtime.ctx.outbound_notifications);
+        data.scene.channels.world_to_overlay.extend(outbound);
+        steps = steps.saturating_add(1);
+    }
+    if steps == 8 && runtime.ctx.fixed_step_accumulator >= fixed_dt {
+        runtime.ctx.fixed_step_accumulator = 0.0;
+        tracing::warn!("world fixed-step loop saturated, dropping accumulated time");
+    }
 
     Ok(())
 }

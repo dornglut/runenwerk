@@ -2,13 +2,18 @@ use crate::ui::{ConsoleUiState, initialize_console_ui, load_console_template};
 use anyhow::Result;
 use ecs::{EntityHandle, World};
 use scheduler::{Node, Scheduler, SchedulerBuilder};
+use std::time::SystemTime;
 
 mod config;
 mod gameplay;
 mod lifecycle;
 mod manager;
 
-pub use config::{GameplayConfig, load_gameplay_config};
+pub use config::{
+    GAMEPLAY_CONFIG_PATH, GameplayConfig, gameplay_config_modified, load_gameplay_config,
+    load_gameplay_config_with_modified,
+};
+pub use gameplay::gameplay_apply_live_config;
 use gameplay::{
     gameplay_combat_system, gameplay_decide_system, gameplay_emit_ui_system, gameplay_move_system,
     gameplay_resolve_system, gameplay_scene_bootstrap, gameplay_sense_system,
@@ -177,6 +182,10 @@ pub struct WorldSceneContext {
     pub world: World,
     pub scene: SceneId,
     pub gameplay_config: GameplayConfig,
+    pub delta_seconds: f32,
+    pub fixed_step_seconds: f32,
+    pub fixed_step_accumulator: f32,
+    pub gameplay_config_modified: Option<SystemTime>,
     pub overlay_consumed: bool,
     pub overlay_scene: SceneId,
     pub tick_entity: EntityHandle,
@@ -324,12 +333,13 @@ fn world_scene_debug_motion_system(ctx: &mut WorldSceneContext) -> Result<()> {
         .get_component::<WorldDebugVelocity>(ctx.debug_entity)
         .copied()
         .unwrap_or(WorldDebugVelocity { x: 0.0, y: 0.0 });
+    let sim_step = ctx.delta_seconds.clamp(0.0, 0.25);
     if let Some(position) = ctx
         .world
         .get_component_mut::<WorldDebugPosition>(ctx.debug_entity)
     {
-        position.x += velocity.x;
-        position.y += velocity.y;
+        position.x += velocity.x * sim_step;
+        position.y += velocity.y * sim_step;
         let min_x = ctx.gameplay_config.bounds.min_x;
         let max_x = ctx.gameplay_config.bounds.max_x;
         let min_y = ctx.gameplay_config.bounds.min_y;
@@ -353,7 +363,7 @@ fn world_scene_debug_motion_system(ctx: &mut WorldSceneContext) -> Result<()> {
 }
 
 fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
-    let gameplay_config = load_gameplay_config();
+    let (gameplay_config, gameplay_config_modified) = load_gameplay_config_with_modified();
     let mut world = World::new();
     world.register_component::<WorldFrameCounter>();
     world.register_component::<WorldDebugPosition>();
@@ -370,6 +380,10 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
         world,
         scene,
         gameplay_config,
+        delta_seconds: 1.0 / 60.0,
+        fixed_step_seconds: 1.0 / 60.0,
+        fixed_step_accumulator: 0.0,
+        gameplay_config_modified,
         overlay_consumed: false,
         overlay_scene: SceneId::ConsoleUi,
         tick_entity,

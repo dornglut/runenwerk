@@ -1,4 +1,8 @@
 use serde::Deserialize;
+use std::path::Path;
+use std::time::SystemTime;
+
+pub const GAMEPLAY_CONFIG_PATH: &str = "assets/gameplay/gameplay_stub.ron";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -23,14 +27,14 @@ impl Default for GameplayConfig {
     fn default() -> Self {
         Self {
             player: AgentArchetypeConfig {
-                speed: 1.6,
+                speed: 1.0,
                 health: 120,
                 attack_range: 5.5,
                 attack_damage: 18,
                 cooldown_ticks: 22,
             },
             enemy: AgentArchetypeConfig {
-                speed: 1.35,
+                speed: 0.85,
                 health: 72,
                 attack_range: 4.0,
                 attack_damage: 10,
@@ -95,22 +99,33 @@ impl Default for GameplayBoundsConfig {
 }
 
 pub fn load_gameplay_config() -> GameplayConfig {
+    load_gameplay_config_with_modified().0
+}
+
+pub fn gameplay_config_modified() -> Option<SystemTime> {
+    std::fs::metadata(Path::new(GAMEPLAY_CONFIG_PATH))
+        .ok()
+        .and_then(|m| m.modified().ok())
+}
+
+pub fn load_gameplay_config_with_modified() -> (GameplayConfig, Option<SystemTime>) {
     let default = GameplayConfig::default();
-    let path = std::path::Path::new("assets/gameplay/gameplay_stub.ron");
+    let path = Path::new(GAMEPLAY_CONFIG_PATH);
+    let modified = gameplay_config_modified();
     if !path.exists() {
-        return default;
+        return (default, modified);
     }
     match std::fs::read_to_string(path) {
         Ok(raw) => match ron::from_str::<GameplayConfig>(&raw) {
-            Ok(cfg) => cfg,
+            Ok(cfg) => (cfg, modified),
             Err(err) => {
                 tracing::warn!(?err, "failed parsing gameplay config, using defaults");
-                default
+                (default, modified)
             }
         },
         Err(err) => {
             tracing::warn!(?err, "failed reading gameplay config, using defaults");
-            default
+            (default, modified)
         }
     }
 }

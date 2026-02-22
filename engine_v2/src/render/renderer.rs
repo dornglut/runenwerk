@@ -1,11 +1,12 @@
 use super::frame_graph::{FrameGraph, PassHandle};
-use super::model_manager::{ModelManager, ModelMesh, ModelTextureData};
+use super::model_manager::{ModelManager, ModelMaterial, ModelMesh, ModelMeshVertex, ModelTextureData};
 use super::pipeline_registry::{PassSlot, PipelineKey, PipelineRegistry, PipelineSelection};
 use super::shader_manager::{ShaderId, ShaderManager};
 use super::text::{FileFontProvider, TextRenderer};
 use super::world_compute::{
     DEFAULT_WORLD_COMPOSE_SHADER_FULLSCREEN, DEFAULT_WORLD_COMPUTE_SHADER_BASIC,
-    DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST, WorldComputeRenderer, WorldRenderFrame,
+    DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST, WorldComputeRenderer, WorldRenderAgent,
+    WorldRenderFrame,
     WorldShaderSources,
 };
 use crate::ui::{UiDrawCmd, UiDrawList};
@@ -208,6 +209,70 @@ struct UiPreparedDraws {
     surface_size: (u32, u32),
 }
 
+const PLAYER_CUBE_COLOR: [f32; 4] = [0.12, 0.88, 0.18, 1.0];
+const ENEMY_CUBE_COLOR: [f32; 4] = [0.92, 0.18, 0.18, 1.0];
+const GROUND_TILE_SIZE: f32 = 4.0;
+
+fn checker_texture_rgba(size: u32) -> ModelTextureData {
+    let size = size.max(2);
+    let mut rgba8 = Vec::with_capacity((size * size * 4) as usize);
+    for y in 0..size {
+        for x in 0..size {
+            let cell = ((x / 8) + (y / 8)) % 2;
+            let color = if cell == 0 {
+                [46u8, 50u8, 58u8, 255u8]
+            } else {
+                [30u8, 34u8, 40u8, 255u8]
+            };
+            rgba8.extend_from_slice(&color);
+        }
+    }
+    ModelTextureData {
+        width: size,
+        height: size,
+        rgba8,
+    }
+}
+
+fn ground_mesh_for_bounds(world_bounds: [f32; 4]) -> ModelMesh {
+    let min_x = world_bounds[0];
+    let min_z = world_bounds[1];
+    let max_x = world_bounds[2];
+    let max_z = world_bounds[3];
+    let span_x = (max_x - min_x).max(1.0);
+    let span_z = (max_z - min_z).max(1.0);
+    let tiles_u = (span_x / GROUND_TILE_SIZE).max(1.0);
+    let tiles_v = (span_z / GROUND_TILE_SIZE).max(1.0);
+    let y = -0.02;
+
+    ModelMesh {
+        vertices: vec![
+            ModelMeshVertex {
+                position: [min_x, y, min_z],
+                uv: [0.0, 0.0],
+            },
+            ModelMeshVertex {
+                position: [max_x, y, min_z],
+                uv: [tiles_u, 0.0],
+            },
+            ModelMeshVertex {
+                position: [max_x, y, max_z],
+                uv: [tiles_u, tiles_v],
+            },
+            ModelMeshVertex {
+                position: [min_x, y, max_z],
+                uv: [0.0, tiles_v],
+            },
+        ],
+        // winding chosen so top-face normal points +Y.
+        indices: vec![0, 2, 1, 0, 3, 2],
+        material: ModelMaterial {
+            base_color_factor: [1.0, 1.0, 1.0, 1.0],
+            base_color_texture: Some(checker_texture_rgba(64)),
+        },
+    }
+}
+
 fn create_texture_from_rgba(
     device: &Device,
     queue: &Queue,
@@ -260,6 +325,74 @@ fn create_texture_from_rgba(
         );
     }
     gpu_texture
+}
+
+fn agent_cube_meshes(agents: &[WorldRenderAgent]) -> Vec<ModelMesh> {
+    let mut meshes = Vec::with_capacity(agents.len());
+    for agent in agents {
+        let color = if agent.team == 0 {
+            PLAYER_CUBE_COLOR
+        } else {
+            ENEMY_CUBE_COLOR
+        };
+        let half = (agent.radius * 0.45).max(0.25);
+        let cx = agent.x;
+        let cy = half;
+        let cz = agent.y;
+
+        let vertices = vec![
+            ModelMeshVertex {
+                position: [cx - half, cy - half, cz - half],
+                uv: [0.0, 0.0],
+            },
+            ModelMeshVertex {
+                position: [cx + half, cy - half, cz - half],
+                uv: [1.0, 0.0],
+            },
+            ModelMeshVertex {
+                position: [cx + half, cy + half, cz - half],
+                uv: [1.0, 1.0],
+            },
+            ModelMeshVertex {
+                position: [cx - half, cy + half, cz - half],
+                uv: [0.0, 1.0],
+            },
+            ModelMeshVertex {
+                position: [cx - half, cy - half, cz + half],
+                uv: [0.0, 0.0],
+            },
+            ModelMeshVertex {
+                position: [cx + half, cy - half, cz + half],
+                uv: [1.0, 0.0],
+            },
+            ModelMeshVertex {
+                position: [cx + half, cy + half, cz + half],
+                uv: [1.0, 1.0],
+            },
+            ModelMeshVertex {
+                position: [cx - half, cy + half, cz + half],
+                uv: [0.0, 1.0],
+            },
+        ];
+        let indices: Vec<u32> = vec![
+            0, 1, 2, 0, 2, 3, // back
+            4, 6, 5, 4, 7, 6, // front
+            0, 4, 5, 0, 5, 1, // bottom
+            3, 2, 6, 3, 6, 7, // top
+            1, 5, 6, 1, 6, 2, // right
+            0, 3, 7, 0, 7, 4, // left
+        ];
+
+        meshes.push(ModelMesh {
+            vertices,
+            indices,
+            material: ModelMaterial {
+                base_color_factor: color,
+                base_color_texture: None,
+            },
+        });
+    }
+    meshes
 }
 
 #[derive(Debug)]
@@ -772,18 +905,33 @@ impl Renderer {
         &self,
         device: &Device,
         queue: &Queue,
+        world_frame: &WorldRenderFrame,
         surface_width: f32,
         surface_height: f32,
     ) -> MeshPreparedDraw {
-        let meshes: Vec<ModelMesh> = self.model_manager.collect_meshes();
+        let meshes: Vec<ModelMesh> = if world_frame.agents.is_empty() {
+            self.model_manager.collect_meshes()
+        } else {
+            let mut meshes = Vec::new();
+            meshes.push(ground_mesh_for_bounds(world_frame.world_bounds));
+            meshes.extend(agent_cube_meshes(&world_frame.agents));
+            meshes
+        };
         if meshes.is_empty() {
             return MeshPreparedDraw { draws: Vec::new() };
         }
 
         if let Some(mesh_pass) = self.mesh_pass.as_ref() {
             let aspect = (surface_width.max(1.0) / surface_height.max(1.0)).max(0.1);
-            let eye = Vec3::new(3.5, 2.8, 3.5);
-            let target = Vec3::ZERO;
+            let player_target = world_frame
+                .agents
+                .iter()
+                .find(|agent| agent.team == 0)
+                .or_else(|| world_frame.agents.first())
+                .map(|agent| Vec3::new(agent.x, 0.0, agent.y))
+                .unwrap_or(Vec3::ZERO);
+            let eye = player_target + Vec3::new(5.0, 5.0, 5.0);
+            let target = player_target;
             let up = Vec3::Y;
             let view = Mat4::look_at_rh(eye, target, up);
             let proj = Mat4::perspective_rh_gl(55.0f32.to_radians(), aspect, 0.01, 200.0);
@@ -1074,7 +1222,13 @@ impl Renderer {
             .extend(self.model_manager.collect_sdf_proxies());
         let prepared_ui =
             self.prepare_ui_draws(device, queue, draw_list, surface_width, surface_height);
-        let prepared_mesh = self.prepare_mesh_draw(device, queue, surface_width, surface_height);
+        let prepared_mesh = self.prepare_mesh_draw(
+            device,
+            queue,
+            &merged_world_frame,
+            surface_width,
+            surface_height,
+        );
         self.world_compute_renderer.prepare_frame(
             device,
             queue,
