@@ -1,8 +1,8 @@
 use crate::render::Gfx;
 use crate::systems::{
     clear_input_system, game_command_apply_system, game_command_execute_system, time_system,
-    ui_build_batches_system, ui_hot_reload_system, ui_input_system, ui_layout_system,
-    ui_render_extract_system, ui_render_submit_system,
+    ui_build_batches_system, ui_editor_system, ui_hot_reload_system, ui_input_system,
+    ui_layout_system, ui_render_extract_system, ui_render_submit_system,
 };
 use crate::ui::{ConsoleUiState, initialize_console_ui, reload_console_template_if_changed};
 use anyhow::Result;
@@ -63,9 +63,14 @@ impl Engine {
                 &["ui_hot_reload"],
             )
             .add_node_with_edges(
+                "ui_editor",
+                Node::new("ui_editor", ui_editor_system),
+                &["ui_input"],
+            )
+            .add_node_with_edges(
                 "game_command_apply",
                 Node::new("game_command_apply", game_command_apply_system),
-                &["ui_input"],
+                &["ui_editor"],
             )
             .add_node_with_edges(
                 "game_command_execute",

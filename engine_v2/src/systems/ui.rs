@@ -1,19 +1,64 @@
 use crate::runtime::EngineData;
 use crate::ui::{
-    UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiInputField, UiInteraction, UiStyle, UiSubmitEvent,
-    UiText, UiTransform, reload_console_template_if_changed,
+    UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiEditorNode, UiInputField, UiInteraction, UiStyle,
+    UiSubmitEvent, UiText, UiTransform, reload_console_template_if_changed,
+    save_console_template_to_disk,
 };
 
 const CONSOLE_PROMPT: &str = "grotto> ";
 const CARET_BLINK_SECONDS: f32 = 0.5;
 const INPUT_PADDING_X: f32 = 6.0;
 const INPUT_PADDING_Y: f32 = 4.0;
+const EDITOR_BASE_NUDGE_PX: f32 = 1.0;
+const EDITOR_DRAG_SNAP_PX: f32 = 10.0;
 
 pub(super) fn point_in_rect(point: (f32, f32), rect: &UiTransform) -> bool {
     point.0 >= rect.x
         && point.0 <= rect.x + rect.w
         && point.1 >= rect.y
         && point.1 <= rect.y + rect.h
+}
+
+#[derive(Debug, Copy, Clone)]
+pub(super) struct EditorNodeRect {
+    pub node: UiEditorNode,
+    pub z: i32,
+    pub rect: UiTransform,
+}
+
+pub(super) fn pick_editor_node_at(
+    point: (f32, f32),
+    nodes: &[EditorNodeRect],
+) -> Option<UiEditorNode> {
+    nodes
+        .iter()
+        .filter(|item| point_in_rect(point, &item.rect))
+        .max_by_key(|item| item.z)
+        .map(|item| item.node)
+}
+
+fn selected_editor_entity(ui: &crate::ui::ConsoleUiState) -> Option<ecs::EntityHandle> {
+    match ui.editor.selected {
+        Some(UiEditorNode::Root) => Some(ui.root),
+        Some(UiEditorNode::Scrollback) => Some(ui.scrollback),
+        Some(UiEditorNode::Input) => Some(ui.input),
+        Some(UiEditorNode::ConfirmButton) => Some(ui.confirm_button),
+        None => None,
+    }
+}
+
+fn editor_node_label(node: UiEditorNode) -> &'static str {
+    match node {
+        UiEditorNode::Root => "root",
+        UiEditorNode::Scrollback => "scrollback",
+        UiEditorNode::Input => "input",
+        UiEditorNode::ConfirmButton => "confirm_button",
+    }
+}
+
+pub(super) fn snap_to_grid(value: f32, grid: f32) -> f32 {
+    let g = grid.max(1.0);
+    (value / g).round() * g
 }
 
 fn tint_color(color: [f32; 4], factor: f32) -> [f32; 4] {
@@ -23,6 +68,47 @@ fn tint_color(color: [f32; 4], factor: f32) -> [f32; 4] {
         (color[2] * factor).clamp(0.0, 1.0),
         color[3],
     ]
+}
+
+fn push_outline(
+    commands: &mut Vec<UiBatchCmd>,
+    rect: &UiTransform,
+    thickness: f32,
+    color: [f32; 4],
+) {
+    let t = thickness.max(1.0);
+    commands.push(UiBatchCmd::Rect {
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: t,
+        color,
+        radius: 0.0,
+    });
+    commands.push(UiBatchCmd::Rect {
+        x: rect.x,
+        y: rect.y + rect.h - t,
+        w: rect.w,
+        h: t,
+        color,
+        radius: 0.0,
+    });
+    commands.push(UiBatchCmd::Rect {
+        x: rect.x,
+        y: rect.y,
+        w: t,
+        h: rect.h,
+        color,
+        radius: 0.0,
+    });
+    commands.push(UiBatchCmd::Rect {
+        x: rect.x + rect.w - t,
+        y: rect.y,
+        w: t,
+        h: rect.h,
+        color,
+        radius: 0.0,
+    });
 }
 
 pub(super) fn estimate_text_width(text: &str, size: f32) -> f32 {
@@ -443,7 +529,147 @@ pub fn ui_hot_reload_system(data: &mut EngineData) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn ui_editor_system(data: &mut EngineData) -> anyhow::Result<()> {
+    if !data.ui.editor.enabled {
+        return Ok(());
+    }
+
+    let candidates = [
+        (UiEditorNode::Root, data.ui.root),
+        (UiEditorNode::Scrollback, data.ui.scrollback),
+        (UiEditorNode::Input, data.ui.input),
+        (UiEditorNode::ConfirmButton, data.ui.confirm_button),
+    ];
+
+    if data.input.left_mouse_pressed() {
+        let mut rects: Vec<EditorNodeRect> = Vec::new();
+        for (node, entity) in candidates {
+            if let (Some(transform), Some(ui_node)) = (
+                data.world.get_component::<UiTransform>(entity),
+                data.world.get_component::<crate::ui::UiNode>(entity),
+            ) {
+                rects.push(EditorNodeRect {
+                    node,
+                    z: ui_node.z,
+                    rect: *transform,
+                });
+            }
+        }
+
+        data.ui.editor.selected = pick_editor_node_at(data.input.mouse_position, &rects);
+        data.ui.editor.dragging = false;
+        data.ui.editor.drag_pointer_offset = (0.0, 0.0);
+        match data.ui.editor.selected {
+            Some(node) => {
+                if let Some(selected_rect) = rects.iter().find(|r| r.node == node).map(|r| r.rect) {
+                    data.ui.editor.drag_pointer_offset = (
+                        data.input.mouse_position.0 - selected_rect.x,
+                        data.input.mouse_position.1 - selected_rect.y,
+                    );
+                    data.ui.editor.dragging = true;
+                }
+                data.ui.editor.status = format!("editor: selected {}", editor_node_label(node));
+            }
+            None => {
+                data.ui.editor.status = "editor: nothing selected".to_string();
+            }
+        }
+    }
+
+    if data.input.left_mouse_released() {
+        data.ui.editor.dragging = false;
+    }
+
+    if let Some(selected_node) = data.ui.editor.selected {
+        let Some(selected) = selected_editor_entity(&data.ui) else {
+            return Ok(());
+        };
+        let step = if data.input.shift_down() {
+            10.0 * data.ui.scale.max(1.0)
+        } else {
+            EDITOR_BASE_NUDGE_PX * data.ui.scale.max(1.0)
+        };
+        let mut dx = 0.0;
+        let mut dy = 0.0;
+        if data.input.move_left {
+            dx -= step;
+        }
+        if data.input.move_right {
+            dx += step;
+        }
+        if data.input.move_up {
+            dy -= step;
+        }
+        if data.input.move_down {
+            dy += step;
+        }
+        if (dx != 0.0 || dy != 0.0)
+            && let Some(transform) = data.world.get_component_mut::<UiTransform>(selected)
+        {
+            transform.x += dx;
+            transform.y += dy;
+            data.ui.editor.status = format!(
+                "editor: nudged {} to ({:.0}, {:.0})",
+                editor_node_label(selected_node),
+                transform.x,
+                transform.y
+            );
+        }
+
+        if data.ui.editor.dragging
+            && data.input.left_mouse_down()
+            && let Some(transform) = data.world.get_component_mut::<UiTransform>(selected)
+        {
+            let mut next_x = data.input.mouse_position.0 - data.ui.editor.drag_pointer_offset.0;
+            let mut next_y = data.input.mouse_position.1 - data.ui.editor.drag_pointer_offset.1;
+            if data.input.shift_down() {
+                let grid = EDITOR_DRAG_SNAP_PX * data.ui.scale.max(1.0);
+                next_x = snap_to_grid(next_x, grid);
+                next_y = snap_to_grid(next_y, grid);
+            }
+            transform.x = next_x;
+            transform.y = next_y;
+            data.ui.editor.status = format!(
+                "editor: dragging {} ({:.0}, {:.0})",
+                editor_node_label(selected_node),
+                transform.x,
+                transform.y
+            );
+        }
+    }
+
+    if data.input.save_ui_template {
+        match save_console_template_to_disk(&data.world, &mut data.ui) {
+            Ok(path) => {
+                data.ui.editor.status = format!("editor: saved {}", path.display());
+                let _ = reload_console_template_if_changed(&mut data.world, &mut data.ui, true);
+            }
+            Err(err) => {
+                data.ui.editor.status = format!("editor: save failed: {err:#}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
+    if data.input.toggle_ui_editor_mode {
+        data.ui.editor.enabled = !data.ui.editor.enabled;
+        data.ui.editor.dragging = false;
+        data.ui.editor.drag_pointer_offset = (0.0, 0.0);
+        data.ui.editor.status = if data.ui.editor.enabled {
+            "editor: on (click+drag move, Shift snap, arrows nudge, Cmd/Ctrl+S save, F1 off)"
+                .to_string()
+        } else {
+            "editor: off (F1 to toggle)".to_string()
+        };
+    }
+
+    if data.ui.editor.enabled {
+        return Ok(());
+    }
+
     let input_entity = data.ui.input;
     let button_entity = data.ui.confirm_button;
     let scroll_entity = data.ui.scrollback;
@@ -896,6 +1122,30 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
             size: scaled_text_size,
             clip: Some([transform.x, transform.y, transform.w, transform.h]),
         });
+    }
+
+    if data.ui.editor.enabled {
+        if let Some(selected_entity) = selected_editor_entity(&data.ui)
+            && let Some(selected_rect) = data.world.get_component::<UiTransform>(selected_entity)
+        {
+            push_outline(
+                &mut commands,
+                selected_rect,
+                2.0 * ui_scale,
+                [0.95, 0.55, 0.15, 0.95],
+            );
+        }
+
+        if let Some(root_rect) = data.world.get_component::<UiTransform>(data.ui.root) {
+            commands.push(UiBatchCmd::Text {
+                x: root_rect.x + (8.0 * ui_scale),
+                y: root_rect.y + (8.0 * ui_scale),
+                content: data.ui.editor.status.clone(),
+                color: [0.98, 0.84, 0.52, 1.0],
+                size: 12.0 * ui_scale,
+                clip: Some([root_rect.x, root_rect.y, root_rect.w, root_rect.h]),
+            });
+        }
     }
 
     data.ui.batches.commands = commands;

@@ -1,13 +1,17 @@
+use crate::systems::ui::EditorNodeRect;
 use crate::systems::ui::WrappedEditorRow;
 use crate::systems::ui::adaptive_footer_metrics;
 use crate::systems::ui::build_scrollback_view_text;
 use crate::systems::ui::build_visible_multiline_input;
 use crate::systems::ui::estimate_text_width;
 use crate::systems::ui::move_cursor_vertical;
+use crate::systems::ui::pick_editor_node_at;
 use crate::systems::ui::point_in_rect;
+use crate::systems::ui::snap_to_grid;
 use crate::systems::ui::visible_line_capacity;
 use crate::systems::ui::wrap_editor_rows;
 use crate::ui::EditorBuffer;
+use crate::ui::UiEditorNode;
 use crate::ui::UiTextMetrics;
 use crate::ui::UiTransform;
 use std::collections::HashMap;
@@ -154,4 +158,47 @@ fn adaptive_footer_metrics_keep_controls_inside_footer_width() {
     assert!(button_w > 0.0);
     assert!(input_w > 0.0);
     assert!(button_w + input_w <= footer_w);
+}
+
+#[test]
+fn pick_editor_node_at_prefers_topmost_overlap() {
+    let nodes = vec![
+        EditorNodeRect {
+            node: UiEditorNode::Root,
+            z: 0,
+            rect: UiTransform {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        },
+        EditorNodeRect {
+            node: UiEditorNode::Input,
+            z: 2,
+            rect: UiTransform {
+                x: 10.0,
+                y: 10.0,
+                w: 60.0,
+                h: 30.0,
+            },
+        },
+    ];
+
+    assert_eq!(
+        pick_editor_node_at((20.0, 20.0), &nodes),
+        Some(UiEditorNode::Input)
+    );
+    assert_eq!(
+        pick_editor_node_at((5.0, 5.0), &nodes),
+        Some(UiEditorNode::Root)
+    );
+    assert_eq!(pick_editor_node_at((200.0, 200.0), &nodes), None);
+}
+
+#[test]
+fn snap_to_grid_rounds_to_nearest_step() {
+    assert_eq!(snap_to_grid(12.0, 10.0), 10.0);
+    assert_eq!(snap_to_grid(15.0, 10.0), 20.0);
+    assert_eq!(snap_to_grid(24.9, 10.0), 20.0);
 }

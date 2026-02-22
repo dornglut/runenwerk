@@ -18,6 +18,8 @@ pub struct InputState {
     pub move_end: bool,
     pub page_up: bool,
     pub page_down: bool,
+    pub toggle_ui_editor_mode: bool,
+    pub save_ui_template: bool,
     pub mouse_delta: (f32, f32),
     pub mouse_position: (f32, f32),
     pub scroll_delta: f32,
@@ -76,6 +78,12 @@ impl InputState {
                             }
                             if code == KeyCode::PageDown {
                                 self.page_down = true;
+                            }
+                            if code == KeyCode::F1 {
+                                self.toggle_ui_editor_mode = true;
+                            }
+                            if code == KeyCode::KeyS && (self.super_down() || self.ctrl_down()) {
+                                self.save_ui_template = true;
                             }
                         }
                         ElementState::Released => {
@@ -138,6 +146,8 @@ impl InputState {
         self.move_end = false;
         self.page_up = false;
         self.page_down = false;
+        self.toggle_ui_editor_mode = false;
+        self.save_ui_template = false;
         self.mouse_delta = (0.0, 0.0);
         self.scroll_delta = 0.0;
         self.left_mouse_pressed = false;
@@ -154,5 +164,20 @@ impl InputState {
 
     pub fn left_mouse_released(&self) -> bool {
         self.left_mouse_released
+    }
+
+    pub fn shift_down(&self) -> bool {
+        self.keys_down.contains(&KeyCode::ShiftLeft)
+            || self.keys_down.contains(&KeyCode::ShiftRight)
+    }
+
+    fn ctrl_down(&self) -> bool {
+        self.keys_down.contains(&KeyCode::ControlLeft)
+            || self.keys_down.contains(&KeyCode::ControlRight)
+    }
+
+    fn super_down(&self) -> bool {
+        self.keys_down.contains(&KeyCode::SuperLeft)
+            || self.keys_down.contains(&KeyCode::SuperRight)
     }
 }

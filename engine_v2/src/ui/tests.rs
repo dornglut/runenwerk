@@ -1,4 +1,4 @@
-use crate::ui::{ConsoleUiTemplate, UiNodeKind, initialize_console_ui};
+use crate::ui::{ConsoleUiTemplate, UiNodeKind, export_console_template, initialize_console_ui};
 use ecs::World;
 
 #[test]
@@ -166,4 +166,18 @@ fn template_component_diff_skips_unchanged_nodes() {
         .get_component::<crate::ui::UiText>(ui.confirm_button)
         .expect("button text should exist");
     assert_eq!(button.content, "Runtime override");
+}
+
+#[test]
+fn export_console_template_contains_editor_node_tree() {
+    let mut world = World::new();
+    let ui = initialize_console_ui(&mut world);
+
+    let template = export_console_template(&world, &ui);
+    let nodes = template.nodes.expect("nodes should exist");
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].id, "root");
+    assert_eq!(nodes[0].children.len(), 3);
+    assert!(template.layout.is_some());
+    assert!(template.confirm_button.is_some());
 }

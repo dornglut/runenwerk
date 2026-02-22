@@ -18,15 +18,16 @@ Track the active implementation state for the retained ECS console UI foundation
 - Tiny-window layout hardening for footer controls.
 - Component-tree templates with stable node IDs and keyed patch/update.
 - Multiline editor mode: wrapping, up/down navigation, viewport behavior.
+- Interactive UI editor mode (M1): `F1` toggle, click-to-select node, mouse drag move, arrow-key nudging, save-to-template.
 
 ## Next (Active)
 - Selection/copy-paste and richer editing behavior.
 
 ## Recommended Breakdown For Next
-1. Add explicit selection model (`anchor`, `caret`, selection range helpers).
-2. Add click-to-caret and Shift+Arrow selection expansion.
+1. Add explicit text selection model (`anchor`, `caret`, selection range helpers).
+2. Add click-to-caret and Shift+Arrow selection expansion for editor text field.
 3. Add clipboard integration (copy/cut/paste).
-4. Add tests for selection range normalization, replacement semantics, and clipboard operations.
+4. Add tests for selection normalization, replacement semantics, and clipboard operations.
 
 ## Later
 - Template diagnostics and reload feedback tooling.

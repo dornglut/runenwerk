@@ -33,6 +33,12 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
 - Text clipping/scissor.
 - Hot-reloadable RON templates with component tree and keyed patch behavior.
 - Multiline input editing with viewport and vertical caret movement.
+- Interactive in-engine editor baseline:
+  - `F1` toggles editor mode.
+  - Click selects UI node (`root`, `scrollback`, `input`, `confirm_button`).
+  - Click-drag moves selected node (Shift enables grid snapping).
+  - Arrow keys nudge selected node (hold Shift for larger steps).
+  - `Cmd/Ctrl+S` exports and saves current UI template.
 
 ## Current Constraints
 - Selection/copy-paste not complete.

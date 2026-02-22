@@ -1,7 +1,7 @@
 use super::{ConsoleUiState, UiStyle, UiText};
 use anyhow::Context;
 use ecs::{EntityHandle, World};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -11,7 +11,7 @@ use std::time::SystemTime;
 const DEFAULT_TEMPLATE_PATHS: &[&str] =
     &["assets/ui/console.ron", "engine_v2/assets/ui/console.ron"];
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct ConsoleUiTemplate {
     pub nodes: Option<Vec<UiNodeTemplate>>,
@@ -23,7 +23,7 @@ pub struct ConsoleUiTemplate {
     pub layout: Option<UiLayoutTemplate>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub enum UiNodeKind {
     Panel,
     Scrollback,
@@ -31,7 +31,7 @@ pub enum UiNodeKind {
     Button,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct UiNodeTemplate {
     pub id: String,
@@ -41,7 +41,7 @@ pub struct UiNodeTemplate {
     pub children: Vec<UiNodeTemplate>,
 }
 
-#[derive(Debug, Copy, Clone, Deserialize, Default)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct UiStyleTemplate {
     pub bg_color: Option<(f32, f32, f32, f32)>,
@@ -50,7 +50,7 @@ pub struct UiStyleTemplate {
     pub radius: Option<f32>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct UiTextTemplate {
     pub content: Option<String>,
@@ -58,14 +58,14 @@ pub struct UiTextTemplate {
     pub size: Option<f32>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct UiButtonTemplate {
     pub style: Option<UiStyleTemplate>,
     pub text: Option<UiTextTemplate>,
 }
 
-#[derive(Debug, Copy, Clone, Deserialize, Default)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct UiLayoutTemplate {
     pub panel_width_ratio: Option<f32>,
@@ -334,4 +334,130 @@ pub fn reload_console_template_if_changed(
     apply_console_template(world, ui, template);
     ui.template_modified = modified;
     Ok(true)
+}
+
+fn serialize_style(style: &UiStyle) -> UiStyleTemplate {
+    UiStyleTemplate {
+        bg_color: Some((
+            style.bg_color[0],
+            style.bg_color[1],
+            style.bg_color[2],
+            style.bg_color[3],
+        )),
+        border_color: Some((
+            style.border_color[0],
+            style.border_color[1],
+            style.border_color[2],
+            style.border_color[3],
+        )),
+        border_width: Some(style.border_width),
+        radius: Some(style.radius),
+    }
+}
+
+fn serialize_text(text: &UiText, include_content: bool) -> UiTextTemplate {
+    UiTextTemplate {
+        content: include_content.then(|| text.content.clone()),
+        color: Some((text.color[0], text.color[1], text.color[2], text.color[3])),
+        size: Some(text.size),
+    }
+}
+
+pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiTemplate {
+    let root_style = world
+        .get_component::<UiStyle>(ui.root)
+        .map(serialize_style)
+        .unwrap_or_default();
+    let scroll_text = world
+        .get_component::<UiText>(ui.scrollback)
+        .map(|t| serialize_text(t, false))
+        .unwrap_or_default();
+    let input_text = world
+        .get_component::<UiText>(ui.input)
+        .map(|t| serialize_text(t, false))
+        .unwrap_or_default();
+    let button_style = world
+        .get_component::<UiStyle>(ui.confirm_button)
+        .map(serialize_style)
+        .unwrap_or_default();
+    let button_text = world
+        .get_component::<UiText>(ui.confirm_button)
+        .map(|t| serialize_text(t, true))
+        .unwrap_or_default();
+
+    let layout = UiLayoutTemplate {
+        panel_width_ratio: Some(ui.layout.panel_width_ratio),
+        panel_height_ratio: Some(ui.layout.panel_height_ratio),
+        panel_min_width: Some(ui.layout.panel_min_width),
+        panel_min_height: Some(ui.layout.panel_min_height),
+        outer_margin: Some(ui.layout.outer_margin),
+        inner_padding: Some(ui.layout.inner_padding),
+        footer_offset: Some(ui.layout.footer_offset),
+        input_height: Some(ui.layout.input_height),
+        button_width: Some(ui.layout.button_width),
+        input_button_gap: Some(ui.layout.input_button_gap),
+    };
+
+    ConsoleUiTemplate {
+        max_lines: Some(ui.max_lines),
+        layout: Some(layout),
+        root_style: Some(root_style),
+        scrollback_text: Some(scroll_text),
+        input_text: Some(input_text),
+        confirm_button: Some(UiButtonTemplate {
+            style: Some(button_style),
+            text: Some(button_text),
+        }),
+        nodes: Some(vec![UiNodeTemplate {
+            id: "root".to_string(),
+            kind: Some(UiNodeKind::Panel),
+            style: None,
+            text: None,
+            children: vec![
+                UiNodeTemplate {
+                    id: "scrollback".to_string(),
+                    kind: Some(UiNodeKind::Scrollback),
+                    style: None,
+                    text: None,
+                    children: Vec::new(),
+                },
+                UiNodeTemplate {
+                    id: "input".to_string(),
+                    kind: Some(UiNodeKind::Input),
+                    style: None,
+                    text: None,
+                    children: Vec::new(),
+                },
+                UiNodeTemplate {
+                    id: "confirm_button".to_string(),
+                    kind: Some(UiNodeKind::Button),
+                    style: None,
+                    text: None,
+                    children: Vec::new(),
+                },
+            ],
+        }]),
+    }
+}
+
+pub fn save_console_template_to_disk(
+    world: &World,
+    ui: &mut ConsoleUiState,
+) -> anyhow::Result<PathBuf> {
+    initialize_template_tracking(ui);
+    let path = ui
+        .template_path
+        .clone()
+        .or_else(discover_default_template_path)
+        .unwrap_or_else(|| PathBuf::from("assets/ui/console.ron"));
+
+    let template = export_console_template(world, ui);
+    let pretty = ron::ser::PrettyConfig::default();
+    let raw =
+        ron::ser::to_string_pretty(&template, pretty).context("failed serializing UI template")?;
+    fs::write(&path, raw)
+        .with_context(|| format!("failed writing UI template at {}", path.display()))?;
+    ui.template_path = Some(path.clone());
+    ui.template_modified = file_modified(&path);
+    Ok(path)
 }

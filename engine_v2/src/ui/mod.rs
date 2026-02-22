@@ -129,6 +129,35 @@ pub struct EditorBuffer {
     pub preferred_caret_x: Option<f32>,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiEditorNode {
+    Root,
+    Scrollback,
+    Input,
+    ConfirmButton,
+}
+
+#[derive(Debug, Clone)]
+pub struct UiEditorState {
+    pub enabled: bool,
+    pub selected: Option<UiEditorNode>,
+    pub dragging: bool,
+    pub drag_pointer_offset: (f32, f32),
+    pub status: String,
+}
+
+impl Default for UiEditorState {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            selected: None,
+            dragging: false,
+            drag_pointer_offset: (0.0, 0.0),
+            status: "editor: off (F1 to toggle)".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UiTextMetrics {
     pub glyphs: HashMap<char, GlyphMetrics>,
@@ -189,6 +218,7 @@ pub struct ConsoleUiState {
     pub screen_size: (f32, f32),
     pub scale: f32,
     pub layout_dirty: bool,
+    pub editor: UiEditorState,
 }
 
 pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
@@ -347,5 +377,6 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         screen_size: (1280.0, 720.0),
         scale: 1.0,
         layout_dirty: true,
+        editor: UiEditorState::default(),
     }
 }
