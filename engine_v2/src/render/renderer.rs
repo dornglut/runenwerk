@@ -11,6 +11,13 @@ use super::world_compute::{
     DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST, WorldComputeRenderer, WorldRenderAgent,
     WorldRenderFrame, WorldShaderSources,
 };
+use crate::scene_manifest::{
+    FramePassDescriptor as SceneFramePassDescriptor,
+    FramePassKindDescriptor as SceneFramePassKindDescriptor,
+    FramePassSlotDescriptor as SceneFramePassSlotDescriptor,
+    FramePipelineDescriptor as SceneFramePipelineDescriptor,
+    FrameResourceDescriptor as SceneFrameResourceDescriptor,
+};
 use crate::ui::{UiDrawCmd, UiDrawList};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -1000,10 +1007,65 @@ impl Renderer {
         }
     }
 
+    fn map_scene_frame_pass(descriptor: &SceneFramePassDescriptor) -> FramePassDescriptor {
+        FramePassDescriptor {
+            name: descriptor.name.clone(),
+            kind: match descriptor.kind {
+                SceneFramePassKindDescriptor::Compute => FramePassKindConfig::Compute,
+                SceneFramePassKindDescriptor::Render => FramePassKindConfig::Render,
+            },
+            slot: descriptor.slot.map(|slot| match slot {
+                SceneFramePassSlotDescriptor::WorldCompute => FramePassSlotConfig::WorldCompute,
+                SceneFramePassSlotDescriptor::WorldCompose => FramePassSlotConfig::WorldCompose,
+                SceneFramePassSlotDescriptor::UiComposite => FramePassSlotConfig::UiComposite,
+            }),
+            pipeline: descriptor.pipeline.map(|pipeline| match pipeline {
+                SceneFramePipelineDescriptor::WorldComputeBasic => {
+                    FramePipelineConfig::WorldComputeBasic
+                }
+                SceneFramePipelineDescriptor::WorldComputeHighContrast => {
+                    FramePipelineConfig::WorldComputeHighContrast
+                }
+                SceneFramePipelineDescriptor::WorldComposeFullscreen => {
+                    FramePipelineConfig::WorldComposeFullscreen
+                }
+                SceneFramePipelineDescriptor::UiCompositeSdf => FramePipelineConfig::UiCompositeSdf,
+            }),
+            reads: descriptor
+                .reads
+                .iter()
+                .copied()
+                .map(|resource| match resource {
+                    SceneFrameResourceDescriptor::SurfaceColor => FrameResourceConfig::SurfaceColor,
+                    SceneFrameResourceDescriptor::WorldColor => FrameResourceConfig::WorldColor,
+                    SceneFrameResourceDescriptor::WorldParams => FrameResourceConfig::WorldParams,
+                    SceneFrameResourceDescriptor::WorldAgents => FrameResourceConfig::WorldAgents,
+                    SceneFrameResourceDescriptor::MeshData => FrameResourceConfig::MeshData,
+                    SceneFrameResourceDescriptor::UiDrawList => FrameResourceConfig::UiDrawList,
+                })
+                .collect(),
+            writes: descriptor
+                .writes
+                .iter()
+                .copied()
+                .map(|resource| match resource {
+                    SceneFrameResourceDescriptor::SurfaceColor => FrameResourceConfig::SurfaceColor,
+                    SceneFrameResourceDescriptor::WorldColor => FrameResourceConfig::WorldColor,
+                    SceneFrameResourceDescriptor::WorldParams => FrameResourceConfig::WorldParams,
+                    SceneFrameResourceDescriptor::WorldAgents => FrameResourceConfig::WorldAgents,
+                    SceneFrameResourceDescriptor::MeshData => FrameResourceConfig::MeshData,
+                    SceneFrameResourceDescriptor::UiDrawList => FrameResourceConfig::UiDrawList,
+                })
+                .collect(),
+            depends_on: descriptor.depends_on.clone(),
+        }
+    }
+
     fn frame_graph_descriptors_for_scene(
         &self,
         world_scene: &str,
         overlay_scene: &str,
+        scene_passes: &[SceneFramePassDescriptor],
     ) -> Vec<FramePassDescriptor> {
         let mut descriptors = self.frame_graph_config.passes.clone();
         for overlay in &self.frame_graph_overlay_config.overlays {
@@ -1012,6 +1074,7 @@ impl Renderer {
             }
             descriptors.extend(overlay.append_passes.iter().cloned());
         }
+        descriptors.extend(scene_passes.iter().map(Self::map_scene_frame_pass));
         descriptors
     }
 
@@ -2182,8 +2245,10 @@ impl Renderer {
         &self,
         world_scene: &str,
         overlay_scene: &str,
+        scene_passes: &[SceneFramePassDescriptor],
     ) -> (FrameGraph, Vec<PassHandle>) {
-        let descriptors = self.frame_graph_descriptors_for_scene(world_scene, overlay_scene);
+        let descriptors =
+            self.frame_graph_descriptors_for_scene(world_scene, overlay_scene, scene_passes);
         let (graph, handles) = self.build_frame_graph_from_descriptors(&descriptors);
         if !handles.is_empty() {
             return (graph, handles);
@@ -2306,6 +2371,7 @@ impl Renderer {
         let (graph, fallback_order) = self.build_frame_graph(
             &packet.merged_world_frame.world_scene_label,
             &packet.merged_world_frame.overlay_scene_label,
+            &packet.merged_world_frame.scene_render_graph_passes,
         );
         let order = match graph.execution_order() {
             Ok(order) => order,

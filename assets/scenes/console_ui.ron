@@ -1,0 +1,6 @@
+(
+  id: "console_ui",
+  layer: Some(overlay_ui),
+  ui_template: Some("assets/ui/console.ron"),
+  render_graph_append_passes: [],
+)

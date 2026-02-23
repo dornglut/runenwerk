@@ -9,10 +9,11 @@ mod config;
 mod gameplay;
 mod lifecycle;
 mod manager;
+mod registry;
 
 pub use config::{
     GAMEPLAY_CONFIG_PATH, GameplayConfig, gameplay_config_modified, load_gameplay_config,
-    load_gameplay_config_with_modified,
+    load_gameplay_config_with_modified, load_gameplay_config_with_modified_and_error,
 };
 pub use gameplay::gameplay_apply_live_config;
 use gameplay::{
@@ -22,6 +23,7 @@ use gameplay::{
 };
 pub use lifecycle::{SceneLifecycleEvent, SceneLifecyclePhase};
 pub use manager::SceneManager;
+pub use registry::{SceneDescriptor, SceneRegistry};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SceneLayer {
@@ -54,6 +56,16 @@ impl SceneId {
         }
     }
 
+    pub fn from_label(label: &str) -> Option<Self> {
+        match label.trim().to_ascii_lowercase().as_str() {
+            "gameplay_stub" => Some(Self::GameplayStub),
+            "hub_stub" => Some(Self::HubStub),
+            "console_ui" => Some(Self::ConsoleUi),
+            "hud_ui" => Some(Self::HudUi),
+            _ => None,
+        }
+    }
+
     pub fn next_overlay(self) -> Self {
         match self {
             Self::ConsoleUi => Self::HudUi,
@@ -68,14 +80,6 @@ impl SceneId {
             Self::HudUi => Self::ConsoleUi,
             Self::GameplayStub | Self::HubStub => Self::ConsoleUi,
         }
-    }
-}
-
-pub fn template_path_for_scene(scene: SceneId) -> Option<&'static str> {
-    match scene {
-        SceneId::ConsoleUi => Some("assets/ui/console.ron"),
-        SceneId::HudUi => Some("assets/ui/hud.ron"),
-        SceneId::GameplayStub | SceneId::HubStub => None,
     }
 }
 
@@ -194,6 +198,7 @@ pub struct WorldSceneContext {
     pub fixed_step_seconds: f32,
     pub fixed_step_accumulator: f32,
     pub gameplay_config_modified: Option<SystemTime>,
+    pub gameplay_config_revision: u64,
     pub overlay_consumed: bool,
     pub overlay_scene: SceneId,
     pub player_move_x: f32,
@@ -281,12 +286,13 @@ fn build_overlay_runtime(
     scene: SceneId,
     screen_size: (f32, f32),
     scale: f32,
+    registry: &SceneRegistry,
 ) -> Result<OverlaySceneRuntime> {
     let mut world = World::new();
     let mut ui = initialize_console_ui(&mut world);
     ui.screen_size = screen_size;
     ui.scale = scale;
-    if let Some(path) = template_path_for_scene(scene) {
+    if let Some(path) = registry.ui_template_path(scene) {
         let template = std::path::Path::new(path);
         if template.exists() {
             load_console_template(&mut world, &mut ui, template)?;
@@ -401,6 +407,7 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
         fixed_step_seconds: 1.0 / 60.0,
         fixed_step_accumulator: 0.0,
         gameplay_config_modified,
+        gameplay_config_revision: 0,
         overlay_consumed: false,
         overlay_scene: SceneId::ConsoleUi,
         player_move_x: 0.0,

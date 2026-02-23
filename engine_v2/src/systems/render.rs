@@ -12,6 +12,10 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
     frame.model_proxies.clear();
     frame.world_scene_label = data.scene.world.active.label().to_string();
     frame.overlay_scene_label = data.scene.active_overlay().label().to_string();
+    frame.scene_render_graph_passes = data
+        .scene
+        .registry
+        .render_graph_contributions(data.scene.world.active, data.scene.active_overlay());
     frame.world_paused = data.scene.world.paused;
     frame.camera_yaw = data.scene.world_runtime.ctx.camera_yaw;
     frame.camera_pitch = data.scene.world_runtime.ctx.camera_pitch;
@@ -159,7 +163,7 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
                 .overlay_runtime
                 .ui
                 .log_lines
-                .push(format!("[world] shader {msg}"));
+                .push(format!("[world] {msg}"));
         }
         clamp_lines(
             &mut data.scene.overlay_runtime.ui.log_lines,
@@ -174,7 +178,7 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
                 .overlay_runtime
                 .ui
                 .log_lines
-                .push(format!("[world] model {msg}"));
+                .push(format!("[world] {msg}"));
         }
         clamp_lines(
             &mut data.scene.overlay_runtime.ui.log_lines,

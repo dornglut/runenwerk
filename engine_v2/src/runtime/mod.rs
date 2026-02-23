@@ -6,7 +6,7 @@ use crate::systems::{
     ui_hot_reload_system, ui_input_system, ui_layout_system, ui_render_extract_system,
     ui_render_submit_system, world_render_extract_system, world_scene_update_system,
 };
-use crate::ui::{initialize_console_ui, load_console_template};
+use crate::ui::initialize_console_ui;
 use anyhow::Result;
 use ecs::World;
 use scheduler::{Node, Scheduler, SchedulerBuilder};
@@ -44,13 +44,6 @@ impl Engine {
             ui: overlay_ui,
         };
         let mut scene = SceneManager::new(overlay_runtime)?;
-        if let Some(path) = template_path_for_scene(scene.active_overlay()) {
-            let _ = load_console_template(
-                &mut scene.overlay_runtime.world,
-                &mut scene.overlay_runtime.ui,
-                std::path::Path::new(path),
-            );
-        }
         scene.overlay_runtime.ui.screen_size = (
             gfx.ctx.surface_config.width as f32,
             gfx.ctx.surface_config.height as f32,

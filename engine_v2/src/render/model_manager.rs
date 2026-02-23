@@ -1,4 +1,7 @@
 use super::WorldRenderModelProxy;
+use crate::utils::{
+    ReloadStatusPayload, file_modified, should_poll, should_reload, watch_status_line,
+};
 use glam::{Mat4, Vec3, Vec4};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -161,45 +164,66 @@ impl ModelManager {
     }
 
     pub fn status_lines(&self) -> Vec<String> {
-        let mut lines = vec![format!(
-            "model_watch={} (assets/models/*.blend|*.glb|*.gltf)",
-            if self.watch_enabled { "on" } else { "off" }
+        let mut lines = vec![watch_status_line(
+            "model",
+            self.watch_enabled,
+            "assets/models/*.blend|*.glb|*.gltf",
         )];
-        if self.models.is_empty() {
-            lines.push("models: none loaded".to_string());
-            return lines;
-        }
-        for (id, asset) in &self.models {
-            let textured_meshes = asset
-                .meshes
-                .iter()
-                .filter(|m| m.material.base_color_texture.is_some())
-                .count();
-            if let Some(err) = &asset.last_error {
-                lines.push(format!(
-                    "model {} rev={} proxies={} meshes={} textured={} error={}",
-                    id,
-                    asset.revision,
-                    asset.proxies.len(),
-                    asset.meshes.len(),
-                    textured_meshes,
-                    err
-                ));
-            } else {
-                lines.push(format!(
-                    "model {} rev={} proxies={} meshes={} textured={} source={} path={} glb={}",
-                    id,
-                    asset.revision,
-                    asset.proxies.len(),
-                    asset.meshes.len(),
-                    textured_meshes,
-                    asset.source_kind.as_str(),
-                    asset.source_path.display(),
-                    asset.glb_path.display()
-                ));
-            }
-        }
+        lines.extend(
+            self.status_payloads()
+                .into_iter()
+                .map(|payload| payload.line()),
+        );
         lines
+    }
+
+    pub fn status_payloads(&self) -> Vec<ReloadStatusPayload> {
+        if self.models.is_empty() {
+            return vec![ReloadStatusPayload::new(
+                "model",
+                "none",
+                "empty",
+                MODELS_DIR,
+                0,
+                self.watch_enabled,
+                None,
+                None,
+                None,
+            )];
+        }
+        self.models
+            .iter()
+            .map(|(id, asset)| {
+                let textured_meshes = asset
+                    .meshes
+                    .iter()
+                    .filter(|m| m.material.base_color_texture.is_some())
+                    .count();
+                let state = if asset.last_error.is_some() {
+                    "error"
+                } else {
+                    "loaded"
+                };
+                ReloadStatusPayload::new(
+                    "model",
+                    id.clone(),
+                    state,
+                    asset.source_path.to_string_lossy(),
+                    asset.revision,
+                    self.watch_enabled,
+                    asset.stamp.source_modified,
+                    asset.last_error.clone(),
+                    Some(format!(
+                        "source_kind={} proxies={} meshes={} textured={} glb={}",
+                        asset.source_kind.as_str(),
+                        asset.proxies.len(),
+                        asset.meshes.len(),
+                        textured_meshes,
+                        asset.glb_path.display()
+                    )),
+                )
+            })
+            .collect()
     }
 
     pub fn statuses(&self) -> Vec<ModelStatus> {
@@ -221,15 +245,28 @@ impl ModelManager {
     pub fn poll_updates(&mut self) -> Vec<String> {
         match self.poll_updates_impl() {
             Ok(messages) => messages,
-            Err(err) => vec![format!("reload poll failed: {err}")],
+            Err(err) => vec![
+                ReloadStatusPayload::new(
+                    "model",
+                    "poll",
+                    "failed",
+                    MODELS_DIR,
+                    0,
+                    self.watch_enabled,
+                    None,
+                    Some(err),
+                    None,
+                )
+                .line(),
+            ],
         }
     }
 
     fn poll_updates_impl(&mut self) -> Result<Vec<String>, String> {
-        if !self.watch_enabled && !self.force_reload {
+        if !should_poll(self.watch_enabled, self.force_reload) {
             return Ok(Vec::new());
         }
-        let mut messages = Vec::new();
+        let mut payloads = Vec::new();
         let force = self.force_reload;
         self.force_reload = false;
 
@@ -243,8 +280,23 @@ impl ModelManager {
         let existing_ids: Vec<String> = self.models.keys().cloned().collect();
         for id in existing_ids {
             if !discovered_ids.contains(&id) {
-                self.models.remove(&id);
-                messages.push(format!("model {id} removed from watch list"));
+                let removed = self.models.remove(&id);
+                payloads.push(ReloadStatusPayload::new(
+                    "model",
+                    id,
+                    "removed",
+                    removed
+                        .as_ref()
+                        .map(|asset| asset.source_path.to_string_lossy().to_string())
+                        .unwrap_or_else(|| MODELS_DIR.to_string()),
+                    removed.as_ref().map(|asset| asset.revision).unwrap_or(0),
+                    self.watch_enabled,
+                    removed
+                        .as_ref()
+                        .and_then(|asset| asset.stamp.source_modified),
+                    None,
+                    None,
+                ));
             }
         }
 
@@ -269,18 +321,33 @@ impl ModelManager {
 
             if model.source_kind == SourceKind::Blend {
                 if let Some(msg) = ensure_blend_export(&model, force)? {
-                    messages.push(msg);
+                    payloads.push(ReloadStatusPayload::new(
+                        "model",
+                        id.clone(),
+                        "converted",
+                        model.source_path.to_string_lossy(),
+                        entry.revision,
+                        self.watch_enabled,
+                        model.source_modified,
+                        None,
+                        Some(msg),
+                    ));
                 }
             }
 
             let stamp = ReloadStamp {
                 source_modified: model.source_modified,
-                glb_modified: fs::metadata(&model.glb_path)
-                    .ok()
-                    .and_then(|m| m.modified().ok()),
+                glb_modified: file_modified(&model.glb_path),
             };
 
-            if !force && entry.stamp == stamp {
+            if !should_reload(
+                self.watch_enabled,
+                force,
+                entry.stamp.glb_modified,
+                stamp.glb_modified,
+            ) && !force
+                && entry.stamp.source_modified == stamp.source_modified
+            {
                 continue;
             }
 
@@ -291,23 +358,42 @@ impl ModelManager {
                     entry.stamp = stamp;
                     entry.revision = entry.revision.saturating_add(1);
                     entry.last_error = None;
-                    messages.push(format!(
-                        "model {} reloaded rev={} proxies={} meshes={} ({})",
+                    payloads.push(ReloadStatusPayload::new(
+                        "model",
                         id,
+                        "reloaded",
+                        model.source_path.to_string_lossy(),
                         entry.revision,
-                        entry.proxies.len(),
-                        entry.meshes.len(),
-                        model.glb_path.display()
+                        self.watch_enabled,
+                        entry.stamp.source_modified,
+                        None,
+                        Some(format!(
+                            "proxies={} meshes={} glb={}",
+                            entry.proxies.len(),
+                            entry.meshes.len(),
+                            model.glb_path.display()
+                        )),
                     ));
                 }
                 Err(err) => {
                     entry.last_error = Some(err.clone());
-                    messages.push(format!("model {} reload failed: {}", id, err));
+                    entry.stamp = stamp;
+                    payloads.push(ReloadStatusPayload::new(
+                        "model",
+                        id,
+                        "failed",
+                        model.source_path.to_string_lossy(),
+                        entry.revision,
+                        self.watch_enabled,
+                        entry.stamp.source_modified,
+                        Some(err),
+                        Some(format!("glb={}", model.glb_path.display())),
+                    ));
                 }
             }
         }
 
-        Ok(messages)
+        Ok(payloads.into_iter().map(|payload| payload.line()).collect())
     }
 }
 
@@ -326,7 +412,7 @@ fn scan_model_files() -> Vec<DiscoveredModel> {
             continue;
         };
         let id = model_id_from_path(&path);
-        let source_modified = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
+        let source_modified = file_modified(&path);
         if ext.eq_ignore_ascii_case("blend") {
             upsert_model_candidate(
                 &mut files,
@@ -620,7 +706,7 @@ fn ensure_blend_export(model: &DiscoveredModel, force: bool) -> Result<Option<St
     let glb_path = &model.glb_path;
 
     let source_modified = model.source_modified;
-    let target_modified = fs::metadata(glb_path).ok().and_then(|m| m.modified().ok());
+    let target_modified = file_modified(glb_path);
 
     let needs_export = force
         || target_modified.is_none()

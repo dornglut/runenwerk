@@ -1,9 +1,10 @@
 use crate::runtime::{
-    EngineData, QuestState, SceneCommand, SceneId, SceneLifecycleEvent, SceneLifecyclePhase,
-    WorldToOverlayMessage, gameplay_apply_live_config, gameplay_config_modified,
-    load_gameplay_config_with_modified, template_path_for_scene,
+    EngineData, GAMEPLAY_CONFIG_PATH, QuestState, SceneCommand, SceneId, SceneLifecycleEvent,
+    SceneLifecyclePhase, WorldToOverlayMessage, gameplay_apply_live_config,
+    load_gameplay_config_with_modified_and_error,
 };
 use crate::ui::UiDirty;
+use crate::utils::{ReloadStatusPayload, should_reload};
 
 pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
     if data.input.toggle_pause_menu {
@@ -48,7 +49,11 @@ pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
     }
     if result.overlay_changed {
         let active = data.scene.active_overlay();
-        let path = template_path_for_scene(active).unwrap_or("<none>");
+        let path = data
+            .scene
+            .registry
+            .ui_template_path(active)
+            .unwrap_or("<none>");
         data.scene.overlay_runtime.ui.editor.status = format!(
             "editor: overlay scene switched to {} ({}) [stack={}]",
             active.label(),
@@ -123,15 +128,38 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
         .camera_distance
         .clamp(distance_min, distance_max);
 
-    let latest_modified = gameplay_config_modified();
-    if latest_modified != runtime.ctx.gameplay_config_modified {
-        let (config, modified) = load_gameplay_config_with_modified();
+    let latest_modified = crate::runtime::gameplay_config_modified();
+    if should_reload(
+        true,
+        false,
+        runtime.ctx.gameplay_config_modified,
+        latest_modified,
+    ) {
+        let (config, modified, error) = load_gameplay_config_with_modified_and_error();
         runtime.ctx.gameplay_config = config;
         runtime.ctx.gameplay_config_modified = modified;
+        runtime.ctx.gameplay_config_revision =
+            runtime.ctx.gameplay_config_revision.saturating_add(1);
         gameplay_apply_live_config(&mut runtime.ctx);
-        data.scene.channels.overlay_console_lines.push(
-            "[world] gameplay config hot reloaded (assets/gameplay/gameplay_stub.ron)".to_string(),
+        let payload = ReloadStatusPayload::new(
+            "gameplay_config",
+            data.scene.world.active.label(),
+            if error.is_some() {
+                "fallback"
+            } else {
+                "reloaded"
+            },
+            GAMEPLAY_CONFIG_PATH,
+            runtime.ctx.gameplay_config_revision,
+            true,
+            modified,
+            error,
+            None,
         );
+        data.scene
+            .channels
+            .overlay_console_lines
+            .push(format!("[world] {}", payload.line()));
     }
 
     let fixed_dt = runtime

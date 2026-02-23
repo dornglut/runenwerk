@@ -1,3 +1,4 @@
+use crate::utils::file_modified;
 use serde::Deserialize;
 use std::path::Path;
 use std::time::SystemTime;
@@ -161,29 +162,33 @@ pub fn load_gameplay_config() -> GameplayConfig {
 }
 
 pub fn gameplay_config_modified() -> Option<SystemTime> {
-    std::fs::metadata(Path::new(GAMEPLAY_CONFIG_PATH))
-        .ok()
-        .and_then(|m| m.modified().ok())
+    file_modified(Path::new(GAMEPLAY_CONFIG_PATH))
 }
 
 pub fn load_gameplay_config_with_modified() -> (GameplayConfig, Option<SystemTime>) {
+    let (config, modified, _) = load_gameplay_config_with_modified_and_error();
+    (config, modified)
+}
+
+pub fn load_gameplay_config_with_modified_and_error()
+-> (GameplayConfig, Option<SystemTime>, Option<String>) {
     let default = GameplayConfig::default();
     let path = Path::new(GAMEPLAY_CONFIG_PATH);
     let modified = gameplay_config_modified();
     if !path.exists() {
-        return (default, modified);
+        return (default, modified, None);
     }
     match std::fs::read_to_string(path) {
         Ok(raw) => match ron::from_str::<GameplayConfig>(&raw) {
-            Ok(cfg) => (cfg, modified),
+            Ok(cfg) => (cfg, modified, None),
             Err(err) => {
                 tracing::warn!(?err, "failed parsing gameplay config, using defaults");
-                (default, modified)
+                (default, modified, Some(format!("parse_error: {err}")))
             }
         },
         Err(err) => {
             tracing::warn!(?err, "failed reading gameplay config, using defaults");
-            (default, modified)
+            (default, modified, Some(format!("read_error: {err}")))
         }
     }
 }

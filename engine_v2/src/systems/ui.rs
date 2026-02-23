@@ -758,22 +758,57 @@ fn flatten_wrapped_rows(
     rows
 }
 
-fn build_wrapped_view_rows(
-    lines: &[String],
+struct ScrollViewportSpec<'a> {
+    lines: &'a [String],
     lines_from_bottom: usize,
     visible_capacity: usize,
     horizontal_chars: usize,
     max_width: f32,
     text_size: f32,
-    metrics: &crate::ui::UiTextMetrics,
-) -> Vec<String> {
-    let wrapped = flatten_wrapped_rows(lines, horizontal_chars, max_width, text_size, metrics);
-    if wrapped.is_empty() {
-        return Vec::new();
+    metrics: &'a crate::ui::UiTextMetrics,
+}
+
+struct ScrollViewport {
+    wrapped_rows: Vec<String>,
+    view_rows: Vec<String>,
+    max_horizontal_chars: usize,
+    clamped_lines_from_bottom: usize,
+    clamped_horizontal_chars: usize,
+}
+
+fn build_scroll_viewport(spec: ScrollViewportSpec<'_>) -> ScrollViewport {
+    let max_horizontal_chars = spec
+        .lines
+        .iter()
+        .map(|line| char_count(line))
+        .max()
+        .unwrap_or(0)
+        .saturating_sub(1);
+    let clamped_horizontal_chars = spec.horizontal_chars.min(max_horizontal_chars);
+    let wrapped_rows = flatten_wrapped_rows(
+        spec.lines,
+        clamped_horizontal_chars,
+        spec.max_width,
+        spec.text_size,
+        spec.metrics,
+    );
+    let max_scroll = wrapped_rows.len().saturating_sub(spec.visible_capacity);
+    let clamped_lines_from_bottom = spec.lines_from_bottom.min(max_scroll);
+    let view_rows = if wrapped_rows.is_empty() {
+        Vec::new()
+    } else {
+        let end = wrapped_rows.len().saturating_sub(clamped_lines_from_bottom);
+        let start = end.saturating_sub(spec.visible_capacity);
+        wrapped_rows[start..end].to_vec()
+    };
+
+    ScrollViewport {
+        wrapped_rows,
+        view_rows,
+        max_horizontal_chars,
+        clamped_lines_from_bottom,
+        clamped_horizontal_chars,
     }
-    let end = wrapped.len().saturating_sub(lines_from_bottom);
-    let start = end.saturating_sub(visible_capacity);
-    wrapped[start..end].to_vec()
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -1432,71 +1467,35 @@ fn process_scroll_routing(
         }
     }
 
-    if console_delta_lines > 0 {
-        data.scene.overlay_runtime.ui.scroll_lines_from_bottom = data
-            .scene
-            .overlay_runtime
-            .ui
-            .scroll_lines_from_bottom
-            .saturating_add(console_delta_lines as usize);
-    } else if console_delta_lines < 0 {
-        data.scene.overlay_runtime.ui.scroll_lines_from_bottom = data
-            .scene
-            .overlay_runtime
-            .ui
-            .scroll_lines_from_bottom
-            .saturating_sub((-console_delta_lines) as usize);
-    }
-    if log_delta_lines > 0 {
-        data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = data
-            .scene
-            .overlay_runtime
-            .ui
-            .log_scroll_lines_from_bottom
-            .saturating_add(log_delta_lines as usize);
-    } else if log_delta_lines < 0 {
-        data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = data
-            .scene
-            .overlay_runtime
-            .ui
-            .log_scroll_lines_from_bottom
-            .saturating_sub((-log_delta_lines) as usize);
-    }
-    if console_delta_horizontal > 0 {
-        data.scene.overlay_runtime.ui.scroll_horizontal_chars = data
-            .scene
-            .overlay_runtime
-            .ui
-            .scroll_horizontal_chars
-            .saturating_add(console_delta_horizontal as usize);
-    } else if console_delta_horizontal < 0 {
-        data.scene.overlay_runtime.ui.scroll_horizontal_chars = data
-            .scene
-            .overlay_runtime
-            .ui
-            .scroll_horizontal_chars
-            .saturating_sub((-console_delta_horizontal) as usize);
-    }
-    if log_delta_horizontal > 0 {
-        data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = data
-            .scene
-            .overlay_runtime
-            .ui
-            .log_scroll_horizontal_chars
-            .saturating_add(log_delta_horizontal as usize);
-    } else if log_delta_horizontal < 0 {
-        data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = data
-            .scene
-            .overlay_runtime
-            .ui
-            .log_scroll_horizontal_chars
-            .saturating_sub((-log_delta_horizontal) as usize);
-    }
+    data.scene.overlay_runtime.ui.scroll_lines_from_bottom = apply_scroll_delta(
+        data.scene.overlay_runtime.ui.scroll_lines_from_bottom,
+        console_delta_lines,
+    );
+    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = apply_scroll_delta(
+        data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom,
+        log_delta_lines,
+    );
+    data.scene.overlay_runtime.ui.scroll_horizontal_chars = apply_scroll_delta(
+        data.scene.overlay_runtime.ui.scroll_horizontal_chars,
+        console_delta_horizontal,
+    );
+    data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = apply_scroll_delta(
+        data.scene.overlay_runtime.ui.log_scroll_horizontal_chars,
+        log_delta_horizontal,
+    );
 
     console_delta_lines != 0
         || log_delta_lines != 0
         || console_delta_horizontal != 0
         || log_delta_horizontal != 0
+}
+
+fn apply_scroll_delta(current: usize, delta: i32) -> usize {
+    if delta >= 0 {
+        current.saturating_add(delta as usize)
+    } else {
+        current.saturating_sub((-delta) as usize)
+    }
 }
 
 pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
@@ -1664,17 +1663,7 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
-    if !data.scene.overlay_visible() {
-        let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
-        let mut commands: Vec<UiBatchCmd> = Vec::new();
-        push_world_stats_panel(&mut commands, data, ui_scale);
-        data.scene.overlay_runtime.ui.batches.commands = commands;
-        return Ok(());
-    }
-    let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
-    let mut commands: Vec<UiBatchCmd> = Vec::new();
-
+fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
     if let (Some(transform), Some(style)) = (
         data.scene
             .overlay_runtime
@@ -1710,46 +1699,19 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
         let text_size = text.size * ui_scale;
         let visible_capacity = visible_line_capacity(transform.h, text_size);
         let line_max_w = (transform.w - (8.0 * ui_scale)).max(1.0);
-        let wrapped_rows = flatten_wrapped_rows(
-            &data.scene.overlay_runtime.ui.lines,
-            data.scene.overlay_runtime.ui.scroll_horizontal_chars,
-            line_max_w,
-            text_size,
-            &data.scene.overlay_runtime.ui.text_metrics,
-        );
-        let max_scroll = wrapped_rows.len().saturating_sub(visible_capacity);
-        let max_horizontal = data
-            .scene
-            .overlay_runtime
-            .ui
-            .lines
-            .iter()
-            .map(|line| char_count(line))
-            .max()
-            .unwrap_or(0)
-            .saturating_sub(1);
-        data.scene.overlay_runtime.ui.scroll_horizontal_chars = data
-            .scene
-            .overlay_runtime
-            .ui
-            .scroll_horizontal_chars
-            .min(max_horizontal);
-        data.scene.overlay_runtime.ui.scroll_lines_from_bottom = data
-            .scene
-            .overlay_runtime
-            .ui
-            .scroll_lines_from_bottom
-            .min(max_scroll);
-        let view_lines = build_wrapped_view_rows(
-            &data.scene.overlay_runtime.ui.lines,
-            data.scene.overlay_runtime.ui.scroll_lines_from_bottom,
+        let viewport = build_scroll_viewport(ScrollViewportSpec {
+            lines: &data.scene.overlay_runtime.ui.lines,
+            lines_from_bottom: data.scene.overlay_runtime.ui.scroll_lines_from_bottom,
             visible_capacity,
-            data.scene.overlay_runtime.ui.scroll_horizontal_chars,
-            line_max_w,
+            horizontal_chars: data.scene.overlay_runtime.ui.scroll_horizontal_chars,
+            max_width: line_max_w,
             text_size,
-            &data.scene.overlay_runtime.ui.text_metrics,
-        );
-        for (line_idx, line) in view_lines.iter().enumerate() {
+            metrics: &data.scene.overlay_runtime.ui.text_metrics,
+        });
+        data.scene.overlay_runtime.ui.scroll_horizontal_chars = viewport.clamped_horizontal_chars;
+        data.scene.overlay_runtime.ui.scroll_lines_from_bottom = viewport.clamped_lines_from_bottom;
+
+        for (line_idx, line) in viewport.view_rows.iter().enumerate() {
             let (line_color, stripped) = scrollback_line_style(line, text.color);
             commands.push(UiBatchCmd::Text {
                 x: transform.x,
@@ -1762,13 +1724,13 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
         }
         if data.scene.overlay_runtime.ui.layout.show_scroll_indicators {
             push_scroll_indicators(
-                &mut commands,
+                commands,
                 transform,
                 visible_capacity,
-                wrapped_rows.len(),
-                data.scene.overlay_runtime.ui.scroll_lines_from_bottom,
-                data.scene.overlay_runtime.ui.scroll_horizontal_chars,
-                max_horizontal,
+                viewport.wrapped_rows.len(),
+                viewport.clamped_lines_from_bottom,
+                viewport.clamped_horizontal_chars,
+                viewport.max_horizontal_chars,
                 ui_scale,
                 [0.62, 0.74, 0.86, 0.95],
             );
@@ -1784,7 +1746,9 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
             });
         }
     }
+}
 
+fn build_logs_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
     let log_rect = compute_log_window_rect(
         &data.scene.overlay_runtime.ui.layout,
         data.scene.overlay_runtime.ui.screen_size,
@@ -1793,36 +1757,17 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
     let log_text_size = 12.0 * ui_scale;
     let log_header_h = 24.0 * ui_scale;
     let log_visible_capacity = visible_line_capacity(log_rect.body_h, log_text_size);
-    let wrapped_log_rows = flatten_wrapped_rows(
-        &data.scene.overlay_runtime.ui.log_lines,
-        data.scene.overlay_runtime.ui.log_scroll_horizontal_chars,
-        log_rect.body_w,
-        log_text_size,
-        &data.scene.overlay_runtime.ui.text_metrics,
-    );
-    let log_max_scroll = wrapped_log_rows.len().saturating_sub(log_visible_capacity);
-    let log_max_horizontal = data
-        .scene
-        .overlay_runtime
-        .ui
-        .log_lines
-        .iter()
-        .map(|line| char_count(line))
-        .max()
-        .unwrap_or(0)
-        .saturating_sub(1);
-    data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = data
-        .scene
-        .overlay_runtime
-        .ui
-        .log_scroll_horizontal_chars
-        .min(log_max_horizontal);
-    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = data
-        .scene
-        .overlay_runtime
-        .ui
-        .log_scroll_lines_from_bottom
-        .min(log_max_scroll);
+    let viewport = build_scroll_viewport(ScrollViewportSpec {
+        lines: &data.scene.overlay_runtime.ui.log_lines,
+        lines_from_bottom: data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom,
+        visible_capacity: log_visible_capacity,
+        horizontal_chars: data.scene.overlay_runtime.ui.log_scroll_horizontal_chars,
+        max_width: log_rect.body_w,
+        text_size: log_text_size,
+        metrics: &data.scene.overlay_runtime.ui.text_metrics,
+    });
+    data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = viewport.clamped_horizontal_chars;
+    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = viewport.clamped_lines_from_bottom;
 
     commands.push(UiBatchCmd::Rect {
         x: log_rect.x,
@@ -1860,16 +1805,7 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
         size: 12.0 * ui_scale,
         clip: Some([log_rect.x, log_rect.y, log_rect.w, log_rect.h]),
     });
-    let log_lines = build_wrapped_view_rows(
-        &data.scene.overlay_runtime.ui.log_lines,
-        data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom,
-        log_visible_capacity,
-        data.scene.overlay_runtime.ui.log_scroll_horizontal_chars,
-        log_rect.body_w,
-        log_text_size,
-        &data.scene.overlay_runtime.ui.text_metrics,
-    );
-    for (line_idx, line) in log_lines.iter().enumerate() {
+    for (line_idx, line) in viewport.view_rows.iter().enumerate() {
         let (line_color, stripped) = scrollback_line_style(line, [0.80, 0.88, 0.94, 1.0]);
         commands.push(UiBatchCmd::Text {
             x: log_rect.body_x,
@@ -1893,18 +1829,20 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
             h: log_rect.body_h,
         };
         push_scroll_indicators(
-            &mut commands,
+            commands,
             &log_content_rect,
             log_visible_capacity,
-            wrapped_log_rows.len(),
-            data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom,
-            data.scene.overlay_runtime.ui.log_scroll_horizontal_chars,
-            log_max_horizontal,
+            viewport.wrapped_rows.len(),
+            viewport.clamped_lines_from_bottom,
+            viewport.clamped_horizontal_chars,
+            viewport.max_horizontal_chars,
             ui_scale,
             [0.72, 0.88, 0.78, 0.95],
         );
     }
+}
 
+fn build_input_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
     if let (Some(transform), Some(style)) = (
         data.scene
             .overlay_runtime
@@ -2036,8 +1974,10 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
             clip: Some([transform.x, transform.y, transform.w, transform.h]),
         });
     }
+}
 
-    push_world_stats_panel(&mut commands, data, ui_scale);
+fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
+    push_world_stats_panel(commands, data, ui_scale);
 
     if data.scene.overlay_runtime.ui.editor.enabled {
         if let Some(selected_entity) = selected_editor_entity(&data.scene.overlay_runtime.ui)
@@ -2048,7 +1988,7 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
                 .get_component::<UiTransform>(selected_entity)
         {
             push_outline(
-                &mut commands,
+                commands,
                 selected_rect,
                 2.0 * ui_scale,
                 [0.95, 0.55, 0.15, 0.95],
@@ -2114,6 +2054,21 @@ pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
             });
         }
     }
+}
+
+pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
+    let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
+    let mut commands: Vec<UiBatchCmd> = Vec::new();
+    if !data.scene.overlay_visible() {
+        build_diagnostics_batches(data, &mut commands, ui_scale);
+        data.scene.overlay_runtime.ui.batches.commands = commands;
+        return Ok(());
+    }
+
+    build_console_batches(data, &mut commands, ui_scale);
+    build_logs_batches(data, &mut commands, ui_scale);
+    build_input_batches(data, &mut commands, ui_scale);
+    build_diagnostics_batches(data, &mut commands, ui_scale);
 
     data.scene.overlay_runtime.ui.batches.commands = commands;
     Ok(())

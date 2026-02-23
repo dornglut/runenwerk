@@ -1,5 +1,5 @@
-use fastnoise_lite::*;
 use crate::*;
+use fastnoise_lite::*;
 
 /// For grids where L: Occupancy + Default
 impl Grid2d<CellType> {

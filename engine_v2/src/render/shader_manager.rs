@@ -1,3 +1,6 @@
+use crate::utils::{
+    ReloadStatusPayload, file_modified, should_poll, should_reload, watch_status_line,
+};
 use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
@@ -103,36 +106,44 @@ impl ShaderManager {
     }
 
     pub fn status_lines(&self) -> Vec<String> {
-        let mut lines = vec![format!(
-            "shader_watch={} (auto file polling)",
-            if self.watch_enabled { "on" } else { "off" }
+        let mut lines = vec![watch_status_line(
+            "shader",
+            self.watch_enabled,
+            "assets/shaders/*.wgsl",
         )];
-        for id in ALL_SHADERS {
-            let asset = self.asset(id);
-            let loaded = if asset.source.is_some() {
-                "loaded"
-            } else {
-                "fallback"
-            };
-            if let Some(err) = &asset.last_error {
-                lines.push(format!(
-                    "shader {} rev={} {} error={}",
-                    id.label(),
-                    asset.revision,
-                    loaded,
-                    err
-                ));
-            } else {
-                lines.push(format!(
-                    "shader {} rev={} {} path={}",
-                    id.label(),
-                    asset.revision,
-                    loaded,
-                    id.path()
-                ));
-            }
-        }
+        lines.extend(
+            self.status_payloads()
+                .into_iter()
+                .map(|payload| payload.line()),
+        );
         lines
+    }
+
+    pub fn status_payloads(&self) -> Vec<ReloadStatusPayload> {
+        ALL_SHADERS
+            .iter()
+            .map(|id| {
+                let asset = self.asset(*id);
+                let state = if asset.last_error.is_some() {
+                    "error"
+                } else if asset.source.is_some() {
+                    "loaded"
+                } else {
+                    "fallback"
+                };
+                ReloadStatusPayload::new(
+                    "shader",
+                    id.label(),
+                    state,
+                    id.path(),
+                    asset.revision,
+                    self.watch_enabled,
+                    asset.modified,
+                    asset.last_error.clone(),
+                    None,
+                )
+            })
+            .collect()
     }
 
     pub fn statuses(&self) -> Vec<ShaderStatus> {
@@ -152,23 +163,20 @@ impl ShaderManager {
     }
 
     pub fn poll_updates(&mut self) -> Vec<String> {
-        if !self.watch_enabled && !self.force_reload {
+        if !should_poll(self.watch_enabled, self.force_reload) {
             return Vec::new();
         }
 
         let force = self.force_reload;
         self.force_reload = false;
-        let mut messages = Vec::new();
+        let mut payloads = Vec::new();
 
         for id in ALL_SHADERS {
             let path = Path::new(id.path());
-            let modified = fs::metadata(path)
-                .ok()
-                .and_then(|meta| meta.modified().ok());
+            let modified = file_modified(path);
             let idx = Self::index(id);
             let asset = &mut self.assets[idx];
-            let changed = force || modified != asset.modified;
-            if !changed {
+            if !should_reload(self.watch_enabled, force, asset.modified, modified) {
                 continue;
             }
 
@@ -178,34 +186,52 @@ impl ShaderManager {
                     asset.modified = modified;
                     asset.revision = asset.revision.saturating_add(1);
                     asset.last_error = None;
-                    messages.push(format!(
-                        "shader {} reloaded rev={} ({})",
+                    payloads.push(ReloadStatusPayload::new(
+                        "shader",
                         id.label(),
+                        "reloaded",
+                        id.path(),
                         asset.revision,
-                        id.path()
+                        self.watch_enabled,
+                        asset.modified,
+                        None,
+                        None,
                     ));
                 }
                 Ok(_) => {
                     asset.last_error = Some("file is empty".to_string());
-                    messages.push(format!(
-                        "shader {} reload skipped: empty file ({})",
+                    asset.modified = modified;
+                    payloads.push(ReloadStatusPayload::new(
+                        "shader",
                         id.label(),
-                        id.path()
+                        "skipped_empty",
+                        id.path(),
+                        asset.revision,
+                        self.watch_enabled,
+                        asset.modified,
+                        asset.last_error.clone(),
+                        None,
                     ));
                 }
                 Err(err) => {
                     asset.last_error = Some(err.to_string());
-                    messages.push(format!(
-                        "shader {} reload failed: {} ({})",
+                    asset.modified = modified;
+                    payloads.push(ReloadStatusPayload::new(
+                        "shader",
                         id.label(),
-                        err,
-                        id.path()
+                        "failed",
+                        id.path(),
+                        asset.revision,
+                        self.watch_enabled,
+                        asset.modified,
+                        Some(err.to_string()),
+                        None,
                     ));
                 }
             }
         }
 
-        messages
+        payloads.into_iter().map(|payload| payload.line()).collect()
     }
 
     fn asset(&self, id: ShaderId) -> &ShaderAsset {

@@ -279,6 +279,7 @@ pub struct WorldRenderModelProxy {
 pub struct WorldRenderFrame {
     pub world_scene_label: String,
     pub overlay_scene_label: String,
+    pub scene_render_graph_passes: Vec<crate::scene_manifest::FramePassDescriptor>,
     pub world_bounds: [f32; 4],
     pub world_paused: bool,
     pub chunk_size: f32,
@@ -309,6 +310,7 @@ impl Default for WorldRenderFrame {
         Self {
             world_scene_label: "gameplay_stub".to_string(),
             overlay_scene_label: "console_ui".to_string(),
+            scene_render_graph_passes: Vec::new(),
             world_bounds: [-32.0, -18.0, 32.0, 18.0],
             world_paused: false,
             chunk_size: 24.0,

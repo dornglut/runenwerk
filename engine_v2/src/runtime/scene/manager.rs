@@ -1,6 +1,6 @@
 use super::{
     OverlaySceneRuntime, SceneCommand, SceneId, SceneLayer, SceneLifecycleEvent,
-    SceneLifecyclePhase, SceneSlot, SceneTransitionResult, WorldSceneRuntime,
+    SceneLifecyclePhase, SceneRegistry, SceneSlot, SceneTransitionResult, WorldSceneRuntime,
     build_overlay_runtime, build_world_scene_runtime,
 };
 use anyhow::Result;
@@ -9,6 +9,7 @@ pub struct SceneManager {
     pub world: SceneSlot,
     pub world_runtime: WorldSceneRuntime,
     pub overlay_runtime: OverlaySceneRuntime,
+    pub registry: SceneRegistry,
     pub overlay_back_stack: Vec<(SceneSlot, OverlaySceneRuntime)>,
     pub channels: super::SceneChannels,
     pub overlays: Vec<SceneSlot>,
@@ -26,10 +27,12 @@ impl SceneManager {
 
     pub fn new(overlay_runtime: OverlaySceneRuntime) -> Result<Self> {
         let world_scene = SceneId::GameplayStub;
+        let registry = SceneRegistry::load();
         let mut manager = Self {
             world: SceneSlot::new(world_scene),
             world_runtime: build_world_scene_runtime(world_scene)?,
             overlay_runtime,
+            registry,
             overlay_back_stack: Vec::new(),
             channels: super::SceneChannels::default(),
             overlays: vec![SceneSlot {
@@ -39,6 +42,16 @@ impl SceneManager {
             }],
             pending: Vec::new(),
         };
+        if let Some(path) = manager.registry.ui_template_path(SceneId::ConsoleUi) {
+            let template = std::path::Path::new(path);
+            if template.exists() {
+                crate::ui::load_console_template(
+                    &mut manager.overlay_runtime.world,
+                    &mut manager.overlay_runtime.ui,
+                    template,
+                )?;
+            }
+        }
         manager.emit_lifecycle(world_scene, SceneLifecyclePhase::Enter);
         manager.emit_lifecycle(SceneId::ConsoleUi, SceneLifecyclePhase::Enter);
         Ok(manager)
@@ -109,7 +122,8 @@ impl SceneManager {
                     if before != scene {
                         self.emit_lifecycle(before, SceneLifecyclePhase::Exit);
                         let (screen_size, scale) = self.overlay_viewport();
-                        self.overlay_runtime = build_overlay_runtime(scene, screen_size, scale)?;
+                        self.overlay_runtime =
+                            build_overlay_runtime(scene, screen_size, scale, &self.registry)?;
                         if let Some(slot) = self.overlays.last_mut() {
                             slot.active = scene;
                         } else {
@@ -129,7 +143,8 @@ impl SceneManager {
                         .copied()
                         .unwrap_or_else(|| SceneSlot::new(self.active_overlay()));
                     let (screen_size, scale) = self.overlay_viewport();
-                    let next_runtime = build_overlay_runtime(scene, screen_size, scale)?;
+                    let next_runtime =
+                        build_overlay_runtime(scene, screen_size, scale, &self.registry)?;
                     let previous_runtime =
                         std::mem::replace(&mut self.overlay_runtime, next_runtime);
                     self.overlay_back_stack

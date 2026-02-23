@@ -6,7 +6,7 @@ use std::fmt;
 #[derive(Debug, Copy, Clone, PartialEq, Default, Eq)]
 pub enum MeshType {
     #[default]
-    Empty,    // 0000
+    Empty, // 0000
     Corner,   // 0001 | 0010 | 0100 | 1000
     Edge,     // 1100 | 0101 | 0011 | 1010
     T,        // 1110 | 0111 | 1011 | 1101
@@ -102,7 +102,11 @@ impl MeshId {
             _ => 0,
         };
 
-        MeshId { mask, kind, rotation }
+        MeshId {
+            mask,
+            kind,
+            rotation,
+        }
     }
 
     /// Rotate tile 90° clockwise
@@ -138,4 +142,3 @@ impl fmt::Display for MeshId {
         write!(f, "{}", self.kind)
     }
 }
-
