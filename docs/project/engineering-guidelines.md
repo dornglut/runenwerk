@@ -12,7 +12,7 @@ Build Grotto Quest as a modular, testable ECS-driven action RPG with scheduler-d
 ## Ownership Boundaries
 - `ecs` crate: data model, archetypes, queries, entity lifecycle.
 - `scheduler` crate: ordering, dependency graph validation, node execution orchestration.
-- `engine_v2` crate: runtime loop, input, rendering, ECS system wiring, retained UI implementation.
+- `engine` crate: runtime loop, plugin composition, rendering/UI/scene/time/input plugin implementations.
 - `game` crate: gameplay systems/content as project scope expands.
 
 ## Non-Negotiables
@@ -25,7 +25,7 @@ Build Grotto Quest as a modular, testable ECS-driven action RPG with scheduler-d
 ## Testing Expectations
 - ECS behavior changes: add or update tests in `ecs/tests`.
 - Scheduler behavior changes: add or update tests in `scheduler/tests`.
-- `engine_v2` behavior changes: add or update unit tests in `engine_v2/src/**/tests`.
+- `engine` behavior changes: add or update unit tests in `engine/src/**`.
 - Before merging substantial changes, run crate-local tests at minimum.
 
 ## Delivery Workflow
@@ -37,6 +37,7 @@ Build Grotto Quest as a modular, testable ECS-driven action RPG with scheduler-d
 
 ## Core Reference Docs
 - Execution plan: `docs/project/execution-plan.md`
+- Plugin domain migration plan: `docs/project/plugin-domain-migration-plan.md`
 - Roadmap: `docs/project/product-roadmap.md`
 - Scene architecture: `docs/project/scene-architecture.md`
 - UI architecture: `docs/project/ui-architecture.md`
