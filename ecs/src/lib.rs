@@ -22,6 +22,9 @@ pub use query::{ComponentTuple, QueryBuilder, TypedQueryIterator, WorldQueryExt}
 pub use resource::Resource;
 pub use table::{Archetype, ArchetypeKey};
 pub use utils::init_tracing;
-pub use world::World;
+pub use world::{
+    EventChannelConfig, EventChannelStats, EventLifetime, EventObserverNotification,
+    EventTracingPolicy, ObserverTrigger, OverflowPolicy, World,
+};
 
 pub(crate) use table::{AnyStorage, Column, Row};

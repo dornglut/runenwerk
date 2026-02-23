@@ -71,6 +71,11 @@ pub struct UiSubmitEvent {
     pub line: String,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct UiButtonClickEvent {
+    pub entity: EntityHandle,
+}
+
 #[derive(Debug, Clone)]
 pub enum UiDrawCmd {
     Rect {

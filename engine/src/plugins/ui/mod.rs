@@ -2,9 +2,9 @@ pub mod domain;
 
 use crate::plugins::scene::domain::{OverlaySubmitMessage, WorldDebugPosition};
 use crate::plugins::ui::domain::{
-    UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiEditorNode, UiInputField, UiInteraction, UiNode,
-    UiPresentationMode, UiStyle, UiText, UiTransform, reload_console_template_if_changed,
-    save_console_template_to_disk,
+    UiBatchCmd, UiButton, UiButtonClickEvent, UiDirty, UiDrawCmd, UiEditorNode, UiInputField,
+    UiInteraction, UiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
+    reload_console_template_if_changed, save_console_template_to_disk,
 };
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
@@ -1346,6 +1346,14 @@ fn process_submit_and_pointer(
     }
 
     if button_visible && clicked {
+        if centered_demo_enabled(data) {
+            data.scene
+                .overlay_runtime
+                .world
+                .emit_event(UiButtonClickEvent {
+                    entity: button_entity,
+                });
+        }
         if let Some(field) = data
             .scene
             .overlay_runtime

@@ -1,8 +1,8 @@
 use super::domain::SceneCommand;
 use crate::plugins::input::domain::action as input_action;
 use crate::plugins::ui::domain::{
-    UiBatchCmd, UiButton, UiButtonTemplate, UiInteraction, UiNode, UiPresentationMode, UiStyle,
-    UiStyleTemplate, UiText, UiTextTemplate, UiTransform,
+    UiBatchCmd, UiButton, UiButtonClickEvent, UiButtonTemplate, UiInteraction, UiNode,
+    UiPresentationMode, UiStyle, UiStyleTemplate, UiText, UiTextTemplate, UiTransform,
 };
 use crate::runtime::{EngineData, SceneCatalog, SceneHandle};
 use anyhow::{Context, Result, anyhow, bail};
@@ -215,21 +215,18 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
 
     let secondary_button = flow_resource(data)?.secondary_button;
     update_secondary_button_layout(data, secondary_button);
-
-    let primary_clicked = data
+    let click_events = data
         .scene
         .overlay_runtime
         .world
-        .get_component::<UiInteraction>(data.scene.overlay_runtime.ui.confirm_button)
-        .map(|interaction| interaction.clicked)
-        .unwrap_or(false);
-    let secondary_clicked = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component::<UiInteraction>(secondary_button)
-        .map(|interaction| interaction.clicked)
-        .unwrap_or(false);
+        .drain_events::<UiButtonClickEvent>();
+    let primary_button = data.scene.overlay_runtime.ui.confirm_button;
+    let primary_clicked = click_events
+        .iter()
+        .any(|event| event.entity == primary_button);
+    let secondary_clicked = click_events
+        .iter()
+        .any(|event| event.entity == secondary_button);
     let pause_toggle_pressed = data.input.toggle_pause_menu;
     let pause_toggle_key_down = data
         .input
@@ -691,8 +688,23 @@ fn update_secondary_button_layout(data: &mut EngineData, secondary_button: ecs::
         .get_component::<UiTransform>(secondary_button)
         .map(|rect| point_in_rect(data.input.mouse_position, rect))
         .unwrap_or(false);
-    let clicked = hovered && data.input.left_mouse_pressed();
-    let pressed = hovered && data.input.left_mouse_down();
+    let button_enabled = data
+        .scene
+        .overlay_runtime
+        .world
+        .get_component::<UiButton>(secondary_button)
+        .map(|button| button.enabled)
+        .unwrap_or(false);
+    let clicked = hovered && button_enabled && data.input.left_mouse_pressed();
+    let pressed = hovered && button_enabled && data.input.left_mouse_down();
+    if clicked {
+        data.scene
+            .overlay_runtime
+            .world
+            .emit_event(UiButtonClickEvent {
+                entity: secondary_button,
+            });
+    }
     if let Some(interaction) = data
         .scene
         .overlay_runtime
