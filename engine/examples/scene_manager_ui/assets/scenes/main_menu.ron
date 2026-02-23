@@ -1,0 +1,15 @@
+(
+  body: "Main Menu",
+  panel_component: "../components/panel.ron",
+  text_component: "../components/text_label.ron",
+  primary_button: Some((
+    label: "Play",
+    component: "../components/button_primary.ron",
+    action: go_to("game_scene"),
+  )),
+  secondary_button: Some((
+    label: "Settings",
+    component: "../components/button_primary.ron",
+    action: go_to("settings_menu"),
+  )),
+)

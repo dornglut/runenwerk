@@ -222,7 +222,7 @@ pub(crate) fn distance(a: Position, b: Position) -> f32 {
 mod tests {
     use super::*;
     use engine::plugins::scene::domain::{
-        SceneId, WorldDebugPosition, WorldDebugVelocity, WorldFrameCounter,
+        WorldDebugPosition, WorldDebugVelocity, WorldFrameCounter,
     };
 
     fn test_config() -> GameplayConfig {
@@ -253,7 +253,7 @@ mod tests {
 
         WorldSceneContext {
             world,
-            scene: SceneId::GameplayStub,
+            world_scene_label: "gameplay_stub".to_string(),
             gameplay_config,
             delta_seconds: 1.0 / 60.0,
             fixed_step_seconds: 1.0 / 60.0,
@@ -261,7 +261,7 @@ mod tests {
             gameplay_config_modified: None,
             gameplay_config_revision: 0,
             overlay_consumed: false,
-            overlay_scene: SceneId::ConsoleUi,
+            overlay_scene_label: "console_ui".to_string(),
             player_move_x: 0.0,
             player_move_y: 0.0,
             camera_yaw: 0.0,

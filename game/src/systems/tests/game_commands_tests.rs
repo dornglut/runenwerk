@@ -4,7 +4,6 @@ use crate::systems::game_commands::{
 };
 use ecs::World;
 use engine::plugins::render::domain::{PassSlot, PipelineKey};
-use engine::plugins::scene::domain::SceneId;
 use engine::plugins::ui::domain::initialize_console_ui;
 
 #[test]
@@ -37,19 +36,23 @@ fn parse_command_line_recognizes_builtins() {
     );
     assert_eq!(
         parse_command_line("grotto> set_world gameplay"),
-        Some(GameCommand::SetWorld(SceneId::GameplayStub))
+        Some(GameCommand::SetWorld("gameplay_stub".to_string()))
     );
     assert_eq!(
         parse_command_line("grotto> set_world hub"),
-        Some(GameCommand::SetWorld(SceneId::HubStub))
+        Some(GameCommand::SetWorld("hub_stub".to_string()))
+    );
+    assert_eq!(
+        parse_command_line("grotto> set_scene main_menu"),
+        Some(GameCommand::SetScene("main_menu".to_string()))
     );
     assert_eq!(
         parse_command_line("grotto> push_overlay pause"),
-        Some(GameCommand::PushOverlay(SceneId::HudUi))
+        Some(GameCommand::PushOverlay("hud_ui".to_string()))
     );
     assert_eq!(
         parse_command_line("grotto> push_overlay inventory"),
-        Some(GameCommand::PushOverlay(SceneId::InventoryUi))
+        Some(GameCommand::PushOverlay("inventory_ui".to_string()))
     );
     assert_eq!(
         parse_command_line("grotto> pop_overlay"),
@@ -124,7 +127,7 @@ fn parse_command_line_recognizes_builtins() {
     );
     assert_eq!(
         parse_command_line("grotto> set-world hub"),
-        Some(GameCommand::SetWorld(SceneId::HubStub))
+        Some(GameCommand::SetWorld("hub_stub".to_string()))
     );
     assert_eq!(
         parse_command_line("grotto> model_status"),
@@ -172,7 +175,7 @@ fn apply_game_command_updates_lines() {
     apply_game_command(&mut lines, GameCommand::Help(None));
     assert_eq!(
         lines[2],
-        "commands: help, clear, echo, history, count, set_world, push_overlay, pop_overlay, pause_logs, resume_logs, toggle_logs, freeze_time, resume_time, toggle_time, pipelines, set_pipeline, reload_shaders, shader_watch, shader_status, models, reload_models, model_watch, model_status"
+        "commands: help, clear, echo, history, count, set_world, set_scene, push_overlay, pop_overlay, pause_logs, resume_logs, toggle_logs, freeze_time, resume_time, toggle_time, pipelines, set_pipeline, reload_shaders, shader_watch, shader_status, models, reload_models, model_watch, model_status"
     );
     assert_eq!(lines[3], "type 'help <command>' for details");
 
@@ -223,6 +226,7 @@ fn command_registry_exposes_expected_core_commands() {
     assert!(names.contains(&"history"));
     assert!(names.contains(&"count"));
     assert!(names.contains(&"set_world"));
+    assert!(names.contains(&"set_scene"));
     assert!(names.contains(&"push_overlay"));
     assert!(names.contains(&"pop_overlay"));
     assert!(names.contains(&"pause_logs"));

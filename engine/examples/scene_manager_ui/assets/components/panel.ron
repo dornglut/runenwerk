@@ -1,0 +1,6 @@
+(
+  bg_color: Some((0.06, 0.10, 0.14, 0.96)),
+  border_color: Some((0.24, 0.36, 0.46, 1.00)),
+  border_width: Some(1.0),
+  radius: Some(8.0),
+)

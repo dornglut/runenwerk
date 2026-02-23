@@ -27,29 +27,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/grotto-quest.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/grotto-quest.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/project/execution-plan.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/project/execution-plan.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/src/entity_builder.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/entity_builder.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/src/world/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/world/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/src/world/spawn.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/world/spawn.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/tests/query.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/tests/query.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/tests/world.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/tests/world.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs_macros/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs_macros/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/engine/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/chunk_mesher.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/chunk_mesher.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/gameplay.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/gameplay.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/plugins.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/plugins.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/systems/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/render.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/tests/game_commands_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/systems/tests/game_commands_tests.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/grid/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/grid/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/engine.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/engine.log" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -138,7 +117,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1771852941485</updated>
-      <workItem from="1771852942540" duration="2803000" />
+      <workItem from="1771852942540" duration="3423000" />
     </task>
     <servers />
   </component>

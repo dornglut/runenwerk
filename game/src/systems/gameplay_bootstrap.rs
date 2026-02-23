@@ -6,7 +6,7 @@ use engine::runtime::EngineData;
 
 pub fn gameplay_bootstrap_system(data: &mut EngineData) -> anyhow::Result<()> {
     let ctx = &mut data.scene.world_runtime.ctx;
-    if ctx.scene.layer() != SceneLayer::World {
+    if data.scene.world.active.layer() != SceneLayer::World {
         return Ok(());
     }
 

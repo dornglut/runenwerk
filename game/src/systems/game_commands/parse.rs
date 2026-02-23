@@ -2,7 +2,6 @@ use super::spec::{
     CONSOLE_PROMPT, DEFAULT_HISTORY_COUNT, GameCommand, MAX_HISTORY_COUNT, find_command_spec,
 };
 use engine::plugins::render::domain::{PassSlot, PipelineKey};
-use engine::plugins::scene::domain::SceneId;
 
 pub(crate) fn parse_command_line(line: &str) -> Option<GameCommand> {
     let without_prompt = line.strip_prefix(CONSOLE_PROMPT).unwrap_or(line);
@@ -44,12 +43,20 @@ pub(crate) fn parse_command_line(line: &str) -> Option<GameCommand> {
             };
             let target = target.to_ascii_lowercase();
             match target.as_str() {
-                "gameplay" => Some(GameCommand::SetWorld(SceneId::GameplayStub)),
-                "hub" => Some(GameCommand::SetWorld(SceneId::HubStub)),
+                "gameplay" => Some(GameCommand::SetWorld("gameplay_stub".to_string())),
+                "hub" => Some(GameCommand::SetWorld("hub_stub".to_string())),
                 _ => Some(GameCommand::Invalid(
                     "usage: set_world <gameplay|hub>".to_string(),
                 )),
             }
+        }
+        "set_scene" => {
+            let Some(target) = args.first() else {
+                return Some(GameCommand::Invalid(
+                    "usage: set_scene <scene_id>".to_string(),
+                ));
+            };
+            Some(GameCommand::SetScene(normalize_scene_label(target)))
         }
         "push_overlay" => {
             let target = args
@@ -57,16 +64,16 @@ pub(crate) fn parse_command_line(line: &str) -> Option<GameCommand> {
                 .map(|s| s.to_ascii_lowercase())
                 .unwrap_or_else(|| "hud".to_string());
             let overlay = match target.as_str() {
-                "console" => SceneId::ConsoleUi,
-                "inventory" | "inv" => SceneId::InventoryUi,
-                "hud" | "pause" => SceneId::HudUi,
+                "console" => "console_ui",
+                "inventory" | "inv" => "inventory_ui",
+                "hud" | "pause" => "hud_ui",
                 _ => {
                     return Some(GameCommand::Invalid(
                         "usage: push_overlay [console|hud|inventory|pause]".to_string(),
                     ));
                 }
             };
-            Some(GameCommand::PushOverlay(overlay))
+            Some(GameCommand::PushOverlay(overlay.to_string()))
         }
         "pop_overlay" => Some(GameCommand::PopOverlay),
         "pause_logs" => Some(GameCommand::PauseLogs),
@@ -138,6 +145,10 @@ pub(crate) fn parse_command_line(line: &str) -> Option<GameCommand> {
 
 fn normalize_command_name(raw: &str) -> String {
     raw.to_ascii_lowercase().replace('-', "_")
+}
+
+fn normalize_scene_label(raw: &str) -> String {
+    raw.trim().to_ascii_lowercase().replace('-', "_")
 }
 
 fn parse_toggle_value(raw: &str) -> Option<bool> {

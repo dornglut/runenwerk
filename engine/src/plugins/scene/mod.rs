@@ -1,10 +1,15 @@
 pub mod domain;
 pub mod manifest;
+mod template_flow;
 
 use self::domain::{
     GAMEPLAY_CONFIG_PATH, QuestState, SceneCommand, SceneId, SceneLayer, SceneLifecycleEvent,
     SceneLifecyclePhase, WorldToOverlayMessage, gameplay_config_modified,
     load_gameplay_config_with_modified_and_error,
+};
+use self::template_flow::{
+    scene_template_flow_system, scene_template_secondary_button_batch_system,
+    set_template_scene_by_id, setup_template_flow, template_flow_enabled,
 };
 use crate::plugins::shared::{ReloadStatusPayload, should_reload};
 use crate::plugins::ui::domain::UiDirty;
@@ -39,11 +44,98 @@ impl EnginePlugin for ScenePlugin {
             scene_overlay_apply_messages_system,
             &["scene_overlay_format_messages"],
         );
+        builder.add_node_with_edges(
+            "scene_template_secondary_button_batch",
+            scene_template_secondary_button_batch_system,
+            &["overlay_ui_build_batches"],
+        );
+        builder.add_edge(
+            "scene_template_secondary_button_batch",
+            "overlay_ui_render_extract",
+        );
         Ok(())
+    }
+
+    fn setup(&self, data: &mut EngineData) -> Result<()> {
+        setup_template_flow(data)
     }
 }
 
+pub fn switch_scene_by_id(data: &mut EngineData, scene_id: &str) -> Result<bool> {
+    let normalized = normalize_scene_label_alias(scene_id);
+    if set_template_scene_by_id(data, &normalized)? {
+        return Ok(true);
+    }
+    let Some(scene) = SceneId::from_label(&normalized) else {
+        return Ok(false);
+    };
+    match scene.layer() {
+        SceneLayer::World => {
+            data.scene
+                .queue(SceneCommand::ReplaceWorldByLabel(normalized));
+            data.scene.queue(SceneCommand::PauseWorld(false));
+        }
+        SceneLayer::OverlayUi => {
+            data.scene
+                .queue(SceneCommand::ReplaceOverlayByLabel(normalized));
+            data.scene.queue(SceneCommand::PauseWorld(true));
+        }
+    }
+    Ok(true)
+}
+
+pub fn set_world_by_id(data: &mut EngineData, scene_id: &str) -> Result<bool> {
+    let normalized = normalize_scene_label_alias(scene_id);
+    let Some(scene) = SceneId::from_label(&normalized) else {
+        return Ok(false);
+    };
+    if scene.layer() != SceneLayer::World {
+        return Ok(false);
+    }
+    data.scene
+        .queue(SceneCommand::ReplaceWorldByLabel(normalized));
+    data.scene.queue(SceneCommand::PauseWorld(false));
+    Ok(true)
+}
+
+pub fn push_overlay_by_id(data: &mut EngineData, scene_id: &str) -> Result<bool> {
+    let normalized = normalize_scene_label_alias(scene_id);
+    if template_flow_enabled(data) {
+        return set_template_scene_by_id(data, &normalized);
+    }
+    let Some(scene) = SceneId::from_label(&normalized) else {
+        return Ok(false);
+    };
+    if scene.layer() != SceneLayer::OverlayUi {
+        return Ok(false);
+    }
+    data.scene
+        .queue(SceneCommand::PushOverlayByLabel(normalized));
+    data.scene.queue(SceneCommand::PauseWorld(true));
+    Ok(true)
+}
+
+pub fn pop_overlay(data: &mut EngineData) {
+    data.scene.queue(SceneCommand::PopOverlay);
+    data.scene.queue(SceneCommand::PauseWorld(false));
+}
+
+pub fn set_world_paused(data: &mut EngineData, paused: bool) {
+    data.scene.queue(SceneCommand::PauseWorld(paused));
+}
+
+pub fn toggle_world_pause(data: &mut EngineData) {
+    data.scene
+        .queue(SceneCommand::PauseWorld(!data.scene.world.paused));
+}
+
 pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
+    if template_flow_enabled(data) {
+        scene_template_flow_system(data)?;
+        flush_lifecycle_status(data);
+        return Ok(());
+    }
+
     if data.input.toggle_pause_menu {
         let show_overlay = !data.scene.overlay_visible();
         data.scene.set_active_overlay_visible(show_overlay);
@@ -106,12 +198,7 @@ pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
         };
     }
 
-    let lifecycle_events = std::mem::take(&mut data.scene.channels.lifecycle_events);
-    for event in lifecycle_events {
-        let line = format_lifecycle_event(event);
-        data.scene.channels.overlay_console_lines.push(line.clone());
-        data.scene.overlay_runtime.ui.editor.status = format!("editor: {line}");
-    }
+    flush_lifecycle_status(data);
 
     Ok(())
 }
@@ -126,7 +213,7 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
     let world_paused = data.scene.world.paused;
     let runtime = &mut data.scene.world_runtime;
     runtime.ctx.overlay_consumed = data.input.overlay_consumed;
-    runtime.ctx.overlay_scene = active_overlay;
+    runtime.ctx.overlay_scene_label = active_overlay.label().to_string();
     runtime.ctx.player_move_x = (if data.input.world_move_right {
         1.0
     } else {
@@ -284,7 +371,7 @@ fn clamp_scrollback_lines(lines: &mut Vec<String>, max_lines: usize) {
 fn format_world_message(message: WorldToOverlayMessage) -> String {
     match message {
         WorldToOverlayMessage::Tick { tick, overlay } => {
-            format!("[world] tick={} overlay={}", tick, overlay.label())
+            format!("[world] tick={} overlay={}", tick, overlay)
         }
         WorldToOverlayMessage::Combat {
             source,
@@ -329,16 +416,36 @@ fn format_lifecycle_event(event: SceneLifecycleEvent) -> String {
     format!("[world] scene:{layer} {} {phase}", event.scene.label())
 }
 
+fn normalize_scene_label_alias(raw: &str) -> String {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "gameplay" => "gameplay_stub".to_string(),
+        "hub" => "hub_stub".to_string(),
+        "console" => "console_ui".to_string(),
+        "hud" | "pause" => "hud_ui".to_string(),
+        "inventory" | "inv" => "inventory_ui".to_string(),
+        other => other.replace('-', "_"),
+    }
+}
+
+fn flush_lifecycle_status(data: &mut EngineData) {
+    let lifecycle_events = std::mem::take(&mut data.scene.channels.lifecycle_events);
+    for event in lifecycle_events {
+        let line = format_lifecycle_event(event);
+        data.scene.channels.overlay_console_lines.push(line.clone());
+        data.scene.overlay_runtime.ui.editor.status = format!("editor: {line}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::domain::{QuestState, SceneId, WorldToOverlayMessage};
+    use super::domain::{QuestState, WorldToOverlayMessage};
     use super::format_world_message;
 
     #[test]
     fn format_world_message_renders_all_variants() {
         let tick = format_world_message(WorldToOverlayMessage::Tick {
             tick: 60,
-            overlay: SceneId::ConsoleUi,
+            overlay: "console_ui".to_string(),
         });
         assert!(tick.contains("tick=60"));
 

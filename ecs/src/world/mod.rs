@@ -1,8 +1,9 @@
 use crate::component_registry::ComponentRegistry;
 use crate::{
     AnyStorage, Archetype, ArchetypeKey, Component, ComponentKey, EntityAllocator, EntityHandle,
+    Resource,
 };
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use tracing::debug;
 
@@ -16,6 +17,7 @@ pub struct World {
     pub archetypes: HashMap<ArchetypeKey, Archetype>,
     pub entity_locations: HashMap<EntityHandle, (ArchetypeKey, usize)>,
     pub component_registry: ComponentRegistry,
+    resources: HashMap<TypeId, Box<dyn Any>>,
 }
 
 impl World {
@@ -26,6 +28,7 @@ impl World {
             archetypes: HashMap::new(),
             entity_locations: HashMap::new(),
             component_registry: ComponentRegistry::new(),
+            resources: HashMap::new(),
         }
     }
 
@@ -77,5 +80,38 @@ impl World {
 
             Archetype::new(keys.to_vec(), &constructors)
         })
+    }
+
+    /// Insert or replace a world resource.
+    pub fn insert_resource<R: Resource>(&mut self, resource: R) -> Option<R> {
+        self.resources
+            .insert(TypeId::of::<R>(), Box::new(resource))
+            .and_then(|prev| prev.downcast::<R>().ok().map(|boxed| *boxed))
+    }
+
+    /// Returns true if a resource of type `R` exists.
+    pub fn has_resource<R: Resource>(&self) -> bool {
+        self.resources.contains_key(&TypeId::of::<R>())
+    }
+
+    /// Borrow an immutable world resource.
+    pub fn get_resource<R: Resource>(&self) -> Option<&R> {
+        self.resources
+            .get(&TypeId::of::<R>())
+            .and_then(|res| res.downcast_ref::<R>())
+    }
+
+    /// Borrow a mutable world resource.
+    pub fn get_resource_mut<R: Resource>(&mut self) -> Option<&mut R> {
+        self.resources
+            .get_mut(&TypeId::of::<R>())
+            .and_then(|res| res.downcast_mut::<R>())
+    }
+
+    /// Remove and return a world resource.
+    pub fn remove_resource<R: Resource>(&mut self) -> Option<R> {
+        self.resources
+            .remove(&TypeId::of::<R>())
+            .and_then(|res| res.downcast::<R>().ok().map(|boxed| *boxed))
     }
 }

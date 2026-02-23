@@ -62,10 +62,13 @@ pub(crate) fn apply_game_command(lines: &mut Vec<String>, command: GameCommand) 
             lines.push(format!("scrollback lines: {}", lines.len()));
         }
         GameCommand::SetWorld(scene) => {
-            lines.push(format!("queued world switch: {}", scene.label()));
+            lines.push(format!("queued world switch: {scene}"));
+        }
+        GameCommand::SetScene(scene_id) => {
+            lines.push(format!("queued scene switch: {scene_id}"));
         }
         GameCommand::PushOverlay(scene) => {
-            lines.push(format!("queued overlay push: {}", scene.label()));
+            lines.push(format!("queued overlay push: {scene}"));
         }
         GameCommand::PopOverlay => {
             lines.push("queued overlay pop".to_string());

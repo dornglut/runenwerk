@@ -2,7 +2,11 @@ use super::{
     GameCommand, apply_game_command, clamp_scrollback_lines, flush_paused_logs, parse_command_line,
 };
 use engine::plugins::render::domain::{PassSlot, PipelineKey};
-use engine::plugins::scene::domain::{OverlayCommandInput, OverlaySubmitMessage, SceneCommand};
+use engine::plugins::scene::domain::{OverlayCommandInput, OverlaySubmitMessage};
+use engine::plugins::scene::{
+    pop_overlay as pop_overlay_scene, push_overlay_by_id, set_world_by_id, set_world_paused,
+    switch_scene_by_id, toggle_world_pause,
+};
 use engine::plugins::ui::domain::UiDirty;
 use engine::runtime::EngineData;
 
@@ -16,7 +20,11 @@ fn drain_command_inputs(data: &mut EngineData) -> Vec<OverlayCommandInput> {
 
 #[derive(Debug, Clone)]
 enum SceneOp {
-    Queue(SceneCommand),
+    SetScene(String),
+    SetWorldById(String),
+    PushOverlayById(String),
+    PopOverlay,
+    SetWorldPaused(bool),
     ToggleWorldPause,
     SetLogsPaused(bool),
     ToggleLogsPaused,
@@ -118,26 +126,19 @@ pub fn game_command_execute_system(data: &mut EngineData) -> anyhow::Result<()> 
 fn plan_command(command: GameCommand) -> CommandOutcome {
     let mut outcome = CommandOutcome::from_command(command.clone());
     match command {
-        GameCommand::SetWorld(scene) => {
-            outcome
-                .scene_ops
-                .push(SceneOp::Queue(SceneCommand::ReplaceWorld(scene)));
+        GameCommand::SetWorld(scene_label) => {
+            outcome.scene_ops.push(SceneOp::SetWorldById(scene_label));
         }
-        GameCommand::PushOverlay(scene) => {
+        GameCommand::SetScene(scene_id) => {
+            outcome.scene_ops.push(SceneOp::SetScene(scene_id));
+        }
+        GameCommand::PushOverlay(scene_label) => {
             outcome
                 .scene_ops
-                .push(SceneOp::Queue(SceneCommand::PushOverlay(scene)));
-            outcome
-                .scene_ops
-                .push(SceneOp::Queue(SceneCommand::PauseWorld(true)));
+                .push(SceneOp::PushOverlayById(scene_label));
         }
         GameCommand::PopOverlay => {
-            outcome
-                .scene_ops
-                .push(SceneOp::Queue(SceneCommand::PopOverlay));
-            outcome
-                .scene_ops
-                .push(SceneOp::Queue(SceneCommand::PauseWorld(false)));
+            outcome.scene_ops.push(SceneOp::PopOverlay);
         }
         GameCommand::PauseLogs => {
             outcome.scene_ops.push(SceneOp::SetLogsPaused(true));
@@ -150,14 +151,10 @@ fn plan_command(command: GameCommand) -> CommandOutcome {
             outcome.scene_ops.push(SceneOp::ToggleLogsPaused);
         }
         GameCommand::FreezeTime => {
-            outcome
-                .scene_ops
-                .push(SceneOp::Queue(SceneCommand::PauseWorld(true)));
+            outcome.scene_ops.push(SceneOp::SetWorldPaused(true));
         }
         GameCommand::ResumeTime => {
-            outcome
-                .scene_ops
-                .push(SceneOp::Queue(SceneCommand::PauseWorld(false)));
+            outcome.scene_ops.push(SceneOp::SetWorldPaused(false));
         }
         GameCommand::ToggleTime => {
             outcome.scene_ops.push(SceneOp::ToggleWorldPause);
@@ -233,12 +230,47 @@ fn apply_gfx_ops(data: &mut EngineData, outcome: &mut CommandOutcome) {
 fn apply_scene_ops(data: &mut EngineData, scene_ops: Vec<SceneOp>) {
     for op in scene_ops {
         match op {
-            SceneOp::Queue(command) => {
-                data.scene.queue(command);
+            SceneOp::SetScene(scene_id) => {
+                let switched = switch_scene_by_id(data, &scene_id).unwrap_or_else(|err| {
+                    data.scene.overlay_runtime.ui.editor.status =
+                        format!("editor: failed to switch scene '{scene_id}': {err}");
+                    false
+                });
+                if !switched {
+                    data.scene.overlay_runtime.ui.editor.status =
+                        format!("editor: unknown scene '{scene_id}'");
+                }
+            }
+            SceneOp::SetWorldById(scene_id) => {
+                let switched = set_world_by_id(data, &scene_id).unwrap_or_else(|err| {
+                    data.scene.overlay_runtime.ui.editor.status =
+                        format!("editor: failed to switch world '{scene_id}': {err}");
+                    false
+                });
+                if !switched {
+                    data.scene.overlay_runtime.ui.editor.status =
+                        format!("editor: unknown world scene '{scene_id}'");
+                }
+            }
+            SceneOp::PushOverlayById(scene_id) => {
+                let switched = push_overlay_by_id(data, &scene_id).unwrap_or_else(|err| {
+                    data.scene.overlay_runtime.ui.editor.status =
+                        format!("editor: failed to push overlay '{scene_id}': {err}");
+                    false
+                });
+                if !switched {
+                    data.scene.overlay_runtime.ui.editor.status =
+                        format!("editor: unknown overlay scene '{scene_id}'");
+                }
+            }
+            SceneOp::PopOverlay => {
+                pop_overlay_scene(data);
+            }
+            SceneOp::SetWorldPaused(paused) => {
+                set_world_paused(data, paused);
             }
             SceneOp::ToggleWorldPause => {
-                data.scene
-                    .queue(SceneCommand::PauseWorld(!data.scene.world.paused));
+                toggle_world_pause(data);
             }
             SceneOp::SetLogsPaused(paused) => {
                 data.scene.overlay_runtime.ui.logs_paused = paused;

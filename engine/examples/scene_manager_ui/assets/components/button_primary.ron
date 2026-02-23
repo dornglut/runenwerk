@@ -1,0 +1,12 @@
+(
+  style: Some((
+    bg_color: Some((0.17, 0.30, 0.24, 1.0)),
+    border_color: Some((0.30, 0.54, 0.42, 1.0)),
+    border_width: Some(1.0),
+    radius: Some(6.0),
+  )),
+  text: Some((
+    color: Some((0.94, 0.98, 0.94, 1.0)),
+    size: Some(13.0),
+  )),
+)

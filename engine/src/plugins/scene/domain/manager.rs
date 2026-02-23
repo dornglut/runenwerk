@@ -100,6 +100,30 @@ impl SceneManager {
         let mut result = SceneTransitionResult::default();
         let pending = std::mem::take(&mut self.pending);
         for command in pending {
+            let command = match command {
+                SceneCommand::ReplaceWorldByLabel(label) => {
+                    let Some(scene) = SceneId::from_label(&label) else {
+                        tracing::warn!(scene_label = %label, "unknown world scene label");
+                        continue;
+                    };
+                    SceneCommand::ReplaceWorld(scene)
+                }
+                SceneCommand::ReplaceOverlayByLabel(label) => {
+                    let Some(scene) = SceneId::from_label(&label) else {
+                        tracing::warn!(scene_label = %label, "unknown overlay scene label");
+                        continue;
+                    };
+                    SceneCommand::ReplaceOverlay(scene)
+                }
+                SceneCommand::PushOverlayByLabel(label) => {
+                    let Some(scene) = SceneId::from_label(&label) else {
+                        tracing::warn!(scene_label = %label, "unknown overlay scene label");
+                        continue;
+                    };
+                    SceneCommand::PushOverlay(scene)
+                }
+                other => other,
+            };
             match command {
                 SceneCommand::ReplaceWorld(scene) => {
                     if scene.layer() != SceneLayer::World {
@@ -187,6 +211,9 @@ impl SceneManager {
                         result.world_pause_changed = true;
                     }
                 }
+                SceneCommand::ReplaceWorldByLabel(_)
+                | SceneCommand::ReplaceOverlayByLabel(_)
+                | SceneCommand::PushOverlayByLabel(_) => {}
             }
         }
         Ok(result)

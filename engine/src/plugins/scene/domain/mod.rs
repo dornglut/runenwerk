@@ -97,11 +97,14 @@ impl SceneSlot {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SceneCommand {
     ReplaceWorld(SceneId),
+    ReplaceWorldByLabel(String),
     ReplaceOverlay(SceneId),
+    ReplaceOverlayByLabel(String),
     PushOverlay(SceneId),
+    PushOverlayByLabel(String),
     PopOverlay,
     PauseWorld(bool),
 }
@@ -132,7 +135,7 @@ pub struct WorldDebugVelocity {
 
 pub struct WorldSceneContext {
     pub world: World,
-    pub scene: SceneId,
+    pub world_scene_label: String,
     pub gameplay_config: GameplayConfig,
     pub delta_seconds: f32,
     pub fixed_step_seconds: f32,
@@ -140,7 +143,7 @@ pub struct WorldSceneContext {
     pub gameplay_config_modified: Option<SystemTime>,
     pub gameplay_config_revision: u64,
     pub overlay_consumed: bool,
-    pub overlay_scene: SceneId,
+    pub overlay_scene_label: String,
     pub player_move_x: f32,
     pub player_move_y: f32,
     pub camera_yaw: f32,
@@ -186,7 +189,7 @@ pub enum OverlayCommandInput {
 pub enum WorldToOverlayMessage {
     Tick {
         tick: u64,
-        overlay: SceneId,
+        overlay: String,
     },
     Combat {
         source: String,
@@ -252,10 +255,10 @@ fn world_scene_tick_system(ctx: &mut WorldSceneContext) -> Result<()> {
             ctx.outbound_notifications
                 .push(WorldToOverlayMessage::Tick {
                     tick: counter.value,
-                    overlay: ctx.overlay_scene,
+                    overlay: ctx.overlay_scene_label.clone(),
                 });
         }
-        if ctx.scene == SceneId::HubStub && counter.value % 180 == 0 {
+        if ctx.world_scene_label == SceneId::HubStub.label() && counter.value % 180 == 0 {
             ctx.outbound_notifications
                 .push(WorldToOverlayMessage::Loot {
                     item: "Rested".to_string(),
@@ -263,7 +266,7 @@ fn world_scene_tick_system(ctx: &mut WorldSceneContext) -> Result<()> {
                     rarity: "hub".to_string(),
                 });
         }
-        if ctx.scene == SceneId::HubStub && counter.value % 300 == 0 {
+        if ctx.world_scene_label == SceneId::HubStub.label() && counter.value % 300 == 0 {
             ctx.outbound_notifications
                 .push(WorldToOverlayMessage::Quest {
                     quest: "Prepare For Expedition".to_string(),
@@ -322,7 +325,7 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
     ));
     let ctx = WorldSceneContext {
         world,
-        scene,
+        world_scene_label: scene.label().to_string(),
         camera_yaw: gameplay_config.camera.initial_yaw,
         camera_pitch: gameplay_config.camera.initial_pitch,
         camera_distance: gameplay_config.camera.initial_distance,
@@ -333,7 +336,7 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
         gameplay_config_modified,
         gameplay_config_revision: 0,
         overlay_consumed: false,
-        overlay_scene: SceneId::ConsoleUi,
+        overlay_scene_label: SceneId::ConsoleUi.label().to_string(),
         player_move_x: 0.0,
         player_move_y: 0.0,
         tick_entity,
@@ -399,6 +402,28 @@ mod tests {
         let result = manager.apply_pending().expect("apply should succeed");
         assert!(result.world_changed);
         assert_eq!(manager.world.active, SceneId::HubStub);
+    }
+
+    #[test]
+    fn replace_world_by_label_switches_active_world() {
+        let mut manager =
+            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
+        assert_eq!(manager.world.active, SceneId::GameplayStub);
+        manager.queue(SceneCommand::ReplaceWorldByLabel("hub_stub".to_string()));
+        let result = manager.apply_pending().expect("apply should succeed");
+        assert!(result.world_changed);
+        assert_eq!(manager.world.active, SceneId::HubStub);
+    }
+
+    #[test]
+    fn replace_overlay_by_label_switches_active_overlay() {
+        let mut manager =
+            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
+        assert_eq!(manager.active_overlay(), SceneId::ConsoleUi);
+        manager.queue(SceneCommand::ReplaceOverlayByLabel("hud_ui".to_string()));
+        let result = manager.apply_pending().expect("apply should succeed");
+        assert!(result.overlay_changed);
+        assert_eq!(manager.active_overlay(), SceneId::HudUi);
     }
 
     #[test]

@@ -1,5 +1,4 @@
 use engine::plugins::render::domain::{PassSlot, PipelineKey};
-use engine::plugins::scene::domain::SceneId;
 
 pub(super) const CONSOLE_PROMPT: &str = "grotto> ";
 pub(super) const DEFAULT_HISTORY_COUNT: usize = 10;
@@ -13,7 +12,7 @@ pub struct CommandSpec {
     pub aliases: &'static [&'static str],
 }
 
-const COMMAND_REGISTRY: [CommandSpec; 23] = [
+const COMMAND_REGISTRY: [CommandSpec; 24] = [
     CommandSpec {
         name: "help",
         usage: "help [command]",
@@ -49,6 +48,12 @@ const COMMAND_REGISTRY: [CommandSpec; 23] = [
         usage: "set_world <gameplay|hub>",
         summary: "switch active world scene",
         aliases: &["world"],
+    },
+    CommandSpec {
+        name: "set_scene",
+        usage: "set_scene <scene_id>",
+        summary: "switch to a registered scene id (template flow) or a known built-in scene id",
+        aliases: &["scene"],
     },
     CommandSpec {
         name: "push_overlay",
@@ -180,8 +185,9 @@ pub enum GameCommand {
     Echo(String),
     History(usize),
     Count,
-    SetWorld(SceneId),
-    PushOverlay(SceneId),
+    SetWorld(String),
+    SetScene(String),
+    PushOverlay(String),
     PopOverlay,
     PauseLogs,
     ResumeLogs,
