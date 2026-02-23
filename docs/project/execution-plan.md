@@ -33,7 +33,7 @@ Track the active implementation state for the retained ECS console UI foundation
 - Editor mode shows live scene diagnostics (world scene state, overlay stack, world tick/debug position).
 - Overlay stack now preserves independent runtime state per pushed overlay scene (push suspends current runtime, pop restores it).
 - Console submit/command processing now flows through scene-scoped channels (no ECS event entities on the hot command path).
-- World scene now emits scene-scoped notifications and overlay applies them via dedicated stage (`scene_overlay_messages`).
+- World scene now emits scene-scoped notifications and overlay applies them via dedicated stages (`scene_overlay_format_messages` and `scene_overlay_apply_messages`).
 - Scene channels now use typed message enums for submit, command input, and world->overlay notifications.
 - World->overlay notifications now include richer typed payloads (`Tick`, `Combat`, `Loot`, `Quest`) with a dedicated format stage before apply stage.
 - Scrollback now supports category-based custom text colors (`world`, `combat`, `loot`, `quest`) in renderer output.
@@ -55,12 +55,14 @@ Track the active implementation state for the retained ECS console UI foundation
 - Scene-aware frame graph overlays now load from `assets/render/frame_graph_overlays.ron` and append passes by world/overlay scene label.
 
 ## Next (Active)
-- Render/scene/mesh simplification pass with explicit abstraction seams.
+- Scene runtime decomposition (descriptor/registry path and world-update stage split).
+- Renderer extraction ownership reduction (move world/mesh/UI extraction out of renderer).
 
 ## Architecture Findings (Code Scan)
-- `engine_v2/src/render/renderer.rs` is a monolithic orchestrator (1766 LOC) that still owns pass creation, asset polling, mesh extraction, camera solve, frame graph build, graph execution, and command submission.
+- `engine_v2/src/render/renderer.rs` remains a monolithic orchestrator (>2k LOC) that still owns asset polling, mesh extraction, camera solve, frame graph build, graph execution, and command submission.
+- `prepare_packet`/`render_packet` provides a clean boundary, but extraction still runs inside renderer instead of dedicated extractor systems/services.
 - `prepare_mesh_draw` in `engine_v2/src/render/renderer.rs` mixes four responsibilities: model/chunk collection, cache policy, GPU uploads, and draw packet assembly.
-- `encode_mesh_pass` in `engine_v2/src/render/renderer.rs` recreates MSAA/depth textures per frame, making pass execution carry resource lifecycle work.
+- Mesh MSAA/depth targets are now reused by surface size/format, but render-target lifecycle policy still lives inside renderer internals.
 - `world_scene_update_system` in `engine_v2/src/systems/scene.rs` combines input mapping, camera controls, gameplay config hot reload, fixed-step stepping, and world->overlay message forwarding.
 - Scene construction remains hardcoded across `engine_v2/src/runtime/scene.rs` and `engine_v2/src/runtime/scene/manager.rs` instead of descriptor/registry-driven.
 - `engine_v2/src/render/model_manager.rs` bundles discovery, Blender conversion, glTF import, watch state, and status/logging in one module.
@@ -68,33 +70,32 @@ Track the active implementation state for the retained ECS console UI foundation
 
 ## Refactor Principles
 - Make frame extraction and frame execution separate phases with typed handoff data.
-- Move pass-specific behavior behind per-pass executors instead of `if handle == ...` chains.
+- Keep pass-specific behavior behind per-pass executors; avoid regressing to inline pass-name branching.
 - Keep GPU resource lifetime persistent and resize/reload driven.
 - Make scene creation data-driven through descriptors and builders.
 - Keep hot-reload services generic (same pattern for shaders, models, gameplay configs).
 
 ## Execution Program
-### Phase A: Render Packet Boundary
-1. Introduce `RenderPacket` (`world packet`, `mesh packet`, `ui packet`) as the only input to rendering.
-2. Move world/mesh/ui extraction out of `Renderer::render` into dedicated extractor systems/services.
-3. Keep `Renderer` focused on encode/submit only.
-4. Add tests that extraction output is deterministic for a fixed world snapshot.
+### Phase A: Render Packet Boundary (`partial`)
+1. Keep packetized handoff (`RendererPreparedPacket`) as the rendering boundary.
+2. Move world/mesh/UI extraction out of renderer into dedicated extractor systems/services.
+3. Keep renderer focused on graph orchestration and encode/submit only.
+4. Add deterministic extraction tests for fixed world snapshots.
 
-### Phase B: Pass Executor Registry
-1. Add `FramePassExecutor` trait with `prepare` and `encode` methods.
-2. Register executors per pass slot (`world_compute`, `world_compose`, `mesh_overlay`, `ui_composite`).
-3. Replace handle identity checks in `Renderer::render` with executor dispatch from graph node metadata.
-4. Keep `FrameGraph` as scheduler; move pass behavior into executors.
+### Phase B: Pass Executor Registry (`complete`)
+1. `FramePassExecutor` dispatch is in place for `world_compute`, `world_compose`, `mesh_overlay`, and `ui_composite`.
+2. Frame-graph pass routing now uses executor lookup from graph node metadata.
+3. Keep `FrameGraph` responsible for ordering/hazards while executors own pass behavior.
 
-### Phase C: Resource Lifetime and Upload Policy
-1. Add a small resource cache for persistent MSAA/depth targets keyed by surface size/format.
+### Phase C: Resource Lifetime and Upload Policy (`partial`)
+1. Mesh MSAA/depth target reuse by surface size/format is in place.
 2. Split mesh upload path into:
    - static geometry/material cache (rare rebuild),
    - per-frame instance stream (agent transforms/colors).
 3. Keep `MeshCacheEntry` internals in a dedicated module; renderer uses a narrow API.
 4. Add cache hit/miss and upload-bytes counters per executor.
 
-### Phase D: Scene Runtime Decomposition
+### Phase D: Scene Runtime Decomposition (`active`)
 1. Add `SceneDescriptor` + `SceneRegistry` for world and overlay scene builders.
 2. Split `world_scene_update_system` into deterministic stages:
    - `world_input_apply`,
@@ -105,19 +106,17 @@ Track the active implementation state for the retained ECS console UI foundation
 3. Keep lifecycle events typed and consumed by optional debug/UI subscribers.
 4. Add transition/lifecycle ordering tests against the registry path.
 
-### Phase E: Unified Hot Reload Services
+### Phase E: Unified Hot Reload Services (`planned`)
 1. Introduce shared file-watch/reload utility used by shader/model/gameplay config.
 2. Normalize status payloads (`revision`, `last_error`, `source_path`, `reload_reason`).
 3. Add runtime controls for profiling verbosity levels without recompiling.
 
-## Recommended First Slice (Low Risk)
-1. Implement Phase A only for mesh path:
-   - extract `MeshPacket` from `prepare_mesh_draw`,
-   - keep current rendering behavior.
-2. Add persistent MSAA/depth cache for mesh overlay.
-3. Wire profiling fields to the new cache policy so regressions are obvious.
+## Recommended Next Slice (Low Risk)
+1. Implement SceneRegistry bootstrap for existing world/overlay scene kinds without changing scene behavior.
+2. Split `world_scene_update_system` into `world_input_apply` and `world_fixed_step_run` first, then preserve existing semantics with explicit stage ordering.
+3. Add deterministic ordering tests for `scene_transition -> world_scene_update -> scene_overlay_*` flow.
 
-## Definition Of Done For Current Phase
+## Definition of Done for Current Phase
 - Renderer no longer owns extraction logic; it consumes packets.
 - Frame-graph execution uses pass executors instead of hardcoded handle checks.
 - World update path is split into composable systems with fixed ordering.

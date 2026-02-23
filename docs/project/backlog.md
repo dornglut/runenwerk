@@ -1,6 +1,7 @@
 # Backlog
 
-Purpose: capture implementation tracks that are agreed but not yet complete, with clear scope and sequence.
+## Purpose
+Capture implementation tracks that are agreed but not yet complete, with clear scope and sequence.
 
 ## Active
 

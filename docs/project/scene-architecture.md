@@ -52,7 +52,9 @@ This gives us "game as scene + UI as overlay scene" without coupling UI and game
   3. `world_render_extract` (copy world-scene ECS render state into renderer frame data)
   4. `scene_overlay_format_messages` (typed world->overlay notifications to formatted lines)
   5. `scene_overlay_apply_messages` (append formatted lines to active overlay scrollback)
-  6. `overlay_ui_*` stages (`input`, `editor`, `layout`, `build_batches`, `render_extract`, `render_submit`)
+  6. `game_command_apply` + `game_command_execute` (consume submit intent and run command side effects)
+  7. `overlay_ui_*` stages (`hot_reload`, `input`, `editor`, `layout`, `build_batches`, `render_extract`)
+  8. `frame_render_submit` (run frame graph + submit world and UI passes)
 - Existing `engine_v2` UI pipeline remains valid inside a UI scene.
 - Render submission uses a frame graph so compute and render passes are scheduled via pass/resource dependencies.
 
@@ -112,5 +114,5 @@ All transition requests should be queued and applied at `scene_transition` stage
 ## Next Actions
 1. Introduce `SceneRegistry` descriptors so world/overlay runtime creation is decoupled from `SceneManager`.
 2. Move lifecycle event handling into dedicated scene lifecycle systems with optional UI/debug subscribers.
-3. Split world-scene runtime implementation into modular files (`scene_manager`, `world_gameplay`, `world_config`, `lifecycle`).
+3. Continue reducing coupling across existing runtime modules (`manager`, `gameplay`, `config`, `lifecycle`) and remove remaining orchestration spillover in system-layer code.
 4. Add scene manifest support to map scene IDs to bootstrap config paths and overlay templates.

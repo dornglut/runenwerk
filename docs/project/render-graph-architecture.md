@@ -23,7 +23,8 @@ Define the engine_v2 frame-graph path used to schedule compute and render passes
     2. `world_compose` (render)
     3. `mesh_overlay` (render)
     4. `ui_composite` (render)
-  - Executes passes in graph order.
+  - Executes passes in graph order through `FramePassExecutor` dispatch by pass name.
+  - Reuses mesh MSAA/depth targets by surface size/format (rebuild only on resize/format changes).
 
 ## Runtime Ergonomics
 - Pipeline inspection and switching are exposed through console commands:
@@ -52,10 +53,10 @@ Define the engine_v2 frame-graph path used to schedule compute and render passes
 - Enables runtime pipeline switching without hardcoding pass internals in gameplay systems.
 
 ## Current Limitations
-- Render loop still dispatches pass work through handle identity checks in `renderer.rs`.
-- Graph node metadata does not yet route to an executor interface.
-- Resource lifetime is partly outside graph policy (example: mesh MSAA/depth targets recreated in mesh encode path).
-- Scene-specific graph composition is still hardcoded in renderer.
+- `engine_v2/src/render/renderer.rs` still centralizes graph build, executor routing, and multiple pass-specific policies in one large module.
+- Scene-specific graph contribution selection is label-driven; descriptor/manifest-driven scene contribution is not complete yet.
+- Resource lifetime policy is still localized per pass/runtime type (no shared transient allocator or aliasing policy yet).
+- Frame diagnostics exist but do not yet expose aggregate per-pass prepare/encode metrics or cache hit/miss summaries.
 
 ## Target Architecture
 1. Keep `FrameGraph` as ordering and hazard model.
@@ -64,18 +65,16 @@ Define the engine_v2 frame-graph path used to schedule compute and render passes
 4. Move render-target lifetime to a small resource cache owned by render runtime.
 5. Let world/overlay scene descriptors append graph nodes/resources through a contribution API.
 
-## Migration Plan
-1. Executor MVP:
-   - implement executors for `world_compute` and `world_compose`,
-   - remove direct handle branching for those two passes.
-2. Mesh/UI migration:
-   - move `mesh_overlay` and `ui_composite` to executors,
-   - keep behavior and shader/pipeline controls unchanged.
-3. Resource policy:
-   - add persistent MSAA/depth target cache by `(surface_format, width, height)`,
-   - expose cache hit/miss metrics in performance logs.
-4. Scene contribution:
-   - introduce descriptor-driven graph contributions for world scene variants and overlays.
+## Migration Status
+1. Executor MVP: complete.
+   - `world_compute` and `world_compose` execute through `FramePassExecutor`.
+2. Mesh/UI executor migration: complete.
+   - `mesh_overlay` and `ui_composite` now dispatch through executor registration.
+3. Resource policy: partial.
+   - Mesh MSAA/depth target reuse by `(surface_format, width, height)` is in place.
+   - Cache metrics and broader transient resource policy are still pending.
+4. Scene contribution descriptors: in progress.
+   - Overlay pass append works via config; manifest-driven scene descriptors are still pending.
 
 ## Next Steps
 1. Move scene overlay selection from simple label match to scene descriptor assets (`assets/scenes/*.ron`) so graph contributions come from scene manifests.

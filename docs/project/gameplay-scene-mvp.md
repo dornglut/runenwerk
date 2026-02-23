@@ -74,7 +74,7 @@ Define the next concrete implementation target: an autonomous ECS gameplay simul
 - Overlay flow test: world combat events appear in overlay scrollback with expected category tags.
 - Lifecycle test: replacing world scene resets gameplay ECS world cleanly.
 
-## Definition Of Done
+## Definition of Done
 - Gameplay scene runs every frame through all gameplay stages without panics.
 - Player/enemy autonomous combat loop is visible through overlay diagnostics/messages.
 - World and overlay scene switching works at runtime without restart.

@@ -2,7 +2,7 @@
 
 `config.ron` contains local editor/tooling settings.
 
-Current fields:
+Supported fields:
 - `blender_bin`: Optional absolute path to Blender executable used for `.blend` export.
 
 Example:
@@ -14,3 +14,4 @@ Example:
 ```
 
 Note: `BLENDER_BIN` environment variable overrides this value when set.
+Prefer `BLENDER_BIN` in CI/shared environments to avoid machine-specific config churn.

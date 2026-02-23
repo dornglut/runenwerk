@@ -15,6 +15,7 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
 - `ui_build_batches`
 - `ui_render_extract`
 - `ui_render_submit`
+- Runtime scheduler node names use `overlay_ui_*` prefixes and end at `frame_render_submit`.
 
 ## Stage Responsibilities
 - `ui_input`: consume input, update focus/interaction/editor state, emit submit intent.
@@ -28,7 +29,7 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
 - Explicit event bridge for submit flow.
 - Template model supports node IDs and controlled patching/hot reload.
 
-## Current Implemented Scope
+## Current Scope
 - Console panel + scrollback + input + confirm button.
 - Shared submit path for Enter and button click.
 - Text clipping/scissor.
@@ -42,8 +43,8 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
   - `X` hides selected node, `A` restores hidden nodes.
   - `Cmd/Ctrl+S` exports and saves current UI template.
 - Scene-aware UI template switching baseline:
-  - scene template mapping (`console` and `hud`) with runtime switching.
-  - node visibility persisted in template node data.
+  - Scene template mapping (`console` and `hud`) with runtime switching.
+  - Node visibility persisted in template node data.
 
 ## Current Constraints
 - Selection/copy-paste not complete.
@@ -57,7 +58,7 @@ Build an integrated engine UI stack where ECS is the source of UI state and wgpu
 4. Keep logs window and scroll UX fully template-driven and editor-friendly.
 5. Continue editor improvements (selection model, clipboard copy/cut/paste, diagnostics polish).
 
-## Risks And Mitigations
+## Risks and Mitigations
 - Risk: ECS/render coupling drift.
   - Mitigation: keep extraction boundary strict and typed.
 - Risk: editor complexity regressions.
