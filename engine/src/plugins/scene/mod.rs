@@ -138,17 +138,6 @@ pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
         flush_lifecycle_status(data);
         return Ok(());
     }
-    if data.input.left_mouse_pressed() {
-        tracing::info!(
-            target: "events",
-            event = "scene.template_flow.disabled",
-            active_overlay = data.scene.active_overlay().label(),
-            overlay_visible = data.scene.overlay_visible(),
-            mouse_x = data.input.mouse_position.0,
-            mouse_y = data.input.mouse_position.1,
-            "left click handled with fallback scene transition path"
-        );
-    }
 
     if data.input.toggle_pause_menu {
         let show_overlay = !data.scene.overlay_visible();

@@ -212,17 +212,6 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
         return Ok(());
     }
     maybe_reload_templates(data)?;
-    if data.input.left_mouse_pressed() {
-        let active_scene = flow_resource(data)?.active_scene.index();
-        tracing::info!(
-            target: "events",
-            event = "scene.template_flow.left_press",
-            active_scene,
-            mouse_x = data.input.mouse_position.0,
-            mouse_y = data.input.mouse_position.1,
-            "left click reached template flow system"
-        );
-    }
 
     let secondary_button = flow_resource(data)?.secondary_button;
     update_secondary_button_layout(data, secondary_button);
@@ -254,20 +243,6 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
             .get_component::<UiInteraction>(secondary_button)
             .map(|interaction| interaction.clicked)
             .unwrap_or(false);
-    let active_scene = flow_resource(data)?.active_scene;
-    if !click_events.is_empty() || primary_clicked || secondary_clicked {
-        tracing::info!(
-            target: "events",
-            event = "ui.button_click.consume",
-            active_scene = active_scene.index(),
-            drained_count = click_events.len(),
-            primary_clicked_from_events,
-            secondary_clicked_from_events,
-            primary_clicked,
-            secondary_clicked,
-            "consumed UI button click signals for scene flow"
-        );
-    }
     let pause_toggle_pressed = data.input.toggle_pause_menu;
     let pause_toggle_key_down = data
         .input
@@ -280,7 +255,6 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
             pause_toggle_pressed || (pause_toggle_key_down && !state.pause_toggle_key_down);
         state.pause_toggle_key_down = pause_toggle_key_down;
         if toggle_pause_menu {
-            let from_scene = state.active_scene;
             if let (Some(game), Some(pause)) = (state.handles.game, state.handles.pause) {
                 if state.active_scene == game {
                     state.previous_scene = Some(game);
@@ -292,15 +266,6 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
             if state.handles.settings == Some(state.active_scene) {
                 state.active_scene = state.previous_scene.take().unwrap_or(state.handles.main);
             }
-            tracing::info!(
-                target: "events",
-                event = "scene.pause_toggle",
-                from_scene = from_scene.index(),
-                to_scene = state.active_scene.index(),
-                pause_toggle_pressed,
-                pause_toggle_key_down,
-                "applied pause toggle input"
-            );
         }
 
         if let Some(scene) = state.scenes.get(&state.active_scene) {
@@ -444,9 +409,6 @@ fn resolve_handles(scene_catalog: &SceneCatalog) -> Result<SceneFlowHandles> {
 }
 
 fn apply_scene_action(state: &mut SceneManagerUiResource, action: SceneAction) {
-    let from_scene = state.active_scene;
-    let previous_before = state.previous_scene.map(|handle| handle.index());
-    let action_kind = scene_action_kind(&action);
     match action {
         SceneAction::GoTo(target) => {
             if Some(target) == state.handles.settings {
@@ -463,24 +425,6 @@ fn apply_scene_action(state: &mut SceneManagerUiResource, action: SceneAction) {
             state.previous_scene = None;
             state.active_scene = state.handles.main;
         }
-    }
-    tracing::info!(
-        target: "events",
-        event = "scene.action.apply",
-        action = action_kind,
-        from_scene = from_scene.index(),
-        to_scene = state.active_scene.index(),
-        previous_before,
-        previous_after = state.previous_scene.map(|handle| handle.index()),
-        "applied scene action"
-    );
-}
-
-fn scene_action_kind(action: &SceneAction) -> &'static str {
-    match action {
-        SceneAction::GoTo(_) => "go_to",
-        SceneAction::Back => "back",
-        SceneAction::MainMenu => "main_menu",
     }
 }
 
@@ -706,7 +650,6 @@ fn apply_active_scene_if_needed(data: &mut EngineData) -> Result<()> {
 }
 
 fn update_secondary_button_layout(data: &mut EngineData, secondary_button: ecs::EntityHandle) {
-    let left_pressed = data.input.left_mouse_pressed();
     let visible = data
         .scene
         .overlay_runtime
@@ -715,20 +658,6 @@ fn update_secondary_button_layout(data: &mut EngineData, secondary_button: ecs::
         .map(|node| node.visible)
         .unwrap_or(false);
 
-    if left_pressed {
-        let active_scene = flow_resource(data)
-            .map(|resource| resource.active_scene.index())
-            .unwrap_or_default();
-        tracing::info!(
-            target: "events",
-            event = "ui.secondary.visibility",
-            active_scene,
-            entity_id = secondary_button.id,
-            entity_generation = secondary_button.generation,
-            visible,
-            "secondary button visibility state at click"
-        );
-    }
     if !visible {
         if let Some(interaction) = data
             .scene
@@ -787,38 +716,7 @@ fn update_secondary_button_layout(data: &mut EngineData, secondary_button: ecs::
         .unwrap_or(false);
     let clicked = hovered && button_enabled && data.input.left_mouse_pressed();
     let pressed = hovered && button_enabled && data.input.left_mouse_down();
-    if left_pressed {
-        let active_scene = flow_resource(data)
-            .map(|resource| resource.active_scene.index())
-            .unwrap_or_default();
-        tracing::info!(
-            target: "events",
-            event = "ui.secondary.hit_test",
-            active_scene,
-            entity_id = secondary_button.id,
-            entity_generation = secondary_button.generation,
-            mouse_x = data.input.mouse_position.0,
-            mouse_y = data.input.mouse_position.1,
-            hovered,
-            button_enabled,
-            rect_x = secondary_rect.map(|rect| rect.x),
-            rect_y = secondary_rect.map(|rect| rect.y),
-            rect_w = secondary_rect.map(|rect| rect.w),
-            rect_h = secondary_rect.map(|rect| rect.h),
-            "evaluated secondary button hit test"
-        );
-    }
     if clicked {
-        tracing::info!(
-            target: "events",
-            event = "ui.button_click.emit",
-            source = "scene_template.secondary",
-            entity_id = secondary_button.id,
-            entity_generation = secondary_button.generation,
-            mouse_x = data.input.mouse_position.0,
-            mouse_y = data.input.mouse_position.1,
-            "emitting secondary UI button click event"
-        );
         data.scene
             .overlay_runtime
             .world

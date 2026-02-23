@@ -61,3 +61,36 @@
 2026-02-23T17:52:53.405261Z  INFO events: emitting secondary UI button click event event="ui.button_click.emit" source="scene_template.secondary" entity_id=4 entity_generation=0 mouse_x=225.40625 mouse_y=424.1640625
 2026-02-23T17:52:53.405293Z  INFO events: consumed UI button click signals for scene flow event="ui.button_click.consume" active_scene=2 drained_count=1 primary_clicked_from_events=false secondary_clicked_from_events=true primary_clicked=false secondary_clicked=true
 2026-02-23T17:52:53.405315Z  INFO events: applied scene action event="scene.action.apply" action="main_menu" from_scene=2 to_scene=0 previous_before=3
+2026-02-23T17:55:03.262372Z  INFO events: events trace log initialized event="events.trace.ready" file="logs/events.log"
+2026-02-23T17:55:08.206110Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=380.66796875 mouse_y=83.94140625 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:08.206209Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=380.66796875 mouse_y=83.94140625
+2026-02-23T17:55:08.206236Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:08.206273Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=380.66796875 mouse_y=83.94140625 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0
+2026-02-23T17:55:08.922338Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=156.94140625 mouse_y=54.453125 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:08.922439Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=156.94140625 mouse_y=54.453125
+2026-02-23T17:55:08.922466Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:08.922503Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=156.94140625 mouse_y=54.453125 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0
+2026-02-23T17:55:09.305460Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=175.75 mouse_y=66.0078125 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:09.305557Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=175.75 mouse_y=66.0078125
+2026-02-23T17:55:09.305584Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:09.305621Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=175.75 mouse_y=66.0078125 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0
+2026-02-23T17:55:09.455766Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=175.75 mouse_y=66.0078125 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:09.455870Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=175.75 mouse_y=66.0078125
+2026-02-23T17:55:09.455896Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:09.455935Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=175.75 mouse_y=66.0078125 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0
+2026-02-23T17:55:09.905937Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=175.75 mouse_y=66.0078125 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:09.906030Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=175.75 mouse_y=66.0078125
+2026-02-23T17:55:09.906056Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:09.906095Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=175.75 mouse_y=66.0078125 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0
+2026-02-23T17:55:10.072265Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=175.75 mouse_y=66.0078125 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:10.072355Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=175.75 mouse_y=66.0078125
+2026-02-23T17:55:10.072381Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:10.072419Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=175.75 mouse_y=66.0078125 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0
+2026-02-23T17:55:10.205908Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=175.75 mouse_y=66.0078125 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:10.206008Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=175.75 mouse_y=66.0078125
+2026-02-23T17:55:10.206037Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:10.206077Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=175.75 mouse_y=66.0078125 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0
+2026-02-23T17:55:10.356034Z  INFO events: received left mouse press in ui input system event="input.left_mouse_pressed" mouse_x=175.75 mouse_y=66.0078125 overlay_visible=true editor_enabled=false
+2026-02-23T17:55:10.356139Z  INFO events: left click reached template flow system event="scene.template_flow.left_press" active_scene=0 mouse_x=175.75 mouse_y=66.0078125
+2026-02-23T17:55:10.356168Z  INFO events: secondary button visibility state at click event="ui.secondary.visibility" active_scene=0 entity_id=4 entity_generation=0 visible=true
+2026-02-23T17:55:10.356207Z  INFO events: evaluated secondary button hit test event="ui.secondary.hit_test" active_scene=0 entity_id=4 entity_generation=0 mouse_x=175.75 mouse_y=66.0078125 hovered=false button_enabled=true rect_x=157.0 rect_y=398.0 rect_w=154.0 rect_h=36.0

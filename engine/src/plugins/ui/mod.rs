@@ -1347,16 +1347,6 @@ fn process_submit_and_pointer(
 
     if button_visible && clicked {
         if centered_demo_enabled(data) {
-            tracing::info!(
-                target: "events",
-                event = "ui.button_click.emit",
-                source = "ui_input.primary",
-                entity_id = button_entity.id,
-                entity_generation = button_entity.generation,
-                mouse_x = data.input.mouse_position.0,
-                mouse_y = data.input.mouse_position.1,
-                "emitting primary UI button click event"
-            );
             data.scene
                 .overlay_runtime
                 .world
@@ -1579,17 +1569,6 @@ fn apply_scroll_delta(current: usize, delta: i32) -> usize {
 
 pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
     data.input.overlay_consumed = false;
-    if data.input.left_mouse_pressed() {
-        tracing::info!(
-            target: "events",
-            event = "input.left_mouse_pressed",
-            mouse_x = data.input.mouse_position.0,
-            mouse_y = data.input.mouse_position.1,
-            overlay_visible = data.scene.overlay_visible(),
-            editor_enabled = data.scene.overlay_runtime.ui.editor.enabled,
-            "received left mouse press in ui input system"
-        );
-    }
     if !data.scene.overlay_visible() {
         return Ok(());
     }

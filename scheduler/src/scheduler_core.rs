@@ -7,6 +7,8 @@ use std::path::Path;
 use std::time::Instant;
 use tracing::{Level, info, span};
 
+const SLOW_NODE_LOG_THRESHOLD_MS: u128 = 20;
+
 pub struct Scheduler<C> {
     dag: DAG<C>,
     execution_order: Vec<NodeId>,
@@ -28,7 +30,7 @@ impl<C> Scheduler<C> {
                 .context("Failed to rebuild execution order")?;
         }
 
-        let run_span = span!(Level::INFO, "scheduler_run");
+        let run_span = span!(Level::DEBUG, "scheduler_run");
         let _enter = run_span.enter();
 
         for node_id in &self.execution_order {
@@ -41,7 +43,7 @@ impl<C> Scheduler<C> {
                 (node.func)(ctx).with_context(|| format!("Failed to run node {:?}", node_id))?;
                 let duration = start.elapsed();
 
-                if duration.as_millis() > 1 {
+                if duration.as_millis() >= SLOW_NODE_LOG_THRESHOLD_MS {
                     info!(
                         "Node {:?} ({}) took {} ms",
                         node_id,
