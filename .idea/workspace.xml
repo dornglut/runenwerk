@@ -27,12 +27,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/main.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/template_flow.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/template_flow.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/runtime/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/engine.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/engine.log" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/scheduler/src/scheduler_core.rs" beforeDir="false" afterPath="$PROJECT_DIR$/scheduler/src/scheduler_core.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -142,7 +138,7 @@
       <option name="presentableId" value="Default" />
       <updated>1771852941485</updated>
       <workItem from="1771852942540" duration="3423000" />
-      <workItem from="1771856374727" duration="13836000" />
+      <workItem from="1771856374727" duration="14215000" />
     </task>
     <servers />
   </component>

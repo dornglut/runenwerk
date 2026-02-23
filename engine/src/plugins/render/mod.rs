@@ -90,8 +90,14 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
                 + timings.renderer.world_prepare_ms
                 + timings.renderer.encode_submit_ms
                 + timings.present_ms;
-            if startup_ready_before && total_ms > FRAME_TIMING_LOG_THRESHOLD_MS {
+            // "Workload" excludes swapchain acquire/present waiting (vsync/compositor pacing).
+            let workload_ms = timings.renderer.prepare_ui_ms
+                + timings.renderer.prepare_mesh_ms
+                + timings.renderer.world_prepare_ms
+                + timings.renderer.encode_submit_ms;
+            if startup_ready_before && workload_ms > FRAME_TIMING_LOG_THRESHOLD_MS {
                 tracing::info!(
+                    workload_ms = workload_ms,
                     total_ms = total_ms,
                     acquire_ms = timings.acquire_ms,
                     prepare_ui_ms = timings.renderer.prepare_ui_ms,

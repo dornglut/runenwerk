@@ -10,9 +10,16 @@ use tracing::{Level, info, span};
 
 const SLOW_NODE_LOG_THRESHOLD_MS: u128 = 20;
 static SLOW_NODE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(true);
+const WALL_TIME_LOG_EXCLUDED_NODES: &[&str] = &["frame_render_submit"];
 
 pub fn set_slow_node_logging_enabled(enabled: bool) {
     SLOW_NODE_LOGGING_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+fn is_wall_time_log_excluded(node_name: &str) -> bool {
+    WALL_TIME_LOG_EXCLUDED_NODES
+        .iter()
+        .any(|excluded| *excluded == node_name)
 }
 
 pub struct Scheduler<C> {
@@ -51,6 +58,7 @@ impl<C> Scheduler<C> {
 
                 if SLOW_NODE_LOGGING_ENABLED.load(Ordering::Relaxed)
                     && duration.as_millis() >= SLOW_NODE_LOG_THRESHOLD_MS
+                    && !is_wall_time_log_excluded(&node.name)
                 {
                     info!(
                         "Node {:?} ({}) took {} ms",
