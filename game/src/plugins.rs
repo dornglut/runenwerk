@@ -2,33 +2,21 @@ use crate::gameplay::{
     gameplay_bootstrap_system, gameplay_combat_system, gameplay_move_system, gameplay_sense_system,
 };
 use crate::systems::{
-    game_command_apply_system, game_command_execute_system, scene_overlay_apply_messages_system,
-    scene_overlay_format_messages_system, scene_transition_system, world_render_extract_system,
-    world_scene_update_system,
+    game_command_apply_system, game_command_execute_system, world_render_extract_system,
 };
 use anyhow::Result;
+use engine::plugins::default_engine_plugins;
 use engine::runtime::{EnginePlugin, EngineScheduleBuilder};
-use engine_plugins::default_engine_plugins;
 
-pub struct GameScenePlugin;
+pub struct GameSimulationPlugin;
 pub struct GameCommandPlugin;
 
-impl EnginePlugin for GameScenePlugin {
+impl EnginePlugin for GameSimulationPlugin {
     fn name(&self) -> &'static str {
-        "game_scene"
+        "game_simulation"
     }
 
     fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
-        builder.add_node_with_edges(
-            "scene_transition",
-            scene_transition_system,
-            &["overlay_ui_editor"],
-        );
-        builder.add_node_with_edges(
-            "world_scene_update",
-            world_scene_update_system,
-            &["scene_transition"],
-        );
         builder.add_node_with_edges(
             "gameplay_bootstrap",
             gameplay_bootstrap_system,
@@ -39,11 +27,7 @@ impl EnginePlugin for GameScenePlugin {
             gameplay_sense_system,
             &["gameplay_bootstrap"],
         );
-        builder.add_node_with_edges(
-            "gameplay_move",
-            gameplay_move_system,
-            &["gameplay_sense"],
-        );
+        builder.add_node_with_edges("gameplay_move", gameplay_move_system, &["gameplay_sense"]);
         builder.add_node_with_edges(
             "gameplay_combat",
             gameplay_combat_system,
@@ -54,16 +38,9 @@ impl EnginePlugin for GameScenePlugin {
             world_render_extract_system,
             &["gameplay_combat"],
         );
-        builder.add_node_with_edges(
-            "scene_overlay_format_messages",
-            scene_overlay_format_messages_system,
-            &["world_render_extract"],
-        );
-        builder.add_node_with_edges(
-            "scene_overlay_apply_messages",
-            scene_overlay_apply_messages_system,
-            &["scene_overlay_format_messages"],
-        );
+        // Keep scene message formatting/apply in the engine ScenePlugin, but enforce
+        // gameplay+render extraction completion before scene messages are flushed to UI.
+        builder.add_edge("world_render_extract", "scene_overlay_format_messages");
         Ok(())
     }
 }
@@ -91,7 +68,7 @@ impl EnginePlugin for GameCommandPlugin {
 }
 
 pub fn default_game_plugins() -> Vec<Box<dyn EnginePlugin>> {
-    vec![Box::new(GameScenePlugin), Box::new(GameCommandPlugin)]
+    vec![Box::new(GameSimulationPlugin), Box::new(GameCommandPlugin)]
 }
 
 pub fn full_game_plugins() -> Vec<Box<dyn EnginePlugin>> {

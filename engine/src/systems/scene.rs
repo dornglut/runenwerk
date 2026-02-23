@@ -1,9 +1,9 @@
-use engine::runtime::{
+use crate::runtime::{
     EngineData, GAMEPLAY_CONFIG_PATH, QuestState, SceneCommand, SceneId, SceneLifecycleEvent,
     SceneLifecyclePhase, WorldToOverlayMessage, load_gameplay_config_with_modified_and_error,
 };
-use engine::ui::UiDirty;
-use engine::utils::{ReloadStatusPayload, should_reload};
+use crate::ui::UiDirty;
+use crate::utils::{ReloadStatusPayload, should_reload};
 
 pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
     if data.input.toggle_pause_menu {
@@ -127,7 +127,7 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
         .camera_distance
         .clamp(distance_min, distance_max);
 
-    let latest_modified = engine::runtime::gameplay_config_modified();
+    let latest_modified = crate::runtime::gameplay_config_modified();
     if should_reload(
         true,
         false,
@@ -139,7 +139,6 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
         runtime.ctx.gameplay_config_modified = modified;
         runtime.ctx.gameplay_config_revision =
             runtime.ctx.gameplay_config_revision.saturating_add(1);
-        crate::gameplay::gameplay_apply_live_config(&mut runtime.ctx);
         let payload = ReloadStatusPayload::new(
             "gameplay_config",
             data.scene.world.active.label(),
@@ -182,6 +181,52 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
     if steps == max_steps && runtime.ctx.fixed_step_accumulator >= fixed_dt {
         runtime.ctx.fixed_step_accumulator = 0.0;
         tracing::warn!("world fixed-step loop saturated, dropping accumulated time");
+    }
+
+    Ok(())
+}
+
+pub fn scene_overlay_format_messages_system(data: &mut EngineData) -> anyhow::Result<()> {
+    let messages = std::mem::take(&mut data.scene.channels.world_to_overlay);
+    if messages.is_empty() {
+        return Ok(());
+    }
+
+    for message in messages {
+        data.scene
+            .channels
+            .overlay_console_lines
+            .push(format_world_message(message));
+    }
+
+    Ok(())
+}
+
+pub fn scene_overlay_apply_messages_system(data: &mut EngineData) -> anyhow::Result<()> {
+    let messages = std::mem::take(&mut data.scene.channels.overlay_console_lines);
+    if messages.is_empty() {
+        return Ok(());
+    }
+
+    for message in messages {
+        if data.scene.overlay_runtime.ui.logs_paused {
+            data.scene.overlay_runtime.ui.log_paused_lines.push(message);
+        } else {
+            data.scene.overlay_runtime.ui.log_lines.push(message);
+        }
+    }
+    clamp_scrollback_lines(
+        &mut data.scene.overlay_runtime.ui.log_lines,
+        data.scene.overlay_runtime.ui.max_lines,
+    );
+    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
+    if let Some(dirty) = data
+        .scene
+        .overlay_runtime
+        .world
+        .get_component_mut::<UiDirty>(data.scene.overlay_runtime.ui.scrollback)
+    {
+        dirty.text = true;
     }
 
     Ok(())
@@ -240,62 +285,16 @@ fn format_lifecycle_event(event: SceneLifecycleEvent) -> String {
         SceneLifecyclePhase::Resume => "resume",
     };
     let layer = match event.layer {
-        engine::runtime::SceneLayer::World => "world",
-        engine::runtime::SceneLayer::OverlayUi => "overlay",
+        crate::runtime::SceneLayer::World => "world",
+        crate::runtime::SceneLayer::OverlayUi => "overlay",
     };
     format!("[world] scene:{layer} {} {phase}", event.scene.label())
-}
-
-pub fn scene_overlay_format_messages_system(data: &mut EngineData) -> anyhow::Result<()> {
-    let messages = std::mem::take(&mut data.scene.channels.world_to_overlay);
-    if messages.is_empty() {
-        return Ok(());
-    }
-
-    for message in messages {
-        data.scene
-            .channels
-            .overlay_console_lines
-            .push(format_world_message(message));
-    }
-
-    Ok(())
-}
-
-pub fn scene_overlay_apply_messages_system(data: &mut EngineData) -> anyhow::Result<()> {
-    let messages = std::mem::take(&mut data.scene.channels.overlay_console_lines);
-    if messages.is_empty() {
-        return Ok(());
-    }
-
-    for message in messages {
-        if data.scene.overlay_runtime.ui.logs_paused {
-            data.scene.overlay_runtime.ui.log_paused_lines.push(message);
-        } else {
-            data.scene.overlay_runtime.ui.log_lines.push(message);
-        }
-    }
-    clamp_scrollback_lines(
-        &mut data.scene.overlay_runtime.ui.log_lines,
-        data.scene.overlay_runtime.ui.max_lines,
-    );
-    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
-    if let Some(dirty) = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component_mut::<UiDirty>(data.scene.overlay_runtime.ui.scrollback)
-    {
-        dirty.text = true;
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::format_world_message;
-    use engine::runtime::{QuestState, SceneId, WorldToOverlayMessage};
+    use crate::runtime::{QuestState, SceneId, WorldToOverlayMessage};
 
     #[test]
     fn format_world_message_renders_all_variants() {

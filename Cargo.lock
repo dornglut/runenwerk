@@ -510,7 +510,6 @@ dependencies = [
 name = "engine_plugins"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "engine",
 ]
 
@@ -634,7 +633,6 @@ dependencies = [
  "anyhow",
  "ecs",
  "engine",
- "engine_plugins",
  "tracing",
  "winit",
 ]
