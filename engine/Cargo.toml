@@ -27,4 +27,4 @@ glam = "0.30.8"
 
 ecs = { path = "../ecs" }
 scheduler = { path = "../scheduler" }
-gridcore = { path = "../grid" }
+grid = { path = "../grid" }

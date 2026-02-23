@@ -1,5 +1,7 @@
 use crate::component_registry::ComponentRegistry;
-use crate::{AnyStorage, Archetype, ArchetypeKey, ComponentKey, EntityAllocator, EntityHandle};
+use crate::{
+    AnyStorage, Archetype, ArchetypeKey, Component, ComponentKey, EntityAllocator, EntityHandle,
+};
 use std::any::TypeId;
 use std::collections::HashMap;
 use tracing::debug;
@@ -28,12 +30,12 @@ impl World {
     }
 
     /// Register a component type `T` with the world.
-    pub fn register_component<T: 'static>(&mut self) -> ComponentKey {
-        self.register_component_named::<T>(std::any::type_name::<T>())
+    pub fn register_component<T: Component>(&mut self) -> ComponentKey {
+        self.register_component_named::<T>(T::component_name())
     }
 
     /// Register `T` only if it has not already been registered.
-    pub fn ensure_component_registered<T: 'static>(&mut self) -> ComponentKey {
+    pub fn ensure_component_registered<T: Component>(&mut self) -> ComponentKey {
         let type_id = TypeId::of::<T>();
         if let Some(key) = self.component_registry.get_key_by_type(type_id) {
             return key.clone();
@@ -43,7 +45,7 @@ impl World {
     }
 
     /// Register a component type `T` with an explicit display name.
-    pub fn register_component_named<T: 'static>(
+    pub fn register_component_named<T: Component>(
         &mut self,
         name: impl Into<String>,
     ) -> ComponentKey {

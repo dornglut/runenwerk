@@ -3,20 +3,20 @@ mod template;
 pub use template::*;
 
 use crate::plugins::render::domain::{FileFontProvider, FontAtlasProvider, GlyphMetrics};
-use ecs::{EntityHandle, World, WorldBuilderExt};
+use ecs::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct UiNode {
     pub visible: bool,
     pub z: i32,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct UiTransform {
     pub x: f32,
     pub y: f32,
@@ -24,7 +24,7 @@ pub struct UiTransform {
     pub h: f32,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct UiStyle {
     pub bg_color: [f32; 4],
     pub border_color: [f32; 4],
@@ -32,26 +32,26 @@ pub struct UiStyle {
     pub radius: f32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ecs::Component)]
 pub struct UiText {
     pub content: String,
     pub color: [f32; 4],
     pub size: f32,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct UiInputField {
     pub cursor: usize,
     pub focused: bool,
     pub submit_requested: bool,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct UiButton {
     pub enabled: bool,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct UiInteraction {
     pub hovered: bool,
     pub pressed: bool,
@@ -59,7 +59,7 @@ pub struct UiInteraction {
     pub focused: bool,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct UiDirty {
     pub layout: bool,
     pub style: bool,
@@ -255,126 +255,122 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         fallback_advance,
     };
 
-    let root = world
-        .entity()
-        .with(UiNode {
+    let root = world.spawn_bundle((
+        UiNode {
             visible: true,
             z: 0,
-        })
-        .with(UiTransform {
+        },
+        UiTransform {
             x: 32.0,
             y: 32.0,
             w: 640.0,
             h: 360.0,
-        })
-        .with(UiStyle {
+        },
+        UiStyle {
             bg_color: [0.08, 0.09, 0.11, 1.0],
             border_color: [0.20, 0.22, 0.28, 1.0],
             border_width: 1.0,
             radius: 6.0,
-        })
-        .with(UiDirty {
+        },
+        UiDirty {
             layout: true,
             style: true,
             text: true,
-        })
-        .build();
+        },
+    ));
 
-    let scrollback = world
-        .entity()
-        .with(UiNode {
+    let scrollback = world.spawn_bundle((
+        UiNode {
             visible: true,
             z: 1,
-        })
-        .with(UiTransform {
+        },
+        UiTransform {
             x: 44.0,
             y: 52.0,
             w: 616.0,
             h: 280.0,
-        })
-        .with(UiText {
+        },
+        UiText {
             content: "grotto> boot complete".to_string(),
             color: [0.78, 0.86, 0.94, 1.0],
             size: 14.0,
-        })
-        .with(UiDirty {
+        },
+        UiDirty {
             layout: true,
             style: false,
             text: true,
-        })
-        .build();
+        },
+    ));
 
-    let input = world
-        .entity()
-        .with(UiNode {
+    let input = world.spawn_bundle((
+        UiNode {
             visible: true,
             z: 1,
-        })
-        .with(UiTransform {
+        },
+        UiTransform {
             x: 44.0,
             y: 338.0,
             w: 504.0,
             h: 24.0,
-        })
-        .with(UiText {
+        },
+        UiText {
             content: "grotto> ".to_string(),
             color: [0.95, 0.95, 0.95, 1.0],
             size: 14.0,
-        })
-        .with(UiInputField {
+        },
+        UiInputField {
             cursor: 0,
             focused: true,
             submit_requested: false,
-        })
-        .with(UiInteraction {
+        },
+        UiInteraction {
             hovered: false,
             pressed: false,
             clicked: false,
             focused: true,
-        })
-        .with(UiDirty {
+        },
+        UiDirty {
             layout: true,
             style: false,
             text: true,
-        })
-        .build();
+        },
+    ));
 
-    let confirm_button = world
-        .entity()
-        .with(UiNode {
+    let confirm_button = world.spawn_bundle((
+        UiNode {
             visible: true,
             z: 2,
-        })
-        .with(UiTransform {
+        },
+        UiTransform {
             x: 556.0,
             y: 338.0,
             w: 104.0,
             h: 24.0,
-        })
-        .with(UiStyle {
+        },
+        UiStyle {
             bg_color: [0.16, 0.30, 0.22, 1.0],
             border_color: [0.32, 0.56, 0.42, 1.0],
             border_width: 1.0,
             radius: 4.0,
-        })
-        .with(UiText {
+        },
+        UiText {
             content: "Confirm".to_string(),
             color: [0.95, 0.96, 0.95, 1.0],
             size: 13.0,
-        })
-        .with(UiButton { enabled: true })
-        .with(UiInteraction {
+        },
+        UiButton { enabled: true },
+        UiInteraction {
             hovered: false,
             pressed: false,
             clicked: false,
             focused: false,
-        })
-        .with(UiDirty {
+        },
+        UiDirty {
             layout: true,
             style: true,
             text: true,
-        })
-        .build();
+        },
+    ));
 
     ConsoleUiState {
         root,

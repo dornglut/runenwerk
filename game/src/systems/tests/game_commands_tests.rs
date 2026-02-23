@@ -115,6 +115,18 @@ fn parse_command_line_recognizes_builtins() {
         Some(GameCommand::ModelWatch(false))
     );
     assert_eq!(
+        parse_command_line("grotto> shader-watch true"),
+        Some(GameCommand::ShaderWatch(true))
+    );
+    assert_eq!(
+        parse_command_line("grotto> model-watch 0"),
+        Some(GameCommand::ModelWatch(false))
+    );
+    assert_eq!(
+        parse_command_line("grotto> set-world hub"),
+        Some(GameCommand::SetWorld(SceneId::HubStub))
+    );
+    assert_eq!(
         parse_command_line("grotto> model_status"),
         Some(GameCommand::ModelStatus)
     );
@@ -168,6 +180,11 @@ fn apply_game_command_updates_lines() {
     assert_eq!(
         lines.last(),
         Some(&"echo <text> - print text back to the console".to_string())
+    );
+    apply_game_command(&mut lines, GameCommand::Help(Some("set-world".to_string())));
+    assert_eq!(
+        lines.last(),
+        Some(&"set_world <gameplay|hub> - switch active world scene".to_string())
     );
 
     apply_game_command(&mut lines, GameCommand::Clear);

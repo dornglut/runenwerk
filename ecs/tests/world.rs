@@ -1,10 +1,10 @@
 use ecs::World;
 use std::any::{Any, TypeId};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, ecs::Component)]
 struct Position(f32, f32);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, ecs::Component)]
 struct Velocity(f32, f32);
 
 #[test]
@@ -20,10 +20,7 @@ fn test_register_and_spawn_entity() {
         &Position(1.0, 2.0)
     );
 
-    let e2 = world.spawn_entity(vec![
-        Box::new(Position(3.0, 4.0)) as Box<dyn Any>,
-        Box::new(Velocity(0.5, 0.5)) as Box<dyn Any>,
-    ]);
+    let e2 = world.spawn_bundle((Position(3.0, 4.0), Velocity(0.5, 0.5)));
     assert_eq!(
         world.get_component::<Position>(e2).unwrap(),
         &Position(3.0, 4.0)
@@ -42,10 +39,7 @@ fn test_entities_with() {
     world.register_component::<Velocity>();
 
     let e1 = world.spawn_entity_typed(Position(0.0, 0.0));
-    let e2 = world.spawn_entity(vec![
-        Box::new(Position(1.0, 1.0)) as Box<dyn Any>,
-        Box::new(Velocity(0.1, 0.1)) as Box<dyn Any>,
-    ]);
+    let e2 = world.spawn_bundle((Position(1.0, 1.0), Velocity(0.1, 0.1)));
 
     let positions: Vec<_> = world.entities_with::<Position>().collect();
     assert!(positions.contains(&e1));
@@ -64,10 +58,7 @@ fn test_remove_entity() {
     world.register_component::<Velocity>();
 
     let e1 = world.spawn_entity_typed(Position(0.0, 0.0));
-    let e2 = world.spawn_entity(vec![
-        Box::new(Position(1.0, 1.0)) as Box<dyn Any>,
-        Box::new(Velocity(0.1, 0.1)) as Box<dyn Any>,
-    ]);
+    let e2 = world.spawn_bundle((Position(1.0, 1.0), Velocity(0.1, 0.1)));
 
     world.remove_entity(e2);
     assert!(world.get_component::<Position>(e2).is_none());

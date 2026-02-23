@@ -1,8 +1,7 @@
-use crate::gameplay::{
-    gameplay_bootstrap_system, gameplay_combat_system, gameplay_move_system, gameplay_sense_system,
-};
 use crate::systems::{
-    game_command_apply_system, game_command_execute_system, world_render_extract_system,
+    game_command_apply_system, game_command_execute_system, gameplay_bootstrap_system,
+    gameplay_combat_system, gameplay_move_system, gameplay_sense_system,
+    world_render_extract_system,
 };
 use anyhow::Result;
 use engine::plugins::default_engine_plugins;

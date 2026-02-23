@@ -1,6 +1,6 @@
 use super::model_manager::{ModelMaterial, ModelMesh, ModelMeshVertex};
 use super::world_compute::WorldRenderFrame;
-use gridcore::{CellType, Grid2d, MeshType};
+use grid::{CellType, Grid2d, MeshType};
 use std::collections::BTreeMap;
 
 const LOGIC_RESOLUTION: usize = 8;

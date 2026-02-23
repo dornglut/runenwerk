@@ -1,13 +1,12 @@
 use ecs::{World, WorldQueryExt};
-use std::any::Any;
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, ecs::Component)]
 struct Position(f32, f32);
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, ecs::Component)]
 struct Velocity(f32, f32);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, ecs::Component)]
 struct Health(u32);
 
 #[test]
@@ -17,21 +16,11 @@ fn test_query_two_components_filters_entities() {
     world.register_component::<Velocity>();
     world.register_component::<Health>();
 
-    let with_velocity_1 = world.spawn_entity(vec![
-        Box::new(Position(1.0, 2.0)) as Box<dyn Any>,
-        Box::new(Velocity(0.25, 0.5)) as Box<dyn Any>,
-    ]);
+    let with_velocity_1 = world.spawn_bundle((Position(1.0, 2.0), Velocity(0.25, 0.5)));
 
-    let _without_velocity = world.spawn_entity(vec![
-        Box::new(Position(10.0, 20.0)) as Box<dyn Any>,
-        Box::new(Health(100)) as Box<dyn Any>,
-    ]);
+    let _without_velocity = world.spawn_bundle((Position(10.0, 20.0), Health(100)));
 
-    let with_velocity_2 = world.spawn_entity(vec![
-        Box::new(Position(3.0, 4.0)) as Box<dyn Any>,
-        Box::new(Velocity(1.0, 1.5)) as Box<dyn Any>,
-        Box::new(Health(80)) as Box<dyn Any>,
-    ]);
+    let with_velocity_2 = world.spawn_bundle((Position(3.0, 4.0), Velocity(1.0, 1.5), Health(80)));
 
     let mut seen = Vec::new();
     for (entity, (position, velocity)) in world.query().with::<Position>().with::<Velocity>().iter()
@@ -56,10 +45,7 @@ fn test_query_single_component_across_archetypes() {
     world.register_component::<Velocity>();
 
     let position_only = world.spawn_entity_typed(Position(8.0, 9.0));
-    let position_and_velocity = world.spawn_entity(vec![
-        Box::new(Position(2.0, 3.0)) as Box<dyn Any>,
-        Box::new(Velocity(0.1, 0.2)) as Box<dyn Any>,
-    ]);
+    let position_and_velocity = world.spawn_bundle((Position(2.0, 3.0), Velocity(0.1, 0.2)));
 
     let mut ids: Vec<u32> = world
         .query()
@@ -78,10 +64,7 @@ fn test_query_mut_updates_components() {
     world.register_component::<Position>();
     world.register_component::<Velocity>();
 
-    let entity = world.spawn_entity(vec![
-        Box::new(Position(1.0, 2.0)) as Box<dyn Any>,
-        Box::new(Velocity(0.5, -1.0)) as Box<dyn Any>,
-    ]);
+    let entity = world.spawn_bundle((Position(1.0, 2.0), Velocity(0.5, -1.0)));
 
     world.query_mut::<Position, Velocity, _>(|_, position, velocity| {
         position.0 += velocity.0;

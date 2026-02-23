@@ -1,4 +1,4 @@
-use crate::{EntityHandle, World};
+use crate::{Component, EntityHandle, World};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use tracing::debug;
@@ -19,7 +19,7 @@ impl<'a> EntityBuilder<'a> {
     }
 
     /// Add a component to the builder
-    pub fn with<T: 'static>(mut self, component: T) -> Self {
+    pub fn with<T: Component>(mut self, component: T) -> Self {
         self.world.ensure_component_registered::<T>();
         self.components
             .insert(TypeId::of::<T>(), Box::new(component));

@@ -1,6 +1,6 @@
 use crate::plugins::ui::domain::{ConsoleUiState, initialize_console_ui, load_console_template};
 use anyhow::Result;
-use ecs::{EntityHandle, World};
+use ecs::prelude::*;
 use scheduler::{Node, Scheduler, SchedulerBuilder};
 use std::time::SystemTime;
 
@@ -113,18 +113,18 @@ pub struct SceneTransitionResult {
     pub world_pause_changed: bool,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct WorldFrameCounter {
     pub value: u64,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct WorldDebugPosition {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, ecs::Component)]
 pub struct WorldDebugVelocity {
     pub x: f32,
     pub y: f32,
@@ -315,14 +315,11 @@ fn world_scene_debug_motion_system(ctx: &mut WorldSceneContext) -> Result<()> {
 fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
     let (gameplay_config, gameplay_config_modified) = load_gameplay_config_with_modified();
     let mut world = World::new();
-    world.register_component::<WorldFrameCounter>();
-    world.register_component::<WorldDebugPosition>();
-    world.register_component::<WorldDebugVelocity>();
     let tick_entity = world.spawn_entity_typed(WorldFrameCounter { value: 0 });
-    let debug_entity = world.spawn_entity(vec![
-        Box::new(WorldDebugPosition { x: 0.0, y: 0.0 }) as Box<dyn std::any::Any>,
-        Box::new(WorldDebugVelocity { x: 1.25, y: 0.75 }) as Box<dyn std::any::Any>,
-    ]);
+    let debug_entity = world.spawn_bundle((
+        WorldDebugPosition { x: 0.0, y: 0.0 },
+        WorldDebugVelocity { x: 1.25, y: 0.75 },
+    ));
     let ctx = WorldSceneContext {
         world,
         scene,

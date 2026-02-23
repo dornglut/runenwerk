@@ -3,6 +3,18 @@ use engine::plugins::render::domain::{MAX_WORLD_RENDER_AGENTS, WorldRenderAgent}
 use engine::runtime::EngineData;
 
 pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> {
+    sync_frame_metadata(data);
+
+    if !data.scene.world.visible {
+        return Ok(());
+    }
+
+    extract_visible_agents(data);
+    update_infinite_world_bounds(data);
+    Ok(())
+}
+
+fn sync_frame_metadata(data: &mut EngineData) {
     let frame = &mut data.world_render;
     frame.agents.clear();
     frame.model_proxies.clear();
@@ -62,11 +74,9 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
 
     let bounds = &data.scene.world_runtime.ctx.gameplay_config.bounds;
     frame.world_bounds = [bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y];
+}
 
-    if !data.scene.world.visible {
-        return Ok(());
-    }
-
+fn extract_visible_agents(data: &mut EngineData) {
     let world = &data.scene.world_runtime.ctx.world;
     let fixed_dt = data
         .scene
@@ -77,10 +87,13 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
     let interp_alpha =
         (data.scene.world_runtime.ctx.fixed_step_accumulator / fixed_dt).clamp(0.0, 1.0);
     let entities: Vec<_> = world.entities_with::<Position>().collect();
+
+    let frame = &mut data.world_render;
     for entity in entities.into_iter().take(MAX_WORLD_RENDER_AGENTS) {
         let Some(position) = world.get_component::<Position>(entity).copied() else {
             continue;
         };
+
         let prev = world
             .get_component::<PreviousPosition>(entity)
             .copied()
@@ -90,6 +103,7 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
             });
         let render_x = prev.x + (position.x - prev.x) * interp_alpha;
         let render_y = prev.y + (position.y - prev.y) * interp_alpha;
+
         let health = world
             .get_component::<Health>(entity)
             .copied()
@@ -99,6 +113,7 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
         } else {
             0.0
         };
+
         let team_id = if world.get_component::<PlayerTag>(entity).is_some() {
             0
         } else if world.get_component::<EnemyTag>(entity).is_some() {
@@ -106,6 +121,7 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
         } else {
             1
         };
+
         frame.agents.push(WorldRenderAgent {
             x: render_x,
             y: render_y,
@@ -114,37 +130,41 @@ pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> 
             team: team_id,
         });
     }
+}
 
-    if data.scene.world_runtime.ctx.gameplay_config.infinite_world {
-        let center = frame
-            .agents
-            .iter()
-            .find(|agent| agent.team == 0)
-            .or_else(|| frame.agents.first())
-            .map(|a| (a.x, a.y))
-            .unwrap_or((0.0, 0.0));
-        let chunk = data
-            .scene
-            .world_runtime
-            .ctx
-            .gameplay_config
-            .chunk_size
-            .max(4.0);
-        let radius_chunks = data
-            .scene
-            .world_runtime
-            .ctx
-            .gameplay_config
-            .chunk_load_radius
-            .max(2) as f32;
-        let extent = chunk * (radius_chunks + 2.0);
-        frame.world_bounds = [
-            center.0 - extent,
-            center.1 - extent,
-            center.0 + extent,
-            center.1 + extent,
-        ];
+fn update_infinite_world_bounds(data: &mut EngineData) {
+    if !data.scene.world_runtime.ctx.gameplay_config.infinite_world {
+        return;
     }
 
-    Ok(())
+    let center = data
+        .world_render
+        .agents
+        .iter()
+        .find(|agent| agent.team == 0)
+        .or_else(|| data.world_render.agents.first())
+        .map(|a| (a.x, a.y))
+        .unwrap_or((0.0, 0.0));
+
+    let chunk = data
+        .scene
+        .world_runtime
+        .ctx
+        .gameplay_config
+        .chunk_size
+        .max(4.0);
+    let radius_chunks = data
+        .scene
+        .world_runtime
+        .ctx
+        .gameplay_config
+        .chunk_load_radius
+        .max(2) as f32;
+    let extent = chunk * (radius_chunks + 2.0);
+    data.world_render.world_bounds = [
+        center.0 - extent,
+        center.1 - extent,
+        center.0 + extent,
+        center.1 + extent,
+    ];
 }

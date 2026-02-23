@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="CargoProjects">
+    <cargoProject FILE="$PROJECT_DIR$/Cargo.toml">
+      <package file="$PROJECT_DIR$/ecs">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/ecs_macros">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/engine">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/game">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/grid">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/scheduler">
+        <feature name="default" enabled="true" />
+      </package>
+    </cargoProject>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/grotto-quest.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/grotto-quest.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/project/execution-plan.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/project/execution-plan.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ecs/src/entity_builder.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/entity_builder.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ecs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ecs/src/world/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/world/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ecs/src/world/spawn.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/src/world/spawn.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ecs/tests/query.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/tests/query.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ecs/tests/world.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/tests/world.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ecs_macros/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ecs_macros/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/engine/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/chunk_mesher.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/chunk_mesher.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/gameplay.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/gameplay.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/plugins.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/plugins.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/systems/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/render.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/tests/game_commands_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/systems/tests/game_commands_tests.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/grid/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/grid/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/engine.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/engine.log" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="113712" />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="OfBe8oGI" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 3
+}]]></component>
+  <component name="ProjectId" id="3A4XiKdFVnqqiTlezX2oz5dNkWW" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Cargo.Game.executor": "Run",
+    "Cargo.Run game.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "main",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "/Users/joshua/Projekte/grotto-quest",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "org.rust.first.attach.projects": "true",
+    "to.speed.mode.migration.done": "true",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration name="Run game" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="run --package game --bin game" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Cargo.Run game" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="RustProjectSettings">
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="" />
+      <created>1771852941485</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1771852941485</updated>
+      <workItem from="1771852942540" duration="2803000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

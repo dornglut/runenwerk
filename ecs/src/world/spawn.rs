@@ -1,4 +1,4 @@
-use crate::{ComponentKey, EntityHandle, World};
+use crate::{Component, ComponentBundle, ComponentKey, EntityHandle, World};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
@@ -39,9 +39,14 @@ impl World {
         entity
     }
 
-    pub fn spawn_entity_typed<T: 'static>(&mut self, component: T) -> EntityHandle {
+    pub fn spawn_entity_typed<T: Component>(&mut self, component: T) -> EntityHandle {
         self.ensure_component_registered::<T>();
         self.spawn_entity([Box::new(component) as Box<dyn Any>])
+    }
+
+    pub fn spawn_bundle<B: ComponentBundle>(&mut self, bundle: B) -> EntityHandle {
+        B::register_components(self);
+        self.spawn_entity(bundle.into_components())
     }
 
     /// Adds an entity with a set of prebuilt components.
