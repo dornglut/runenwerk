@@ -1,4 +1,4 @@
-use crate::ui::{ConsoleUiState, initialize_console_ui, load_console_template};
+use crate::plugins::ui::domain::{ConsoleUiState, initialize_console_ui, load_console_template};
 use anyhow::Result;
 use ecs::{EntityHandle, World};
 use scheduler::{Node, Scheduler, SchedulerBuilder};
@@ -373,7 +373,7 @@ mod tests {
         WorldDebugPosition, WorldFrameCounter, WorldToOverlayMessage, build_world_scene_runtime,
         load_gameplay_config,
     };
-    use crate::ui::initialize_console_ui;
+    use crate::plugins::ui::domain::initialize_console_ui;
     use ecs::World;
 
     fn make_overlay_runtime() -> OverlaySceneRuntime {

@@ -11,14 +11,14 @@ use super::world_compute::{
     DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST, WorldComputeRenderer, WorldRenderAgent,
     WorldRenderFrame, WorldShaderSources,
 };
-use crate::scene_manifest::{
+use crate::plugins::scene::manifest::{
     FramePassDescriptor as SceneFramePassDescriptor,
     FramePassKindDescriptor as SceneFramePassKindDescriptor,
     FramePassSlotDescriptor as SceneFramePassSlotDescriptor,
     FramePipelineDescriptor as SceneFramePipelineDescriptor,
     FrameResourceDescriptor as SceneFrameResourceDescriptor,
 };
-use crate::ui::{UiDrawCmd, UiDrawList};
+use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};

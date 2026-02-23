@@ -2,7 +2,7 @@ mod template;
 
 pub use template::*;
 
-use crate::render::{FileFontProvider, FontAtlasProvider, GlyphMetrics};
+use crate::plugins::render::domain::{FileFontProvider, FontAtlasProvider, GlyphMetrics};
 use ecs::{EntityHandle, World, WorldBuilderExt};
 use std::collections::HashMap;
 use std::path::PathBuf;

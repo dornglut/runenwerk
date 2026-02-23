@@ -1,5 +1,8 @@
-use engine::runtime::{QuestState, WorldSceneContext, WorldToOverlayMessage};
 use ecs::{EntityHandle, World};
+use engine::plugins::scene::domain::{
+    GameplayConfig, QuestState, SceneLayer, WorldSceneContext, WorldToOverlayMessage,
+};
+use engine::runtime::EngineData;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PlayerTag;
@@ -44,9 +47,9 @@ pub struct Attack {
     pub cooldown_remaining: u32,
 }
 
-pub fn gameplay_bootstrap_system(data: &mut engine::runtime::EngineData) -> anyhow::Result<()> {
+pub fn gameplay_bootstrap_system(data: &mut EngineData) -> anyhow::Result<()> {
     let ctx = &mut data.scene.world_runtime.ctx;
-    if ctx.scene.layer() != engine::runtime::SceneLayer::World {
+    if ctx.scene.layer() != SceneLayer::World {
         return Ok(());
     }
 
@@ -105,7 +108,7 @@ pub fn gameplay_apply_live_config(ctx: &mut WorldSceneContext) {
     }
 }
 
-pub fn gameplay_sense_system(data: &mut engine::runtime::EngineData) -> anyhow::Result<()> {
+pub fn gameplay_sense_system(data: &mut EngineData) -> anyhow::Result<()> {
     if !data.scene.world.visible || data.scene.world.paused {
         return Ok(());
     }
@@ -166,7 +169,7 @@ pub fn gameplay_sense_system(data: &mut engine::runtime::EngineData) -> anyhow::
     Ok(())
 }
 
-pub fn gameplay_move_system(data: &mut engine::runtime::EngineData) -> anyhow::Result<()> {
+pub fn gameplay_move_system(data: &mut EngineData) -> anyhow::Result<()> {
     if !data.scene.world.visible || data.scene.world.paused {
         return Ok(());
     }
@@ -207,7 +210,7 @@ pub fn gameplay_move_system(data: &mut engine::runtime::EngineData) -> anyhow::R
     Ok(())
 }
 
-pub fn gameplay_combat_system(data: &mut engine::runtime::EngineData) -> anyhow::Result<()> {
+pub fn gameplay_combat_system(data: &mut EngineData) -> anyhow::Result<()> {
     if !data.scene.world.visible || data.scene.world.paused {
         return Ok(());
     }
@@ -367,7 +370,10 @@ pub fn gameplay_combat_system(data: &mut engine::runtime::EngineData) -> anyhow:
             pos.x = spawn_x;
             pos.y = spawn_y;
         }
-        if let Some(prev) = ctx.world.get_component_mut::<PreviousPosition>(player_entity) {
+        if let Some(prev) = ctx
+            .world
+            .get_component_mut::<PreviousPosition>(player_entity)
+        {
             prev.x = spawn_x;
             prev.y = spawn_y;
         }
@@ -396,12 +402,7 @@ fn register_components(world: &mut World) {
     world.ensure_component_registered::<Attack>();
 }
 
-fn spawn_player(
-    world: &mut World,
-    x: f32,
-    y: f32,
-    cfg: &engine::runtime::GameplayConfig,
-) -> EntityHandle {
+fn spawn_player(world: &mut World, x: f32, y: f32, cfg: &GameplayConfig) -> EntityHandle {
     world.spawn_entity(vec![
         Box::new(PlayerTag) as Box<dyn std::any::Any>,
         Box::new(Position { x, y }) as Box<dyn std::any::Any>,
@@ -423,12 +424,7 @@ fn spawn_player(
     ])
 }
 
-fn spawn_enemy(
-    world: &mut World,
-    x: f32,
-    y: f32,
-    cfg: &engine::runtime::GameplayConfig,
-) -> EntityHandle {
+fn spawn_enemy(world: &mut World, x: f32, y: f32, cfg: &GameplayConfig) -> EntityHandle {
     world.spawn_entity(vec![
         Box::new(EnemyTag) as Box<dyn std::any::Any>,
         Box::new(Position { x, y }) as Box<dyn std::any::Any>,
@@ -540,8 +536,8 @@ fn distance(a: Position, b: Position) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::runtime::{
-        GameplayConfig, SceneId, WorldDebugPosition, WorldDebugVelocity, WorldFrameCounter,
+    use engine::plugins::scene::domain::{
+        SceneId, WorldDebugPosition, WorldDebugVelocity, WorldFrameCounter,
     };
 
     fn test_config() -> GameplayConfig {
@@ -559,7 +555,10 @@ mod tests {
         cfg
     }
 
-    fn make_world_scene_context(world: World, gameplay_config: GameplayConfig) -> WorldSceneContext {
+    fn make_world_scene_context(
+        world: World,
+        gameplay_config: GameplayConfig,
+    ) -> WorldSceneContext {
         let mut world = world;
         world.ensure_component_registered::<WorldFrameCounter>();
         world.ensure_component_registered::<WorldDebugPosition>();

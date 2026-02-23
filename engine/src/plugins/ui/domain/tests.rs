@@ -1,4 +1,6 @@
-use crate::ui::{ConsoleUiTemplate, UiNodeKind, export_console_template, initialize_console_ui};
+use crate::plugins::ui::domain::{
+    ConsoleUiTemplate, UiNodeKind, export_console_template, initialize_console_ui,
+};
 use ecs::World;
 
 #[test]
@@ -68,7 +70,7 @@ fn template_apply_preserves_runtime_input_content() {
     let mut world = World::new();
     let mut ui = initialize_console_ui(&mut world);
 
-    if let Some(input) = world.get_component_mut::<crate::ui::UiText>(ui.input) {
+    if let Some(input) = world.get_component_mut::<crate::plugins::ui::domain::UiText>(ui.input) {
         input.content = "grotto> user typing".to_string();
     }
 
@@ -86,16 +88,16 @@ fn template_apply_preserves_runtime_input_content() {
 )
 "#;
     let tpl: ConsoleUiTemplate = ron::from_str(raw).expect("template should parse");
-    crate::ui::apply_console_template(&mut world, &mut ui, tpl);
+    crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl);
 
     let input = world
-        .get_component::<crate::ui::UiText>(ui.input)
+        .get_component::<crate::plugins::ui::domain::UiText>(ui.input)
         .expect("input text should exist");
     assert_eq!(input.content, "grotto> user typing");
     assert_eq!(input.size, 18.0);
 
     let button = world
-        .get_component::<crate::ui::UiText>(ui.confirm_button)
+        .get_component::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
         .expect("button text should exist");
     assert_eq!(button.content, "Execute");
 }
@@ -105,7 +107,7 @@ fn template_component_nodes_apply_by_stable_id() {
     let mut world = World::new();
     let mut ui = initialize_console_ui(&mut world);
 
-    if let Some(input) = world.get_component_mut::<crate::ui::UiText>(ui.input) {
+    if let Some(input) = world.get_component_mut::<crate::plugins::ui::domain::UiText>(ui.input) {
         input.content = "grotto> keep-me".to_string();
     }
 
@@ -125,16 +127,16 @@ fn template_component_nodes_apply_by_stable_id() {
 )
 "#;
     let tpl: ConsoleUiTemplate = ron::from_str(raw).expect("template should parse");
-    crate::ui::apply_console_template(&mut world, &mut ui, tpl);
+    crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl);
 
     let input = world
-        .get_component::<crate::ui::UiText>(ui.input)
+        .get_component::<crate::plugins::ui::domain::UiText>(ui.input)
         .expect("input text should exist");
     assert_eq!(input.content, "grotto> keep-me");
     assert_eq!(input.size, 19.0);
 
     let button = world
-        .get_component::<crate::ui::UiText>(ui.confirm_button)
+        .get_component::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
         .expect("button text should exist");
     assert_eq!(button.content, "Ship");
 }
@@ -158,16 +160,18 @@ fn template_component_diff_skips_unchanged_nodes() {
 )
 "#;
     let tpl: ConsoleUiTemplate = ron::from_str(raw).expect("template should parse");
-    crate::ui::apply_console_template(&mut world, &mut ui, tpl.clone());
+    crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl.clone());
 
-    if let Some(button) = world.get_component_mut::<crate::ui::UiText>(ui.confirm_button) {
+    if let Some(button) =
+        world.get_component_mut::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
+    {
         button.content = "Runtime override".to_string();
     }
 
     // Same template should not re-apply unchanged node patch.
-    crate::ui::apply_console_template(&mut world, &mut ui, tpl);
+    crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl);
     let button = world
-        .get_component::<crate::ui::UiText>(ui.confirm_button)
+        .get_component::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
         .expect("button text should exist");
     assert_eq!(button.content, "Runtime override");
 }

@@ -1,5 +1,5 @@
 use super::{SceneId, SceneLayer};
-use crate::scene_manifest::{
+use crate::plugins::scene::manifest::{
     FramePassDescriptor as SceneFramePassDescriptor, SceneLayerDescriptor,
     load_scene_manifest_descriptors, normalize_scene_label,
 };
@@ -122,8 +122,8 @@ fn descriptor_mut(descriptors: &mut [SceneDescriptor], scene: SceneId) -> &mut S
 
 #[cfg(test)]
 mod tests {
+    use super::super::SceneId;
     use super::SceneRegistry;
-    use crate::runtime::SceneId;
 
     #[test]
     fn scene_registry_contains_all_core_scenes() {

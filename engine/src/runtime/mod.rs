@@ -1,23 +1,16 @@
-use crate::render::{Gfx, WorldRenderFrame};
-use crate::ui::initialize_console_ui;
+use crate::plugins::input::domain::InputState;
+use crate::plugins::render::domain::{Gfx, WorldRenderFrame};
+use crate::plugins::scene::domain::{OverlaySceneRuntime, SceneManager};
+use crate::plugins::time::domain::Time;
+use crate::plugins::ui::domain::initialize_console_ui;
 use anyhow::Result;
 use ecs::World;
 use scheduler::Scheduler;
 use std::sync::Arc;
 use winit::window::Window;
 
-#[path = "../plugins/input/domain.rs"]
-mod input;
 mod plugin;
-#[path = "../plugins/scene/domain/mod.rs"]
-mod scene;
-#[path = "../plugins/time/domain.rs"]
-mod time;
-
-pub use input::*;
 pub use plugin::*;
-pub use scene::*;
-pub use time::*;
 
 pub struct EngineData {
     pub gfx: Gfx,

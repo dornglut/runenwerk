@@ -11,10 +11,10 @@ use super::scrollback_line_style;
 use super::snap_to_grid;
 use super::visible_line_capacity;
 use super::wrap_editor_rows;
-use crate::ui::EditorBuffer;
-use crate::ui::UiEditorNode;
-use crate::ui::UiTextMetrics;
-use crate::ui::UiTransform;
+use crate::plugins::ui::domain::EditorBuffer;
+use crate::plugins::ui::domain::UiEditorNode;
+use crate::plugins::ui::domain::UiTextMetrics;
+use crate::plugins::ui::domain::UiTransform;
 use std::collections::HashMap;
 
 fn mono_metrics() -> UiTextMetrics {

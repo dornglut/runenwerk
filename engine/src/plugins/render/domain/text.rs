@@ -1,4 +1,4 @@
-use crate::ui::{UiDrawCmd, UiDrawList};
+use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
 use bytemuck::{Pod, Zeroable};
 use image::GenericImageView;
 use rusttype::{Font, Scale, point};
@@ -901,7 +901,7 @@ pub fn build_glyph_instances(
 #[cfg(test)]
 mod tests {
     use super::{GlyphMetrics, build_glyph_instances};
-    use crate::ui::{UiDrawCmd, UiDrawList};
+    use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
     use std::collections::HashMap;
 
     #[test]

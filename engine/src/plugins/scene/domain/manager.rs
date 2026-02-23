@@ -45,7 +45,7 @@ impl SceneManager {
         if let Some(path) = manager.registry.ui_template_path(SceneId::ConsoleUi) {
             let template = std::path::Path::new(path);
             if template.exists() {
-                crate::ui::load_console_template(
+                crate::plugins::ui::domain::load_console_template(
                     &mut manager.overlay_runtime.world,
                     &mut manager.overlay_runtime.ui,
                     template,

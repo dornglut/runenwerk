@@ -1,4 +1,4 @@
-use crate::utils::{
+use crate::plugins::shared::{
     ReloadStatusPayload, file_modified, should_poll, should_reload, watch_status_line,
 };
 use std::fs;

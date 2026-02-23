@@ -1,12 +1,17 @@
-pub(crate) mod input;
-pub(crate) mod render;
-pub(crate) mod scene;
-pub(crate) mod time;
-pub(crate) mod ui;
+pub mod grid;
+pub mod input;
+pub mod render;
+pub mod scene;
+pub mod scheduler_diagnostics;
+pub(crate) mod shared;
+pub mod time;
+pub mod ui;
 
+pub use grid::GridPlugin;
 pub use input::InputFinalizePlugin;
 pub use render::RenderPlugin;
 pub use scene::ScenePlugin;
+pub use scheduler_diagnostics::SchedulerDiagnosticsPlugin;
 pub use time::TimePlugin;
 pub use ui::UiInputPlugin;
 pub use ui::UiRenderPlugin;
@@ -18,17 +23,24 @@ pub fn default_engine_plugins() -> Vec<Box<dyn EnginePlugin>> {
         Box::new(TimePlugin),
         Box::new(UiInputPlugin),
         Box::new(ScenePlugin),
+        Box::new(GridPlugin),
         Box::new(UiRenderPlugin),
         Box::new(RenderPlugin),
         Box::new(InputFinalizePlugin),
     ]
 }
 
+pub fn default_engine_plugins_with_diagnostics() -> Vec<Box<dyn EnginePlugin>> {
+    let mut plugins = default_engine_plugins();
+    plugins.push(Box::new(SchedulerDiagnosticsPlugin));
+    plugins
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        InputFinalizePlugin, RenderPlugin, ScenePlugin, TimePlugin, UiInputPlugin, UiRenderPlugin,
-        default_engine_plugins,
+        GridPlugin, InputFinalizePlugin, RenderPlugin, ScenePlugin, TimePlugin, UiInputPlugin,
+        UiRenderPlugin, default_engine_plugins,
     };
     use crate::runtime::{EnginePlugin, EngineScheduleBuilder};
 
@@ -42,6 +54,7 @@ mod tests {
                 "time",
                 "ui_input",
                 "scene",
+                "grid",
                 "ui_render",
                 "render",
                 "input_finalize"
@@ -65,6 +78,7 @@ mod tests {
     fn dependent_plugins_fail_without_prerequisites() {
         assert!(build_with_plugin(UiInputPlugin).is_err());
         assert!(build_with_plugin(ScenePlugin).is_err());
+        assert!(build_with_plugin(GridPlugin).is_err());
         assert!(build_with_plugin(UiRenderPlugin).is_err());
         assert!(build_with_plugin(RenderPlugin).is_err());
         assert!(build_with_plugin(InputFinalizePlugin).is_err());

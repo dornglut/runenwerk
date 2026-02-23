@@ -2,8 +2,10 @@ use crate::systems::game_commands::{
     GameCommand, apply_game_command, clamp_scrollback_lines, command_registry, flush_paused_logs,
     parse_command_line,
 };
-use engine::ui::initialize_console_ui;
 use ecs::World;
+use engine::plugins::render::domain::{PassSlot, PipelineKey};
+use engine::plugins::scene::domain::SceneId;
+use engine::plugins::ui::domain::initialize_console_ui;
 
 #[test]
 fn parse_command_line_recognizes_builtins() {
@@ -35,19 +37,19 @@ fn parse_command_line_recognizes_builtins() {
     );
     assert_eq!(
         parse_command_line("grotto> set_world gameplay"),
-        Some(GameCommand::SetWorld(engine::runtime::SceneId::GameplayStub))
+        Some(GameCommand::SetWorld(SceneId::GameplayStub))
     );
     assert_eq!(
         parse_command_line("grotto> set_world hub"),
-        Some(GameCommand::SetWorld(engine::runtime::SceneId::HubStub))
+        Some(GameCommand::SetWorld(SceneId::HubStub))
     );
     assert_eq!(
         parse_command_line("grotto> push_overlay pause"),
-        Some(GameCommand::PushOverlay(engine::runtime::SceneId::HudUi))
+        Some(GameCommand::PushOverlay(SceneId::HudUi))
     );
     assert_eq!(
         parse_command_line("grotto> push_overlay inventory"),
-        Some(GameCommand::PushOverlay(engine::runtime::SceneId::InventoryUi))
+        Some(GameCommand::PushOverlay(SceneId::InventoryUi))
     );
     assert_eq!(
         parse_command_line("grotto> pop_overlay"),
@@ -84,8 +86,8 @@ fn parse_command_line_recognizes_builtins() {
     assert_eq!(
         parse_command_line("grotto> set_pipeline world_compute world_compute_high_contrast"),
         Some(GameCommand::SetPipeline {
-            slot: engine::render::PassSlot::WorldCompute,
-            key: engine::render::PipelineKey::WorldComputeHighContrast,
+            slot: PassSlot::WorldCompute,
+            key: PipelineKey::WorldComputeHighContrast,
         })
     );
     assert_eq!(

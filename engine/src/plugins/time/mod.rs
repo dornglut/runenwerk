@@ -1,3 +1,5 @@
+pub mod domain;
+
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
 

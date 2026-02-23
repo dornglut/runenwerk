@@ -1,10 +1,14 @@
-use crate::runtime::{
-    EngineData, EnginePlugin, EngineScheduleBuilder, GAMEPLAY_CONFIG_PATH, QuestState,
-    SceneCommand, SceneId, SceneLifecycleEvent, SceneLifecyclePhase, WorldToOverlayMessage,
+pub mod domain;
+pub mod manifest;
+
+use self::domain::{
+    GAMEPLAY_CONFIG_PATH, QuestState, SceneCommand, SceneId, SceneLayer, SceneLifecycleEvent,
+    SceneLifecyclePhase, WorldToOverlayMessage, gameplay_config_modified,
     load_gameplay_config_with_modified_and_error,
 };
-use crate::ui::UiDirty;
-use crate::utils::{ReloadStatusPayload, should_reload};
+use crate::plugins::shared::{ReloadStatusPayload, should_reload};
+use crate::plugins::ui::domain::UiDirty;
+use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
 
 pub struct ScenePlugin;
@@ -161,7 +165,7 @@ pub fn world_scene_update_system(data: &mut EngineData) -> anyhow::Result<()> {
         .camera_distance
         .clamp(distance_min, distance_max);
 
-    let latest_modified = crate::runtime::gameplay_config_modified();
+    let latest_modified = gameplay_config_modified();
     if should_reload(
         true,
         false,
@@ -319,16 +323,16 @@ fn format_lifecycle_event(event: SceneLifecycleEvent) -> String {
         SceneLifecyclePhase::Resume => "resume",
     };
     let layer = match event.layer {
-        crate::runtime::SceneLayer::World => "world",
-        crate::runtime::SceneLayer::OverlayUi => "overlay",
+        SceneLayer::World => "world",
+        SceneLayer::OverlayUi => "overlay",
     };
     format!("[world] scene:{layer} {} {phase}", event.scene.label())
 }
 
 #[cfg(test)]
 mod tests {
+    use super::domain::{QuestState, SceneId, WorldToOverlayMessage};
     use super::format_world_message;
-    use crate::runtime::{QuestState, SceneId, WorldToOverlayMessage};
 
     #[test]
     fn format_world_message_renders_all_variants() {

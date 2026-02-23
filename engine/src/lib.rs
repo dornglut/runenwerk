@@ -1,9 +1,4 @@
 pub mod platform;
 pub mod plugins;
-#[path = "plugins/render/domain/mod.rs"]
-pub mod render;
 pub mod runtime;
-pub mod scene_manifest;
-#[path = "plugins/ui/domain/mod.rs"]
-pub mod ui;
 pub mod utils;

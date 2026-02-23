@@ -2,7 +2,7 @@ use super::{
     PassSlot, PipelineKey, PipelineSelection, Renderer, RendererFrameTimings, WgpuCtx,
     WorldRenderFrame,
 };
-use crate::ui::UiDrawList;
+use crate::plugins::ui::domain::UiDrawList;
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Instant;

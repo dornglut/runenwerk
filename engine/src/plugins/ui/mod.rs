@@ -1,9 +1,12 @@
-use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder, OverlaySubmitMessage};
-use crate::ui::{
+pub mod domain;
+
+use crate::plugins::scene::domain::{OverlaySubmitMessage, WorldDebugPosition};
+use crate::plugins::ui::domain::{
     UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiEditorNode, UiInputField, UiInteraction, UiNode,
     UiStyle, UiText, UiTransform, reload_console_template_if_changed,
     save_console_template_to_disk,
 };
+use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
 
 pub struct UiInputPlugin;
@@ -71,7 +74,7 @@ struct LogWindowRect {
 }
 
 fn compute_log_window_rect(
-    layout: &crate::ui::UiLayoutConfig,
+    layout: &crate::plugins::ui::domain::UiLayoutConfig,
     screen_size: (f32, f32),
     ui_scale: f32,
 ) -> LogWindowRect {
@@ -195,7 +198,9 @@ pub fn pick_editor_node_at(point: (f32, f32), nodes: &[EditorNodeRect]) -> Optio
         .map(|item| item.node)
 }
 
-fn selected_editor_entity(ui: &crate::ui::ConsoleUiState) -> Option<ecs::EntityHandle> {
+fn selected_editor_entity(
+    ui: &crate::plugins::ui::domain::ConsoleUiState,
+) -> Option<ecs::EntityHandle> {
     match ui.editor.selected {
         Some(UiEditorNode::Root) => Some(ui.root),
         Some(UiEditorNode::Scrollback) => Some(ui.scrollback),
@@ -380,7 +385,11 @@ pub fn estimate_text_width(text: &str, size: f32) -> f32 {
     text.chars().count() as f32 * size * 0.56
 }
 
-fn measure_text_advance_precise(metrics: &crate::ui::UiTextMetrics, text: &str, size: f32) -> f32 {
+fn measure_text_advance_precise(
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
+    text: &str,
+    size: f32,
+) -> f32 {
     let scale = text_scale(metrics, size);
 
     text.chars()
@@ -405,7 +414,7 @@ fn slice_chars(text: &str, start_char: usize, end_char: usize) -> String {
     text[start..end].to_string()
 }
 
-fn text_scale(metrics: &crate::ui::UiTextMetrics, size: f32) -> f32 {
+fn text_scale(metrics: &crate::plugins::ui::domain::UiTextMetrics, size: f32) -> f32 {
     if metrics.base_size > 0.0 {
         (size / metrics.base_size).max(0.1)
     } else {
@@ -413,7 +422,11 @@ fn text_scale(metrics: &crate::ui::UiTextMetrics, size: f32) -> f32 {
     }
 }
 
-fn glyph_advance_with_scale(metrics: &crate::ui::UiTextMetrics, ch: char, scale: f32) -> f32 {
+fn glyph_advance_with_scale(
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
+    ch: char,
+    scale: f32,
+) -> f32 {
     let advance = metrics
         .glyphs
         .get(&ch)
@@ -450,7 +463,7 @@ pub struct InputViewportLayout {
 
 fn wrap_editor_rows_with_prompt(
     editor_text: &str,
-    metrics: &crate::ui::UiTextMetrics,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
     size: f32,
     max_width: f32,
     prompt_width: f32,
@@ -513,7 +526,7 @@ fn wrap_editor_rows_with_prompt(
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn wrap_editor_rows(
     editor_text: &str,
-    metrics: &crate::ui::UiTextMetrics,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
     size: f32,
     max_width: f32,
 ) -> Vec<WrappedEditorRow> {
@@ -534,7 +547,7 @@ fn caret_x_for_row_cursor(
     text: &str,
     row: WrappedEditorRow,
     cursor_chars: usize,
-    metrics: &crate::ui::UiTextMetrics,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
     size: f32,
     row_prefix: f32,
 ) -> f32 {
@@ -550,7 +563,7 @@ fn cursor_for_row_x(
     text: &str,
     row: WrappedEditorRow,
     target_x: f32,
-    metrics: &crate::ui::UiTextMetrics,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
     size: f32,
     row_prefix: f32,
 ) -> usize {
@@ -575,8 +588,8 @@ fn cursor_for_row_x(
 }
 
 pub fn move_cursor_vertical(
-    editor: &mut crate::ui::EditorBuffer,
-    metrics: &crate::ui::UiTextMetrics,
+    editor: &mut crate::plugins::ui::domain::EditorBuffer,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
     size: f32,
     max_width: f32,
     move_down: bool,
@@ -624,8 +637,8 @@ pub fn move_cursor_vertical(
 }
 
 pub fn build_visible_multiline_input(
-    editor: &mut crate::ui::EditorBuffer,
-    metrics: &crate::ui::UiTextMetrics,
+    editor: &mut crate::plugins::ui::domain::EditorBuffer,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
     size: f32,
     max_width: f32,
     max_height: f32,
@@ -743,7 +756,7 @@ fn wrapped_line_rows(
     horizontal_chars: usize,
     max_width: f32,
     text_size: f32,
-    metrics: &crate::ui::UiTextMetrics,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
 ) -> Vec<String> {
     let start = byte_index_at_char(line, horizontal_chars.min(char_count(line)));
     let shifted = &line[start..];
@@ -784,7 +797,7 @@ fn flatten_wrapped_rows(
     horizontal_chars: usize,
     max_width: f32,
     text_size: f32,
-    metrics: &crate::ui::UiTextMetrics,
+    metrics: &crate::plugins::ui::domain::UiTextMetrics,
 ) -> Vec<String> {
     let mut rows = Vec::new();
     for line in lines {
@@ -806,7 +819,7 @@ struct ScrollViewportSpec<'a> {
     horizontal_chars: usize,
     max_width: f32,
     text_size: f32,
-    metrics: &'a crate::ui::UiTextMetrics,
+    metrics: &'a crate::plugins::ui::domain::UiTextMetrics,
 }
 
 struct ScrollViewport {
@@ -976,7 +989,7 @@ pub fn ui_editor_system(data: &mut EngineData) -> anyhow::Result<()> {
                 data.scene
                     .overlay_runtime
                     .world
-                    .get_component::<crate::ui::UiNode>(entity),
+                    .get_component::<crate::plugins::ui::domain::UiNode>(entity),
             ) {
                 if !ui_node.visible {
                     continue;
@@ -2054,9 +2067,7 @@ fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, 
                 .world_runtime
                 .ctx
                 .world
-                .get_component::<crate::runtime::WorldDebugPosition>(
-                    data.scene.world_runtime.ctx.debug_entity,
-                )
+                .get_component::<WorldDebugPosition>(data.scene.world_runtime.ctx.debug_entity)
                 .map(|p| format!("({:.1}, {:.1})", p.x, p.y))
                 .unwrap_or_else(|| "(n/a)".to_string());
             commands.push(UiBatchCmd::Text {

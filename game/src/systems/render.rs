@@ -1,5 +1,5 @@
 use crate::gameplay::{EnemyTag, Health, PlayerTag, Position, PreviousPosition};
-use engine::render::{MAX_WORLD_RENDER_AGENTS, WorldRenderAgent};
+use engine::plugins::render::domain::{MAX_WORLD_RENDER_AGENTS, WorldRenderAgent};
 use engine::runtime::EngineData;
 
 pub fn world_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> {

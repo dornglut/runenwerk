@@ -1,8 +1,9 @@
-use engine::render::{PassSlot, PipelineKey};
-use engine::runtime::{
-    EngineData, OverlayCommandInput, OverlaySubmitMessage, SceneCommand, SceneId,
+use engine::plugins::render::domain::{PassSlot, PipelineKey};
+use engine::plugins::scene::domain::{
+    OverlayCommandInput, OverlaySubmitMessage, SceneCommand, SceneId,
 };
-use engine::ui::UiDirty;
+use engine::plugins::ui::domain::{ConsoleUiState, UiDirty};
+use engine::runtime::EngineData;
 
 const CONSOLE_PROMPT: &str = "grotto> ";
 const DEFAULT_HISTORY_COUNT: usize = 10;
@@ -196,7 +197,7 @@ pub enum GameCommand {
     Unknown(String),
 }
 
-pub(super) fn flush_paused_logs(ui: &mut engine::ui::ConsoleUiState) {
+pub(super) fn flush_paused_logs(ui: &mut ConsoleUiState) {
     if ui.log_paused_lines.is_empty() {
         return;
     }

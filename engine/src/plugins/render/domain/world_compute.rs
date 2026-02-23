@@ -279,7 +279,7 @@ pub struct WorldRenderModelProxy {
 pub struct WorldRenderFrame {
     pub world_scene_label: String,
     pub overlay_scene_label: String,
-    pub scene_render_graph_passes: Vec<crate::scene_manifest::FramePassDescriptor>,
+    pub scene_render_graph_passes: Vec<crate::plugins::scene::manifest::FramePassDescriptor>,
     pub world_bounds: [f32; 4],
     pub world_paused: bool,
     pub chunk_size: f32,
