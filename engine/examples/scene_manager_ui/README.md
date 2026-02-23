@@ -11,8 +11,10 @@ const MAIN_MENU_SCENE: &str = ".../main_menu.ron";
 const SETTINGS_MENU_SCENE: &str = ".../settings_menu.ron";
 const PAUSE_MENU_SCENE: &str = ".../pause_menu.ron";
 const GAME_SCENE: &str = ".../game_scene.ron";
+const LOADING_SCENE: &str = ".../loading_scene.ron";
 
 App::new()
+    .add_scene(LOADING_SCENE)
     .add_scene(MAIN_MENU_SCENE)
     .add_scene(SETTINGS_MENU_SCENE)
     .add_scene(PAUSE_MENU_SCENE)
@@ -28,6 +30,7 @@ App::new()
 - `settings_menu`: button to go back to the previous scene.
 - `game_scene`: text panel that shows `"Gameplay Preview"`.
 - `pause_menu`: triggered by `Esc` in `game_scene`, with `settings` and `main menu` buttons.
+- `loading_scene`: shown at startup until render warmup stabilizes, then transitions to `main_menu`.
 
 ## Demo Presentation
 
@@ -46,6 +49,7 @@ Recommended structure:
 ```text
 engine/examples/scene_manager_ui/assets/
   scenes/
+    loading_scene.ron
     main_menu.ron
     settings_menu.ron
     game_scene.ron

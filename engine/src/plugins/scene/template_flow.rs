@@ -17,6 +17,7 @@ const MAIN_MENU_ID: &str = "main_menu";
 const SETTINGS_MENU_ID: &str = "settings_menu";
 const PAUSE_MENU_ID: &str = "pause_menu";
 const GAME_SCENE_ID: &str = "game_scene";
+const LOADING_SCENE_ID: &str = "loading_scene";
 
 pub fn setup_template_flow(data: &mut EngineData) -> Result<()> {
     if data.scene_catalog.is_empty() {
@@ -36,6 +37,11 @@ pub fn setup_template_flow(data: &mut EngineData) -> Result<()> {
     if !scenes.contains_key(&handles.main) {
         bail!("scene handle {} was not loaded", handles.main.index());
     }
+    let initial_scene = if data.startup.is_loading() {
+        handles.loading.unwrap_or(handles.main)
+    } else {
+        handles.main
+    };
 
     data.scene.overlay_runtime.ui.presentation_mode = UiPresentationMode::CenteredDemo;
     data.scene.overlay_runtime.ui.layout.panel_width_ratio = 0.48;
@@ -87,7 +93,7 @@ pub fn setup_template_flow(data: &mut EngineData) -> Result<()> {
         .world
         .insert_resource(SceneManagerUiResource {
             handles,
-            active_scene: handles.main,
+            active_scene: initial_scene,
             previous_scene: None,
             applied_scene: None,
             scenes,
@@ -112,6 +118,7 @@ struct SceneFlowHandles {
     settings: Option<SceneHandle>,
     pause: Option<SceneHandle>,
     game: Option<SceneHandle>,
+    loading: Option<SceneHandle>,
 }
 
 #[derive(Debug)]
@@ -212,6 +219,9 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
         return Ok(());
     }
     maybe_reload_templates(data)?;
+    if sync_loading_scene_state(data)? {
+        return Ok(());
+    }
 
     let secondary_button = flow_resource(data)?.secondary_button;
     update_secondary_button_layout(data, secondary_button);
@@ -400,12 +410,47 @@ fn resolve_handles(scene_catalog: &SceneCatalog) -> Result<SceneFlowHandles> {
     let settings = scene_catalog.handle(SETTINGS_MENU_ID);
     let pause = scene_catalog.handle(PAUSE_MENU_ID);
     let game = scene_catalog.handle(GAME_SCENE_ID);
+    let loading = scene_catalog.handle(LOADING_SCENE_ID);
     Ok(SceneFlowHandles {
         main,
         settings,
         pause,
         game,
+        loading,
     })
+}
+
+fn sync_loading_scene_state(data: &mut EngineData) -> Result<bool> {
+    let Some(loading_scene) = flow_resource(data)?.handles.loading else {
+        return Ok(false);
+    };
+
+    if data.startup.is_loading() {
+        {
+            let state = flow_resource_mut(data)?;
+            if state.active_scene != loading_scene {
+                state.active_scene = loading_scene;
+                state.applied_scene = None;
+            }
+        }
+        apply_active_scene_if_needed(data)?;
+        return Ok(true);
+    }
+
+    let mut switched_from_loading = false;
+    {
+        let state = flow_resource_mut(data)?;
+        if state.active_scene == loading_scene {
+            state.active_scene = state.handles.main;
+            state.applied_scene = None;
+            switched_from_loading = true;
+        }
+    }
+    if switched_from_loading {
+        apply_active_scene_if_needed(data)?;
+    }
+
+    Ok(false)
 }
 
 fn apply_scene_action(state: &mut SceneManagerUiResource, action: SceneAction) {

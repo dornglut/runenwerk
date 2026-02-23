@@ -1,0 +1,5 @@
+(
+  body: "Loading World...",
+  panel_component: "../components/panel.ron",
+  text_component: "../components/text_label.ron",
+)

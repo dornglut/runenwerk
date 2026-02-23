@@ -2,6 +2,7 @@ pub mod domain;
 
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
+use scheduler::set_slow_node_logging_enabled;
 use wgpu::SurfaceError;
 
 pub struct RenderPlugin;
@@ -26,6 +27,10 @@ const MESH_HOT_PATH_LOG_THRESHOLD_MS: f32 = 8.0;
 
 pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
     let _submit_span = tracing::info_span!("systems.ui_render_submit").entered();
+    let startup_ready_before = data.startup.is_ready();
+    // Keep scheduler slow-node logs muted while startup warmup is still in loading.
+    set_slow_node_logging_enabled(startup_ready_before);
+
     let shader_reload_messages = data.gfx.poll_shader_hot_reload();
     if !shader_reload_messages.is_empty() {
         for msg in shader_reload_messages {
@@ -63,13 +68,29 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
     {
         Ok(timings) => {
             let mesh_hot = timings.renderer.mesh_hot_path;
+            let warm_frame = mesh_hot.static_cache_misses == 0
+                && mesh_hot.vertex_upload_bytes == 0
+                && mesh_hot.index_upload_bytes == 0
+                && mesh_hot.texture_upload_bytes == 0;
+            let warmup_completed = data
+                .startup
+                .observe_render_warm_frame(warm_frame, data.time.delta_seconds);
+            if warmup_completed {
+                tracing::info!(
+                    elapsed_loading_seconds = data.startup.elapsed_loading_seconds,
+                    stable_frames = data.startup.stable_frames,
+                    required_stable_frames = data.startup.required_stable_frames,
+                    warm_frame,
+                    "startup warmup complete; scene flow can transition out of loading screen"
+                );
+            }
             let total_ms = timings.acquire_ms
                 + timings.renderer.prepare_ui_ms
                 + timings.renderer.prepare_mesh_ms
                 + timings.renderer.world_prepare_ms
                 + timings.renderer.encode_submit_ms
                 + timings.present_ms;
-            if total_ms > FRAME_TIMING_LOG_THRESHOLD_MS {
+            if startup_ready_before && total_ms > FRAME_TIMING_LOG_THRESHOLD_MS {
                 tracing::info!(
                     total_ms = total_ms,
                     acquire_ms = timings.acquire_ms,
@@ -103,7 +124,9 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
                     "frame render timing breakdown"
                 );
             }
-            if timings.renderer.prepare_mesh_ms > MESH_HOT_PATH_LOG_THRESHOLD_MS {
+            if startup_ready_before
+                && timings.renderer.prepare_mesh_ms > MESH_HOT_PATH_LOG_THRESHOLD_MS
+            {
                 tracing::info!(
                     prepare_mesh_ms = timings.renderer.prepare_mesh_ms,
                     model_collect_ms = mesh_hot.model_collect_ms,

@@ -5,7 +5,7 @@ use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::initialize_console_ui;
 use anyhow::Result;
 use ecs::World;
-use scheduler::Scheduler;
+use scheduler::{Scheduler, set_slow_node_logging_enabled};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -145,6 +145,82 @@ impl SceneCatalog {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum StartupPhase {
+    Loading,
+    Ready,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct StartupState {
+    pub phase: StartupPhase,
+    pub stable_frames: u32,
+    pub required_stable_frames: u32,
+    pub elapsed_loading_seconds: f32,
+    pub max_loading_seconds: f32,
+}
+
+impl StartupState {
+    pub const DEFAULT_REQUIRED_STABLE_FRAMES: u32 = 8;
+    pub const DEFAULT_MAX_LOADING_SECONDS: f32 = 5.0;
+
+    pub fn loading() -> Self {
+        Self {
+            phase: StartupPhase::Loading,
+            stable_frames: 0,
+            required_stable_frames: Self::DEFAULT_REQUIRED_STABLE_FRAMES,
+            elapsed_loading_seconds: 0.0,
+            max_loading_seconds: Self::DEFAULT_MAX_LOADING_SECONDS,
+        }
+    }
+
+    pub fn ready() -> Self {
+        let mut state = Self::loading();
+        state.phase = StartupPhase::Ready;
+        state.stable_frames = state.required_stable_frames;
+        state
+    }
+
+    pub fn from_loading_enabled(enabled: bool) -> Self {
+        if enabled {
+            Self::loading()
+        } else {
+            Self::ready()
+        }
+    }
+
+    pub fn is_loading(&self) -> bool {
+        self.phase == StartupPhase::Loading
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.phase == StartupPhase::Ready
+    }
+
+    /// Returns true when warmup transitions from loading -> ready.
+    pub fn observe_render_warm_frame(&mut self, warm_frame: bool, delta_seconds: f32) -> bool {
+        if self.is_ready() {
+            return false;
+        }
+
+        self.elapsed_loading_seconds += delta_seconds.max(0.0);
+        if warm_frame {
+            self.stable_frames = self.stable_frames.saturating_add(1);
+        } else {
+            self.stable_frames = 0;
+        }
+
+        let stable_target = self.required_stable_frames.max(1);
+        let timed_out = self.elapsed_loading_seconds >= self.max_loading_seconds.max(0.0);
+        if self.stable_frames >= stable_target || timed_out {
+            self.phase = StartupPhase::Ready;
+            return true;
+        }
+
+        false
+    }
+}
+
 pub struct EngineData {
     pub gfx: Gfx,
     pub world_render: WorldRenderFrame,
@@ -152,6 +228,7 @@ pub struct EngineData {
     pub input: InputState,
     pub scene: SceneManager,
     pub scene_catalog: SceneCatalog,
+    pub startup: StartupState,
 }
 
 pub struct Engine {
@@ -189,6 +266,10 @@ impl Engine {
             gfx.ctx.surface_config.height as f32,
         );
         scene.overlay_runtime.ui.scale = ui_scale_from_window_factor(window.scale_factor());
+        let scene_catalog = SceneCatalog::from_registrations(&scene_registrations);
+        let startup =
+            StartupState::from_loading_enabled(scene_catalog.handle("loading_scene").is_some());
+        set_slow_node_logging_enabled(startup.is_ready());
 
         let data = EngineData {
             gfx,
@@ -196,7 +277,8 @@ impl Engine {
             time: Time::new(),
             input: InputState::new(),
             scene,
-            scene_catalog: SceneCatalog::from_registrations(&scene_registrations),
+            scene_catalog,
+            startup,
         };
 
         let mut schedule_builder = EngineScheduleBuilder::new();
@@ -243,7 +325,7 @@ fn ui_scale_from_window_factor(window_scale_factor: f64) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{SceneCatalog, SceneRegistration};
+    use super::{SceneCatalog, SceneRegistration, StartupPhase, StartupState};
 
     #[test]
     fn scene_catalog_assigns_stable_sequential_handles() {
@@ -289,5 +371,37 @@ mod tests {
         let registration = SceneRegistration::from_template_path("assets/scenes/Main-Menu.ron");
         assert_eq!(registration.id, "main_menu");
         assert_eq!(registration.template_path, "assets/scenes/Main-Menu.ron");
+    }
+
+    #[test]
+    fn startup_state_can_start_ready_without_loading_scene() {
+        let startup = StartupState::from_loading_enabled(false);
+        assert!(startup.is_ready());
+        assert_eq!(startup.phase, StartupPhase::Ready);
+    }
+
+    #[test]
+    fn startup_state_transitions_to_ready_after_stable_warm_frames() {
+        let mut startup = StartupState::loading();
+        startup.required_stable_frames = 3;
+        startup.max_loading_seconds = 100.0;
+
+        assert!(!startup.observe_render_warm_frame(false, 0.016));
+        assert!(!startup.observe_render_warm_frame(true, 0.016));
+        assert!(!startup.observe_render_warm_frame(true, 0.016));
+        assert!(startup.observe_render_warm_frame(true, 0.016));
+        assert!(startup.is_ready());
+    }
+
+    #[test]
+    fn startup_state_transitions_to_ready_on_timeout() {
+        let mut startup = StartupState::loading();
+        startup.required_stable_frames = 100;
+        startup.max_loading_seconds = 0.05;
+
+        assert!(!startup.observe_render_warm_frame(false, 0.01));
+        assert!(!startup.observe_render_warm_frame(false, 0.02));
+        assert!(startup.observe_render_warm_frame(false, 0.02));
+        assert!(startup.is_ready());
     }
 }
