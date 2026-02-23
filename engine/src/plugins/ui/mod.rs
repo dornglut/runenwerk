@@ -1,9 +1,55 @@
-use crate::runtime::{EngineData, OverlaySubmitMessage};
+use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder, OverlaySubmitMessage};
 use crate::ui::{
     UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiEditorNode, UiInputField, UiInteraction, UiNode,
     UiStyle, UiText, UiTransform, reload_console_template_if_changed,
     save_console_template_to_disk,
 };
+use anyhow::Result;
+
+pub struct UiInputPlugin;
+pub struct UiRenderPlugin;
+
+impl EnginePlugin for UiInputPlugin {
+    fn name(&self) -> &'static str {
+        "ui_input"
+    }
+
+    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
+        builder.add_node_with_edges("overlay_ui_hot_reload", ui_hot_reload_system, &["time"]);
+        builder.add_node_with_edges(
+            "overlay_ui_input",
+            ui_input_system,
+            &["overlay_ui_hot_reload"],
+        );
+        builder.add_node_with_edges("overlay_ui_editor", ui_editor_system, &["overlay_ui_input"]);
+        Ok(())
+    }
+}
+
+impl EnginePlugin for UiRenderPlugin {
+    fn name(&self) -> &'static str {
+        "ui_render"
+    }
+
+    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
+        builder.add_node_with_edges(
+            "overlay_ui_layout",
+            ui_layout_system,
+            &["overlay_ui_editor"],
+        );
+        builder.add_node_with_edges(
+            "overlay_ui_build_batches",
+            ui_build_batches_system,
+            &["overlay_ui_layout"],
+        );
+        builder.add_node_with_edges(
+            "overlay_ui_render_extract",
+            ui_render_extract_system,
+            &["overlay_ui_build_batches"],
+        );
+        Ok(())
+    }
+}
 
 const CONSOLE_PROMPT: &str = "grotto> ";
 const CARET_BLINK_SECONDS: f32 = 0.5;
@@ -58,7 +104,11 @@ fn compute_log_window_rect(
 }
 
 fn world_hud_stats(data: &EngineData) -> Option<(f32, f32, usize, u32)> {
-    let player = data.world_render.agents.iter().find(|agent| agent.team == 0)?;
+    let player = data
+        .world_render
+        .agents
+        .iter()
+        .find(|agent| agent.team == 0)?;
     let enemies = data
         .world_render
         .agents
@@ -123,7 +173,7 @@ fn push_world_stats_panel(commands: &mut Vec<UiBatchCmd>, data: &EngineData, ui_
     });
 }
 
-pub(super) fn point_in_rect(point: (f32, f32), rect: &UiTransform) -> bool {
+pub fn point_in_rect(point: (f32, f32), rect: &UiTransform) -> bool {
     point.0 >= rect.x
         && point.0 <= rect.x + rect.w
         && point.1 >= rect.y
@@ -131,16 +181,13 @@ pub(super) fn point_in_rect(point: (f32, f32), rect: &UiTransform) -> bool {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub(super) struct EditorNodeRect {
+pub struct EditorNodeRect {
     pub node: UiEditorNode,
     pub z: i32,
     pub rect: UiTransform,
 }
 
-pub(super) fn pick_editor_node_at(
-    point: (f32, f32),
-    nodes: &[EditorNodeRect],
-) -> Option<UiEditorNode> {
+pub fn pick_editor_node_at(point: (f32, f32), nodes: &[EditorNodeRect]) -> Option<UiEditorNode> {
     nodes
         .iter()
         .filter(|item| point_in_rect(point, &item.rect))
@@ -204,7 +251,7 @@ fn apply_editor_translation(data: &mut EngineData, selected_node: UiEditorNode, 
     }
 }
 
-pub(super) fn snap_to_grid(value: f32, grid: f32) -> f32 {
+pub fn snap_to_grid(value: f32, grid: f32) -> f32 {
     let g = grid.max(1.0);
     (value / g).round() * g
 }
@@ -328,7 +375,7 @@ fn push_scroll_indicators(
     }
 }
 
-pub(super) fn estimate_text_width(text: &str, size: f32) -> f32 {
+pub fn estimate_text_width(text: &str, size: f32) -> f32 {
     // Monospace-biased estimate for centering labels in this MVP stage.
     text.chars().count() as f32 * size * 0.56
 }
@@ -386,13 +433,13 @@ fn input_content_rect(transform: &UiTransform, ui_scale: f32) -> (f32, f32, f32,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub(super) struct WrappedEditorRow {
+pub struct WrappedEditorRow {
     pub start_char: usize,
     pub end_char: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct InputViewportLayout {
+pub struct InputViewportLayout {
     pub content: String,
     pub caret_x: f32,
     pub caret_y: f32,
@@ -464,7 +511,7 @@ fn wrap_editor_rows_with_prompt(
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-pub(super) fn wrap_editor_rows(
+pub fn wrap_editor_rows(
     editor_text: &str,
     metrics: &crate::ui::UiTextMetrics,
     size: f32,
@@ -527,7 +574,7 @@ fn cursor_for_row_x(
     row.end_char
 }
 
-pub(super) fn move_cursor_vertical(
+pub fn move_cursor_vertical(
     editor: &mut crate::ui::EditorBuffer,
     metrics: &crate::ui::UiTextMetrics,
     size: f32,
@@ -576,7 +623,7 @@ pub(super) fn move_cursor_vertical(
     true
 }
 
-pub(super) fn build_visible_multiline_input(
+pub fn build_visible_multiline_input(
     editor: &mut crate::ui::EditorBuffer,
     metrics: &crate::ui::UiTextMetrics,
     size: f32,
@@ -664,7 +711,10 @@ fn line_height(size: f32) -> f32 {
     size * 1.25
 }
 
-pub(super) fn visible_line_capacity(area_height: f32, text_size: f32) -> usize {
+#[cfg(test)]
+mod tests;
+
+pub fn visible_line_capacity(area_height: f32, text_size: f32) -> usize {
     let h = line_height(text_size).max(1.0);
     ((area_height / h).floor() as usize).max(1)
 }
@@ -803,7 +853,7 @@ fn build_scroll_viewport(spec: ScrollViewportSpec<'_>) -> ScrollViewport {
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-pub(super) fn build_scrollback_view_text(
+pub fn build_scrollback_view_text(
     lines: &[String],
     lines_from_bottom: usize,
     visible_capacity: usize,
@@ -820,7 +870,7 @@ pub(super) fn build_scrollback_view_text(
     .join("\n")
 }
 
-pub(super) fn scrollback_line_style(line: &str, default: [f32; 4]) -> ([f32; 4], &str) {
+pub fn scrollback_line_style(line: &str, default: [f32; 4]) -> ([f32; 4], &str) {
     if let Some(rest) = line.strip_prefix("[world] ") {
         return ([0.70, 0.86, 0.98, 1.0], rest);
     }
@@ -844,7 +894,7 @@ fn clamp_panel_dimension(target: f32, min_size: f32, max_size: f32) -> f32 {
     }
 }
 
-pub(super) fn adaptive_footer_metrics(
+pub fn adaptive_footer_metrics(
     panel_available_w: f32,
     panel_h: f32,
     inner_padding: f32,

@@ -1,5 +1,4 @@
-use crate::runtime::{EnginePlugin, EngineScheduleBuilder};
-use crate::systems::time_system;
+use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
 
 pub struct TimePlugin;
@@ -13,4 +12,9 @@ impl EnginePlugin for TimePlugin {
         builder.add_node("time", time_system);
         Ok(())
     }
+}
+
+pub fn time_system(data: &mut EngineData) -> anyhow::Result<()> {
+    data.time.tick();
+    Ok(())
 }

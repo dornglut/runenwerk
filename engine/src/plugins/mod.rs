@@ -1,16 +1,15 @@
-mod input_finalize;
-mod render;
-mod scene;
-mod time;
-mod ui_input;
-mod ui_render;
+pub(crate) mod input;
+pub(crate) mod render;
+pub(crate) mod scene;
+pub(crate) mod time;
+pub(crate) mod ui;
 
-pub use input_finalize::InputFinalizePlugin;
+pub use input::InputFinalizePlugin;
 pub use render::RenderPlugin;
 pub use scene::ScenePlugin;
 pub use time::TimePlugin;
-pub use ui_input::UiInputPlugin;
-pub use ui_render::UiRenderPlugin;
+pub use ui::UiInputPlugin;
+pub use ui::UiRenderPlugin;
 
 use crate::runtime::EnginePlugin;
 

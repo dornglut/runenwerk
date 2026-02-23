@@ -1,9 +1,43 @@
 use crate::runtime::{
-    EngineData, GAMEPLAY_CONFIG_PATH, QuestState, SceneCommand, SceneId, SceneLifecycleEvent,
-    SceneLifecyclePhase, WorldToOverlayMessage, load_gameplay_config_with_modified_and_error,
+    EngineData, EnginePlugin, EngineScheduleBuilder, GAMEPLAY_CONFIG_PATH, QuestState,
+    SceneCommand, SceneId, SceneLifecycleEvent, SceneLifecyclePhase, WorldToOverlayMessage,
+    load_gameplay_config_with_modified_and_error,
 };
 use crate::ui::UiDirty;
 use crate::utils::{ReloadStatusPayload, should_reload};
+use anyhow::Result;
+
+pub struct ScenePlugin;
+
+impl EnginePlugin for ScenePlugin {
+    fn name(&self) -> &'static str {
+        "scene"
+    }
+
+    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
+        builder.add_node_with_edges(
+            "scene_transition",
+            scene_transition_system,
+            &["overlay_ui_editor"],
+        );
+        builder.add_node_with_edges(
+            "world_scene_update",
+            world_scene_update_system,
+            &["scene_transition"],
+        );
+        builder.add_node_with_edges(
+            "scene_overlay_format_messages",
+            scene_overlay_format_messages_system,
+            &["world_scene_update"],
+        );
+        builder.add_node_with_edges(
+            "scene_overlay_apply_messages",
+            scene_overlay_apply_messages_system,
+            &["scene_overlay_format_messages"],
+        );
+        Ok(())
+    }
+}
 
 pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
     if data.input.toggle_pause_menu {

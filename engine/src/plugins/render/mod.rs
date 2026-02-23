@@ -1,5 +1,23 @@
-use crate::runtime::EngineData;
+use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
+use anyhow::Result;
 use wgpu::SurfaceError;
+
+pub struct RenderPlugin;
+
+impl EnginePlugin for RenderPlugin {
+    fn name(&self) -> &'static str {
+        "render"
+    }
+
+    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
+        builder.add_node_with_edges(
+            "frame_render_submit",
+            ui_render_submit_system,
+            &["overlay_ui_render_extract"],
+        );
+        Ok(())
+    }
+}
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
 const MESH_HOT_PATH_LOG_THRESHOLD_MS: f32 = 8.0;

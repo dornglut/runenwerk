@@ -1,5 +1,4 @@
-use crate::runtime::{EnginePlugin, EngineScheduleBuilder};
-use crate::systems::clear_input_system;
+use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
 
 pub struct InputFinalizePlugin;
@@ -13,4 +12,9 @@ impl EnginePlugin for InputFinalizePlugin {
         builder.add_node_with_edges("clear_input", clear_input_system, &["frame_render_submit"]);
         Ok(())
     }
+}
+
+pub fn clear_input_system(data: &mut EngineData) -> anyhow::Result<()> {
+    data.input.clear_frame();
+    Ok(())
 }
