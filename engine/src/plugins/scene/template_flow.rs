@@ -1,4 +1,5 @@
 use super::domain::SceneCommand;
+use crate::plugins::input::domain::action as input_action;
 use crate::plugins::ui::domain::{
     UiBatchCmd, UiButton, UiButtonTemplate, UiInteraction, UiNode, UiPresentationMode, UiStyle,
     UiStyleTemplate, UiText, UiTextTemplate, UiTransform,
@@ -94,6 +95,7 @@ pub fn setup_template_flow(data: &mut EngineData) -> Result<()> {
             revision: 0,
             watch_enabled: true,
             secondary_button,
+            pause_toggle_key_down: false,
         });
 
     data.scene.set_active_overlay_visible(true);
@@ -123,6 +125,7 @@ struct SceneManagerUiResource {
     revision: u64,
     watch_enabled: bool,
     secondary_button: ecs::EntityHandle,
+    pause_toggle_key_down: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -227,11 +230,17 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
         .get_component::<UiInteraction>(secondary_button)
         .map(|interaction| interaction.clicked)
         .unwrap_or(false);
-    let toggle_pause_menu = data.input.toggle_pause_menu;
+    let pause_toggle_pressed = data.input.toggle_pause_menu;
+    let pause_toggle_key_down = data
+        .input
+        .action_down(input_action::SYSTEM_TOGGLE_PAUSE_MENU);
 
     let mut queued_action: Option<SceneAction> = None;
     {
         let state = flow_resource_mut(data)?;
+        let toggle_pause_menu =
+            pause_toggle_pressed || (pause_toggle_key_down && !state.pause_toggle_key_down);
+        state.pause_toggle_key_down = pause_toggle_key_down;
         if toggle_pause_menu {
             if let (Some(game), Some(pause)) = (state.handles.game, state.handles.pause) {
                 if state.active_scene == game {
@@ -661,47 +670,18 @@ fn update_secondary_button_layout(data: &mut EngineData, secondary_button: ecs::
         .world
         .get_component::<UiTransform>(data.scene.overlay_runtime.ui.confirm_button)
         .copied()
-    {
-        let gap =
-            if centered_demo { 12.0 } else { 8.0 } * data.scene.overlay_runtime.ui.scale.max(1.0);
-        if centered_demo {
-            let group_x = data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component::<UiTransform>(data.scene.overlay_runtime.ui.root)
-                .map(|root| root.x + ((root.w - ((confirm.w * 2.0) + gap)) * 0.5).max(0.0))
-                .unwrap_or(confirm.x - confirm.w - gap);
-            if let Some(confirm_mut) = data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.confirm_button)
-            {
-                confirm_mut.x = group_x + confirm.w + gap;
-            }
-            if let Some(secondary) = data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component_mut::<UiTransform>(secondary_button)
-            {
-                secondary.w = confirm.w;
-                secondary.h = confirm.h;
-                secondary.x = group_x;
-                secondary.y = confirm.y;
-            }
-        } else if let Some(secondary) = data
+        && let Some(secondary) = data
             .scene
             .overlay_runtime
             .world
             .get_component_mut::<UiTransform>(secondary_button)
-        {
-            secondary.w = confirm.w;
-            secondary.h = confirm.h;
-            secondary.x = confirm.x - confirm.w - gap;
-            secondary.y = confirm.y;
-        }
+    {
+        let gap =
+            if centered_demo { 12.0 } else { 8.0 } * data.scene.overlay_runtime.ui.scale.max(1.0);
+        secondary.w = confirm.w;
+        secondary.h = confirm.h;
+        secondary.x = confirm.x - confirm.w - gap;
+        secondary.y = confirm.y;
     }
 
     let hovered = data

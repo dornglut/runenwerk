@@ -27,7 +27,7 @@ App::new()
 - `main_menu`: buttons to go to `game_scene` and `settings_menu`.
 - `settings_menu`: button to go back to the previous scene.
 - `game_scene`: text panel that shows `"Gameplay Preview"`.
-- `pause_menu`: triggered by `Esc` in `game_scene`, with `resume` and `main menu` buttons.
+- `pause_menu`: triggered by `Esc` in `game_scene`, with `settings` and `main menu` buttons.
 
 ## Demo Presentation
 

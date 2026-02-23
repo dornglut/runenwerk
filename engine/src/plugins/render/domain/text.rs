@@ -421,6 +421,7 @@ pub struct TextRenderer {
     screen_buffer: Buffer,
     screen_bind_group: BindGroup,
     atlas_bind_group: BindGroup,
+    sampling: TextSampling,
     glyphs: HashMap<char, GlyphMetrics>,
     base_size: f32,
     line_height: f32,
@@ -624,6 +625,7 @@ impl TextRenderer {
             screen_buffer,
             screen_bind_group,
             atlas_bind_group,
+            sampling: loaded.sampling,
             glyphs: loaded.glyphs,
             base_size: loaded.base_size,
             line_height: loaded.line_height,
@@ -650,6 +652,7 @@ impl TextRenderer {
             self.base_size,
             self.line_height,
             self.ascent,
+            self.sampling,
         );
         if instances.is_empty() {
             return None;
@@ -691,7 +694,7 @@ struct GlyphPackMeta {
 
 fn build_bitmap_font_atlas(ttf_bytes: &[u8]) -> Option<LoadedFontAtlas> {
     let font = Font::try_from_bytes(ttf_bytes)?;
-    let base_size = 18.0_f32;
+    let base_size = 42.0_f32;
     let scale = Scale::uniform(base_size);
     let v_metrics = font.v_metrics(scale);
     let ascent = v_metrics.ascent;
@@ -728,7 +731,7 @@ fn build_bitmap_font_atlas(ttf_bytes: &[u8]) -> Option<LoadedFontAtlas> {
         });
     }
 
-    let atlas_width = 1024_u32;
+    let atlas_width = 2048_u32;
     let padding = 1_u32;
     let mut cursor_x = padding;
     let mut cursor_y = padding;
@@ -831,6 +834,7 @@ pub fn build_glyph_instances(
     base_size: f32,
     line_height: f32,
     ascent: f32,
+    sampling: TextSampling,
 ) -> Vec<GlyphInstanceRaw> {
     let mut instances = Vec::new();
     let fallback = glyphs.get(&' ').copied().unwrap_or(GlyphMetrics {
@@ -878,6 +882,12 @@ pub fn build_glyph_instances(
             if rect_w > 0.0 && rect_h > 0.0 {
                 let rect_x = pen_x + glyph.bearing_px[0] * scale;
                 let rect_y = baseline_y - glyph.bearing_px[1] * scale;
+                let (rect_x, rect_y) = if matches!(sampling, TextSampling::Alpha) {
+                    // Pixel-snap raster glyph quads to reduce blur when upscaled.
+                    (rect_x.round(), rect_y.round())
+                } else {
+                    (rect_x, rect_y)
+                };
 
                 instances.push(GlyphInstanceRaw {
                     rect: [rect_x, rect_y, rect_w, rect_h],
@@ -900,7 +910,7 @@ pub fn build_glyph_instances(
 
 #[cfg(test)]
 mod tests {
-    use super::{GlyphMetrics, build_glyph_instances};
+    use super::{GlyphMetrics, TextSampling, build_glyph_instances};
     use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
     use std::collections::HashMap;
 
@@ -949,7 +959,8 @@ mod tests {
             }],
         };
 
-        let instances = build_glyph_instances(&draw, &glyphs, 14.0, 16.0, 12.0);
+        let instances =
+            build_glyph_instances(&draw, &glyphs, 14.0, 16.0, 12.0, TextSampling::Alpha);
         assert_eq!(instances.len(), 2);
         assert!((instances[0].rect[0] - 10.0).abs() < 0.001);
         assert!((instances[1].rect[0] - 19.0).abs() < 0.001);
