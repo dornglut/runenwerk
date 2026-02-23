@@ -6,9 +6,12 @@ use scheduler::Scheduler;
 use std::sync::Arc;
 use winit::window::Window;
 
+#[path = "../plugins/input/domain.rs"]
 mod input;
 mod plugin;
+#[path = "../plugins/scene/domain/mod.rs"]
 mod scene;
+#[path = "../plugins/time/domain.rs"]
 mod time;
 
 pub use input::*;

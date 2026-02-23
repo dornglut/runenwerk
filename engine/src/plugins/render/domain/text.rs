@@ -186,7 +186,10 @@ impl FileFontProvider {
                 "assets/fonts/console_msdf.png",
                 "assets/fonts/console_msdf.json",
             ),
-            ("engine/assets/console_msdf.png", "engine/assets/console_msdf.json"),
+            (
+                "engine/assets/console_msdf.png",
+                "engine/assets/console_msdf.json",
+            ),
         ]
     }
 
