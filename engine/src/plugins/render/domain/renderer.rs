@@ -309,6 +309,18 @@ fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
     ]
 }
 
+fn ui_only_frame_graph_passes() -> Vec<FramePassDescriptor> {
+    vec![FramePassDescriptor {
+        name: "ui_composite".to_string(),
+        kind: FramePassKindConfig::Render,
+        slot: Some(FramePassSlotConfig::UiComposite),
+        pipeline: None,
+        reads: vec![FrameResourceConfig::UiDrawList],
+        writes: vec![FrameResourceConfig::SurfaceColor],
+        depends_on: Vec::new(),
+    }]
+}
+
 fn load_frame_graph_config() -> FrameGraphConfig {
     let path = Path::new(FRAME_GRAPH_CONFIG_PATH);
     if !path.exists() {
@@ -972,9 +984,13 @@ impl Renderer {
         device: &Device,
         queue: &Queue,
         packet: &RendererPreparedPacket,
+        active_passes: &BTreeSet<String>,
         timings: &mut RendererFrameTimings,
     ) {
         for executor in Self::pass_executors() {
+            if !active_passes.contains(executor.pass_name()) {
+                continue;
+            }
             executor.prepare(self, device, queue, packet, timings);
         }
     }
@@ -1066,8 +1082,13 @@ impl Renderer {
         world_scene: &str,
         overlay_scene: &str,
         scene_passes: &[SceneFramePassDescriptor],
+        render_world: bool,
     ) -> Vec<FramePassDescriptor> {
-        let mut descriptors = self.frame_graph_config.passes.clone();
+        let mut descriptors = if render_world {
+            self.frame_graph_config.passes.clone()
+        } else {
+            ui_only_frame_graph_passes()
+        };
         for overlay in &self.frame_graph_overlay_config.overlays {
             if !overlay.matches_scene(world_scene, overlay_scene) {
                 continue;
@@ -2246,9 +2267,14 @@ impl Renderer {
         world_scene: &str,
         overlay_scene: &str,
         scene_passes: &[SceneFramePassDescriptor],
+        render_world: bool,
     ) -> (FrameGraph, Vec<PassHandle>) {
-        let descriptors =
-            self.frame_graph_descriptors_for_scene(world_scene, overlay_scene, scene_passes);
+        let descriptors = self.frame_graph_descriptors_for_scene(
+            world_scene,
+            overlay_scene,
+            scene_passes,
+            render_world,
+        );
         let (graph, handles) = self.build_frame_graph_from_descriptors(&descriptors);
         if !handles.is_empty() {
             return (graph, handles);
@@ -2258,7 +2284,12 @@ impl Renderer {
             overlay_scene,
             "frame graph descriptors produced no valid passes; using built-in defaults"
         );
-        self.build_frame_graph_from_descriptors(&default_frame_graph_passes())
+        let fallback = if render_world {
+            default_frame_graph_passes()
+        } else {
+            ui_only_frame_graph_passes()
+        };
+        self.build_frame_graph_from_descriptors(&fallback)
     }
 
     pub(crate) fn prepare_packet(
@@ -2330,17 +2361,28 @@ impl Renderer {
         prepare_timings.prepare_ui_ms = prepare_ui_start.elapsed().as_secs_f32() * 1000.0;
 
         let prepare_mesh_start = Instant::now();
-        let prepared_mesh = {
-            let _span = tracing::info_span!("renderer.prepare_mesh_draws").entered();
-            self.prepare_mesh_draw(
-                device,
-                queue,
-                &merged_world_frame,
-                surface_width,
-                surface_height,
-            )
+        let prepared_mesh = if merged_world_frame.render_world {
+            let prepared = {
+                let _span = tracing::info_span!("renderer.prepare_mesh_draws").entered();
+                self.prepare_mesh_draw(
+                    device,
+                    queue,
+                    &merged_world_frame,
+                    surface_width,
+                    surface_height,
+                )
+            };
+            prepare_timings.prepare_mesh_ms = prepare_mesh_start.elapsed().as_secs_f32() * 1000.0;
+            prepared
+        } else {
+            MeshPreparedWithHotPath {
+                prepared: MeshPreparedDraw {
+                    draws: Vec::new(),
+                    surface_size,
+                },
+                hot_path: MeshPrepareHotPath::default(),
+            }
         };
-        prepare_timings.prepare_mesh_ms = prepare_mesh_start.elapsed().as_secs_f32() * 1000.0;
         prepare_timings.mesh_hot_path = prepared_mesh.hot_path;
 
         RendererPreparedPacket {
@@ -2361,17 +2403,11 @@ impl Renderer {
         frame_view: &TextureView,
         packet: RendererPreparedPacket,
     ) -> RendererFrameTimings {
-        let mut timings = packet.prepare_timings;
-        self.prepare_registered_passes(device, queue, &packet, &mut timings);
-
-        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("engine_render_encoder"),
-        });
-
         let (graph, fallback_order) = self.build_frame_graph(
             &packet.merged_world_frame.world_scene_label,
             &packet.merged_world_frame.overlay_scene_label,
             &packet.merged_world_frame.scene_render_graph_passes,
+            packet.merged_world_frame.render_world,
         );
         let order = match graph.execution_order() {
             Ok(order) => order,
@@ -2383,6 +2419,19 @@ impl Renderer {
                 fallback_order
             }
         };
+        let mut active_passes = BTreeSet::new();
+        for handle in &order {
+            if let Some(node) = graph.node(*handle) {
+                active_passes.insert(node.name.clone());
+            }
+        }
+
+        let mut timings = packet.prepare_timings;
+        self.prepare_registered_passes(device, queue, &packet, &active_passes, &mut timings);
+
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("engine_render_encoder"),
+        });
 
         for handle in order {
             let Some(node) = graph.node(handle) else {

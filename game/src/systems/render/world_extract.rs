@@ -24,6 +24,7 @@ fn sync_frame_metadata(data: &mut EngineData) {
         .scene
         .registry
         .render_graph_contributions(data.scene.world.active, data.scene.active_overlay());
+    frame.render_world = data.scene.world.visible;
     frame.world_paused = data.scene.world.paused;
     frame.camera_yaw = data.scene.world_runtime.ctx.camera_yaw;
     frame.camera_pitch = data.scene.world_runtime.ctx.camera_pitch;
