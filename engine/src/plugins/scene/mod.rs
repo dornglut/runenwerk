@@ -49,6 +49,9 @@ impl EnginePlugin for ScenePlugin {
             scene_template_secondary_button_batch_system,
             &["overlay_ui_build_batches"],
         );
+        // Scene transitions mutate overlay UI state and must happen before layout/render.
+        // Without this edge, clear_input can run first and erase click edges before scene flow reads them.
+        builder.add_edge("scene_transition", "overlay_ui_layout");
         builder.add_edge(
             "scene_template_secondary_button_batch",
             "overlay_ui_render_extract",
@@ -134,6 +137,17 @@ pub fn scene_transition_system(data: &mut EngineData) -> anyhow::Result<()> {
         scene_template_flow_system(data)?;
         flush_lifecycle_status(data);
         return Ok(());
+    }
+    if data.input.left_mouse_pressed() {
+        tracing::info!(
+            target: "events",
+            event = "scene.template_flow.disabled",
+            active_overlay = data.scene.active_overlay().label(),
+            overlay_visible = data.scene.overlay_visible(),
+            mouse_x = data.input.mouse_position.0,
+            mouse_y = data.input.mouse_position.1,
+            "left click handled with fallback scene transition path"
+        );
     }
 
     if data.input.toggle_pause_menu {

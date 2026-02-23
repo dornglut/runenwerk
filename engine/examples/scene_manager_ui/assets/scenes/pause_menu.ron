@@ -10,6 +10,6 @@
   secondary_button: Some((
     label: "Main Menu",
     component: "../components/button_primary.ron",
-    action: go_to("main_menu"),
+    action: main_menu,
   )),
 )

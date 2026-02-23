@@ -1,11 +1,18 @@
 use std::path::Path;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    EnvFilter, Layer, filter::filter_fn, fmt, layer::SubscriberExt, util::SubscriberInitExt,
+};
 
 #[cfg(feature = "tracy")]
 const TRACY_ENV_VAR: &str = "ENGINE_TRACY";
 #[cfg(feature = "tracy")]
 const TRACY_ENV_VAR_LEGACY: &str = "ENGINE_V2_TRACY";
+
+pub struct TracingGuards {
+    _engine_log_guard: WorkerGuard,
+    _events_log_guard: WorkerGuard,
+}
 
 #[cfg(feature = "tracy")]
 fn tracy_enabled() -> bool {
@@ -20,28 +27,41 @@ fn tracy_enabled() -> bool {
         .unwrap_or(false)
 }
 
-pub fn setup_tracing() -> Option<WorkerGuard> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+pub fn setup_tracing() -> Option<TracingGuards> {
+    let stdout_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let file_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let log_dir = Path::new("logs");
     if let Err(err) = std::fs::create_dir_all(log_dir) {
         eprintln!("failed creating log directory {}: {err}", log_dir.display());
     }
-    let file_appender = tracing_appender::rolling::never(log_dir, "engine.log");
-    let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
+    let engine_file_appender = tracing_appender::rolling::never(log_dir, "engine.log");
+    let (engine_file_writer, engine_log_guard) =
+        tracing_appender::non_blocking(engine_file_appender);
+    let events_file_appender = tracing_appender::rolling::never(log_dir, "events.log");
+    let (events_file_writer, events_log_guard) =
+        tracing_appender::non_blocking(events_file_appender);
 
     let stdout_layer = fmt::layer().with_target(true).with_ansi(true);
+    let stdout_layer = stdout_layer.with_filter(stdout_filter);
     let file_layer = fmt::layer()
         .with_target(true)
         .with_ansi(false)
-        .with_writer(file_writer);
+        .with_writer(engine_file_writer)
+        .with_filter(file_filter);
+    let events_layer = fmt::layer()
+        .with_target(true)
+        .with_ansi(false)
+        .with_writer(events_file_writer)
+        .with_filter(filter_fn(|metadata| metadata.target() == "events"));
 
     #[cfg(feature = "tracy")]
     {
         let enable_tracy = tracy_enabled();
         let subscriber = tracing_subscriber::registry()
-            .with(filter)
             .with(stdout_layer)
             .with(file_layer)
+            .with(events_layer)
             .with(enable_tracy.then_some(tracing_tracy::TracyLayer::default()));
 
         match subscriber.try_init() {
@@ -59,7 +79,16 @@ pub fn setup_tracing() -> Option<WorkerGuard> {
                         "tracy profiling disabled (set env to 1 to enable)"
                     );
                 }
-                Some(guard)
+                tracing::info!(
+                    target: "events",
+                    event = "events.trace.ready",
+                    file = "logs/events.log",
+                    "events trace log initialized"
+                );
+                Some(TracingGuards {
+                    _engine_log_guard: engine_log_guard,
+                    _events_log_guard: events_log_guard,
+                })
             }
             Err(err) => {
                 eprintln!("failed to initialize tracing subscriber: {err}");
@@ -71,11 +100,22 @@ pub fn setup_tracing() -> Option<WorkerGuard> {
     #[cfg(not(feature = "tracy"))]
     {
         let subscriber = tracing_subscriber::registry()
-            .with(filter)
             .with(stdout_layer)
-            .with(file_layer);
+            .with(file_layer)
+            .with(events_layer);
         match subscriber.try_init() {
-            Ok(()) => Some(guard),
+            Ok(()) => {
+                tracing::info!(
+                    target: "events",
+                    event = "events.trace.ready",
+                    file = "logs/events.log",
+                    "events trace log initialized"
+                );
+                Some(TracingGuards {
+                    _engine_log_guard: engine_log_guard,
+                    _events_log_guard: events_log_guard,
+                })
+            }
             Err(err) => {
                 eprintln!("failed to initialize tracing subscriber: {err}");
                 None
