@@ -1,0 +1,106 @@
+# Input Plugin
+
+This plugin now uses a data-driven action map instead of hardcoded key checks.
+
+## Goals
+
+- Keep engine/game systems decoupled from concrete keys.
+- Allow runtime rebinding (`map_key`, `map_chord`, `unmap_*`) without changing system code.
+- Preserve the existing `InputState` booleans (`data.input.world_move_left`, etc.) for compatibility.
+
+## Core Types
+
+- `InputState` (`engine/src/plugins/input/domain.rs`)
+- `InputBindings`
+- `InputBindingChange`
+- `KeyChord`
+- `ModifierRule`
+- `action::*` constants (built-in action ids)
+
+## Model
+
+`InputState` tracks:
+
+- physical key/button state (`keys_down`, mouse buttons)
+- action state:
+  - `action_pressed(action_id)`: fired this frame
+  - `action_down(action_id)`: currently held
+
+Legacy public fields are synchronized from the action state each frame, so existing systems continue to work.
+
+## Default Action Map
+
+Default bindings are installed by `InputBindings::with_default_bindings()` and used by `InputState::new()`.
+
+Examples:
+
+- `ui.submit`: `Enter`, `NumpadEnter` (Shift forbidden)
+- `ui.insert_newline`: `Shift+Enter`, `Shift+NumpadEnter`
+- `world.move_left/right/up/down`: `A/D/W/S`
+- `system.toggle_pause_menu`: `Escape`
+- `scene.next` / `scene.prev`: `F2` / `Shift+F2`
+- `scene.overlay_push` / `scene.overlay_pop`: `F5` / `Shift+F5`
+- `ui.save_template`: `Ctrl+S` or `Super+S`
+
+## Runtime Remapping
+
+```rust
+use engine::plugins::input::domain::{action, KeyChord};
+use winit::keyboard::KeyCode;
+
+// Rebind world left movement from A -> J.
+engine.data.input.unmap_key(action::WORLD_MOVE_LEFT, KeyCode::KeyA);
+engine.data.input.map_key(action::WORLD_MOVE_LEFT, KeyCode::KeyJ);
+
+// Add a custom action with a modifier chord.
+engine
+    .data
+    .input
+    .map_chord("debug.toggle_freecam", KeyChord::new(KeyCode::KeyP).with_shift_required());
+```
+
+Read action state:
+
+```rust
+if engine.data.input.action_pressed("debug.toggle_freecam") {
+    // toggle freecam
+}
+
+if engine.data.input.action_down(action::WORLD_MOVE_LEFT) {
+    // held movement
+}
+```
+
+## Goal API (Resource/Event Friendly)
+
+`InputBindingChange` is designed so remap requests can be passed around as data (for example via ECS resources/events) before being applied:
+
+```rust
+use engine::plugins::input::domain::{action, InputBindingChange, KeyChord};
+use winit::keyboard::KeyCode;
+
+let applied = engine.data.input.apply_binding_changes([
+    InputBindingChange::UnmapKey {
+        action: action::WORLD_MOVE_LEFT.to_string(),
+        key: KeyCode::KeyA,
+    },
+    InputBindingChange::MapChord {
+        action: action::WORLD_MOVE_LEFT.to_string(),
+        chord: KeyChord::new(KeyCode::ArrowLeft),
+    },
+]);
+
+assert_eq!(applied, 2);
+```
+
+This shape is intended to map directly to future ECS event payloads (`InputRemapRequested`, etc.).
+
+## Frame Lifecycle
+
+- OS events call:
+  - `InputState::handle_window_event`
+  - `InputState::handle_device_event`
+- End-of-frame reset is done by `InputFinalizePlugin` (`clear_input` node), which calls:
+  - `InputState::clear_frame`
+
+`clear_frame` clears per-frame pulses and keeps held actions in sync with current key state.

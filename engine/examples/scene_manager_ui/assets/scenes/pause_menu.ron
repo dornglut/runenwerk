@@ -3,9 +3,9 @@
   panel_component: "../components/panel.ron",
   text_component: "../components/text_label.ron",
   primary_button: Some((
-    label: "Settings",
+    label: "Resume",
     component: "../components/button_primary.ron",
-    action: go_to("settings_menu"),
+    action: back,
   )),
   secondary_button: Some((
     label: "Main Menu",

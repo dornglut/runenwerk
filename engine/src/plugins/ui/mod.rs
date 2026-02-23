@@ -3,7 +3,7 @@ pub mod domain;
 use crate::plugins::scene::domain::{OverlaySubmitMessage, WorldDebugPosition};
 use crate::plugins::ui::domain::{
     UiBatchCmd, UiButton, UiDirty, UiDrawCmd, UiEditorNode, UiInputField, UiInteraction, UiNode,
-    UiStyle, UiText, UiTransform, reload_console_template_if_changed,
+    UiPresentationMode, UiStyle, UiText, UiTransform, reload_console_template_if_changed,
     save_console_template_to_disk,
 };
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
@@ -60,6 +60,13 @@ const INPUT_PADDING_X: f32 = 6.0;
 const INPUT_PADDING_Y: f32 = 4.0;
 const EDITOR_BASE_NUDGE_PX: f32 = 1.0;
 const EDITOR_DRAG_SNAP_PX: f32 = 10.0;
+
+fn centered_demo_enabled(data: &EngineData) -> bool {
+    matches!(
+        data.scene.overlay_runtime.ui.presentation_mode,
+        UiPresentationMode::CenteredDemo
+    )
+}
 
 #[derive(Debug, Copy, Clone)]
 struct LogWindowRect {
@@ -1650,8 +1657,17 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
         data.scene.overlay_runtime.ui.layout.panel_min_height * s,
         available_h,
     );
-    let panel_x = outer_margin;
-    let panel_y = (screen_h - panel_h - outer_margin).max(outer_margin);
+    let centered_demo = centered_demo_enabled(data);
+    let panel_x = if centered_demo {
+        ((screen_w - panel_w) * 0.5).max(outer_margin)
+    } else {
+        outer_margin
+    };
+    let panel_y = if centered_demo {
+        ((screen_h - panel_h) * 0.5).max(outer_margin)
+    } else {
+        (screen_h - panel_h - outer_margin).max(outer_margin)
+    };
     let inner_padding = data.scene.overlay_runtime.ui.layout.inner_padding * s;
     let panel_inner_w = (panel_w - inner_padding * 2.0).max(1.0);
     let (footer_y, input_h, button_w, input_w) = adaptive_footer_metrics(
@@ -1683,10 +1699,23 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
         .world
         .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.scrollback)
     {
-        scroll.x = panel_x + inner_padding;
-        scroll.y = panel_y + inner_padding;
-        scroll.w = panel_inner_w;
-        scroll.h = panel_h - footer_y - inner_padding;
+        if centered_demo {
+            let scroll_h =
+                (panel_h * 0.34).clamp(52.0 * s, (panel_h - (inner_padding * 2.0)).max(1.0));
+            let scroll_y = (panel_y + ((panel_h - scroll_h) * 0.30)).clamp(
+                panel_y + inner_padding,
+                panel_y + panel_h - inner_padding - scroll_h,
+            );
+            scroll.x = panel_x + inner_padding;
+            scroll.y = scroll_y;
+            scroll.w = panel_inner_w;
+            scroll.h = scroll_h;
+        } else {
+            scroll.x = panel_x + inner_padding;
+            scroll.y = panel_y + inner_padding;
+            scroll.w = panel_inner_w;
+            scroll.h = panel_h - footer_y - inner_padding;
+        }
     }
 
     if let Some(input) = data
@@ -1695,7 +1724,11 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
         .world
         .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.input)
     {
-        input.x = panel_x + inner_padding;
+        input.x = if centered_demo {
+            panel_x + ((panel_w - input_w) * 0.5).max(inner_padding)
+        } else {
+            panel_x + inner_padding
+        };
         input.y = panel_y + panel_h - footer_y;
         input.w = input_w;
         input.h = input_h;
@@ -1707,7 +1740,11 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
         .world
         .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.confirm_button)
     {
-        button.x = panel_x + panel_w - inner_padding - button_w;
+        button.x = if centered_demo {
+            panel_x + ((panel_w - button_w) * 0.5).max(inner_padding)
+        } else {
+            panel_x + panel_w - inner_padding - button_w
+        };
         button.y = panel_y + panel_h - footer_y;
         button.w = button_w;
         button.h = input_h;
@@ -1718,6 +1755,7 @@ pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
 }
 
 fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
+    let centered_demo = centered_demo_enabled(data);
     if let (Some(transform), Some(style)) = (
         data.scene
             .overlay_runtime
@@ -1767,8 +1805,18 @@ fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, 
 
         for (line_idx, line) in viewport.view_rows.iter().enumerate() {
             let (line_color, stripped) = scrollback_line_style(line, text.color);
+            let line_x = if centered_demo {
+                let text_w = measure_text_advance_precise(
+                    &data.scene.overlay_runtime.ui.text_metrics,
+                    stripped,
+                    text_size,
+                );
+                transform.x + ((transform.w - text_w) * 0.5).max(0.0)
+            } else {
+                transform.x
+            };
             commands.push(UiBatchCmd::Text {
-                x: transform.x,
+                x: line_x,
                 y: transform.y + (line_idx as f32 * line_height(text_size)),
                 content: stripped.to_string(),
                 color: line_color,
@@ -1776,7 +1824,7 @@ fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, 
                 clip: Some([transform.x, transform.y, transform.w, transform.h]),
             });
         }
-        if data.scene.overlay_runtime.ui.layout.show_scroll_indicators {
+        if !centered_demo && data.scene.overlay_runtime.ui.layout.show_scroll_indicators {
             push_scroll_indicators(
                 commands,
                 transform,
@@ -1789,7 +1837,7 @@ fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, 
                 [0.62, 0.74, 0.86, 0.95],
             );
         }
-        if data.scene.overlay_runtime.ui.layout.show_scroll_hints {
+        if !centered_demo && data.scene.overlay_runtime.ui.layout.show_scroll_hints {
             commands.push(UiBatchCmd::Text {
                 x: transform.x + (4.0 * ui_scale),
                 y: (transform.y + transform.h - (14.0 * ui_scale)).max(transform.y),
@@ -2110,17 +2158,24 @@ fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, 
 
 pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
     let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
+    let centered_demo = centered_demo_enabled(data);
     let mut commands: Vec<UiBatchCmd> = Vec::new();
     if !data.scene.overlay_visible() {
-        build_diagnostics_batches(data, &mut commands, ui_scale);
+        if !centered_demo {
+            build_diagnostics_batches(data, &mut commands, ui_scale);
+        }
         data.scene.overlay_runtime.ui.batches.commands = commands;
         return Ok(());
     }
 
     build_console_batches(data, &mut commands, ui_scale);
-    build_logs_batches(data, &mut commands, ui_scale);
+    if !centered_demo {
+        build_logs_batches(data, &mut commands, ui_scale);
+    }
     build_input_batches(data, &mut commands, ui_scale);
-    build_diagnostics_batches(data, &mut commands, ui_scale);
+    if !centered_demo {
+        build_diagnostics_batches(data, &mut commands, ui_scale);
+    }
 
     data.scene.overlay_runtime.ui.batches.commands = commands;
     Ok(())

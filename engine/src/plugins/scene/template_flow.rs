@@ -1,7 +1,7 @@
 use super::domain::SceneCommand;
 use crate::plugins::ui::domain::{
-    UiBatchCmd, UiButton, UiButtonTemplate, UiInteraction, UiNode, UiStyle, UiStyleTemplate,
-    UiText, UiTextTemplate, UiTransform,
+    UiBatchCmd, UiButton, UiButtonTemplate, UiInteraction, UiNode, UiPresentationMode, UiStyle,
+    UiStyleTemplate, UiText, UiTextTemplate, UiTransform,
 };
 use crate::runtime::{EngineData, SceneCatalog, SceneHandle};
 use anyhow::{Context, Result, anyhow, bail};
@@ -35,6 +35,20 @@ pub fn setup_template_flow(data: &mut EngineData) -> Result<()> {
     if !scenes.contains_key(&handles.main) {
         bail!("scene handle {} was not loaded", handles.main.index());
     }
+
+    data.scene.overlay_runtime.ui.presentation_mode = UiPresentationMode::CenteredDemo;
+    data.scene.overlay_runtime.ui.layout.panel_width_ratio = 0.48;
+    data.scene.overlay_runtime.ui.layout.panel_height_ratio = 0.52;
+    data.scene.overlay_runtime.ui.layout.panel_min_width = 540.0;
+    data.scene.overlay_runtime.ui.layout.panel_min_height = 340.0;
+    data.scene.overlay_runtime.ui.layout.inner_padding = 18.0;
+    data.scene.overlay_runtime.ui.layout.footer_offset = 72.0;
+    data.scene.overlay_runtime.ui.layout.input_height = 36.0;
+    data.scene.overlay_runtime.ui.layout.button_width = 154.0;
+    data.scene.overlay_runtime.ui.layout.input_button_gap = 12.0;
+    data.scene.overlay_runtime.ui.layout.show_scroll_indicators = false;
+    data.scene.overlay_runtime.ui.layout.show_scroll_hints = false;
+    data.scene.overlay_runtime.ui.layout_dirty = true;
 
     let secondary_button = data.scene.overlay_runtime.world.spawn_bundle((
         UiNode {
@@ -481,6 +495,10 @@ fn apply_active_scene_if_needed(data: &mut EngineData) -> Result<()> {
     };
     data.scene.overlay_runtime.ui.scroll_lines_from_bottom = 0;
     data.scene.overlay_runtime.ui.scroll_horizontal_chars = 0;
+    data.scene.overlay_runtime.ui.log_lines.clear();
+    data.scene.overlay_runtime.ui.log_paused_lines.clear();
+    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
+    data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = 0;
     data.scene.overlay_runtime.ui.input_editor.text.clear();
     data.scene.overlay_runtime.ui.input_editor.cursor_chars = 0;
     data.scene.overlay_runtime.ui.input_editor.viewport_row = 0;
@@ -632,23 +650,58 @@ fn update_secondary_button_layout(data: &mut EngineData, secondary_button: ecs::
         return;
     }
 
+    let centered_demo = matches!(
+        data.scene.overlay_runtime.ui.presentation_mode,
+        UiPresentationMode::CenteredDemo
+    );
+
     if let Some(confirm) = data
         .scene
         .overlay_runtime
         .world
         .get_component::<UiTransform>(data.scene.overlay_runtime.ui.confirm_button)
         .copied()
-        && let Some(secondary) = data
+    {
+        let gap =
+            if centered_demo { 12.0 } else { 8.0 } * data.scene.overlay_runtime.ui.scale.max(1.0);
+        if centered_demo {
+            let group_x = data
+                .scene
+                .overlay_runtime
+                .world
+                .get_component::<UiTransform>(data.scene.overlay_runtime.ui.root)
+                .map(|root| root.x + ((root.w - ((confirm.w * 2.0) + gap)) * 0.5).max(0.0))
+                .unwrap_or(confirm.x - confirm.w - gap);
+            if let Some(confirm_mut) = data
+                .scene
+                .overlay_runtime
+                .world
+                .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.confirm_button)
+            {
+                confirm_mut.x = group_x + confirm.w + gap;
+            }
+            if let Some(secondary) = data
+                .scene
+                .overlay_runtime
+                .world
+                .get_component_mut::<UiTransform>(secondary_button)
+            {
+                secondary.w = confirm.w;
+                secondary.h = confirm.h;
+                secondary.x = group_x;
+                secondary.y = confirm.y;
+            }
+        } else if let Some(secondary) = data
             .scene
             .overlay_runtime
             .world
             .get_component_mut::<UiTransform>(secondary_button)
-    {
-        let gap = 8.0 * data.scene.overlay_runtime.ui.scale.max(1.0);
-        secondary.w = confirm.w;
-        secondary.h = confirm.h;
-        secondary.x = confirm.x - confirm.w - gap;
-        secondary.y = confirm.y;
+        {
+            secondary.w = confirm.w;
+            secondary.h = confirm.h;
+            secondary.x = confirm.x - confirm.w - gap;
+            secondary.y = confirm.y;
+        }
     }
 
     let hovered = data

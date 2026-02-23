@@ -1,5 +1,5 @@
 (
-  body: "gameplay",
+  body: "Gameplay Preview",
   panel_component: "../components/panel.ron",
   text_component: "../components/text_label.ron",
 )

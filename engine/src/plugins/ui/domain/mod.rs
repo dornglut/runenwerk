@@ -210,6 +210,13 @@ impl Default for UiLayoutConfig {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub enum UiPresentationMode {
+    #[default]
+    Standard,
+    CenteredDemo,
+}
+
 #[derive(Debug)]
 pub struct ConsoleUiState {
     pub root: EntityHandle,
@@ -238,6 +245,7 @@ pub struct ConsoleUiState {
     pub screen_size: (f32, f32),
     pub scale: f32,
     pub layout_dirty: bool,
+    pub presentation_mode: UiPresentationMode,
     pub editor: UiEditorState,
 }
 
@@ -399,6 +407,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         screen_size: (1280.0, 720.0),
         scale: 1.0,
         layout_dirty: true,
+        presentation_mode: UiPresentationMode::Standard,
         editor: UiEditorState::default(),
     }
 }

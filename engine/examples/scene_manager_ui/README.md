@@ -26,8 +26,14 @@ App::new()
 
 - `main_menu`: buttons to go to `game_scene` and `settings_menu`.
 - `settings_menu`: button to go back to the previous scene.
-- `game_scene`: text panel that shows `"gameplay"`.
-- `pause_menu`: triggered by `Esc` in `game_scene`, with `settings` and `back to main menu` buttons.
+- `game_scene`: text panel that shows `"Gameplay Preview"`.
+- `pause_menu`: triggered by `Esc` in `game_scene`, with `resume` and `main menu` buttons.
+
+## Demo Presentation
+
+- Scene-template demo mode uses centered panel/content layout.
+- Default world logs and diagnostics overlays are suppressed for this example.
+- The default console input field is hidden for this flow.
 
 ## Assets Layout
 
