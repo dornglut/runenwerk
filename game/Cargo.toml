@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
+engine = { path = "../engine" }
+engine_plugins = { path = "../engine_plugins" }
 ecs = { path = "../ecs" }
-glam = "0.32.0"
 tracing = "0.1.44"
-rand = "0.10.0"
+winit = "0.30.9"

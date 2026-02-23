@@ -1,67 +1,16 @@
-use ecs::{World, WorldQueryExt, init_tracing};
-use glam::Vec3;
-use tracing::info;
+use anyhow::Result;
+use engine::platform::App;
+use engine::utils::setup_tracing;
+use game::plugins::full_game_plugins;
+use winit::event_loop::{ControlFlow, EventLoop};
 
-#[derive(Debug, Copy, Clone)]
-struct Position(Vec3);
+fn main() -> Result<()> {
+    let _tracing_guard = setup_tracing();
+    tracing::info!("starting grotto game");
 
-#[derive(Debug, Copy, Clone)]
-struct Velocity(Vec3);
+    let event_loop = EventLoop::new()?;
+    event_loop.set_control_flow(ControlFlow::Poll);
 
-fn movement_system(world: &mut World, dt: f32) {
-    world.query_mut::<Position, Velocity, _>(|_entity, position, velocity| {
-        position.0 += velocity.0 * dt;
-    });
-}
-
-fn main() {
-    init_tracing();
-
-    let mut world = World::new();
-
-    world.spawn_many(12, |builder| {
-        builder
-            .with(Position(Vec3::new(
-                rand::random::<f32>() * 50.0,
-                rand::random::<f32>() * 50.0,
-                0.0,
-            )))
-            .with(Velocity(Vec3::new(
-                rand::random::<f32>() - 0.5,
-                rand::random::<f32>() - 0.5,
-                0.0,
-            )))
-    });
-
-    info!("spawned {} entities", world.entity_locations.len());
-
-    let dt = 0.16_f32;
-    for tick in 0..5 {
-        movement_system(&mut world, dt);
-
-        let visible_count = world
-            .query()
-            .with::<Position>()
-            .with::<Velocity>()
-            .iter()
-            .count();
-        info!(tick, visible_count, "simulation step");
-    }
-
-    info!("final sample (first 5 entities)");
-    for (entity, (position, velocity)) in world
-        .query()
-        .with::<Position>()
-        .with::<Velocity>()
-        .iter()
-        .take(5)
-    {
-        info!(
-            id = entity.id,
-            generation = entity.generation,
-            ?position,
-            ?velocity,
-            "entity"
-        );
-    }
+    let mut app = App::with_plugins(full_game_plugins());
+    event_loop.run_app(&mut app).map_err(Into::into)
 }

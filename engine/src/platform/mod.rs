@@ -1,2 +1,3 @@
-pub mod app;
+mod app;
+
 pub use app::*;

@@ -2,9 +2,10 @@
 resolver = "3"
 members = [
   "game",
+  "engine_plugins",
   "ecs",
   "ecs_macros",
   "scheduler",
-  "engine_v2",
+  "engine",
   "grid"
 ]
