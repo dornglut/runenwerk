@@ -1,6 +1,6 @@
 use super::{
     RenderGraphRegistryResource, RenderPassExecutorRegistryResource, Renderer,
-    RendererFrameTimings, WgpuCtx, WorldRenderFrame,
+    RendererFrameTimings, ShaderRegistryResource, WgpuCtx, WorldRenderFrame,
 };
 use crate::plugins::ui::domain::UiDrawList;
 use anyhow::Result;
@@ -35,26 +35,6 @@ impl Gfx {
         self.ctx.resize(width, height);
     }
 
-    pub fn poll_shader_hot_reload(&mut self) -> Vec<String> {
-        self.renderer.poll_shader_hot_reload()
-    }
-
-    pub fn force_shader_reload(&mut self) -> Vec<String> {
-        self.renderer.force_shader_reload()
-    }
-
-    pub fn set_shader_watch_enabled(&mut self, enabled: bool) {
-        self.renderer.set_shader_watch_enabled(enabled);
-    }
-
-    pub fn shader_watch_enabled(&self) -> bool {
-        self.renderer.shader_watch_enabled()
-    }
-
-    pub fn shader_status_lines(&self) -> Vec<String> {
-        self.renderer.shader_status_lines()
-    }
-
     pub fn poll_model_hot_reload(&mut self) -> Vec<String> {
         self.renderer.poll_model_hot_reload()
     }
@@ -79,6 +59,7 @@ impl Gfx {
         &mut self,
         world_frame: &WorldRenderFrame,
         draw_list: &UiDrawList,
+        shader_registry: &mut ShaderRegistryResource,
         render_graph_registry: &RenderGraphRegistryResource,
         render_executor_registry: &RenderPassExecutorRegistryResource,
     ) -> Result<GfxFrameTimings, SurfaceError> {
@@ -92,6 +73,7 @@ impl Gfx {
             &self.ctx.queue,
             world_frame,
             draw_list,
+            shader_registry,
             self.ctx.surface_config.format,
             self.ctx.surface_config.width as f32,
             self.ctx.surface_config.height as f32,

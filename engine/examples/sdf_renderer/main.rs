@@ -3,7 +3,7 @@ use bytemuck::{Pod, Zeroable};
 use engine::plugins::render::domain::{
     BuiltinRenderPassExecutor, MAX_WORLD_RENDER_AGENTS, MAX_WORLD_RENDER_MODELS,
     RenderFeatureGraphSpec, RenderPassEncodeContext, RenderPassExecutor,
-    RenderPassExecutorRegistryResource, RenderPassPrepareContext,
+    RenderPassExecutorRegistryResource, RenderPassPrepareContext, WorldRenderFrame,
 };
 use engine::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use engine::{platform::App, plugins::input::domain::action};
@@ -903,7 +903,9 @@ impl RenderPassExecutor for SdfComputeExecutor {
             .as_ref()
             .ok_or_else(|| anyhow!("sdf compute pass unavailable after setup"))?;
 
-        let world_frame = ctx.world_frame();
+        let world_frame = ctx
+            .frame_data::<WorldRenderFrame>()
+            .ok_or_else(|| anyhow!("missing WorldRenderFrame in render pass prepare context"))?;
         let agent_count = world_frame.agents.len().min(MAX_WORLD_RENDER_AGENTS);
         let model_count = world_frame.model_proxies.len().min(MAX_WORLD_RENDER_MODELS);
         let params = SdfWorldParamsRaw {

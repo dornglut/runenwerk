@@ -2,6 +2,7 @@ use super::WorldRenderModelProxy;
 use crate::plugins::shared::{
     ReloadStatusPayload, file_modified, should_poll, should_reload, watch_status_line,
 };
+use ecs::{EntityHandle, World};
 use glam::{Mat4, Vec3, Vec4};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,12 +42,6 @@ impl SourceKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ReloadStamp {
-    source_modified: Option<SystemTime>,
-    glb_modified: Option<SystemTime>,
-}
-
 #[derive(Debug, Clone)]
 struct DiscoveredModel {
     id: String,
@@ -56,16 +51,33 @@ struct DiscoveredModel {
     source_modified: Option<SystemTime>,
 }
 
-#[derive(Debug, Clone)]
-struct ModelAsset {
+#[derive(Debug, Clone, ecs::Component)]
+struct ModelAssetComponent {
+    id: String,
     source_kind: SourceKind,
     source_path: PathBuf,
     glb_path: PathBuf,
-    stamp: ReloadStamp,
+    source_modified: Option<SystemTime>,
+    glb_modified: Option<SystemTime>,
     revision: u64,
     proxies: Vec<WorldRenderModelProxy>,
     meshes: Vec<ModelMesh>,
     last_error: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ModelManagerConfigResource {
+    watch_enabled: bool,
+    force_reload: bool,
+}
+
+impl Default for ModelManagerConfigResource {
+    fn default() -> Self {
+        Self {
+            watch_enabled: true,
+            force_reload: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -114,11 +126,17 @@ struct ImportedModelData {
     meshes: Vec<ModelMesh>,
 }
 
-#[derive(Debug, Clone)]
 pub struct ModelManager {
-    models: BTreeMap<String, ModelAsset>,
-    watch_enabled: bool,
-    force_reload: bool,
+    world: World,
+}
+
+impl std::fmt::Debug for ModelManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModelManager")
+            .field("model_count", &self.model_count())
+            .field("watch_enabled", &self.watch_enabled())
+            .finish()
+    }
 }
 
 impl Default for ModelManager {
@@ -129,30 +147,33 @@ impl Default for ModelManager {
 
 impl ModelManager {
     pub fn new() -> Self {
-        let mut manager = Self {
-            models: BTreeMap::new(),
-            watch_enabled: true,
-            force_reload: true,
-        };
+        let mut world = World::new();
+        world.register_component::<ModelAssetComponent>();
+        world.ensure_component_index::<ModelAssetComponent, String>(|asset| asset.id.clone());
+        world.insert_resource(ModelManagerConfigResource::default());
+        let mut manager = Self { world };
         let _ = manager.poll_updates();
         manager
     }
 
     pub fn watch_enabled(&self) -> bool {
-        self.watch_enabled
+        self.config().watch_enabled
     }
 
     pub fn set_watch_enabled(&mut self, enabled: bool) {
-        self.watch_enabled = enabled;
+        self.config_mut().watch_enabled = enabled;
     }
 
     pub fn request_reload(&mut self) {
-        self.force_reload = true;
+        self.config_mut().force_reload = true;
     }
 
     pub fn collect_sdf_proxies(&self) -> Vec<WorldRenderModelProxy> {
         let mut out = Vec::new();
-        for asset in self.models.values() {
+        for entity in self.world.entities_with::<ModelAssetComponent>() {
+            let Some(asset) = self.world.get_component::<ModelAssetComponent>(entity) else {
+                continue;
+            };
             out.extend(asset.proxies.iter().copied());
         }
         out
@@ -160,16 +181,20 @@ impl ModelManager {
 
     pub fn collect_meshes(&self) -> Vec<ModelMesh> {
         let mut out = Vec::new();
-        for asset in self.models.values() {
+        for entity in self.world.entities_with::<ModelAssetComponent>() {
+            let Some(asset) = self.world.get_component::<ModelAssetComponent>(entity) else {
+                continue;
+            };
             out.extend(asset.meshes.iter().cloned());
         }
         out
     }
 
     pub fn status_lines(&self) -> Vec<String> {
+        let watch_enabled = self.watch_enabled();
         let mut lines = vec![watch_status_line(
             "model",
-            self.watch_enabled,
+            watch_enabled,
             MODELS_WATCH_SOURCE,
         )];
         lines.extend(
@@ -181,22 +206,24 @@ impl ModelManager {
     }
 
     pub fn status_payloads(&self) -> Vec<ReloadStatusPayload> {
-        if self.models.is_empty() {
+        let watch_enabled = self.watch_enabled();
+        let assets = self.assets_sorted();
+        if assets.is_empty() {
             return vec![ReloadStatusPayload::new(
                 "model",
                 "none",
                 "empty",
                 MODELS_DIR_FALLBACK,
                 0,
-                self.watch_enabled,
+                watch_enabled,
                 None,
                 None,
                 None,
             )];
         }
-        self.models
-            .iter()
-            .map(|(id, asset)| {
+        assets
+            .into_iter()
+            .map(|asset| {
                 let textured_meshes = asset
                     .meshes
                     .iter()
@@ -209,12 +236,12 @@ impl ModelManager {
                 };
                 ReloadStatusPayload::new(
                     "model",
-                    id.clone(),
+                    asset.id.clone(),
                     state,
                     asset.source_path.to_string_lossy(),
                     asset.revision,
-                    self.watch_enabled,
-                    asset.stamp.source_modified,
+                    watch_enabled,
+                    asset.source_modified,
                     asset.last_error.clone(),
                     Some(format!(
                         "source_kind={} proxies={} meshes={} textured={} glb={}",
@@ -230,10 +257,10 @@ impl ModelManager {
     }
 
     pub fn statuses(&self) -> Vec<ModelStatus> {
-        self.models
-            .iter()
-            .map(|(id, asset)| ModelStatus {
-                id: id.clone(),
+        self.assets_sorted()
+            .into_iter()
+            .map(|asset| ModelStatus {
+                id: asset.id,
                 path: asset.source_path.to_string_lossy().to_string(),
                 source_kind: asset.source_kind.as_str().to_string(),
                 glb_path: asset.glb_path.to_string_lossy().to_string(),
@@ -246,6 +273,7 @@ impl ModelManager {
     }
 
     pub fn poll_updates(&mut self) -> Vec<String> {
+        let watch_enabled = self.watch_enabled();
         match self.poll_updates_impl() {
             Ok(messages) => messages,
             Err(err) => vec![
@@ -255,7 +283,7 @@ impl ModelManager {
                     "failed",
                     MODELS_DIR_FALLBACK,
                     0,
-                    self.watch_enabled,
+                    watch_enabled,
                     None,
                     Some(err),
                     None,
@@ -266,24 +294,37 @@ impl ModelManager {
     }
 
     fn poll_updates_impl(&mut self) -> Result<Vec<String>, String> {
-        if !should_poll(self.watch_enabled, self.force_reload) {
+        let watch_enabled = self.watch_enabled();
+        let force = self.config().force_reload;
+        if !should_poll(watch_enabled, force) {
             return Ok(Vec::new());
         }
         let mut payloads = Vec::new();
-        let force = self.force_reload;
-        self.force_reload = false;
+        self.config_mut().force_reload = false;
 
         let model_files = scan_model_files();
-        if model_files.is_empty() && self.models.is_empty() {
+        if model_files.is_empty() && self.model_count() == 0 {
             return Ok(Vec::new());
         }
 
         let discovered_ids: BTreeSet<String> = model_files.iter().map(|m| m.id.clone()).collect();
 
-        let existing_ids: Vec<String> = self.models.keys().cloned().collect();
-        for id in existing_ids {
+        let existing_assets: Vec<(String, EntityHandle)> = self
+            .world
+            .entities_with::<ModelAssetComponent>()
+            .filter_map(|entity| {
+                self.world
+                    .get_component::<ModelAssetComponent>(entity)
+                    .map(|asset| (asset.id.clone(), entity))
+            })
+            .collect();
+        for (id, entity) in existing_assets {
             if !discovered_ids.contains(&id) {
-                let removed = self.models.remove(&id);
+                let removed = self
+                    .world
+                    .get_component::<ModelAssetComponent>(entity)
+                    .cloned();
+                self.world.remove_entity(entity);
                 payloads.push(ReloadStatusPayload::new(
                     "model",
                     id,
@@ -293,10 +334,8 @@ impl ModelManager {
                         .map(|asset| asset.source_path.to_string_lossy().to_string())
                         .unwrap_or_else(|| MODELS_DIR_FALLBACK.to_string()),
                     removed.as_ref().map(|asset| asset.revision).unwrap_or(0),
-                    self.watch_enabled,
-                    removed
-                        .as_ref()
-                        .and_then(|asset| asset.stamp.source_modified),
+                    watch_enabled,
+                    removed.as_ref().and_then(|asset| asset.source_modified),
                     None,
                     None,
                 ));
@@ -305,32 +344,42 @@ impl ModelManager {
 
         for model in model_files {
             let id = model.id.clone();
-            let entry = self.models.entry(id.clone()).or_insert_with(|| ModelAsset {
-                source_kind: model.source_kind,
-                source_path: model.source_path.clone(),
-                glb_path: model.glb_path.clone(),
-                stamp: ReloadStamp {
+            let entity = if let Some(entity) = self.asset_entity(&id) {
+                entity
+            } else {
+                self.world.spawn_entity_typed(ModelAssetComponent {
+                    id: id.clone(),
+                    source_kind: model.source_kind,
+                    source_path: model.source_path.clone(),
+                    glb_path: model.glb_path.clone(),
                     source_modified: None,
                     glb_modified: None,
-                },
-                revision: 0,
-                proxies: Vec::new(),
-                meshes: Vec::new(),
-                last_error: None,
-            });
-            entry.source_kind = model.source_kind;
-            entry.source_path = model.source_path.clone();
-            entry.glb_path = model.glb_path.clone();
+                    revision: 0,
+                    proxies: Vec::new(),
+                    meshes: Vec::new(),
+                    last_error: None,
+                })
+            };
+            if let Some(asset) = self.world.get_component_mut::<ModelAssetComponent>(entity) {
+                asset.source_kind = model.source_kind;
+                asset.source_path = model.source_path.clone();
+                asset.glb_path = model.glb_path.clone();
+            }
 
             if model.source_kind == SourceKind::Blend {
                 if let Some(msg) = ensure_blend_export(&model, force)? {
+                    let revision = self
+                        .world
+                        .get_component::<ModelAssetComponent>(entity)
+                        .map(|asset| asset.revision)
+                        .unwrap_or(0);
                     payloads.push(ReloadStatusPayload::new(
                         "model",
                         id.clone(),
                         "converted",
                         model.source_path.to_string_lossy(),
-                        entry.revision,
-                        self.watch_enabled,
+                        revision,
+                        watch_enabled,
                         model.source_modified,
                         None,
                         Some(msg),
@@ -338,57 +387,72 @@ impl ModelManager {
                 }
             }
 
-            let stamp = ReloadStamp {
-                source_modified: model.source_modified,
-                glb_modified: file_modified(&model.glb_path),
-            };
+            let source_modified = model.source_modified;
+            let glb_modified = file_modified(&model.glb_path);
+            let (last_source_modified, last_glb_modified) = self
+                .world
+                .get_component::<ModelAssetComponent>(entity)
+                .map(|asset| (asset.source_modified, asset.glb_modified))
+                .unwrap_or((None, None));
 
-            if !should_reload(
-                self.watch_enabled,
-                force,
-                entry.stamp.glb_modified,
-                stamp.glb_modified,
-            ) && !force
-                && entry.stamp.source_modified == stamp.source_modified
+            if !should_reload(watch_enabled, force, last_glb_modified, glb_modified)
+                && !force
+                && last_source_modified == source_modified
             {
                 continue;
             }
 
             match import_model_data(&model.glb_path) {
                 Ok(imported) => {
-                    entry.proxies = imported.proxies;
-                    entry.meshes = imported.meshes;
-                    entry.stamp = stamp;
-                    entry.revision = entry.revision.saturating_add(1);
-                    entry.last_error = None;
+                    let (revision, proxy_count, mesh_count) = if let Some(asset) =
+                        self.world.get_component_mut::<ModelAssetComponent>(entity)
+                    {
+                        asset.proxies = imported.proxies;
+                        asset.meshes = imported.meshes;
+                        asset.source_modified = source_modified;
+                        asset.glb_modified = glb_modified;
+                        asset.revision = asset.revision.saturating_add(1);
+                        asset.last_error = None;
+                        (asset.revision, asset.proxies.len(), asset.meshes.len())
+                    } else {
+                        (0, 0, 0)
+                    };
                     payloads.push(ReloadStatusPayload::new(
                         "model",
                         id,
                         "reloaded",
                         model.source_path.to_string_lossy(),
-                        entry.revision,
-                        self.watch_enabled,
-                        entry.stamp.source_modified,
+                        revision,
+                        watch_enabled,
+                        source_modified,
                         None,
                         Some(format!(
                             "proxies={} meshes={} glb={}",
-                            entry.proxies.len(),
-                            entry.meshes.len(),
+                            proxy_count,
+                            mesh_count,
                             model.glb_path.display()
                         )),
                     ));
                 }
                 Err(err) => {
-                    entry.last_error = Some(err.clone());
-                    entry.stamp = stamp;
+                    let revision = if let Some(asset) =
+                        self.world.get_component_mut::<ModelAssetComponent>(entity)
+                    {
+                        asset.last_error = Some(err.clone());
+                        asset.source_modified = source_modified;
+                        asset.glb_modified = glb_modified;
+                        asset.revision
+                    } else {
+                        0
+                    };
                     payloads.push(ReloadStatusPayload::new(
                         "model",
                         id,
                         "failed",
                         model.source_path.to_string_lossy(),
-                        entry.revision,
-                        self.watch_enabled,
-                        entry.stamp.source_modified,
+                        revision,
+                        watch_enabled,
+                        source_modified,
                         Some(err),
                         Some(format!("glb={}", model.glb_path.display())),
                     ));
@@ -397,6 +461,45 @@ impl ModelManager {
         }
 
         Ok(payloads.into_iter().map(|payload| payload.line()).collect())
+    }
+
+    fn config(&self) -> &ModelManagerConfigResource {
+        self.world
+            .get_resource::<ModelManagerConfigResource>()
+            .expect("model manager config resource should exist")
+    }
+
+    fn config_mut(&mut self) -> &mut ModelManagerConfigResource {
+        self.world
+            .get_resource_mut::<ModelManagerConfigResource>()
+            .expect("model manager config resource should exist")
+    }
+
+    fn model_count(&self) -> usize {
+        self.world.entities_with::<ModelAssetComponent>().count()
+    }
+
+    fn asset_entity(&mut self, id: &str) -> Option<EntityHandle> {
+        let id = id.trim();
+        if id.is_empty() {
+            return None;
+        }
+        self.world
+            .find_entity_by_index::<ModelAssetComponent, String>(&id.to_string())
+    }
+
+    fn assets_sorted(&self) -> Vec<ModelAssetComponent> {
+        let mut assets: Vec<_> = self
+            .world
+            .entities_with::<ModelAssetComponent>()
+            .filter_map(|entity| {
+                self.world
+                    .get_component::<ModelAssetComponent>(entity)
+                    .cloned()
+            })
+            .collect();
+        assets.sort_by(|a, b| a.id.cmp(&b.id));
+        assets
     }
 }
 

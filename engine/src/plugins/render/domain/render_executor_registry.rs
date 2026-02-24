@@ -1,6 +1,8 @@
-use super::{PipelineKey, WorldRenderFrame};
+use super::PipelineKey;
 use anyhow::{Result, bail};
-use std::collections::BTreeMap;
+use ecs::{Component, World};
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::sync::Arc;
 use wgpu::{CommandEncoder, Device, Queue, TextureFormat, TextureView};
 
@@ -12,10 +14,36 @@ pub trait RenderPassExecutor: Send + Sync {
     fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()>;
 }
 
+#[derive(Default)]
+pub struct RenderFrameDataRegistry<'a> {
+    by_type: HashMap<TypeId, &'a dyn Any>,
+}
+
+impl<'a> RenderFrameDataRegistry<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with<T: 'static>(mut self, value: &'a T) -> Self {
+        self.insert(value);
+        self
+    }
+
+    pub fn insert<T: 'static>(&mut self, value: &'a T) {
+        self.by_type.insert(TypeId::of::<T>(), value);
+    }
+
+    pub fn get<T: 'static>(&self) -> Option<&'a T> {
+        self.by_type
+            .get(&TypeId::of::<T>())
+            .and_then(|value| value.downcast_ref::<T>())
+    }
+}
+
 pub struct RenderPassPrepareContext<'a> {
     device: &'a Device,
     queue: &'a Queue,
-    world_frame: &'a WorldRenderFrame,
+    frame_data: &'a RenderFrameDataRegistry<'a>,
     surface_format: TextureFormat,
     surface_size: (u32, u32),
     builtin_dispatch: Option<&'a mut dyn FnMut(BuiltinRenderPassExecutor) -> Result<()>>,
@@ -25,14 +53,14 @@ impl<'a> RenderPassPrepareContext<'a> {
     pub fn new(
         device: &'a Device,
         queue: &'a Queue,
-        world_frame: &'a WorldRenderFrame,
+        frame_data: &'a RenderFrameDataRegistry<'a>,
         surface_format: TextureFormat,
         surface_size: (u32, u32),
     ) -> Self {
         Self {
             device,
             queue,
-            world_frame,
+            frame_data,
             surface_format,
             surface_size,
             builtin_dispatch: None,
@@ -55,8 +83,8 @@ impl<'a> RenderPassPrepareContext<'a> {
         self.queue
     }
 
-    pub fn world_frame(&self) -> &'a WorldRenderFrame {
-        self.world_frame
+    pub fn frame_data<T: 'static>(&self) -> Option<&'a T> {
+        self.frame_data.get::<T>()
     }
 
     pub fn surface_format(&self) -> TextureFormat {
@@ -79,7 +107,7 @@ pub struct RenderPassEncodeContext<'a> {
     device: &'a Device,
     encoder: &'a mut CommandEncoder,
     frame_view: &'a TextureView,
-    world_frame: &'a WorldRenderFrame,
+    frame_data: &'a RenderFrameDataRegistry<'a>,
     surface_format: TextureFormat,
     surface_size: (u32, u32),
     pipeline: PipelineKey,
@@ -93,7 +121,7 @@ impl<'a> RenderPassEncodeContext<'a> {
         device: &'a Device,
         encoder: &'a mut CommandEncoder,
         frame_view: &'a TextureView,
-        world_frame: &'a WorldRenderFrame,
+        frame_data: &'a RenderFrameDataRegistry<'a>,
         surface_format: TextureFormat,
         surface_size: (u32, u32),
         pipeline: PipelineKey,
@@ -102,7 +130,7 @@ impl<'a> RenderPassEncodeContext<'a> {
             device,
             encoder,
             frame_view,
-            world_frame,
+            frame_data,
             surface_format,
             surface_size,
             pipeline,
@@ -139,8 +167,8 @@ impl<'a> RenderPassEncodeContext<'a> {
         self.frame_view
     }
 
-    pub fn world_frame(&self) -> &'a WorldRenderFrame {
-        self.world_frame
+    pub fn frame_data<T: 'static>(&self) -> Option<&'a T> {
+        self.frame_data.get::<T>()
     }
 
     pub fn surface_format(&self) -> TextureFormat {
@@ -200,35 +228,94 @@ impl BuiltinRenderPassExecutor {
 }
 
 #[derive(Clone)]
-pub struct RenderPassExecutorRegistryResource {
-    builtin_bindings: BTreeMap<String, BuiltinRenderPassExecutor>,
-    custom_bindings: BTreeMap<String, Arc<dyn RenderPassExecutor>>,
+enum ExecutorBindingKind {
+    Builtin(BuiltinRenderPassExecutor),
+    Custom(Arc<dyn RenderPassExecutor>),
+}
+
+impl std::fmt::Debug for ExecutorBindingKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Builtin(value) => f.debug_tuple("Builtin").field(value).finish(),
+            Self::Custom(_) => f.write_str("Custom(<dyn RenderPassExecutor>)"),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct RenderExecutorBindingComponent {
+    executor_id: String,
+    binding: ExecutorBindingKind,
+}
+
+impl Component for RenderExecutorBindingComponent {}
+
+impl std::fmt::Debug for RenderExecutorBindingComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RenderExecutorBindingComponent")
+            .field("executor_id", &self.executor_id)
+            .field("binding", &self.binding)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderPassExecutorRegistryEventKind {
+    RegisteredBuiltin,
+    RegisteredCustom,
+    Removed,
+    ClearedCustom,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderPassExecutorRegistryEvent {
+    pub kind: RenderPassExecutorRegistryEventKind,
+    pub executor_id: Option<String>,
+    pub builtin: Option<BuiltinRenderPassExecutor>,
+    pub revision: u64,
+    pub details: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct RenderPassExecutorRegistryMetaResource {
     revision: u64,
+}
+
+pub struct RenderPassExecutorRegistryResource {
+    world: World,
+}
+
+impl std::fmt::Debug for RenderPassExecutorRegistryResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RenderPassExecutorRegistryResource")
+            .field("binding_count", &self.binding_count())
+            .field("revision", &self.revision())
+            .finish()
+    }
 }
 
 impl Default for RenderPassExecutorRegistryResource {
     fn default() -> Self {
-        let mut builtin_bindings = BTreeMap::new();
-        let defaults = [
-            BuiltinRenderPassExecutor::Compute,
-            BuiltinRenderPassExecutor::Compose,
-            BuiltinRenderPassExecutor::MeshOverlay,
-            BuiltinRenderPassExecutor::UiComposite,
-        ];
-        for builtin in defaults {
-            builtin_bindings.insert(builtin.label().to_string(), builtin);
-        }
-        Self {
-            builtin_bindings,
-            custom_bindings: BTreeMap::new(),
-            revision: 0,
-        }
+        let mut world = World::new();
+        world.register_component::<RenderExecutorBindingComponent>();
+        world.ensure_component_index::<RenderExecutorBindingComponent, String>(|binding| {
+            binding.executor_id.clone()
+        });
+        world.ensure_event_channel::<RenderPassExecutorRegistryEvent>();
+        world.insert_resource(RenderPassExecutorRegistryMetaResource::default());
+        Self { world }
     }
 }
 
 impl RenderPassExecutorRegistryResource {
     pub fn revision(&self) -> u64 {
-        self.revision
+        self.meta().revision
+    }
+
+    pub fn binding_count(&self) -> usize {
+        self.world
+            .entities_with::<RenderExecutorBindingComponent>()
+            .count()
     }
 
     pub fn register_builtin(
@@ -236,14 +323,44 @@ impl RenderPassExecutorRegistryResource {
         executor_id: impl Into<String>,
         builtin: BuiltinRenderPassExecutor,
     ) {
-        let executor_id = executor_id.into();
-        if executor_id.trim().is_empty() {
+        let executor_id = normalize_executor_id(executor_id.into());
+        if executor_id.is_empty() {
             return;
         }
-        let replaced = self.builtin_bindings.insert(executor_id.clone(), builtin);
-        self.custom_bindings.remove(&executor_id);
-        if replaced != Some(builtin) {
-            self.revision = self.revision.saturating_add(1);
+
+        let mut changed = false;
+        if let Some(entity) = self.binding_entity(&executor_id) {
+            if let Some(binding) = self
+                .world
+                .get_component_mut::<RenderExecutorBindingComponent>(entity)
+            {
+                changed = !matches!(
+                    binding.binding,
+                    ExecutorBindingKind::Builtin(current) if current == builtin
+                );
+                if changed {
+                    binding.binding = ExecutorBindingKind::Builtin(builtin);
+                }
+            }
+        } else {
+            let _ = self
+                .world
+                .spawn_entity_typed(RenderExecutorBindingComponent {
+                    executor_id: executor_id.clone(),
+                    binding: ExecutorBindingKind::Builtin(builtin),
+                });
+            changed = true;
+        }
+
+        if changed {
+            let revision = self.bump_revision();
+            self.world.emit_event(RenderPassExecutorRegistryEvent {
+                kind: RenderPassExecutorRegistryEventKind::RegisteredBuiltin,
+                executor_id: Some(executor_id),
+                builtin: Some(builtin),
+                revision,
+                details: None,
+            });
         }
     }
 
@@ -252,69 +369,180 @@ impl RenderPassExecutorRegistryResource {
         executor_id: impl Into<String>,
         executor: Arc<dyn RenderPassExecutor>,
     ) {
-        let executor_id = executor_id.into();
-        if executor_id.trim().is_empty() {
+        let executor_id = normalize_executor_id(executor_id.into());
+        if executor_id.is_empty() {
             return;
         }
-        let removed_builtin = self.builtin_bindings.remove(&executor_id).is_some();
-        let replaced = self
-            .custom_bindings
-            .insert(executor_id, Arc::clone(&executor));
-        let custom_changed = replaced
-            .as_ref()
-            .map_or(true, |previous| !Arc::ptr_eq(previous, &executor));
-        if removed_builtin || custom_changed {
-            self.revision = self.revision.saturating_add(1);
+
+        let mut changed = false;
+        if let Some(entity) = self.binding_entity(&executor_id) {
+            if let Some(binding) = self
+                .world
+                .get_component_mut::<RenderExecutorBindingComponent>(entity)
+            {
+                changed = match &binding.binding {
+                    ExecutorBindingKind::Custom(current) => !Arc::ptr_eq(current, &executor),
+                    ExecutorBindingKind::Builtin(_) => true,
+                };
+                if changed {
+                    binding.binding = ExecutorBindingKind::Custom(Arc::clone(&executor));
+                }
+            }
+        } else {
+            let _ = self
+                .world
+                .spawn_entity_typed(RenderExecutorBindingComponent {
+                    executor_id: executor_id.clone(),
+                    binding: ExecutorBindingKind::Custom(Arc::clone(&executor)),
+                });
+            changed = true;
+        }
+
+        if changed {
+            let revision = self.bump_revision();
+            self.world.emit_event(RenderPassExecutorRegistryEvent {
+                kind: RenderPassExecutorRegistryEventKind::RegisteredCustom,
+                executor_id: Some(executor_id),
+                builtin: None,
+                revision,
+                details: None,
+            });
         }
     }
 
     pub fn remove(&mut self, executor_id: &str) -> bool {
-        let removed_builtin = self.builtin_bindings.remove(executor_id).is_some();
-        let removed_custom = self.custom_bindings.remove(executor_id).is_some();
-        let removed = removed_builtin || removed_custom;
-        if removed {
-            self.revision = self.revision.saturating_add(1);
+        let executor_id = normalize_executor_id(executor_id);
+        if executor_id.is_empty() {
+            return false;
         }
-        removed
+        let Some(entity) = self.binding_entity(&executor_id) else {
+            return false;
+        };
+        self.world.remove_entity(entity);
+        let revision = self.bump_revision();
+        self.world.emit_event(RenderPassExecutorRegistryEvent {
+            kind: RenderPassExecutorRegistryEventKind::Removed,
+            executor_id: Some(executor_id),
+            builtin: None,
+            revision,
+            details: None,
+        });
+        true
     }
 
     pub fn resolve_builtin(&self, executor_id: &str) -> Option<BuiltinRenderPassExecutor> {
-        self.builtin_bindings.get(executor_id).copied()
+        let binding = self.binding(executor_id)?;
+        match binding.binding {
+            ExecutorBindingKind::Builtin(builtin) => Some(builtin),
+            ExecutorBindingKind::Custom(_) => None,
+        }
     }
 
     pub fn resolve_custom(&self, executor_id: &str) -> Option<Arc<dyn RenderPassExecutor>> {
-        self.custom_bindings.get(executor_id).cloned()
+        let binding = self.binding(executor_id)?;
+        match &binding.binding {
+            ExecutorBindingKind::Builtin(_) => None,
+            ExecutorBindingKind::Custom(custom) => Some(Arc::clone(custom)),
+        }
     }
 
     pub fn contains(&self, executor_id: &str) -> bool {
-        self.builtin_bindings.contains_key(executor_id)
-            || self.custom_bindings.contains_key(executor_id)
+        self.binding(executor_id).is_some()
     }
 
     pub fn clear_custom(&mut self) {
-        let defaults = [
-            BuiltinRenderPassExecutor::Compute,
-            BuiltinRenderPassExecutor::Compose,
-            BuiltinRenderPassExecutor::MeshOverlay,
-            BuiltinRenderPassExecutor::UiComposite,
-        ];
-        let mut next = BTreeMap::new();
-        for builtin in defaults {
-            next.insert(builtin.label().to_string(), builtin);
+        let entities: Vec<_> = self
+            .world
+            .entities_with::<RenderExecutorBindingComponent>()
+            .collect();
+        let mut removed_any = false;
+        for entity in entities {
+            let remove = self
+                .world
+                .get_component::<RenderExecutorBindingComponent>(entity)
+                .is_some_and(|binding| matches!(binding.binding, ExecutorBindingKind::Custom(_)));
+            if remove {
+                self.world.remove_entity(entity);
+                removed_any = true;
+            }
         }
-        if next == self.builtin_bindings && self.custom_bindings.is_empty() {
+        if !removed_any {
             return;
         }
-        self.builtin_bindings = next;
-        self.custom_bindings.clear();
-        self.revision = self.revision.saturating_add(1);
+        let revision = self.bump_revision();
+        self.world.emit_event(RenderPassExecutorRegistryEvent {
+            kind: RenderPassExecutorRegistryEventKind::ClearedCustom,
+            executor_id: None,
+            builtin: None,
+            revision,
+            details: Some("custom executor bindings cleared".to_string()),
+        });
     }
+
+    pub fn read_events(&self) -> &[RenderPassExecutorRegistryEvent] {
+        self.world.read_events::<RenderPassExecutorRegistryEvent>()
+    }
+
+    pub fn drain_events(&mut self) -> Vec<RenderPassExecutorRegistryEvent> {
+        self.world.drain_events::<RenderPassExecutorRegistryEvent>()
+    }
+
+    fn binding(&self, executor_id: &str) -> Option<&RenderExecutorBindingComponent> {
+        let executor_id = normalize_executor_id(executor_id);
+        if executor_id.is_empty() {
+            return None;
+        }
+        self.world
+            .entities_with::<RenderExecutorBindingComponent>()
+            .find_map(|entity| {
+                let binding = self
+                    .world
+                    .get_component::<RenderExecutorBindingComponent>(entity)?;
+                if binding.executor_id == executor_id {
+                    Some(binding)
+                } else {
+                    None
+                }
+            })
+    }
+
+    fn binding_entity(&mut self, executor_id: &str) -> Option<ecs::EntityHandle> {
+        let executor_id = normalize_executor_id(executor_id);
+        if executor_id.is_empty() {
+            return None;
+        }
+        self.world
+            .find_entity_by_index::<RenderExecutorBindingComponent, String>(&executor_id)
+    }
+
+    fn meta(&self) -> &RenderPassExecutorRegistryMetaResource {
+        self.world
+            .get_resource::<RenderPassExecutorRegistryMetaResource>()
+            .expect("render executor registry meta resource should exist")
+    }
+
+    fn meta_mut(&mut self) -> &mut RenderPassExecutorRegistryMetaResource {
+        self.world
+            .get_resource_mut::<RenderPassExecutorRegistryMetaResource>()
+            .expect("render executor registry meta resource should exist")
+    }
+
+    fn bump_revision(&mut self) -> u64 {
+        let meta = self.meta_mut();
+        meta.revision = meta.revision.saturating_add(1);
+        meta.revision
+    }
+}
+
+fn normalize_executor_id(value: impl AsRef<str>) -> String {
+    value.as_ref().trim().to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        BuiltinRenderPassExecutor, RenderPassEncodeContext, RenderPassExecutor,
+        BuiltinRenderPassExecutor, RenderFrameDataRegistry, RenderPassEncodeContext,
+        RenderPassExecutor, RenderPassExecutorRegistryEventKind,
         RenderPassExecutorRegistryResource,
     };
     use anyhow::Result;
@@ -329,24 +557,20 @@ mod tests {
     }
 
     #[test]
-    fn defaults_include_builtin_executor_ids() {
+    fn frame_data_registry_supports_typed_lookup() {
+        let value = 42_u32;
+        let registry = RenderFrameDataRegistry::new().with(&value);
+        assert_eq!(registry.get::<u32>(), Some(&42_u32));
+        assert!(registry.get::<u64>().is_none());
+    }
+
+    #[test]
+    fn defaults_start_empty() {
         let registry = RenderPassExecutorRegistryResource::default();
-        assert_eq!(
-            registry.resolve_builtin("builtin_compute"),
-            Some(BuiltinRenderPassExecutor::Compute)
-        );
-        assert_eq!(
-            registry.resolve_builtin("builtin_compose"),
-            Some(BuiltinRenderPassExecutor::Compose)
-        );
-        assert_eq!(
-            registry.resolve_builtin("builtin_mesh_overlay"),
-            Some(BuiltinRenderPassExecutor::MeshOverlay)
-        );
-        assert_eq!(
-            registry.resolve_builtin("builtin_ui_composite"),
-            Some(BuiltinRenderPassExecutor::UiComposite)
-        );
+        assert!(!registry.contains("builtin_compute"));
+        assert!(!registry.contains("builtin_compose"));
+        assert!(!registry.contains("builtin_mesh_overlay"));
+        assert!(!registry.contains("builtin_ui_composite"));
     }
 
     #[test]
@@ -374,15 +598,48 @@ mod tests {
     }
 
     #[test]
-    fn clear_custom_keeps_builtin_defaults() {
+    fn clear_custom_keeps_registered_builtins() {
         let mut registry = RenderPassExecutorRegistryResource::default();
         registry.register_builtin("sdf.compute", BuiltinRenderPassExecutor::Compute);
         registry.register_custom("custom.compute", Arc::new(TestExecutor));
         assert!(registry.contains("sdf.compute"));
         assert!(registry.contains("custom.compute"));
         registry.clear_custom();
-        assert!(!registry.contains("sdf.compute"));
+        assert!(registry.contains("sdf.compute"));
         assert!(!registry.contains("custom.compute"));
-        assert!(registry.contains("builtin_compute"));
+    }
+
+    #[test]
+    fn registry_emits_events_for_mutations() {
+        let mut registry = RenderPassExecutorRegistryResource::default();
+        assert!(registry.read_events().is_empty());
+
+        registry.register_builtin("sdf.compute", BuiltinRenderPassExecutor::Compute);
+        registry.register_custom("custom.compute", Arc::new(TestExecutor));
+        assert!(registry.remove("custom.compute"));
+        registry.register_custom("custom.compose", Arc::new(TestExecutor));
+        registry.clear_custom();
+
+        let events = registry.drain_events();
+        assert!(events.iter().any(|event| {
+            event.kind == RenderPassExecutorRegistryEventKind::RegisteredBuiltin
+                && event.executor_id.as_deref() == Some("sdf.compute")
+        }));
+        assert!(events.iter().any(|event| {
+            event.kind == RenderPassExecutorRegistryEventKind::RegisteredCustom
+                && event.executor_id.as_deref() == Some("custom.compute")
+        }));
+        assert!(events.iter().any(|event| {
+            event.kind == RenderPassExecutorRegistryEventKind::RegisteredCustom
+                && event.executor_id.as_deref() == Some("custom.compose")
+        }));
+        assert!(events.iter().any(|event| {
+            event.kind == RenderPassExecutorRegistryEventKind::Removed
+                && event.executor_id.as_deref() == Some("custom.compute")
+        }));
+        assert!(events.iter().any(|event| {
+            event.kind == RenderPassExecutorRegistryEventKind::ClearedCustom
+                && event.executor_id.is_none()
+        }));
     }
 }

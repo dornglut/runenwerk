@@ -4,29 +4,21 @@ use super::model_manager::{
     ModelManager, ModelMaterial, ModelMesh, ModelMeshVertex, ModelTextureData,
 };
 use super::render_executor_registry::{
-    BuiltinRenderPassExecutor, RenderPassEncodeContext, RenderPassExecutorRegistryResource,
-    RenderPassPrepareContext,
+    BuiltinRenderPassExecutor, RenderFrameDataRegistry, RenderPassEncodeContext,
+    RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
 use super::render_frame::{WorldRenderAgent, WorldRenderFrame};
 use super::render_graph_registry::{
     RegisteredPassKind, RegisteredPipelineRef, RenderGraphRegistryResource,
 };
-use super::shader_manager::{ShaderId, ShaderManager};
-use super::text::{FileFontProvider, TextRenderer};
-use crate::plugins::scene::manifest::{
-    FramePassDescriptor as SceneFramePassDescriptor,
-    FramePassKindDescriptor as SceneFramePassKindDescriptor,
-    FrameResourceDescriptor as SceneFrameResourceDescriptor,
-};
+use super::shader_manager::ShaderRegistryResource;
+use crate::plugins::ui::domain::{FileFontProvider, TextRenderer};
 use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
-use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::hash::{Hash, Hasher};
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use wgpu::util::DeviceExt;
@@ -151,17 +143,7 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
 }
 "#;
 
-const RESOURCE_SURFACE_COLOR: &str = "surface_color";
-const RESOURCE_WORLD_COLOR: &str = "world_color";
-const RESOURCE_WORLD_PARAMS: &str = "world_params";
-const RESOURCE_WORLD_AGENTS: &str = "world_agents";
-const RESOURCE_MESH_DATA: &str = "mesh_data";
-const RESOURCE_UI_DRAW_LIST: &str = "ui_draw_list";
-const PIPELINE_WORLD_COMPUTE_SDF_3D: &str = "world_compute_sdf_3d";
-const PIPELINE_WORLD_COMPOSE_FULLSCREEN: &str = "world_compose_fullscreen";
-const PIPELINE_UI_COMPOSITE_SDF: &str = "ui_composite_sdf";
-const FRAME_GRAPH_CONFIG_PATH: &str = "assets/render/frame_graph.ron";
-const FRAME_GRAPH_OVERLAY_CONFIG_PATH: &str = "assets/render/frame_graph_overlays.ron";
+const UI_RECT_SHADER_ID: &str = "ui_rect";
 const MESH_CLEAR_COLOR: Color = Color {
     r: 0.02,
     g: 0.03,
@@ -169,51 +151,6 @@ const MESH_CLEAR_COLOR: Color = Color {
     a: 1.0,
 };
 const MESH_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum FramePassKindConfig {
-    Compute,
-    Render,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum FrameResourceConfig {
-    SurfaceColor,
-    WorldColor,
-    WorldParams,
-    WorldAgents,
-    MeshData,
-    UiDrawList,
-}
-
-impl FrameResourceConfig {
-    fn as_resource(self) -> &'static str {
-        match self {
-            Self::SurfaceColor => RESOURCE_SURFACE_COLOR,
-            Self::WorldColor => RESOURCE_WORLD_COLOR,
-            Self::WorldParams => RESOURCE_WORLD_PARAMS,
-            Self::WorldAgents => RESOURCE_WORLD_AGENTS,
-            Self::MeshData => RESOURCE_MESH_DATA,
-            Self::UiDrawList => RESOURCE_UI_DRAW_LIST,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct FramePassDescriptor {
-    name: String,
-    kind: FramePassKindConfig,
-    #[serde(default)]
-    pipeline: Option<String>,
-    #[serde(default)]
-    reads: Vec<FrameResourceConfig>,
-    #[serde(default)]
-    writes: Vec<FrameResourceConfig>,
-    #[serde(default)]
-    depends_on: Vec<String>,
-}
 
 #[derive(Debug, Clone)]
 struct ResolvedFramePassDescriptor {
@@ -231,7 +168,7 @@ struct FrameGraphCompileDiagnostics {
     empty_pass_name_count: usize,
     duplicate_pass_names: Vec<String>,
     missing_dependencies: Vec<(String, String)>,
-    used_builtin_fallback: bool,
+    no_registered_passes: bool,
 }
 
 impl FrameGraphCompileDiagnostics {
@@ -243,14 +180,7 @@ impl FrameGraphCompileDiagnostics {
         self.empty_pass_name_count
             + self.duplicate_pass_names.len()
             + self.missing_dependencies.len()
-            + usize::from(self.used_builtin_fallback)
-    }
-
-    fn absorb(&mut self, other: Self) {
-        self.empty_pass_name_count += other.empty_pass_name_count;
-        self.duplicate_pass_names.extend(other.duplicate_pass_names);
-        self.missing_dependencies.extend(other.missing_dependencies);
-        self.used_builtin_fallback |= other.used_builtin_fallback;
+            + usize::from(self.no_registered_passes)
     }
 }
 
@@ -260,155 +190,6 @@ struct FrameGraphBuildOutput {
     handles: Vec<PassHandle>,
     pass_executor_bindings: BTreeMap<String, String>,
     diagnostics: FrameGraphCompileDiagnostics,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-struct FrameGraphConfig {
-    passes: Vec<FramePassDescriptor>,
-}
-
-impl Default for FrameGraphConfig {
-    fn default() -> Self {
-        Self {
-            passes: default_frame_graph_passes(),
-        }
-    }
-}
-
-fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
-    vec![
-        FramePassDescriptor {
-            name: "mesh_overlay".to_string(),
-            kind: FramePassKindConfig::Render,
-            pipeline: Some(PIPELINE_WORLD_COMPOSE_FULLSCREEN.to_string()),
-            reads: vec![FrameResourceConfig::MeshData],
-            writes: vec![FrameResourceConfig::SurfaceColor],
-            depends_on: Vec::new(),
-        },
-        FramePassDescriptor {
-            name: "ui_composite".to_string(),
-            kind: FramePassKindConfig::Render,
-            pipeline: None,
-            reads: vec![FrameResourceConfig::UiDrawList],
-            writes: vec![FrameResourceConfig::SurfaceColor],
-            depends_on: vec!["mesh_overlay".to_string()],
-        },
-    ]
-}
-
-fn ui_only_frame_graph_passes() -> Vec<FramePassDescriptor> {
-    vec![FramePassDescriptor {
-        name: "ui_composite".to_string(),
-        kind: FramePassKindConfig::Render,
-        pipeline: None,
-        reads: vec![FrameResourceConfig::UiDrawList],
-        writes: vec![FrameResourceConfig::SurfaceColor],
-        depends_on: Vec::new(),
-    }]
-}
-
-fn load_frame_graph_config() -> FrameGraphConfig {
-    let path = Path::new(FRAME_GRAPH_CONFIG_PATH);
-    if !path.exists() {
-        return FrameGraphConfig::default();
-    }
-    let raw = match fs::read_to_string(path) {
-        Ok(raw) => raw,
-        Err(err) => {
-            tracing::warn!(
-                ?err,
-                path = FRAME_GRAPH_CONFIG_PATH,
-                "failed reading frame graph config"
-            );
-            return FrameGraphConfig::default();
-        }
-    };
-    match ron::from_str::<FrameGraphConfig>(&raw) {
-        Ok(config) if !config.passes.is_empty() => config,
-        Ok(_) => {
-            tracing::warn!(
-                path = FRAME_GRAPH_CONFIG_PATH,
-                "frame graph config had no passes; using defaults"
-            );
-            FrameGraphConfig::default()
-        }
-        Err(err) => {
-            tracing::warn!(
-                ?err,
-                path = FRAME_GRAPH_CONFIG_PATH,
-                "failed parsing frame graph config"
-            );
-            FrameGraphConfig::default()
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-struct SceneFrameGraphOverlay {
-    world_scene: Option<String>,
-    overlay_scene: Option<String>,
-    append_passes: Vec<FramePassDescriptor>,
-}
-
-impl Default for SceneFrameGraphOverlay {
-    fn default() -> Self {
-        Self {
-            world_scene: None,
-            overlay_scene: None,
-            append_passes: Vec::new(),
-        }
-    }
-}
-
-impl SceneFrameGraphOverlay {
-    fn matches_scene(&self, world_scene: &str, overlay_scene: &str) -> bool {
-        let world_matches = self
-            .world_scene
-            .as_deref()
-            .is_none_or(|value| value.eq_ignore_ascii_case(world_scene));
-        let overlay_matches = self
-            .overlay_scene
-            .as_deref()
-            .is_none_or(|value| value.eq_ignore_ascii_case(overlay_scene));
-        world_matches && overlay_matches
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(default)]
-struct FrameGraphOverlayConfig {
-    overlays: Vec<SceneFrameGraphOverlay>,
-}
-
-fn load_frame_graph_overlay_config() -> FrameGraphOverlayConfig {
-    let path = Path::new(FRAME_GRAPH_OVERLAY_CONFIG_PATH);
-    if !path.exists() {
-        return FrameGraphOverlayConfig::default();
-    }
-    let raw = match fs::read_to_string(path) {
-        Ok(raw) => raw,
-        Err(err) => {
-            tracing::warn!(
-                ?err,
-                path = FRAME_GRAPH_OVERLAY_CONFIG_PATH,
-                "failed reading frame graph overlay config"
-            );
-            return FrameGraphOverlayConfig::default();
-        }
-    };
-    match ron::from_str::<FrameGraphOverlayConfig>(&raw) {
-        Ok(config) => config,
-        Err(err) => {
-            tracing::warn!(
-                ?err,
-                path = FRAME_GRAPH_OVERLAY_CONFIG_PATH,
-                "failed parsing frame graph overlay config"
-            );
-            FrameGraphOverlayConfig::default()
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -907,9 +688,6 @@ fn agent_instance_data(agents: &[WorldRenderAgent]) -> Vec<MeshInstanceRaw> {
 
 #[derive(Debug)]
 pub struct Renderer {
-    frame_graph_config: FrameGraphConfig,
-    frame_graph_overlay_config: FrameGraphOverlayConfig,
-    shader_manager: ShaderManager,
     model_manager: ModelManager,
     mesh_pass: Option<MeshPass>,
     mesh_pass_format: Option<TextureFormat>,
@@ -988,7 +766,7 @@ impl Renderer {
             empty_pass_name_count = diagnostics.empty_pass_name_count,
             duplicate_pass_count = diagnostics.duplicate_pass_names.len(),
             missing_dependency_count = diagnostics.missing_dependencies.len(),
-            used_builtin_fallback = diagnostics.used_builtin_fallback,
+            no_registered_passes = diagnostics.no_registered_passes,
             first_duplicate_pass,
             first_missing_dependency,
             "frame graph compile diagnostics"
@@ -1052,6 +830,7 @@ impl Renderer {
         render_executor_registry: &RenderPassExecutorRegistryResource,
         timings: &mut RendererFrameTimings,
     ) {
+        let frame_data = RenderFrameDataRegistry::new().with(&packet.merged_world_frame);
         for executor_name in active_executors {
             if let Some(builtin) = render_executor_registry.resolve_builtin(executor_name) {
                 let executor = Self::builtin_pass_executor(builtin);
@@ -1067,7 +846,7 @@ impl Renderer {
                 let mut ctx = RenderPassPrepareContext::new(
                     device,
                     queue,
-                    &packet.merged_world_frame,
+                    &frame_data,
                     packet.surface_format,
                     packet.surface_size,
                 )
@@ -1083,150 +862,9 @@ impl Renderer {
         }
     }
 
-    fn resolve_pass_pipeline(&self, pass: &FramePassDescriptor) -> PipelineKey {
-        if let Some(explicit) = pass.pipeline.as_deref().map(str::trim)
-            && !explicit.is_empty()
-        {
-            return PipelineKey::from(explicit.to_string());
-        }
-
-        match pass.kind {
-            FramePassKindConfig::Compute => PipelineKey::from(PIPELINE_WORLD_COMPUTE_SDF_3D),
-            FramePassKindConfig::Render => PipelineKey::from(PIPELINE_WORLD_COMPOSE_FULLSCREEN),
-        }
-    }
-
-    fn map_scene_frame_pass(descriptor: &SceneFramePassDescriptor) -> FramePassDescriptor {
-        FramePassDescriptor {
-            name: descriptor.name.clone(),
-            kind: match descriptor.kind {
-                SceneFramePassKindDescriptor::Compute => FramePassKindConfig::Compute,
-                SceneFramePassKindDescriptor::Render => FramePassKindConfig::Render,
-            },
-            pipeline: descriptor.pipeline.clone(),
-            reads: descriptor
-                .reads
-                .iter()
-                .copied()
-                .map(|resource| match resource {
-                    SceneFrameResourceDescriptor::SurfaceColor => FrameResourceConfig::SurfaceColor,
-                    SceneFrameResourceDescriptor::WorldColor => FrameResourceConfig::WorldColor,
-                    SceneFrameResourceDescriptor::WorldParams => FrameResourceConfig::WorldParams,
-                    SceneFrameResourceDescriptor::WorldAgents => FrameResourceConfig::WorldAgents,
-                    SceneFrameResourceDescriptor::MeshData => FrameResourceConfig::MeshData,
-                    SceneFrameResourceDescriptor::UiDrawList => FrameResourceConfig::UiDrawList,
-                })
-                .collect(),
-            writes: descriptor
-                .writes
-                .iter()
-                .copied()
-                .map(|resource| match resource {
-                    SceneFrameResourceDescriptor::SurfaceColor => FrameResourceConfig::SurfaceColor,
-                    SceneFrameResourceDescriptor::WorldColor => FrameResourceConfig::WorldColor,
-                    SceneFrameResourceDescriptor::WorldParams => FrameResourceConfig::WorldParams,
-                    SceneFrameResourceDescriptor::WorldAgents => FrameResourceConfig::WorldAgents,
-                    SceneFrameResourceDescriptor::MeshData => FrameResourceConfig::MeshData,
-                    SceneFrameResourceDescriptor::UiDrawList => FrameResourceConfig::UiDrawList,
-                })
-                .collect(),
-            depends_on: descriptor.depends_on.clone(),
-        }
-    }
-
-    fn frame_graph_descriptors_for_scene(
-        &self,
-        world_scene: &str,
-        overlay_scene: &str,
-        scene_passes: &[SceneFramePassDescriptor],
-        render_world: bool,
-    ) -> Vec<FramePassDescriptor> {
-        let mut descriptors = if render_world {
-            self.frame_graph_config.passes.clone()
-        } else {
-            ui_only_frame_graph_passes()
-        };
-        for overlay in &self.frame_graph_overlay_config.overlays {
-            if !overlay.matches_scene(world_scene, overlay_scene) {
-                continue;
-            }
-            descriptors.extend(overlay.append_passes.iter().cloned());
-        }
-        descriptors.extend(scene_passes.iter().map(Self::map_scene_frame_pass));
-        descriptors
-    }
-
-    fn default_pipeline_for_kind(&self, kind: PassKind) -> PipelineKey {
-        match kind {
-            PassKind::Compute => PipelineKey::from(PIPELINE_WORLD_COMPUTE_SDF_3D),
-            PassKind::Render => PipelineKey::from(PIPELINE_WORLD_COMPOSE_FULLSCREEN),
-        }
-    }
-
-    fn builtin_executor_id_for_descriptor(
-        &self,
-        descriptor: &FramePassDescriptor,
-        pipeline: PipelineKey,
-    ) -> String {
-        let pass_name = descriptor.name.trim().to_ascii_lowercase();
-        if pass_name == "mesh_overlay" {
-            return "builtin_mesh_overlay".to_string();
-        }
-        if pass_name == "ui_composite" {
-            return "builtin_ui_composite".to_string();
-        }
-        match descriptor.kind {
-            FramePassKindConfig::Compute => "builtin_compute".to_string(),
-            FramePassKindConfig::Render => {
-                if pipeline.label() == PIPELINE_UI_COMPOSITE_SDF {
-                    "builtin_ui_composite".to_string()
-                } else {
-                    "builtin_compose".to_string()
-                }
-            }
-        }
-    }
-
-    fn resolved_builtin_descriptors(
-        &self,
-        descriptors: &[FramePassDescriptor],
-    ) -> Vec<ResolvedFramePassDescriptor> {
-        descriptors
-            .iter()
-            .map(|descriptor| {
-                let pipeline = self.resolve_pass_pipeline(descriptor);
-                ResolvedFramePassDescriptor {
-                    name: descriptor.name.clone(),
-                    kind: match descriptor.kind {
-                        FramePassKindConfig::Compute => PassKind::Compute,
-                        FramePassKindConfig::Render => PassKind::Render,
-                    },
-                    pipeline: pipeline.clone(),
-                    reads: descriptor
-                        .reads
-                        .iter()
-                        .copied()
-                        .map(FrameResourceConfig::as_resource)
-                        .map(str::to_string)
-                        .collect(),
-                    writes: descriptor
-                        .writes
-                        .iter()
-                        .copied()
-                        .map(FrameResourceConfig::as_resource)
-                        .map(str::to_string)
-                        .collect(),
-                    depends_on: descriptor.depends_on.clone(),
-                    executor: self.builtin_executor_id_for_descriptor(descriptor, pipeline),
-                }
-            })
-            .collect()
-    }
-
     fn resolve_registered_pipeline(
         &self,
         pass_name: &str,
-        pass_kind: PassKind,
         pipeline_ref: Option<&RegisteredPipelineRef>,
         named_pipelines: &BTreeMap<String, PipelineKey>,
     ) -> PipelineKey {
@@ -1240,21 +878,22 @@ impl Renderer {
                     tracing::warn!(
                         pass = pass_name,
                         pipeline_id = name,
-                        "registered named pipeline id not found; falling back to kind default pipeline"
+                        "registered named pipeline id not found; falling back to pass id key"
                     );
                 }
             }
         }
 
-        self.default_pipeline_for_kind(pass_kind)
+        PipelineKey::from(pass_name.to_string())
     }
 
     fn resolved_registered_descriptors(
         &self,
         render_graph_registry: &RenderGraphRegistryResource,
     ) -> Vec<ResolvedFramePassDescriptor> {
+        let owners = render_graph_registry.owners();
         let mut named_pipelines = BTreeMap::<String, PipelineKey>::new();
-        for owner in render_graph_registry.owners() {
+        for owner in &owners {
             for pipeline in &owner.pipelines {
                 let pipeline_id = pipeline.id.trim();
                 if pipeline_id.is_empty() {
@@ -1279,7 +918,7 @@ impl Renderer {
         }
 
         let mut out = Vec::new();
-        for owner in render_graph_registry.owners() {
+        for owner in &owners {
             for pass in &owner.passes {
                 let pass_name = pass.id.trim();
                 if pass_name.is_empty() {
@@ -1295,7 +934,6 @@ impl Renderer {
                 };
                 let pipeline = self.resolve_registered_pipeline(
                     pass_name,
-                    kind,
                     pass.pipeline.as_ref(),
                     &named_pipelines,
                 );
@@ -1405,9 +1043,6 @@ impl Renderer {
 
     pub fn new() -> Self {
         Self {
-            frame_graph_config: load_frame_graph_config(),
-            frame_graph_overlay_config: load_frame_graph_overlay_config(),
-            shader_manager: ShaderManager::new(),
             model_manager: ModelManager::new(),
             mesh_pass: None,
             mesh_pass_format: None,
@@ -1888,27 +1523,6 @@ impl Renderer {
         let provider = FileFontProvider;
         self.text_renderer = Some(TextRenderer::new(device, queue, format, &provider));
         self.text_renderer_format = Some(format);
-    }
-
-    pub fn poll_shader_hot_reload(&mut self) -> Vec<String> {
-        self.shader_manager.poll_updates()
-    }
-
-    pub fn force_shader_reload(&mut self) -> Vec<String> {
-        self.shader_manager.request_reload();
-        self.shader_manager.poll_updates()
-    }
-
-    pub fn set_shader_watch_enabled(&mut self, enabled: bool) {
-        self.shader_manager.set_watch_enabled(enabled);
-    }
-
-    pub fn shader_watch_enabled(&self) -> bool {
-        self.shader_manager.watch_enabled()
-    }
-
-    pub fn shader_status_lines(&self) -> Vec<String> {
-        self.shader_manager.status_lines()
     }
 
     pub fn poll_model_hot_reload(&mut self) -> Vec<String> {
@@ -2487,35 +2101,14 @@ impl Renderer {
 
     fn build_frame_graph(
         &self,
-        world_scene: &str,
-        overlay_scene: &str,
-        scene_passes: &[SceneFramePassDescriptor],
-        render_world: bool,
         render_graph_registry: &RenderGraphRegistryResource,
     ) -> FrameGraphBuildOutput {
-        let base_descriptors = self.frame_graph_descriptors_for_scene(
-            world_scene,
-            overlay_scene,
-            scene_passes,
-            render_world,
-        );
-        let mut descriptors = self.resolved_registered_descriptors(render_graph_registry);
-        descriptors.extend(self.resolved_builtin_descriptors(&base_descriptors));
-        let primary = self.build_frame_graph_from_descriptors(&descriptors);
-        if !primary.handles.is_empty() {
-            return primary;
+        let descriptors = self.resolved_registered_descriptors(render_graph_registry);
+        let mut output = self.build_frame_graph_from_descriptors(&descriptors);
+        if output.handles.is_empty() {
+            output.diagnostics.no_registered_passes = true;
         }
-        let fallback = if render_world {
-            default_frame_graph_passes()
-        } else {
-            ui_only_frame_graph_passes()
-        };
-        let mut fallback_descriptors = self.resolved_registered_descriptors(render_graph_registry);
-        fallback_descriptors.extend(self.resolved_builtin_descriptors(&fallback));
-        let mut fallback_output = self.build_frame_graph_from_descriptors(&fallback_descriptors);
-        fallback_output.diagnostics.absorb(primary.diagnostics);
-        fallback_output.diagnostics.used_builtin_fallback = true;
-        fallback_output
+        output
     }
 
     pub(crate) fn prepare_packet(
@@ -2524,16 +2117,16 @@ impl Renderer {
         queue: &Queue,
         world_frame: &WorldRenderFrame,
         draw_list: &UiDrawList,
+        shader_registry: &mut ShaderRegistryResource,
         surface_format: TextureFormat,
         surface_width: f32,
         surface_height: f32,
     ) -> RendererPreparedPacket {
         let mut prepare_timings = RendererFrameTimings::default();
-        let ui_rect_shader = self
-            .shader_manager
-            .source_or(ShaderId::UiRect, DEFAULT_UI_RECT_SHADER)
+        let ui_rect_shader = shader_registry
+            .source_or(UI_RECT_SHADER_ID, DEFAULT_UI_RECT_SHADER)
             .to_string();
-        let ui_rect_revision = self.shader_manager.revision(ShaderId::UiRect);
+        let ui_rect_revision = shader_registry.revision_for(UI_RECT_SHADER_ID);
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
         self.ensure_mesh_pass(device, queue, surface_format);
@@ -2599,13 +2192,7 @@ impl Renderer {
     ) -> RendererFrameTimings {
         let world_scene = packet.merged_world_frame.world_scene_label.as_str();
         let overlay_scene = packet.merged_world_frame.overlay_scene_label.as_str();
-        let frame_graph_output = self.build_frame_graph(
-            world_scene,
-            overlay_scene,
-            &packet.merged_world_frame.scene_render_graph_passes,
-            packet.merged_world_frame.render_world,
-            render_graph_registry,
-        );
+        let frame_graph_output = self.build_frame_graph(render_graph_registry);
         self.log_frame_graph_diagnostics(
             world_scene,
             overlay_scene,
@@ -2649,6 +2236,7 @@ impl Renderer {
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("engine_render_encoder"),
         });
+        let frame_data = RenderFrameDataRegistry::new().with(&packet.merged_world_frame);
 
         let mut missing_executors = Vec::<(String, String)>::new();
         for handle in order {
@@ -2672,9 +2260,8 @@ impl Renderer {
                 continue;
             }
             if let Some(custom) = render_executor_registry.resolve_custom(executor_name) {
-                let uses_ui_dispatch =
-                    executor_name.eq_ignore_ascii_case("builtin_ui_composite")
-                        || node.name.eq_ignore_ascii_case("ui_composite");
+                let uses_ui_dispatch = executor_name.eq_ignore_ascii_case("builtin_ui_composite")
+                    || node.name.eq_ignore_ascii_case("ui_composite");
                 if uses_ui_dispatch {
                     let mut dispatch_ui = |encoder: &mut CommandEncoder| -> Result<()> {
                         self.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
@@ -2684,7 +2271,7 @@ impl Renderer {
                         device,
                         &mut encoder,
                         frame_view,
-                        &packet.merged_world_frame,
+                        &frame_data,
                         packet.surface_format,
                         packet.surface_size,
                         node.pipeline.clone(),
@@ -2717,7 +2304,7 @@ impl Renderer {
                         device,
                         &mut encoder,
                         frame_view,
-                        &packet.merged_world_frame,
+                        &frame_data,
                         packet.surface_format,
                         packet.surface_size,
                         node.pipeline.clone(),
@@ -2754,6 +2341,7 @@ impl Renderer {
         frame_view: &TextureView,
         world_frame: &WorldRenderFrame,
         draw_list: &UiDrawList,
+        shader_registry: &mut ShaderRegistryResource,
         render_graph_registry: &RenderGraphRegistryResource,
         render_executor_registry: &RenderPassExecutorRegistryResource,
         surface_format: TextureFormat,
@@ -2765,6 +2353,7 @@ impl Renderer {
             queue,
             world_frame,
             draw_list,
+            shader_registry,
             surface_format,
             surface_width,
             surface_height,
@@ -2783,8 +2372,7 @@ impl Renderer {
 #[cfg(test)]
 mod tests {
     use super::{
-        FrameGraphConfig, FrameGraphOverlayConfig, FramePassKindConfig, PassKind, PipelineKey,
-        RenderGraphRegistryResource, Renderer, ResolvedFramePassDescriptor,
+        PassKind, PipelineKey, RenderGraphRegistryResource, Renderer, ResolvedFramePassDescriptor,
     };
 
     #[test]
@@ -2795,29 +2383,6 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
-    }
-
-    #[test]
-    fn frame_graph_config_parses_from_ron() {
-        let raw = r#"
-(
-  passes: [
-    (
-      name: "builtin_compute",
-      kind: compute,
-      reads: [world_params, world_agents],
-      writes: [world_color],
-    ),
-  ],
-)
-"#;
-        let config: FrameGraphConfig = ron::from_str(raw).expect("frame graph config should parse");
-        assert_eq!(config.passes.len(), 1);
-        assert_eq!(config.passes[0].name, "builtin_compute");
-        assert!(matches!(
-            config.passes[0].kind,
-            FramePassKindConfig::Compute
-        ));
     }
 
     #[test]
@@ -2876,54 +2441,10 @@ mod tests {
     }
 
     #[test]
-    fn build_frame_graph_uses_builtin_fallback_when_primary_has_no_passes() {
-        let mut renderer = Renderer::new();
-        renderer.frame_graph_config.passes.clear();
-
-        let output = renderer.build_frame_graph(
-            "gameplay_stub",
-            "console_ui",
-            &[],
-            true,
-            &RenderGraphRegistryResource::default(),
-        );
-        assert!(output.diagnostics.used_builtin_fallback);
-        assert!(!output.handles.is_empty());
-    }
-
-    #[test]
-    fn frame_graph_overlay_config_parses_from_ron() {
-        let raw = r#"
-(
-  overlays: [
-    (
-      world_scene: Some("gameplay_stub"),
-      overlay_scene: Some("hud_ui"),
-      append_passes: [
-        (
-          name: "ui_composite_extra",
-          kind: render,
-          reads: [ui_draw_list],
-          writes: [surface_color],
-          depends_on: ["ui_composite"],
-        ),
-      ],
-    ),
-  ],
-)
-"#;
-        let config: FrameGraphOverlayConfig =
-            ron::from_str(raw).expect("frame graph overlay config should parse");
-        assert_eq!(config.overlays.len(), 1);
-        assert_eq!(
-            config.overlays[0].world_scene.as_deref(),
-            Some("gameplay_stub")
-        );
-        assert_eq!(config.overlays[0].overlay_scene.as_deref(), Some("hud_ui"));
-        assert_eq!(config.overlays[0].append_passes.len(), 1);
-        assert_eq!(
-            config.overlays[0].append_passes[0].name,
-            "ui_composite_extra"
-        );
+    fn build_frame_graph_reports_when_no_feature_graph_is_registered() {
+        let renderer = Renderer::new();
+        let output = renderer.build_frame_graph(&RenderGraphRegistryResource::default());
+        assert!(output.handles.is_empty());
+        assert!(output.diagnostics.no_registered_passes);
     }
 }

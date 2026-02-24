@@ -1,4 +1,4 @@
-use crate::{Component, ComponentBundle, ComponentKey, EntityHandle, World};
+use crate::{Component, ComponentBundle, ComponentKey, EntityHandle, EntitySpawnedEvent, World};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
@@ -35,6 +35,10 @@ impl World {
 
         let row = archetype.len() - 1;
         self.entity_locations.insert(entity, (key, row));
+        for component in &keys {
+            self.mark_component_added_for_entity(entity, component.type_id, component.name.clone());
+        }
+        self.emit_event(EntitySpawnedEvent { entity });
 
         entity
     }
@@ -76,6 +80,10 @@ impl World {
 
         let row = archetype.len() - 1;
         self.entity_locations.insert(entity, (key, row));
+        for component in &keys {
+            self.mark_component_added_for_entity(entity, component.type_id, component.name.clone());
+        }
+        self.emit_event(EntitySpawnedEvent { entity });
 
         entity
     }

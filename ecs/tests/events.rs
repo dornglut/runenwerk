@@ -162,3 +162,21 @@ fn frame_transient_lifetime_clears_events_on_finish_frame() {
     assert_eq!(stats.drained, 1);
     assert_eq!(stats.pending, 0);
 }
+
+#[test]
+fn drain_events_map_and_filter_helpers_work() {
+    let mut world = World::new();
+    world.emit_event(SceneUiEvent { action: "menu" });
+    world.emit_event(SceneUiEvent { action: "settings" });
+    world.emit_event(SceneUiEvent { action: "pause" });
+
+    let long_actions = world.drain_events_filter::<SceneUiEvent, _>(|event| event.action.len() > 5);
+    assert_eq!(long_actions.len(), 1);
+    assert_eq!(long_actions[0].action, "settings");
+
+    world.emit_event(SceneUiEvent { action: "resume" });
+    world.emit_event(SceneUiEvent { action: "quit" });
+    let labels =
+        world.drain_events_map::<SceneUiEvent, String, _>(|event| format!("ui:{}", event.action));
+    assert_eq!(labels, vec!["ui:resume".to_string(), "ui:quit".to_string()]);
+}

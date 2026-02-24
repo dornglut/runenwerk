@@ -1,5 +1,6 @@
 use super::PipelineKey;
 use anyhow::{Result, anyhow, bail};
+use ecs::World;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -251,7 +252,7 @@ impl RegisteredPassDescriptor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
 pub struct OwnerRenderGraphRegistration {
     pub owner: String,
     pub pipelines: Vec<RegisteredPipelineDescriptor>,
@@ -276,6 +277,11 @@ impl OwnerRenderGraphRegistration {
         self.passes = passes;
         self
     }
+}
+
+#[derive(Debug, Clone, Default)]
+struct RenderGraphRegistryMetaResource {
+    revision: u64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -537,11 +543,10 @@ impl RenderFeatureGraphSpecBuilder {
     ) -> Self {
         let id = id.into();
         let shader_path = shader_path.into();
-        self.pipelines
-            .push(
-                RenderPipelineSpec::new(id.clone(), id.as_str().to_string().into())
-                    .with_shader_path(shader_path),
-            );
+        self.pipelines.push(
+            RenderPipelineSpec::new(id.clone(), id.as_str().to_string().into())
+                .with_shader_path(shader_path),
+        );
         self
     }
 
@@ -551,8 +556,10 @@ impl RenderFeatureGraphSpecBuilder {
         _builtin: impl AsRef<str>,
     ) -> Self {
         let id = id.into();
-        self.pipelines
-            .push(RenderPipelineSpec::new(id.clone(), id.as_str().to_string().into()));
+        self.pipelines.push(RenderPipelineSpec::new(
+            id.clone(),
+            id.as_str().to_string().into(),
+        ));
         self
     }
 
@@ -654,32 +661,57 @@ impl RenderPassSpecBuilder {
     }
 }
 
-#[derive(Debug, Clone, Default)]
 pub struct RenderGraphRegistryResource {
-    owners: Vec<OwnerRenderGraphRegistration>,
-    revision: u64,
+    world: World,
+}
+
+impl std::fmt::Debug for RenderGraphRegistryResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RenderGraphRegistryResource")
+            .field("owner_count", &self.owner_count())
+            .field("revision", &self.revision())
+            .finish()
+    }
+}
+
+impl Default for RenderGraphRegistryResource {
+    fn default() -> Self {
+        let mut world = World::new();
+        world.register_component::<OwnerRenderGraphRegistration>();
+        world.ensure_component_index::<OwnerRenderGraphRegistration, String>(|owner| {
+            owner.owner.clone()
+        });
+        world.insert_resource(RenderGraphRegistryMetaResource::default());
+        Self { world }
+    }
 }
 
 impl RenderGraphRegistryResource {
     pub fn revision(&self) -> u64 {
-        self.revision
+        self.meta().revision
     }
 
     pub fn owner_count(&self) -> usize {
-        self.owners.len()
+        self.world
+            .entities_with::<OwnerRenderGraphRegistration>()
+            .count()
     }
 
     pub fn upsert_owner(&mut self, registration: OwnerRenderGraphRegistration) {
-        if let Some(existing) = self
-            .owners
-            .iter_mut()
-            .find(|entry| entry.owner == registration.owner)
+        if let Some(existing_entity) = self
+            .world
+            .find_entity_by_index::<OwnerRenderGraphRegistration, String>(&registration.owner)
         {
-            *existing = registration;
+            if let Some(existing) = self
+                .world
+                .get_component_mut::<OwnerRenderGraphRegistration>(existing_entity)
+            {
+                *existing = registration;
+            }
         } else {
-            self.owners.push(registration);
+            let _ = self.world.spawn_entity_typed(registration);
         }
-        self.revision = self.revision.saturating_add(1);
+        self.bump_revision();
     }
 
     pub fn register_feature_graph(&mut self, spec: RenderFeatureGraphSpec) {
@@ -704,11 +736,22 @@ impl RenderGraphRegistryResource {
     }
 
     pub fn clear_owner(&mut self, owner: &str) -> bool {
-        let before = self.owners.len();
-        self.owners.retain(|entry| entry.owner != owner);
-        let removed = before != self.owners.len();
+        let owner = owner.trim();
+        if owner.is_empty() {
+            return false;
+        }
+        let owner_key = owner.to_string();
+        let removed = if let Some(entity) = self
+            .world
+            .find_entity_by_index::<OwnerRenderGraphRegistration, String>(&owner_key)
+        {
+            self.world.remove_entity(entity);
+            true
+        } else {
+            false
+        };
         if removed {
-            self.revision = self.revision.saturating_add(1);
+            self.bump_revision();
         }
         removed
     }
@@ -718,15 +761,48 @@ impl RenderGraphRegistryResource {
     }
 
     pub fn clear(&mut self) {
-        if self.owners.is_empty() {
+        let entities: Vec<_> = self
+            .world
+            .entities_with::<OwnerRenderGraphRegistration>()
+            .collect();
+        if entities.is_empty() {
             return;
         }
-        self.owners.clear();
-        self.revision = self.revision.saturating_add(1);
+        for entity in entities {
+            self.world.remove_entity(entity);
+        }
+        self.bump_revision();
     }
 
-    pub fn owners(&self) -> &[OwnerRenderGraphRegistration] {
-        &self.owners
+    pub fn owners(&self) -> Vec<OwnerRenderGraphRegistration> {
+        let mut owners: Vec<_> = self
+            .world
+            .entities_with::<OwnerRenderGraphRegistration>()
+            .filter_map(|entity| {
+                self.world
+                    .get_component::<OwnerRenderGraphRegistration>(entity)
+                    .cloned()
+            })
+            .collect();
+        owners.sort_by(|a, b| a.owner.cmp(&b.owner));
+        owners
+    }
+
+    fn meta(&self) -> &RenderGraphRegistryMetaResource {
+        self.world
+            .get_resource::<RenderGraphRegistryMetaResource>()
+            .expect("render graph registry meta resource should exist")
+    }
+
+    fn meta_mut(&mut self) -> &mut RenderGraphRegistryMetaResource {
+        self.world
+            .get_resource_mut::<RenderGraphRegistryMetaResource>()
+            .expect("render graph registry meta resource should exist")
+    }
+
+    fn bump_revision(&mut self) {
+        let meta = self.meta_mut();
+        meta.revision = meta.revision.saturating_add(1);
     }
 }
 
@@ -750,7 +826,8 @@ mod tests {
                 .with_passes(vec![RegisteredPassDescriptor::compute("sdf_compute")]),
         );
         assert_eq!(registry.owner_count(), 1);
-        let owner = &registry.owners()[0];
+        let owners = registry.owners();
+        let owner = &owners[0];
         assert!(owner.pipelines.is_empty());
         assert_eq!(owner.passes.len(), 1);
     }
@@ -836,9 +913,10 @@ mod tests {
         registry.register_feature_graph(spec_b);
 
         assert_eq!(registry.owner_count(), 1);
-        assert_eq!(registry.owners()[0].owner, "sdf_renderer");
-        assert_eq!(registry.owners()[0].passes.len(), 1);
-        assert_eq!(registry.owners()[0].passes[0].id, "sdf.compose");
+        let owners = registry.owners();
+        assert_eq!(owners[0].owner, "sdf_renderer");
+        assert_eq!(owners[0].passes.len(), 1);
+        assert_eq!(owners[0].passes[0].id, "sdf.compose");
     }
 
     #[test]

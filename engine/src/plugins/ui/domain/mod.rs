@@ -1,8 +1,9 @@
 mod template;
+mod text;
 
 pub use template::*;
+pub use text::*;
 
-use crate::plugins::render::domain::{FileFontProvider, FontAtlasProvider, GlyphMetrics};
 use ecs::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;

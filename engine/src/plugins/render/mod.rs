@@ -31,7 +31,8 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
     // Keep scheduler slow-node logs muted while startup warmup is still in loading.
     set_slow_node_logging_enabled(startup_ready_before);
 
-    let shader_reload_messages = data.gfx.poll_shader_hot_reload();
+    let _ = data.shader_registry.poll_updates();
+    let shader_reload_messages = data.shader_registry.drain_event_lines();
     if !shader_reload_messages.is_empty() {
         for msg in shader_reload_messages {
             data.scene
@@ -65,6 +66,7 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
     match data.gfx.render(
         &data.world_render,
         &data.scene.overlay_runtime.ui.draw_list,
+        &mut data.shader_registry,
         &data.render_graph_registry,
         &data.render_executor_registry,
     ) {

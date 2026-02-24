@@ -76,3 +76,41 @@ fn test_query_mut_updates_components() {
         Some(&Position(1.5, 1.0))
     );
 }
+
+#[derive(Debug, PartialEq, Copy, Clone, ecs::Component)]
+struct Disabled;
+
+#[test]
+fn test_query_mut_builder_supports_with_without_filters() {
+    let mut world = World::new();
+    world.register_component::<Position>();
+    world.register_component::<Velocity>();
+    world.register_component::<Health>();
+    world.register_component::<Disabled>();
+
+    let e_a = world.spawn_bundle((Position(0.0, 0.0), Velocity(1.0, 0.0), Health(10)));
+    let e_b = world.spawn_bundle((Position(0.0, 0.0), Velocity(2.0, 0.0), Disabled));
+    let e_c = world.spawn_bundle((Position(0.0, 0.0), Health(20)));
+
+    world
+        .query_mut_components::<Position>()
+        .with::<Velocity>()
+        .without::<Disabled>()
+        .for_each_with::<Velocity, _>(|_, position, velocity| {
+            position.0 += velocity.0;
+            position.1 += velocity.1;
+        });
+
+    assert_eq!(
+        world.get_component::<Position>(e_a),
+        Some(&Position(1.0, 0.0))
+    );
+    assert_eq!(
+        world.get_component::<Position>(e_b),
+        Some(&Position(0.0, 0.0))
+    );
+    assert_eq!(
+        world.get_component::<Position>(e_c),
+        Some(&Position(0.0, 0.0))
+    );
+}

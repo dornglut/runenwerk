@@ -7,7 +7,6 @@ mod render_frame;
 mod render_graph_registry;
 mod renderer;
 mod shader_manager;
-mod text;
 mod wgpu_ctx;
 
 pub use frame_graph::*;
@@ -19,5 +18,4 @@ pub use render_frame::*;
 pub use render_graph_registry::*;
 pub use renderer::*;
 pub use shader_manager::*;
-pub use text::*;
 pub use wgpu_ctx::*;

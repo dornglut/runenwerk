@@ -1,7 +1,7 @@
 use crate::plugins::input::domain::InputState;
 use crate::plugins::render::domain::{
     Gfx, GfxFrameTimings, RenderGraphRegistryResource, RenderPassExecutorRegistryResource,
-    WorldRenderFrame,
+    ShaderRegistryResource, WorldRenderFrame,
 };
 use crate::plugins::scene::domain::{OverlaySceneRuntime, SceneManager};
 use crate::plugins::time::domain::Time;
@@ -227,6 +227,7 @@ impl StartupState {
 pub struct EngineData {
     pub gfx: Gfx,
     pub world_render: WorldRenderFrame,
+    pub shader_registry: ShaderRegistryResource,
     pub render_graph_registry: RenderGraphRegistryResource,
     pub render_executor_registry: RenderPassExecutorRegistryResource,
     pub time: Time,
@@ -320,6 +321,7 @@ impl Engine {
         let data = EngineData {
             gfx,
             world_render: WorldRenderFrame::default(),
+            shader_registry: ShaderRegistryResource::new(),
             render_graph_registry: RenderGraphRegistryResource::default(),
             render_executor_registry: RenderPassExecutorRegistryResource::default(),
             time: Time::new(),

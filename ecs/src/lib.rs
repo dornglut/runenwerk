@@ -23,8 +23,10 @@ pub use resource::Resource;
 pub use table::{Archetype, ArchetypeKey};
 pub use utils::init_tracing;
 pub use world::{
+    ComponentChangeKind, ComponentChangeRecord, EntityDespawnedEvent, EntitySpawnedEvent,
     EventChannelConfig, EventChannelStats, EventLifetime, EventObserverNotification,
-    EventTracingPolicy, ObserverTrigger, OverflowPolicy, World,
+    EventTracingPolicy, MutQueryBuilder, ObserverTrigger, OverflowPolicy, ResourceChangeKind,
+    ResourceChangeRecord, World,
 };
 
 pub(crate) use table::{AnyStorage, Column, Row};
