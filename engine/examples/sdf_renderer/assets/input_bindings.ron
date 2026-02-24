@@ -1,0 +1,10 @@
+(
+  bindings: [
+    (action: "sdf.move_up", key: "KeyR"),
+    (action: "sdf.move_down", key: "KeyF"),
+    (action: "sdf.debug_next", key: "Tab"),
+    (action: "sdf.debug_prev", key: "Backquote"),
+    (action: "sdf.speed_up", key: "KeyE"),
+    (action: "sdf.speed_down", key: "KeyQ"),
+  ],
+)

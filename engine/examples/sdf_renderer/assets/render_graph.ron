@@ -1,0 +1,69 @@
+(
+  feature: "sdf_renderer_example",
+  resources: [
+    "sdf.params",
+    "world.agents",
+    "sdf.color",
+    "surface.color",
+    "ui.draw_list",
+  ],
+  compute_pipelines: [
+    (
+      id: "sdf.compute.raymarch",
+      shader: "assets/shaders/sdf_compute_3d_example.wgsl",
+    ),
+  ],
+  render_builtin_pipelines: [
+    (
+      id: "sdf.compose.fullscreen",
+      builtin: "compose.fullscreen",
+    ),
+    (
+      id: "ui.compose",
+      builtin: "ui.composite",
+    ),
+  ],
+  executor_bindings: [
+    (
+      id: "sdf.compute",
+      builtin: "builtin_compute",
+    ),
+    (
+      id: "sdf.compose",
+      builtin: "builtin_compose",
+    ),
+    (
+      id: "ui_composite",
+      builtin: "builtin_ui_composite",
+    ),
+  ],
+  passes: [
+    (
+      id: "sdf.compute",
+      kind: compute,
+      pipeline: "sdf.compute.raymarch",
+      executor: "sdf.compute",
+      reads: ["sdf.params", "world.agents"],
+      writes: ["sdf.color"],
+      depends_on: [],
+    ),
+    (
+      id: "sdf.compose",
+      kind: render,
+      pipeline: "sdf.compose.fullscreen",
+      executor: "sdf.compose",
+      reads: ["sdf.color"],
+      writes: ["surface.color"],
+      depends_on: ["sdf.compute"],
+    ),
+    (
+      id: "ui_composite",
+      kind: render,
+      pipeline: "ui.compose",
+      executor: "ui_composite",
+      reads: ["ui.draw_list"],
+      writes: ["surface.color"],
+      depends_on: ["sdf.compose"],
+    ),
+  ],
+)

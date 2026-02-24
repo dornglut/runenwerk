@@ -4,6 +4,10 @@ use super::model_manager::{
     ModelManager, ModelMaterial, ModelMesh, ModelMeshVertex, ModelTextureData,
 };
 use super::pipeline_registry::{PassSlot, PipelineKey, PipelineRegistry, PipelineSelection};
+use super::render_executor_registry::{
+    BuiltinRenderPassExecutor, RenderPassEncodeContext, RenderPassExecutorRegistryResource,
+    RenderPassPrepareContext,
+};
 use super::render_graph_registry::{
     RegisteredPassKind, RegisteredPipelineRef, RenderGraphRegistryResource,
 };
@@ -657,8 +661,6 @@ pub(crate) struct RendererPreparedPacket {
 }
 
 trait FramePassExecutor {
-    fn pass_name(&self) -> &'static str;
-
     fn prepare(
         &self,
         _renderer: &mut Renderer,
@@ -684,10 +686,6 @@ trait FramePassExecutor {
 struct WorldComputePassExecutor;
 
 impl FramePassExecutor for WorldComputePassExecutor {
-    fn pass_name(&self) -> &'static str {
-        "world_compute"
-    }
-
     fn prepare(
         &self,
         renderer: &mut Renderer,
@@ -738,10 +736,6 @@ impl FramePassExecutor for WorldComputePassExecutor {
 struct WorldComposePassExecutor;
 
 impl FramePassExecutor for WorldComposePassExecutor {
-    fn pass_name(&self) -> &'static str {
-        "world_compose"
-    }
-
     fn encode(
         &self,
         renderer: &mut Renderer,
@@ -761,10 +755,6 @@ impl FramePassExecutor for WorldComposePassExecutor {
 struct MeshOverlayPassExecutor;
 
 impl FramePassExecutor for MeshOverlayPassExecutor {
-    fn pass_name(&self) -> &'static str {
-        "mesh_overlay"
-    }
-
     fn encode(
         &self,
         renderer: &mut Renderer,
@@ -782,10 +772,6 @@ impl FramePassExecutor for MeshOverlayPassExecutor {
 struct UiCompositePassExecutor;
 
 impl FramePassExecutor for UiCompositePassExecutor {
-    fn pass_name(&self) -> &'static str {
-        "ui_composite"
-    }
-
     fn encode(
         &self,
         renderer: &mut Renderer,
@@ -1030,19 +1016,15 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    fn pass_executors() -> [&'static dyn FramePassExecutor; 4] {
-        [
-            &WORLD_COMPUTE_PASS_EXECUTOR,
-            &WORLD_COMPOSE_PASS_EXECUTOR,
-            &MESH_OVERLAY_PASS_EXECUTOR,
-            &UI_COMPOSITE_PASS_EXECUTOR,
-        ]
-    }
-
-    fn pass_executor(name: &str) -> Option<&'static dyn FramePassExecutor> {
-        Self::pass_executors()
-            .into_iter()
-            .find(|executor| executor.pass_name() == name)
+    fn builtin_pass_executor(
+        executor: BuiltinRenderPassExecutor,
+    ) -> &'static dyn FramePassExecutor {
+        match executor {
+            BuiltinRenderPassExecutor::WorldCompute => &WORLD_COMPUTE_PASS_EXECUTOR,
+            BuiltinRenderPassExecutor::WorldCompose => &WORLD_COMPOSE_PASS_EXECUTOR,
+            BuiltinRenderPassExecutor::MeshOverlay => &MESH_OVERLAY_PASS_EXECUTOR,
+            BuiltinRenderPassExecutor::UiComposite => &UI_COMPOSITE_PASS_EXECUTOR,
+        }
     }
 
     fn stable_hash<T: Hash>(value: &T) -> u64 {
@@ -1156,13 +1138,37 @@ impl Renderer {
         queue: &Queue,
         packet: &RendererPreparedPacket,
         active_executors: &BTreeSet<String>,
+        render_executor_registry: &RenderPassExecutorRegistryResource,
         timings: &mut RendererFrameTimings,
     ) {
-        for executor in Self::pass_executors() {
-            if !active_executors.contains(executor.pass_name()) {
+        for executor_name in active_executors {
+            if let Some(builtin) = render_executor_registry.resolve_builtin(executor_name) {
+                let executor = Self::builtin_pass_executor(builtin);
+                executor.prepare(self, device, queue, packet, timings);
                 continue;
             }
-            executor.prepare(self, device, queue, packet, timings);
+            if let Some(custom) = render_executor_registry.resolve_custom(executor_name) {
+                let mut dispatch_builtin = |builtin: BuiltinRenderPassExecutor| -> Result<()> {
+                    let executor = Self::builtin_pass_executor(builtin);
+                    executor.prepare(self, device, queue, packet, timings);
+                    Ok(())
+                };
+                let mut ctx = RenderPassPrepareContext::new(
+                    device,
+                    queue,
+                    &packet.merged_world_frame,
+                    packet.surface_format,
+                    packet.surface_size,
+                )
+                .with_builtin_dispatch(&mut dispatch_builtin);
+                if let Err(err) = custom.prepare(&mut ctx) {
+                    tracing::error!(
+                        executor = executor_name,
+                        ?err,
+                        "custom render pass executor prepare failed"
+                    );
+                }
+            }
         }
     }
 
@@ -2779,6 +2785,7 @@ impl Renderer {
         frame_view: &TextureView,
         packet: RendererPreparedPacket,
         render_graph_registry: &RenderGraphRegistryResource,
+        render_executor_registry: &RenderPassExecutorRegistryResource,
     ) -> RendererFrameTimings {
         let world_scene = packet.merged_world_frame.world_scene_label.as_str();
         let overlay_scene = packet.merged_world_frame.overlay_scene_label.as_str();
@@ -2820,7 +2827,14 @@ impl Renderer {
         }
 
         let mut timings = packet.prepare_timings;
-        self.prepare_registered_passes(device, queue, &packet, &active_executors, &mut timings);
+        self.prepare_registered_passes(
+            device,
+            queue,
+            &packet,
+            &active_executors,
+            render_executor_registry,
+            &mut timings,
+        );
 
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("engine_render_encoder"),
@@ -2835,7 +2849,8 @@ impl Renderer {
                 .get(&node.name)
                 .map(String::as_str)
                 .unwrap_or(node.name.as_str());
-            if let Some(executor) = Self::pass_executor(executor_name) {
+            if let Some(builtin) = render_executor_registry.resolve_builtin(executor_name) {
+                let executor = Self::builtin_pass_executor(builtin);
                 executor.encode(
                     self,
                     device,
@@ -2844,6 +2859,64 @@ impl Renderer {
                     &packet,
                     node.pipeline,
                 );
+                continue;
+            }
+            if let Some(custom) = render_executor_registry.resolve_custom(executor_name) {
+                if node.pipeline == PipelineKey::UiCompositeSdf {
+                    let mut dispatch_ui = |encoder: &mut CommandEncoder| -> Result<()> {
+                        self.encode_ui_pass(
+                            encoder,
+                            frame_view,
+                            &packet.prepared_ui,
+                            node.pipeline,
+                        );
+                        Ok(())
+                    };
+                    let mut ctx = RenderPassEncodeContext::new(
+                        device,
+                        &mut encoder,
+                        frame_view,
+                        &packet.merged_world_frame,
+                        packet.surface_format,
+                        packet.surface_size,
+                        node.pipeline,
+                    )
+                    .with_ui_dispatch(&mut dispatch_ui);
+                    if let Err(err) = custom.encode(&mut ctx) {
+                        tracing::error!(
+                            pass = node.name.as_str(),
+                            executor = executor_name,
+                            ?err,
+                            "custom render pass executor encode failed"
+                        );
+                    }
+                } else {
+                    let mut dispatch_builtin = |encoder: &mut CommandEncoder,
+                                                builtin: BuiltinRenderPassExecutor|
+                     -> Result<()> {
+                        let executor = Self::builtin_pass_executor(builtin);
+                        executor.encode(self, device, encoder, frame_view, &packet, node.pipeline);
+                        Ok(())
+                    };
+                    let mut ctx = RenderPassEncodeContext::new(
+                        device,
+                        &mut encoder,
+                        frame_view,
+                        &packet.merged_world_frame,
+                        packet.surface_format,
+                        packet.surface_size,
+                        node.pipeline,
+                    )
+                    .with_builtin_dispatch(&mut dispatch_builtin);
+                    if let Err(err) = custom.encode(&mut ctx) {
+                        tracing::error!(
+                            pass = node.name.as_str(),
+                            executor = executor_name,
+                            ?err,
+                            "custom render pass executor encode failed"
+                        );
+                    }
+                }
                 continue;
             }
             missing_executors.push((node.name.clone(), executor_name.to_string()));
@@ -2867,6 +2940,7 @@ impl Renderer {
         world_frame: &WorldRenderFrame,
         draw_list: &UiDrawList,
         render_graph_registry: &RenderGraphRegistryResource,
+        render_executor_registry: &RenderPassExecutorRegistryResource,
         surface_format: TextureFormat,
         surface_width: f32,
         surface_height: f32,
@@ -2880,7 +2954,14 @@ impl Renderer {
             surface_width,
             surface_height,
         );
-        self.render_packet(device, queue, frame_view, packet, render_graph_registry)
+        self.render_packet(
+            device,
+            queue,
+            frame_view,
+            packet,
+            render_graph_registry,
+            render_executor_registry,
+        )
     }
 }
 

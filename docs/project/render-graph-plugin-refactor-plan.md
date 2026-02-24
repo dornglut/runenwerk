@@ -8,6 +8,30 @@
 
 Refactor rendering so compute/render pipelines and pass responsibilities are plugin-owned and data-driven, rather than hard-wired into engine core paths such as `world_compute`.
 
+## Status Snapshot (2026-02-24)
+
+Implemented:
+
+1. Typed feature graph declarations and ids are available in engine code:
+   - `RenderFeatureGraphSpec`
+   - `RenderFeatureId`, `RenderResourceId`, `RenderPipelineId`, `RenderPassId`, `RenderPassExecutorId`
+2. Feature-centric registry bridge methods are available:
+   - `register_feature_graph`
+   - `replace_feature_graph`
+   - `remove_feature_graph`
+3. `sdf_renderer` example now registers a graph via typed builder with SDF-owned pass ids (`sdf.compute`, `sdf.compose`).
+4. Runtime executor registry exists with builtin + custom trait registration:
+   - `RenderPassExecutorRegistryResource`
+   - `BuiltinRenderPassExecutor`
+   - `RenderPassExecutor`
+5. `sdf_renderer` maps `executor_bindings` to custom executors; SDF compute/compose are feature-owned implementations.
+
+Still pending:
+
+1. Runtime dynamic pipeline registry by id.
+2. Full ECS-owned compile/runtime render state.
+3. Broader custom executor context for plugin-owned GPU resources beyond current bridge-level context.
+
 ## Problem Statement
 
 Current render flow mixes responsibilities across core render code and individual features:
@@ -61,8 +85,8 @@ Add `RenderPassExecutorRegistry` mapping `RenderPassExecutorId -> dyn RenderPass
 
 Executor trait should be plugin-friendly:
 
-- `prepare(&mut self, ctx, world, resources)`
-- `encode(&mut self, ctx, encoder, targets, resources)`
+- `prepare(&self, ctx)`
+- `encode(&self, ctx)`
 
 Core renderer invokes by id; it does not know feature-specific pass logic.
 
@@ -107,11 +131,11 @@ Per-frame systems update these resources before render submit.
 
 Target plugin responsibilities for `SdfRenderPlugin`:
 
-1. Register resources: `sdf_color`, `sdf_params`, `surface_color` (or plugin-owned output target name).
+1. Register resources: `sdf.color`, `sdf.params`, `surface.color` (or plugin-owned output target name).
 2. Register pipeline(s): `sdf.compute.raymarch`, `sdf.compose.fullscreen` (feature ids, not core world ids).
 3. Register passes:
-   - `sdf_compute` (compute, writes `sdf_color`)
-   - `sdf_compose` (render, reads `sdf_color`, writes `surface_color`)
+   - `sdf.compute` (compute, writes `sdf.color`)
+   - `sdf.compose` (render, reads `sdf.color`, writes `surface.color`)
 4. Provide executor implementation for both passes.
 5. Own input/camera/update systems that produce `SdfRenderStateResource`.
 
@@ -127,6 +151,13 @@ Explicit goal for the example:
 
 - Do not require reuse of `world_compute` / `world_compose` pass ids for SDF features.
 - Engine should provide generic renderer-building abstractions so users can author their own renderer paths.
+
+Current bridge note:
+
+1. Feature graph uses feature-owned executor ids (for example `sdf.compute`).
+2. Example setup registers custom executors via `register_custom`.
+3. SDF compute/compose use feature-owned GPU pipelines/resources in the example plugin.
+4. UI composite also runs through a custom executor path (using render-context UI dispatch helper).
 
 ## Migration Plan
 
@@ -211,9 +242,8 @@ pub struct RenderPassDescriptor {
 
 ## Open Decisions
 
-1. Whether pass executors are trait-object based or function-pointer + context id.
-2. Whether graph compilation occurs every frame or only on revision changes.
-3. Whether to support runtime scene-driven pass append at same layer as plugin registrations or as overlay on top.
+1. Whether graph compilation occurs every frame or only on revision changes.
+2. Whether to support runtime scene-driven pass append at same layer as plugin registrations or as overlay on top.
 
 ## Recommendation
 

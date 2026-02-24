@@ -1,6 +1,7 @@
 use crate::plugins::input::domain::InputState;
 use crate::plugins::render::domain::{
-    Gfx, GfxFrameTimings, RenderGraphRegistryResource, WorldRenderFrame,
+    Gfx, GfxFrameTimings, RenderGraphRegistryResource, RenderPassExecutorRegistryResource,
+    WorldRenderFrame,
 };
 use crate::plugins::scene::domain::{OverlaySceneRuntime, SceneManager};
 use crate::plugins::time::domain::Time;
@@ -227,6 +228,7 @@ pub struct EngineData {
     pub gfx: Gfx,
     pub world_render: WorldRenderFrame,
     pub render_graph_registry: RenderGraphRegistryResource,
+    pub render_executor_registry: RenderPassExecutorRegistryResource,
     pub time: Time,
     pub input: InputState,
     pub scene: SceneManager,
@@ -319,6 +321,7 @@ impl Engine {
             gfx,
             world_render: WorldRenderFrame::default(),
             render_graph_registry: RenderGraphRegistryResource::default(),
+            render_executor_registry: RenderPassExecutorRegistryResource::default(),
             time: Time::new(),
             input: InputState::new(),
             scene,

@@ -17,6 +17,28 @@ Critical boundary:
 - The target SDF setup is self-owned. Avoid default world-renderer pass ids (`world_compute`, `world_compose`) as required wiring.
 - Example should demonstrate the abstractions a user needs to build an independent renderer feature.
 
+## Current Implementation Status (2026-02-24)
+
+Implemented now:
+
+1. Setup uses typed builder API (`RenderFeatureGraphSpec::builder(...)`) instead of manual owner registration DTOs.
+2. SDF render path uses feature-owned pass ids:
+   - `sdf.compute`
+   - `sdf.compose`
+3. UI pass dependency is explicitly declared in example graph (`ui_composite` depends on `sdf.compose`).
+4. SDF example now uses feature-owned executor ids in graph config:
+   - `sdf.compute`
+   - `sdf.compose`
+   - `ui_composite`
+5. Runtime executor registry now uses `executor_bindings` to register custom executors.
+6. `sdf.compute`, `sdf.compose`, and `ui_composite` run through custom executor paths in the example.
+
+Still pending for this plan:
+
+1. Add focused tests for loader/conversion edge cases (especially invalid keys and invalid render graph executor/pipeline ids).
+2. Keep schema/docs aligned with the now-implemented `.ron` DTO shape as execution phases continue.
+3. Reduce bridge-only aliasing over time (for example keeping `world_*` builtin label aliases only for compatibility).
+
 ## Target Usage (What We Want)
 
 The example should follow this startup flow:
@@ -33,6 +55,28 @@ Primary authoring API decision:
 1. Use typed builder API for runtime graph construction (`RenderFeatureGraphSpec::builder(...)`).
 2. Treat `render_graph.ron` as import format that converts into the same typed spec.
 
+Current bridge usage in code:
+
+```rust
+let cfg = load_config_with_default::<SdfRenderGraphConfig>("render_graph.ron");
+let spec = cfg.to_spec()?;
+data.render_graph_registry.register_feature_graph(spec);
+cfg.register_custom_executors(&mut data.render_executor_registry)?;
+```
+
+Intended usage later (no built-in delegation):
+
+```rust
+let cfg = load_config_with_default::<SdfRenderGraphConfig>("render_graph.ron");
+data.render_graph_registry.register_feature_graph(cfg.to_spec()?);
+data.render_executor_registry
+    .register_custom("sdf.compute", Arc::new(SdfComputeExecutor::new()));
+data.render_executor_registry
+    .register_custom("sdf.compose", Arc::new(SdfComposeExecutor::new()));
+data.render_executor_registry
+    .register_custom("ui_composite", Arc::new(SdfUiCompositeExecutor));
+```
+
 ## Proposed Config Schemas
 
 ### `sdf_params.ron` (example shape)
@@ -40,9 +84,10 @@ Primary authoring API decision:
 ```ron
 (
   world_scene_label: "gameplay_stub",
-  world_bounds: (-18.0, -18.0, 18.0, 18.0),
+  overlay_scene_label: "console_ui",
+  world_bounds: [-18.0, -18.0, 18.0, 18.0],
   camera: (
-    target: (0.0, 0.8, 0.0),
+    target: [0.0, 0.8, 0.0],
     yaw: 0.4,
     pitch: 0.25,
     distance: 9.5,
@@ -58,6 +103,8 @@ Primary authoring API decision:
     speed_down_multiplier: 0.35,
     mouse_rotate_sensitivity: 0.0045,
     scroll_zoom_sensitivity: 0.55,
+    camera_target_y_min: -4.0,
+    camera_target_y_max: 8.0,
   ),
   debug_view_mode: 0,
   world_paused: false,
@@ -84,40 +131,62 @@ Primary authoring API decision:
 
 ```ron
 (
-  feature: "sdf_renderer",
+  feature: "sdf_renderer_example",
   resources: [
-    (id: "sdf.color"),
-    (id: "sdf.params"),
-    (id: "surface.color"),
+    "sdf.params",
+    "world.agents",
+    "sdf.color",
+    "surface.color",
+    "ui.draw_list",
   ],
-  pipelines: [
+  compute_pipelines: [
     (
       id: "sdf.compute.raymarch",
-      key: sdf_compute_raymarch_3d,
+      shader: "assets/shaders/sdf_compute_3d_example.wgsl",
     ),
+  ],
+  render_builtin_pipelines: [
     (
       id: "sdf.compose.fullscreen",
-      key: sdf_compose_fullscreen,
+      builtin: "compose.fullscreen",
     ),
+    (
+      id: "ui.compose",
+      builtin: "ui.composite",
+    ),
+  ],
+  executor_bindings: [
+    (id: "sdf.compute", builtin: "builtin_compute"),
+    (id: "sdf.compose", builtin: "builtin_compose"),
+    (id: "ui_composite", builtin: "builtin_ui_composite"),
   ],
   passes: [
     (
       id: "sdf.compute",
       kind: compute,
-      pipeline: Some((named: "sdf.compute.raymarch")),
-      executor: Some("sdf.compute"),
-      reads: ["sdf.params"],
+      pipeline: "sdf.compute.raymarch",
+      executor: "sdf.compute",
+      reads: ["sdf.params", "world.agents"],
       writes: ["sdf.color"],
       depends_on: [],
     ),
     (
       id: "sdf.compose",
       kind: render,
-      pipeline: Some((named: "sdf.compose.fullscreen")),
-      executor: Some("sdf.compose"),
+      pipeline: "sdf.compose.fullscreen",
+      executor: "sdf.compose",
       reads: ["sdf.color"],
       writes: ["surface.color"],
       depends_on: ["sdf.compute"],
+    ),
+    (
+      id: "ui_composite",
+      kind: render,
+      pipeline: "ui.compose",
+      executor: "ui_composite",
+      reads: ["ui.draw_list"],
+      writes: ["surface.color"],
+      depends_on: ["sdf.compose"],
     ),
   ],
 )
@@ -143,7 +212,7 @@ Primary authoring API decision:
 5. Keep logging concise:
    - one error per failed file load/parse
    - one summary info/warn after apply
-6. Remove requirement that plugin passes map onto fixed built-in executor names.
+6. Keep bridge aliases optional; target end-state is fully feature-owned custom executors.
 7. Add typed builder API as primary authoring surface for specs.
 
 ## Example Changes Needed
@@ -160,7 +229,7 @@ Primary authoring API decision:
    - apply feature graph spec from config/builder
    - apply input mappings from config
    - apply world/camera params from config or typed defaults
-   - register SDF-owned executor bindings
+   - apply executor bindings from config to custom executor registrations
 4. Preserve current behavior as default values when file missing/invalid (for dev continuity).
 
 ## Implementation Phases
@@ -191,7 +260,7 @@ Primary authoring API decision:
 2. Corrupt each `.ron` file and verify single concise error + safe fallback.
 3. Change pipeline/pass config in `render_graph.ron` and verify behavior changes without Rust edits.
 4. Confirm controls remap from `input_bindings.ron` without rebuild.
-5. Verify no hard dependency remains on `world_compute`/`world_compose` ids in example config.
+5. Verify no hard dependency remains on `world_compute`/`world_compose` ids in example config (use `builtin_*` labels instead).
 
 ## Definition of Done
 

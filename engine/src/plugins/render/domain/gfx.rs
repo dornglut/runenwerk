@@ -1,6 +1,6 @@
 use super::{
-    PassSlot, PipelineKey, PipelineSelection, RenderGraphRegistryResource, Renderer,
-    RendererFrameTimings, WgpuCtx, WorldRenderFrame,
+    PassSlot, PipelineKey, PipelineSelection, RenderGraphRegistryResource,
+    RenderPassExecutorRegistryResource, Renderer, RendererFrameTimings, WgpuCtx, WorldRenderFrame,
 };
 use crate::plugins::ui::domain::UiDrawList;
 use anyhow::Result;
@@ -88,6 +88,7 @@ impl Gfx {
         world_frame: &WorldRenderFrame,
         draw_list: &UiDrawList,
         render_graph_registry: &RenderGraphRegistryResource,
+        render_executor_registry: &RenderPassExecutorRegistryResource,
     ) -> Result<GfxFrameTimings, SurfaceError> {
         let mut timings = GfxFrameTimings::default();
         let acquire_start = Instant::now();
@@ -109,6 +110,7 @@ impl Gfx {
             &view,
             packet,
             render_graph_registry,
+            render_executor_registry,
         );
 
         let present_start = Instant::now();

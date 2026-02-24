@@ -66,6 +66,7 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
         &data.world_render,
         &data.scene.overlay_runtime.ui.draw_list,
         &data.render_graph_registry,
+        &data.render_executor_registry,
     ) {
         Ok(timings) => {
             data.debug_metrics.last_timings = Some(timings);
