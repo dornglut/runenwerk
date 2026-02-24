@@ -643,17 +643,17 @@ impl RenderPassSpecBuilder {
     }
 
     pub fn executor_builtin_compute(mut self) -> Self {
-        self.pass.executor = Some(RenderPassExecutorId::new("world_compute"));
+        self.pass.executor = Some(RenderPassExecutorId::new("builtin_compute"));
         self
     }
 
     pub fn executor_builtin_compose(mut self) -> Self {
-        self.pass.executor = Some(RenderPassExecutorId::new("world_compose"));
+        self.pass.executor = Some(RenderPassExecutorId::new("builtin_compose"));
         self
     }
 
     pub fn executor_builtin_ui_composite(mut self) -> Self {
-        self.pass.executor = Some(RenderPassExecutorId::new("ui_composite"));
+        self.pass.executor = Some(RenderPassExecutorId::new("builtin_ui_composite"));
         self
     }
 
@@ -714,10 +714,8 @@ fn infer_compute_pipeline_key(shader_path: &str) -> PipelineKey {
 fn parse_render_builtin_pipeline_key(builtin: &str) -> Result<PipelineKey> {
     let normalized = builtin.trim().to_ascii_lowercase();
     match normalized.as_str() {
-        "compose.fullscreen" | "world_compose_fullscreen" => {
-            Ok(PipelineKey::WorldComposeFullscreen)
-        }
-        "ui.composite" | "ui_composite_sdf" => Ok(PipelineKey::UiCompositeSdf),
+        "compose.fullscreen" => Ok(PipelineKey::WorldComposeFullscreen),
+        "ui.composite" => Ok(PipelineKey::UiCompositeSdf),
         _ => bail!("unknown render builtin pipeline '{}'", builtin.trim()),
     }
 }
@@ -856,7 +854,7 @@ mod tests {
         assert_eq!(owner.pipelines.len(), 2);
         assert_eq!(owner.passes.len(), 2);
         assert_eq!(owner.passes[0].id, "sdf.compute");
-        assert_eq!(owner.passes[0].executor.as_deref(), Some("world_compute"));
+        assert_eq!(owner.passes[0].executor.as_deref(), Some("builtin_compute"));
     }
 
     #[test]

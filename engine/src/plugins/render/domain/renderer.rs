@@ -324,7 +324,7 @@ impl Default for FrameGraphConfig {
 fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
     vec![
         FramePassDescriptor {
-            name: "world_compute".to_string(),
+            name: "builtin_compute".to_string(),
             kind: FramePassKindConfig::Compute,
             slot: Some(FramePassSlotConfig::WorldCompute),
             pipeline: None,
@@ -336,13 +336,13 @@ fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
             depends_on: Vec::new(),
         },
         FramePassDescriptor {
-            name: "world_compose".to_string(),
+            name: "builtin_compose".to_string(),
             kind: FramePassKindConfig::Render,
             slot: Some(FramePassSlotConfig::WorldCompose),
             pipeline: None,
             reads: vec![FrameResourceConfig::WorldColor],
             writes: vec![FrameResourceConfig::SurfaceColor],
-            depends_on: vec!["world_compute".to_string()],
+            depends_on: vec!["builtin_compute".to_string()],
         },
         FramePassDescriptor {
             name: "mesh_overlay".to_string(),
@@ -351,7 +351,7 @@ fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
             pipeline: Some(FramePipelineConfig::WorldComposeFullscreen),
             reads: vec![FrameResourceConfig::MeshData],
             writes: vec![FrameResourceConfig::SurfaceColor],
-            depends_on: vec!["world_compose".to_string()],
+            depends_on: vec!["builtin_compose".to_string()],
         },
         FramePassDescriptor {
             name: "ui_composite".to_string(),
@@ -1020,8 +1020,8 @@ impl Renderer {
         executor: BuiltinRenderPassExecutor,
     ) -> &'static dyn FramePassExecutor {
         match executor {
-            BuiltinRenderPassExecutor::WorldCompute => &WORLD_COMPUTE_PASS_EXECUTOR,
-            BuiltinRenderPassExecutor::WorldCompose => &WORLD_COMPOSE_PASS_EXECUTOR,
+            BuiltinRenderPassExecutor::Compute => &WORLD_COMPUTE_PASS_EXECUTOR,
+            BuiltinRenderPassExecutor::Compose => &WORLD_COMPOSE_PASS_EXECUTOR,
             BuiltinRenderPassExecutor::MeshOverlay => &MESH_OVERLAY_PASS_EXECUTOR,
             BuiltinRenderPassExecutor::UiComposite => &UI_COMPOSITE_PASS_EXECUTOR,
         }
@@ -1286,35 +1286,66 @@ impl Renderer {
         }
     }
 
+    fn builtin_executor_id_for_descriptor(
+        &self,
+        descriptor: &FramePassDescriptor,
+        pipeline: PipelineKey,
+    ) -> String {
+        if let Some(slot) = descriptor.slot {
+            return match slot {
+                FramePassSlotConfig::WorldCompute => "builtin_compute".to_string(),
+                FramePassSlotConfig::WorldCompose => "builtin_compose".to_string(),
+                FramePassSlotConfig::UiComposite => "builtin_ui_composite".to_string(),
+            };
+        }
+        let pass_name = descriptor.name.trim().to_ascii_lowercase();
+        if pass_name == "mesh_overlay" {
+            return "builtin_mesh_overlay".to_string();
+        }
+        match descriptor.kind {
+            FramePassKindConfig::Compute => "builtin_compute".to_string(),
+            FramePassKindConfig::Render => {
+                if pipeline == PipelineKey::UiCompositeSdf {
+                    "builtin_ui_composite".to_string()
+                } else {
+                    "builtin_compose".to_string()
+                }
+            }
+        }
+    }
+
     fn resolved_builtin_descriptors(
         &self,
         descriptors: &[FramePassDescriptor],
     ) -> Vec<ResolvedFramePassDescriptor> {
         descriptors
             .iter()
-            .map(|descriptor| ResolvedFramePassDescriptor {
-                name: descriptor.name.clone(),
-                kind: match descriptor.kind {
-                    FramePassKindConfig::Compute => PassKind::Compute,
-                    FramePassKindConfig::Render => PassKind::Render,
-                },
-                pipeline: self.resolve_pass_pipeline(descriptor),
-                reads: descriptor
-                    .reads
-                    .iter()
-                    .copied()
-                    .map(FrameResourceConfig::as_resource)
-                    .map(str::to_string)
-                    .collect(),
-                writes: descriptor
-                    .writes
-                    .iter()
-                    .copied()
-                    .map(FrameResourceConfig::as_resource)
-                    .map(str::to_string)
-                    .collect(),
-                depends_on: descriptor.depends_on.clone(),
-                executor: descriptor.name.clone(),
+            .map(|descriptor| {
+                let pipeline = self.resolve_pass_pipeline(descriptor);
+                ResolvedFramePassDescriptor {
+                    name: descriptor.name.clone(),
+                    kind: match descriptor.kind {
+                        FramePassKindConfig::Compute => PassKind::Compute,
+                        FramePassKindConfig::Render => PassKind::Render,
+                    },
+                    pipeline,
+                    reads: descriptor
+                        .reads
+                        .iter()
+                        .copied()
+                        .map(FrameResourceConfig::as_resource)
+                        .map(str::to_string)
+                        .collect(),
+                    writes: descriptor
+                        .writes
+                        .iter()
+                        .copied()
+                        .map(FrameResourceConfig::as_resource)
+                        .map(str::to_string)
+                        .collect(),
+                    depends_on: descriptor.depends_on.clone(),
+                    executor: self.builtin_executor_id_for_descriptor(descriptor, pipeline),
+                }
             })
             .collect()
     }
@@ -2988,7 +3019,7 @@ mod tests {
 (
   passes: [
     (
-      name: "world_compute",
+      name: "builtin_compute",
       kind: compute,
       slot: Some(world_compute),
       reads: [world_params, world_agents],
@@ -2999,7 +3030,7 @@ mod tests {
 "#;
         let config: FrameGraphConfig = ron::from_str(raw).expect("frame graph config should parse");
         assert_eq!(config.passes.len(), 1);
-        assert_eq!(config.passes[0].name, "world_compute");
+        assert_eq!(config.passes[0].name, "builtin_compute");
         assert!(matches!(
             config.passes[0].kind,
             FramePassKindConfig::Compute
@@ -3024,31 +3055,31 @@ mod tests {
                 executor: "ui_composite".to_string(),
             },
             ResolvedFramePassDescriptor {
-                name: "world_compute".to_string(),
+                name: "builtin_compute".to_string(),
                 kind: PassKind::Compute,
                 pipeline: PipelineKey::WorldComputeBasic,
                 reads: vec!["world_params".to_string()],
                 writes: vec!["world_color".to_string()],
                 depends_on: Vec::new(),
-                executor: "world_compute".to_string(),
+                executor: "builtin_compute".to_string(),
             },
             ResolvedFramePassDescriptor {
-                name: "world_compute".to_string(),
+                name: "builtin_compute".to_string(),
                 kind: PassKind::Compute,
                 pipeline: PipelineKey::WorldComputeHighContrast,
                 reads: vec!["world_params".to_string()],
                 writes: vec!["world_color".to_string()],
                 depends_on: Vec::new(),
-                executor: "world_compute".to_string(),
+                executor: "builtin_compute".to_string(),
             },
             ResolvedFramePassDescriptor {
-                name: "world_compose".to_string(),
+                name: "builtin_compose".to_string(),
                 kind: PassKind::Render,
                 pipeline: PipelineKey::WorldComposeFullscreen,
                 reads: vec!["world_color".to_string()],
                 writes: vec!["surface_color".to_string()],
                 depends_on: vec!["missing_pass".to_string()],
-                executor: "world_compose".to_string(),
+                executor: "builtin_compose".to_string(),
             },
         ];
 
@@ -3057,11 +3088,11 @@ mod tests {
         assert_eq!(output.diagnostics.empty_pass_name_count, 1);
         assert_eq!(
             output.diagnostics.duplicate_pass_names,
-            vec!["world_compute".to_string()]
+            vec!["builtin_compute".to_string()]
         );
         assert_eq!(
             output.diagnostics.missing_dependencies,
-            vec![("world_compose".to_string(), "missing_pass".to_string())]
+            vec![("builtin_compose".to_string(), "missing_pass".to_string())]
         );
     }
 

@@ -442,10 +442,10 @@ impl SdfRenderGraphConfig {
                 )
             })?;
             let executor: Arc<dyn RenderPassExecutor> = match builtin {
-                BuiltinRenderPassExecutor::WorldCompute => {
+                BuiltinRenderPassExecutor::Compute => {
                     Arc::new(SdfComputeExecutor::new(Arc::clone(&shared_state)))
                 }
-                BuiltinRenderPassExecutor::WorldCompose => {
+                BuiltinRenderPassExecutor::Compose => {
                     Arc::new(SdfComposeExecutor::new(Arc::clone(&shared_state)))
                 }
                 BuiltinRenderPassExecutor::UiComposite => Arc::new(SdfUiCompositeExecutor),
@@ -1267,13 +1267,7 @@ fn parse_function_key(suffix: &str) -> Option<KeyCode> {
 }
 
 fn parse_builtin_executor(raw: &str) -> Option<BuiltinRenderPassExecutor> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "world_compute" | "builtin_compute" => Some(BuiltinRenderPassExecutor::WorldCompute),
-        "world_compose" | "builtin_compose" => Some(BuiltinRenderPassExecutor::WorldCompose),
-        "mesh_overlay" => Some(BuiltinRenderPassExecutor::MeshOverlay),
-        "ui_composite" | "builtin_ui_composite" => Some(BuiltinRenderPassExecutor::UiComposite),
-        _ => None,
-    }
+    BuiltinRenderPassExecutor::from_label(raw)
 }
 
 fn load_config_with_default<T>(file_name: &str) -> T
@@ -1356,18 +1350,18 @@ mod tests {
     }
 
     #[test]
-    fn builtin_executor_parser_accepts_aliases() {
+    fn builtin_executor_parser_accepts_builtin_labels() {
         assert_eq!(
             parse_builtin_executor("builtin_compute"),
-            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::WorldCompute)
-        );
-        assert_eq!(
-            parse_builtin_executor("world_compute"),
-            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::WorldCompute)
+            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::Compute)
         );
         assert_eq!(
             parse_builtin_executor("builtin_compose"),
-            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::WorldCompose)
+            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::Compose)
+        );
+        assert_eq!(
+            parse_builtin_executor("builtin_mesh_overlay"),
+            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::MeshOverlay)
         );
         assert_eq!(
             parse_builtin_executor("builtin_ui_composite"),

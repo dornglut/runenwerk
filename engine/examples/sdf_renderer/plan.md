@@ -37,7 +37,7 @@ Still pending for this plan:
 
 1. Add focused tests for loader/conversion edge cases (especially invalid keys and invalid render graph executor/pipeline ids).
 2. Keep schema/docs aligned with the now-implemented `.ron` DTO shape as execution phases continue.
-3. Reduce bridge-only aliasing over time (for example keeping `world_*` builtin label aliases only for compatibility).
+3. Keep builtin label contract strict (`builtin_*`) and remove legacy alias acceptance from config parsing.
 
 ## Target Usage (What We Want)
 

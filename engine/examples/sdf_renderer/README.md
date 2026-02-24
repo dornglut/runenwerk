@@ -35,7 +35,7 @@ Compatibility note:
 - `executor_bindings` are used to register `register_custom` executors.
 - `sdf.compute` and `sdf.compose` now use feature-owned executor implementations in this example.
 - `ui_composite` also runs through a custom executor path in the example.
-- Use `builtin_compute`, `builtin_compose`, and `builtin_ui_composite` labels in config (legacy `world_*` aliases are still accepted).
+- Use `builtin_compute`, `builtin_compose`, and `builtin_ui_composite` labels in config.
 - This keeps SDF pass ownership in the example while preserving parity.
 
 ## Target State (Planned)

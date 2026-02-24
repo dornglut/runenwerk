@@ -1,19 +1,19 @@
 (
   passes: [
     (
-      name: "world_compute",
+      name: "builtin_compute",
       kind: compute,
       slot: Some(world_compute),
       reads: [world_params, world_agents],
       writes: [world_color],
     ),
     (
-      name: "world_compose",
+      name: "builtin_compose",
       kind: render,
       slot: Some(world_compose),
       reads: [world_color],
       writes: [surface_color],
-      depends_on: ["world_compute"],
+      depends_on: ["builtin_compute"],
     ),
     (
       name: "mesh_overlay",
@@ -21,7 +21,7 @@
       pipeline: Some(world_compose_fullscreen),
       reads: [mesh_data],
       writes: [surface_color],
-      depends_on: ["world_compose"],
+      depends_on: ["builtin_compose"],
     ),
     (
       name: "ui_composite",

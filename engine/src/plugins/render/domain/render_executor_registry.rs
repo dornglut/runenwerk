@@ -172,8 +172,8 @@ impl<'a> RenderPassEncodeContext<'a> {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BuiltinRenderPassExecutor {
-    WorldCompute,
-    WorldCompose,
+    Compute,
+    Compose,
     MeshOverlay,
     UiComposite,
 }
@@ -181,19 +181,19 @@ pub enum BuiltinRenderPassExecutor {
 impl BuiltinRenderPassExecutor {
     pub fn label(self) -> &'static str {
         match self {
-            Self::WorldCompute => "world_compute",
-            Self::WorldCompose => "world_compose",
-            Self::MeshOverlay => "mesh_overlay",
-            Self::UiComposite => "ui_composite",
+            Self::Compute => "builtin_compute",
+            Self::Compose => "builtin_compose",
+            Self::MeshOverlay => "builtin_mesh_overlay",
+            Self::UiComposite => "builtin_ui_composite",
         }
     }
 
     pub fn from_label(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "world_compute" => Some(Self::WorldCompute),
-            "world_compose" => Some(Self::WorldCompose),
-            "mesh_overlay" => Some(Self::MeshOverlay),
-            "ui_composite" => Some(Self::UiComposite),
+            "builtin_compute" => Some(Self::Compute),
+            "builtin_compose" => Some(Self::Compose),
+            "builtin_mesh_overlay" => Some(Self::MeshOverlay),
+            "builtin_ui_composite" => Some(Self::UiComposite),
             _ => None,
         }
     }
@@ -210,8 +210,8 @@ impl Default for RenderPassExecutorRegistryResource {
     fn default() -> Self {
         let mut builtin_bindings = BTreeMap::new();
         let defaults = [
-            BuiltinRenderPassExecutor::WorldCompute,
-            BuiltinRenderPassExecutor::WorldCompose,
+            BuiltinRenderPassExecutor::Compute,
+            BuiltinRenderPassExecutor::Compose,
             BuiltinRenderPassExecutor::MeshOverlay,
             BuiltinRenderPassExecutor::UiComposite,
         ];
@@ -293,8 +293,8 @@ impl RenderPassExecutorRegistryResource {
 
     pub fn clear_custom(&mut self) {
         let defaults = [
-            BuiltinRenderPassExecutor::WorldCompute,
-            BuiltinRenderPassExecutor::WorldCompose,
+            BuiltinRenderPassExecutor::Compute,
+            BuiltinRenderPassExecutor::Compose,
             BuiltinRenderPassExecutor::MeshOverlay,
             BuiltinRenderPassExecutor::UiComposite,
         ];
@@ -332,19 +332,19 @@ mod tests {
     fn defaults_include_builtin_executor_ids() {
         let registry = RenderPassExecutorRegistryResource::default();
         assert_eq!(
-            registry.resolve_builtin("world_compute"),
-            Some(BuiltinRenderPassExecutor::WorldCompute)
+            registry.resolve_builtin("builtin_compute"),
+            Some(BuiltinRenderPassExecutor::Compute)
         );
         assert_eq!(
-            registry.resolve_builtin("world_compose"),
-            Some(BuiltinRenderPassExecutor::WorldCompose)
+            registry.resolve_builtin("builtin_compose"),
+            Some(BuiltinRenderPassExecutor::Compose)
         );
         assert_eq!(
-            registry.resolve_builtin("mesh_overlay"),
+            registry.resolve_builtin("builtin_mesh_overlay"),
             Some(BuiltinRenderPassExecutor::MeshOverlay)
         );
         assert_eq!(
-            registry.resolve_builtin("ui_composite"),
+            registry.resolve_builtin("builtin_ui_composite"),
             Some(BuiltinRenderPassExecutor::UiComposite)
         );
     }
@@ -352,37 +352,37 @@ mod tests {
     #[test]
     fn register_builtin_alias_updates_binding() {
         let mut registry = RenderPassExecutorRegistryResource::default();
-        registry.register_builtin("sdf.compute", BuiltinRenderPassExecutor::WorldCompute);
-        registry.register_builtin("sdf.compose", BuiltinRenderPassExecutor::WorldCompose);
+        registry.register_builtin("sdf.compute", BuiltinRenderPassExecutor::Compute);
+        registry.register_builtin("sdf.compose", BuiltinRenderPassExecutor::Compose);
 
         assert_eq!(
             registry.resolve_builtin("sdf.compute"),
-            Some(BuiltinRenderPassExecutor::WorldCompute)
+            Some(BuiltinRenderPassExecutor::Compute)
         );
         assert_eq!(
             registry.resolve_builtin("sdf.compose"),
-            Some(BuiltinRenderPassExecutor::WorldCompose)
+            Some(BuiltinRenderPassExecutor::Compose)
         );
     }
 
     #[test]
     fn register_custom_overrides_builtin_slot() {
         let mut registry = RenderPassExecutorRegistryResource::default();
-        registry.register_custom("world_compute", Arc::new(TestExecutor));
-        assert!(registry.resolve_builtin("world_compute").is_none());
-        assert!(registry.resolve_custom("world_compute").is_some());
+        registry.register_custom("builtin_compute", Arc::new(TestExecutor));
+        assert!(registry.resolve_builtin("builtin_compute").is_none());
+        assert!(registry.resolve_custom("builtin_compute").is_some());
     }
 
     #[test]
     fn clear_custom_keeps_builtin_defaults() {
         let mut registry = RenderPassExecutorRegistryResource::default();
-        registry.register_builtin("sdf.compute", BuiltinRenderPassExecutor::WorldCompute);
+        registry.register_builtin("sdf.compute", BuiltinRenderPassExecutor::Compute);
         registry.register_custom("custom.compute", Arc::new(TestExecutor));
         assert!(registry.contains("sdf.compute"));
         assert!(registry.contains("custom.compute"));
         registry.clear_custom();
         assert!(!registry.contains("sdf.compute"));
         assert!(!registry.contains("custom.compute"));
-        assert!(registry.contains("world_compute"));
+        assert!(registry.contains("builtin_compute"));
     }
 }
