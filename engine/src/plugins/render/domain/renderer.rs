@@ -1,4 +1,3 @@
-use super::chunk_mesher::ChunkMesher;
 use super::frame_graph::{FrameGraph, PassHandle, PassKind};
 use super::model_manager::{
     ModelManager, ModelMaterial, ModelMesh, ModelMeshVertex, ModelTextureData,
@@ -8,16 +7,12 @@ use super::render_executor_registry::{
     BuiltinRenderPassExecutor, RenderPassEncodeContext, RenderPassExecutorRegistryResource,
     RenderPassPrepareContext,
 };
+use super::render_frame::{WorldRenderAgent, WorldRenderFrame};
 use super::render_graph_registry::{
     RegisteredPassKind, RegisteredPipelineRef, RenderGraphRegistryResource,
 };
 use super::shader_manager::{ShaderId, ShaderManager};
 use super::text::{FileFontProvider, TextRenderer};
-use super::world_compute::{
-    DEFAULT_WORLD_COMPOSE_SHADER_FULLSCREEN, DEFAULT_WORLD_COMPUTE_SHADER_BASIC,
-    DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST, DEFAULT_WORLD_COMPUTE_SHADER_SDF_3D,
-    WorldComputeRenderer, WorldRenderAgent, WorldRenderFrame, WorldShaderSources,
-};
 use crate::plugins::scene::manifest::{
     FramePassDescriptor as SceneFramePassDescriptor,
     FramePassKindDescriptor as SceneFramePassKindDescriptor,
@@ -34,6 +29,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu::*;
@@ -324,34 +320,13 @@ impl Default for FrameGraphConfig {
 fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
     vec![
         FramePassDescriptor {
-            name: "builtin_compute".to_string(),
-            kind: FramePassKindConfig::Compute,
-            slot: Some(FramePassSlotConfig::WorldCompute),
-            pipeline: None,
-            reads: vec![
-                FrameResourceConfig::WorldParams,
-                FrameResourceConfig::WorldAgents,
-            ],
-            writes: vec![FrameResourceConfig::WorldColor],
-            depends_on: Vec::new(),
-        },
-        FramePassDescriptor {
-            name: "builtin_compose".to_string(),
-            kind: FramePassKindConfig::Render,
-            slot: Some(FramePassSlotConfig::WorldCompose),
-            pipeline: None,
-            reads: vec![FrameResourceConfig::WorldColor],
-            writes: vec![FrameResourceConfig::SurfaceColor],
-            depends_on: vec!["builtin_compute".to_string()],
-        },
-        FramePassDescriptor {
             name: "mesh_overlay".to_string(),
             kind: FramePassKindConfig::Render,
             slot: None,
             pipeline: Some(FramePipelineConfig::WorldComposeFullscreen),
             reads: vec![FrameResourceConfig::MeshData],
             writes: vec![FrameResourceConfig::SurfaceColor],
-            depends_on: vec!["builtin_compose".to_string()],
+            depends_on: Vec::new(),
         },
         FramePassDescriptor {
             name: "ui_composite".to_string(),
@@ -640,15 +615,6 @@ struct UiPreparedDraws {
     surface_size: (u32, u32),
 }
 
-#[derive(Debug, Clone)]
-struct PreparedWorldShaderSources {
-    compute_basic: String,
-    compute_high_contrast: String,
-    compute_sdf_3d: String,
-    compose_fullscreen: String,
-    revisions: [u64; 4],
-}
-
 #[derive(Debug)]
 pub(crate) struct RendererPreparedPacket {
     surface_format: TextureFormat,
@@ -656,7 +622,6 @@ pub(crate) struct RendererPreparedPacket {
     merged_world_frame: WorldRenderFrame,
     prepared_ui: UiPreparedDraws,
     prepared_mesh: MeshPreparedDraw,
-    world_shaders: PreparedWorldShaderSources,
     prepare_timings: RendererFrameTimings,
 }
 
@@ -683,71 +648,46 @@ trait FramePassExecutor {
 }
 
 #[derive(Debug, Default)]
-struct WorldComputePassExecutor;
+struct BuiltinComputeNoopPassExecutor;
 
-impl FramePassExecutor for WorldComputePassExecutor {
-    fn prepare(
-        &self,
-        renderer: &mut Renderer,
-        device: &Device,
-        queue: &Queue,
-        packet: &RendererPreparedPacket,
-        timings: &mut RendererFrameTimings,
-    ) {
-        let world_prepare_start = Instant::now();
-        let world_shader_sources = WorldShaderSources {
-            compute_basic: &packet.world_shaders.compute_basic,
-            compute_high_contrast: &packet.world_shaders.compute_high_contrast,
-            compute_sdf_3d: &packet.world_shaders.compute_sdf_3d,
-            compose_fullscreen: &packet.world_shaders.compose_fullscreen,
-            revisions: packet.world_shaders.revisions,
-        };
-        {
-            let _span = tracing::info_span!("renderer.prepare_world_compute").entered();
-            renderer.world_compute_renderer.prepare_frame(
-                device,
-                queue,
-                packet.surface_format,
-                packet.surface_size.0,
-                packet.surface_size.1,
-                &world_shader_sources,
-                &packet.merged_world_frame,
-            );
-        }
-        timings.world_prepare_ms = world_prepare_start.elapsed().as_secs_f32() * 1000.0;
-    }
-
+impl FramePassExecutor for BuiltinComputeNoopPassExecutor {
     fn encode(
         &self,
-        renderer: &mut Renderer,
+        _renderer: &mut Renderer,
         _device: &Device,
-        encoder: &mut CommandEncoder,
+        _encoder: &mut CommandEncoder,
         _frame_view: &TextureView,
         _packet: &RendererPreparedPacket,
-        pipeline: PipelineKey,
+        _pipeline: PipelineKey,
     ) {
-        renderer
-            .world_compute_renderer
-            .encode_compute_pass(encoder, pipeline);
+        static WARNED: AtomicBool = AtomicBool::new(false);
+        if !WARNED.swap(true, Ordering::Relaxed) {
+            tracing::warn!(
+                "builtin_compute is not implemented in core render plugin; register a custom executor instead"
+            );
+        }
     }
 }
 
 #[derive(Debug, Default)]
-struct WorldComposePassExecutor;
+struct BuiltinComposeNoopPassExecutor;
 
-impl FramePassExecutor for WorldComposePassExecutor {
+impl FramePassExecutor for BuiltinComposeNoopPassExecutor {
     fn encode(
         &self,
-        renderer: &mut Renderer,
+        _renderer: &mut Renderer,
         _device: &Device,
-        encoder: &mut CommandEncoder,
-        frame_view: &TextureView,
+        _encoder: &mut CommandEncoder,
+        _frame_view: &TextureView,
         _packet: &RendererPreparedPacket,
-        pipeline: PipelineKey,
+        _pipeline: PipelineKey,
     ) {
-        renderer
-            .world_compute_renderer
-            .encode_compose_pass(encoder, frame_view, pipeline);
+        static WARNED: AtomicBool = AtomicBool::new(false);
+        if !WARNED.swap(true, Ordering::Relaxed) {
+            tracing::warn!(
+                "builtin_compose is not implemented in core render plugin; register a custom executor instead"
+            );
+        }
     }
 }
 
@@ -785,8 +725,10 @@ impl FramePassExecutor for UiCompositePassExecutor {
     }
 }
 
-const WORLD_COMPUTE_PASS_EXECUTOR: WorldComputePassExecutor = WorldComputePassExecutor;
-const WORLD_COMPOSE_PASS_EXECUTOR: WorldComposePassExecutor = WorldComposePassExecutor;
+const BUILTIN_COMPUTE_NOOP_PASS_EXECUTOR: BuiltinComputeNoopPassExecutor =
+    BuiltinComputeNoopPassExecutor;
+const BUILTIN_COMPOSE_NOOP_PASS_EXECUTOR: BuiltinComposeNoopPassExecutor =
+    BuiltinComposeNoopPassExecutor;
 const MESH_OVERLAY_PASS_EXECUTOR: MeshOverlayPassExecutor = MeshOverlayPassExecutor;
 const UI_COMPOSITE_PASS_EXECUTOR: UiCompositePassExecutor = UiCompositePassExecutor;
 
@@ -832,6 +774,22 @@ fn ground_mesh_for_bounds(world_bounds: [f32; 4]) -> ModelMesh {
 
 fn mesh_cache_key(mesh_name: &str, mesh_idx: usize) -> String {
     format!("{mesh_name}#{mesh_idx}")
+}
+
+fn is_template_mesh_name(name: &str) -> bool {
+    template_name_matches(name, "corner_col")
+        || template_name_matches(name, "diagonal_corner_col")
+        || template_name_matches(name, "edge_col")
+        || template_name_matches(name, "full_col")
+        || template_name_matches(name, "T_col")
+}
+
+fn template_name_matches(name: &str, base: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    let base = base.to_ascii_lowercase();
+    lower == base
+        || lower.starts_with(&format!("{base}."))
+        || lower.starts_with(&format!("{base}_"))
 }
 
 fn mesh_signature(mesh: &ModelMesh) -> u64 {
@@ -998,8 +956,6 @@ pub struct Renderer {
     frame_graph_overlay_config: FrameGraphOverlayConfig,
     shader_manager: ShaderManager,
     model_manager: ModelManager,
-    chunk_mesher: ChunkMesher,
-    world_compute_renderer: WorldComputeRenderer,
     mesh_pass: Option<MeshPass>,
     mesh_pass_format: Option<TextureFormat>,
     mesh_surface_targets: Option<MeshSurfaceTargets>,
@@ -1020,8 +976,8 @@ impl Renderer {
         executor: BuiltinRenderPassExecutor,
     ) -> &'static dyn FramePassExecutor {
         match executor {
-            BuiltinRenderPassExecutor::Compute => &WORLD_COMPUTE_PASS_EXECUTOR,
-            BuiltinRenderPassExecutor::Compose => &WORLD_COMPOSE_PASS_EXECUTOR,
+            BuiltinRenderPassExecutor::Compute => &BUILTIN_COMPUTE_NOOP_PASS_EXECUTOR,
+            BuiltinRenderPassExecutor::Compose => &BUILTIN_COMPOSE_NOOP_PASS_EXECUTOR,
             BuiltinRenderPassExecutor::MeshOverlay => &MESH_OVERLAY_PASS_EXECUTOR,
             BuiltinRenderPassExecutor::UiComposite => &UI_COMPOSITE_PASS_EXECUTOR,
         }
@@ -1565,8 +1521,6 @@ impl Renderer {
             frame_graph_overlay_config: load_frame_graph_overlay_config(),
             shader_manager: ShaderManager::new(),
             model_manager: ModelManager::new(),
-            chunk_mesher: ChunkMesher::new(),
-            world_compute_renderer: WorldComputeRenderer::new(),
             mesh_pass: None,
             mesh_pass_format: None,
             mesh_surface_targets: None,
@@ -2196,26 +2150,18 @@ impl Renderer {
         hot_path.model_collect_ms = collect_models_start.elapsed().as_secs_f32() * 1000.0;
         hot_path.model_meshes = source_meshes.len() as u32;
 
-        let collect_chunks_start = Instant::now();
-        let mut meshes = {
-            let _span = tracing::info_span!("mesh.collect_chunks").entered();
-            self.chunk_mesher.visible_chunk_meshes(world_frame)
-        };
-        hot_path.chunk_collect_ms = collect_chunks_start.elapsed().as_secs_f32() * 1000.0;
-        hot_path.chunk_meshes = meshes.len() as u32;
-
         let merge_start = Instant::now();
-        {
+        let meshes = {
             let _span = tracing::info_span!("mesh.merge_filter").entered();
-            meshes.extend(
-                source_meshes
-                    .into_iter()
-                    .filter(|mesh| !ChunkMesher::is_template_mesh_name(&mesh.name)),
-            );
+            let mut meshes: Vec<_> = source_meshes
+                .into_iter()
+                .filter(|mesh| !is_template_mesh_name(&mesh.name))
+                .collect();
             if !world_frame.agents.is_empty() {
                 meshes.push(ground_mesh_for_bounds(world_frame.world_bounds));
             }
-        }
+            meshes
+        };
         hot_path.merge_filter_ms = merge_start.elapsed().as_secs_f32() * 1000.0;
         hot_path.merged_meshes = meshes.len() as u32;
 
@@ -2712,48 +2658,6 @@ impl Renderer {
             .source_or(ShaderId::UiRect, DEFAULT_UI_RECT_SHADER)
             .to_string();
         let ui_rect_revision = self.shader_manager.revision(ShaderId::UiRect);
-        let world_compute_basic = self
-            .shader_manager
-            .source_or(
-                ShaderId::WorldComputeBasic,
-                DEFAULT_WORLD_COMPUTE_SHADER_BASIC,
-            )
-            .to_string();
-        let world_compute_high_contrast = self
-            .shader_manager
-            .source_or(
-                ShaderId::WorldComputeHighContrast,
-                DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST,
-            )
-            .to_string();
-        let world_compute_sdf_3d = self
-            .shader_manager
-            .source_or(
-                ShaderId::WorldComputeSdf3d,
-                DEFAULT_WORLD_COMPUTE_SHADER_SDF_3D,
-            )
-            .to_string();
-        let world_compose = self
-            .shader_manager
-            .source_or(
-                ShaderId::WorldComposeFullscreen,
-                DEFAULT_WORLD_COMPOSE_SHADER_FULLSCREEN,
-            )
-            .to_string();
-        let world_shaders = PreparedWorldShaderSources {
-            compute_basic: world_compute_basic,
-            compute_high_contrast: world_compute_high_contrast,
-            compute_sdf_3d: world_compute_sdf_3d,
-            compose_fullscreen: world_compose,
-            revisions: [
-                self.shader_manager.revision(ShaderId::WorldComputeBasic),
-                self.shader_manager
-                    .revision(ShaderId::WorldComputeHighContrast),
-                self.shader_manager.revision(ShaderId::WorldComputeSdf3d),
-                self.shader_manager
-                    .revision(ShaderId::WorldComposeFullscreen),
-            ],
-        };
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
         self.ensure_mesh_pass(device, queue, surface_format);
@@ -2804,7 +2708,6 @@ impl Renderer {
             merged_world_frame,
             prepared_ui,
             prepared_mesh: prepared_mesh.prepared,
-            world_shaders,
             prepare_timings,
         }
     }

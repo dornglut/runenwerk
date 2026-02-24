@@ -1,8 +1,8 @@
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use engine::plugins::render::domain::{
-    BuiltinRenderPassExecutor, DEFAULT_WORLD_COMPOSE_SHADER_FULLSCREEN, MAX_WORLD_RENDER_AGENTS,
-    MAX_WORLD_RENDER_MODELS, RenderFeatureGraphSpec, RenderPassEncodeContext, RenderPassExecutor,
+    BuiltinRenderPassExecutor, MAX_WORLD_RENDER_AGENTS, MAX_WORLD_RENDER_MODELS,
+    RenderFeatureGraphSpec, RenderPassEncodeContext, RenderPassExecutor,
     RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
 use engine::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
@@ -30,6 +30,8 @@ const INPUT_BINDINGS_CONFIG_FILE: &str = "input_bindings.ron";
 const RENDER_GRAPH_CONFIG_FILE: &str = "render_graph.ron";
 const SDF_COMPUTE_SHADER: &str =
     include_str!("../../../assets/shaders/sdf_compute_3d_example.wgsl");
+const SDF_COMPOSE_SHADER: &str =
+    include_str!("../../../assets/shaders/world_compose_fullscreen.wgsl");
 
 static SDF_CONTROLS: OnceLock<SdfControlsConfig> = OnceLock::new();
 
@@ -639,7 +641,7 @@ fn build_sdf_gpu_pass(
     });
     let compose_shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("sdf_example_compose_shader"),
-        source: ShaderSource::Wgsl(DEFAULT_WORLD_COMPOSE_SHADER_FULLSCREEN.into()),
+        source: ShaderSource::Wgsl(SDF_COMPOSE_SHADER.into()),
     });
 
     let params_buffer = device.create_buffer(&BufferDescriptor {
