@@ -1,10 +1,10 @@
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use engine::plugins::render::domain::{
-    BuiltinRenderPassExecutor, MAX_WORLD_RENDER_AGENTS, MAX_WORLD_RENDER_MODELS,
-    RenderFeatureGraphSpec, RenderFrameData, RenderPassEncodeContext, RenderPassExecutor,
+    BuiltinRenderPassExecutor, RenderFeatureGraphSpec, RenderPassEncodeContext, RenderPassExecutor,
     RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
+use engine::plugins::scene::domain::{MAX_WORLD_RENDER_AGENTS, RenderFrameData};
 use engine::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use engine::{platform::App, plugins::input::domain::action};
 use serde::Deserialize;
@@ -32,6 +32,7 @@ const SDF_COMPUTE_SHADER: &str =
     include_str!("../../../assets/shaders/sdf_compute_3d_example.wgsl");
 const SDF_COMPOSE_SHADER: &str =
     include_str!("../../../assets/shaders/world_compose_fullscreen.wgsl");
+const SDF_MAX_MODELS: usize = 1;
 
 static SDF_CONTROLS: OnceLock<SdfControlsConfig> = OnceLock::new();
 
@@ -118,7 +119,6 @@ fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
         let world_render = data.world_render_mut();
         world_render.render_world = false;
         world_render.agents.clear();
-        world_render.model_proxies.clear();
     }
     let controls = SDF_CONTROLS.get().copied().unwrap_or_default();
 
@@ -631,7 +631,7 @@ struct SdfGpuPass {
     size: (u32, u32),
     params_buffer: Buffer,
     agents_buffer: Buffer,
-    models_buffer: Buffer,
+    _models_buffer: Buffer,
     compute_bind_group: BindGroup,
     compose_bind_group: BindGroup,
     compute_pipeline: ComputePipeline,
@@ -669,7 +669,7 @@ fn build_sdf_gpu_pass(
     });
     let models_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("sdf_example_models_buffer"),
-        size: (std::mem::size_of::<SdfWorldModelRaw>() * MAX_WORLD_RENDER_MODELS) as u64,
+        size: (std::mem::size_of::<SdfWorldModelRaw>() * SDF_MAX_MODELS) as u64,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -860,7 +860,7 @@ fn build_sdf_gpu_pass(
         size,
         params_buffer,
         agents_buffer,
-        models_buffer,
+        _models_buffer: models_buffer,
         compute_bind_group,
         compose_bind_group,
         compute_pipeline,
@@ -918,7 +918,7 @@ impl RenderPassExecutor for SdfComputeExecutor {
             .frame_data::<RenderFrameData>()
             .ok_or_else(|| anyhow!("missing RenderFrameData in render pass prepare context"))?;
         let agent_count = world_frame.agents.len().min(MAX_WORLD_RENDER_AGENTS);
-        let model_count = world_frame.model_proxies.len().min(MAX_WORLD_RENDER_MODELS);
+        let model_count = 0usize;
         let params = SdfWorldParamsRaw {
             screen_size: [pass.size.0 as f32, pass.size.1 as f32],
             _pad0: [0.0; 2],
@@ -965,19 +965,6 @@ impl RenderPassExecutor for SdfComputeExecutor {
                 .write_buffer(&pass.agents_buffer, 0, bytemuck::cast_slice(&agents));
         }
 
-        let mut models = Vec::with_capacity(model_count);
-        for model in world_frame.model_proxies.iter().take(model_count) {
-            models.push(SdfWorldModelRaw {
-                pos: [model.x, model.y],
-                radius: model.radius.max(0.2),
-                _pad0: 0.0,
-                color: model.color,
-            });
-        }
-        if !models.is_empty() {
-            ctx.queue()
-                .write_buffer(&pass.models_buffer, 0, bytemuck::cast_slice(&models));
-        }
         Ok(())
     }
 
@@ -1128,7 +1115,6 @@ fn apply_sdf_params(data: &mut EngineData, params: &SdfParamsConfig) {
     world_render.elapsed_time_seconds = 0.0;
     world_render.render_mesh_overlay = params.render_mesh_overlay;
     world_render.agents.clear();
-    world_render.model_proxies.clear();
 }
 
 fn apply_input_bindings(data: &mut EngineData, config: &SdfInputBindingsConfig) -> usize {

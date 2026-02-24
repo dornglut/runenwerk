@@ -33,6 +33,15 @@ impl<'a> RenderFrameDataRegistry<'a> {
         self.by_type.insert(TypeId::of::<T>(), value);
     }
 
+    pub fn extend_from(&mut self, other: &RenderFrameDataRegistry<'a>) {
+        self.by_type.extend(
+            other
+                .by_type
+                .iter()
+                .map(|(type_id, value)| (*type_id, *value)),
+        );
+    }
+
     pub fn get<T: 'static>(&self) -> Option<&'a T> {
         self.by_type
             .get(&TypeId::of::<T>())

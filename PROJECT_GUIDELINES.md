@@ -28,7 +28,8 @@ This file is the top-level guidance for all new proposals and implementation pla
 3. Each plugin crate or feature area must include a `requests.md` for proposal-driven feature requests.
 4. New proposal gaps must be added to the nearest owning plugin/feature `requests.md`.
 5. Completed requests should be marked completed or removed from the open section.
-6. Root `requests.md` is reserved for cross-cutting requests that span multiple plugins/features.
+6. Root `requests.md` must include a project-wide index of ongoing requests (with links to owning files).
+7. Root `requests.md` should also track cross-cutting requests that span multiple plugins/features.
 
 ## Minimal Templates
 

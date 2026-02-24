@@ -1,6 +1,6 @@
 use super::{
-    RenderFrameData, RenderGraphRegistryResource, RenderPassExecutorRegistryResource, Renderer,
-    RendererFrameTimings, ShaderHandle, ShaderRegistryResource, WgpuCtx,
+    RenderFrameDataRegistry, RenderGraphRegistryResource, RenderPassExecutorRegistryResource,
+    Renderer, RendererFrameTimings, ShaderHandle, ShaderRegistryResource, WgpuCtx,
 };
 use crate::plugins::ui::domain::UiDrawList;
 use anyhow::Result;
@@ -35,29 +35,9 @@ impl Gfx {
         self.ctx.resize(width, height);
     }
 
-    pub fn poll_model_hot_reload(&mut self) -> Vec<String> {
-        self.renderer.poll_model_hot_reload()
-    }
-
-    pub fn force_model_reload(&mut self) -> Vec<String> {
-        self.renderer.force_model_reload()
-    }
-
-    pub fn set_model_watch_enabled(&mut self, enabled: bool) {
-        self.renderer.set_model_watch_enabled(enabled);
-    }
-
-    pub fn model_watch_enabled(&self) -> bool {
-        self.renderer.model_watch_enabled()
-    }
-
-    pub fn model_status_lines(&self) -> Vec<String> {
-        self.renderer.model_status_lines()
-    }
-
     pub fn render(
         &mut self,
-        world_frame: &RenderFrameData,
+        frame_data: &RenderFrameDataRegistry<'_>,
         draw_list: &UiDrawList,
         shader_registry: &mut ShaderRegistryResource,
         render_graph_registry: &RenderGraphRegistryResource,
@@ -72,7 +52,7 @@ impl Gfx {
         let packet = self.renderer.prepare_packet(
             &self.ctx.device,
             &self.ctx.queue,
-            world_frame,
+            frame_data,
             draw_list,
             shader_registry,
             ui_rect_shader,
@@ -84,6 +64,7 @@ impl Gfx {
             &self.ctx.device,
             &self.ctx.queue,
             &view,
+            frame_data,
             packet,
             render_graph_registry,
             render_executor_registry,

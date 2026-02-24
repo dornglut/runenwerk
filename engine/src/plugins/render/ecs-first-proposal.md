@@ -1,7 +1,7 @@
 # Fully ECS-First Render Proposal
 
 Date: `2026-02-24`  
-Status: `proposed`
+Status: `in_progress`
 
 ## Objective
 

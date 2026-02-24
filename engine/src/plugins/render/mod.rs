@@ -1,6 +1,6 @@
 pub mod domain;
 
-use self::domain::{RenderFrameData, ShaderHandle};
+use self::domain::{RenderFrameDataRegistry, ShaderHandle};
 use crate::plugins::ui::domain::UiRenderShaderConfig;
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
@@ -16,9 +16,14 @@ impl EnginePlugin for RenderPlugin {
 
     fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
         builder.add_node_with_edges(
+            "frame_render_prepare",
+            frame_render_prepare_system,
+            &["overlay_ui_render_extract"],
+        );
+        builder.add_node_with_edges(
             "frame_render_submit",
             ui_render_submit_system,
-            &["overlay_ui_render_extract"],
+            &["frame_render_prepare"],
         );
         Ok(())
     }
@@ -26,6 +31,10 @@ impl EnginePlugin for RenderPlugin {
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
 const MESH_HOT_PATH_LOG_THRESHOLD_MS: f32 = 8.0;
+
+pub fn frame_render_prepare_system(_data: &mut EngineData) -> anyhow::Result<()> {
+    Ok(())
+}
 
 pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
     let _submit_span = tracing::info_span!("systems.ui_render_submit").entered();
@@ -49,23 +58,9 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
         );
         data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
     }
-    let model_reload_messages = data.gfx.poll_model_hot_reload();
-    if !model_reload_messages.is_empty() {
-        for msg in model_reload_messages {
-            data.scene
-                .overlay_runtime
-                .ui
-                .log_lines
-                .push(format!("[world] {msg}"));
-        }
-        clamp_lines(
-            &mut data.scene.overlay_runtime.ui.log_lines,
-            data.scene.overlay_runtime.ui.max_lines,
-        );
-        data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
-    }
-
-    let render_frame = RenderFrameData::from_world_frame(data.world_render());
+    let mut frame_data = RenderFrameDataRegistry::new();
+    data.render_frame_bindings
+        .collect_frame_data(&data.render_resources, &mut frame_data);
     let ui_rect_shader: Option<ShaderHandle> = data
         .scene
         .overlay_runtime
@@ -76,7 +71,7 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
         .and_then(|id| data.shader_registry.handle(id));
 
     match data.gfx.render(
-        &render_frame,
+        &frame_data,
         &data.scene.overlay_runtime.ui.draw_list,
         &mut data.shader_registry,
         &data.render_graph_registry,

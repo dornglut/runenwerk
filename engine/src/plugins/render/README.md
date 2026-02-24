@@ -7,7 +7,7 @@ Render plugin is moving toward a pure orchestration role so feature plugins can 
 ## Usage
 
 - Plugin: `RenderPlugin`
-- Scheduler node: `frame_render_submit`
+- Scheduler nodes: `frame_render_prepare`, `frame_render_submit`
 - Consumes:
   - render graph registrations
   - executor registrations
@@ -24,6 +24,7 @@ Render plugin is moving toward a pure orchestration role so feature plugins can 
 
 - Register feature-owned frame graphs through render graph registry APIs.
 - Register feature-owned pass executors through executor registry APIs.
+- Register ECS frame resources through `EngineData::register_render_frame_resource::<T>()` in feature plugin setup so submit includes them in `RenderFrameDataRegistry`.
 - Register shader roots/assets and consume shader handles in feature plugins.
 - Add feature-owned renderer plugins/examples without editing core render orchestration.
 
@@ -49,7 +50,7 @@ Core render must not own:
 - default frame graph passes from `renderer.rs`
 - shader-specific loading/hot-reload behavior
 - text rendering logic (`text.rs`)
-- world-specific frame data coupling (`WorldRenderFrame` as mandatory pass input)
+- world-specific frame data coupling (any mandatory concrete world payload struct)
 
 ## Required Extractions
 
@@ -74,7 +75,7 @@ Core render must not own:
 - UI plugin registers its own resources/pipelines/passes/executors.
 
 5. Render frame decoupling:
-- Replace hard dependency on `WorldRenderFrame` with plugin-defined resources/contexts.
+- Replace hard dependency on concrete world frame structs with plugin-defined resources/contexts.
 - Core pass execution uses ids + opaque data handles.
 
 ## Current Shader Registry Behavior
@@ -125,14 +126,19 @@ Progress completed in this pass:
 - `renderer.rs` no longer injects default/fallback frame graph passes; it compiles only ECS-registered feature graphs and reports `no_registered_passes` diagnostics when empty.
 - UI plugin now owns UI rect shader selection via ECS resource (`UiRenderShaderConfig`), and render submit resolves it to a `ShaderHandle` before invoking core renderer.
 - `text.rs` moved from `render/domain` into `ui/domain`; font atlas + glyph pipeline ownership now lives in UI plugin.
-- `model_manager.rs` now stores model assets in ECS components with indexed id lookup and ECS-owned watch/reload config state.
-- `RenderPassPrepareContext` / `RenderPassEncodeContext` now use typed frame-data lookup (`frame_data::<T>()`) instead of hardcoding `WorldRenderFrame`.
-- `renderer.rs` / `gfx.rs` entrypoints now consume `RenderFrameData` (adapter type) instead of `WorldRenderFrame` directly.
-- `EngineData` world render state now lives in ECS (`render_resources` + `WorldRenderFrame` resource) rather than a dedicated runtime struct field.
+- `RenderPassPrepareContext` / `RenderPassEncodeContext` now use typed frame-data lookup (`frame_data::<T>()`) instead of hardcoding concrete world frame types.
+- `EngineData` render state now lives in ECS (`render_resources` + `RenderFrameData` resource) rather than a dedicated runtime struct field.
+- `gfx.render` / `renderer.prepare_packet` / `renderer.render` now accept a generic `RenderFrameDataRegistry` input.
+- Render pass prepare/encode contexts now consume only caller-provided frame data from `RenderFrameDataRegistry`; renderer no longer synthesizes packet-local `RenderFrameData` entries.
+- Render submit now populates frame data from ECS through typed `RenderFrameResourceBindings`; feature plugins opt-in by registering resource types, instead of hardcoding submit payload types.
+- Core `renderer.rs` no longer performs world/mesh preparation from `RenderFrameData`; `builtin_mesh_overlay` is intentionally no-op in core so feature plugins must own that behavior.
+- Legacy `model_manager` coupling has been removed from the active core render domain module.
+- Scene render payload no longer includes `WorldRenderModelProxy`/`model_proxies`.
 
 1. Render frame coupling:
-- Render submit path still adapts from `WorldRenderFrame` ECS resource into `RenderFrameData` each frame.
-- Target: source `RenderFrameData` (and future per-feature packet inputs) directly as plugin-owned ECS resources/handles to remove this adapter hop.
+- Render submit no longer adapts from a separate world-frame type; it injects the runtime `RenderFrameData` resource directly into `RenderFrameDataRegistry`.
+- `RenderFrameData` ownership moved out of render domain into `scene::domain`.
+- Target: migrate feature plugins from compatibility `RenderFrameData` to smaller plugin-owned ECS resources per executor.
 
 ECS gaps discovered during this migration are tracked in:
 

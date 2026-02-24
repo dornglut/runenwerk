@@ -3,7 +3,7 @@
 ## Core
 
 - `PROJECT_GUIDELINES.md` - top-level proposal and architecture guidelines.
-- `requests.md` - cross-cutting project requests.
+- `requests.md` - cross-cutting requests plus a project-wide index of ongoing plugin/feature requests.
 
 ## Crate/Area Docs
 
