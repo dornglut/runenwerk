@@ -27,31 +27,39 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/feature-request.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/plan.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/index.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/project/execution-plan.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/project/execution-plan.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/engine/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/example-requests.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/main_menu.ron" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/main_menu.ron" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/pause_menu.ron" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/pause_menu.ron" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/settings_menu.ron" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/settings_menu.ron" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/frame_graph.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/frame_graph.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/pipeline_registry.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/pipeline_registry.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/shader_manager.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/shader_manager.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/world_compute.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/world_compute.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/manifest/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/manifest/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/template_flow.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/template_flow.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/runtime/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/world_renderer_legacy/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/world_renderer_legacy/chunk_mesher.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/world_renderer_legacy/world_compute.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/Cargo.toml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/gameplay/gameplay_stub.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/models/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/models/cube.glb" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/scenes/console_ui.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/scenes/gameplay_stub.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/scenes/hub_stub.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/scenes/hud_ui.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/scenes/inventory_ui.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/ui/console.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/ui/hud.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/assets/ui/inventory.ron" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/gameplay.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/lib.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/main.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/plugins.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/apply.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/execute.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/parse.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/spec.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_bootstrap.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_combat.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_move.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_sense.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/render/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/render/world_extract.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/tests/game_commands_tests.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/game/src/systems/tests/mod.rs" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/logs/engine.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/engine.log" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -60,7 +68,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="180" />
+    <option name="cachedIndexableFilesCount" value="187" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
   <component name="Git.Settings">
@@ -84,52 +92,35 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Cargo.Game.executor": "Run",
-    "Cargo.Run game.executor": "Run",
-    "Cargo.Run scene_manager_ui.executor": "Run",
-    "Cargo.Run sdf_renderer.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "main",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "/Users/joshua/Projekte/grotto-quest",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
-    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
-    "org.rust.first.attach.projects": "true",
-    "to.speed.mode.migration.done": "true",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Cargo.Game.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Run game.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Run scene_manager_ui.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Run sdf_renderer.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/joshua/Projekte/grotto-quest&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager" selected="Cargo.Run sdf_renderer">
-    <configuration name="Run game" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package game --bin game" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-      <envs />
-      <option name="emulateTerminal" value="true" />
-      <option name="channel" value="DEFAULT" />
-      <option name="requiredFeatures" value="true" />
-      <option name="allFeatures" value="false" />
-      <option name="withSudo" value="false" />
-      <option name="buildTarget" value="REMOTE" />
-      <option name="backtrace" value="SHORT" />
-      <option name="isRedirectInput" value="false" />
-      <option name="redirectInputPath" value="" />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="Run scene_manager_ui" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="run --package engine --example scene_manager_ui" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -168,7 +159,6 @@
       <list>
         <item itemvalue="Cargo.Run sdf_renderer" />
         <item itemvalue="Cargo.Run scene_manager_ui" />
-        <item itemvalue="Cargo.Run game" />
       </list>
     </recent_temporary>
   </component>
@@ -185,6 +175,7 @@
       <workItem from="1771852942540" duration="3423000" />
       <workItem from="1771856374727" duration="18919000" />
       <workItem from="1771933104718" duration="3937000" />
+      <workItem from="1771937057504" duration="10798000" />
     </task>
     <servers />
   </component>
