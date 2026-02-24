@@ -1,5 +1,34 @@
 # Render Plugin Decoupling Plan
 
+## Purpose
+
+Render plugin is moving toward a pure orchestration role so feature plugins can provide concrete rendering behavior without core edits.
+
+## Usage
+
+- Plugin: `RenderPlugin`
+- Scheduler node: `frame_render_submit`
+- Consumes:
+  - render graph registrations
+  - executor registrations
+  - shader registry updates
+  - feature/plugin-provided frame data
+
+## Ownership Boundaries
+
+- Owns graph compilation, pass ordering, execution dispatch, and submission lifecycle.
+- Owns render diagnostics/timing orchestration.
+- Does not own feature/world payload schemas, builtin-default gameplay/UI behavior, or feature-specific pass logic.
+
+## Extension Points
+
+- Register feature-owned frame graphs through render graph registry APIs.
+- Register feature-owned pass executors through executor registry APIs.
+- Register shader roots/assets and consume shader handles in feature plugins.
+- Add feature-owned renderer plugins/examples without editing core render orchestration.
+
+## Additional Details
+
 ## Goal
 
 Turn the render plugin into pure orchestration/tooling so feature plugins can build any renderer (for example, SDF-style) without editing core render files.
@@ -112,3 +141,4 @@ ECS gaps discovered during this migration are tracked in:
 Render-plugin architecture requests are tracked in:
 
 - `engine/src/plugins/render/requests.md`
+- `engine/src/plugins/render/ecs-first-proposal.md` (active direction)

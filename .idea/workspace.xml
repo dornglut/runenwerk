@@ -25,18 +25,19 @@
   <component name="ChangeListManager">
     <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/requests.md" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/requests.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/sdf_renderer/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/grid/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/grid/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/index.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/project/engineering-guidelines.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/project/execution-plan.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/project/game-design.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/game-design.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/project/planned-features.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/project/render-graph-plugin-refactor-plan.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/scheduler/AGENTS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/scheduler/design-goals.md" beforeDir="false" afterPath="$PROJECT_DIR$/scheduler/design-goals.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/scheduler/engineering-guidelines.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/input/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/input/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/render_frame.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/render_frame.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/ui/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/ui/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/runtime/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/requests.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/requests.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/ui/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/ui/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -96,6 +97,12 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/docs" />
+      <recent name="$PROJECT_DIR$/scheduler" />
+    </key>
+  </component>
   <component name="RunManager" selected="Cargo.Run sdf_renderer">
     <configuration name="Run scene_manager_ui" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="run --package engine --example scene_manager_ui" />
@@ -152,7 +159,7 @@
       <workItem from="1771856374727" duration="18919000" />
       <workItem from="1771933104718" duration="3937000" />
       <workItem from="1771937057504" duration="11463000" />
-      <workItem from="1771948547394" duration="8954000" />
+      <workItem from="1771948547394" duration="11062000" />
     </task>
     <servers />
   </component>

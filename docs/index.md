@@ -1,35 +1,51 @@
 # Documentation Index
 
-This folder is the single source of truth for project and crate docs.
+## Core
 
-## Project
-- `docs/project/AGENTS.md` - short redirect for project contributor guidance.
-- `docs/project/engineering-guidelines.md` - engineering standards, ownership, and workflow rules.
-- `docs/project/execution-plan.md` - current implementation status and near-term plan.
-- `docs/project/render-graph-plugin-refactor-plan.md` - migration plan to plugin-owned, data-driven render graph registration/execution.
-- `docs/project/plugin-domain-migration-plan.md` - plan for consolidating render/runtime/ui/input/scene/time code under plugin-owned folders.
-- `docs/project/backlog.md` - active and planned backlog tracks with acceptance criteria.
-- `docs/project/product-roadmap.md` - priority roadmap across foundation, MVP, and polish.
-- `docs/project/scene-architecture.md` - ECS-first scene stack model, transitions, and overlay layering strategy.
-- `docs/project/render-graph-architecture.md` - frame graph and pipeline registry model for mixed compute/render rendering.
-- `docs/project/profiling-and-tracing.md` - runtime performance profiling setup, hot-path logs, and Tracy workflow.
-- `docs/project/ui-architecture.md` - retained ECS SDF/MSDF UI architecture and implementation scope.
-- `docs/project/game-design.md` - high-level game design and loop direction.
-- `docs/project/gameplay-scene-mvp.md` - concrete ECS gameplay scene vertical-slice spec and definition of done.
+- `PROJECT_GUIDELINES.md` - top-level proposal and architecture guidelines.
+- `requests.md` - cross-cutting project requests.
 
-## ECS
-- `docs/ecs/design-goals.md` - ECS goals, invariants, performance targets, and testing expectations.
+## Crate/Area Docs
 
-## Scheduler
-- `docs/scheduler/AGENTS.md` - short redirect for scheduler contributor guidance.
-- `docs/scheduler/engineering-guidelines.md` - scheduler contributor rules.
-- `docs/scheduler/design-goals.md` - scheduler behavior goals and invariants.
+- `engine/README.md`
+- `engine/requests.md`
+- `ecs/README.md`
+- `ecs/requests.md`
+- `ecs_macros/README.md`
+- `ecs_macros/requests.md`
+- `scheduler/README.md`
+- `scheduler/requests.md`
+- `grid/README.md`
+- `grid/requests.md`
+- `assets/README.md`
+- `assets/requests.md`
+- `docs/README.md`
+- `docs/requests.md`
 
-## Asset Docs
-- `assets/editor/README.md` - local editor/tooling config expectations.
-- `assets/models/README.md` - model import pipeline behavior and commands.
+## Project Docs
 
-## Documentation Conventions
-- Documentation files use lowercase kebab-case.
-- Long-form docs should include purpose, current state, constraints, and next actions when practical.
-- Keep implementation details aligned with actual code state; mark forward-looking sections as proposed/planned.
+- `docs/game-design.md` - high-level game design direction.
+
+## Plugin Docs
+
+- `engine/src/plugins/debug_metrics/README.md`
+- `engine/src/plugins/debug_metrics/requests.md`
+- `engine/src/plugins/grid/README.md`
+- `engine/src/plugins/grid/requests.md`
+- `engine/src/plugins/input/README.md`
+- `engine/src/plugins/input/requests.md`
+- `engine/src/plugins/render/README.md`
+- `engine/src/plugins/render/requests.md`
+- `engine/src/plugins/render/ecs-first-proposal.md`
+- `engine/src/plugins/scene/README.md`
+- `engine/src/plugins/scene/requests.md`
+- `engine/src/plugins/scheduler_diagnostics/README.md`
+- `engine/src/plugins/scheduler_diagnostics/requests.md`
+- `engine/src/plugins/shared/README.md`
+- `engine/src/plugins/shared/requests.md`
+- `engine/src/plugins/time/README.md`
+- `engine/src/plugins/time/requests.md`
+- `engine/src/plugins/ui/README.md`
+- `engine/src/plugins/ui/requests.md`
+
+Each plugin/feature area should keep its own `README.md` and `requests.md` per `PROJECT_GUIDELINES.md`.

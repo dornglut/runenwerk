@@ -1,14 +1,38 @@
 # Input Plugin
 
-This plugin now uses a data-driven action map instead of hardcoded key checks.
+## Purpose
 
-## Goals
+Provides action-mapped input state and frame pulse handling, decoupling gameplay/UI systems from concrete key bindings.
+
+## Usage
+
+- Plugin: `InputFinalizePlugin`
+- Frame reset node: `clear_input` (runs after `frame_render_submit`)
+- Primary state type: `InputState` (`engine/src/plugins/input/domain.rs`)
+
+OS input events are consumed through `InputState::handle_window_event` and `InputState::handle_device_event`.
+
+## Ownership Boundaries
+
+- Owns action mapping, per-frame action pulses, and key/chord rebinding behavior.
+- Owns compatibility synchronization to legacy public movement/action booleans.
+- Does not own scene/render behavior that consumes input.
+
+## Extension Points
+
+- Add new action ids and default bindings in `InputBindings::with_default_bindings()`.
+- Add rebinding flows by applying `InputBindingChange` collections.
+- Add higher-level input events/resources on top of `InputState`.
+
+## Additional Details
+
+### Goals
 
 - Keep engine/game systems decoupled from concrete keys.
 - Allow runtime rebinding (`map_key`, `map_chord`, `unmap_*`) without changing system code.
 - Preserve the existing `InputState` booleans (`data.input.world_move_left`, etc.) for compatibility.
 
-## Core Types
+### Core Types
 
 - `InputState` (`engine/src/plugins/input/domain.rs`)
 - `InputBindings`
@@ -17,7 +41,7 @@ This plugin now uses a data-driven action map instead of hardcoded key checks.
 - `ModifierRule`
 - `action::*` constants (built-in action ids)
 
-## Model
+### Model
 
 `InputState` tracks:
 
@@ -28,7 +52,7 @@ This plugin now uses a data-driven action map instead of hardcoded key checks.
 
 Legacy public fields are synchronized from the action state each frame, so existing systems continue to work.
 
-## Default Action Map
+### Default Action Map
 
 Default bindings are installed by `InputBindings::with_default_bindings()` and used by `InputState::new()`.
 
@@ -42,7 +66,7 @@ Examples:
 - `scene.overlay_push` / `scene.overlay_pop`: `F5` / `Shift+F5`
 - `ui.save_template`: `Ctrl+S` or `Super+S`
 
-## Runtime Remapping
+### Runtime Remapping
 
 ```rust
 use engine::plugins::input::domain::{action, KeyChord};
@@ -71,7 +95,7 @@ if engine.data.input.action_down(action::WORLD_MOVE_LEFT) {
 }
 ```
 
-## Goal API (Resource/Event Friendly)
+### Goal API (Resource/Event Friendly)
 
 `InputBindingChange` is designed so remap requests can be passed around as data (for example via ECS resources/events) before being applied:
 
@@ -95,7 +119,7 @@ assert_eq!(applied, 2);
 
 This shape is intended to map directly to future ECS event payloads (`InputRemapRequested`, etc.).
 
-## Frame Lifecycle
+### Frame Lifecycle
 
 - OS events call:
   - `InputState::handle_window_event`
