@@ -226,6 +226,9 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
 }
 "#;
 
+pub const DEFAULT_WORLD_COMPUTE_SHADER_SDF_3D: &str =
+    include_str!("../../../../../assets/shaders/sdf_compute_3d_example.wgsl");
+
 pub const DEFAULT_WORLD_COMPOSE_SHADER_FULLSCREEN: &str = r#"
 @group(0) @binding(0)
 var world_tex : texture_2d<f32>;
@@ -294,6 +297,11 @@ pub struct WorldRenderFrame {
     pub camera_distance_min: f32,
     pub camera_distance_max: f32,
     pub camera_follow_dampening: f32,
+    pub camera_target: [f32; 3],
+    pub camera_fov_y: f32,
+    pub debug_view_mode: u32,
+    pub elapsed_time_seconds: f32,
+    pub render_mesh_overlay: bool,
     pub agents: Vec<WorldRenderAgent>,
     pub model_proxies: Vec<WorldRenderModelProxy>,
 }
@@ -302,8 +310,9 @@ pub struct WorldRenderFrame {
 pub struct WorldShaderSources<'a> {
     pub compute_basic: &'a str,
     pub compute_high_contrast: &'a str,
+    pub compute_sdf_3d: &'a str,
     pub compose_fullscreen: &'a str,
-    pub revisions: [u64; 3],
+    pub revisions: [u64; 4],
 }
 
 impl Default for WorldRenderFrame {
@@ -326,6 +335,11 @@ impl Default for WorldRenderFrame {
             camera_distance_min: 3.0,
             camera_distance_max: 48.0,
             camera_follow_dampening: 0.12,
+            camera_target: [0.0, 1.1, 0.0],
+            camera_fov_y: 55.0f32.to_radians(),
+            debug_view_mode: 0,
+            elapsed_time_seconds: 0.0,
+            render_mesh_overlay: true,
             agents: Vec::new(),
             model_proxies: Vec::new(),
         }
@@ -345,6 +359,10 @@ struct WorldParamsRaw {
     model_count: u32,
     paused: u32,
     _pad3: u32,
+    camera_target_time: [f32; 4],
+    camera_orbit: [f32; 4],
+    debug_view_mode: u32,
+    _pad4: [u32; 3],
 }
 
 #[repr(C)]
@@ -370,6 +388,7 @@ struct WorldModelRaw {
 struct WorldComputePass {
     compute_pipeline_basic: ComputePipeline,
     compute_pipeline_high_contrast: ComputePipeline,
+    compute_pipeline_sdf_3d: ComputePipeline,
     compose_pipeline: RenderPipeline,
     params_buffer: Buffer,
     agents_buffer: Buffer,
@@ -379,7 +398,7 @@ struct WorldComputePass {
     world_texture: Texture,
     size: (u32, u32),
     surface_format: TextureFormat,
-    shader_revisions: [u64; 3],
+    shader_revisions: [u64; 4],
 }
 
 #[derive(Debug, Default)]
@@ -407,6 +426,10 @@ impl WorldComputeRenderer {
         let compute_shader_high_contrast = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("engine_world_compute_shader_high_contrast"),
             source: ShaderSource::Wgsl(shaders.compute_high_contrast.into()),
+        });
+        let compute_shader_sdf_3d = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("engine_world_compute_shader_sdf_3d"),
+            source: ShaderSource::Wgsl(shaders.compute_sdf_3d.into()),
         });
         let compose_shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("engine_world_compose_shader"),
@@ -550,6 +573,14 @@ impl WorldComputeRenderer {
                 compilation_options: PipelineCompilationOptions::default(),
                 cache: None,
             });
+        let compute_pipeline_sdf_3d = device.create_compute_pipeline(&ComputePipelineDescriptor {
+            label: Some("engine_world_compute_pipeline_sdf_3d"),
+            layout: Some(&compute_pipeline_layout),
+            module: &compute_shader_sdf_3d,
+            entry_point: Some("cs_main"),
+            compilation_options: PipelineCompilationOptions::default(),
+            cache: None,
+        });
 
         let compose_bind_group_layout =
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -631,6 +662,7 @@ impl WorldComputeRenderer {
         self.pass = Some(WorldComputePass {
             compute_pipeline_basic,
             compute_pipeline_high_contrast,
+            compute_pipeline_sdf_3d,
             compose_pipeline,
             params_buffer,
             agents_buffer,
@@ -693,6 +725,20 @@ impl WorldComputeRenderer {
             model_count: model_count as u32,
             paused: u32::from(frame.world_paused),
             _pad3: 0,
+            camera_target_time: [
+                frame.camera_target[0],
+                frame.camera_target[1],
+                frame.camera_target[2],
+                frame.elapsed_time_seconds.max(0.0),
+            ],
+            camera_orbit: [
+                frame.camera_yaw,
+                frame.camera_pitch,
+                frame.camera_distance.max(0.1),
+                frame.camera_fov_y.clamp(0.1, std::f32::consts::PI - 0.1),
+            ],
+            debug_view_mode: frame.debug_view_mode,
+            _pad4: [0; 3],
         };
         queue.write_buffer(&pass.params_buffer, 0, bytemuck::bytes_of(&params));
 
@@ -731,6 +777,7 @@ impl WorldComputeRenderer {
         let selected_pipeline = match pipeline {
             PipelineKey::WorldComputeBasic => &pass.compute_pipeline_basic,
             PipelineKey::WorldComputeHighContrast => &pass.compute_pipeline_high_contrast,
+            PipelineKey::WorldComputeSdf3d => &pass.compute_pipeline_sdf_3d,
             _ => return,
         };
 

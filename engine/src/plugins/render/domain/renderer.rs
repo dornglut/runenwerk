@@ -1,15 +1,18 @@
 use super::chunk_mesher::ChunkMesher;
-use super::frame_graph::{FrameGraph, PassHandle};
+use super::frame_graph::{FrameGraph, PassHandle, PassKind};
 use super::model_manager::{
     ModelManager, ModelMaterial, ModelMesh, ModelMeshVertex, ModelTextureData,
 };
 use super::pipeline_registry::{PassSlot, PipelineKey, PipelineRegistry, PipelineSelection};
+use super::render_graph_registry::{
+    RegisteredPassKind, RegisteredPipelineRef, RenderGraphRegistryResource,
+};
 use super::shader_manager::{ShaderId, ShaderManager};
 use super::text::{FileFontProvider, TextRenderer};
 use super::world_compute::{
     DEFAULT_WORLD_COMPOSE_SHADER_FULLSCREEN, DEFAULT_WORLD_COMPUTE_SHADER_BASIC,
-    DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST, WorldComputeRenderer, WorldRenderAgent,
-    WorldRenderFrame, WorldShaderSources,
+    DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST, DEFAULT_WORLD_COMPUTE_SHADER_SDF_3D,
+    WorldComputeRenderer, WorldRenderAgent, WorldRenderFrame, WorldShaderSources,
 };
 use crate::plugins::scene::manifest::{
     FramePassDescriptor as SceneFramePassDescriptor,
@@ -196,6 +199,7 @@ impl FramePassSlotConfig {
 enum FramePipelineConfig {
     WorldComputeBasic,
     WorldComputeHighContrast,
+    WorldComputeSdf3d,
     WorldComposeFullscreen,
     UiCompositeSdf,
 }
@@ -205,6 +209,7 @@ impl FramePipelineConfig {
         match self {
             Self::WorldComputeBasic => PipelineKey::WorldComputeBasic,
             Self::WorldComputeHighContrast => PipelineKey::WorldComputeHighContrast,
+            Self::WorldComputeSdf3d => PipelineKey::WorldComputeSdf3d,
             Self::WorldComposeFullscreen => PipelineKey::WorldComposeFullscreen,
             Self::UiCompositeSdf => PipelineKey::UiCompositeSdf,
         }
@@ -249,6 +254,53 @@ struct FramePassDescriptor {
     writes: Vec<FrameResourceConfig>,
     #[serde(default)]
     depends_on: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedFramePassDescriptor {
+    name: String,
+    kind: PassKind,
+    pipeline: PipelineKey,
+    reads: Vec<String>,
+    writes: Vec<String>,
+    depends_on: Vec<String>,
+    executor: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+struct FrameGraphCompileDiagnostics {
+    empty_pass_name_count: usize,
+    duplicate_pass_names: Vec<String>,
+    missing_dependencies: Vec<(String, String)>,
+    used_builtin_fallback: bool,
+}
+
+impl FrameGraphCompileDiagnostics {
+    fn has_issues(&self) -> bool {
+        self.issue_count() > 0
+    }
+
+    fn issue_count(&self) -> usize {
+        self.empty_pass_name_count
+            + self.duplicate_pass_names.len()
+            + self.missing_dependencies.len()
+            + usize::from(self.used_builtin_fallback)
+    }
+
+    fn absorb(&mut self, other: Self) {
+        self.empty_pass_name_count += other.empty_pass_name_count;
+        self.duplicate_pass_names.extend(other.duplicate_pass_names);
+        self.missing_dependencies.extend(other.missing_dependencies);
+        self.used_builtin_fallback |= other.used_builtin_fallback;
+    }
+}
+
+#[derive(Debug, Clone)]
+struct FrameGraphBuildOutput {
+    graph: FrameGraph,
+    handles: Vec<PassHandle>,
+    pass_executor_bindings: BTreeMap<String, String>,
+    diagnostics: FrameGraphCompileDiagnostics,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -459,6 +511,15 @@ pub struct MeshPrepareHotPath {
     pub static_cache_misses: u32,
 }
 
+impl MeshPrepareHotPath {
+    pub fn is_warm_frame(&self) -> bool {
+        self.static_cache_misses == 0
+            && self.vertex_upload_bytes == 0
+            && self.index_upload_bytes == 0
+            && self.texture_upload_bytes == 0
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct RectInstanceRaw {
@@ -579,8 +640,9 @@ struct UiPreparedDraws {
 struct PreparedWorldShaderSources {
     compute_basic: String,
     compute_high_contrast: String,
+    compute_sdf_3d: String,
     compose_fullscreen: String,
-    revisions: [u64; 3],
+    revisions: [u64; 4],
 }
 
 #[derive(Debug)]
@@ -638,6 +700,7 @@ impl FramePassExecutor for WorldComputePassExecutor {
         let world_shader_sources = WorldShaderSources {
             compute_basic: &packet.world_shaders.compute_basic,
             compute_high_contrast: &packet.world_shaders.compute_high_contrast,
+            compute_sdf_3d: &packet.world_shaders.compute_sdf_3d,
             compose_fullscreen: &packet.world_shaders.compose_fullscreen,
             revisions: packet.world_shaders.revisions,
         };
@@ -961,6 +1024,9 @@ pub struct Renderer {
     text_renderer_format: Option<TextureFormat>,
     camera_focus: Option<Vec3>,
     mesh_cache: BTreeMap<String, MeshCacheEntry>,
+    last_frame_graph_diagnostics_hash: Option<u64>,
+    last_missing_executors_hash: Option<u64>,
+    last_execution_order_error_hash: Option<u64>,
 }
 
 impl Renderer {
@@ -979,16 +1045,121 @@ impl Renderer {
             .find(|executor| executor.pass_name() == name)
     }
 
+    fn stable_hash<T: Hash>(value: &T) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn log_frame_graph_diagnostics(
+        &mut self,
+        world_scene: &str,
+        overlay_scene: &str,
+        registry_revision: u64,
+        diagnostics: &FrameGraphCompileDiagnostics,
+    ) {
+        if !diagnostics.has_issues() {
+            if self.last_frame_graph_diagnostics_hash.take().is_some() {
+                tracing::info!(
+                    world_scene,
+                    overlay_scene,
+                    "frame graph compile diagnostics resolved"
+                );
+            }
+            return;
+        }
+
+        let signature =
+            Self::stable_hash(&(world_scene, overlay_scene, registry_revision, diagnostics));
+        if self.last_frame_graph_diagnostics_hash == Some(signature) {
+            return;
+        }
+        self.last_frame_graph_diagnostics_hash = Some(signature);
+
+        let first_duplicate_pass = diagnostics
+            .duplicate_pass_names
+            .first()
+            .map(String::as_str)
+            .unwrap_or_default();
+        let first_missing_dependency = diagnostics
+            .missing_dependencies
+            .first()
+            .map(|(pass, dependency)| format!("{pass}->{dependency}"))
+            .unwrap_or_default();
+
+        tracing::warn!(
+            world_scene,
+            overlay_scene,
+            registry_revision,
+            issue_count = diagnostics.issue_count(),
+            empty_pass_name_count = diagnostics.empty_pass_name_count,
+            duplicate_pass_count = diagnostics.duplicate_pass_names.len(),
+            missing_dependency_count = diagnostics.missing_dependencies.len(),
+            used_builtin_fallback = diagnostics.used_builtin_fallback,
+            first_duplicate_pass,
+            first_missing_dependency,
+            "frame graph compile diagnostics"
+        );
+    }
+
+    fn log_missing_executors_once(&mut self, missing_executors: &[(String, String)]) {
+        if missing_executors.is_empty() {
+            if self.last_missing_executors_hash.take().is_some() {
+                tracing::info!("frame graph executor bindings resolved");
+            }
+            return;
+        }
+
+        let mut unique_missing = missing_executors.to_vec();
+        unique_missing.sort();
+        unique_missing.dedup();
+
+        let signature = Self::stable_hash(&unique_missing);
+        if self.last_missing_executors_hash == Some(signature) {
+            return;
+        }
+        self.last_missing_executors_hash = Some(signature);
+
+        let first_missing = unique_missing
+            .first()
+            .map(|(pass, executor)| format!("{pass}->{executor}"))
+            .unwrap_or_default();
+        tracing::warn!(
+            missing_count = unique_missing.len(),
+            first_missing,
+            "frame graph pass executor bindings are missing; skipped pass encoding"
+        );
+    }
+
+    fn log_execution_order_error_once(&mut self, err: &anyhow::Error) {
+        let err_text = err.to_string();
+        let signature = Self::stable_hash(&err_text);
+        if self.last_execution_order_error_hash == Some(signature) {
+            return;
+        }
+        self.last_execution_order_error_hash = Some(signature);
+        tracing::error!(
+            error = err_text,
+            "frame graph execution order failed; using fallback order"
+        );
+    }
+
+    fn clear_execution_order_error(&mut self) {
+        if self.last_execution_order_error_hash.take().is_some() {
+            tracing::info!("frame graph execution ordering recovered");
+        }
+    }
+
     fn prepare_registered_passes(
         &mut self,
         device: &Device,
         queue: &Queue,
         packet: &RendererPreparedPacket,
-        active_passes: &BTreeSet<String>,
+        active_executors: &BTreeSet<String>,
         timings: &mut RendererFrameTimings,
     ) {
         for executor in Self::pass_executors() {
-            if !active_passes.contains(executor.pass_name()) {
+            if !active_executors.contains(executor.pass_name()) {
                 continue;
             }
             executor.prepare(self, device, queue, packet, timings);
@@ -1041,6 +1212,9 @@ impl Renderer {
                 }
                 SceneFramePipelineDescriptor::WorldComputeHighContrast => {
                     FramePipelineConfig::WorldComputeHighContrast
+                }
+                SceneFramePipelineDescriptor::WorldComputeSdf3d => {
+                    FramePipelineConfig::WorldComputeSdf3d
                 }
                 SceneFramePipelineDescriptor::WorldComposeFullscreen => {
                     FramePipelineConfig::WorldComposeFullscreen
@@ -1099,51 +1273,225 @@ impl Renderer {
         descriptors
     }
 
-    fn build_frame_graph_from_descriptors(
+    fn default_pipeline_for_kind(&self, kind: PassKind) -> PipelineKey {
+        match kind {
+            PassKind::Compute => self.pipeline_registry.key_for(PassSlot::WorldCompute),
+            PassKind::Render => PipelineKey::WorldComposeFullscreen,
+        }
+    }
+
+    fn resolved_builtin_descriptors(
         &self,
         descriptors: &[FramePassDescriptor],
-    ) -> (FrameGraph, Vec<PassHandle>) {
+    ) -> Vec<ResolvedFramePassDescriptor> {
+        descriptors
+            .iter()
+            .map(|descriptor| ResolvedFramePassDescriptor {
+                name: descriptor.name.clone(),
+                kind: match descriptor.kind {
+                    FramePassKindConfig::Compute => PassKind::Compute,
+                    FramePassKindConfig::Render => PassKind::Render,
+                },
+                pipeline: self.resolve_pass_pipeline(descriptor),
+                reads: descriptor
+                    .reads
+                    .iter()
+                    .copied()
+                    .map(FrameResourceConfig::as_resource)
+                    .map(str::to_string)
+                    .collect(),
+                writes: descriptor
+                    .writes
+                    .iter()
+                    .copied()
+                    .map(FrameResourceConfig::as_resource)
+                    .map(str::to_string)
+                    .collect(),
+                depends_on: descriptor.depends_on.clone(),
+                executor: descriptor.name.clone(),
+            })
+            .collect()
+    }
+
+    fn resolve_registered_pipeline(
+        &self,
+        pass_name: &str,
+        pass_kind: PassKind,
+        slot: Option<PassSlot>,
+        pipeline_ref: Option<&RegisteredPipelineRef>,
+        named_pipelines: &BTreeMap<String, (PipelineKey, Option<PassSlot>)>,
+    ) -> PipelineKey {
+        if let Some(pipeline_ref) = pipeline_ref {
+            match pipeline_ref {
+                RegisteredPipelineRef::Builtin(key) => {
+                    if let Some(slot) = slot
+                        && !PipelineRegistry::supports(slot, *key)
+                    {
+                        tracing::warn!(
+                            pass = pass_name,
+                            slot = slot.label(),
+                            pipeline = key.label(),
+                            "registered render pass uses incompatible slot/pipeline; falling back to slot selection"
+                        );
+                        return self.pipeline_registry.key_for(slot);
+                    }
+                    return *key;
+                }
+                RegisteredPipelineRef::Named(name) => {
+                    if let Some((key, registered_slot)) = named_pipelines.get(name).copied() {
+                        let resolved_slot = slot.or(registered_slot);
+                        if let Some(slot) = resolved_slot
+                            && !PipelineRegistry::supports(slot, key)
+                        {
+                            tracing::warn!(
+                                pass = pass_name,
+                                slot = slot.label(),
+                                pipeline = key.label(),
+                                pipeline_id = name,
+                                "registered named pipeline is incompatible with pass slot; falling back to slot selection"
+                            );
+                            return self.pipeline_registry.key_for(slot);
+                        }
+                        return key;
+                    }
+                    tracing::warn!(
+                        pass = pass_name,
+                        pipeline_id = name,
+                        "registered named pipeline id not found; falling back to slot/default selection"
+                    );
+                }
+            }
+        }
+
+        if let Some(slot) = slot {
+            return self.pipeline_registry.key_for(slot);
+        }
+
+        self.default_pipeline_for_kind(pass_kind)
+    }
+
+    fn resolved_registered_descriptors(
+        &self,
+        render_graph_registry: &RenderGraphRegistryResource,
+    ) -> Vec<ResolvedFramePassDescriptor> {
+        let mut named_pipelines = BTreeMap::<String, (PipelineKey, Option<PassSlot>)>::new();
+        for owner in render_graph_registry.owners() {
+            for pipeline in &owner.pipelines {
+                let pipeline_id = pipeline.id.trim();
+                if pipeline_id.is_empty() {
+                    tracing::warn!(
+                        owner = owner.owner,
+                        "registered named pipeline has empty id; skipping"
+                    );
+                    continue;
+                }
+                if let Some(previous) =
+                    named_pipelines.insert(pipeline_id.to_string(), (pipeline.key, pipeline.slot))
+                {
+                    tracing::warn!(
+                        owner = owner.owner,
+                        pipeline_id,
+                        previous_pipeline = previous.0.label(),
+                        new_pipeline = pipeline.key.label(),
+                        "registered named pipeline id replaced previous registration"
+                    );
+                }
+            }
+        }
+
+        let mut out = Vec::new();
+        for owner in render_graph_registry.owners() {
+            for pass in &owner.passes {
+                let pass_name = pass.id.trim();
+                if pass_name.is_empty() {
+                    tracing::warn!(
+                        owner = owner.owner,
+                        "registered render pass has empty id; skipping"
+                    );
+                    continue;
+                }
+                let kind = match pass.kind {
+                    RegisteredPassKind::Compute => PassKind::Compute,
+                    RegisteredPassKind::Render => PassKind::Render,
+                };
+                let pipeline = self.resolve_registered_pipeline(
+                    pass_name,
+                    kind,
+                    pass.slot,
+                    pass.pipeline.as_ref(),
+                    &named_pipelines,
+                );
+                let executor = pass
+                    .executor
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(pass_name)
+                    .to_string();
+                out.push(ResolvedFramePassDescriptor {
+                    name: pass_name.to_string(),
+                    kind,
+                    pipeline,
+                    reads: pass
+                        .reads
+                        .iter()
+                        .map(|value| value.trim())
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string)
+                        .collect(),
+                    writes: pass
+                        .writes
+                        .iter()
+                        .map(|value| value.trim())
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string)
+                        .collect(),
+                    depends_on: pass
+                        .depends_on
+                        .iter()
+                        .map(|value| value.trim())
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string)
+                        .collect(),
+                    executor,
+                });
+            }
+        }
+
+        out
+    }
+
+    fn build_frame_graph_from_descriptors(
+        &self,
+        descriptors: &[ResolvedFramePassDescriptor],
+    ) -> FrameGraphBuildOutput {
         let mut graph = FrameGraph::new();
         let mut handles = Vec::with_capacity(descriptors.len());
         let mut by_name = BTreeMap::<String, PassHandle>::new();
+        let mut pass_executor_bindings = BTreeMap::<String, String>::new();
+        let mut diagnostics = FrameGraphCompileDiagnostics::default();
 
         for descriptor in descriptors {
             let pass_name = descriptor.name.trim();
             if pass_name.is_empty() {
-                tracing::warn!("frame graph descriptor contained an empty pass name; skipping");
+                diagnostics.empty_pass_name_count =
+                    diagnostics.empty_pass_name_count.saturating_add(1);
                 continue;
             }
             if by_name.contains_key(pass_name) {
-                tracing::warn!(
-                    pass = pass_name,
-                    "frame graph descriptor contains duplicate pass name; skipping duplicate"
-                );
+                diagnostics.duplicate_pass_names.push(pass_name.to_string());
                 continue;
             }
 
-            let pipeline = self.resolve_pass_pipeline(descriptor);
-            let reads: Vec<_> = descriptor
-                .reads
-                .iter()
-                .copied()
-                .map(FrameResourceConfig::as_resource)
-                .collect();
-            let writes: Vec<_> = descriptor
-                .writes
-                .iter()
-                .copied()
-                .map(FrameResourceConfig::as_resource)
-                .collect();
-
             let mut builder = match descriptor.kind {
-                FramePassKindConfig::Compute => graph.compute_pass(pass_name.to_string(), pipeline),
-                FramePassKindConfig::Render => graph.render_pass(pass_name.to_string(), pipeline),
+                PassKind::Compute => graph.compute_pass(pass_name.to_string(), descriptor.pipeline),
+                PassKind::Render => graph.render_pass(pass_name.to_string(), descriptor.pipeline),
             };
-            if !reads.is_empty() {
-                builder = builder.reads(&reads);
+            if !descriptor.reads.is_empty() {
+                builder = builder.reads(descriptor.reads.clone());
             }
-            if !writes.is_empty() {
-                builder = builder.writes(&writes);
+            if !descriptor.writes.is_empty() {
+                builder = builder.writes(descriptor.writes.clone());
             }
             for dep_name in &descriptor.depends_on {
                 let dep_name = dep_name.trim();
@@ -1153,20 +1501,24 @@ impl Renderer {
                 if let Some(dep_handle) = by_name.get(dep_name).copied() {
                     builder = builder.depends_on(dep_handle);
                 } else {
-                    tracing::warn!(
-                        pass = pass_name,
-                        dependency = dep_name,
-                        "frame graph dependency not found in prior descriptors; skipping explicit dependency"
-                    );
+                    diagnostics
+                        .missing_dependencies
+                        .push((pass_name.to_string(), dep_name.to_string()));
                 }
             }
 
             let handle = builder.build();
             by_name.insert(pass_name.to_string(), handle);
+            pass_executor_bindings.insert(pass_name.to_string(), descriptor.executor.clone());
             handles.push(handle);
         }
 
-        (graph, handles)
+        FrameGraphBuildOutput {
+            graph,
+            handles,
+            pass_executor_bindings,
+            diagnostics,
+        }
     }
 
     pub fn new() -> Self {
@@ -1188,6 +1540,9 @@ impl Renderer {
             text_renderer_format: None,
             camera_focus: None,
             mesh_cache: BTreeMap::new(),
+            last_frame_graph_diagnostics_hash: None,
+            last_missing_executors_hash: None,
+            last_execution_order_error_hash: None,
         }
     }
 
@@ -1786,6 +2141,15 @@ impl Renderer {
             surface_width.max(1.0).round() as u32,
             surface_height.max(1.0).round() as u32,
         );
+        if !world_frame.render_mesh_overlay {
+            return MeshPreparedWithHotPath {
+                prepared: MeshPreparedDraw {
+                    draws: Vec::new(),
+                    surface_size,
+                },
+                hot_path,
+            };
+        }
 
         let collect_models_start = Instant::now();
         let source_meshes = {
@@ -2268,28 +2632,31 @@ impl Renderer {
         overlay_scene: &str,
         scene_passes: &[SceneFramePassDescriptor],
         render_world: bool,
-    ) -> (FrameGraph, Vec<PassHandle>) {
-        let descriptors = self.frame_graph_descriptors_for_scene(
+        render_graph_registry: &RenderGraphRegistryResource,
+    ) -> FrameGraphBuildOutput {
+        let base_descriptors = self.frame_graph_descriptors_for_scene(
             world_scene,
             overlay_scene,
             scene_passes,
             render_world,
         );
-        let (graph, handles) = self.build_frame_graph_from_descriptors(&descriptors);
-        if !handles.is_empty() {
-            return (graph, handles);
+        let mut descriptors = self.resolved_registered_descriptors(render_graph_registry);
+        descriptors.extend(self.resolved_builtin_descriptors(&base_descriptors));
+        let primary = self.build_frame_graph_from_descriptors(&descriptors);
+        if !primary.handles.is_empty() {
+            return primary;
         }
-        tracing::warn!(
-            world_scene,
-            overlay_scene,
-            "frame graph descriptors produced no valid passes; using built-in defaults"
-        );
         let fallback = if render_world {
             default_frame_graph_passes()
         } else {
             ui_only_frame_graph_passes()
         };
-        self.build_frame_graph_from_descriptors(&fallback)
+        let mut fallback_descriptors = self.resolved_registered_descriptors(render_graph_registry);
+        fallback_descriptors.extend(self.resolved_builtin_descriptors(&fallback));
+        let mut fallback_output = self.build_frame_graph_from_descriptors(&fallback_descriptors);
+        fallback_output.diagnostics.absorb(primary.diagnostics);
+        fallback_output.diagnostics.used_builtin_fallback = true;
+        fallback_output
     }
 
     pub(crate) fn prepare_packet(
@@ -2322,6 +2689,13 @@ impl Renderer {
                 DEFAULT_WORLD_COMPUTE_SHADER_HIGH_CONTRAST,
             )
             .to_string();
+        let world_compute_sdf_3d = self
+            .shader_manager
+            .source_or(
+                ShaderId::WorldComputeSdf3d,
+                DEFAULT_WORLD_COMPUTE_SHADER_SDF_3D,
+            )
+            .to_string();
         let world_compose = self
             .shader_manager
             .source_or(
@@ -2332,11 +2706,13 @@ impl Renderer {
         let world_shaders = PreparedWorldShaderSources {
             compute_basic: world_compute_basic,
             compute_high_contrast: world_compute_high_contrast,
+            compute_sdf_3d: world_compute_sdf_3d,
             compose_fullscreen: world_compose,
             revisions: [
                 self.shader_manager.revision(ShaderId::WorldComputeBasic),
                 self.shader_manager
                     .revision(ShaderId::WorldComputeHighContrast),
+                self.shader_manager.revision(ShaderId::WorldComputeSdf3d),
                 self.shader_manager
                     .revision(ShaderId::WorldComposeFullscreen),
             ],
@@ -2402,42 +2778,64 @@ impl Renderer {
         queue: &Queue,
         frame_view: &TextureView,
         packet: RendererPreparedPacket,
+        render_graph_registry: &RenderGraphRegistryResource,
     ) -> RendererFrameTimings {
-        let (graph, fallback_order) = self.build_frame_graph(
-            &packet.merged_world_frame.world_scene_label,
-            &packet.merged_world_frame.overlay_scene_label,
+        let world_scene = packet.merged_world_frame.world_scene_label.as_str();
+        let overlay_scene = packet.merged_world_frame.overlay_scene_label.as_str();
+        let frame_graph_output = self.build_frame_graph(
+            world_scene,
+            overlay_scene,
             &packet.merged_world_frame.scene_render_graph_passes,
             packet.merged_world_frame.render_world,
+            render_graph_registry,
         );
+        self.log_frame_graph_diagnostics(
+            world_scene,
+            overlay_scene,
+            render_graph_registry.revision(),
+            &frame_graph_output.diagnostics,
+        );
+        let graph = frame_graph_output.graph;
+        let fallback_order = frame_graph_output.handles;
+        let pass_executor_bindings = frame_graph_output.pass_executor_bindings;
         let order = match graph.execution_order() {
-            Ok(order) => order,
+            Ok(order) => {
+                self.clear_execution_order_error();
+                order
+            }
             Err(err) => {
-                tracing::error!(
-                    ?err,
-                    "frame graph execution order failed; using fallback order"
-                );
+                self.log_execution_order_error_once(&err);
                 fallback_order
             }
         };
-        let mut active_passes = BTreeSet::new();
+        let mut active_executors = BTreeSet::new();
         for handle in &order {
             if let Some(node) = graph.node(*handle) {
-                active_passes.insert(node.name.clone());
+                let executor_name = pass_executor_bindings
+                    .get(&node.name)
+                    .map(String::as_str)
+                    .unwrap_or(node.name.as_str());
+                active_executors.insert(executor_name.to_string());
             }
         }
 
         let mut timings = packet.prepare_timings;
-        self.prepare_registered_passes(device, queue, &packet, &active_passes, &mut timings);
+        self.prepare_registered_passes(device, queue, &packet, &active_executors, &mut timings);
 
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("engine_render_encoder"),
         });
 
+        let mut missing_executors = Vec::<(String, String)>::new();
         for handle in order {
             let Some(node) = graph.node(handle) else {
                 continue;
             };
-            if let Some(executor) = Self::pass_executor(&node.name) {
+            let executor_name = pass_executor_bindings
+                .get(&node.name)
+                .map(String::as_str)
+                .unwrap_or(node.name.as_str());
+            if let Some(executor) = Self::pass_executor(executor_name) {
                 executor.encode(
                     self,
                     device,
@@ -2448,8 +2846,9 @@ impl Renderer {
                 );
                 continue;
             }
-            tracing::warn!(pass = node.name, "no executor registered for frame pass");
+            missing_executors.push((node.name.clone(), executor_name.to_string()));
         }
+        self.log_missing_executors_once(&missing_executors);
 
         let encode_submit_start = Instant::now();
         {
@@ -2467,6 +2866,7 @@ impl Renderer {
         frame_view: &TextureView,
         world_frame: &WorldRenderFrame,
         draw_list: &UiDrawList,
+        render_graph_registry: &RenderGraphRegistryResource,
         surface_format: TextureFormat,
         surface_width: f32,
         surface_height: f32,
@@ -2480,7 +2880,7 @@ impl Renderer {
             surface_width,
             surface_height,
         );
-        self.render_packet(device, queue, frame_view, packet)
+        self.render_packet(device, queue, frame_view, packet, render_graph_registry)
     }
 }
 
@@ -2488,7 +2888,7 @@ impl Renderer {
 mod tests {
     use super::{
         FrameGraphConfig, FrameGraphOverlayConfig, FramePassKindConfig, FramePassSlotConfig,
-        Renderer,
+        PassKind, PipelineKey, RenderGraphRegistryResource, Renderer, ResolvedFramePassDescriptor,
     };
 
     #[test]
@@ -2527,6 +2927,77 @@ mod tests {
             config.passes[0].slot,
             Some(FramePassSlotConfig::WorldCompute)
         ));
+    }
+
+    #[test]
+    fn build_frame_graph_from_descriptors_collects_diagnostics() {
+        let renderer = Renderer::new();
+        let descriptors = vec![
+            ResolvedFramePassDescriptor {
+                name: "".to_string(),
+                kind: PassKind::Render,
+                pipeline: PipelineKey::WorldComposeFullscreen,
+                reads: Vec::new(),
+                writes: Vec::new(),
+                depends_on: Vec::new(),
+                executor: "ui_composite".to_string(),
+            },
+            ResolvedFramePassDescriptor {
+                name: "world_compute".to_string(),
+                kind: PassKind::Compute,
+                pipeline: PipelineKey::WorldComputeBasic,
+                reads: vec!["world_params".to_string()],
+                writes: vec!["world_color".to_string()],
+                depends_on: Vec::new(),
+                executor: "world_compute".to_string(),
+            },
+            ResolvedFramePassDescriptor {
+                name: "world_compute".to_string(),
+                kind: PassKind::Compute,
+                pipeline: PipelineKey::WorldComputeHighContrast,
+                reads: vec!["world_params".to_string()],
+                writes: vec!["world_color".to_string()],
+                depends_on: Vec::new(),
+                executor: "world_compute".to_string(),
+            },
+            ResolvedFramePassDescriptor {
+                name: "world_compose".to_string(),
+                kind: PassKind::Render,
+                pipeline: PipelineKey::WorldComposeFullscreen,
+                reads: vec!["world_color".to_string()],
+                writes: vec!["surface_color".to_string()],
+                depends_on: vec!["missing_pass".to_string()],
+                executor: "world_compose".to_string(),
+            },
+        ];
+
+        let output = renderer.build_frame_graph_from_descriptors(&descriptors);
+        assert_eq!(output.handles.len(), 2);
+        assert_eq!(output.diagnostics.empty_pass_name_count, 1);
+        assert_eq!(
+            output.diagnostics.duplicate_pass_names,
+            vec!["world_compute".to_string()]
+        );
+        assert_eq!(
+            output.diagnostics.missing_dependencies,
+            vec![("world_compose".to_string(), "missing_pass".to_string())]
+        );
+    }
+
+    #[test]
+    fn build_frame_graph_uses_builtin_fallback_when_primary_has_no_passes() {
+        let mut renderer = Renderer::new();
+        renderer.frame_graph_config.passes.clear();
+
+        let output = renderer.build_frame_graph(
+            "gameplay_stub",
+            "console_ui",
+            &[],
+            true,
+            &RenderGraphRegistryResource::default(),
+        );
+        assert!(output.diagnostics.used_builtin_fallback);
+        assert!(!output.handles.is_empty());
     }
 
     #[test]

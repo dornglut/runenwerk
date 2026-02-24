@@ -5,6 +5,16 @@
   primary_button: Some((
     label: "Back",
     component: "../components/button_primary.ron",
-    action: back,
+    on_click: Some(back),
+  )),
+  secondary_button: Some((
+    label: "Debug Event",
+    component: "../components/button_primary.ron",
+    on_click: Some(emit("settings.debug_click")),
+    on_hold: Some((
+      threshold_ms: Some(650),
+      repeat_ms: Some(250),
+      action: Some(emit("settings.debug_hold")),
+    )),
   )),
 )

@@ -27,13 +27,31 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/engine/examples/example-requests.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/feature-request.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/plan.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ecs/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ecs/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/plan.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/plan.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/index.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/project/execution-plan.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/project/execution-plan.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/engine/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/example-requests.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/main_menu.ron" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/main_menu.ron" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/pause_menu.ron" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/pause_menu.ron" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/settings_menu.ron" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/scene_manager_ui/assets/scenes/settings_menu.ron" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/frame_graph.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/frame_graph.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/pipeline_registry.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/pipeline_registry.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/shader_manager.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/shader_manager.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/world_compute.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/world_compute.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/render/world_extract.rs" beforeDir="false" afterPath="$PROJECT_DIR$/game/src/systems/render/world_extract.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/manifest/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/manifest/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/template_flow.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/template_flow.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/runtime/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/logs/engine.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/engine.log" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -42,7 +60,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="174" />
+    <option name="cachedIndexableFilesCount" value="180" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
   <component name="Git.Settings">
@@ -59,6 +77,9 @@
   &quot;associatedIndex&quot;: 3
 }</component>
   <component name="ProjectId" id="3A4XiKdFVnqqiTlezX2oz5dNkWW" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
@@ -68,6 +89,7 @@
     "Cargo.Game.executor": "Run",
     "Cargo.Run game.executor": "Run",
     "Cargo.Run scene_manager_ui.executor": "Run",
+    "Cargo.Run sdf_renderer.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
@@ -90,7 +112,7 @@
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
-  <component name="RunManager" selected="Cargo.Run scene_manager_ui">
+  <component name="RunManager" selected="Cargo.Run sdf_renderer">
     <configuration name="Run game" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="run --package game --bin game" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -125,8 +147,26 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
+    <configuration name="Run sdf_renderer" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="run --package engine --example sdf_renderer" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Cargo.Run sdf_renderer" />
         <item itemvalue="Cargo.Run scene_manager_ui" />
         <item itemvalue="Cargo.Run game" />
       </list>
@@ -143,7 +183,8 @@
       <option name="presentableId" value="Default" />
       <updated>1771852941485</updated>
       <workItem from="1771852942540" duration="3423000" />
-      <workItem from="1771856374727" duration="17436000" />
+      <workItem from="1771856374727" duration="18919000" />
+      <workItem from="1771933104718" duration="3937000" />
     </task>
     <servers />
   </component>

@@ -39,6 +39,7 @@ pub enum FramePassSlotDescriptor {
 pub enum FramePipelineDescriptor {
     WorldComputeBasic,
     WorldComputeHighContrast,
+    WorldComputeSdf3d,
     WorldComposeFullscreen,
     UiCompositeSdf,
 }

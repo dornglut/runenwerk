@@ -4,6 +4,7 @@ use anyhow::{Result, bail};
 pub enum PipelineKey {
     WorldComputeBasic,
     WorldComputeHighContrast,
+    WorldComputeSdf3d,
     WorldComposeFullscreen,
     UiCompositeSdf,
 }
@@ -13,6 +14,7 @@ impl PipelineKey {
         match self {
             Self::WorldComputeBasic => "world_compute_basic",
             Self::WorldComputeHighContrast => "world_compute_high_contrast",
+            Self::WorldComputeSdf3d => "world_compute_sdf_3d",
             Self::WorldComposeFullscreen => "world_compose_fullscreen",
             Self::UiCompositeSdf => "ui_composite_sdf",
         }
@@ -95,6 +97,7 @@ impl PipelineRegistry {
                     PassSlot::WorldCompute,
                     PipelineKey::WorldComputeHighContrast
                 )
+                | (PassSlot::WorldCompute, PipelineKey::WorldComputeSdf3d)
                 | (PassSlot::WorldCompose, PipelineKey::WorldComposeFullscreen)
                 | (PassSlot::UiComposite, PipelineKey::UiCompositeSdf)
         )

@@ -1,4 +1,4 @@
-use super::domain::SceneCommand;
+use super::domain::{SceneCommand, SceneTemplateUiEvent};
 use crate::plugins::input::domain::action as input_action;
 use crate::plugins::ui::domain::{
     UiBatchCmd, UiButton, UiButtonClickEvent, UiButtonTemplate, UiInteraction, UiNode,
@@ -102,6 +102,8 @@ pub fn setup_template_flow(data: &mut EngineData) -> Result<()> {
             watch_enabled: true,
             secondary_button,
             pause_toggle_key_down: false,
+            primary_trigger_state: ButtonTriggerRuntimeState::default(),
+            secondary_trigger_state: ButtonTriggerRuntimeState::default(),
         });
 
     data.scene.set_active_overlay_visible(true);
@@ -133,6 +135,8 @@ struct SceneManagerUiResource {
     watch_enabled: bool,
     secondary_button: ecs::EntityHandle,
     pause_toggle_key_down: bool,
+    primary_trigger_state: ButtonTriggerRuntimeState,
+    secondary_trigger_state: ButtonTriggerRuntimeState,
 }
 
 #[derive(Debug, Clone)]
@@ -148,7 +152,7 @@ struct LoadedScene {
 #[derive(Debug, Clone)]
 struct LoadedButton {
     label: String,
-    action: SceneAction,
+    triggers: ButtonTriggers,
     template: UiButtonTemplate,
 }
 
@@ -157,6 +161,7 @@ enum SceneAction {
     GoTo(SceneHandle),
     Back,
     MainMenu,
+    Emit(String),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -165,6 +170,15 @@ enum SceneActionRaw {
     GoTo(String),
     Back,
     MainMenu,
+    Emit(String),
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct SceneHoldTriggerRaw {
+    threshold_ms: Option<u64>,
+    repeat_ms: Option<u64>,
+    action: Option<SceneActionRaw>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -178,10 +192,59 @@ struct SceneFileTemplate {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 struct SceneFileButton {
     label: String,
     component: String,
-    action: SceneActionRaw,
+    action: Option<SceneActionRaw>,
+    on_click: Option<SceneActionRaw>,
+    on_press_start: Option<SceneActionRaw>,
+    on_press_end: Option<SceneActionRaw>,
+    on_hold: Option<SceneHoldTriggerRaw>,
+}
+
+impl Default for SceneFileButton {
+    fn default() -> Self {
+        Self {
+            label: String::new(),
+            component: String::new(),
+            action: None,
+            on_click: None,
+            on_press_start: None,
+            on_press_end: None,
+            on_hold: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct HoldTrigger {
+    threshold_seconds: f32,
+    repeat_seconds: Option<f32>,
+    action: SceneAction,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ButtonTriggers {
+    on_click: Option<SceneAction>,
+    on_press_start: Option<SceneAction>,
+    on_press_end: Option<SceneAction>,
+    on_hold: Option<HoldTrigger>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ButtonTriggerRuntimeState {
+    pressed_last_frame: bool,
+    hold_elapsed_seconds: f32,
+    hold_repeat_elapsed_seconds: f32,
+    hold_armed: bool,
+}
+
+#[derive(Debug, Clone)]
+struct QueuedSceneAction {
+    action: SceneAction,
+    button_label: Option<String>,
+    trigger: &'static str,
 }
 
 pub fn template_flow_enabled(data: &EngineData) -> bool {
@@ -231,6 +294,18 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
         .world
         .drain_events::<UiButtonClickEvent>();
     let primary_button = data.scene.overlay_runtime.ui.confirm_button;
+    let primary_interaction = data
+        .scene
+        .overlay_runtime
+        .world
+        .get_component::<UiInteraction>(primary_button)
+        .copied();
+    let secondary_interaction = data
+        .scene
+        .overlay_runtime
+        .world
+        .get_component::<UiInteraction>(secondary_button)
+        .copied();
     let primary_clicked_from_events = click_events
         .iter()
         .any(|event| event.entity == primary_button);
@@ -238,27 +313,19 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
         .iter()
         .any(|event| event.entity == secondary_button);
     let primary_clicked = primary_clicked_from_events
-        || data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component::<UiInteraction>(primary_button)
-            .map(|interaction| interaction.clicked)
-            .unwrap_or(false);
+        || primary_interaction.is_some_and(|interaction| interaction.clicked);
     let secondary_clicked = secondary_clicked_from_events
-        || data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component::<UiInteraction>(secondary_button)
-            .map(|interaction| interaction.clicked)
-            .unwrap_or(false);
+        || secondary_interaction.is_some_and(|interaction| interaction.clicked);
+    let primary_pressed = primary_interaction.is_some_and(|interaction| interaction.pressed);
+    let secondary_pressed = secondary_interaction.is_some_and(|interaction| interaction.pressed);
     let pause_toggle_pressed = data.input.toggle_pause_menu;
     let pause_toggle_key_down = data
         .input
         .action_down(input_action::SYSTEM_TOGGLE_PAUSE_MENU);
+    let dt_seconds = data.time.delta_seconds.max(0.0);
 
-    let mut queued_action: Option<SceneAction> = None;
+    let mut queued_actions: Vec<QueuedSceneAction> = Vec::new();
+    let mut emitted_events: Vec<SceneTemplateUiEvent> = Vec::new();
     {
         let state = flow_resource_mut(data)?;
         let toggle_pause_menu =
@@ -279,20 +346,63 @@ pub fn scene_template_flow_system(data: &mut EngineData) -> Result<()> {
         }
 
         if let Some(scene) = state.scenes.get(&state.active_scene) {
-            if primary_clicked && let Some(button) = &scene.primary_button {
-                queued_action = Some(button.action.clone());
+            if let Some(button) = &scene.primary_button {
+                collect_button_actions(
+                    button,
+                    &mut state.primary_trigger_state,
+                    primary_clicked,
+                    primary_pressed,
+                    dt_seconds,
+                    &mut queued_actions,
+                );
+            } else {
+                state.primary_trigger_state = ButtonTriggerRuntimeState::default();
             }
-            if queued_action.is_none()
-                && secondary_clicked
-                && let Some(button) = &scene.secondary_button
-            {
-                queued_action = Some(button.action.clone());
+            if let Some(button) = &scene.secondary_button {
+                collect_button_actions(
+                    button,
+                    &mut state.secondary_trigger_state,
+                    secondary_clicked,
+                    secondary_pressed,
+                    dt_seconds,
+                    &mut queued_actions,
+                );
+            } else {
+                state.secondary_trigger_state = ButtonTriggerRuntimeState::default();
             }
         }
 
-        if let Some(action) = queued_action {
-            apply_scene_action(state, action);
+        for queued in queued_actions.drain(..) {
+            match queued.action {
+                SceneAction::Emit(event_name) => emitted_events.push(SceneTemplateUiEvent {
+                    name: event_name,
+                    scene_id: state
+                        .scenes
+                        .get(&state.active_scene)
+                        .map(|scene| scene.id.clone())
+                        .unwrap_or_else(|| "<unknown>".to_string()),
+                    button: queued.button_label.clone(),
+                    trigger: queued.trigger,
+                }),
+                other => apply_scene_action(state, other),
+            }
         }
+    }
+
+    for event in emitted_events {
+        data.scene.overlay_runtime.world.emit_event(event.clone());
+        tracing::info!(
+            event = %event.name,
+            scene = %event.scene_id,
+            button = ?event.button,
+            trigger = event.trigger,
+            "scene template ui trigger emitted"
+        );
+        data.scene
+            .channels
+            .overlay_console_lines
+            .push(format!("[scene-event] {}", event.name));
+        data.scene.overlay_runtime.ui.editor.status = format!("scene event: {}", event.name);
     }
 
     apply_active_scene_if_needed(data)
@@ -453,6 +563,82 @@ fn sync_loading_scene_state(data: &mut EngineData) -> Result<bool> {
     Ok(false)
 }
 
+fn collect_button_actions(
+    button: &LoadedButton,
+    runtime: &mut ButtonTriggerRuntimeState,
+    clicked: bool,
+    pressed: bool,
+    dt_seconds: f32,
+    out: &mut Vec<QueuedSceneAction>,
+) {
+    if pressed
+        && !runtime.pressed_last_frame
+        && let Some(action) = &button.triggers.on_press_start
+    {
+        out.push(QueuedSceneAction {
+            action: action.clone(),
+            button_label: Some(button.label.clone()),
+            trigger: "on_press_start",
+        });
+    }
+
+    if clicked && let Some(action) = &button.triggers.on_click {
+        out.push(QueuedSceneAction {
+            action: action.clone(),
+            button_label: Some(button.label.clone()),
+            trigger: "on_click",
+        });
+    }
+
+    if pressed {
+        if runtime.pressed_last_frame {
+            runtime.hold_elapsed_seconds += dt_seconds;
+            if let Some(hold) = &button.triggers.on_hold {
+                if !runtime.hold_armed {
+                    if runtime.hold_elapsed_seconds >= hold.threshold_seconds {
+                        out.push(QueuedSceneAction {
+                            action: hold.action.clone(),
+                            button_label: Some(button.label.clone()),
+                            trigger: "on_hold",
+                        });
+                        runtime.hold_armed = true;
+                        runtime.hold_repeat_elapsed_seconds = 0.0;
+                    }
+                } else if let Some(repeat_seconds) = hold.repeat_seconds {
+                    runtime.hold_repeat_elapsed_seconds += dt_seconds;
+                    while runtime.hold_repeat_elapsed_seconds >= repeat_seconds {
+                        out.push(QueuedSceneAction {
+                            action: hold.action.clone(),
+                            button_label: Some(button.label.clone()),
+                            trigger: "on_hold",
+                        });
+                        runtime.hold_repeat_elapsed_seconds -= repeat_seconds;
+                    }
+                }
+            }
+        } else {
+            runtime.hold_elapsed_seconds = 0.0;
+            runtime.hold_repeat_elapsed_seconds = 0.0;
+            runtime.hold_armed = false;
+        }
+    } else {
+        if runtime.pressed_last_frame
+            && let Some(action) = &button.triggers.on_press_end
+        {
+            out.push(QueuedSceneAction {
+                action: action.clone(),
+                button_label: Some(button.label.clone()),
+                trigger: "on_press_end",
+            });
+        }
+        runtime.hold_elapsed_seconds = 0.0;
+        runtime.hold_repeat_elapsed_seconds = 0.0;
+        runtime.hold_armed = false;
+    }
+
+    runtime.pressed_last_frame = pressed;
+}
+
 fn apply_scene_action(state: &mut SceneManagerUiResource, action: SceneAction) {
     match action {
         SceneAction::GoTo(target) => {
@@ -470,6 +656,7 @@ fn apply_scene_action(state: &mut SceneManagerUiResource, action: SceneAction) {
             state.previous_scene = None;
             state.active_scene = state.handles.main;
         }
+        SceneAction::Emit(_) => {}
     }
 }
 
@@ -543,6 +730,8 @@ fn apply_active_scene_if_needed(data: &mut EngineData) -> Result<()> {
             .cloned()
             .with_context(|| format!("missing scene handle {}", state.active_scene.index()))?;
         state.applied_scene = Some(state.active_scene);
+        state.primary_trigger_state = ButtonTriggerRuntimeState::default();
+        state.secondary_trigger_state = ButtonTriggerRuntimeState::default();
         (
             scene,
             state.secondary_button,
@@ -927,9 +1116,30 @@ fn load_button(
         )
     })?;
 
+    let on_click = resolve_action_opt(button.on_click.or(button.action), scene_catalog)?;
+    let on_press_start = resolve_action_opt(button.on_press_start, scene_catalog)?;
+    let on_press_end = resolve_action_opt(button.on_press_end, scene_catalog)?;
+    let on_hold = resolve_hold_trigger(button.on_hold, scene_catalog)?;
+    let triggers = ButtonTriggers {
+        on_click,
+        on_press_start,
+        on_press_end,
+        on_hold,
+    };
+    if triggers.on_click.is_none()
+        && triggers.on_press_start.is_none()
+        && triggers.on_press_end.is_none()
+        && triggers.on_hold.is_none()
+    {
+        bail!(
+            "button '{}' does not define any trigger (use action/on_click/on_press_start/on_press_end/on_hold)",
+            button.label
+        );
+    }
+
     Ok(LoadedButton {
         label: button.label,
-        action: resolve_action(button.action, scene_catalog)?,
+        triggers,
         template,
     })
 }
@@ -942,7 +1152,53 @@ fn resolve_action(raw: SceneActionRaw, scene_catalog: &SceneCatalog) -> Result<S
             .ok_or_else(|| anyhow!("unknown target scene '{label}'")),
         SceneActionRaw::Back => Ok(SceneAction::Back),
         SceneActionRaw::MainMenu => Ok(SceneAction::MainMenu),
+        SceneActionRaw::Emit(name) => {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                bail!("emit action name cannot be empty");
+            }
+            Ok(SceneAction::Emit(trimmed.to_string()))
+        }
     }
+}
+
+fn resolve_action_opt(
+    raw: Option<SceneActionRaw>,
+    scene_catalog: &SceneCatalog,
+) -> Result<Option<SceneAction>> {
+    raw.map(|value| resolve_action(value, scene_catalog))
+        .transpose()
+}
+
+fn resolve_hold_trigger(
+    raw: Option<SceneHoldTriggerRaw>,
+    scene_catalog: &SceneCatalog,
+) -> Result<Option<HoldTrigger>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let Some(action_raw) = raw.action else {
+        bail!("on_hold requires an action");
+    };
+    let threshold_seconds = raw
+        .threshold_ms
+        .map(milliseconds_to_seconds)
+        .unwrap_or(0.60);
+    let repeat_seconds = raw.repeat_ms.and_then(milliseconds_to_seconds_opt);
+    Ok(Some(HoldTrigger {
+        threshold_seconds,
+        repeat_seconds,
+        action: resolve_action(action_raw, scene_catalog)?,
+    }))
+}
+
+fn milliseconds_to_seconds(ms: u64) -> f32 {
+    (ms as f32 / 1000.0).max(0.0)
+}
+
+fn milliseconds_to_seconds_opt(ms: u64) -> Option<f32> {
+    let seconds = milliseconds_to_seconds(ms);
+    if seconds > 0.0 { Some(seconds) } else { None }
 }
 
 fn resolve_component_path(root: &Path, raw: &str, field: &str) -> Result<PathBuf> {

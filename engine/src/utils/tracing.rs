@@ -6,6 +6,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 const TRACY_ENV_VAR: &str = "ENGINE_TRACY";
 #[cfg(feature = "tracy")]
 const TRACY_ENV_VAR_LEGACY: &str = "ENGINE_V2_TRACY";
+const DEFAULT_TRACING_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,naga=warn";
 
 #[cfg(feature = "tracy")]
 fn tracy_enabled() -> bool {
@@ -21,7 +22,8 @@ fn tracy_enabled() -> bool {
 }
 
 pub fn setup_tracing() -> Option<WorkerGuard> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(DEFAULT_TRACING_FILTER));
     let log_dir = Path::new("logs");
     if let Err(err) = std::fs::create_dir_all(log_dir) {
         eprintln!("failed creating log directory {}: {err}", log_dir.display());

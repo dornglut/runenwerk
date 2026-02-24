@@ -6,6 +6,7 @@ This folder is the single source of truth for project and crate docs.
 - `docs/project/AGENTS.md` - short redirect for project contributor guidance.
 - `docs/project/engineering-guidelines.md` - engineering standards, ownership, and workflow rules.
 - `docs/project/execution-plan.md` - current implementation status and near-term plan.
+- `docs/project/render-graph-plugin-refactor-plan.md` - migration plan to plugin-owned, data-driven render graph registration/execution.
 - `docs/project/plugin-domain-migration-plan.md` - plan for consolidating render/runtime/ui/input/scene/time code under plugin-owned folders.
 - `docs/project/backlog.md` - active and planned backlog tracks with acceptance criteria.
 - `docs/project/product-roadmap.md` - priority roadmap across foundation, MVP, and polish.

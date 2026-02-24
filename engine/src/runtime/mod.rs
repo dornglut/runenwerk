@@ -1,5 +1,7 @@
 use crate::plugins::input::domain::InputState;
-use crate::plugins::render::domain::{Gfx, WorldRenderFrame};
+use crate::plugins::render::domain::{
+    Gfx, GfxFrameTimings, RenderGraphRegistryResource, WorldRenderFrame,
+};
 use crate::plugins::scene::domain::{OverlaySceneRuntime, SceneManager};
 use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::initialize_console_ui;
@@ -224,11 +226,51 @@ impl StartupState {
 pub struct EngineData {
     pub gfx: Gfx,
     pub world_render: WorldRenderFrame,
+    pub render_graph_registry: RenderGraphRegistryResource,
     pub time: Time,
     pub input: InputState,
     pub scene: SceneManager,
     pub scene_catalog: SceneCatalog,
     pub startup: StartupState,
+    pub debug_metrics: DebugMetricsState,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DebugMetricsState {
+    pub visible: bool,
+    pub fps_ema: f32,
+    pub frame_ms_ema: f32,
+    pub last_timings: Option<GfxFrameTimings>,
+}
+
+impl Default for DebugMetricsState {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            fps_ema: 0.0,
+            frame_ms_ema: 0.0,
+            last_timings: None,
+        }
+    }
+}
+
+impl DebugMetricsState {
+    pub fn observe_frame_delta(&mut self, delta_seconds: f32) {
+        let safe_dt = delta_seconds.max(1.0 / 1000.0);
+        let fps = (1.0 / safe_dt).clamp(0.0, 2000.0);
+        let frame_ms = (safe_dt * 1000.0).clamp(0.0, 1000.0);
+        let alpha = 0.12;
+        if self.fps_ema <= f32::EPSILON {
+            self.fps_ema = fps;
+        } else {
+            self.fps_ema = self.fps_ema + (fps - self.fps_ema) * alpha;
+        }
+        if self.frame_ms_ema <= f32::EPSILON {
+            self.frame_ms_ema = frame_ms;
+        } else {
+            self.frame_ms_ema = self.frame_ms_ema + (frame_ms - self.frame_ms_ema) * alpha;
+        }
+    }
 }
 
 pub struct Engine {
@@ -267,18 +309,22 @@ impl Engine {
         );
         scene.overlay_runtime.ui.scale = ui_scale_from_window_factor(window.scale_factor());
         let scene_catalog = SceneCatalog::from_registrations(&scene_registrations);
-        let startup =
-            StartupState::from_loading_enabled(scene_catalog.handle("loading_scene").is_some());
+        // Startup warmup is globally enabled by default so heavy first-frame work
+        // is absorbed before diagnostics and transition-dependent logic treat the
+        // runtime as fully ready.
+        let startup = StartupState::loading();
         set_slow_node_logging_enabled(startup.is_ready());
 
         let data = EngineData {
             gfx,
             world_render: WorldRenderFrame::default(),
+            render_graph_registry: RenderGraphRegistryResource::default(),
             time: Time::new(),
             input: InputState::new(),
             scene,
             scene_catalog,
             startup,
+            debug_metrics: DebugMetricsState::default(),
         };
 
         let mut schedule_builder = EngineScheduleBuilder::new();

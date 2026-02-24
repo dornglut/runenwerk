@@ -1,3 +1,4 @@
+pub mod debug_metrics;
 pub mod grid;
 pub mod input;
 pub mod render;
@@ -7,6 +8,7 @@ pub(crate) mod shared;
 pub mod time;
 pub mod ui;
 
+pub use debug_metrics::DebugMetricsPlugin;
 pub use grid::GridPlugin;
 pub use input::InputFinalizePlugin;
 pub use render::RenderPlugin;
@@ -25,6 +27,7 @@ pub fn default_engine_plugins() -> Vec<Box<dyn EnginePlugin>> {
         Box::new(ScenePlugin),
         Box::new(GridPlugin),
         Box::new(UiRenderPlugin),
+        Box::new(DebugMetricsPlugin),
         Box::new(RenderPlugin),
         Box::new(InputFinalizePlugin),
     ]
@@ -39,8 +42,8 @@ pub fn default_engine_plugins_with_diagnostics() -> Vec<Box<dyn EnginePlugin>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        GridPlugin, InputFinalizePlugin, RenderPlugin, ScenePlugin, TimePlugin, UiInputPlugin,
-        UiRenderPlugin, default_engine_plugins,
+        DebugMetricsPlugin, GridPlugin, InputFinalizePlugin, RenderPlugin, ScenePlugin, TimePlugin,
+        UiInputPlugin, UiRenderPlugin, default_engine_plugins,
     };
     use crate::runtime::{EnginePlugin, EngineScheduleBuilder};
 
@@ -56,6 +59,7 @@ mod tests {
                 "scene",
                 "grid",
                 "ui_render",
+                "debug_metrics",
                 "render",
                 "input_finalize"
             ]
@@ -80,6 +84,7 @@ mod tests {
         assert!(build_with_plugin(ScenePlugin).is_err());
         assert!(build_with_plugin(GridPlugin).is_err());
         assert!(build_with_plugin(UiRenderPlugin).is_err());
+        assert!(build_with_plugin(DebugMetricsPlugin).is_err());
         assert!(build_with_plugin(RenderPlugin).is_err());
         assert!(build_with_plugin(InputFinalizePlugin).is_err());
         assert!(build_with_plugin(TimePlugin).is_ok());

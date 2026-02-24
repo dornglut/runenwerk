@@ -5,11 +5,11 @@
   primary_button: Some((
     label: "Settings",
     component: "../components/button_primary.ron",
-    action: go_to("settings_menu"),
+    on_click: Some(go_to("settings_menu")),
   )),
   secondary_button: Some((
     label: "Main Menu",
     component: "../components/button_primary.ron",
-    action: main_menu,
+    on_click: Some(main_menu),
   )),
 )

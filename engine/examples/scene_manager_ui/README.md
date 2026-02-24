@@ -27,7 +27,7 @@ App::new()
 ## Scene Flow
 
 - `main_menu`: buttons to go to `game_scene` and `settings_menu`.
-- `settings_menu`: button to go back to the previous scene.
+- `settings_menu`: button to go back to the previous scene plus a demo button that emits custom events on click/hold.
 - `game_scene`: text panel that shows `"Gameplay Preview"`.
 - `pause_menu`: triggered by `Esc` in `game_scene`, with `settings` and `main menu` buttons.
 - `loading_scene`: shown at startup until render warmup stabilizes, then transitions to `main_menu`.
@@ -66,6 +66,82 @@ engine/examples/scene_manager_ui/assets/
 - Component templates should define reusable UI building blocks such as buttons, panels, and labels.
 - The runtime scene builder should construct each scene by loading these `.ron` templates instead of hardcoding UI layout in Rust.
 
+### Scene Schema (Buttons + Triggers)
+
+Each scene file supports:
+
+```ron
+(
+  body: "Title",
+  panel_component: "../components/panel.ron",
+  text_component: "../components/text_label.ron",
+  primary_button: Some((
+    label: "Start",
+    component: "../components/button_primary.ron",
+    on_click: Some(go_to("game_scene")),
+    on_press_start: Some(emit("start.press_start")),
+    on_press_end: Some(emit("start.press_end")),
+    on_hold: Some((
+      threshold_ms: Some(650),
+      repeat_ms: Some(250),
+      action: Some(emit("start.hold")),
+    )),
+  )),
+)
+```
+
+Supported button trigger fields:
+
+- `on_click`: fires on pointer click edge.
+- `on_press_start`: fires once when press begins.
+- `on_press_end`: fires once when press ends.
+- `on_hold`: fires after `threshold_ms`, then repeats if `repeat_ms` is set.
+
+Supported trigger actions:
+
+- `go_to("<scene_id>")`
+- `back`
+- `main_menu`
+- `emit("<event_name>")`
+
+Backward compatibility:
+
+- `action: <...>` is still accepted and treated as `on_click`.
+
+### Custom Events
+
+- `emit("...")` publishes a scene-template event in this demo flow.
+- Emitted events are written to overlay lines as `[scene-event] <event_name>`.
+- Emitted events also update the editor status line and are logged via `tracing`.
+- Emitted events are also available as typed ECS events:
+  - type: `engine::plugins::scene::domain::SceneTemplateUiEvent`
+  - fields: `name`, `scene_id`, `button`, `trigger`
+
+Example consumer system:
+
+```rust
+use engine::plugins::scene::domain::SceneTemplateUiEvent;
+use engine::runtime::EngineData;
+
+pub fn consume_scene_template_events_system(data: &mut EngineData) -> anyhow::Result<()> {
+    let events = data
+        .scene
+        .overlay_runtime
+        .world
+        .drain_events::<SceneTemplateUiEvent>();
+    for event in events {
+        tracing::info!(
+            name = %event.name,
+            scene = %event.scene_id,
+            button = ?event.button,
+            trigger = event.trigger,
+            "received scene template ui event"
+        );
+    }
+    Ok(())
+}
+```
+
 ## Run
 
 ```bash
@@ -75,6 +151,7 @@ cargo run -p engine --example scene_manager_ui
 ## Controls
 
 - Mouse click: trigger scene buttons.
+- Mouse hold: trigger `on_hold` for buttons configured with hold actions.
 - `Esc` in `game_scene`: open `pause_menu`.
 - `Esc` in `pause_menu`: return to `game_scene`.
 

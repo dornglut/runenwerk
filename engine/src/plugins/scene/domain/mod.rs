@@ -185,6 +185,14 @@ pub enum OverlayCommandInput {
     Line(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SceneTemplateUiEvent {
+    pub name: String,
+    pub scene_id: String,
+    pub button: Option<String>,
+    pub trigger: &'static str,
+}
+
 #[derive(Debug, Clone)]
 pub enum WorldToOverlayMessage {
     Tick {

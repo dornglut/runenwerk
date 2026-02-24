@@ -62,16 +62,15 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
         data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
     }
 
-    match data
-        .gfx
-        .render(&data.world_render, &data.scene.overlay_runtime.ui.draw_list)
-    {
+    match data.gfx.render(
+        &data.world_render,
+        &data.scene.overlay_runtime.ui.draw_list,
+        &data.render_graph_registry,
+    ) {
         Ok(timings) => {
+            data.debug_metrics.last_timings = Some(timings);
             let mesh_hot = timings.renderer.mesh_hot_path;
-            let warm_frame = mesh_hot.static_cache_misses == 0
-                && mesh_hot.vertex_upload_bytes == 0
-                && mesh_hot.index_upload_bytes == 0
-                && mesh_hot.texture_upload_bytes == 0;
+            let warm_frame = mesh_hot.is_warm_frame();
             let warmup_completed = data
                 .startup
                 .observe_render_warm_frame(warm_frame, data.time.delta_seconds);

@@ -32,3 +32,7 @@ grid = { path = "../grid" }
 [[example]]
 name = "scene_manager_ui"
 path = "examples/scene_manager_ui/main.rs"
+
+[[example]]
+name = "sdf_renderer"
+path = "examples/sdf_renderer/main.rs"

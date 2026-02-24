@@ -10,6 +10,7 @@ pub enum ShaderId {
     UiRect,
     WorldComputeBasic,
     WorldComputeHighContrast,
+    WorldComputeSdf3d,
     WorldComposeFullscreen,
 }
 
@@ -19,6 +20,7 @@ impl ShaderId {
             Self::UiRect => "ui_rect",
             Self::WorldComputeBasic => "world_compute_basic",
             Self::WorldComputeHighContrast => "world_compute_high_contrast",
+            Self::WorldComputeSdf3d => "world_compute_sdf_3d",
             Self::WorldComposeFullscreen => "world_compose_fullscreen",
         }
     }
@@ -28,15 +30,17 @@ impl ShaderId {
             Self::UiRect => "assets/shaders/ui_rect.wgsl",
             Self::WorldComputeBasic => "assets/shaders/world_compute_basic.wgsl",
             Self::WorldComputeHighContrast => "assets/shaders/world_compute_high_contrast.wgsl",
+            Self::WorldComputeSdf3d => "assets/shaders/sdf_compute_3d_example.wgsl",
             Self::WorldComposeFullscreen => "assets/shaders/world_compose_fullscreen.wgsl",
         }
     }
 }
 
-const ALL_SHADERS: [ShaderId; 4] = [
+const ALL_SHADERS: [ShaderId; 5] = [
     ShaderId::UiRect,
     ShaderId::WorldComputeBasic,
     ShaderId::WorldComputeHighContrast,
+    ShaderId::WorldComputeSdf3d,
     ShaderId::WorldComposeFullscreen,
 ];
 
@@ -59,7 +63,7 @@ pub struct ShaderStatus {
 
 #[derive(Debug, Clone)]
 pub struct ShaderManager {
-    assets: [ShaderAsset; 4],
+    assets: [ShaderAsset; 5],
     watch_enabled: bool,
     force_reload: bool,
 }
@@ -243,7 +247,8 @@ impl ShaderManager {
             ShaderId::UiRect => 0,
             ShaderId::WorldComputeBasic => 1,
             ShaderId::WorldComputeHighContrast => 2,
-            ShaderId::WorldComposeFullscreen => 3,
+            ShaderId::WorldComputeSdf3d => 3,
+            ShaderId::WorldComposeFullscreen => 4,
         }
     }
 }

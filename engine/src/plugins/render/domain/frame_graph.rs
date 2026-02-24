@@ -2,7 +2,7 @@ use super::PipelineKey;
 use anyhow::{Result, bail};
 use std::collections::{BTreeSet, VecDeque};
 
-pub type ResourceId = &'static str;
+pub type ResourceId = String;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PassKind {
@@ -173,13 +173,25 @@ impl<'a> PassBuilder<'a> {
         }
     }
 
-    pub fn reads(mut self, resources: &[ResourceId]) -> Self {
-        self.node.reads.extend_from_slice(resources);
+    pub fn reads<I, S>(mut self, resources: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.node
+            .reads
+            .extend(resources.into_iter().map(Into::into));
         self
     }
 
-    pub fn writes(mut self, resources: &[ResourceId]) -> Self {
-        self.node.writes.extend_from_slice(resources);
+    pub fn writes<I, S>(mut self, resources: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.node
+            .writes
+            .extend(resources.into_iter().map(Into::into));
         self
     }
 
@@ -218,11 +230,11 @@ mod tests {
         let mut graph = FrameGraph::new();
         let writer = graph
             .compute_pass("writer", PipelineKey::WorldComputeBasic)
-            .writes(&["world_color"])
+            .writes(["world_color"])
             .build();
         let reader = graph
             .render_pass("reader", PipelineKey::WorldComposeFullscreen)
-            .reads(&["world_color"])
+            .reads(["world_color"])
             .build();
         let order = graph.execution_order().expect("graph should sort");
         assert_eq!(order, vec![writer, reader]);
