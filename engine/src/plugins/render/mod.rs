@@ -1,5 +1,7 @@
 pub mod domain;
 
+use self::domain::{RenderFrameData, ShaderHandle};
+use crate::plugins::ui::domain::UiRenderShaderConfig;
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
 use scheduler::set_slow_node_logging_enabled;
@@ -63,12 +65,23 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
         data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
     }
 
+    let render_frame = RenderFrameData::from_world_frame(data.world_render());
+    let ui_rect_shader: Option<ShaderHandle> = data
+        .scene
+        .overlay_runtime
+        .world
+        .get_resource::<UiRenderShaderConfig>()
+        .map(|config| config.rect_shader_asset_id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .and_then(|id| data.shader_registry.handle(id));
+
     match data.gfx.render(
-        &data.world_render,
+        &render_frame,
         &data.scene.overlay_runtime.ui.draw_list,
         &mut data.shader_registry,
         &data.render_graph_registry,
         &data.render_executor_registry,
+        ui_rect_shader,
     ) {
         Ok(timings) => {
             data.debug_metrics.last_timings = Some(timings);

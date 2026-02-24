@@ -82,6 +82,20 @@ world.insert_resource(FrameCounter(1));
 assert_eq!(world.get_resource::<FrameCounter>(), Some(&FrameCounter(1)));
 ```
 
+Engine integration pattern (ECS-first runtime state):
+
+```rust
+use ecs::World;
+
+let mut render_resources = World::new();
+render_resources.insert_resource(FrameCounter(0));
+
+let frame_counter = render_resources
+    .get_resource_mut::<FrameCounter>()
+    .expect("resource should exist");
+frame_counter.0 += 1;
+```
+
 ## Events and Subscriptions
 
 Events are typed and channel-backed. Channels are auto-created on first emit, so setup is minimal.

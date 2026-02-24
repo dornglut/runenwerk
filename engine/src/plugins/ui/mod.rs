@@ -3,7 +3,7 @@ pub mod domain;
 use crate::plugins::scene::domain::{OverlaySubmitMessage, WorldDebugPosition};
 use crate::plugins::ui::domain::{
     UiBatchCmd, UiButton, UiButtonClickEvent, UiDirty, UiDrawCmd, UiEditorNode, UiInputField,
-    UiInteraction, UiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
+    UiInteraction, UiNode, UiPresentationMode, UiRenderShaderConfig, UiStyle, UiText, UiTransform,
     reload_console_template_if_changed, save_console_template_to_disk,
 };
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
@@ -50,6 +50,22 @@ impl EnginePlugin for UiRenderPlugin {
             ui_render_extract_system,
             &["overlay_ui_build_batches"],
         );
+        Ok(())
+    }
+
+    fn setup(&self, data: &mut EngineData) -> Result<()> {
+        if data
+            .scene
+            .overlay_runtime
+            .world
+            .get_resource::<UiRenderShaderConfig>()
+            .is_none()
+        {
+            data.scene
+                .overlay_runtime
+                .world
+                .insert_resource(UiRenderShaderConfig::default());
+        }
         Ok(())
     }
 }
@@ -115,12 +131,12 @@ fn compute_log_window_rect(
 
 fn world_hud_stats(data: &EngineData) -> Option<(f32, f32, usize, u32)> {
     let player = data
-        .world_render
+        .world_render()
         .agents
         .iter()
         .find(|agent| agent.team == 0)?;
     let enemies = data
-        .world_render
+        .world_render()
         .agents
         .iter()
         .filter(|agent| agent.team != 0 && agent.health_ratio > 0.0)

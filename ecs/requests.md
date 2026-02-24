@@ -1,7 +1,5 @@
 # ECS Requests
 
-All previously tracked ECS feature requests are complete as of 2026-02-24.
-
 Implemented:
 
 - secondary component indexes (default + named indexes)

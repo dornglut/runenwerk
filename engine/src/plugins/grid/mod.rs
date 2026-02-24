@@ -15,10 +15,14 @@ impl EnginePlugin for GridPlugin {
 }
 
 pub fn grid_prepare_system(data: &mut EngineData) -> anyhow::Result<()> {
-    let cfg = &data.scene.world_runtime.ctx.gameplay_config;
-    data.world_render.chunk_size = cfg.chunk_size;
-    data.world_render.chunk_load_radius = cfg.chunk_load_radius;
-    data.world_render.infinite_world = cfg.infinite_world;
+    let (chunk_size, chunk_load_radius, infinite_world) = {
+        let cfg = &data.scene.world_runtime.ctx.gameplay_config;
+        (cfg.chunk_size, cfg.chunk_load_radius, cfg.infinite_world)
+    };
+    let world_render = data.world_render_mut();
+    world_render.chunk_size = chunk_size;
+    world_render.chunk_load_radius = chunk_load_radius;
+    world_render.infinite_world = infinite_world;
     Ok(())
 }
 

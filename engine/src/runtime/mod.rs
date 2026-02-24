@@ -226,7 +226,7 @@ impl StartupState {
 
 pub struct EngineData {
     pub gfx: Gfx,
-    pub world_render: WorldRenderFrame,
+    pub render_resources: World,
     pub shader_registry: ShaderRegistryResource,
     pub render_graph_registry: RenderGraphRegistryResource,
     pub render_executor_registry: RenderPassExecutorRegistryResource,
@@ -236,6 +236,20 @@ pub struct EngineData {
     pub scene_catalog: SceneCatalog,
     pub startup: StartupState,
     pub debug_metrics: DebugMetricsState,
+}
+
+impl EngineData {
+    pub fn world_render(&self) -> &WorldRenderFrame {
+        self.render_resources
+            .get_resource::<WorldRenderFrame>()
+            .expect("world render frame resource should be present")
+    }
+
+    pub fn world_render_mut(&mut self) -> &mut WorldRenderFrame {
+        self.render_resources
+            .get_resource_mut::<WorldRenderFrame>()
+            .expect("world render frame resource should be present")
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -318,9 +332,12 @@ impl Engine {
         let startup = StartupState::loading();
         set_slow_node_logging_enabled(startup.is_ready());
 
+        let mut render_resources = World::new();
+        render_resources.insert_resource(WorldRenderFrame::default());
+
         let data = EngineData {
             gfx,
-            world_render: WorldRenderFrame::default(),
+            render_resources,
             shader_registry: ShaderRegistryResource::new(),
             render_graph_registry: RenderGraphRegistryResource::default(),
             render_executor_registry: RenderPassExecutorRegistryResource::default(),

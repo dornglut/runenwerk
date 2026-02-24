@@ -94,15 +94,21 @@ Progress completed in this pass:
 - `render_executor_registry.rs` now stores executor bindings in ECS components and emits ECS registry events.
 - `render_executor_registry.rs` no longer auto-seeds builtin executor ids in `Default`; builtin aliases must be registered by plugins/features.
 - `renderer.rs` no longer injects default/fallback frame graph passes; it compiles only ECS-registered feature graphs and reports `no_registered_passes` diagnostics when empty.
-- `renderer.rs` UI shader binding now resolves by ECS shader id (`ui_rect`) from auto-discovered assets instead of hardcoding a shader file registration path at render time.
+- UI plugin now owns UI rect shader selection via ECS resource (`UiRenderShaderConfig`), and render submit resolves it to a `ShaderHandle` before invoking core renderer.
 - `text.rs` moved from `render/domain` into `ui/domain`; font atlas + glyph pipeline ownership now lives in UI plugin.
 - `model_manager.rs` now stores model assets in ECS components with indexed id lookup and ECS-owned watch/reload config state.
 - `RenderPassPrepareContext` / `RenderPassEncodeContext` now use typed frame-data lookup (`frame_data::<T>()`) instead of hardcoding `WorldRenderFrame`.
+- `renderer.rs` / `gfx.rs` entrypoints now consume `RenderFrameData` (adapter type) instead of `WorldRenderFrame` directly.
+- `EngineData` world render state now lives in ECS (`render_resources` + `WorldRenderFrame` resource) rather than a dedicated runtime struct field.
 
 1. Render frame coupling:
-- Core renderer packet build path still sources data from `WorldRenderFrame` directly.
-- Target: move packet input to plugin-owned ECS resources/handles and stop requiring world-specific frame struct at renderer entrypoints.
+- Render submit path still adapts from `WorldRenderFrame` ECS resource into `RenderFrameData` each frame.
+- Target: source `RenderFrameData` (and future per-feature packet inputs) directly as plugin-owned ECS resources/handles to remove this adapter hop.
 
 ECS gaps discovered during this migration are tracked in:
 
-- `ecs/requests.md`
+- `ecs/requests.md` (currently `Open requests: none.`)
+
+Render-plugin architecture requests are tracked in:
+
+- `engine/src/plugins/render/requests.md`

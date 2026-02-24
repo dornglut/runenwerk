@@ -7,11 +7,11 @@ use super::render_executor_registry::{
     BuiltinRenderPassExecutor, RenderFrameDataRegistry, RenderPassEncodeContext,
     RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
-use super::render_frame::{WorldRenderAgent, WorldRenderFrame};
+use super::render_frame::{RenderFrameData, WorldRenderAgent};
 use super::render_graph_registry::{
     RegisteredPassKind, RegisteredPipelineRef, RenderGraphRegistryResource,
 };
-use super::shader_manager::ShaderRegistryResource;
+use super::shader_manager::{ShaderHandle, ShaderRegistryResource};
 use crate::plugins::ui::domain::{FileFontProvider, TextRenderer};
 use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
 use anyhow::Result;
@@ -143,7 +143,6 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
 }
 "#;
 
-const UI_RECT_SHADER_ID: &str = "ui_rect";
 const MESH_CLEAR_COLOR: Color = Color {
     r: 0.02,
     g: 0.03,
@@ -356,7 +355,7 @@ struct UiPreparedDraws {
 pub(crate) struct RendererPreparedPacket {
     surface_format: TextureFormat,
     surface_size: (u32, u32),
-    merged_world_frame: WorldRenderFrame,
+    merged_world_frame: RenderFrameData,
     prepared_ui: UiPreparedDraws,
     prepared_mesh: MeshPreparedDraw,
     prepare_timings: RendererFrameTimings,
@@ -1616,7 +1615,7 @@ impl Renderer {
         &mut self,
         device: &Device,
         queue: &Queue,
-        world_frame: &WorldRenderFrame,
+        world_frame: &RenderFrameData,
         surface_width: f32,
         surface_height: f32,
     ) -> MeshPreparedWithHotPath {
@@ -2115,18 +2114,22 @@ impl Renderer {
         &mut self,
         device: &Device,
         queue: &Queue,
-        world_frame: &WorldRenderFrame,
+        world_frame: &RenderFrameData,
         draw_list: &UiDrawList,
         shader_registry: &mut ShaderRegistryResource,
+        ui_rect_shader_handle: Option<ShaderHandle>,
         surface_format: TextureFormat,
         surface_width: f32,
         surface_height: f32,
     ) -> RendererPreparedPacket {
         let mut prepare_timings = RendererFrameTimings::default();
-        let ui_rect_shader = shader_registry
-            .source_or(UI_RECT_SHADER_ID, DEFAULT_UI_RECT_SHADER)
+        let ui_rect_shader = ui_rect_shader_handle
+            .map(|handle| shader_registry.source_or_handle(handle, DEFAULT_UI_RECT_SHADER))
+            .unwrap_or(DEFAULT_UI_RECT_SHADER)
             .to_string();
-        let ui_rect_revision = shader_registry.revision_for(UI_RECT_SHADER_ID);
+        let ui_rect_revision = ui_rect_shader_handle
+            .map(|handle| shader_registry.revision_for_handle(handle))
+            .unwrap_or(0);
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
         self.ensure_mesh_pass(device, queue, surface_format);
@@ -2339,11 +2342,12 @@ impl Renderer {
         device: &Device,
         queue: &Queue,
         frame_view: &TextureView,
-        world_frame: &WorldRenderFrame,
+        world_frame: &RenderFrameData,
         draw_list: &UiDrawList,
         shader_registry: &mut ShaderRegistryResource,
         render_graph_registry: &RenderGraphRegistryResource,
         render_executor_registry: &RenderPassExecutorRegistryResource,
+        ui_rect_shader: Option<ShaderHandle>,
         surface_format: TextureFormat,
         surface_width: f32,
         surface_height: f32,
@@ -2354,6 +2358,7 @@ impl Renderer {
             world_frame,
             draw_list,
             shader_registry,
+            ui_rect_shader,
             surface_format,
             surface_width,
             surface_height,

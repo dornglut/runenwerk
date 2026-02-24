@@ -2,8 +2,8 @@ use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use engine::plugins::render::domain::{
     BuiltinRenderPassExecutor, MAX_WORLD_RENDER_AGENTS, MAX_WORLD_RENDER_MODELS,
-    RenderFeatureGraphSpec, RenderPassEncodeContext, RenderPassExecutor,
-    RenderPassExecutorRegistryResource, RenderPassPrepareContext, WorldRenderFrame,
+    RenderFeatureGraphSpec, RenderFrameData, RenderPassEncodeContext, RenderPassExecutor,
+    RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
 use engine::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use engine::{platform::App, plugins::input::domain::action};
@@ -114,54 +114,61 @@ impl EnginePlugin for SdfRendererExamplePlugin {
 }
 
 fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
-    data.world_render.render_world = false;
-    data.world_render.agents.clear();
-    data.world_render.model_proxies.clear();
+    {
+        let world_render = data.world_render_mut();
+        world_render.render_world = false;
+        world_render.agents.clear();
+        world_render.model_proxies.clear();
+    }
     let controls = SDF_CONTROLS.get().copied().unwrap_or_default();
 
     if data.input.toggle_pause_menu {
-        data.world_render.world_paused = !data.world_render.world_paused;
+        let next = !data.world_render().world_paused;
+        data.world_render_mut().world_paused = next;
     }
 
-    if !data.world_render.world_paused {
-        data.world_render.elapsed_time_seconds += data.time.delta_seconds.max(0.0);
+    if !data.world_render().world_paused {
+        data.world_render_mut().elapsed_time_seconds += data.time.delta_seconds.max(0.0);
     }
 
     if data.input.left_mouse_down() {
-        data.world_render.camera_yaw -=
-            data.input.mouse_delta.0 * controls.mouse_rotate_sensitivity;
-        data.world_render.camera_pitch -=
-            data.input.mouse_delta.1 * controls.mouse_rotate_sensitivity;
+        let yaw_delta = data.input.mouse_delta.0 * controls.mouse_rotate_sensitivity;
+        let pitch_delta = data.input.mouse_delta.1 * controls.mouse_rotate_sensitivity;
+        let world_render = data.world_render_mut();
+        world_render.camera_yaw -= yaw_delta;
+        world_render.camera_pitch -= pitch_delta;
     }
 
     if data.input.scroll_delta.abs() > f32::EPSILON {
-        data.world_render.camera_distance -=
-            data.input.scroll_delta * controls.scroll_zoom_sensitivity;
+        let zoom_delta = data.input.scroll_delta * controls.scroll_zoom_sensitivity;
+        data.world_render_mut().camera_distance -= zoom_delta;
     }
 
-    let min_pitch = data
-        .world_render
-        .camera_pitch_min
-        .min(data.world_render.camera_pitch_max);
-    let max_pitch = data
-        .world_render
-        .camera_pitch_min
-        .max(data.world_render.camera_pitch_max);
-    let min_distance = data
-        .world_render
-        .camera_distance_min
-        .min(data.world_render.camera_distance_max)
-        .max(0.1);
-    let max_distance = data
-        .world_render
-        .camera_distance_min
-        .max(data.world_render.camera_distance_max)
-        .max(min_distance);
-    data.world_render.camera_pitch = data.world_render.camera_pitch.clamp(min_pitch, max_pitch);
-    data.world_render.camera_distance = data
-        .world_render
-        .camera_distance
-        .clamp(min_distance, max_distance);
+    let (min_pitch, max_pitch, min_distance, max_distance) = {
+        let world_render = data.world_render();
+        let min_pitch = world_render
+            .camera_pitch_min
+            .min(world_render.camera_pitch_max);
+        let max_pitch = world_render
+            .camera_pitch_min
+            .max(world_render.camera_pitch_max);
+        let min_distance = world_render
+            .camera_distance_min
+            .min(world_render.camera_distance_max)
+            .max(0.1);
+        let max_distance = world_render
+            .camera_distance_min
+            .max(world_render.camera_distance_max)
+            .max(min_distance);
+        (min_pitch, max_pitch, min_distance, max_distance)
+    };
+    {
+        let world_render = data.world_render_mut();
+        world_render.camera_pitch = world_render.camera_pitch.clamp(min_pitch, max_pitch);
+        world_render.camera_distance = world_render
+            .camera_distance
+            .clamp(min_distance, max_distance);
+    }
 
     let mut speed = controls.base_move_speed;
     if data.input.action_down(ACTION_SPEED_UP) {
@@ -172,7 +179,7 @@ fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
     }
 
     let move_dt = speed * data.time.delta_seconds;
-    let yaw = data.world_render.camera_yaw;
+    let yaw = data.world_render().camera_yaw;
     let forward = [yaw.sin(), yaw.cos()];
     let right = [forward[1], -forward[0]];
 
@@ -204,20 +211,24 @@ fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
         0.0
     });
 
-    data.world_render.camera_target[0] +=
-        (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
-    data.world_render.camera_target[2] +=
-        (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;
-    data.world_render.camera_target[1] += vertical_axis * move_dt;
-
-    data.world_render.camera_target[1] = data.world_render.camera_target[1]
-        .clamp(controls.camera_target_y_min, controls.camera_target_y_max);
+    {
+        let world_render = data.world_render_mut();
+        world_render.camera_target[0] +=
+            (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
+        world_render.camera_target[2] +=
+            (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;
+        world_render.camera_target[1] += vertical_axis * move_dt;
+        world_render.camera_target[1] = world_render.camera_target[1]
+            .clamp(controls.camera_target_y_min, controls.camera_target_y_max);
+    }
 
     if data.input.action_pressed(ACTION_DEBUG_NEXT) {
-        data.world_render.debug_view_mode = (data.world_render.debug_view_mode + 1) % 4;
+        let next = (data.world_render().debug_view_mode + 1) % 4;
+        data.world_render_mut().debug_view_mode = next;
     }
     if data.input.action_pressed(ACTION_DEBUG_PREV) {
-        data.world_render.debug_view_mode = (data.world_render.debug_view_mode + 3) % 4;
+        let next = (data.world_render().debug_view_mode + 3) % 4;
+        data.world_render_mut().debug_view_mode = next;
     }
 
     Ok(())
@@ -904,8 +915,8 @@ impl RenderPassExecutor for SdfComputeExecutor {
             .ok_or_else(|| anyhow!("sdf compute pass unavailable after setup"))?;
 
         let world_frame = ctx
-            .frame_data::<WorldRenderFrame>()
-            .ok_or_else(|| anyhow!("missing WorldRenderFrame in render pass prepare context"))?;
+            .frame_data::<RenderFrameData>()
+            .ok_or_else(|| anyhow!("missing RenderFrameData in render pass prepare context"))?;
         let agent_count = world_frame.agents.len().min(MAX_WORLD_RENDER_AGENTS);
         let model_count = world_frame.model_proxies.len().min(MAX_WORLD_RENDER_MODELS);
         let params = SdfWorldParamsRaw {
@@ -1098,25 +1109,26 @@ struct SdfRenderPassConfig {
 }
 
 fn apply_sdf_params(data: &mut EngineData, params: &SdfParamsConfig) {
-    data.world_render.render_world = false;
-    data.world_render.world_scene_label = params.world_scene_label.clone();
-    data.world_render.overlay_scene_label = params.overlay_scene_label.clone();
-    data.world_render.world_bounds = params.world_bounds;
-    data.world_render.camera_target = params.camera.target;
-    data.world_render.camera_yaw = params.camera.yaw;
-    data.world_render.camera_pitch = params.camera.pitch;
-    data.world_render.camera_distance = params.camera.distance;
-    data.world_render.camera_pitch_min = params.camera.pitch_min;
-    data.world_render.camera_pitch_max = params.camera.pitch_max;
-    data.world_render.camera_distance_min = params.camera.distance_min;
-    data.world_render.camera_distance_max = params.camera.distance_max;
-    data.world_render.camera_fov_y = params.camera.fov_y_radians;
-    data.world_render.world_paused = params.world_paused;
-    data.world_render.debug_view_mode = params.debug_view_mode;
-    data.world_render.elapsed_time_seconds = 0.0;
-    data.world_render.render_mesh_overlay = params.render_mesh_overlay;
-    data.world_render.agents.clear();
-    data.world_render.model_proxies.clear();
+    let world_render = data.world_render_mut();
+    world_render.render_world = false;
+    world_render.world_scene_label = params.world_scene_label.clone();
+    world_render.overlay_scene_label = params.overlay_scene_label.clone();
+    world_render.world_bounds = params.world_bounds;
+    world_render.camera_target = params.camera.target;
+    world_render.camera_yaw = params.camera.yaw;
+    world_render.camera_pitch = params.camera.pitch;
+    world_render.camera_distance = params.camera.distance;
+    world_render.camera_pitch_min = params.camera.pitch_min;
+    world_render.camera_pitch_max = params.camera.pitch_max;
+    world_render.camera_distance_min = params.camera.distance_min;
+    world_render.camera_distance_max = params.camera.distance_max;
+    world_render.camera_fov_y = params.camera.fov_y_radians;
+    world_render.world_paused = params.world_paused;
+    world_render.debug_view_mode = params.debug_view_mode;
+    world_render.elapsed_time_seconds = 0.0;
+    world_render.render_mesh_overlay = params.render_mesh_overlay;
+    world_render.agents.clear();
+    world_render.model_proxies.clear();
 }
 
 fn apply_input_bindings(data: &mut EngineData, config: &SdfInputBindingsConfig) -> usize {

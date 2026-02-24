@@ -103,6 +103,19 @@ pub struct UiDrawList {
 }
 
 #[derive(Debug, Clone)]
+pub struct UiRenderShaderConfig {
+    pub rect_shader_asset_id: String,
+}
+
+impl Default for UiRenderShaderConfig {
+    fn default() -> Self {
+        Self {
+            rect_shader_asset_id: "ui_rect".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum UiBatchCmd {
     Rect {
         x: f32,

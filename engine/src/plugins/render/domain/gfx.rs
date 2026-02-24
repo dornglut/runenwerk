@@ -1,6 +1,6 @@
 use super::{
-    RenderGraphRegistryResource, RenderPassExecutorRegistryResource, Renderer,
-    RendererFrameTimings, ShaderRegistryResource, WgpuCtx, WorldRenderFrame,
+    RenderFrameData, RenderGraphRegistryResource, RenderPassExecutorRegistryResource, Renderer,
+    RendererFrameTimings, ShaderHandle, ShaderRegistryResource, WgpuCtx,
 };
 use crate::plugins::ui::domain::UiDrawList;
 use anyhow::Result;
@@ -57,11 +57,12 @@ impl Gfx {
 
     pub fn render(
         &mut self,
-        world_frame: &WorldRenderFrame,
+        world_frame: &RenderFrameData,
         draw_list: &UiDrawList,
         shader_registry: &mut ShaderRegistryResource,
         render_graph_registry: &RenderGraphRegistryResource,
         render_executor_registry: &RenderPassExecutorRegistryResource,
+        ui_rect_shader: Option<ShaderHandle>,
     ) -> Result<GfxFrameTimings, SurfaceError> {
         let mut timings = GfxFrameTimings::default();
         let acquire_start = Instant::now();
@@ -74,6 +75,7 @@ impl Gfx {
             world_frame,
             draw_list,
             shader_registry,
+            ui_rect_shader,
             self.ctx.surface_config.format,
             self.ctx.surface_config.width as f32,
             self.ctx.surface_config.height as f32,
