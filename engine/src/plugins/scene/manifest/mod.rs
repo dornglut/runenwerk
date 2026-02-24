@@ -28,24 +28,6 @@ impl Default for FramePassKindDescriptor {
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum FramePassSlotDescriptor {
-    WorldCompute,
-    WorldCompose,
-    UiComposite,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum FramePipelineDescriptor {
-    WorldComputeBasic,
-    WorldComputeHighContrast,
-    WorldComputeSdf3d,
-    WorldComposeFullscreen,
-    UiCompositeSdf,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
 pub enum FrameResourceDescriptor {
     SurfaceColor,
     WorldColor,
@@ -60,8 +42,7 @@ pub enum FrameResourceDescriptor {
 pub struct FramePassDescriptor {
     pub name: String,
     pub kind: FramePassKindDescriptor,
-    pub slot: Option<FramePassSlotDescriptor>,
-    pub pipeline: Option<FramePipelineDescriptor>,
+    pub pipeline: Option<String>,
     pub reads: Vec<FrameResourceDescriptor>,
     pub writes: Vec<FrameResourceDescriptor>,
     pub depends_on: Vec<String>,

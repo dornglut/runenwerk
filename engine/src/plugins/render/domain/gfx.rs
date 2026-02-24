@@ -1,6 +1,6 @@
 use super::{
-    PassSlot, PipelineKey, PipelineSelection, RenderGraphRegistryResource,
-    RenderPassExecutorRegistryResource, Renderer, RendererFrameTimings, WgpuCtx, WorldRenderFrame,
+    RenderGraphRegistryResource, RenderPassExecutorRegistryResource, Renderer,
+    RendererFrameTimings, WgpuCtx, WorldRenderFrame,
 };
 use crate::plugins::ui::domain::UiDrawList;
 use anyhow::Result;
@@ -33,14 +33,6 @@ impl Gfx {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.ctx.resize(width, height);
-    }
-
-    pub fn pipeline_selection(&self) -> PipelineSelection {
-        self.renderer.pipeline_selection()
-    }
-
-    pub fn set_pipeline_for_slot(&mut self, slot: PassSlot, key: PipelineKey) -> Result<()> {
-        self.renderer.set_pipeline_for_slot(slot, key)
     }
 
     pub fn poll_shader_hot_reload(&mut self) -> Vec<String> {

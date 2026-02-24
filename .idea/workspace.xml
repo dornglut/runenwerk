@@ -14,9 +14,6 @@
       <package file="$PROJECT_DIR$/engine">
         <feature name="default" enabled="true" />
       </package>
-      <package file="$PROJECT_DIR$/game">
-        <feature name="default" enabled="true" />
-      </package>
       <package file="$PROJECT_DIR$/grid">
         <feature name="default" enabled="true" />
       </package>
@@ -27,40 +24,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/engine/examples/world_renderer_legacy/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/world_renderer_legacy/chunk_mesher.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/examples/world_renderer_legacy/world_compute.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/Cargo.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/gameplay/gameplay_stub.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/models/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/models/cube.glb" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/scenes/console_ui.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/scenes/gameplay_stub.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/scenes/hub_stub.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/scenes/hud_ui.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/scenes/inventory_ui.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/ui/console.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/ui/hud.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/assets/ui/inventory.ron" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/gameplay.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/lib.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/main.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/plugins.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/apply.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/execute.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/parse.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/game_commands/spec.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_bootstrap.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_combat.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_move.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/gameplay_sense.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/render/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/render/world_extract.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/tests/game_commands_tests.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/game/src/systems/tests/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/engine.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/engine.log" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/render/frame_graph.ron" beforeDir="false" afterPath="$PROJECT_DIR$/assets/render/frame_graph.ron" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/pipeline_registry.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/render_graph_registry.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/render_graph_registry.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/manifest/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/manifest/mod.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -175,7 +145,7 @@
       <workItem from="1771852942540" duration="3423000" />
       <workItem from="1771856374727" duration="18919000" />
       <workItem from="1771933104718" duration="3937000" />
-      <workItem from="1771937057504" duration="10798000" />
+      <workItem from="1771937057504" duration="11463000" />
     </task>
     <servers />
   </component>

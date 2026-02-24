@@ -1,4 +1,4 @@
-use super::{PassSlot, PipelineKey};
+use super::PipelineKey;
 use anyhow::{Result, anyhow, bail};
 use std::collections::BTreeSet;
 
@@ -173,21 +173,11 @@ pub enum RegisteredPipelineRef {
 pub struct RegisteredPipelineDescriptor {
     pub id: String,
     pub key: PipelineKey,
-    pub slot: Option<PassSlot>,
 }
 
 impl RegisteredPipelineDescriptor {
     pub fn new(id: impl Into<String>, key: PipelineKey) -> Self {
-        Self {
-            id: id.into(),
-            key,
-            slot: None,
-        }
-    }
-
-    pub fn with_slot(mut self, slot: PassSlot) -> Self {
-        self.slot = Some(slot);
-        self
+        Self { id: id.into(), key }
     }
 }
 
@@ -198,7 +188,6 @@ pub struct RegisteredPassDescriptor {
     pub reads: Vec<String>,
     pub writes: Vec<String>,
     pub depends_on: Vec<String>,
-    pub slot: Option<PassSlot>,
     pub pipeline: Option<RegisteredPipelineRef>,
     pub executor: Option<String>,
 }
@@ -219,7 +208,6 @@ impl RegisteredPassDescriptor {
             reads: Vec::new(),
             writes: Vec::new(),
             depends_on: Vec::new(),
-            slot: None,
             pipeline: None,
             executor: None,
         }
@@ -249,11 +237,6 @@ impl RegisteredPassDescriptor {
         S: Into<String>,
     {
         self.depends_on = depends_on.into_iter().map(Into::into).collect();
-        self
-    }
-
-    pub fn with_slot(mut self, slot: PassSlot) -> Self {
-        self.slot = Some(slot);
         self
     }
 
@@ -305,7 +288,6 @@ pub enum RenderPassKind {
 pub struct RenderPipelineSpec {
     pub id: RenderPipelineId,
     pub key: PipelineKey,
-    pub slot: Option<PassSlot>,
     pub shader_path: Option<String>,
 }
 
@@ -314,14 +296,8 @@ impl RenderPipelineSpec {
         Self {
             id: id.into(),
             key,
-            slot: infer_slot_for_pipeline_key(key),
             shader_path: None,
         }
-    }
-
-    pub fn with_slot(mut self, slot: PassSlot) -> Self {
-        self.slot = Some(slot);
-        self
     }
 
     pub fn with_shader_path(mut self, shader_path: impl Into<String>) -> Self {
@@ -337,7 +313,6 @@ pub struct RenderPassSpec {
     pub reads: Vec<RenderResourceId>,
     pub writes: Vec<RenderResourceId>,
     pub depends_on: Vec<RenderPassId>,
-    pub slot: Option<PassSlot>,
     pub pipeline: Option<RenderPipelineId>,
     pub executor: Option<RenderPassExecutorId>,
 }
@@ -358,7 +333,6 @@ impl RenderPassSpec {
             reads: Vec::new(),
             writes: Vec::new(),
             depends_on: Vec::new(),
-            slot: None,
             pipeline: None,
             executor: None,
         }
@@ -489,7 +463,6 @@ impl RenderFeatureGraphSpec {
             .map(|pipeline| RegisteredPipelineDescriptor {
                 id: pipeline.id.as_str().to_string(),
                 key: pipeline.key,
-                slot: pipeline.slot,
             })
             .collect();
 
@@ -517,7 +490,6 @@ impl RenderFeatureGraphSpec {
                     .into_iter()
                     .map(|id| id.as_str().to_string())
                     .collect(),
-                slot: pass.slot,
                 pipeline: pass
                     .pipeline
                     .map(|pipeline| RegisteredPipelineRef::Named(pipeline.as_str().to_string())),
@@ -563,27 +535,24 @@ impl RenderFeatureGraphSpecBuilder {
         id: impl Into<RenderPipelineId>,
         shader_path: impl Into<String>,
     ) -> Self {
+        let id = id.into();
         let shader_path = shader_path.into();
-        let key = infer_compute_pipeline_key(&shader_path);
-        self.pipelines.push(
-            RenderPipelineSpec::new(id, key)
-                .with_slot(PassSlot::WorldCompute)
-                .with_shader_path(shader_path),
-        );
+        self.pipelines
+            .push(
+                RenderPipelineSpec::new(id.clone(), id.as_str().to_string().into())
+                    .with_shader_path(shader_path),
+            );
         self
     }
 
     pub fn pipeline_render_builtin(
         mut self,
         id: impl Into<RenderPipelineId>,
-        builtin: impl AsRef<str>,
+        _builtin: impl AsRef<str>,
     ) -> Self {
-        match parse_render_builtin_pipeline_key(builtin.as_ref()) {
-            Ok(key) => {
-                self.pipelines.push(RenderPipelineSpec::new(id, key));
-            }
-            Err(err) => self.errors.push(err.to_string()),
-        }
+        let id = id.into();
+        self.pipelines
+            .push(RenderPipelineSpec::new(id.clone(), id.as_str().to_string().into()));
         self
     }
 
@@ -625,11 +594,6 @@ pub struct RenderPassSpecBuilder {
 impl RenderPassSpecBuilder {
     fn new(parent: RenderFeatureGraphSpecBuilder, pass: RenderPassSpec) -> Self {
         Self { parent, pass }
-    }
-
-    pub fn slot(mut self, slot: PassSlot) -> Self {
-        self.pass.slot = Some(slot);
-        self
     }
 
     pub fn pipeline(mut self, pipeline: impl Into<RenderPipelineId>) -> Self {
@@ -687,36 +651,6 @@ impl RenderPassSpecBuilder {
     pub fn finish(mut self) -> RenderFeatureGraphSpecBuilder {
         self.parent.passes.push(self.pass);
         self.parent
-    }
-}
-
-fn infer_slot_for_pipeline_key(key: PipelineKey) -> Option<PassSlot> {
-    match key {
-        PipelineKey::WorldComputeBasic
-        | PipelineKey::WorldComputeHighContrast
-        | PipelineKey::WorldComputeSdf3d => Some(PassSlot::WorldCompute),
-        PipelineKey::WorldComposeFullscreen => Some(PassSlot::WorldCompose),
-        PipelineKey::UiCompositeSdf => Some(PassSlot::UiComposite),
-    }
-}
-
-fn infer_compute_pipeline_key(shader_path: &str) -> PipelineKey {
-    let normalized = shader_path.trim().to_ascii_lowercase();
-    if normalized.contains("high_contrast") {
-        PipelineKey::WorldComputeHighContrast
-    } else if normalized.contains("basic") {
-        PipelineKey::WorldComputeBasic
-    } else {
-        PipelineKey::WorldComputeSdf3d
-    }
-}
-
-fn parse_render_builtin_pipeline_key(builtin: &str) -> Result<PipelineKey> {
-    let normalized = builtin.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        "compose.fullscreen" => Ok(PipelineKey::WorldComposeFullscreen),
-        "ui.composite" => Ok(PipelineKey::UiCompositeSdf),
-        _ => bail!("unknown render builtin pipeline '{}'", builtin.trim()),
     }
 }
 
@@ -802,14 +736,13 @@ mod tests {
         OwnerRenderGraphRegistration, RegisteredPassDescriptor, RegisteredPipelineDescriptor,
         RenderFeatureGraphSpec, RenderGraphRegistryResource,
     };
-    use crate::plugins::render::domain::PipelineKey;
 
     #[test]
     fn upsert_owner_replaces_existing_owner_registration() {
         let mut registry = RenderGraphRegistryResource::default();
         registry.upsert_owner(
             OwnerRenderGraphRegistration::new("sdf").with_pipelines(vec![
-                RegisteredPipelineDescriptor::new("sdf.compute", PipelineKey::WorldComputeSdf3d),
+                RegisteredPipelineDescriptor::new("sdf.compute", "world_compute_sdf_3d".into()),
             ]),
         );
         registry.upsert_owner(
@@ -858,8 +791,8 @@ mod tests {
     }
 
     #[test]
-    fn typed_builder_rejects_unknown_render_builtin() {
-        let err = RenderFeatureGraphSpec::builder("sdf_renderer")
+    fn typed_builder_accepts_arbitrary_render_builtin_labels() {
+        let spec = RenderFeatureGraphSpec::builder("sdf_renderer")
             .resource("surface.color")
             .pipeline_render_builtin("sdf.compose.bad", "compose.unknown")
             .render_pass("sdf.compose")
@@ -868,8 +801,8 @@ mod tests {
             .writes(["surface.color"])
             .finish()
             .build()
-            .expect_err("unknown builtin render pipeline should fail");
-        assert!(err.to_string().contains("unknown render builtin pipeline"));
+            .expect("arbitrary render builtin labels should be accepted");
+        assert_eq!(spec.pipelines.len(), 1);
     }
 
     #[test]

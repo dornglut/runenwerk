@@ -215,10 +215,10 @@ mod tests {
     fn explicit_dependencies_are_honored() {
         let mut graph = FrameGraph::new();
         let first = graph
-            .compute_pass("first", PipelineKey::WorldComputeBasic)
+            .compute_pass("first", PipelineKey::from("world_compute_basic"))
             .build();
         let second = graph
-            .render_pass("second", PipelineKey::WorldComposeFullscreen)
+            .render_pass("second", PipelineKey::from("world_compose_fullscreen"))
             .depends_on(first)
             .build();
         let order = graph.execution_order().expect("graph should sort");
@@ -229,11 +229,11 @@ mod tests {
     fn write_then_read_resource_infers_dependency() {
         let mut graph = FrameGraph::new();
         let writer = graph
-            .compute_pass("writer", PipelineKey::WorldComputeBasic)
+            .compute_pass("writer", PipelineKey::from("world_compute_basic"))
             .writes(["world_color"])
             .build();
         let reader = graph
-            .render_pass("reader", PipelineKey::WorldComposeFullscreen)
+            .render_pass("reader", PipelineKey::from("world_compose_fullscreen"))
             .reads(["world_color"])
             .build();
         let order = graph.execution_order().expect("graph should sort");
@@ -244,10 +244,10 @@ mod tests {
     fn cycle_is_reported() {
         let mut graph = FrameGraph::new();
         let a = graph
-            .compute_pass("a", PipelineKey::WorldComputeBasic)
+            .compute_pass("a", PipelineKey::from("world_compute_basic"))
             .build();
         let _b = graph
-            .render_pass("b", PipelineKey::WorldComposeFullscreen)
+            .render_pass("b", PipelineKey::from("world_compose_fullscreen"))
             .depends_on(a)
             .build();
         // Add a backwards explicit dependency to force a cycle.

@@ -1,8 +1,8 @@
+use super::PipelineKey;
 use super::frame_graph::{FrameGraph, PassHandle, PassKind};
 use super::model_manager::{
     ModelManager, ModelMaterial, ModelMesh, ModelMeshVertex, ModelTextureData,
 };
-use super::pipeline_registry::{PassSlot, PipelineKey, PipelineRegistry, PipelineSelection};
 use super::render_executor_registry::{
     BuiltinRenderPassExecutor, RenderPassEncodeContext, RenderPassExecutorRegistryResource,
     RenderPassPrepareContext,
@@ -16,8 +16,6 @@ use super::text::{FileFontProvider, TextRenderer};
 use crate::plugins::scene::manifest::{
     FramePassDescriptor as SceneFramePassDescriptor,
     FramePassKindDescriptor as SceneFramePassKindDescriptor,
-    FramePassSlotDescriptor as SceneFramePassSlotDescriptor,
-    FramePipelineDescriptor as SceneFramePipelineDescriptor,
     FrameResourceDescriptor as SceneFrameResourceDescriptor,
 };
 use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
@@ -159,6 +157,9 @@ const RESOURCE_WORLD_PARAMS: &str = "world_params";
 const RESOURCE_WORLD_AGENTS: &str = "world_agents";
 const RESOURCE_MESH_DATA: &str = "mesh_data";
 const RESOURCE_UI_DRAW_LIST: &str = "ui_draw_list";
+const PIPELINE_WORLD_COMPUTE_SDF_3D: &str = "world_compute_sdf_3d";
+const PIPELINE_WORLD_COMPOSE_FULLSCREEN: &str = "world_compose_fullscreen";
+const PIPELINE_UI_COMPOSITE_SDF: &str = "ui_composite_sdf";
 const FRAME_GRAPH_CONFIG_PATH: &str = "assets/render/frame_graph.ron";
 const FRAME_GRAPH_OVERLAY_CONFIG_PATH: &str = "assets/render/frame_graph_overlays.ron";
 const MESH_CLEAR_COLOR: Color = Color {
@@ -174,46 +175,6 @@ const MESH_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 enum FramePassKindConfig {
     Compute,
     Render,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum FramePassSlotConfig {
-    WorldCompute,
-    WorldCompose,
-    UiComposite,
-}
-
-impl FramePassSlotConfig {
-    fn as_pass_slot(self) -> PassSlot {
-        match self {
-            Self::WorldCompute => PassSlot::WorldCompute,
-            Self::WorldCompose => PassSlot::WorldCompose,
-            Self::UiComposite => PassSlot::UiComposite,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum FramePipelineConfig {
-    WorldComputeBasic,
-    WorldComputeHighContrast,
-    WorldComputeSdf3d,
-    WorldComposeFullscreen,
-    UiCompositeSdf,
-}
-
-impl FramePipelineConfig {
-    fn as_pipeline_key(self) -> PipelineKey {
-        match self {
-            Self::WorldComputeBasic => PipelineKey::WorldComputeBasic,
-            Self::WorldComputeHighContrast => PipelineKey::WorldComputeHighContrast,
-            Self::WorldComputeSdf3d => PipelineKey::WorldComputeSdf3d,
-            Self::WorldComposeFullscreen => PipelineKey::WorldComposeFullscreen,
-            Self::UiCompositeSdf => PipelineKey::UiCompositeSdf,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -245,9 +206,7 @@ struct FramePassDescriptor {
     name: String,
     kind: FramePassKindConfig,
     #[serde(default)]
-    slot: Option<FramePassSlotConfig>,
-    #[serde(default)]
-    pipeline: Option<FramePipelineConfig>,
+    pipeline: Option<String>,
     #[serde(default)]
     reads: Vec<FrameResourceConfig>,
     #[serde(default)]
@@ -322,8 +281,7 @@ fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
         FramePassDescriptor {
             name: "mesh_overlay".to_string(),
             kind: FramePassKindConfig::Render,
-            slot: None,
-            pipeline: Some(FramePipelineConfig::WorldComposeFullscreen),
+            pipeline: Some(PIPELINE_WORLD_COMPOSE_FULLSCREEN.to_string()),
             reads: vec![FrameResourceConfig::MeshData],
             writes: vec![FrameResourceConfig::SurfaceColor],
             depends_on: Vec::new(),
@@ -331,7 +289,6 @@ fn default_frame_graph_passes() -> Vec<FramePassDescriptor> {
         FramePassDescriptor {
             name: "ui_composite".to_string(),
             kind: FramePassKindConfig::Render,
-            slot: Some(FramePassSlotConfig::UiComposite),
             pipeline: None,
             reads: vec![FrameResourceConfig::UiDrawList],
             writes: vec![FrameResourceConfig::SurfaceColor],
@@ -344,7 +301,6 @@ fn ui_only_frame_graph_passes() -> Vec<FramePassDescriptor> {
     vec![FramePassDescriptor {
         name: "ui_composite".to_string(),
         kind: FramePassKindConfig::Render,
-        slot: Some(FramePassSlotConfig::UiComposite),
         pipeline: None,
         reads: vec![FrameResourceConfig::UiDrawList],
         writes: vec![FrameResourceConfig::SurfaceColor],
@@ -719,9 +675,9 @@ impl FramePassExecutor for UiCompositePassExecutor {
         encoder: &mut CommandEncoder,
         frame_view: &TextureView,
         packet: &RendererPreparedPacket,
-        pipeline: PipelineKey,
+        _pipeline: PipelineKey,
     ) {
-        renderer.encode_ui_pass(encoder, frame_view, &packet.prepared_ui, pipeline);
+        renderer.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
     }
 }
 
@@ -951,7 +907,6 @@ fn agent_instance_data(agents: &[WorldRenderAgent]) -> Vec<MeshInstanceRaw> {
 
 #[derive(Debug)]
 pub struct Renderer {
-    pipeline_registry: PipelineRegistry,
     frame_graph_config: FrameGraphConfig,
     frame_graph_overlay_config: FrameGraphOverlayConfig,
     shader_manager: ShaderManager,
@@ -1129,30 +1084,15 @@ impl Renderer {
     }
 
     fn resolve_pass_pipeline(&self, pass: &FramePassDescriptor) -> PipelineKey {
-        if let Some(explicit) = pass.pipeline {
-            let key = explicit.as_pipeline_key();
-            if let Some(slot_cfg) = pass.slot {
-                let slot = slot_cfg.as_pass_slot();
-                if !PipelineRegistry::supports(slot, key) {
-                    tracing::warn!(
-                        pass = pass.name,
-                        slot = slot.label(),
-                        pipeline = key.label(),
-                        "frame graph pass uses incompatible slot/pipeline; falling back to slot selection"
-                    );
-                    return self.pipeline_registry.key_for(slot);
-                }
-            }
-            return key;
-        }
-
-        if let Some(slot_cfg) = pass.slot {
-            return self.pipeline_registry.key_for(slot_cfg.as_pass_slot());
+        if let Some(explicit) = pass.pipeline.as_deref().map(str::trim)
+            && !explicit.is_empty()
+        {
+            return PipelineKey::from(explicit.to_string());
         }
 
         match pass.kind {
-            FramePassKindConfig::Compute => self.pipeline_registry.key_for(PassSlot::WorldCompute),
-            FramePassKindConfig::Render => PipelineKey::WorldComposeFullscreen,
+            FramePassKindConfig::Compute => PipelineKey::from(PIPELINE_WORLD_COMPUTE_SDF_3D),
+            FramePassKindConfig::Render => PipelineKey::from(PIPELINE_WORLD_COMPOSE_FULLSCREEN),
         }
     }
 
@@ -1163,26 +1103,7 @@ impl Renderer {
                 SceneFramePassKindDescriptor::Compute => FramePassKindConfig::Compute,
                 SceneFramePassKindDescriptor::Render => FramePassKindConfig::Render,
             },
-            slot: descriptor.slot.map(|slot| match slot {
-                SceneFramePassSlotDescriptor::WorldCompute => FramePassSlotConfig::WorldCompute,
-                SceneFramePassSlotDescriptor::WorldCompose => FramePassSlotConfig::WorldCompose,
-                SceneFramePassSlotDescriptor::UiComposite => FramePassSlotConfig::UiComposite,
-            }),
-            pipeline: descriptor.pipeline.map(|pipeline| match pipeline {
-                SceneFramePipelineDescriptor::WorldComputeBasic => {
-                    FramePipelineConfig::WorldComputeBasic
-                }
-                SceneFramePipelineDescriptor::WorldComputeHighContrast => {
-                    FramePipelineConfig::WorldComputeHighContrast
-                }
-                SceneFramePipelineDescriptor::WorldComputeSdf3d => {
-                    FramePipelineConfig::WorldComputeSdf3d
-                }
-                SceneFramePipelineDescriptor::WorldComposeFullscreen => {
-                    FramePipelineConfig::WorldComposeFullscreen
-                }
-                SceneFramePipelineDescriptor::UiCompositeSdf => FramePipelineConfig::UiCompositeSdf,
-            }),
+            pipeline: descriptor.pipeline.clone(),
             reads: descriptor
                 .reads
                 .iter()
@@ -1237,8 +1158,8 @@ impl Renderer {
 
     fn default_pipeline_for_kind(&self, kind: PassKind) -> PipelineKey {
         match kind {
-            PassKind::Compute => self.pipeline_registry.key_for(PassSlot::WorldCompute),
-            PassKind::Render => PipelineKey::WorldComposeFullscreen,
+            PassKind::Compute => PipelineKey::from(PIPELINE_WORLD_COMPUTE_SDF_3D),
+            PassKind::Render => PipelineKey::from(PIPELINE_WORLD_COMPOSE_FULLSCREEN),
         }
     }
 
@@ -1247,21 +1168,17 @@ impl Renderer {
         descriptor: &FramePassDescriptor,
         pipeline: PipelineKey,
     ) -> String {
-        if let Some(slot) = descriptor.slot {
-            return match slot {
-                FramePassSlotConfig::WorldCompute => "builtin_compute".to_string(),
-                FramePassSlotConfig::WorldCompose => "builtin_compose".to_string(),
-                FramePassSlotConfig::UiComposite => "builtin_ui_composite".to_string(),
-            };
-        }
         let pass_name = descriptor.name.trim().to_ascii_lowercase();
         if pass_name == "mesh_overlay" {
             return "builtin_mesh_overlay".to_string();
         }
+        if pass_name == "ui_composite" {
+            return "builtin_ui_composite".to_string();
+        }
         match descriptor.kind {
             FramePassKindConfig::Compute => "builtin_compute".to_string(),
             FramePassKindConfig::Render => {
-                if pipeline == PipelineKey::UiCompositeSdf {
+                if pipeline.label() == PIPELINE_UI_COMPOSITE_SDF {
                     "builtin_ui_composite".to_string()
                 } else {
                     "builtin_compose".to_string()
@@ -1284,7 +1201,7 @@ impl Renderer {
                         FramePassKindConfig::Compute => PassKind::Compute,
                         FramePassKindConfig::Render => PassKind::Render,
                     },
-                    pipeline,
+                    pipeline: pipeline.clone(),
                     reads: descriptor
                         .reads
                         .iter()
@@ -1310,54 +1227,23 @@ impl Renderer {
         &self,
         pass_name: &str,
         pass_kind: PassKind,
-        slot: Option<PassSlot>,
         pipeline_ref: Option<&RegisteredPipelineRef>,
-        named_pipelines: &BTreeMap<String, (PipelineKey, Option<PassSlot>)>,
+        named_pipelines: &BTreeMap<String, PipelineKey>,
     ) -> PipelineKey {
         if let Some(pipeline_ref) = pipeline_ref {
             match pipeline_ref {
-                RegisteredPipelineRef::Builtin(key) => {
-                    if let Some(slot) = slot
-                        && !PipelineRegistry::supports(slot, *key)
-                    {
-                        tracing::warn!(
-                            pass = pass_name,
-                            slot = slot.label(),
-                            pipeline = key.label(),
-                            "registered render pass uses incompatible slot/pipeline; falling back to slot selection"
-                        );
-                        return self.pipeline_registry.key_for(slot);
-                    }
-                    return *key;
-                }
+                RegisteredPipelineRef::Builtin(key) => return key.clone(),
                 RegisteredPipelineRef::Named(name) => {
-                    if let Some((key, registered_slot)) = named_pipelines.get(name).copied() {
-                        let resolved_slot = slot.or(registered_slot);
-                        if let Some(slot) = resolved_slot
-                            && !PipelineRegistry::supports(slot, key)
-                        {
-                            tracing::warn!(
-                                pass = pass_name,
-                                slot = slot.label(),
-                                pipeline = key.label(),
-                                pipeline_id = name,
-                                "registered named pipeline is incompatible with pass slot; falling back to slot selection"
-                            );
-                            return self.pipeline_registry.key_for(slot);
-                        }
+                    if let Some(key) = named_pipelines.get(name).cloned() {
                         return key;
                     }
                     tracing::warn!(
                         pass = pass_name,
                         pipeline_id = name,
-                        "registered named pipeline id not found; falling back to slot/default selection"
+                        "registered named pipeline id not found; falling back to kind default pipeline"
                     );
                 }
             }
-        }
-
-        if let Some(slot) = slot {
-            return self.pipeline_registry.key_for(slot);
         }
 
         self.default_pipeline_for_kind(pass_kind)
@@ -1367,7 +1253,7 @@ impl Renderer {
         &self,
         render_graph_registry: &RenderGraphRegistryResource,
     ) -> Vec<ResolvedFramePassDescriptor> {
-        let mut named_pipelines = BTreeMap::<String, (PipelineKey, Option<PassSlot>)>::new();
+        let mut named_pipelines = BTreeMap::<String, PipelineKey>::new();
         for owner in render_graph_registry.owners() {
             for pipeline in &owner.pipelines {
                 let pipeline_id = pipeline.id.trim();
@@ -1379,12 +1265,12 @@ impl Renderer {
                     continue;
                 }
                 if let Some(previous) =
-                    named_pipelines.insert(pipeline_id.to_string(), (pipeline.key, pipeline.slot))
+                    named_pipelines.insert(pipeline_id.to_string(), pipeline.key.clone())
                 {
                     tracing::warn!(
                         owner = owner.owner,
                         pipeline_id,
-                        previous_pipeline = previous.0.label(),
+                        previous_pipeline = previous.label(),
                         new_pipeline = pipeline.key.label(),
                         "registered named pipeline id replaced previous registration"
                     );
@@ -1410,7 +1296,6 @@ impl Renderer {
                 let pipeline = self.resolve_registered_pipeline(
                     pass_name,
                     kind,
-                    pass.slot,
                     pass.pipeline.as_ref(),
                     &named_pipelines,
                 );
@@ -1477,8 +1362,12 @@ impl Renderer {
             }
 
             let mut builder = match descriptor.kind {
-                PassKind::Compute => graph.compute_pass(pass_name.to_string(), descriptor.pipeline),
-                PassKind::Render => graph.render_pass(pass_name.to_string(), descriptor.pipeline),
+                PassKind::Compute => {
+                    graph.compute_pass(pass_name.to_string(), descriptor.pipeline.clone())
+                }
+                PassKind::Render => {
+                    graph.render_pass(pass_name.to_string(), descriptor.pipeline.clone())
+                }
             };
             if !descriptor.reads.is_empty() {
                 builder = builder.reads(descriptor.reads.clone());
@@ -1516,7 +1405,6 @@ impl Renderer {
 
     pub fn new() -> Self {
         Self {
-            pipeline_registry: PipelineRegistry::default(),
             frame_graph_config: load_frame_graph_config(),
             frame_graph_overlay_config: load_frame_graph_overlay_config(),
             shader_manager: ShaderManager::new(),
@@ -2000,14 +1888,6 @@ impl Renderer {
         let provider = FileFontProvider;
         self.text_renderer = Some(TextRenderer::new(device, queue, format, &provider));
         self.text_renderer_format = Some(format);
-    }
-
-    pub fn pipeline_selection(&self) -> PipelineSelection {
-        self.pipeline_registry.selection()
-    }
-
-    pub fn set_pipeline_for_slot(&mut self, slot: PassSlot, key: PipelineKey) -> Result<()> {
-        self.pipeline_registry.set_pipeline(slot, key)
     }
 
     pub fn poll_shader_hot_reload(&mut self) -> Vec<String> {
@@ -2562,11 +2442,7 @@ impl Renderer {
         encoder: &mut CommandEncoder,
         frame_view: &TextureView,
         prepared: &UiPreparedDraws,
-        pipeline: PipelineKey,
     ) {
-        if pipeline != PipelineKey::UiCompositeSdf {
-            return;
-        }
         let Some(rect_pass) = self.rect_pass.as_ref() else {
             return;
         };
@@ -2791,19 +2667,17 @@ impl Renderer {
                     &mut encoder,
                     frame_view,
                     &packet,
-                    node.pipeline,
+                    node.pipeline.clone(),
                 );
                 continue;
             }
             if let Some(custom) = render_executor_registry.resolve_custom(executor_name) {
-                if node.pipeline == PipelineKey::UiCompositeSdf {
+                let uses_ui_dispatch =
+                    executor_name.eq_ignore_ascii_case("builtin_ui_composite")
+                        || node.name.eq_ignore_ascii_case("ui_composite");
+                if uses_ui_dispatch {
                     let mut dispatch_ui = |encoder: &mut CommandEncoder| -> Result<()> {
-                        self.encode_ui_pass(
-                            encoder,
-                            frame_view,
-                            &packet.prepared_ui,
-                            node.pipeline,
-                        );
+                        self.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
                         Ok(())
                     };
                     let mut ctx = RenderPassEncodeContext::new(
@@ -2813,7 +2687,7 @@ impl Renderer {
                         &packet.merged_world_frame,
                         packet.surface_format,
                         packet.surface_size,
-                        node.pipeline,
+                        node.pipeline.clone(),
                     )
                     .with_ui_dispatch(&mut dispatch_ui);
                     if let Err(err) = custom.encode(&mut ctx) {
@@ -2829,7 +2703,14 @@ impl Renderer {
                                                 builtin: BuiltinRenderPassExecutor|
                      -> Result<()> {
                         let executor = Self::builtin_pass_executor(builtin);
-                        executor.encode(self, device, encoder, frame_view, &packet, node.pipeline);
+                        executor.encode(
+                            self,
+                            device,
+                            encoder,
+                            frame_view,
+                            &packet,
+                            node.pipeline.clone(),
+                        );
                         Ok(())
                     };
                     let mut ctx = RenderPassEncodeContext::new(
@@ -2839,7 +2720,7 @@ impl Renderer {
                         &packet.merged_world_frame,
                         packet.surface_format,
                         packet.surface_size,
-                        node.pipeline,
+                        node.pipeline.clone(),
                     )
                     .with_builtin_dispatch(&mut dispatch_builtin);
                     if let Err(err) = custom.encode(&mut ctx) {
@@ -2902,8 +2783,8 @@ impl Renderer {
 #[cfg(test)]
 mod tests {
     use super::{
-        FrameGraphConfig, FrameGraphOverlayConfig, FramePassKindConfig, FramePassSlotConfig,
-        PassKind, PipelineKey, RenderGraphRegistryResource, Renderer, ResolvedFramePassDescriptor,
+        FrameGraphConfig, FrameGraphOverlayConfig, FramePassKindConfig, PassKind, PipelineKey,
+        RenderGraphRegistryResource, Renderer, ResolvedFramePassDescriptor,
     };
 
     #[test]
@@ -2924,7 +2805,6 @@ mod tests {
     (
       name: "builtin_compute",
       kind: compute,
-      slot: Some(world_compute),
       reads: [world_params, world_agents],
       writes: [world_color],
     ),
@@ -2938,10 +2818,6 @@ mod tests {
             config.passes[0].kind,
             FramePassKindConfig::Compute
         ));
-        assert!(matches!(
-            config.passes[0].slot,
-            Some(FramePassSlotConfig::WorldCompute)
-        ));
     }
 
     #[test]
@@ -2951,7 +2827,7 @@ mod tests {
             ResolvedFramePassDescriptor {
                 name: "".to_string(),
                 kind: PassKind::Render,
-                pipeline: PipelineKey::WorldComposeFullscreen,
+                pipeline: PipelineKey::from("world_compose_fullscreen"),
                 reads: Vec::new(),
                 writes: Vec::new(),
                 depends_on: Vec::new(),
@@ -2960,7 +2836,7 @@ mod tests {
             ResolvedFramePassDescriptor {
                 name: "builtin_compute".to_string(),
                 kind: PassKind::Compute,
-                pipeline: PipelineKey::WorldComputeBasic,
+                pipeline: PipelineKey::from("world_compute_basic"),
                 reads: vec!["world_params".to_string()],
                 writes: vec!["world_color".to_string()],
                 depends_on: Vec::new(),
@@ -2969,7 +2845,7 @@ mod tests {
             ResolvedFramePassDescriptor {
                 name: "builtin_compute".to_string(),
                 kind: PassKind::Compute,
-                pipeline: PipelineKey::WorldComputeHighContrast,
+                pipeline: PipelineKey::from("world_compute_high_contrast"),
                 reads: vec!["world_params".to_string()],
                 writes: vec!["world_color".to_string()],
                 depends_on: Vec::new(),
@@ -2978,7 +2854,7 @@ mod tests {
             ResolvedFramePassDescriptor {
                 name: "builtin_compose".to_string(),
                 kind: PassKind::Render,
-                pipeline: PipelineKey::WorldComposeFullscreen,
+                pipeline: PipelineKey::from("world_compose_fullscreen"),
                 reads: vec!["world_color".to_string()],
                 writes: vec!["surface_color".to_string()],
                 depends_on: vec!["missing_pass".to_string()],
@@ -3027,7 +2903,6 @@ mod tests {
         (
           name: "ui_composite_extra",
           kind: render,
-          slot: Some(ui_composite),
           reads: [ui_draw_list],
           writes: [surface_color],
           depends_on: ["ui_composite"],

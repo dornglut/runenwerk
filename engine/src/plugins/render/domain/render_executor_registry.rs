@@ -151,8 +151,8 @@ impl<'a> RenderPassEncodeContext<'a> {
         self.surface_size
     }
 
-    pub fn pipeline(&self) -> PipelineKey {
-        self.pipeline
+    pub fn pipeline(&self) -> &PipelineKey {
+        &self.pipeline
     }
 
     pub fn run_builtin(&mut self, builtin: BuiltinRenderPassExecutor) -> Result<()> {
