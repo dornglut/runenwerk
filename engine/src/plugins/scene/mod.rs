@@ -3,8 +3,8 @@ pub mod manifest;
 mod template_flow;
 
 use self::domain::{
-    GAMEPLAY_CONFIG_PATH, QuestState, RenderFrameData, SceneCommand, SceneId, SceneLayer,
-    SceneLifecycleEvent, SceneLifecyclePhase, WorldToOverlayMessage, gameplay_config_modified,
+    GAMEPLAY_CONFIG_PATH, QuestState, SceneCommand, SceneId, SceneLayer, SceneLifecycleEvent,
+    SceneLifecyclePhase, WorldToOverlayMessage, gameplay_config_modified,
     load_gameplay_config_with_modified_and_error,
 };
 use self::template_flow::{
@@ -60,7 +60,6 @@ impl EnginePlugin for ScenePlugin {
     }
 
     fn setup(&self, data: &mut EngineData) -> Result<()> {
-        data.register_render_frame_resource::<RenderFrameData>();
         setup_template_flow(data)
     }
 }

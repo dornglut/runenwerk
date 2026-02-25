@@ -18,7 +18,7 @@ impl EnginePlugin for DebugMetricsPlugin {
             debug_metrics_overlay_system,
             &["overlay_ui_render_extract"],
         );
-        builder.add_edge("debug_metrics_overlay", "frame_render_submit");
+        builder.add_edge("debug_metrics_overlay", "frame_render_prepare");
         Ok(())
     }
 

@@ -25,23 +25,19 @@
   <component name="ChangeListManager">
     <list default="true" id="e8281c93-8d3d-48ac-97b3-11ac3e995c66" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PROJECT_GUIDELINES.md" beforeDir="false" afterPath="$PROJECT_DIR$/PROJECT_GUIDELINES.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/index.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/index.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/examples/sdf_renderer/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/examples/sdf_renderer/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/debug_metrics/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/debug_metrics/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/grid/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/grid/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/grid/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/grid/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/gfx.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/model_manager.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/render_executor_registry.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/render_executor_registry.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/render_frame.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/domain/renderer.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/ecs-first-proposal.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/ecs-first-proposal.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/render/requests.md" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/render/requests.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/domain/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/domain/render_data.rs" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/plugins/scene/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/scene/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/ui/domain/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/engine/src/plugins/ui/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/plugins/ui/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/engine/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/engine/src/runtime/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requests.md" beforeDir="false" afterPath="$PROJECT_DIR$/requests.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/engine.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/engine.log" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -163,7 +159,7 @@
       <workItem from="1771856374727" duration="18919000" />
       <workItem from="1771933104718" duration="3937000" />
       <workItem from="1771937057504" duration="11463000" />
-      <workItem from="1771948547394" duration="14112000" />
+      <workItem from="1771948547394" duration="14968000" />
     </task>
     <servers />
   </component>

@@ -115,6 +115,27 @@ impl Default for UiRenderShaderConfig {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct UiWorldHudStats {
+    pub visible: bool,
+    pub player_x: f32,
+    pub player_y: f32,
+    pub enemies_alive: usize,
+    pub enemy_kills: u32,
+}
+
+impl Default for UiWorldHudStats {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            player_x: 0.0,
+            player_y: 0.0,
+            enemies_alive: 0,
+            enemy_kills: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum UiBatchCmd {
     Rect {

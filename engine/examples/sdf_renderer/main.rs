@@ -4,7 +4,7 @@ use engine::plugins::render::domain::{
     BuiltinRenderPassExecutor, RenderFeatureGraphSpec, RenderPassEncodeContext, RenderPassExecutor,
     RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
-use engine::plugins::scene::domain::{MAX_WORLD_RENDER_AGENTS, RenderFrameData};
+use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use engine::{platform::App, plugins::input::domain::action};
 use serde::Deserialize;
@@ -32,6 +32,7 @@ const SDF_COMPUTE_SHADER: &str =
     include_str!("../../../assets/shaders/sdf_compute_3d_example.wgsl");
 const SDF_COMPOSE_SHADER: &str =
     include_str!("../../../assets/shaders/world_compose_fullscreen.wgsl");
+const SDF_MAX_AGENTS: usize = 512;
 const SDF_MAX_MODELS: usize = 1;
 
 static SDF_CONTROLS: OnceLock<SdfControlsConfig> = OnceLock::new();
@@ -45,6 +46,54 @@ fn main() -> Result<()> {
 
 struct SdfRendererExamplePlugin;
 
+#[derive(Debug, Clone)]
+struct SdfWorldAgent {
+    x: f32,
+    y: f32,
+    radius: f32,
+    health_ratio: f32,
+    team: u32,
+}
+
+#[derive(Debug, Clone)]
+struct SdfWorldState {
+    world_bounds: [f32; 4],
+    world_paused: bool,
+    camera_yaw: f32,
+    camera_pitch: f32,
+    camera_distance: f32,
+    camera_pitch_min: f32,
+    camera_pitch_max: f32,
+    camera_distance_min: f32,
+    camera_distance_max: f32,
+    camera_target: [f32; 3],
+    camera_fov_y: f32,
+    debug_view_mode: u32,
+    elapsed_time_seconds: f32,
+    agents: Vec<SdfWorldAgent>,
+}
+
+impl Default for SdfWorldState {
+    fn default() -> Self {
+        Self {
+            world_bounds: [-18.0, -18.0, 18.0, 18.0],
+            world_paused: false,
+            camera_yaw: std::f32::consts::PI,
+            camera_pitch: 0.58,
+            camera_distance: 14.0,
+            camera_pitch_min: -1.10,
+            camera_pitch_max: 1.10,
+            camera_distance_min: 2.0,
+            camera_distance_max: 80.0,
+            camera_target: [0.0, 1.8, 0.0],
+            camera_fov_y: 55.0f32.to_radians(),
+            debug_view_mode: 0,
+            elapsed_time_seconds: 0.0,
+            agents: Vec::new(),
+        }
+    }
+}
+
 impl EnginePlugin for SdfRendererExamplePlugin {
     fn name(&self) -> &'static str {
         "sdf_renderer_example"
@@ -56,13 +105,31 @@ impl EnginePlugin for SdfRendererExamplePlugin {
             sdf_renderer_example_update_system,
             &["world_scene_update"],
         );
-        builder.add_edge("sdf_renderer_example_update", "frame_render_submit");
+        builder.add_edge("sdf_renderer_example_update", "frame_render_prepare");
         Ok(())
     }
 
     fn setup(&self, data: &mut EngineData) -> Result<()> {
+        if data
+            .render_resources
+            .get_resource::<SdfWorldState>()
+            .is_none()
+        {
+            data.render_resources
+                .insert_resource(SdfWorldState::default());
+        }
+        data.register_render_frame_resource::<SdfWorldState>();
+        if data
+            .render_resources
+            .get_resource::<UiWorldHudStats>()
+            .is_none()
+        {
+            data.render_resources
+                .insert_resource(UiWorldHudStats::default());
+        }
+
         let params_config = load_config_with_default::<SdfParamsConfig>(PARAMS_CONFIG_FILE);
-        apply_sdf_params(data, &params_config);
+        apply_sdf_params(data, &params_config)?;
         let _ = SDF_CONTROLS.set(params_config.controls);
 
         let input_bindings =
@@ -116,58 +183,51 @@ impl EnginePlugin for SdfRendererExamplePlugin {
 
 fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
     {
-        let world_render = data.world_render_mut();
-        world_render.render_world = false;
-        world_render.agents.clear();
+        let state = sdf_world_state_mut(data)?;
+        state.agents.clear();
     }
     let controls = SDF_CONTROLS.get().copied().unwrap_or_default();
 
     if data.input.toggle_pause_menu {
-        let next = !data.world_render().world_paused;
-        data.world_render_mut().world_paused = next;
+        let next = !sdf_world_state(data)?.world_paused;
+        sdf_world_state_mut(data)?.world_paused = next;
     }
 
-    if !data.world_render().world_paused {
-        data.world_render_mut().elapsed_time_seconds += data.time.delta_seconds.max(0.0);
+    if !sdf_world_state(data)?.world_paused {
+        sdf_world_state_mut(data)?.elapsed_time_seconds += data.time.delta_seconds.max(0.0);
     }
 
     if data.input.left_mouse_down() {
         let yaw_delta = data.input.mouse_delta.0 * controls.mouse_rotate_sensitivity;
         let pitch_delta = data.input.mouse_delta.1 * controls.mouse_rotate_sensitivity;
-        let world_render = data.world_render_mut();
-        world_render.camera_yaw -= yaw_delta;
-        world_render.camera_pitch -= pitch_delta;
+        let state = sdf_world_state_mut(data)?;
+        state.camera_yaw -= yaw_delta;
+        state.camera_pitch -= pitch_delta;
     }
 
     if data.input.scroll_delta.abs() > f32::EPSILON {
         let zoom_delta = data.input.scroll_delta * controls.scroll_zoom_sensitivity;
-        data.world_render_mut().camera_distance -= zoom_delta;
+        sdf_world_state_mut(data)?.camera_distance -= zoom_delta;
     }
 
     let (min_pitch, max_pitch, min_distance, max_distance) = {
-        let world_render = data.world_render();
-        let min_pitch = world_render
-            .camera_pitch_min
-            .min(world_render.camera_pitch_max);
-        let max_pitch = world_render
-            .camera_pitch_min
-            .max(world_render.camera_pitch_max);
-        let min_distance = world_render
+        let state = sdf_world_state(data)?;
+        let min_pitch = state.camera_pitch_min.min(state.camera_pitch_max);
+        let max_pitch = state.camera_pitch_min.max(state.camera_pitch_max);
+        let min_distance = state
             .camera_distance_min
-            .min(world_render.camera_distance_max)
+            .min(state.camera_distance_max)
             .max(0.1);
-        let max_distance = world_render
+        let max_distance = state
             .camera_distance_min
-            .max(world_render.camera_distance_max)
+            .max(state.camera_distance_max)
             .max(min_distance);
         (min_pitch, max_pitch, min_distance, max_distance)
     };
     {
-        let world_render = data.world_render_mut();
-        world_render.camera_pitch = world_render.camera_pitch.clamp(min_pitch, max_pitch);
-        world_render.camera_distance = world_render
-            .camera_distance
-            .clamp(min_distance, max_distance);
+        let state = sdf_world_state_mut(data)?;
+        state.camera_pitch = state.camera_pitch.clamp(min_pitch, max_pitch);
+        state.camera_distance = state.camera_distance.clamp(min_distance, max_distance);
     }
 
     let mut speed = controls.base_move_speed;
@@ -179,7 +239,7 @@ fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
     }
 
     let move_dt = speed * data.time.delta_seconds;
-    let yaw = data.world_render().camera_yaw;
+    let yaw = sdf_world_state(data)?.camera_yaw;
     let forward = [yaw.sin(), yaw.cos()];
     let right = [forward[1], -forward[0]];
 
@@ -212,23 +272,45 @@ fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
     });
 
     {
-        let world_render = data.world_render_mut();
-        world_render.camera_target[0] +=
-            (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
-        world_render.camera_target[2] +=
-            (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;
-        world_render.camera_target[1] += vertical_axis * move_dt;
-        world_render.camera_target[1] = world_render.camera_target[1]
+        let state = sdf_world_state_mut(data)?;
+        state.camera_target[0] += (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
+        state.camera_target[2] += (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;
+        state.camera_target[1] += vertical_axis * move_dt;
+        state.camera_target[1] = state.camera_target[1]
             .clamp(controls.camera_target_y_min, controls.camera_target_y_max);
     }
 
     if data.input.action_pressed(ACTION_DEBUG_NEXT) {
-        let next = (data.world_render().debug_view_mode + 1) % 4;
-        data.world_render_mut().debug_view_mode = next;
+        let next = (sdf_world_state(data)?.debug_view_mode + 1) % 4;
+        sdf_world_state_mut(data)?.debug_view_mode = next;
     }
     if data.input.action_pressed(ACTION_DEBUG_PREV) {
-        let next = (data.world_render().debug_view_mode + 3) % 4;
-        data.world_render_mut().debug_view_mode = next;
+        let next = (sdf_world_state(data)?.debug_view_mode + 3) % 4;
+        sdf_world_state_mut(data)?.debug_view_mode = next;
+    }
+
+    let hud_next = {
+        let state = sdf_world_state(data)?;
+        let player = state.agents.iter().find(|agent| agent.team == 0);
+        let enemies_alive = state
+            .agents
+            .iter()
+            .filter(|agent| agent.team != 0 && agent.health_ratio > 0.0)
+            .count();
+        if let Some(player) = player {
+            UiWorldHudStats {
+                visible: true,
+                player_x: player.x,
+                player_y: player.y,
+                enemies_alive,
+                enemy_kills: data.scene.world_runtime.ctx.enemy_kills,
+            }
+        } else {
+            UiWorldHudStats::default()
+        }
+    };
+    if let Some(hud) = data.render_resources.get_resource_mut::<UiWorldHudStats>() {
+        *hud = hud_next;
     }
 
     Ok(())
@@ -663,7 +745,7 @@ fn build_sdf_gpu_pass(
     });
     let agents_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("sdf_example_agents_buffer"),
-        size: (std::mem::size_of::<SdfWorldAgentRaw>() * MAX_WORLD_RENDER_AGENTS) as u64,
+        size: (std::mem::size_of::<SdfWorldAgentRaw>() * SDF_MAX_AGENTS) as u64,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -915,9 +997,9 @@ impl RenderPassExecutor for SdfComputeExecutor {
             .ok_or_else(|| anyhow!("sdf compute pass unavailable after setup"))?;
 
         let world_frame = ctx
-            .frame_data::<RenderFrameData>()
-            .ok_or_else(|| anyhow!("missing RenderFrameData in render pass prepare context"))?;
-        let agent_count = world_frame.agents.len().min(MAX_WORLD_RENDER_AGENTS);
+            .frame_data::<SdfWorldState>()
+            .ok_or_else(|| anyhow!("missing SdfWorldState in render pass prepare context"))?;
+        let agent_count = world_frame.agents.len().min(SDF_MAX_AGENTS);
         let model_count = 0usize;
         let params = SdfWorldParamsRaw {
             screen_size: [pass.size.0 as f32, pass.size.1 as f32],
@@ -1095,26 +1177,40 @@ struct SdfRenderPassConfig {
     depends_on: Vec<String>,
 }
 
-fn apply_sdf_params(data: &mut EngineData, params: &SdfParamsConfig) {
-    let world_render = data.world_render_mut();
-    world_render.render_world = false;
-    world_render.world_scene_label = params.world_scene_label.clone();
-    world_render.overlay_scene_label = params.overlay_scene_label.clone();
-    world_render.world_bounds = params.world_bounds;
-    world_render.camera_target = params.camera.target;
-    world_render.camera_yaw = params.camera.yaw;
-    world_render.camera_pitch = params.camera.pitch;
-    world_render.camera_distance = params.camera.distance;
-    world_render.camera_pitch_min = params.camera.pitch_min;
-    world_render.camera_pitch_max = params.camera.pitch_max;
-    world_render.camera_distance_min = params.camera.distance_min;
-    world_render.camera_distance_max = params.camera.distance_max;
-    world_render.camera_fov_y = params.camera.fov_y_radians;
-    world_render.world_paused = params.world_paused;
-    world_render.debug_view_mode = params.debug_view_mode;
-    world_render.elapsed_time_seconds = 0.0;
-    world_render.render_mesh_overlay = params.render_mesh_overlay;
-    world_render.agents.clear();
+fn apply_sdf_params(data: &mut EngineData, params: &SdfParamsConfig) -> Result<()> {
+    let _ = (
+        params.world_scene_label.as_str(),
+        params.overlay_scene_label.as_str(),
+        params.render_mesh_overlay,
+    );
+    let state = sdf_world_state_mut(data)?;
+    state.world_bounds = params.world_bounds;
+    state.camera_target = params.camera.target;
+    state.camera_yaw = params.camera.yaw;
+    state.camera_pitch = params.camera.pitch;
+    state.camera_distance = params.camera.distance;
+    state.camera_pitch_min = params.camera.pitch_min;
+    state.camera_pitch_max = params.camera.pitch_max;
+    state.camera_distance_min = params.camera.distance_min;
+    state.camera_distance_max = params.camera.distance_max;
+    state.camera_fov_y = params.camera.fov_y_radians;
+    state.world_paused = params.world_paused;
+    state.debug_view_mode = params.debug_view_mode;
+    state.elapsed_time_seconds = 0.0;
+    state.agents.clear();
+    Ok(())
+}
+
+fn sdf_world_state(data: &EngineData) -> Result<&SdfWorldState> {
+    data.render_resources
+        .get_resource::<SdfWorldState>()
+        .ok_or_else(|| anyhow!("missing SdfWorldState resource"))
+}
+
+fn sdf_world_state_mut(data: &mut EngineData) -> Result<&mut SdfWorldState> {
+    data.render_resources
+        .get_resource_mut::<SdfWorldState>()
+        .ok_or_else(|| anyhow!("missing SdfWorldState resource"))
 }
 
 fn apply_input_bindings(data: &mut EngineData, config: &SdfInputBindingsConfig) -> usize {

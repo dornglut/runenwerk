@@ -3,7 +3,7 @@ use crate::plugins::render::domain::{
     Gfx, GfxFrameTimings, RenderFrameResourceBindings, RenderGraphRegistryResource,
     RenderPassExecutorRegistryResource, ShaderRegistryResource,
 };
-use crate::plugins::scene::domain::{OverlaySceneRuntime, RenderFrameData, SceneManager};
+use crate::plugins::scene::domain::{OverlaySceneRuntime, SceneManager};
 use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::initialize_console_ui;
 use anyhow::Result;
@@ -243,18 +243,6 @@ pub struct EngineData {
 }
 
 impl EngineData {
-    pub fn world_render(&self) -> &RenderFrameData {
-        self.render_resources
-            .get_resource::<RenderFrameData>()
-            .expect("world render frame resource should be present")
-    }
-
-    pub fn world_render_mut(&mut self) -> &mut RenderFrameData {
-        self.render_resources
-            .get_resource_mut::<RenderFrameData>()
-            .expect("world render frame resource should be present")
-    }
-
     pub fn register_render_frame_resource<T>(&mut self)
     where
         T: ecs::Resource + Send + Sync + 'static,
@@ -350,12 +338,9 @@ impl Engine {
         let startup = StartupState::loading();
         set_slow_node_logging_enabled(startup.is_ready());
 
-        let mut render_resources = World::new();
-        render_resources.insert_resource(RenderFrameData::default());
-
         let data = EngineData {
             gfx,
-            render_resources,
+            render_resources: World::new(),
             render_frame_bindings: RenderFrameResourceBindings::default(),
             shader_registry: ShaderRegistryResource::new(),
             render_graph_registry: RenderGraphRegistryResource::default(),

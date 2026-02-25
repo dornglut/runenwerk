@@ -8,7 +8,6 @@ mod config;
 mod lifecycle;
 mod manager;
 mod registry;
-mod render_data;
 
 pub use config::{
     GAMEPLAY_CONFIG_PATH, GameplayConfig, gameplay_config_modified, load_gameplay_config,
@@ -17,7 +16,6 @@ pub use config::{
 pub use lifecycle::{SceneLifecycleEvent, SceneLifecyclePhase};
 pub use manager::SceneManager;
 pub use registry::{SceneDescriptor, SceneRegistry};
-pub use render_data::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SceneLayer {

@@ -4,7 +4,7 @@ use crate::plugins::scene::domain::{OverlaySubmitMessage, WorldDebugPosition};
 use crate::plugins::ui::domain::{
     UiBatchCmd, UiButton, UiButtonClickEvent, UiDirty, UiDrawCmd, UiEditorNode, UiInputField,
     UiInteraction, UiNode, UiPresentationMode, UiRenderShaderConfig, UiStyle, UiText, UiTransform,
-    reload_console_template_if_changed, save_console_template_to_disk,
+    UiWorldHudStats, reload_console_template_if_changed, save_console_template_to_disk,
 };
 use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
 use anyhow::Result;
@@ -65,6 +65,14 @@ impl EnginePlugin for UiRenderPlugin {
                 .overlay_runtime
                 .world
                 .insert_resource(UiRenderShaderConfig::default());
+        }
+        if data
+            .render_resources
+            .get_resource::<UiWorldHudStats>()
+            .is_none()
+        {
+            data.render_resources
+                .insert_resource(UiWorldHudStats::default());
         }
         Ok(())
     }
@@ -130,22 +138,15 @@ fn compute_log_window_rect(
 }
 
 fn world_hud_stats(data: &EngineData) -> Option<(f32, f32, usize, u32)> {
-    let player = data
-        .world_render()
-        .agents
-        .iter()
-        .find(|agent| agent.team == 0)?;
-    let enemies = data
-        .world_render()
-        .agents
-        .iter()
-        .filter(|agent| agent.team != 0 && agent.health_ratio > 0.0)
-        .count();
+    let stats = data.render_resources.get_resource::<UiWorldHudStats>()?;
+    if !stats.visible {
+        return None;
+    }
     Some((
-        player.x,
-        player.y,
-        enemies,
-        data.scene.world_runtime.ctx.enemy_kills,
+        stats.player_x,
+        stats.player_y,
+        stats.enemies_alive,
+        stats.enemy_kills,
     ))
 }
 

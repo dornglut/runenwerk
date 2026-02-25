@@ -3,6 +3,13 @@ use anyhow::Result;
 
 pub struct GridPlugin;
 
+#[derive(Debug, Copy, Clone, Default)]
+pub struct GridRuntimeConfig {
+    pub chunk_size: f32,
+    pub chunk_load_radius: u32,
+    pub infinite_world: bool,
+}
+
 impl EnginePlugin for GridPlugin {
     fn name(&self) -> &'static str {
         "grid"
@@ -10,6 +17,7 @@ impl EnginePlugin for GridPlugin {
 
     fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
         builder.add_node_with_edges("grid_prepare", grid_prepare_system, &["world_scene_update"]);
+        builder.add_edge("grid_prepare", "frame_render_prepare");
         Ok(())
     }
 }
@@ -19,10 +27,19 @@ pub fn grid_prepare_system(data: &mut EngineData) -> anyhow::Result<()> {
         let cfg = &data.scene.world_runtime.ctx.gameplay_config;
         (cfg.chunk_size, cfg.chunk_load_radius, cfg.infinite_world)
     };
-    let world_render = data.world_render_mut();
-    world_render.chunk_size = chunk_size;
-    world_render.chunk_load_radius = chunk_load_radius;
-    world_render.infinite_world = infinite_world;
+    let next = GridRuntimeConfig {
+        chunk_size,
+        chunk_load_radius,
+        infinite_world,
+    };
+    if let Some(existing) = data
+        .render_resources
+        .get_resource_mut::<GridRuntimeConfig>()
+    {
+        *existing = next;
+    } else {
+        data.render_resources.insert_resource(next);
+    }
     Ok(())
 }
 

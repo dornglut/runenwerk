@@ -20,13 +20,13 @@ Current progress:
 - Render submit now builds `RenderFrameDataRegistry` from ECS `RenderFrameResourceBindings`; feature plugins register resource types via setup instead of hardcoded submit payload wiring.
 - Core `renderer.rs` no longer performs mesh/world preparation from `RenderFrameData`; builtin `builtin_mesh_overlay` dispatch is now no-op in core and must be provided by feature plugins.
 - Legacy model-manager wiring has been removed from the core render domain module.
-- Runtime render resource still stores `RenderFrameData` for feature compatibility, but ownership remains outside render core (`scene::domain`).
-- `WorldRenderModelProxy`/`model_proxies` were removed from scene render data and SDF example preparation.
+- Runtime `world_render()` / `world_render_mut()` compatibility helpers were removed from `EngineData`.
+- Scene-owned compatibility payload module (`scene::domain::render_data`) was removed; feature plugins now own and register their own frame resources (for example `SdfWorldState`).
+- Feature producers now wire explicitly to render prep (`grid_prepare`, `debug_metrics_overlay`, `sdf_renderer_example_update` all run before `frame_render_prepare`).
 
 Next steps:
 
-- Add a dedicated render-prep schedule stage before submit so feature extract systems can publish/update frame resources explicitly.
-- Continue migrating feature plugins off the compatibility `RenderFrameData` resource into narrower plugin-owned ECS resources.
+- Continue splitting feature-owned frame resources into narrower per-pass payloads where useful.
 - Keep render core orchestration generic while moving any remaining feature-specific convenience helpers out of shared runtime APIs.
 
 ### Typed Frame Data Providers (Render-Agnostic Core)
