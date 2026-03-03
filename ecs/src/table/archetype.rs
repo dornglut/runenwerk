@@ -101,6 +101,14 @@ impl Archetype {
             });
         }
 
+        for (component, expected) in components.iter().zip(self.key.components.iter()) {
+            if component.as_ref().type_id() != expected.type_id {
+                return Err(ArchetypeError::MissingComponent(
+                    "component order/type mismatch",
+                ));
+            }
+        }
+
         for (column, component) in self.columns.iter_mut().zip(components.into_iter()) {
             if column.push_box(component).is_err() {
                 return Err(ArchetypeError::MissingComponent("Unknown type"));

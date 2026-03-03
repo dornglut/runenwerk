@@ -1,4 +1,4 @@
-use ecs::{Archetype, ComponentRegistry, EntityAllocator};
+use ecs::{Archetype, ComponentRegistry, EntityAllocator, RowError};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
@@ -99,4 +99,100 @@ fn test_add_and_remove_row() {
     assert_eq!(vel_col.get(0), Some(&Velocity { dx: 1.5, dy: 2.0 }));
 
     assert!(archetype.validate());
+}
+
+#[test]
+fn test_row_set_replaces_existing_value_without_growing_column() {
+    let mut archetype = make_archetype();
+
+    let mut allocator = EntityAllocator::new();
+    let entity = allocator.allocate();
+
+    let mut components = HashMap::new();
+    components.insert(
+        TypeId::of::<Position>(),
+        Box::new(Position { x: 1.0, y: 2.0 }) as Box<dyn Any>,
+    );
+    components.insert(
+        TypeId::of::<Velocity>(),
+        Box::new(Velocity { dx: 0.5, dy: 1.0 }) as Box<dyn Any>,
+    );
+    archetype.add_row(entity, components);
+
+    let position_index = archetype.column_index(TypeId::of::<Position>()).unwrap();
+    archetype
+        .row(0)
+        .set(position_index, Position { x: 9.0, y: 10.0 })
+        .expect("row set should replace existing value");
+
+    assert_eq!(archetype.len(), 1);
+    assert!(archetype.validate());
+    assert_eq!(
+        archetype
+            .column::<Position>(TypeId::of::<Position>())
+            .unwrap()
+            .get(0),
+        Some(&Position { x: 9.0, y: 10.0 })
+    );
+}
+
+#[test]
+fn test_add_row_complete_type_mismatch_does_not_mutate_archetype() {
+    let mut archetype = make_archetype();
+
+    let mut allocator = EntityAllocator::new();
+    let entity = allocator.allocate();
+
+    let result = archetype.add_row_complete(
+        entity,
+        vec![
+            Box::new(Position { x: 1.0, y: 2.0 }) as Box<dyn Any>,
+            Box::new(Position { x: 3.0, y: 4.0 }) as Box<dyn Any>,
+        ],
+    );
+
+    assert!(result.is_err());
+    assert_eq!(archetype.len(), 0);
+    assert!(archetype.validate());
+    assert_eq!(
+        archetype
+            .column::<Position>(TypeId::of::<Position>())
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        archetype
+            .column::<Velocity>(TypeId::of::<Velocity>())
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn test_swap_remove_column_is_rejected_without_mutating_archetype() {
+    let mut archetype = make_archetype();
+
+    let mut allocator = EntityAllocator::new();
+    let entity = allocator.allocate();
+
+    let mut components = HashMap::new();
+    components.insert(
+        TypeId::of::<Position>(),
+        Box::new(Position { x: 1.0, y: 2.0 }) as Box<dyn Any>,
+    );
+    components.insert(
+        TypeId::of::<Velocity>(),
+        Box::new(Velocity { dx: 0.5, dy: 1.0 }) as Box<dyn Any>,
+    );
+    archetype.add_row(entity, components);
+
+    let position_index = archetype.column_index(TypeId::of::<Position>()).unwrap();
+    let result = archetype.row(0).swap_remove_column(position_index);
+
+    assert!(matches!(result, Err(RowError::UnsupportedOperation(_))));
+    assert_eq!(archetype.len(), 1);
+    assert!(archetype.validate());
+    assert_eq!(archetype.entity(0), Some(&entity));
 }

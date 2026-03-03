@@ -8,6 +8,7 @@ Contains project-level documentation and documentation indexes.
 
 - Start from `docs/index.md` for the active document map.
 - Keep docs aligned with current implemented behavior.
+- Use `docs/authoring-layer.md` when changing data-driven asset/config workflows.
 
 ## Ownership Boundaries
 

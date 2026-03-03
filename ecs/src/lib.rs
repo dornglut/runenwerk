@@ -20,7 +20,7 @@ pub use entity::{EntityAllocator, EntityHandle};
 pub use entity_builder::{EntityBuilder, WorldBuilderExt};
 pub use query::{ComponentTuple, QueryBuilder, TypedQueryIterator, WorldQueryExt};
 pub use resource::Resource;
-pub use table::{Archetype, ArchetypeKey};
+pub use table::{Archetype, ArchetypeKey, RowError};
 pub use utils::init_tracing;
 pub use world::{
     ComponentChangeKind, ComponentChangeRecord, EntityDespawnedEvent, EntitySpawnedEvent,

@@ -7,7 +7,8 @@ Provides dependency-aware scheduling and node execution ordering.
 ## Usage
 
 - Crate: `scheduler`
-- Used by runtime/plugin systems to register nodes and edges and run execution graphs.
+- Legacy DAG path: register `Node`s and dependency edges, then build a `Scheduler`.
+- Typed path: register `RegisteredSystem`s in an `ExecutionScheduler` and run them by `ScheduleLabel`.
 
 ## Ownership Boundaries
 
@@ -18,3 +19,4 @@ Provides dependency-aware scheduling and node execution ordering.
 
 - Add scheduling diagnostics and execution controls.
 - Extend ordering/validation behavior while preserving deterministic execution.
+- Use `SystemAccess` and `ExecutionPlan` to prepare for future parallel execution.

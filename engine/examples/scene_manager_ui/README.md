@@ -142,6 +142,37 @@ pub fn consume_scene_template_events_system(data: &mut EngineData) -> anyhow::Re
 }
 ```
 
+## Authoring Pipeline Direction
+
+This example should follow the shared engine authoring pipeline described in [docs/authoring-layer.md](/Users/joshua/Projekte/grotto-quest/docs/authoring-layer.md).
+
+Target split:
+
+- authored assets:
+  - `scenes/*.ron`
+  - `components/*.ron`
+- compiled artifacts:
+  - resolved scene template
+  - resolved reusable component-template set
+- live runtime state:
+  - spawned ECS entities/components
+  - scene transition hooks
+  - emitted scene-template events
+
+Reload rules for this example:
+
+- scene assets and referenced component templates form one dependency graph
+- changing a component template invalidates all scenes that reference it
+- a reload only applies when the full affected set compiles successfully
+- failed reloads keep the last-known-good scene/template generation active
+
+Diagnostics should report:
+
+- the root scene asset
+- the referenced component-template path if applicable
+- the include chain that led to the failure
+- the exact field/action that failed validation
+
 ## Run
 
 ```bash

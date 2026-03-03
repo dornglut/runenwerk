@@ -67,6 +67,33 @@ fn overflow_drop_oldest_keeps_latest_events() {
 }
 
 #[test]
+fn overflow_drop_oldest_still_notifies_on_emit_for_latest_event() {
+    let mut world = World::new();
+    world.configure_event_channel::<SceneUiEvent>(EventChannelConfig {
+        capacity: Some(1),
+        overflow: OverflowPolicy::DropOldest,
+        lifetime: EventLifetime::Manual,
+        tracing: EventTracingPolicy::Disabled,
+    });
+    world.observe_events::<SceneUiEvent>("emit_observer", ObserverTrigger::OnEmit);
+
+    world.emit_event(SceneUiEvent { action: "a" });
+    world.emit_event(SceneUiEvent { action: "b" });
+
+    assert_eq!(world.event_observer_invocations("emit_observer"), Some(2));
+    assert_eq!(
+        world.read_events::<SceneUiEvent>(),
+        &[SceneUiEvent { action: "b" }]
+    );
+
+    let notifications = world.drain_event_observer_notifications();
+    assert_eq!(notifications.len(), 2);
+    assert!(notifications.iter().all(|notification| {
+        notification.trigger == ObserverTrigger::OnEmit && notification.event_count == 1
+    }));
+}
+
+#[test]
 fn overflow_drop_newest_preserves_existing_events() {
     let mut world = World::new();
     world.configure_event_channel::<SceneUiEvent>(EventChannelConfig {

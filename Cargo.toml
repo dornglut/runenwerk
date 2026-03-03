@@ -2,6 +2,8 @@
 resolver = "3"
 members = [
   "ecs",
+  "ecs_v2",
+  "ecs_v2_macros",
   "ecs_macros",
   "scheduler",
   "engine",

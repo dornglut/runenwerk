@@ -28,6 +28,7 @@ Render plugin is moving toward a pure orchestration role so feature plugins can 
 - Schedule feature extract/publish systems to run before `frame_render_prepare` so frame resources are finalized before submit.
 - Register shader roots/assets and consume shader handles in feature plugins.
 - Add feature-owned renderer plugins/examples without editing core render orchestration.
+- Add feature-owned render authoring schemas that compile into runtime graph/executor/pipeline registrations.
 
 ## Additional Details
 
@@ -100,6 +101,12 @@ Provide a renderer authoring surface that lets features define complete pipeline
   - unresolved ids report
   - pass timings per owner/plugin
 
+Authoring-specific requirements for this tooling:
+
+- dependency-aware reload for graph assets and referenced shader inputs
+- atomic application of compiled render-graph bundles
+- source-aware diagnostics for unresolved resource/pipeline/executor/shader references
+
 ## Migration Phases
 
 1. Phase A: Add final APIs alongside legacy behavior.
@@ -113,6 +120,7 @@ Provide a renderer authoring surface that lets features define complete pipeline
 - SDF example runs entirely through plugin-owned graph + executors.
 - A second custom renderer can be added without touching core render files.
 - Missing plugin registrations fail fast with actionable diagnostics.
+- Render authoring reload never leaves mixed-generation graph state active.
 
 ## ECS-First Targets (Current Audit)
 

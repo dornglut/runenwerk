@@ -484,10 +484,12 @@ impl World {
             let events = channel.events_mut::<T>();
             let before = events.len();
             let mut dropped = false;
+            let mut accepted = false;
 
             match config.capacity {
                 None => {
                     events.push(event);
+                    accepted = true;
                 }
                 Some(capacity) => {
                     if capacity == 0 {
@@ -497,12 +499,14 @@ impl World {
                         }
                     } else if before < capacity {
                         events.push(event);
+                        accepted = true;
                     } else {
                         match config.overflow {
                             OverflowPolicy::DropOldest => {
                                 events.remove(0);
                                 events.push(event);
                                 dropped = true;
+                                accepted = true;
                             }
                             OverflowPolicy::DropNewest => {
                                 dropped = true;
@@ -529,7 +533,7 @@ impl World {
                 }
             }
 
-            (event_type_name, if dropped { 0 } else { 1 })
+            (event_type_name, usize::from(accepted))
         };
         if emitted_count > 0 {
             self.trigger_observers(

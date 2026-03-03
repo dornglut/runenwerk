@@ -61,12 +61,45 @@ Authoring API direction:
 
 - Primary: typed builder API (`RenderFeatureGraphSpec::builder(...)`).
 - Secondary: `render_graph.ron` import that converts into the same typed runtime model.
+- Load/validate/compile/apply should move into the shared engine authoring pipeline over time.
 
 `sdf.params` clarification:
 
 - `sdf.params` is a logical render resource id in the render graph.
 - Data is authored in [sdf_params.ron](/Users/joshua/Projekte/grotto-quest/engine/examples/sdf_renderer/assets/sdf_params.ron) and falls back to typed Rust defaults in [main.rs](/Users/joshua/Projekte/grotto-quest/engine/examples/sdf_renderer/main.rs).
 - Runtime parses/validates into a typed struct and writes frame data consumed by `sdf.compute`.
+
+## Authoring Pipeline Direction
+
+This example should also follow the shared authoring pipeline in [docs/authoring-layer.md](/Users/joshua/Projekte/grotto-quest/docs/authoring-layer.md).
+
+Target split:
+
+- authored assets:
+  - `sdf_params.ron`
+  - `input_bindings.ron`
+  - `render_graph.ron`
+- compiled artifacts:
+  - validated params/config structs
+  - compiled input bindings
+  - validated render graph spec
+- live runtime state:
+  - render resources
+  - input registry/resource state
+  - render graph and executor registrations
+
+Reload rules for this example:
+
+- render graph authoring must track dependencies on referenced shaders, executors, pipelines, and logical resource ids
+- reload should compute one affected bundle and only swap it in if the bundle compiles fully
+- partial success must not leave mixed-generation render graph state active
+
+Diagnostics should report:
+
+- source asset path
+- unresolved resource/pipeline/executor/shader references
+- the dependency chain that produced the failed compiled graph
+- actionable hints for fallback/default behavior when relevant
 
 ## Run
 

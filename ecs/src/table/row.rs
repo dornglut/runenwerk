@@ -9,6 +9,7 @@ pub enum RowError {
     InvalidColumnIndex { index: usize },
     TypeMismatch { index: usize },
     SwapRemoveOutOfBounds { index: usize },
+    UnsupportedOperation(&'static str),
 }
 /// Represents a single row in an archetype.
 pub struct Row<'a> {
@@ -57,7 +58,12 @@ impl<'a> Row<'a> {
                     index: column_index,
                 })?;
 
-        typed_col.push(value);
+        let slot = typed_col
+            .get_mut(self.row_index)
+            .ok_or(RowError::SwapRemoveOutOfBounds {
+                index: column_index,
+            })?;
+        *slot = value;
         Ok(())
     }
 
@@ -107,19 +113,18 @@ impl<'a> Row<'a> {
             })
     }
 
+    /// Removing a single component from an archetype row is unsupported because it would
+    /// desynchronize the component columns from the entity column. Remove the whole row instead.
     pub fn swap_remove_column(&mut self, column_index: usize) -> Result<Box<dyn Any>, RowError> {
-        let column = self
-            .columns
-            .get_mut(column_index)
-            .ok_or(RowError::InvalidColumnIndex {
+        if self.columns.get(column_index).is_none() {
+            return Err(RowError::InvalidColumnIndex {
                 index: column_index,
-            })?;
+            });
+        }
 
-        column
-            .swap_remove(self.row_index)
-            .ok_or(RowError::SwapRemoveOutOfBounds {
-                index: column_index,
-            })
+        Err(RowError::UnsupportedOperation(
+            "cannot remove a single component from an archetype row; remove the whole row instead",
+        ))
     }
 
     /// Swap-removes the entire row across all columns and the entity column.

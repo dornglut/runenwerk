@@ -26,6 +26,7 @@ gltf = "1.4.1"
 glam = "0.30.8"
 
 ecs = { path = "../ecs" }
+ecs_v2 = { path = "../ecs_v2" }
 scheduler = { path = "../scheduler" }
 grid = { path = "../grid" }
 
@@ -36,3 +37,7 @@ path = "examples/scene_manager_ui/main.rs"
 [[example]]
 name = "sdf_renderer"
 path = "examples/sdf_renderer/main.rs"
+
+[[example]]
+name = "runtime_minimal"
+path = "examples/runtime_minimal/main.rs"

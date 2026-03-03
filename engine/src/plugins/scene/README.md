@@ -19,6 +19,7 @@ The plugin manages scene stack commands and applies transition side effects.
 
 - Owns scene transition orchestration and scene lifecycle event flow.
 - Owns world scene runtime updates and overlay/world interaction state.
+- Owns applying compiled scene/template authoring outputs to runtime state.
 - Does not own render graph execution or input device event collection.
 
 ## Extension Points
@@ -26,3 +27,5 @@ The plugin manages scene stack commands and applies transition side effects.
 - Register new scene labels/aliases and transition commands.
 - Add new world-to-overlay message types and formatting paths.
 - Extend template scene flow integration hooks.
+- Add scene authoring schemas/compilers under scene-owned authoring modules.
+- Integrate dependency-aware scene/template hot reload without exposing parsing logic to runtime orchestration.

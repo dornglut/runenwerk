@@ -7,8 +7,20 @@ Hosts the runtime, plugin composition, and core engine-facing feature implementa
 ## Usage
 
 - Crate: `engine`
-- Entry surface: runtime/app APIs under `engine::runtime` and `engine::platform`.
+- Primary entry surface: `engine::App`, `engine::Plugin`, and `engine::prelude`.
+- Legacy entry surface: `engine::legacy`, `engine::runtime`, and `engine::platform`.
 - Features are organized under `engine/src/plugins/*`.
+
+### Typed Runtime
+
+The typed runtime path is now the preferred API for new code:
+
+- `engine::App`
+- `engine::Plugin`
+- schedule labels: `Startup`, `Update`, `RenderPrepare`, `RenderSubmit`
+- system params: `Query`, `Res`, `ResMut`, `Commands`
+
+See [`engine/examples/runtime_minimal/main.rs`](/Users/joshua/Projekte/grotto-quest/engine/examples/runtime_minimal/main.rs) for the smallest headless end-to-end example.
 
 ## Ownership Boundaries
 

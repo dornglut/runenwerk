@@ -482,12 +482,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "ecs_v2"
+version = "0.1.0"
+dependencies = [
+ "ecs_v2_macros",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "ecs_v2_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
  "ecs",
+ "ecs_v2",
  "glam 0.30.10",
  "gltf",
  "grid",

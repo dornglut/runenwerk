@@ -25,6 +25,7 @@
 ## Project Docs
 
 - `docs/game-design.md` - high-level game design direction.
+- `docs/authoring-layer.md` - authoring/runtime split and implementation direction for data-driven engine features.
 
 ## Plugin Docs
 
