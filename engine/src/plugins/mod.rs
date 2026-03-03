@@ -18,7 +18,18 @@ pub use time::TimePlugin;
 pub use ui::UiInputPlugin;
 pub use ui::UiRenderPlugin;
 
+use crate::plugin::Plugin;
 use crate::runtime::EnginePlugin;
+
+pub fn default_runtime_plugins() -> Vec<Box<dyn Plugin>> {
+    vec![Box::new(TimePlugin), Box::new(InputFinalizePlugin)]
+}
+
+pub fn default_runtime_plugins_with_diagnostics() -> Vec<Box<dyn Plugin>> {
+    let mut plugins = default_runtime_plugins();
+    plugins.push(Box::new(SchedulerDiagnosticsPlugin));
+    plugins
+}
 
 pub fn default_engine_plugins() -> Vec<Box<dyn EnginePlugin>> {
     vec![
@@ -42,9 +53,11 @@ pub fn default_engine_plugins_with_diagnostics() -> Vec<Box<dyn EnginePlugin>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        DebugMetricsPlugin, GridPlugin, InputFinalizePlugin, RenderPlugin, ScenePlugin, TimePlugin,
-        UiInputPlugin, UiRenderPlugin, default_engine_plugins,
+        DebugMetricsPlugin, GridPlugin, InputFinalizePlugin, RenderPlugin, ScenePlugin,
+        SchedulerDiagnosticsPlugin, TimePlugin, UiInputPlugin, UiRenderPlugin,
+        default_engine_plugins, default_runtime_plugins,
     };
+    use crate::plugin::Plugin;
     use crate::runtime::{EnginePlugin, EngineScheduleBuilder};
 
     #[test]
@@ -94,5 +107,27 @@ mod tests {
         let mut builder = EngineScheduleBuilder::new();
         plugin.configure(&mut builder)?;
         builder.build_scheduler().map(|_| ())
+    }
+
+    #[test]
+    fn default_runtime_plugins_have_stable_order() {
+        let plugins = default_runtime_plugins();
+        let names: Vec<_> = plugins.iter().map(|plugin| plugin.name()).collect();
+        assert_eq!(
+            names,
+            vec![
+                std::any::type_name::<TimePlugin>(),
+                std::any::type_name::<InputFinalizePlugin>(),
+            ]
+        );
+    }
+
+    #[test]
+    fn foundational_plugins_implement_typed_plugin() {
+        fn assert_plugin<T: Plugin>() {}
+
+        assert_plugin::<TimePlugin>();
+        assert_plugin::<InputFinalizePlugin>();
+        assert_plugin::<SchedulerDiagnosticsPlugin>();
     }
 }

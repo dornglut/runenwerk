@@ -19,3 +19,9 @@ impl Time {
         self.last_frame = now;
     }
 }
+
+impl Default for Time {
+    fn default() -> Self {
+        Self::new()
+    }
+}

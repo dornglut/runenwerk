@@ -1,7 +1,8 @@
 use crate::access::AccessConflict;
-use crate::label::{ScheduleKey, ScheduleLabel};
+use crate::label::{ScheduleKey, ScheduleLabel, SystemSetKey};
 use crate::system::RegisteredSystem;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
+use std::collections::{BTreeSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionConflict {
@@ -107,12 +108,12 @@ impl<C> ExecutionScheduler<C> {
         self.plans = labels
             .into_iter()
             .map(|label| self.build_plan(label))
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         self.dirty = false;
         Ok(())
     }
 
-    fn build_plan(&self, label: ScheduleKey) -> ExecutionPlan {
+    fn build_plan(&self, label: ScheduleKey) -> Result<ExecutionPlan> {
         let scheduled_indices: Vec<_> = self
             .systems
             .iter()
@@ -120,12 +121,62 @@ impl<C> ExecutionScheduler<C> {
             .filter_map(|(index, system)| (system.label() == label).then_some(index))
             .collect();
 
-        let stages = scheduled_indices
-            .iter()
+        let mut outgoing = vec![BTreeSet::<usize>::new(); scheduled_indices.len()];
+        let mut incoming = vec![0usize; scheduled_indices.len()];
+
+        for (source_pos, source_index) in scheduled_indices.iter().enumerate() {
+            let source = &self.systems[*source_index];
+            for (target_pos, target_index) in scheduled_indices.iter().enumerate() {
+                if source_pos == target_pos {
+                    continue;
+                }
+                let target = &self.systems[*target_index];
+
+                if depends_on_set(source.after_sets(), target.sets())
+                    && outgoing[target_pos].insert(source_pos)
+                {
+                    incoming[source_pos] = incoming[source_pos].saturating_add(1);
+                }
+
+                if depends_on_set(source.before_sets(), target.sets())
+                    && outgoing[source_pos].insert(target_pos)
+                {
+                    incoming[target_pos] = incoming[target_pos].saturating_add(1);
+                }
+            }
+        }
+
+        let mut ready = VecDeque::new();
+        for (position, indegree) in incoming.iter().enumerate() {
+            if *indegree == 0 {
+                ready.push_back(position);
+            }
+        }
+
+        let mut ordered_positions = Vec::with_capacity(scheduled_indices.len());
+        while let Some(position) = ready.pop_front() {
+            ordered_positions.push(position);
+            for dependent in outgoing[position].iter().copied() {
+                incoming[dependent] = incoming[dependent].saturating_sub(1);
+                if incoming[dependent] == 0 {
+                    ready.push_back(dependent);
+                }
+            }
+        }
+
+        if ordered_positions.len() != scheduled_indices.len() {
+            return Err(anyhow!(
+                "schedule '{}' has cyclic system ordering constraints",
+                label.name()
+            ));
+        }
+
+        let stages = ordered_positions
+            .into_iter()
             .enumerate()
-            .map(|(stage_index, system_index)| ExecutionStage {
+            .map(|(stage_index, position)| ExecutionStage {
                 index: stage_index,
-                system_indices: vec![*system_index],
+                system_indices: vec![scheduled_indices[position]],
             })
             .collect();
 
@@ -144,10 +195,16 @@ impl<C> ExecutionScheduler<C> {
             }
         }
 
-        ExecutionPlan {
+        Ok(ExecutionPlan {
             label,
             stages,
             conflicts,
-        }
+        })
     }
+}
+
+fn depends_on_set(required_sets: &[SystemSetKey], assigned_sets: &[SystemSetKey]) -> bool {
+    required_sets
+        .iter()
+        .any(|required| assigned_sets.iter().any(|assigned| assigned == required))
 }

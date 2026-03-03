@@ -7,8 +7,9 @@ Emits periodic scheduler/runtime diagnostics logs.
 ## Usage
 
 - Plugin: `SchedulerDiagnosticsPlugin`
-- Scheduler node: `scheduler_diagnostics`
-- Runs after: `frame_render_submit`
+- Typed schedule: `RenderSubmit`
+- Legacy scheduler node: `scheduler_diagnostics`
+- Runs after: render submit on both runtimes
 
 By default logs every `120` frames.
 
@@ -17,6 +18,8 @@ By default logs every `120` frames.
 - Owns periodic diagnostics emission policy.
 - Consumes runtime state for logging only.
 - Does not own scheduler execution or render submission.
+
+The typed runtime variant currently logs `Time` and `WindowState` only. Scene-specific diagnostics remain on the legacy path until scene migration happens.
 
 ## Extension Points
 

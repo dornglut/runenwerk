@@ -8,6 +8,8 @@ pub struct RegisteredSystem<C> {
     name: String,
     label: ScheduleKey,
     sets: Vec<SystemSetKey>,
+    before_sets: Vec<SystemSetKey>,
+    after_sets: Vec<SystemSetKey>,
     access: SystemAccess,
     run: RunnableSystemFn<C>,
 }
@@ -30,13 +32,46 @@ impl<C> RegisteredSystem<C> {
             name,
             label: L::key(),
             sets: Vec::new(),
+            before_sets: Vec::new(),
+            after_sets: Vec::new(),
             access,
             run: Box::new(run),
         })
     }
 
     pub fn with_set<S: SystemSet>(mut self) -> Self {
-        self.sets.push(S::key());
+        self.with_set_key(S::key());
+        self
+    }
+
+    pub fn with_set_key(&mut self, key: SystemSetKey) -> &mut Self {
+        if !self.sets.contains(&key) {
+            self.sets.push(key);
+        }
+        self
+    }
+
+    pub fn before_set<S: SystemSet>(mut self) -> Self {
+        self.before_set_key(S::key());
+        self
+    }
+
+    pub fn before_set_key(&mut self, key: SystemSetKey) -> &mut Self {
+        if !self.before_sets.contains(&key) {
+            self.before_sets.push(key);
+        }
+        self
+    }
+
+    pub fn after_set<S: SystemSet>(mut self) -> Self {
+        self.after_set_key(S::key());
+        self
+    }
+
+    pub fn after_set_key(&mut self, key: SystemSetKey) -> &mut Self {
+        if !self.after_sets.contains(&key) {
+            self.after_sets.push(key);
+        }
         self
     }
 
@@ -50,6 +85,14 @@ impl<C> RegisteredSystem<C> {
 
     pub fn sets(&self) -> &[SystemSetKey] {
         &self.sets
+    }
+
+    pub fn before_sets(&self) -> &[SystemSetKey] {
+        &self.before_sets
+    }
+
+    pub fn after_sets(&self) -> &[SystemSetKey] {
+        &self.after_sets
     }
 
     pub fn access(&self) -> &SystemAccess {

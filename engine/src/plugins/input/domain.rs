@@ -454,62 +454,89 @@ impl InputState {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
-                    match event.state {
-                        ElementState::Pressed => {
-                            let is_new_press = self.keys_down.insert(code);
-                            self.recompute_action_down_states();
-                            if is_new_press {
-                                self.apply_action_press_for_key(code);
-                            } else {
-                                self.sync_legacy_flags();
-                            }
-                        }
-                        ElementState::Released => {
-                            self.keys_down.remove(&code);
-                            self.recompute_action_down_states();
-                            self.sync_legacy_flags();
-                        }
-                    }
-                }
-
-                if let Some(text) = &event.text {
-                    for ch in text.chars() {
-                        if !ch.is_control() {
-                            self.typed_text.push(ch);
-                        }
-                    }
+                    self.handle_keyboard_input(code, event.state, event.text.as_deref());
                 }
             }
-            WindowEvent::MouseWheel { delta, .. } => match delta {
-                MouseScrollDelta::LineDelta(_, y) => self.scroll_delta += *y,
-                MouseScrollDelta::PixelDelta(p) => self.scroll_delta += p.y as f32,
-            },
+            WindowEvent::MouseWheel { delta, .. } => self.handle_mouse_wheel_delta(match delta {
+                MouseScrollDelta::LineDelta(_, y) => *y,
+                MouseScrollDelta::PixelDelta(p) => p.y as f32,
+            }),
             WindowEvent::CursorMoved { position, .. } => {
-                self.mouse_position = (position.x as f32, position.y as f32);
+                self.handle_cursor_moved(position.x as f32, position.y as f32);
             }
-            WindowEvent::MouseInput { state, button, .. } => match state {
-                ElementState::Pressed => {
-                    self.mouse_buttons_down.insert(*button);
-                    if *button == MouseButton::Left {
-                        self.left_mouse_pressed = true;
-                    }
-                }
-                ElementState::Released => {
-                    self.mouse_buttons_down.remove(button);
-                    if *button == MouseButton::Left {
-                        self.left_mouse_released = true;
-                    }
-                }
-            },
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.handle_mouse_input(*state, *button);
+            }
             _ => {}
         }
     }
 
     pub fn handle_device_event(&mut self, event: &DeviceEvent) {
         if let DeviceEvent::MouseMotion { delta } = event {
-            self.mouse_delta.0 += delta.0 as f32;
-            self.mouse_delta.1 += delta.1 as f32;
+            self.handle_mouse_motion(delta.0 as f32, delta.1 as f32);
         }
+    }
+
+    pub fn handle_keyboard_input(
+        &mut self,
+        code: KeyCode,
+        state: ElementState,
+        text: Option<&str>,
+    ) {
+        match state {
+            ElementState::Pressed => {
+                let is_new_press = self.keys_down.insert(code);
+                self.recompute_action_down_states();
+                if is_new_press {
+                    self.apply_action_press_for_key(code);
+                } else {
+                    self.sync_legacy_flags();
+                }
+            }
+            ElementState::Released => {
+                self.keys_down.remove(&code);
+                self.recompute_action_down_states();
+                self.sync_legacy_flags();
+            }
+        }
+
+        if let Some(text) = text {
+            for ch in text.chars() {
+                if !ch.is_control() {
+                    self.typed_text.push(ch);
+                }
+            }
+        }
+    }
+
+    pub fn handle_mouse_wheel_delta(&mut self, delta: f32) {
+        self.scroll_delta += delta;
+    }
+
+    pub fn handle_cursor_moved(&mut self, x: f32, y: f32) {
+        self.mouse_position = (x, y);
+    }
+
+    pub fn handle_mouse_input(&mut self, state: ElementState, button: MouseButton) {
+        match state {
+            ElementState::Pressed => {
+                self.mouse_buttons_down.insert(button);
+                if button == MouseButton::Left {
+                    self.left_mouse_pressed = true;
+                }
+            }
+            ElementState::Released => {
+                self.mouse_buttons_down.remove(&button);
+                if button == MouseButton::Left {
+                    self.left_mouse_released = true;
+                }
+            }
+        }
+    }
+
+    pub fn handle_mouse_motion(&mut self, dx: f32, dy: f32) {
+        self.mouse_delta.0 += dx;
+        self.mouse_delta.1 += dy;
     }
 
     pub fn clear_frame(&mut self) {

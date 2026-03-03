@@ -1,4 +1,5 @@
-use scheduler::ScheduleLabel;
+use crate::runtime_v2::system::IntoSystemSetKey;
+use scheduler::{ScheduleLabel, SystemSetKey};
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Startup;
@@ -33,5 +34,22 @@ pub struct RenderSubmit;
 impl ScheduleLabel for RenderSubmit {
     fn name() -> &'static str {
         "RenderSubmit"
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CoreSet {
+    Input,
+    Time,
+    FrameEnd,
+}
+
+impl IntoSystemSetKey for CoreSet {
+    fn system_set_key(&self) -> SystemSetKey {
+        match self {
+            Self::Input => SystemSetKey::of::<CoreSet>("CoreSet::Input"),
+            Self::Time => SystemSetKey::of::<CoreSet>("CoreSet::Time"),
+            Self::FrameEnd => SystemSetKey::of::<CoreSet>("CoreSet::FrameEnd"),
+        }
     }
 }

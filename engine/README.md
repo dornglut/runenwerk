@@ -16,11 +16,16 @@ Hosts the runtime, plugin composition, and core engine-facing feature implementa
 The typed runtime path is now the preferred API for new code:
 
 - `engine::App`
+- `engine::App::new()` for the windowed runtime
+- `engine::App::headless()` for deterministic tests/tools
 - `engine::Plugin`
 - schedule labels: `Startup`, `Update`, `RenderPrepare`, `RenderSubmit`
+- built-in runtime resources: `WindowState`, `Time`, `InputState`
+- ordering helpers: `in_set`, `before`, `after`
 - system params: `Query`, `Res`, `ResMut`, `Commands`
 
 See [`engine/examples/runtime_minimal/main.rs`](/Users/joshua/Projekte/grotto-quest/engine/examples/runtime_minimal/main.rs) for the smallest headless end-to-end example.
+See [`engine/examples/window_input_demo/main.rs`](/Users/joshua/Projekte/grotto-quest/engine/examples/window_input_demo/main.rs) for the primary windowed typed-runtime demo.
 
 ## Ownership Boundaries
 
