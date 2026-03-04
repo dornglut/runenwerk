@@ -1,7 +1,8 @@
 use crate::domain::{
-    CavernCameraState, CavernLayout, CavernSdfAgent, CavernSdfWorldFrame, Chest, ColliderRadius,
-    EnemyKind, ExtractionZone, Health, LocalPlayerRef, LootDrop, Pickup, Player, PlayerCompanion,
-    PlayerSpectator, Projectile, ProjectileVisualState, Transform2, is_active_player_entity,
+    CavernCameraState, CavernLayout, CavernSdfAgent, CavernSdfWorldFrame, CavernTopology, Chest,
+    ColliderRadius, EnemyKind, ExtractionZone, Health, LocalPlayerRef, LootDrop, Pickup, Player,
+    PlayerCompanion, PlayerSpectator, Projectile, ProjectileVisualState, Transform2,
+    is_active_player_entity,
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
@@ -174,7 +175,11 @@ pub(crate) fn build_sdf_world_frame_system(
     camera: Res<CavernCameraState>,
     mut frame: ResMut<CavernSdfWorldFrame>,
 ) -> Result<()> {
-    frame.rebuild_from_layout(&layout, &camera);
+    let render_layout = world
+        .resource::<CavernTopology>()
+        .map(|topology| topology.to_layout_2d())
+        .unwrap_or_else(|_| layout.clone());
+    frame.rebuild_from_layout(&render_layout, &camera);
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
         if is_active_player_entity(&world, entity) {

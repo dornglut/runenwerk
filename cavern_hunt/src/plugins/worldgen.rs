@@ -1,12 +1,12 @@
 use crate::domain::{
-    AggroState, AimTarget2, CavernCameraState, CavernLayout, CavernMetaProfile,
-    CavernObjectiveState, CavernRunConfig, CavernRunPhase, CavernRunState, Chest, ColliderRadius,
-    DashState, EliteObjective, Enemy, EnemyKind, ExtractionState, ExtractionZone, Faction, Health,
-    InventoryRunState, LocalPlayerRef, LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player,
-    PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity, PlayerSpawnProfile,
-    PlayerSpawnState, ProjectileAttack, RoomAnchor, RoomEncounterRegistry, RoomEncounterState,
-    RoomEncounterStatus, SessionSpawnPolicy, SpawnDirector, SpawnRoom, Transform2, Velocity2,
-    WeaponState,
+    AggroState, AimTarget2, CavernCameraState, CavernCollisionField, CavernGeometryGraph,
+    CavernLayout, CavernMetaProfile, CavernObjectiveState, CavernRunConfig, CavernRunPhase,
+    CavernRunState, CavernTopology, Chest, ColliderRadius, DashState, EliteObjective, Enemy,
+    EnemyKind, ExtractionState, ExtractionZone, Faction, Health, InventoryRunState, LocalPlayerRef,
+    LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerCompanion,
+    PlayerId, PlayerRosterIdentity, PlayerSpawnProfile, PlayerSpawnState, ProjectileAttack,
+    RoomAnchor, RoomEncounterRegistry, RoomEncounterState, RoomEncounterStatus, SessionSpawnPolicy,
+    SpawnDirector, SpawnRoom, Transform2, Velocity2, WeaponState,
 };
 use anyhow::Result;
 use engine::prelude::{AuthorityRole, Bundle, Entity, SimulationProfileConfig, World};
@@ -48,7 +48,13 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
         .cloned()
         .unwrap_or_else(|_| CavernRunConfig::default());
     let layout = CavernLayout::generate(config.seed, &config);
+    let topology = CavernTopology::from_layout(&layout, config.seed);
+    let geometry_graph = CavernGeometryGraph::from_topology(&topology);
+    let collision_field = CavernCollisionField::from_graph(&geometry_graph);
     world.insert_resource(layout.clone());
+    world.insert_resource(topology);
+    world.insert_resource(geometry_graph);
+    world.insert_resource(collision_field);
 
     let mut run_state = CavernRunState::default();
     run_state.seed = config.seed;

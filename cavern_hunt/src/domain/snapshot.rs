@@ -13,6 +13,7 @@ use crate::domain::resources::{
 };
 use crate::domain::worldgen::CavernLayout;
 use crate::domain::worldgen::RoomId;
+use crate::domain::{CavernCollisionField, CavernGeometryGraph, CavernTopology};
 use anyhow::Result;
 use engine::prelude::{Bundle, Entity, NetworkSessionStatus, SimulationTick, World};
 use serde::{Deserialize, Serialize};
@@ -114,6 +115,17 @@ pub struct CavernLayoutSnapshotV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CavernTopologySnapshotV1 {
+    pub topology: CavernTopology,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CavernGeometrySnapshotV1 {
+    pub revision: u64,
+    pub graph: CavernGeometryGraph,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CavernRunSnapshotV1 {
     pub run_id: u64,
     pub seed: CavernSeed,
@@ -127,6 +139,8 @@ pub struct CavernRunSnapshotV1 {
     pub extraction: ExtractionState,
     pub encounters: Vec<RoomEncounterSnapshotV1>,
     pub layout: CavernLayoutSnapshotV1,
+    pub topology: Option<CavernTopologySnapshotV1>,
+    pub geometry: Option<CavernGeometrySnapshotV1>,
     pub players: Vec<CavernPlayerSnapshotV1>,
     pub enemies: Vec<CavernEnemySnapshotV1>,
     pub projectiles: Vec<CavernProjectileSnapshotV1>,
@@ -148,6 +162,8 @@ pub struct CavernRunDeltaV1 {
     pub extraction: Option<ExtractionState>,
     pub encounters: Option<Vec<RoomEncounterSnapshotV1>>,
     pub layout: Option<CavernLayoutSnapshotV1>,
+    pub topology: Option<CavernTopologySnapshotV1>,
+    pub geometry: Option<CavernGeometrySnapshotV1>,
     pub players: Option<Vec<CavernPlayerSnapshotV1>>,
     pub enemies: Option<Vec<CavernEnemySnapshotV1>>,
     pub projectiles: Option<Vec<CavernProjectileSnapshotV1>>,
@@ -209,6 +225,14 @@ struct ExtractionSnapshotBundle {
 pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1> {
     let layout = world.resource::<CavernLayout>()?.clone();
     let run_state = world.resource::<CavernRunState>()?.clone();
+    let topology = world
+        .resource::<CavernTopology>()
+        .cloned()
+        .unwrap_or_else(|_| CavernTopology::from_layout(&layout, run_state.seed));
+    let geometry = world
+        .resource::<CavernGeometryGraph>()
+        .cloned()
+        .unwrap_or_else(|_| CavernGeometryGraph::from_topology(&topology));
     let objective = world.resource::<CavernObjectiveState>()?.clone();
     let extraction = world.resource::<ExtractionState>()?.clone();
     let encounters = world
@@ -436,6 +460,11 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
             seed: run_state.seed,
             layout,
         },
+        topology: Some(CavernTopologySnapshotV1 { topology }),
+        geometry: Some(CavernGeometrySnapshotV1 {
+            revision: geometry.revision.0,
+            graph: geometry,
+        }),
         players,
         enemies,
         projectiles,
@@ -466,6 +495,16 @@ pub fn build_cavern_run_delta(
         extraction: (base.extraction != current.extraction).then_some(current.extraction.clone()),
         encounters: (base.encounters != current.encounters).then_some(current.encounters.clone()),
         layout: (base.layout != current.layout).then_some(current.layout.clone()),
+        topology: if base.topology != current.topology {
+            current.topology.clone()
+        } else {
+            None
+        },
+        geometry: if base.geometry != current.geometry {
+            current.geometry.clone()
+        } else {
+            None
+        },
         players: (base.players != current.players).then_some(current.players.clone()),
         enemies: (base.enemies != current.enemies).then_some(current.enemies.clone()),
         projectiles: (base.projectiles != current.projectiles)
@@ -504,6 +543,8 @@ pub fn apply_cavern_run_delta(
             .clone()
             .unwrap_or_else(|| base.encounters.clone()),
         layout: delta.layout.clone().unwrap_or_else(|| base.layout.clone()),
+        topology: delta.topology.clone().or_else(|| base.topology.clone()),
+        geometry: delta.geometry.clone().or_else(|| base.geometry.clone()),
         players: delta
             .players
             .clone()
@@ -552,7 +593,28 @@ pub fn restore_cavern_run_snapshot(
         .or(previous_local_player_id);
 
     clear_cavern_run_entities(world);
-    world.insert_resource(snapshot.layout.layout.clone());
+    let layout = snapshot.layout.layout.clone();
+    world.insert_resource(layout.clone());
+    let topology = snapshot
+        .topology
+        .as_ref()
+        .map(|snapshot| snapshot.topology.clone())
+        .or_else(|| world.resource::<CavernTopology>().ok().map(|topology| topology.clone()))
+        .unwrap_or_else(|| CavernTopology::from_layout(&layout, snapshot.seed));
+    world.insert_resource(topology.clone());
+    let geometry = snapshot
+        .geometry
+        .as_ref()
+        .map(|snapshot| snapshot.graph.clone())
+        .or_else(|| {
+            world
+                .resource::<CavernGeometryGraph>()
+                .ok()
+                .map(|graph| graph.clone())
+        })
+        .unwrap_or_else(|| CavernGeometryGraph::from_topology(&topology));
+    world.insert_resource(geometry.clone());
+    world.insert_resource(CavernCollisionField::from_graph(&geometry));
     world.insert_resource(CavernRunState {
         run_id: snapshot.run_id,
         seed: snapshot.seed,

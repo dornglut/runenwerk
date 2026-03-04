@@ -1,7 +1,8 @@
 use crate::domain::{
-    AggroState, CavernLayout, CavernRunPhase, CavernRunState, ColliderRadius, EnemyCombatTuning,
-    EnemyKind, Faction, Health, MeleeAttack, ProjectileAttack, RoomAnchor, RoomEncounterRegistry,
-    RoomEncounterState, Transform2, Velocity2, WeaponState, is_active_player_entity,
+    AggroState, CavernCollisionField, CavernGeometryGraph, CavernRunPhase, CavernRunState,
+    ColliderRadius, EnemyCombatTuning, EnemyKind, Faction, Health, MeleeAttack, ProjectileAttack,
+    RoomAnchor, RoomEncounterRegistry, RoomEncounterState, Transform2, Velocity2, WeaponState,
+    is_active_player_entity,
 };
 use crate::plugins::combat::{constrained_move, spawn_projectile};
 use anyhow::Result;
@@ -36,7 +37,7 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
         return Ok(());
     }
 
-    let layout = world.resource::<CavernLayout>()?.clone();
+    let graph = world.resource::<CavernGeometryGraph>()?.clone();
     let encounter_registry = world
         .resource::<RoomEncounterRegistry>()
         .cloned()
@@ -124,8 +125,10 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
             0.9 + target.radius + radius
         };
         let next = if distance > stop_distance {
+            let mut field = world.resource_mut::<CavernCollisionField>()?;
             constrained_move(
-                &layout,
+                &mut field,
+                &graph,
                 [transform.x, transform.y],
                 [direction[0] * speed * dt, direction[1] * speed * dt],
                 radius,

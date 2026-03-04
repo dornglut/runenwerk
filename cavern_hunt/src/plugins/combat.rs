@@ -1,9 +1,9 @@
 use crate::domain::{
-    AimTarget2, CavernAimState, CavernControlState, CavernLayout, CavernRunPhase, CavernRunState,
-    CavernServerControlMap, ColliderRadius, DamageFeedbackState, DashState, EnemyKind, Faction,
-    Health, HitFlashState, LocalPlayerRef, PlayerActive, PlayerCombatTuning, PlayerCompanion,
-    PlayerId, PlayerSpectator, Projectile, ProjectileVisualState, Transform2, Velocity2,
-    WeaponState, is_active_player_entity,
+    AimTarget2, CAVERN_GAMEPLAY_HEIGHT, CavernAimState, CavernCollisionField, CavernControlState,
+    CavernGeometryGraph, CavernLayout, CavernRunPhase, CavernRunState, CavernServerControlMap,
+    ColliderRadius, DamageFeedbackState, DashState, EnemyKind, Faction, Health, HitFlashState,
+    LocalPlayerRef, PlayerActive, PlayerCombatTuning, PlayerCompanion, PlayerId, PlayerSpectator,
+    Projectile, ProjectileVisualState, Transform2, Velocity2, WeaponState, is_active_player_entity,
 };
 use crate::plugins::render_sdf;
 use anyhow::Result;
@@ -366,7 +366,7 @@ fn move_player_with_control(
         aim.y = control.aim_world[1];
     }
 
-    let layout = world.resource::<CavernLayout>()?.clone();
+    let graph = world.resource::<CavernGeometryGraph>()?.clone();
     let Some(health) = world.get::<Health>(entity).copied() else {
         return Ok(());
     };
@@ -410,12 +410,16 @@ fn move_player_with_control(
         }
     }
 
-    let next = constrained_move(
-        &layout,
-        [current.x, current.y],
-        delta,
-        movement_footprint_radius(radius),
-    );
+    let next = {
+        let mut field = world.resource_mut::<CavernCollisionField>()?;
+        constrained_move(
+            &mut field,
+            &graph,
+            [current.x, current.y],
+            delta,
+            movement_footprint_radius(radius),
+        )
+    };
     let aim = world.get::<AimTarget2>(entity).copied();
     if let Some(mut transform) = world.get_mut::<Transform2>(entity) {
         transform.x = next[0];
@@ -547,7 +551,7 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
         return Ok(());
     }
 
-    let layout = world.resource::<CavernLayout>()?.clone();
+    let graph = world.resource::<CavernGeometryGraph>()?.clone();
     let projectile_entities = world
         .query::<(Entity, &Projectile)>()
         .iter()
@@ -592,7 +596,18 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
         let current_pos = [transform.x, transform.y];
         drop(transform);
 
-        if layout.segment_hits_wall(previous_pos, current_pos, radius) {
+        let wall_hit = {
+            let mut field = world.resource_mut::<CavernCollisionField>()?;
+            field
+                .sweep_sphere(
+                    &graph,
+                    [previous_pos[0], CAVERN_GAMEPLAY_HEIGHT, previous_pos[1]],
+                    [current_pos[0], CAVERN_GAMEPLAY_HEIGHT, current_pos[1]],
+                    radius,
+                )
+                .hit
+        };
+        if wall_hit {
             despawns.push(entity);
             continue;
         }
@@ -694,56 +709,69 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
 }
 
 pub(crate) fn constrained_move(
-    layout: &CavernLayout,
+    field: &mut CavernCollisionField,
+    graph: &CavernGeometryGraph,
     current: [f32; 2],
     delta: [f32; 2],
     radius: f32,
 ) -> [f32; 2] {
     let candidate = [current[0] + delta[0], current[1] + delta[1]];
-    if layout.walkable_signed_distance(candidate) <= -radius {
+    let candidate_3 = [candidate[0], CAVERN_GAMEPLAY_HEIGHT, candidate[1]];
+    if field.distance(graph, candidate_3) <= -radius {
         return candidate;
     }
 
-    let normal = layout.walkable_normal(candidate);
-    let penetration = layout.walkable_signed_distance(candidate) + radius;
-    if (normal[0].abs() > f32::EPSILON || normal[1].abs() > f32::EPSILON) && penetration > 0.0 {
+    let normal = field.normal(graph, candidate_3);
+    let penetration = field.distance(graph, candidate_3) + radius;
+    if (normal[0].abs() > f32::EPSILON || normal[2].abs() > f32::EPSILON) && penetration > 0.0 {
         let pushed = [
             candidate[0] - normal[0] * (penetration + 0.02),
-            candidate[1] - normal[1] * (penetration + 0.02),
+            candidate[1] - normal[2] * (penetration + 0.02),
         ];
-        if layout.walkable_signed_distance(pushed) <= -radius {
+        if field.distance(graph, [pushed[0], CAVERN_GAMEPLAY_HEIGHT, pushed[1]]) <= -radius {
             return pushed;
         }
     }
 
-    let tangent = [-normal[1], normal[0]];
+    let tangent = [-normal[2], normal[0]];
     if tangent[0].abs() > f32::EPSILON || tangent[1].abs() > f32::EPSILON {
         let slide_amount = delta[0] * tangent[0] + delta[1] * tangent[1];
         let slide_candidate = [
             current[0] + tangent[0] * slide_amount,
             current[1] + tangent[1] * slide_amount,
         ];
-        let slide_penetration = layout.walkable_signed_distance(slide_candidate) + radius;
+        let slide_penetration = field.distance(
+            graph,
+            [
+                slide_candidate[0],
+                CAVERN_GAMEPLAY_HEIGHT,
+                slide_candidate[1],
+            ],
+        ) + radius;
         if slide_penetration <= 0.0 {
             return slide_candidate;
         }
 
         let slide_pushed = [
             slide_candidate[0] - normal[0] * (slide_penetration + 0.02),
-            slide_candidate[1] - normal[1] * (slide_penetration + 0.02),
+            slide_candidate[1] - normal[2] * (slide_penetration + 0.02),
         ];
-        if layout.walkable_signed_distance(slide_pushed) <= -radius {
+        if field.distance(
+            graph,
+            [slide_pushed[0], CAVERN_GAMEPLAY_HEIGHT, slide_pushed[1]],
+        ) <= -radius
+        {
             return slide_pushed;
         }
     }
 
     let x_only = [current[0] + delta[0], current[1]];
-    if layout.walkable_signed_distance(x_only) <= -radius {
+    if field.distance(graph, [x_only[0], CAVERN_GAMEPLAY_HEIGHT, x_only[1]]) <= -radius {
         return x_only;
     }
 
     let y_only = [current[0], current[1] + delta[1]];
-    if layout.walkable_signed_distance(y_only) <= -radius {
+    if field.distance(graph, [y_only[0], CAVERN_GAMEPLAY_HEIGHT, y_only[1]]) <= -radius {
         return y_only;
     }
 
@@ -813,10 +841,11 @@ fn distance_squared(a: [f32; 2], b: [f32; 2]) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{constrained_move, update_local_aim};
+    use super::{CAVERN_GAMEPLAY_HEIGHT, constrained_move, update_local_aim};
     use crate::domain::{
-        CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
-        CavernPlayerOwnershipState, CavernRunConfig, CavernRunState, CavernServerControlMap,
+        CavernAimState, CavernCameraState, CavernCollisionField, CavernControlState,
+        CavernGeometryGraph, CavernLayout, CavernMetaProfile, CavernPlayerOwnershipState,
+        CavernRunConfig, CavernRunState, CavernSeed, CavernServerControlMap, CavernTopology,
         EnemyKind, LocalPlayerRef, LootTableRegistry, PlayerActive, PlayerCompanion, SpawnDirector,
         Transform2,
     };
@@ -829,13 +858,13 @@ mod tests {
 
     #[test]
     fn constrained_move_stays_inside_layout() {
-        let layout = CavernLayout::generate(
-            crate::domain::CavernSeed::default(),
-            &CavernRunConfig::default(),
-        );
+        let layout = CavernLayout::generate(CavernSeed::default(), &CavernRunConfig::default());
+        let topology = CavernTopology::from_layout(&layout, CavernSeed::default());
+        let graph = CavernGeometryGraph::from_topology(&topology);
+        let mut field = CavernCollisionField::from_graph(&graph);
         let start = layout.room(layout.start_room).unwrap().center;
-        let next = constrained_move(&layout, start, [100.0, 100.0], 0.5);
-        assert!(layout.contains_point(next, 0.5));
+        let next = constrained_move(&mut field, &graph, start, [100.0, 100.0], 0.5);
+        assert!(field.distance(&graph, [next[0], CAVERN_GAMEPLAY_HEIGHT, next[1]]) <= -0.5);
     }
 
     #[test]

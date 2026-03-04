@@ -1,8 +1,9 @@
 use crate::domain::{
-    CavernAimState, CavernCameraState, CavernControlState, CavernHudState, CavernLayout,
-    CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState, CavernObjectiveKind,
-    CavernObjectiveState, CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig,
-    CavernRunState, CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings,
+    CavernAimState, CavernCameraState, CavernCollisionField, CavernControlState,
+    CavernGeometryGraph, CavernHudState, CavernLayout, CavernMetaPersistenceConfig,
+    CavernMetaProfile, CavernMetaRewardState, CavernObjectiveKind, CavernObjectiveState,
+    CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig, CavernRunState,
+    CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings, CavernTopology,
     EnemyCombatTuning, ExtractionState, LocalPlayerRef, LootTableRegistry, PlayerActive,
     PlayerCombatTuning, PlayerId, PlayerSpawnProfile, RoomEncounterRegistry, RoomEncounterState,
     RoomEncounterStatus, RoomRole, RunDifficultyProfile, SessionSpawnPolicy, SpawnDirector,
@@ -27,6 +28,9 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<CavernRunConfig>();
         app.init_resource::<CavernRunState>();
         app.init_resource::<CavernLayout>();
+        app.init_resource::<CavernTopology>();
+        app.init_resource::<CavernGeometryGraph>();
+        app.init_resource::<CavernCollisionField>();
         app.init_resource::<SpawnDirector>();
         app.init_resource::<LootTableRegistry>();
         app.init_resource::<CavernMetaProfile>();

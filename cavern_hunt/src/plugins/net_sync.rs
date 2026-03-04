@@ -317,7 +317,7 @@ fn server_emit_replication(world: &mut World) -> Result<()> {
         return Ok(());
     }
 
-    let snapshot = capture_cavern_run_snapshot(&world)?;
+    let snapshot = strip_network_only_geometry(capture_cavern_run_snapshot(&world)?);
     let tick = world
         .resource::<SimulationTick>()
         .copied()
@@ -372,6 +372,12 @@ fn server_emit_replication(world: &mut World) -> Result<()> {
         }));
     }
     Ok(())
+}
+
+fn strip_network_only_geometry(mut snapshot: CavernRunSnapshotV1) -> CavernRunSnapshotV1 {
+    snapshot.topology = None;
+    snapshot.geometry = None;
+    snapshot
 }
 
 fn client_apply_replication_events_system(mut world: WorldMut) -> Result<()> {
