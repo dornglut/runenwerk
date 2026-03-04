@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+cavern_hunt = { path = "../cavern_hunt" }
 engine = { path = "../engine" }
 engine_net = { path = "../engine_net" }
 engine_net_quic = { path = "../engine_net_quic" }

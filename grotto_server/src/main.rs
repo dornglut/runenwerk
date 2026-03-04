@@ -1,4 +1,5 @@
 use anyhow::Result;
+use cavern_hunt::{CavernHuntPlugin, CavernHuntServerPlugin};
 use engine::plugins::{
     NetworkRuntimeHandle, NetworkServerPlugin, PredictionPlugin, RenderPlugin, ReplicationPlugin,
     ScenePlugin, UiInputPlugin, UiRenderPlugin, default_plugins,
@@ -31,7 +32,7 @@ impl AppRunner for SignalRunner {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let mut app = App::headless();
-    app.set_title("Grotto Quest Dedicated Server");
+    app.set_title("Cavern Hunt Dedicated Server");
     app.set_simulation_profile(SimulationProfile::DedicatedAuthority);
     app.set_authority_role(AuthorityRole::Server);
     app.add_plugins(default_plugins());
@@ -44,6 +45,7 @@ async fn main() -> Result<()> {
         ReplicationPlugin,
         PredictionPlugin,
     ));
+    app.add_plugins((CavernHuntPlugin, CavernHuntServerPlugin));
 
     let protocol = ProtocolVersion::new(1, 1, 1);
     let session_config = ServerSessionConfig {

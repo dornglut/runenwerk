@@ -1,0 +1,453 @@
+use crate::domain::{
+    AimTarget2, CavernAimState, CavernLayout, CavernRunPhase, CavernRunState, ColliderRadius,
+    DashState, Faction, Health, LocalPlayerRef, Projectile, Transform2, Velocity2, WeaponState,
+};
+use crate::plugins::render_sdf;
+use anyhow::Result;
+use engine::prelude::{
+    App, Entity, FixedUpdate, InputState, Plugin, PreUpdate, Time, WindowState, World, WorldMut,
+};
+
+pub struct CavernHuntCombatPlugin;
+
+impl Plugin for CavernHuntCombatPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(PreUpdate, update_local_aim_system);
+        app.add_systems(FixedUpdate, fixed_step_combat_system);
+    }
+}
+
+fn update_local_aim_system(mut world: WorldMut) -> Result<()> {
+    update_local_aim(&mut world)
+}
+
+pub(crate) fn update_local_aim(world: &mut World) -> Result<()> {
+    let layout = world.resource::<CavernLayout>()?.clone();
+    let camera = world
+        .resource::<crate::domain::CavernCameraState>()?
+        .clone();
+    let window_size = {
+        let window = world.resource::<WindowState>()?;
+        window.clone()
+    };
+    let cursor = {
+        let input = world.resource::<InputState>()?;
+        input.mouse_position
+    };
+    let local_entity = world.resource::<LocalPlayerRef>()?.entity;
+
+    let aim_world = render_sdf::project_mouse_to_world(&camera, &window_size, &layout, cursor);
+    world.insert_resource(CavernAimState {
+        world_point: aim_world,
+    });
+
+    if let Some(entity) = local_entity {
+        if let Some(mut aim) = world.get_mut::<AimTarget2>(entity) {
+            aim.x = aim_world[0];
+            aim.y = aim_world[1];
+        }
+    }
+
+    Ok(())
+}
+
+fn fixed_step_combat_system(mut world: WorldMut) -> Result<()> {
+    let dt = world.resource::<Time>()?.delta_seconds.max(0.0);
+    if dt <= f32::EPSILON {
+        return Ok(());
+    }
+
+    tick_cooldowns(&mut world, dt);
+    move_local_player(&mut world, dt)?;
+    fire_local_player_weapon(&mut world)?;
+    step_projectiles(&mut world, dt)?;
+    Ok(())
+}
+
+fn tick_cooldowns(world: &mut World, dt: f32) {
+    let weapon_entities = world
+        .query::<(Entity, &WeaponState)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    for entity in weapon_entities {
+        if let Some(mut weapon) = world.get_mut::<WeaponState>(entity) {
+            weapon.cooldown_remaining = (weapon.cooldown_remaining - dt).max(0.0);
+        }
+    }
+
+    let dash_entities = world
+        .query::<(Entity, &DashState)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    for entity in dash_entities {
+        if let Some(mut dash) = world.get_mut::<DashState>(entity) {
+            dash.cooldown_remaining = (dash.cooldown_remaining - dt).max(0.0);
+        }
+    }
+}
+
+fn move_local_player(world: &mut World, dt: f32) -> Result<()> {
+    let phase = world.resource::<CavernRunState>()?.phase;
+    if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
+        return Ok(());
+    }
+
+    let local_entity = world.resource::<LocalPlayerRef>()?.entity;
+    let Some(entity) = local_entity else {
+        return Ok(());
+    };
+
+    let (move_input, dash_pressed) = {
+        let input = world.resource::<InputState>()?;
+        let movement = normalized_vector(
+            (input.world_move_right as i32 - input.world_move_left as i32) as f32,
+            (input.world_move_up as i32 - input.world_move_down as i32) as f32,
+        );
+        ([movement.0, movement.1], input.right_mouse_down())
+    };
+
+    let layout = world.resource::<CavernLayout>()?.clone();
+    let Some(health) = world.get::<Health>(entity).copied() else {
+        return Ok(());
+    };
+    if health.current <= 0.0 {
+        if let Some(mut velocity) = world.get_mut::<Velocity2>(entity) {
+            velocity.x = 0.0;
+            velocity.y = 0.0;
+        }
+        return Ok(());
+    }
+
+    let current = world
+        .get::<Transform2>(entity)
+        .copied()
+        .unwrap_or_else(|| Transform2::new(0.0, 0.0, 0.0));
+    let radius = world
+        .get::<ColliderRadius>(entity)
+        .copied()
+        .unwrap_or(ColliderRadius(0.45))
+        .0;
+
+    let mut delta = [move_input[0] * 5.5 * dt, move_input[1] * 5.5 * dt];
+    if dash_pressed && (move_input[0].abs() > f32::EPSILON || move_input[1].abs() > f32::EPSILON) {
+        if let Some(mut dash) = world.get_mut::<DashState>(entity) {
+            if dash.cooldown_remaining <= f32::EPSILON {
+                delta = [
+                    move_input[0] * dash.dash_distance,
+                    move_input[1] * dash.dash_distance,
+                ];
+                dash.cooldown_remaining = dash.cooldown_seconds;
+            }
+        }
+    }
+
+    let next = constrained_move(&layout, [current.x, current.y], delta, radius);
+    let aim = world.get::<AimTarget2>(entity).copied();
+    if let Some(mut transform) = world.get_mut::<Transform2>(entity) {
+        transform.x = next[0];
+        transform.y = next[1];
+        if let Some(aim) = aim {
+            let facing = [aim.x - transform.x, aim.y - transform.y];
+            if facing[0].abs() > f32::EPSILON || facing[1].abs() > f32::EPSILON {
+                transform.yaw = facing[1].atan2(facing[0]);
+            }
+        }
+    }
+    if let Some(mut velocity) = world.get_mut::<Velocity2>(entity) {
+        velocity.x = (next[0] - current.x) / dt.max(0.0001);
+        velocity.y = (next[1] - current.y) / dt.max(0.0001);
+    }
+
+    Ok(())
+}
+
+fn fire_local_player_weapon(world: &mut World) -> Result<()> {
+    let phase = world.resource::<CavernRunState>()?.phase;
+    if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
+        return Ok(());
+    }
+
+    let local_entity = world.resource::<LocalPlayerRef>()?.entity;
+    let Some(entity) = local_entity else {
+        return Ok(());
+    };
+
+    let should_fire = {
+        let input = world.resource::<InputState>()?;
+        input.left_mouse_down()
+    };
+    if !should_fire {
+        return Ok(());
+    }
+
+    let health = world
+        .get::<Health>(entity)
+        .copied()
+        .unwrap_or_else(|| Health::new(1.0));
+    if health.current <= 0.0 {
+        return Ok(());
+    }
+
+    let weapon = world
+        .get::<WeaponState>(entity)
+        .copied()
+        .unwrap_or_default();
+    if weapon.cooldown_remaining > f32::EPSILON {
+        return Ok(());
+    }
+
+    let transform = world
+        .get::<Transform2>(entity)
+        .copied()
+        .unwrap_or_else(|| Transform2::new(0.0, 0.0, 0.0));
+    let aim = world
+        .get::<AimTarget2>(entity)
+        .copied()
+        .unwrap_or(AimTarget2 {
+            x: transform.x + 1.0,
+            y: transform.y,
+        });
+    let direction = normalized_vector(aim.x - transform.x, aim.y - transform.y);
+    let origin = [
+        transform.x + direction.0 * 0.9,
+        transform.y + direction.1 * 0.9,
+    ];
+    spawn_projectile(
+        world,
+        origin,
+        [direction.0, direction.1],
+        weapon.projectile_speed,
+        weapon.damage,
+        Faction::Hunters,
+    );
+    if let Some(mut weapon) = world.get_mut::<WeaponState>(entity) {
+        weapon.cooldown_remaining = weapon.fire_interval_seconds;
+    }
+
+    Ok(())
+}
+
+fn step_projectiles(world: &mut World, dt: f32) -> Result<()> {
+    let phase = world.resource::<CavernRunState>()?.phase;
+    if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
+        return Ok(());
+    }
+
+    let layout = world.resource::<CavernLayout>()?.clone();
+    let projectile_entities = world
+        .query::<(Entity, &Projectile)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    let target_entities = world
+        .query::<(Entity, &Health)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    let mut despawns = Vec::new();
+
+    for entity in projectile_entities {
+        let Some(projectile) = world.get::<Projectile>(entity).copied() else {
+            continue;
+        };
+        let Some(velocity) = world.get::<Velocity2>(entity).copied() else {
+            despawns.push(entity);
+            continue;
+        };
+        let radius = world
+            .get::<ColliderRadius>(entity)
+            .copied()
+            .unwrap_or(ColliderRadius(0.18))
+            .0;
+        let faction = world
+            .get::<Faction>(entity)
+            .copied()
+            .unwrap_or(Faction::Neutral);
+        let Some(mut transform) = world.get_mut::<Transform2>(entity) else {
+            despawns.push(entity);
+            continue;
+        };
+
+        transform.x += velocity.x * dt;
+        transform.y += velocity.y * dt;
+        transform.yaw = velocity.y.atan2(velocity.x);
+        let current_pos = [transform.x, transform.y];
+        drop(transform);
+
+        if !layout.contains_point(current_pos, radius) {
+            despawns.push(entity);
+            continue;
+        }
+
+        if let Some(mut state) = world.get_mut::<Projectile>(entity) {
+            state.lifetime_seconds -= dt;
+            if state.lifetime_seconds <= 0.0 {
+                despawns.push(entity);
+                continue;
+            }
+        }
+
+        let mut hit_target = None;
+        for target in &target_entities {
+            if *target == entity {
+                continue;
+            }
+            let Some(target_health) = world.get::<Health>(*target).copied() else {
+                continue;
+            };
+            if target_health.current <= 0.0 {
+                continue;
+            }
+            let Some(target_faction) = world.get::<Faction>(*target).copied() else {
+                continue;
+            };
+            if target_faction == faction || target_faction == Faction::Neutral {
+                continue;
+            }
+            let Some(target_transform) = world.get::<Transform2>(*target).copied() else {
+                continue;
+            };
+            let target_radius = world
+                .get::<ColliderRadius>(*target)
+                .copied()
+                .unwrap_or(ColliderRadius(0.5))
+                .0;
+            if distance_squared(current_pos, [target_transform.x, target_transform.y])
+                <= (radius + target_radius).powi(2)
+            {
+                hit_target = Some(*target);
+                break;
+            }
+        }
+
+        if let Some(target) = hit_target {
+            if let Some(mut health) = world.get_mut::<Health>(target) {
+                health.current = (health.current - projectile.damage).max(0.0);
+            }
+            despawns.push(entity);
+        }
+    }
+
+    for entity in despawns {
+        let _ = world.despawn(entity);
+    }
+
+    Ok(())
+}
+
+pub(crate) fn constrained_move(
+    layout: &CavernLayout,
+    current: [f32; 2],
+    delta: [f32; 2],
+    radius: f32,
+) -> [f32; 2] {
+    let candidate = [current[0] + delta[0], current[1] + delta[1]];
+    if layout.contains_point(candidate, radius) {
+        return candidate;
+    }
+
+    let x_only = [current[0] + delta[0], current[1]];
+    if layout.contains_point(x_only, radius) {
+        return x_only;
+    }
+
+    let y_only = [current[0], current[1] + delta[1]];
+    if layout.contains_point(y_only, radius) {
+        return y_only;
+    }
+
+    current
+}
+
+pub(crate) fn spawn_projectile(
+    world: &mut World,
+    origin: [f32; 2],
+    direction: [f32; 2],
+    speed: f32,
+    damage: f32,
+    faction: Faction,
+) -> Entity {
+    let velocity = [direction[0] * speed, direction[1] * speed];
+    world.spawn((
+        Projectile {
+            damage,
+            lifetime_seconds: 1.4,
+        },
+        Transform2::new(origin[0], origin[1], direction[1].atan2(direction[0])),
+        Velocity2 {
+            x: velocity[0],
+            y: velocity[1],
+        },
+        ColliderRadius(0.18),
+        faction,
+    ))
+}
+
+fn normalized_vector(x: f32, y: f32) -> (f32, f32) {
+    let length = (x * x + y * y).sqrt();
+    if length <= f32::EPSILON {
+        (0.0, 0.0)
+    } else {
+        (x / length, y / length)
+    }
+}
+
+fn distance_squared(a: [f32; 2], b: [f32; 2]) -> f32 {
+    let dx = a[0] - b[0];
+    let dy = a[1] - b[1];
+    dx * dx + dy * dy
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{constrained_move, update_local_aim};
+    use crate::domain::{
+        CavernAimState, CavernCameraState, CavernLayout, CavernMetaProfile, CavernRunConfig,
+        CavernRunState, LocalPlayerRef, LootTableRegistry, SpawnDirector,
+    };
+    use crate::plugins::worldgen;
+    use engine::prelude::{InputState, WindowState, World};
+
+    #[test]
+    fn constrained_move_stays_inside_layout() {
+        let layout = CavernLayout::generate(
+            crate::domain::CavernSeed::default(),
+            &CavernRunConfig::default(),
+        );
+        let start = layout.room(layout.start_room).unwrap().center;
+        let next = constrained_move(&layout, start, [100.0, 100.0], 0.5);
+        assert!(layout.contains_point(next, 0.5));
+    }
+
+    #[test]
+    fn local_aim_updates_from_mouse_projection() {
+        let mut world = World::new();
+        world.insert_resource(CavernRunConfig::default());
+        world.insert_resource(CavernRunState::default());
+        world.insert_resource(CavernLayout::default());
+        world.insert_resource(SpawnDirector::default());
+        world.insert_resource(LootTableRegistry::default());
+        world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(LocalPlayerRef::default());
+        world.insert_resource(CavernCameraState::default());
+        world.insert_resource(CavernAimState::default());
+        world.insert_resource(InputState::default());
+        world.insert_resource(WindowState::headless("test"));
+        worldgen::initialize_run_world(&mut world, true).unwrap();
+        world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_cursor_moved(640.0, 360.0);
+
+        update_local_aim(&mut world).unwrap();
+        let aim = world.resource::<CavernAimState>().unwrap();
+        assert!(
+            world
+                .resource::<CavernLayout>()
+                .unwrap()
+                .contains_point(aim.world_point, 0.0)
+        );
+    }
+}

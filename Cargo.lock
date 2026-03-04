@@ -326,6 +326,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cavern_hunt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "ecs",
+ "engine",
+ "serde",
+ "serde_json",
+ "tracing",
+ "wgpu",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1068,6 +1082,7 @@ name = "grotto_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cavern_hunt",
  "engine",
  "engine_net",
  "engine_net_quic",
@@ -1096,6 +1111,7 @@ name = "grotto_server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cavern_hunt",
  "engine",
  "engine_net",
  "engine_net_quic",
