@@ -6,7 +6,7 @@ use crate::domain::{
     ProjectileAttack, RoomAnchor, SpawnDirector, SpawnRoom, Transform2, Velocity2, WeaponState,
 };
 use anyhow::Result;
-use engine::prelude::{Bundle, Entity, World};
+use engine::prelude::{AuthorityRole, Bundle, Entity, SimulationProfileConfig, World};
 
 #[derive(Bundle)]
 struct PlayerSpawnBundle {
@@ -49,7 +49,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     let mut run_state = CavernRunState::default();
     run_state.seed = config.seed;
     run_state.phase = CavernRunPhase::Exploring;
-    run_state.party_alive_count = config.max_players.max(1);
+    run_state.party_alive_count = if assign_local_player { 1 } else { 0 };
     world.insert_resource(run_state);
     world.insert_resource(LootTableRegistry::default());
 
@@ -64,56 +64,17 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
         .resource::<CavernMetaProfile>()
         .cloned()
         .unwrap_or_default();
-    let player_count = usize::from(config.max_players.max(1).min(4));
-    for index in 0..player_count {
-        let angle = index as f32 / player_count as f32 * std::f32::consts::TAU;
-        let offset = [angle.cos() * 1.1, angle.sin() * 1.1];
-        let entity = world.spawn(PlayerSpawnBundle {
-            player: Player,
-            player_id: PlayerId(index as u32 + 1),
-            transform: Transform2::new(
-                start_room.spawn_anchor[0] + offset[0],
-                start_room.spawn_anchor[1] + offset[1],
-                angle,
-            ),
-            velocity: Velocity2::default(),
-            health: Health::new(10.0 + meta_profile.bonus_max_health as f32),
-            faction: Faction::Hunters,
-            collider_radius: ColliderRadius(0.55),
-            aim_target: AimTarget2 {
-                x: start_room.spawn_anchor[0] + 2.0,
-                y: start_room.spawn_anchor[1],
-            },
-            dash_state: DashState {
-                cooldown_seconds: (2.5 - meta_profile.bonus_dash_efficiency as f32 * 0.15)
-                    .max(1.25),
-                ..DashState::default()
-            },
-            weapon_state: WeaponState {
-                fire_interval_seconds: if meta_profile.unlocked_weapon_mod_slot {
-                    0.32
-                } else {
-                    WeaponState::default().fire_interval_seconds
-                },
-                ..WeaponState::default()
-            },
-            inventory: InventoryRunState {
-                scrap: 0,
-                weapon_mods: Vec::new(),
-                relics: Vec::new(),
-            },
-            room_anchor: RoomAnchor {
-                room_id: start_room.id,
-            },
-        });
-        if assign_local_player && index == 0 {
-            let _ = world.insert(entity, PlayerActive);
-        }
-        if assign_local_player && index == 0 {
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+    if !matches!(authority, AuthorityRole::Server) {
+        let entity = spawn_player_entity(world, 1, 0, assign_local_player, &meta_profile);
+        if assign_local_player {
             let mut local = world
                 .resource_mut::<LocalPlayerRef>()
                 .expect("local player resource initialized");
-            local.player_id = Some(index as u32 + 1);
+            local.player_id = Some(1);
             local.entity = Some(entity);
         }
     }
@@ -185,6 +146,70 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     }
 
     Ok(())
+}
+
+pub(crate) fn spawn_player_entity(
+    world: &mut World,
+    player_id: u32,
+    spawn_index: usize,
+    active: bool,
+    meta_profile: &CavernMetaProfile,
+) -> Entity {
+    let layout = world
+        .resource::<CavernLayout>()
+        .expect("cavern layout initialized")
+        .clone();
+    let start_room = layout
+        .room(layout.start_room)
+        .expect("generated layout must contain start room");
+    let player_count = world
+        .resource::<CavernRunConfig>()
+        .map(|config| usize::from(config.max_players.max(1)))
+        .unwrap_or(1)
+        .max(spawn_index + 1);
+    let angle = spawn_index as f32 / player_count as f32 * std::f32::consts::TAU;
+    let offset = [angle.cos() * 1.1, angle.sin() * 1.1];
+    let entity = world.spawn(PlayerSpawnBundle {
+        player: Player,
+        player_id: PlayerId(player_id),
+        transform: Transform2::new(
+            start_room.spawn_anchor[0] + offset[0],
+            start_room.spawn_anchor[1] + offset[1],
+            angle,
+        ),
+        velocity: Velocity2::default(),
+        health: Health::new(10.0 + meta_profile.bonus_max_health as f32),
+        faction: Faction::Hunters,
+        collider_radius: ColliderRadius(0.55),
+        aim_target: AimTarget2 {
+            x: start_room.spawn_anchor[0] + 2.0,
+            y: start_room.spawn_anchor[1],
+        },
+        dash_state: DashState {
+            cooldown_seconds: (2.5 - meta_profile.bonus_dash_efficiency as f32 * 0.15).max(1.25),
+            ..DashState::default()
+        },
+        weapon_state: WeaponState {
+            fire_interval_seconds: if meta_profile.unlocked_weapon_mod_slot {
+                0.32
+            } else {
+                WeaponState::default().fire_interval_seconds
+            },
+            ..WeaponState::default()
+        },
+        inventory: InventoryRunState {
+            scrap: 0,
+            weapon_mods: Vec::new(),
+            relics: Vec::new(),
+        },
+        room_anchor: RoomAnchor {
+            room_id: start_room.id,
+        },
+    });
+    if active {
+        let _ = world.insert(entity, PlayerActive);
+    }
+    entity
 }
 
 fn spawn_enemy(world: &mut World, room: &crate::domain::CavernRoom, kind: EnemyKind) -> Entity {

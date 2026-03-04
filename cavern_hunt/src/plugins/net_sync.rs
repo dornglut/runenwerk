@@ -1,8 +1,7 @@
 use crate::domain::{
     CavernControlState, CavernPlayerOwnershipState, CavernPredictedFrame, CavernPredictionState,
-    CavernRunDeltaV1, CavernRunSnapshotV1, CavernServerControlMap, PlayerId,
-    apply_cavern_run_delta, build_cavern_run_delta, capture_cavern_run_snapshot,
-    restore_cavern_run_snapshot,
+    CavernRunDeltaV1, CavernRunSnapshotV1, CavernServerControlMap, apply_cavern_run_delta,
+    build_cavern_run_delta, capture_cavern_run_snapshot, restore_cavern_run_snapshot,
 };
 use anyhow::Result;
 use engine::prelude::{
@@ -165,12 +164,10 @@ fn server_capture_control_input(world: &mut World) -> Result<()> {
         return Ok(());
     }
 
-    let mut spawned_player_ids = world
-        .query::<(engine::prelude::Entity, &PlayerId)>()
-        .iter()
-        .map(|(_, player_id)| player_id.0)
-        .collect::<Vec<_>>();
-    spawned_player_ids.sort_unstable();
+    let max_players = world
+        .resource::<crate::domain::CavernRunConfig>()
+        .map(|config| config.max_players.max(1))
+        .unwrap_or(1);
 
     let mut ownership = world
         .resource::<CavernPlayerOwnershipState>()
@@ -197,8 +194,7 @@ fn server_capture_control_input(world: &mut World) -> Result<()> {
         if control_state.source_tick.0 < current_source_tick.0 {
             continue;
         }
-        if let Some(player_id) =
-            resolve_owned_player_id(&spawned_player_ids, &mut ownership, connection_id)
+        if let Some(player_id) = resolve_owned_player_id(max_players, &mut ownership, connection_id)
         {
             let should_replace = controls
                 .by_player_id
@@ -249,21 +245,22 @@ fn control_state_from_frame(frame: InputFrame) -> CavernControlState {
 }
 
 fn resolve_owned_player_id(
-    spawned_player_ids: &[u32],
+    max_players: u8,
     ownership: &mut CavernPlayerOwnershipState,
     connection_id: Option<ConnectionId>,
 ) -> Option<u32> {
-    if spawned_player_ids.is_empty() {
+    if max_players == 0 {
         ownership.by_connection_id.clear();
         return None;
     }
+    let valid_player_ids = (1..=u32::from(max_players)).collect::<std::collections::BTreeSet<_>>();
 
     ownership
         .by_connection_id
-        .retain(|_, player_id| spawned_player_ids.contains(player_id));
+        .retain(|_, player_id| valid_player_ids.contains(player_id));
 
     let Some(connection_id) = connection_id else {
-        return spawned_player_ids.first().copied();
+        return Some(1);
     };
     if let Some(existing) = ownership.by_connection_id.get(&connection_id.0).copied() {
         return Some(existing);
@@ -274,11 +271,9 @@ fn resolve_owned_player_id(
         .values()
         .copied()
         .collect::<std::collections::BTreeSet<_>>();
-    let player_id = spawned_player_ids
-        .iter()
-        .copied()
+    let player_id = (1..=u32::from(max_players))
         .find(|player_id| !assigned.contains(player_id))
-        .or_else(|| spawned_player_ids.first().copied())?;
+        .or(Some(1))?;
     ownership
         .by_connection_id
         .insert(connection_id.0, player_id);
@@ -764,5 +759,85 @@ mod tests {
         assert_eq!(prediction.pending_frames.len(), 1);
         assert_eq!(prediction.last_authoritative_tick, SimulationTick(1));
         assert_eq!(prediction.corrections_applied, 1);
+    }
+
+    #[test]
+    fn two_clients_restore_different_owned_players_from_same_server_run() {
+        let mut server = server_world();
+        {
+            let mut ownership = server.resource_mut::<CavernPlayerOwnershipState>().unwrap();
+            ownership.by_connection_id = [(11, 1), (22, 2)].into_iter().collect();
+        }
+        game::sync_active_player_slots(&mut server).unwrap();
+        let snapshot = capture_cavern_run_snapshot(&server).unwrap();
+        assert_eq!(snapshot.players.len(), 2);
+
+        let mut client_a = World::new();
+        client_a.insert_resource(NetworkInboundQueue::default());
+        client_a.insert_resource(CavernNetSyncState::default());
+        client_a.insert_resource(CavernPredictionState::default());
+        client_a.insert_resource(FixedTimeConfig::default());
+        client_a.insert_resource(LocalPlayerRef::default());
+        client_a.insert_resource(NetworkSessionStatus {
+            connection_id: Some(ConnectionId(11)),
+            connected: true,
+            ..Default::default()
+        });
+        client_a.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: engine::prelude::AuthorityRole::Client,
+            determinism: engine::prelude::DeterminismLevel::Validated,
+        });
+        client_a
+            .resource_mut::<NetworkInboundQueue>()
+            .unwrap()
+            .push_server(ServerMessage::RunEvent(RunEvent {
+                code: RUN_EVENT_SNAPSHOT.to_string(),
+                payload: postcard::to_allocvec(&CavernSnapshotEventV1 {
+                    tick: SimulationTick(1),
+                    cursor: 1,
+                    snapshot: snapshot.clone(),
+                })
+                .unwrap(),
+            }));
+        client_apply_replication_events(&mut client_a).unwrap();
+        assert_eq!(
+            client_a.resource::<LocalPlayerRef>().unwrap().player_id,
+            Some(1)
+        );
+
+        let mut client_b = World::new();
+        client_b.insert_resource(NetworkInboundQueue::default());
+        client_b.insert_resource(CavernNetSyncState::default());
+        client_b.insert_resource(CavernPredictionState::default());
+        client_b.insert_resource(FixedTimeConfig::default());
+        client_b.insert_resource(LocalPlayerRef::default());
+        client_b.insert_resource(NetworkSessionStatus {
+            connection_id: Some(ConnectionId(22)),
+            connected: true,
+            ..Default::default()
+        });
+        client_b.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: engine::prelude::AuthorityRole::Client,
+            determinism: engine::prelude::DeterminismLevel::Validated,
+        });
+        client_b
+            .resource_mut::<NetworkInboundQueue>()
+            .unwrap()
+            .push_server(ServerMessage::RunEvent(RunEvent {
+                code: RUN_EVENT_SNAPSHOT.to_string(),
+                payload: postcard::to_allocvec(&CavernSnapshotEventV1 {
+                    tick: SimulationTick(1),
+                    cursor: 1,
+                    snapshot,
+                })
+                .unwrap(),
+            }));
+        client_apply_replication_events(&mut client_b).unwrap();
+        assert_eq!(
+            client_b.resource::<LocalPlayerRef>().unwrap().player_id,
+            Some(2)
+        );
     }
 }

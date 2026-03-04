@@ -113,6 +113,10 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
         .resource::<CavernRunConfig>()
         .map(|config| config.max_players.max(1))
         .unwrap_or(1);
+    let meta_profile = world
+        .resource::<CavernMetaProfile>()
+        .cloned()
+        .unwrap_or_default();
     let mut active_player_ids = BTreeSet::new();
     match authority {
         AuthorityRole::Local => {
@@ -132,11 +136,23 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
         }
     }
 
-    let player_entities = world
+    let mut player_entities = world
         .query::<(engine::prelude::Entity, &PlayerId)>()
         .iter()
         .map(|(entity, player_id)| (entity, player_id.0))
         .collect::<Vec<_>>();
+    let existing_ids = player_entities
+        .iter()
+        .map(|(_, player_id)| *player_id)
+        .collect::<BTreeSet<_>>();
+    for (spawn_index, player_id) in active_player_ids.iter().copied().enumerate() {
+        if !existing_ids.contains(&player_id) {
+            let entity =
+                worldgen::spawn_player_entity(world, player_id, spawn_index, true, &meta_profile);
+            player_entities.push((entity, player_id));
+        }
+    }
+    player_entities.sort_by_key(|(_, player_id)| *player_id);
     let mut resolved_local_entity = None;
     let mut living_active_players = 0_u8;
 
@@ -212,6 +228,13 @@ mod tests {
             determinism: DeterminismLevel::Validated,
         });
         worldgen::initialize_run_world(&mut world, false).unwrap();
+        assert_eq!(
+            world
+                .query::<(engine::prelude::Entity, &PlayerId)>()
+                .iter()
+                .count(),
+            0
+        );
 
         sync_active_player_slots(&mut world).unwrap();
 

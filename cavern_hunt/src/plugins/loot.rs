@@ -169,6 +169,15 @@ fn resolve_run_state(world: &mut World) -> Result<()> {
         return Ok(());
     }
 
+    let active_player_count = world
+        .query::<(Entity, &Transform2)>()
+        .iter()
+        .filter(|(entity, _)| is_active_player_entity(world, *entity))
+        .count();
+    if active_player_count == 0 {
+        return Ok(());
+    }
+
     if alive_players.is_empty() {
         let mut run_state = world.resource_mut::<CavernRunState>()?;
         run_state.phase = CavernRunPhase::Failure;

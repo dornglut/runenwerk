@@ -576,10 +576,10 @@ mod tests {
     use super::{constrained_move, update_local_aim};
     use crate::domain::{
         CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
-        CavernRunConfig, CavernRunState, CavernServerControlMap, LocalPlayerRef, LootTableRegistry,
-        PlayerActive, SpawnDirector,
+        CavernPlayerOwnershipState, CavernRunConfig, CavernRunState, CavernServerControlMap,
+        LocalPlayerRef, LootTableRegistry, PlayerActive, SpawnDirector,
     };
-    use crate::plugins::worldgen;
+    use crate::plugins::{game, worldgen};
     use engine::prelude::{
         AuthorityRole, InputState, SimulationProfile, SimulationProfileConfig, Time, WindowState,
         World,
@@ -639,6 +639,9 @@ mod tests {
         world.insert_resource(CavernCameraState::default());
         world.insert_resource(CavernAimState::default());
         world.insert_resource(CavernServerControlMap::default());
+        world.insert_resource(CavernPlayerOwnershipState {
+            by_connection_id: [(11, 1), (22, 2)].into_iter().collect(),
+        });
         world.insert_resource(Time::default());
         world.insert_resource(SimulationProfileConfig {
             profile: SimulationProfile::DedicatedAuthority,
@@ -646,6 +649,7 @@ mod tests {
             determinism: engine::prelude::DeterminismLevel::Validated,
         });
         worldgen::initialize_run_world(&mut world, false).unwrap();
+        game::sync_active_player_slots(&mut world).unwrap();
         let players = world
             .query::<(engine::prelude::Entity, &crate::domain::PlayerId)>()
             .iter()

@@ -693,11 +693,11 @@ mod tests {
     use crate::domain::{
         CavernAimState, CavernCameraState, CavernMetaProfile, CavernPlayerOwnershipState,
         CavernRunConfig, CavernRunState, Faction, Health, LocalPlayerRef, LootTableRegistry,
-        PlayerActive, PlayerId, SpawnDirector, Transform2,
+        PlayerActive, SpawnDirector, Transform2,
     };
     use crate::plugins::{combat, worldgen};
     use engine::prelude::{
-        Entity, InputState, NetworkSessionStatus, SimulationRng, SimulationSeed, WindowState, World,
+        InputState, NetworkSessionStatus, SimulationRng, SimulationSeed, WindowState, World,
     };
     use engine_net::ConnectionId;
 
@@ -766,14 +766,11 @@ mod tests {
     #[test]
     fn restoring_snapshot_prefers_player_owned_by_current_connection() {
         let mut source = seeded_world();
+        let second_player =
+            worldgen::spawn_player_entity(&mut source, 2, 1, true, &CavernMetaProfile::default());
         source.insert_resource(CavernPlayerOwnershipState {
             by_connection_id: std::iter::once((99, 2)).collect(),
         });
-        let second_player = source
-            .query::<(Entity, &PlayerId)>()
-            .iter()
-            .find_map(|(entity, player_id)| (player_id.0 == 2).then_some(entity))
-            .unwrap();
         let _ = source.insert(second_player, PlayerActive);
         let snapshot = capture_cavern_run_snapshot(&source).unwrap();
 
