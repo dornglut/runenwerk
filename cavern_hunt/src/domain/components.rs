@@ -61,6 +61,12 @@ pub struct PlayerId(pub u32);
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct PlayerActive;
 
+#[derive(Debug, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct PlayerRosterIdentity {
+    pub player_code: String,
+    pub roster_index: u8,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
 pub struct AimTarget2 {
     pub x: f32,

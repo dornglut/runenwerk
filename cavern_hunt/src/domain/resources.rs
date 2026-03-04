@@ -40,6 +40,14 @@ impl Default for CavernRunConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct CavernSessionSettings {
+    pub seed: Option<CavernSeed>,
+    pub enemy_density: Option<f32>,
+    pub extract_countdown_seconds: Option<f32>,
+    pub base_scrap_reward: Option<u32>,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CavernRunPhase {
     Exploring,

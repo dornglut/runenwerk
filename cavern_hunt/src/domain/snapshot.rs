@@ -1,8 +1,8 @@
 use crate::domain::components::{
     AggroState, AimTarget2, Chest, ColliderRadius, DashState, EliteObjective, Enemy, EnemyKind,
     Extracting, ExtractionZone, Faction, Health, InventoryRunState, LootDrop, Pickup, Player,
-    PlayerActive, PlayerId, Projectile, ProjectileAttack, RoomAnchor, SpawnRoom, Transform2,
-    Velocity2, WeaponState,
+    PlayerActive, PlayerId, PlayerRosterIdentity, Projectile, ProjectileAttack, RoomAnchor,
+    SpawnRoom, Transform2, Velocity2, WeaponState,
 };
 use crate::domain::is_active_player_entity;
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
@@ -26,6 +26,8 @@ pub struct CavernInventorySnapshotV1 {
 pub struct CavernPlayerSnapshotV1 {
     pub player_id: u32,
     pub owner_connection_id: Option<u64>,
+    pub player_code: String,
+    pub roster_index: u8,
     pub x: f32,
     pub y: f32,
     pub yaw: f32,
@@ -139,6 +141,7 @@ pub struct CavernRunDeltaV1 {
 struct PlayerSnapshotBundle {
     player: Player,
     player_id: PlayerId,
+    player_roster_identity: PlayerRosterIdentity,
     transform: Transform2,
     velocity: Velocity2,
     health: Health,
@@ -242,9 +245,18 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                     .find_map(|(connection_id, owned_player_id)| {
                         (*owned_player_id == player_id).then_some(*connection_id)
                     });
+            let roster_identity = world
+                .get::<PlayerRosterIdentity>(entity)
+                .cloned()
+                .unwrap_or(PlayerRosterIdentity {
+                    player_code: format!("hunter_{player_id}"),
+                    roster_index: player_id.saturating_sub(1) as u8,
+                });
             players.push(CavernPlayerSnapshotV1 {
                 player_id,
                 owner_connection_id,
+                player_code: roster_identity.player_code,
+                roster_index: roster_identity.roster_index,
                 x: transform.x,
                 y: transform.y,
                 yaw: transform.yaw,
@@ -510,6 +522,10 @@ pub fn restore_cavern_run_snapshot(
         let entity = world.spawn(PlayerSnapshotBundle {
             player: Player,
             player_id: PlayerId(player.player_id),
+            player_roster_identity: PlayerRosterIdentity {
+                player_code: player.player_code.clone(),
+                roster_index: player.roster_index,
+            },
             transform: Transform2::new(player.x, player.y, player.yaw),
             velocity: Velocity2 {
                 x: player.velocity[0],
@@ -766,8 +782,15 @@ mod tests {
     #[test]
     fn restoring_snapshot_prefers_player_owned_by_current_connection() {
         let mut source = seeded_world();
-        let second_player =
-            worldgen::spawn_player_entity(&mut source, 2, 1, true, &CavernMetaProfile::default());
+        let second_player = worldgen::spawn_player_entity(
+            &mut source,
+            2,
+            1,
+            true,
+            &CavernMetaProfile::default(),
+            "hunter_2",
+            1,
+        );
         source.insert_resource(CavernPlayerOwnershipState {
             by_connection_id: std::iter::once((99, 2)).collect(),
         });

@@ -3,7 +3,8 @@ use crate::domain::{
     CavernRunPhase, CavernRunState, Chest, ColliderRadius, DashState, EliteObjective, Enemy,
     EnemyKind, ExtractionZone, Faction, Health, InventoryRunState, LocalPlayerRef,
     LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerId,
-    ProjectileAttack, RoomAnchor, SpawnDirector, SpawnRoom, Transform2, Velocity2, WeaponState,
+    PlayerRosterIdentity, ProjectileAttack, RoomAnchor, SpawnDirector, SpawnRoom, Transform2,
+    Velocity2, WeaponState,
 };
 use anyhow::Result;
 use engine::prelude::{AuthorityRole, Bundle, Entity, SimulationProfileConfig, World};
@@ -12,6 +13,7 @@ use engine::prelude::{AuthorityRole, Bundle, Entity, SimulationProfileConfig, Wo
 struct PlayerSpawnBundle {
     player: Player,
     player_id: PlayerId,
+    player_roster_identity: PlayerRosterIdentity,
     transform: Transform2,
     velocity: Velocity2,
     health: Health,
@@ -69,7 +71,15 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
         .map(|config| config.authority)
         .unwrap_or(AuthorityRole::Local);
     if !matches!(authority, AuthorityRole::Server) {
-        let entity = spawn_player_entity(world, 1, 0, assign_local_player, &meta_profile);
+        let entity = spawn_player_entity(
+            world,
+            1,
+            0,
+            assign_local_player,
+            &meta_profile,
+            "local_hunter_1",
+            0,
+        );
         if assign_local_player {
             let mut local = world
                 .resource_mut::<LocalPlayerRef>()
@@ -154,6 +164,8 @@ pub(crate) fn spawn_player_entity(
     spawn_index: usize,
     active: bool,
     meta_profile: &CavernMetaProfile,
+    player_code: impl Into<String>,
+    roster_index: u8,
 ) -> Entity {
     let layout = world
         .resource::<CavernLayout>()
@@ -172,6 +184,10 @@ pub(crate) fn spawn_player_entity(
     let entity = world.spawn(PlayerSpawnBundle {
         player: Player,
         player_id: PlayerId(player_id),
+        player_roster_identity: PlayerRosterIdentity {
+            player_code: player_code.into(),
+            roster_index,
+        },
         transform: Transform2::new(
             start_room.spawn_anchor[0] + offset[0],
             start_room.spawn_anchor[1] + offset[1],

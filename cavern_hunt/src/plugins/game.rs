@@ -2,8 +2,8 @@ use crate::domain::{
     CavernAimState, CavernCameraState, CavernControlState, CavernLayout,
     CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState,
     CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig, CavernRunState,
-    CavernSdfWorldFrame, CavernServerControlMap, LocalPlayerRef, LootTableRegistry, PlayerActive,
-    PlayerId, SpawnDirector,
+    CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings, LocalPlayerRef,
+    LootTableRegistry, PlayerActive, PlayerId, SpawnDirector,
 };
 use crate::plugins::{ai, combat, loot, meta, net_sync, render_sdf, worldgen};
 use anyhow::Result;
@@ -85,6 +85,25 @@ fn sync_session_runtime_config(session: &SessionRuntimeState, config: &mut Caver
         // becomes mandatory for all admissions.
         config.max_players = config.max_players.max(session.max_players.max(1));
     }
+    if let Some(settings) = parse_cavern_session_settings(session) {
+        if let Some(seed) = settings.seed {
+            config.seed = seed;
+        }
+        if let Some(enemy_density) = settings.enemy_density {
+            config.enemy_density = enemy_density.max(0.1);
+        }
+        if let Some(extract_countdown_seconds) = settings.extract_countdown_seconds {
+            config.extract_countdown_seconds = extract_countdown_seconds.max(0.0);
+        }
+        if let Some(base_scrap_reward) = settings.base_scrap_reward {
+            config.base_scrap_reward = base_scrap_reward;
+        }
+    }
+}
+
+fn parse_cavern_session_settings(session: &SessionRuntimeState) -> Option<CavernSessionSettings> {
+    let raw = session.settings_json.as_ref()?;
+    serde_json::from_str(raw).ok()
 }
 
 fn client_setup_system(mut world: WorldMut) -> Result<()> {
@@ -119,6 +138,10 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
         .unwrap_or_default();
     let ownership = world
         .resource::<CavernPlayerOwnershipState>()
+        .cloned()
+        .unwrap_or_default();
+    let session = world
+        .resource::<SessionRuntimeState>()
         .cloned()
         .unwrap_or_default();
     let max_players = world
@@ -159,8 +182,21 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
         .collect::<BTreeSet<_>>();
     for (spawn_index, player_id) in active_player_ids.iter().copied().enumerate() {
         if !existing_ids.contains(&player_id) {
-            let entity =
-                worldgen::spawn_player_entity(world, player_id, spawn_index, true, &meta_profile);
+            let roster_index = player_id.saturating_sub(1) as usize;
+            let player_code = session
+                .roster_player_codes
+                .get(roster_index)
+                .cloned()
+                .unwrap_or_else(|| format!("hunter_{player_id}"));
+            let entity = worldgen::spawn_player_entity(
+                world,
+                player_id,
+                spawn_index,
+                true,
+                &meta_profile,
+                player_code,
+                roster_index as u8,
+            );
             player_entities.push((entity, player_id));
         }
     }
@@ -208,7 +244,7 @@ mod tests {
         CavernAimState, CavernCameraState, CavernLayout, CavernMetaPersistenceConfig,
         CavernMetaProfile, CavernMetaRewardState, CavernPlayerOwnershipState, CavernRunConfig,
         CavernRunState, CavernSdfWorldFrame, CavernServerControlMap, LocalPlayerRef,
-        LootTableRegistry, PlayerActive, PlayerId, SpawnDirector,
+        LootTableRegistry, PlayerActive, PlayerId, PlayerRosterIdentity, SpawnDirector,
     };
     use crate::plugins::worldgen;
     use engine::plugins::ui::domain::UiWorldHudStats;
@@ -235,6 +271,26 @@ mod tests {
     }
 
     #[test]
+    fn session_settings_json_overrides_game_run_config() {
+        let session = SessionRuntimeState {
+            admitted: true,
+            settings_json: Some(
+                r#"{"seed":4242,"enemy_density":1.7,"extract_countdown_seconds":3.5,"base_scrap_reward":19}"#
+                    .to_string(),
+            ),
+            ..SessionRuntimeState::default()
+        };
+        let mut config = CavernRunConfig::default();
+
+        super::sync_session_runtime_config(&session, &mut config);
+
+        assert_eq!(config.seed.0, 4242);
+        assert_eq!(config.enemy_density, 1.7);
+        assert_eq!(config.extract_countdown_seconds, 3.5);
+        assert_eq!(config.base_scrap_reward, 19);
+    }
+
+    #[test]
     fn server_activation_follows_owned_connections() {
         let mut world = World::new();
         world.insert_resource(CavernRunConfig::default());
@@ -245,6 +301,14 @@ mod tests {
         world.insert_resource(CavernMetaProfile::default());
         world.insert_resource(CavernMetaPersistenceConfig { enabled: false });
         world.insert_resource(CavernMetaRewardState::default());
+        world.insert_resource(SessionRuntimeState {
+            admitted: true,
+            lobby_id: Some("lobby-test".into()),
+            roster_player_codes: vec!["alpha".into(), "beta".into()],
+            max_players: 2,
+            ai_fill_target: 2,
+            settings_json: None,
+        });
         world.insert_resource(LocalPlayerRef::default());
         world.insert_resource(CavernCameraState::default());
         world.insert_resource(CavernAimState::default());
@@ -274,13 +338,21 @@ mod tests {
             .query::<(engine::prelude::Entity, &PlayerId)>()
             .iter()
             .filter_map(|(entity, player_id)| {
-                world
-                    .get::<PlayerActive>(entity)
-                    .is_some()
-                    .then_some(player_id.0)
+                world.get::<PlayerActive>(entity).is_some().then(|| {
+                    (
+                        player_id.0,
+                        world
+                            .get::<PlayerRosterIdentity>(entity)
+                            .map(|identity| identity.player_code.clone())
+                            .unwrap_or_default(),
+                    )
+                })
             })
             .collect::<Vec<_>>();
-        assert_eq!(active_ids, vec![1, 2]);
+        assert_eq!(
+            active_ids,
+            vec![(1, "alpha".to_string()), (2, "beta".to_string())]
+        );
         assert_eq!(
             world
                 .resource::<CavernRunState>()
