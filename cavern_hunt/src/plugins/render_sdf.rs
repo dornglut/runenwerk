@@ -166,28 +166,38 @@ pub(crate) fn build_sdf_world_frame_system(
     camera: Res<CavernCameraState>,
     mut frame: ResMut<CavernSdfWorldFrame>,
 ) -> Result<()> {
-    let fallback_layout = world
-        .resource::<CavernTopology>()
-        .map(|topology| topology.to_layout_2d())
-        .unwrap_or_else(|_| layout.clone());
+    let (world_bounds, geometry_primitives) =
+        if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
+            (
+                [
+                    graph.bounds.min[0],
+                    graph.bounds.min[2],
+                    graph.bounds.max[0],
+                    graph.bounds.max[2],
+                ],
+                geometry_primitives_from_graph(&graph),
+            )
+        } else if let Ok(topology) = world.resource::<CavernTopology>() {
+            (
+                [
+                    topology.world_bounds.min[0],
+                    topology.world_bounds.min[2],
+                    topology.world_bounds.max[0],
+                    topology.world_bounds.max[2],
+                ],
+                geometry_primitives_from_topology(&topology),
+            )
+        } else {
+            (
+                layout.world_bounds,
+                geometry_primitives_from_layout(&layout),
+            )
+        };
 
-    frame.world_bounds = if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
-        [
-            graph.bounds.min[0],
-            graph.bounds.min[2],
-            graph.bounds.max[0],
-            graph.bounds.max[2],
-        ]
-    } else {
-        fallback_layout.world_bounds
-    };
+    frame.world_bounds = world_bounds;
     frame.camera = camera.clone();
     frame.agents.clear();
-    frame.geometry_primitives = if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
-        geometry_primitives_from_graph(&graph)
-    } else {
-        geometry_primitives_from_layout(&fallback_layout)
-    };
+    frame.geometry_primitives = geometry_primitives;
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
         if is_active_player_entity(&world, entity) {
@@ -355,6 +365,51 @@ fn geometry_primitives_from_graph(graph: &CavernGeometryGraph) -> Vec<CavernSdfG
         .filter(|primitive| primitive.enabled)
     {
         append_shape_primitive(&mut out, primitive.op, &primitive.shape);
+    }
+    out
+}
+
+fn geometry_primitives_from_topology(topology: &CavernTopology) -> Vec<CavernSdfGeometryPrimitive> {
+    let mut out = Vec::with_capacity(topology.rooms.len() + topology.connections.len() + 1);
+    let center = [
+        (topology.world_bounds.min[0] + topology.world_bounds.max[0]) * 0.5,
+        (topology.world_bounds.min[1] + topology.world_bounds.max[1]) * 0.5,
+        (topology.world_bounds.min[2] + topology.world_bounds.max[2]) * 0.5,
+    ];
+    let half_extents = [
+        (topology.world_bounds.max[0] - topology.world_bounds.min[0]) * 0.5,
+        (topology.world_bounds.max[1] - topology.world_bounds.min[1]) * 0.5,
+        (topology.world_bounds.max[2] - topology.world_bounds.min[2]) * 0.5,
+    ];
+    out.push(CavernSdfGeometryPrimitive {
+        shape_kind: SHAPE_BOX,
+        op_kind: OP_ADD_SOLID,
+        p0: [center[0], center[1], center[2], 0.0],
+        p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
+        p2: [0.0; 4],
+    });
+    for room in &topology.rooms {
+        out.push(CavernSdfGeometryPrimitive {
+            shape_kind: SHAPE_ELLIPSOID,
+            op_kind: OP_SUBTRACT_VOID,
+            p0: [room.center[0], room.center[1], room.center[2], 0.0],
+            p1: [room.radii[0], room.radii[1], room.radii[2], 0.0],
+            p2: [0.0; 4],
+        });
+    }
+    for connection in &topology.connections {
+        out.push(CavernSdfGeometryPrimitive {
+            shape_kind: SHAPE_CAPSULE,
+            op_kind: OP_SUBTRACT_VOID,
+            p0: [
+                connection.start[0],
+                connection.start[1],
+                connection.start[2],
+                connection.radius,
+            ],
+            p1: [connection.end[0], connection.end[1], connection.end[2], 0.0],
+            p2: [0.0; 4],
+        });
     }
     out
 }
@@ -968,7 +1023,7 @@ impl RenderPassExecutor for CavernComposeExecutor {
 mod tests {
     use super::{
         OP_ADD_SOLID, OP_BLOCKER, OP_SUBTRACT_VOID, SHAPE_CAPSULE, SHAPE_ELLIPSOID, SHAPE_SPHERE,
-        geometry_primitives_from_graph,
+        geometry_primitives_from_graph, geometry_primitives_from_topology,
     };
     use crate::domain::{CavernGeometryGraph, GeometryPrimitiveShape3, GeometryRevision};
 
@@ -1026,5 +1081,33 @@ mod tests {
         assert_eq!(primitives[2].op_kind, OP_SUBTRACT_VOID);
         assert_eq!(primitives[3].shape_kind, SHAPE_ELLIPSOID);
         assert_eq!(primitives[3].op_kind, OP_BLOCKER);
+    }
+
+    #[test]
+    fn geometry_primitives_from_topology_keeps_topology_heights() {
+        let layout = crate::domain::CavernLayout::generate(
+            crate::domain::CavernSeed(1337),
+            &crate::domain::CavernRunConfig::default(),
+        );
+        let topology =
+            crate::domain::CavernTopology::from_layout(&layout, crate::domain::CavernSeed(1337));
+        let primitives = geometry_primitives_from_topology(&topology);
+        assert!(
+            !primitives.is_empty(),
+            "topology conversion should produce primitives"
+        );
+        assert_eq!(primitives[0].shape_kind, super::SHAPE_BOX);
+        assert_eq!(primitives[0].op_kind, OP_ADD_SOLID);
+        let first_room = topology
+            .rooms
+            .first()
+            .expect("topology should contain rooms");
+        let first_room_prim = primitives
+            .iter()
+            .find(|primitive| {
+                primitive.shape_kind == SHAPE_ELLIPSOID && primitive.op_kind == OP_SUBTRACT_VOID
+            })
+            .expect("expected room ellipsoid primitive");
+        assert_eq!(first_room_prim.p0[1], first_room.center[1]);
     }
 }
