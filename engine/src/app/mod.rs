@@ -1,5 +1,7 @@
 use crate::plugin::Plugin;
 use crate::plugins::input::domain::InputState;
+use crate::plugins::replay as replay_runtime;
+use crate::plugins::scene::SceneReplayArchive;
 use crate::plugins::time::domain::Time;
 use crate::runtime::fixed_time::{CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick};
 use crate::runtime::schedules::{
@@ -9,11 +11,16 @@ use crate::runtime::system::IntoSystemConfigs;
 use crate::runtime::window::WindowState;
 use crate::runtime::winit_runner;
 use crate::state::{
-    GameplayRuntimeConfig, SceneCatalog, SceneRegistration, SceneRuntimeState, StartupState,
-    UiOverlayState,
+    GameplayRuntimeConfig, SceneCatalog, SceneRegistration, SceneRuntimeState, SessionRuntimeState,
+    StartupState, UiOverlayState,
 };
 use anyhow::{Result, anyhow};
 use ecs::{Resource, World};
+use engine_replay::ReplayValidationReport;
+use engine_sim::{
+    AuthorityRole, SimulationProfile, SimulationProfileConfig, SimulationRng, SimulationSeed,
+    SimulationSessionId,
+};
 use scheduler::{ExecutionScheduler, ScheduleLabel};
 use winit::event_loop::ControlFlow;
 
@@ -198,6 +205,64 @@ impl App {
         self
     }
 
+    pub fn set_simulation_profile(&mut self, profile: SimulationProfile) -> &mut Self {
+        if let Ok(mut config) = self.world.resource_mut::<SimulationProfileConfig>() {
+            config.profile = profile;
+            config.determinism = match profile {
+                SimulationProfile::DeterministicLockstep | SimulationProfile::RollbackSession => {
+                    engine_sim::DeterminismLevel::Strict
+                }
+                SimulationProfile::HighThroughputAuthority => {
+                    engine_sim::DeterminismLevel::BestEffort
+                }
+                SimulationProfile::LocalSinglePlayer | SimulationProfile::DedicatedAuthority => {
+                    engine_sim::DeterminismLevel::Validated
+                }
+            };
+        }
+        self
+    }
+
+    pub fn set_authority_role(&mut self, authority: AuthorityRole) -> &mut Self {
+        if let Ok(mut config) = self.world.resource_mut::<SimulationProfileConfig>() {
+            config.authority = authority;
+        }
+        self
+    }
+
+    pub fn set_simulation_seed(&mut self, seed: SimulationSeed) -> &mut Self {
+        self.world.insert_resource(seed);
+        if let Ok(mut rng) = self.world.resource_mut::<SimulationRng>() {
+            rng.reseed(seed);
+        }
+        self
+    }
+
+    pub fn start_recording(&mut self) -> Result<&mut Self> {
+        replay_runtime::start_recording(&mut self.world)?;
+        Ok(self)
+    }
+
+    pub fn stop_recording(&mut self) -> Result<SceneReplayArchive> {
+        replay_runtime::stop_recording(&mut self.world)
+    }
+
+    pub fn load_replay(&mut self, archive: SceneReplayArchive) -> Result<&mut Self> {
+        replay_runtime::load_replay(&mut self.world, archive)?;
+        Ok(self)
+    }
+
+    pub fn seek_tick(&mut self, tick: u64) -> Result<ReplayValidationReport> {
+        replay_runtime::seek_loaded_replay(&mut self.world, SimulationTick(tick))
+    }
+
+    pub fn current_tick(&self) -> u64 {
+        self.world
+            .resource::<SimulationTick>()
+            .map(|tick| tick.0)
+            .unwrap_or(0)
+    }
+
     pub fn add_scene<S>(&mut self, scene: S) -> &mut Self
     where
         S: Into<SceneRegistration>,
@@ -314,6 +379,9 @@ impl App {
         if !self.world.has_resource::<GameplayRuntimeConfig>() {
             self.world.insert_resource(GameplayRuntimeConfig::default());
         }
+        if !self.world.has_resource::<SessionRuntimeState>() {
+            self.world.insert_resource(SessionRuntimeState::default());
+        }
         if !self.world.has_resource::<FixedTimeConfig>() {
             self.world.insert_resource(FixedTimeConfig::default());
         }
@@ -325,6 +393,25 @@ impl App {
         }
         if !self.world.has_resource::<SimulationTick>() {
             self.world.insert_resource(SimulationTick::default());
+        }
+        if !self.world.has_resource::<SimulationProfileConfig>() {
+            self.world
+                .insert_resource(SimulationProfileConfig::default());
+        }
+        if !self.world.has_resource::<SimulationSessionId>() {
+            self.world.insert_resource(SimulationSessionId::default());
+        }
+        if !self.world.has_resource::<SimulationSeed>() {
+            let seed = SimulationSeed::default();
+            self.world.insert_resource(seed);
+            self.world.insert_resource(SimulationRng::from_seed(seed));
+        } else if !self.world.has_resource::<SimulationRng>() {
+            let seed = self
+                .world
+                .resource::<SimulationSeed>()
+                .copied()
+                .unwrap_or_default();
+            self.world.insert_resource(SimulationRng::from_seed(seed));
         }
     }
 

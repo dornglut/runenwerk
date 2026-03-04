@@ -1,6 +1,7 @@
 mod handoff;
 
 pub use handoff::{
-    AuthoritativeJoinState, AxiomJoinHandoff, AxiomLobbyClient, AxiomRealtimeBridge,
-    AxiomSessionClient, JoinGrant, JoinGrantError,
+    AuthoritativeJoinState, AxiomAuthState, AxiomHttpClient, AxiomHttpError,
+    AxiomJoinGrantProvider, AxiomJoinGrantVerifier, AxiomJoinHandoff, AxiomLobbyClient,
+    AxiomRealtimeBridge, AxiomSessionClient, JoinGrant, JoinGrantError, RefreshSessionResponse,
 };

@@ -2,6 +2,7 @@
 
 ## Core
 
+- `README.md` - workspace overview and current baseline.
 - `PROJECT_GUIDELINES.md` - top-level proposal and architecture guidelines.
 - `requests.md` - cross-cutting requests plus a project-wide index of ongoing plugin/feature requests.
 
@@ -10,6 +11,12 @@
 - `engine/README.md`
 - `engine/requests.md`
 - `ecs/README.md`
+- `ecs_macros/README.md`
+- `engine_sim/README.md`
+- `engine_replay/README.md`
+- `engine_net/README.md`
+- `engine_net_quic/README.md`
+- `grotto_online/README.md`
 - `scheduler/README.md`
 - `scheduler/requests.md`
 - `grid/README.md`
@@ -21,6 +28,7 @@
 
 ## Project Docs
 
+- `docs/current-state.md` - current runtime, networking, replay, and delivery status.
 - `docs/game-design.md` - high-level game design direction.
 - `docs/authoring-layer.md` - authoring/runtime split and implementation direction for data-driven engine features.
 

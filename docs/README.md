@@ -7,6 +7,7 @@ Contains project-level documentation and documentation indexes.
 ## Usage
 
 - Start from `docs/index.md` for the active document map.
+- Use `docs/current-state.md` for the current runtime/networking status before making architecture assumptions.
 - Keep docs aligned with current implemented behavior.
 - Use `docs/authoring-layer.md` when changing data-driven asset/config workflows.
 

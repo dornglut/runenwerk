@@ -3,6 +3,7 @@ use crate::plugins::ui::domain::{
 };
 use anyhow::Result;
 use scheduler::{Node, Scheduler, SchedulerBuilder};
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 mod config;
@@ -16,13 +17,13 @@ pub use config::{
 pub use lifecycle::{SceneLifecycleEvent, SceneLifecyclePhase};
 pub use registry::{SceneDescriptor, SceneRegistry};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SceneLayer {
     World,
     OverlayUi,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SceneId {
     GameplayStub,
     HubStub,
@@ -79,7 +80,7 @@ impl SceneId {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SceneSlot {
     pub active: SceneId,
     pub paused: bool,
@@ -115,18 +116,18 @@ pub struct SceneTransitionResult {
     pub world_pause_changed: bool,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component)]
 pub struct WorldFrameCounter {
     pub value: u64,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Component)]
 pub struct WorldDebugPosition {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Component)]
 pub struct WorldDebugVelocity {
     pub x: f32,
     pub y: f32,
@@ -152,6 +153,12 @@ pub struct WorldSceneContext {
     pub debug_entity: ecs::Entity,
     pub frame_count: u64,
     pub enemy_kills: u32,
+    pub session_admitted: bool,
+    pub session_lobby_id: Option<String>,
+    pub session_roster_player_codes: Vec<String>,
+    pub session_max_players: u8,
+    pub session_ai_fill_target: u8,
+    pub session_settings_json: Option<String>,
     pub outbound_notifications: Vec<WorldToOverlayMessage>,
 }
 
@@ -192,7 +199,7 @@ pub struct SceneTemplateUiEvent {
     pub trigger: &'static str,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorldToOverlayMessage {
     Tick {
         tick: u64,
@@ -215,7 +222,7 @@ pub enum WorldToOverlayMessage {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum QuestState {
     Started,
     Progress { current: u32, goal: u32 },
@@ -347,6 +354,12 @@ pub fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
         debug_entity,
         frame_count: 0,
         enemy_kills: 0,
+        session_admitted: false,
+        session_lobby_id: None,
+        session_roster_player_codes: Vec::new(),
+        session_max_players: 1,
+        session_ai_fill_target: 1,
+        session_settings_json: None,
         outbound_notifications: Vec::new(),
     };
 

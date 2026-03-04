@@ -1,23 +1,19 @@
+use engine_sim::{ActorId, AuthorityRole, CommandSource, SimulationCommandFrame, SimulationTick};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum SimulationRole {
-    #[default]
-    Client,
-    Server,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct NetworkTick(pub u64);
+pub type SimulationRole = AuthorityRole;
+#[allow(deprecated)]
+#[deprecated(note = "use SimulationTick")]
+pub type NetworkTick = SimulationTick;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ServerClock {
-    pub tick: u64,
+    pub tick: SimulationTick,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ClientClock {
-    pub tick: u64,
+    pub tick: SimulationTick,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -65,6 +61,13 @@ pub enum ClientCommandEnvelope {
     Interact(InteractCommand),
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecordedCommand {
+    pub actor: ActorId,
+    pub source: CommandSource,
+    pub command: ClientCommandEnvelope,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PlayerCommandBuffer {
     commands: Vec<ClientCommandEnvelope>,
@@ -87,3 +90,5 @@ impl PlayerCommandBuffer {
         self.commands.is_empty()
     }
 }
+
+pub type CanonicalCommandFrame = SimulationCommandFrame<RecordedCommand>;

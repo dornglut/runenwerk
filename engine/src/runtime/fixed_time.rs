@@ -1,3 +1,5 @@
+pub use engine_sim::SimulationTick;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FixedTimeConfig {
     pub step_seconds: f32,
@@ -30,6 +32,3 @@ pub struct FixedTimeState {
     pub steps_ran_last_frame: u32,
     pub saturated_frames: u64,
 }
-
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
-pub struct SimulationTick(pub u64);

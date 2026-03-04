@@ -7,10 +7,9 @@ Provides action-mapped input state and frame pulse handling, decoupling gameplay
 ## Usage
 
 - Plugin: `InputFinalizePlugin`
-- Typed schedule: `RenderSubmit`
+- Typed schedule: `FrameEnd`
 - Typed set: `CoreSet::FrameEnd`
-- Legacy frame reset node: `clear_input` (runs after `frame_render_submit`)
-- Primary state type: `InputState` (`engine/src/plugins/input/domain.rs`)
+- Primary state type: `InputState` in [domain.rs](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/src/plugins/input/domain.rs)
 
 OS input events are consumed through `InputState::handle_window_event` and `InputState::handle_device_event`.
 The runtime also feeds normalized platform events through the same `InputState` methods.
@@ -18,7 +17,6 @@ The runtime also feeds normalized platform events through the same `InputState` 
 ## Ownership Boundaries
 
 - Owns action mapping, per-frame action pulses, and key/chord rebinding behavior.
-- Owns compatibility synchronization to legacy public movement/action booleans.
 - Does not own scene/render behavior that consumes input.
 
 ## Extension Points
@@ -33,7 +31,7 @@ The runtime also feeds normalized platform events through the same `InputState` 
 
 - Keep engine/game systems decoupled from concrete keys.
 - Allow runtime rebinding (`map_key`, `map_chord`, `unmap_*`) without changing system code.
-- Preserve the existing `InputState` booleans (`data.input.world_move_left`, etc.) for compatibility.
+- Keep action queries and public movement/menu booleans synchronized in `InputState`.
 
 ### Core Types
 
@@ -44,7 +42,7 @@ The runtime also feeds normalized platform events through the same `InputState` 
 - `ModifierRule`
 - `action::*` constants (built-in action ids)
 
-### Model
+### Runtime Model
 
 `InputState` tracks:
 
@@ -53,7 +51,7 @@ The runtime also feeds normalized platform events through the same `InputState` 
   - `action_pressed(action_id)`: fired this frame
   - `action_down(action_id)`: currently held
 
-Legacy public fields are synchronized from the action state each frame, so existing systems continue to work.
+Public movement/menu fields are synchronized from the action state each frame so scene/UI systems can read a stable input view.
 
 ### Default Action Map
 
@@ -73,27 +71,26 @@ Examples:
 
 ```rust
 use engine::plugins::input::domain::{action, KeyChord};
+use engine::InputState;
 use winit::keyboard::KeyCode;
 
-// Rebind world left movement from A -> J.
-engine.data.input.unmap_key(action::WORLD_MOVE_LEFT, KeyCode::KeyA);
-engine.data.input.map_key(action::WORLD_MOVE_LEFT, KeyCode::KeyJ);
-
-// Add a custom action with a modifier chord.
-engine
-    .data
-    .input
-    .map_chord("debug.toggle_freecam", KeyChord::new(KeyCode::KeyP).with_shift_required());
+let mut input = InputState::new();
+input.unmap_key(action::WORLD_MOVE_LEFT, KeyCode::KeyA);
+input.map_key(action::WORLD_MOVE_LEFT, KeyCode::KeyJ);
+input.map_chord(
+    "debug.toggle_freecam",
+    KeyChord::new(KeyCode::KeyP).with_shift_required(),
+);
 ```
 
 Read action state:
 
 ```rust
-if engine.data.input.action_pressed("debug.toggle_freecam") {
+if input.action_pressed("debug.toggle_freecam") {
     // toggle freecam
 }
 
-if engine.data.input.action_down(action::WORLD_MOVE_LEFT) {
+if input.action_down(action::WORLD_MOVE_LEFT) {
     // held movement
 }
 ```
@@ -104,9 +101,11 @@ if engine.data.input.action_down(action::WORLD_MOVE_LEFT) {
 
 ```rust
 use engine::plugins::input::domain::{action, InputBindingChange, KeyChord};
+use engine::InputState;
 use winit::keyboard::KeyCode;
 
-let applied = engine.data.input.apply_binding_changes([
+let mut input = InputState::new();
+let applied = input.apply_binding_changes([
     InputBindingChange::UnmapKey {
         action: action::WORLD_MOVE_LEFT.to_string(),
         key: KeyCode::KeyA,
@@ -120,14 +119,19 @@ let applied = engine.data.input.apply_binding_changes([
 assert_eq!(applied, 2);
 ```
 
-This shape is intended to map directly to future ECS event payloads (`InputRemapRequested`, etc.).
+Equivalent changes can also be applied to the world resource:
+
+```rust
+let mut input = world.resource_mut::<InputState>()?;
+let applied = input.apply_binding_changes(changes);
+```
 
 ### Frame Lifecycle
 
 - OS events call:
   - `InputState::handle_window_event`
   - `InputState::handle_device_event`
-- End-of-frame reset is done by `InputFinalizePlugin` (`clear_input` node), which calls:
+- End-of-frame reset is done by `InputFinalizePlugin`, which calls:
   - `InputState::clear_frame`
 
 `clear_frame` clears per-frame pulses and keeps held actions in sync with current key state.

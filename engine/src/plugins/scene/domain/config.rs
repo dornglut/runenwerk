@@ -1,12 +1,12 @@
 use crate::plugins::shared::file_modified;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::SystemTime;
 
 pub const GAMEPLAY_CONFIG_PATH: &str = "game/assets/gameplay/gameplay_stub.ron";
 const GAMEPLAY_CONFIG_PATH_LEGACY: &str = "assets/gameplay/gameplay_stub.ron";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GameplayConfig {
     pub player: AgentArchetypeConfig,
@@ -78,7 +78,7 @@ impl Default for GameplayConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GameplayCameraConfig {
     pub initial_yaw: f32,
@@ -116,7 +116,7 @@ impl Default for GameplayCameraConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AgentArchetypeConfig {
     pub speed: f32,
@@ -138,7 +138,7 @@ impl Default for AgentArchetypeConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GameplayBoundsConfig {
     pub min_x: f32,

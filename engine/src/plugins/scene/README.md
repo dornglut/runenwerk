@@ -2,23 +2,36 @@
 
 ## Purpose
 
-Coordinates world/overlay scene lifecycle, transitions, and message flow.
+Coordinates world/overlay scene lifecycle, authoritative scene simulation, and scene replay/snapshot boundaries.
 
 ## Usage
 
 - Plugin: `ScenePlugin`
-- Core nodes:
-  - `scene_transition`
-  - `world_scene_update`
-  - `scene_overlay_format_messages`
-  - `scene_overlay_apply_messages`
+- Schedules:
+  - `Startup`: initialize the scene manager
+  - `PreUpdate`: process transition commands and input-driven scene state
+  - `FixedUpdate`: run authoritative world-scene simulation
+  - `Update`: apply world-to-overlay message flow and republish scene state
 
-The plugin manages scene stack commands and applies transition side effects.
+The plugin owns the runtime scene manager and republishes transport-neutral scene state through:
+
+- `SceneRuntimeState`
+- `GameplayRuntimeConfig`
+- `UiOverlayState`
+- `SessionRuntimeState`
+
+It also defines the current authoritative scene replay/snapshot DTOs:
+
+- `SceneSimulationSnapshotV1`
+- `SceneSimulationDeltaV1`
+- `SceneReplayCommandFrame`
+- `SceneReplayArchive`
 
 ## Ownership Boundaries
 
 - Owns scene transition orchestration and scene lifecycle event flow.
 - Owns world scene runtime updates and overlay/world interaction state.
+- Owns the authoritative scene snapshot/restore boundary used by replay and replication.
 - Owns applying compiled scene/template authoring outputs to runtime state.
 - Does not own render graph execution or input device event collection.
 
@@ -26,6 +39,6 @@ The plugin manages scene stack commands and applies transition side effects.
 
 - Register new scene labels/aliases and transition commands.
 - Add new world-to-overlay message types and formatting paths.
-- Extend template scene flow integration hooks.
+- Extend the authoritative snapshot boundary as real gameplay state grows.
 - Add scene authoring schemas/compilers under scene-owned authoring modules.
-- Integrate dependency-aware scene/template hot reload without exposing parsing logic to runtime orchestration.
+- Integrate richer session-driven scene/run setup from `SessionRuntimeState`.

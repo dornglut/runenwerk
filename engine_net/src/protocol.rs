@@ -1,6 +1,7 @@
 use crate::replication::SnapshotCursor;
-use crate::simulation::{ClientCommandEnvelope, NetworkEntityId, NetworkTick};
+use crate::simulation::{ClientCommandEnvelope, NetworkEntityId};
 use crate::transport::TransportKind;
+use engine_sim::SimulationTick;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -47,6 +48,7 @@ pub struct JoinRequest {
 pub struct JoinAccepted {
     pub connection_id: u64,
     pub tick_rate_hz: u16,
+    pub join_state: crate::session::AuthoritativeJoinState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,7 +58,8 @@ pub struct JoinRejected {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snapshot {
-    pub tick: NetworkTick,
+    pub tick: SimulationTick,
+    pub cursor: SnapshotCursor,
     pub last_applied: SnapshotCursor,
     pub entity_ids: Vec<NetworkEntityId>,
     pub payload: Vec<u8>,
@@ -64,7 +67,7 @@ pub struct Snapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeltaSnapshot {
-    pub tick: NetworkTick,
+    pub tick: SimulationTick,
     pub base: SnapshotCursor,
     pub cursor: SnapshotCursor,
     pub entity_ids: Vec<NetworkEntityId>,
@@ -73,14 +76,14 @@ pub struct DeltaSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InputFrame {
-    pub tick: NetworkTick,
+    pub tick: SimulationTick,
     pub commands: Vec<ClientCommandEnvelope>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ack {
     pub cursor: SnapshotCursor,
-    pub last_received_tick: NetworkTick,
+    pub last_received_tick: SimulationTick,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

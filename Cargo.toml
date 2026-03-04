@@ -3,6 +3,8 @@ resolver = "3"
 members = [
   "ecs",
   "ecs_macros",
+  "engine_sim",
+  "engine_replay",
   "scheduler",
   "engine",
   "grid",

@@ -4,6 +4,7 @@ pub mod grid;
 pub mod input;
 pub mod net;
 pub mod render;
+pub mod replay;
 pub mod scene;
 pub mod scheduler_diagnostics;
 pub(crate) mod shared;
@@ -15,11 +16,17 @@ pub use fixed_step::FixedStepPlugin;
 pub use grid::GridPlugin;
 pub use input::InputFinalizePlugin;
 pub use net::{
-    NetworkClientInbox, NetworkClientOutbox, NetworkClientPlugin, NetworkDiagnostics,
-    NetworkServerInbox, NetworkServerOutbox, NetworkServerPlugin, PredictionDiagnostics,
-    PredictionPlugin, ReplicationDiagnostics, ReplicationPlugin,
+    ConnectionHealth, NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
+    NetworkClientPlugin, NetworkDiagnostics, NetworkInboundQueue, NetworkOutboundQueue,
+    NetworkRuntimeHandle, NetworkServerInbox, NetworkServerOutbox, NetworkServerPlugin,
+    NetworkSessionStatus, PredictionDiagnostics, PredictionPlugin, PredictionState,
+    ReplicationDiagnostics, ReplicationPlugin, RoundTripMetrics, SnapshotReplicationState,
 };
 pub use render::RenderPlugin;
+pub use replay::{
+    ReplayControllerResource, ReplayMode, ReplayPlugin, ReplayRecorderResource, ReplaySessionInfo,
+    ReplayState,
+};
 pub use scene::ScenePlugin;
 pub use scheduler_diagnostics::SchedulerDiagnosticsPlugin;
 pub use time::TimePlugin;
@@ -32,6 +39,7 @@ pub fn default_plugins() -> Vec<Box<dyn Plugin>> {
     vec![
         Box::new(TimePlugin),
         Box::new(FixedStepPlugin),
+        Box::new(ReplayPlugin),
         Box::new(InputFinalizePlugin),
     ]
 }
@@ -46,8 +54,8 @@ pub fn default_plugins_with_diagnostics() -> Vec<Box<dyn Plugin>> {
 mod tests {
     use super::{
         FixedStepPlugin, InputFinalizePlugin, NetworkClientPlugin, NetworkServerPlugin,
-        PredictionPlugin, RenderPlugin, ReplicationPlugin, ScenePlugin, SchedulerDiagnosticsPlugin,
-        TimePlugin, UiInputPlugin, UiRenderPlugin, default_plugins,
+        PredictionPlugin, RenderPlugin, ReplayPlugin, ReplicationPlugin, ScenePlugin,
+        SchedulerDiagnosticsPlugin, TimePlugin, UiInputPlugin, UiRenderPlugin, default_plugins,
     };
     use crate::plugin::Plugin;
 
@@ -60,6 +68,7 @@ mod tests {
             vec![
                 std::any::type_name::<TimePlugin>(),
                 std::any::type_name::<FixedStepPlugin>(),
+                std::any::type_name::<ReplayPlugin>(),
                 std::any::type_name::<InputFinalizePlugin>(),
             ]
         );
@@ -71,6 +80,7 @@ mod tests {
 
         assert_plugin::<TimePlugin>();
         assert_plugin::<FixedStepPlugin>();
+        assert_plugin::<ReplayPlugin>();
         assert_plugin::<InputFinalizePlugin>();
         assert_plugin::<NetworkClientPlugin>();
         assert_plugin::<NetworkServerPlugin>();
