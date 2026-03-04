@@ -7,7 +7,7 @@ Render plugin is moving toward a pure orchestration role so feature plugins can 
 ## Usage
 
 - Plugin: `RenderPlugin`
-- Scheduler nodes: `frame_render_prepare`, `frame_render_submit`
+- Typed schedules: `RenderPrepare`, `RenderSubmit`
 - Consumes:
   - render graph registrations
   - executor registrations
@@ -24,8 +24,8 @@ Render plugin is moving toward a pure orchestration role so feature plugins can 
 
 - Register feature-owned frame graphs through render graph registry APIs.
 - Register feature-owned pass executors through executor registry APIs.
-- Register ECS frame resources through `EngineData::register_render_frame_resource::<T>()` in feature plugin setup so submit includes them in `RenderFrameDataRegistry`.
-- Schedule feature extract/publish systems to run before `frame_render_prepare` so frame resources are finalized before submit.
+- Register typed frame resources through `RenderFrameResourceBindings::register_resource::<T>()` so submit includes them in `RenderFrameDataRegistry`.
+- Schedule feature extract/publish systems to run before `RenderPrepare` so frame resources are finalized before submit.
 - Register shader roots/assets and consume shader handles in feature plugins.
 - Add feature-owned renderer plugins/examples without editing core render orchestration.
 - Add feature-owned render authoring schemas that compile into runtime graph/executor/pipeline registrations.
@@ -82,10 +82,10 @@ Core render must not own:
 
 ## Current Shader Registry Behavior
 
-- Shader assets are ECS components (`ShaderAssetComponent`) stored in `ShaderRegistryResource`.
+- Shader assets are tracked in `ShaderRegistryResource`.
 - Shader files are auto-discovered by scanning configured roots (default: `assets/shaders`).
 - Shader ids are derived from relative file paths; no enum or hardcoded global key list is required.
-- Hot reload emits ECS events (`ShaderRegistryEvent`) and updates revision counters.
+- Hot reload emits shader registry events and updates revision counters.
 - Runtime systems consume shader handles and events, not hardcoded shader enum variants.
 
 ## Tooling for Custom Renderers
@@ -136,23 +136,18 @@ Progress completed in this pass:
 - UI plugin now owns UI rect shader selection via ECS resource (`UiRenderShaderConfig`), and render submit resolves it to a `ShaderHandle` before invoking core renderer.
 - `text.rs` moved from `render/domain` into `ui/domain`; font atlas + glyph pipeline ownership now lives in UI plugin.
 - `RenderPassPrepareContext` / `RenderPassEncodeContext` now use typed frame-data lookup (`frame_data::<T>()`) instead of hardcoding concrete world frame types.
-- `EngineData` render state now lives in ECS (`render_resources`) and feature plugins register their own typed frame resources.
+- Render state now lives in typed resources and feature plugins register their own typed frame resources.
 - `gfx.render` / `renderer.prepare_packet` / `renderer.render` now accept a generic `RenderFrameDataRegistry` input.
 - Render pass prepare/encode contexts now consume only caller-provided frame data from `RenderFrameDataRegistry`; renderer no longer synthesizes packet-local payload entries.
-- Render submit now populates frame data from ECS through typed `RenderFrameResourceBindings`; feature plugins opt-in by registering resource types, instead of hardcoding submit payload types.
+- Render submit now populates frame data through typed `RenderFrameResourceBindings`; feature plugins opt-in by registering resource types, instead of hardcoding submit payload types.
 - Feature data producers now explicitly target the render-prep stage (`... -> frame_render_prepare -> frame_render_submit`) instead of only depending on submit.
 - Core `renderer.rs` no longer performs world/mesh preparation from feature payloads; `builtin_mesh_overlay` is intentionally no-op in core so feature plugins must own that behavior.
 - Legacy `model_manager` coupling has been removed from the active core render domain module.
 - Scene compatibility render payload module was removed; feature plugins now own their frame payload schemas.
 
 1. Render frame coupling:
-- Render submit no longer adapts from a separate world-frame type; it collects only registered ECS frame resources into `RenderFrameDataRegistry`.
-- Runtime `world_render` compatibility helpers were removed.
-- Target: migrate feature plugins from coarse compatibility resources to smaller plugin-owned ECS resources per executor.
-
-ECS gaps discovered during this migration are tracked in:
-
-- `ecs/requests.md` (currently `Open requests: none.`)
+- Render submit no longer adapts from a separate world-frame type; it collects only registered typed frame resources into `RenderFrameDataRegistry`.
+- Target: migrate feature plugins from coarse compatibility resources to smaller plugin-owned resources per executor.
 
 Render-plugin architecture requests are tracked in:
 

@@ -1,0 +1,9 @@
+[package]
+name = "grotto_online"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine_net = { path = "../engine_net" }
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"

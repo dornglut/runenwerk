@@ -1,48 +1,52 @@
-use crate::plugins::ui::domain::UiDrawCmd;
-use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder, StartupPhase};
-use anyhow::Result;
+use crate::app::App;
+use crate::plugin::Plugin;
+use crate::plugins::input::domain::InputState;
+use crate::plugins::time::domain::Time;
+use crate::runtime::{RenderPrepare, Res, ResMut, Startup};
+use crate::state::{
+    DebugMetricsState, OverlayDrawCmd, SceneRuntimeState, StartupPhase, StartupState,
+    UiOverlayState,
+};
 use winit::keyboard::KeyCode;
 
 pub struct DebugMetricsPlugin;
 
 const ACTION_TOGGLE_METRICS: &str = "debug.metrics.toggle";
 
-impl EnginePlugin for DebugMetricsPlugin {
-    fn name(&self) -> &'static str {
-        "debug_metrics"
-    }
-
-    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
-        builder.add_node_with_edges(
-            "debug_metrics_overlay",
-            debug_metrics_overlay_system,
-            &["overlay_ui_render_extract"],
-        );
-        builder.add_edge("debug_metrics_overlay", "frame_render_prepare");
-        Ok(())
-    }
-
-    fn setup(&self, data: &mut EngineData) -> Result<()> {
-        data.input.map_key(ACTION_TOGGLE_METRICS, KeyCode::F10);
-        Ok(())
+impl Plugin for DebugMetricsPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<DebugMetricsState>();
+        app.init_resource::<StartupState>();
+        app.init_resource::<SceneRuntimeState>();
+        app.init_resource::<UiOverlayState>();
+        app.add_systems(Startup, setup_debug_metrics_input_binding);
+        app.add_systems(RenderPrepare, debug_metrics_overlay_system);
     }
 }
 
-pub fn debug_metrics_overlay_system(data: &mut EngineData) -> anyhow::Result<()> {
-    if data.input.action_pressed(ACTION_TOGGLE_METRICS) {
-        data.debug_metrics.visible = !data.debug_metrics.visible;
+fn setup_debug_metrics_input_binding(mut input: ResMut<InputState>) {
+    input.map_key(ACTION_TOGGLE_METRICS, KeyCode::F10);
+}
+
+fn debug_metrics_overlay_system(
+    input: Res<InputState>,
+    time: Res<Time>,
+    startup: Res<StartupState>,
+    scene: Res<SceneRuntimeState>,
+    mut debug_metrics: ResMut<DebugMetricsState>,
+    mut ui: ResMut<UiOverlayState>,
+) {
+    if input.action_pressed(ACTION_TOGGLE_METRICS) {
+        debug_metrics.visible = !debug_metrics.visible;
     }
 
-    data.debug_metrics
-        .observe_frame_delta(data.time.delta_seconds);
+    debug_metrics.observe_frame_delta(time.delta_seconds);
+    ui.debug_draw_list.commands.clear();
 
-    if !data.debug_metrics.visible {
-        return Ok(());
+    if !debug_metrics.visible {
+        return;
     }
 
-    let world_scene_label = data.scene.world.active.label().to_string();
-    let overlay_scene_label = data.scene.active_overlay().label().to_string();
-    let ui = &mut data.scene.overlay_runtime.ui;
     let (screen_w, _screen_h) = ui.screen_size;
     let scale = ui.scale.max(0.5);
     let x = 12.0 * scale;
@@ -51,7 +55,7 @@ pub fn debug_metrics_overlay_system(data: &mut EngineData) -> anyhow::Result<()>
     let h = 170.0 * scale;
     let clip = Some([x, y, w, h]);
 
-    ui.draw_list.commands.push(UiDrawCmd::Rect {
+    ui.debug_draw_list.commands.push(OverlayDrawCmd::Rect {
         x,
         y,
         w,
@@ -60,13 +64,13 @@ pub fn debug_metrics_overlay_system(data: &mut EngineData) -> anyhow::Result<()>
         radius: 8.0 * scale,
     });
 
-    let phase = match data.startup.phase {
+    let phase = match startup.phase {
         StartupPhase::Loading => "loading",
         StartupPhase::Ready => "ready",
     };
-    let fps = data.debug_metrics.fps_ema;
-    let frame_ms = data.debug_metrics.frame_ms_ema;
-    let timings = data.debug_metrics.last_timings;
+    let fps = debug_metrics.fps_ema;
+    let frame_ms = debug_metrics.frame_ms_ema;
+    let timings = debug_metrics.last_timings;
     let workload_ms = timings.map(|t| {
         t.renderer.prepare_ui_ms
             + t.renderer.prepare_mesh_ms
@@ -79,11 +83,15 @@ pub fn debug_metrics_overlay_system(data: &mut EngineData) -> anyhow::Result<()>
     lines.push(format!("fps={fps:>6.1} frame={frame_ms:>6.2}ms"));
     lines.push(format!(
         "startup={} stable={}/{}",
-        phase, data.startup.stable_frames, data.startup.required_stable_frames
+        phase, startup.stable_frames, startup.required_stable_frames
     ));
     lines.push(format!(
         "scene={} overlay={}",
-        world_scene_label, overlay_scene_label
+        scene.world_scene_label, scene.overlay_scene_label
+    ));
+    lines.push(format!(
+        "overlay_visible={} world_paused={}",
+        scene.overlay_visible, scene.world_paused
     ));
 
     if let Some(t) = timings {
@@ -105,7 +113,7 @@ pub fn debug_metrics_overlay_system(data: &mut EngineData) -> anyhow::Result<()>
 
     let line_h = 16.0 * scale;
     for (idx, line) in lines.into_iter().enumerate() {
-        ui.draw_list.commands.push(UiDrawCmd::Text {
+        ui.debug_draw_list.commands.push(OverlayDrawCmd::Text {
             x: x + 10.0 * scale,
             y: y + 10.0 * scale + line_h * idx as f32,
             content: line,
@@ -114,6 +122,29 @@ pub fn debug_metrics_overlay_system(data: &mut EngineData) -> anyhow::Result<()>
             clip,
         });
     }
+}
 
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use super::DebugMetricsPlugin;
+    use crate::prelude::*;
+    use winit::event::ElementState;
+    use winit::keyboard::KeyCode;
+
+    fn inject_f10(mut input: ResMut<InputState>) {
+        input.handle_keyboard_input(KeyCode::F10, ElementState::Pressed, None);
+    }
+
+    #[test]
+    fn debug_metrics_plugin_populates_overlay_draw_state() {
+        let mut app = App::headless();
+        app.add_plugin(DebugMetricsPlugin);
+        app.add_systems(Update, inject_f10);
+        let app = app.run_for_frames(1).expect("debug metrics should run");
+
+        let metrics = app.world().resource::<DebugMetricsState>().unwrap();
+        assert!(metrics.visible);
+        let overlay = app.world().resource::<UiOverlayState>().unwrap();
+        assert!(!overlay.debug_draw_list.commands.is_empty());
+    }
 }

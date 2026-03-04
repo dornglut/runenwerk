@@ -1,14 +1,14 @@
 # Window Input Demo
 
-Small typed-runtime windowed example for the new `engine::App` path.
+Small windowed example for the `engine::App` path.
 
 It demonstrates:
 
 - real `winit` window creation through `engine::App::run()`
-- typed plugins on top of `ecs_v2`
+- plugins on top of `ecs`
 - default runtime resources: `WindowState`, `Time`, `InputState`
 - action-mapped movement with `W`, `A`, `S`, `D`
-- close-on-`Escape` using the typed runtime API
+- close-on-`Escape` using the runtime API
 
 Run it with:
 

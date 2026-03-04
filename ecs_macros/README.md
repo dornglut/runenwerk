@@ -1,20 +1,12 @@
 # ECS Macros Crate
 
+Proc-macro derives for `ecs`.
+
 ## Purpose
 
-Provides procedural macros that support ECS ergonomics (for example derive macros used by ECS component types).
-
-## Usage
-
-- Crate: `ecs_macros`
-- Consumed by `ecs`/`engine` via macro derives.
+- Provide `#[derive(Component)]` and `#[derive(Bundle)]` for `ecs`.
 
 ## Ownership Boundaries
 
-- Owns macro expansion logic and compile-time code generation support.
-- Does not own runtime ECS storage/query behavior.
-
-## Extension Points
-
-- Add derive and helper macros needed by ECS API ergonomics.
-- Keep generated code aligned with `ecs` crate contracts.
+- Owns derive macro expansion only.
+- Does not own ECS runtime behavior.

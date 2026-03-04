@@ -1,19 +1,28 @@
 use crate::plugin::Plugin;
 use crate::plugins::input::domain::InputState;
 use crate::plugins::time::domain::Time;
-use crate::runtime_v2::schedules::{RenderPrepare, RenderSubmit, Startup, Update};
-use crate::runtime_v2::system::IntoSystemConfigs;
-use crate::runtime_v2::window::WindowState;
-use crate::runtime_v2::winit_runner;
+use crate::runtime::fixed_time::{CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick};
+use crate::runtime::schedules::{
+    FixedUpdate, FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
+};
+use crate::runtime::system::IntoSystemConfigs;
+use crate::runtime::window::WindowState;
+use crate::runtime::winit_runner;
+use crate::state::{
+    GameplayRuntimeConfig, SceneCatalog, SceneRegistration, SceneRuntimeState, StartupState,
+    UiOverlayState,
+};
 use anyhow::{Result, anyhow};
-use ecs_v2::{Resource, World};
+use ecs::{Resource, World};
 use scheduler::{ExecutionScheduler, ScheduleLabel};
 use winit::event_loop::ControlFlow;
 
 const DEFAULT_WINDOW_TITLE: &str = "Grotto Quest - Engine";
 
 pub trait AppRunner: Send {
-    fn next_frame(&mut self, completed_frames: usize) -> bool;
+    fn next_frame(&mut self, completed_frames: usize, world: &World) -> bool;
+
+    fn before_frame(&mut self, _world: &mut World) {}
 }
 
 #[derive(Debug, Clone)]
@@ -30,12 +39,42 @@ impl FixedFramesRunner {
 }
 
 impl AppRunner for FixedFramesRunner {
-    fn next_frame(&mut self, _completed_frames: usize) -> bool {
+    fn next_frame(&mut self, _completed_frames: usize, _world: &World) -> bool {
         if self.frames_remaining == 0 {
             return false;
         }
         self.frames_remaining -= 1;
         true
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FixedTicksRunner {
+    target_ticks: u64,
+}
+
+impl FixedTicksRunner {
+    pub fn new(target_ticks: u64) -> Self {
+        Self { target_ticks }
+    }
+}
+
+impl AppRunner for FixedTicksRunner {
+    fn next_frame(&mut self, _completed_frames: usize, world: &World) -> bool {
+        world
+            .resource::<SimulationTick>()
+            .map(|tick| tick.0 < self.target_ticks)
+            .unwrap_or(false)
+    }
+
+    fn before_frame(&mut self, world: &mut World) {
+        let fixed_step_seconds = world
+            .resource::<FixedTimeConfig>()
+            .map(|config| config.step_seconds)
+            .unwrap_or(1.0 / 60.0);
+        if let Ok(mut time) = world.resource_mut::<Time>() {
+            time.delta_seconds = fixed_step_seconds;
+        }
     }
 }
 
@@ -159,6 +198,47 @@ impl App {
         self
     }
 
+    pub fn add_scene<S>(&mut self, scene: S) -> &mut Self
+    where
+        S: Into<SceneRegistration>,
+    {
+        let scene = scene.into();
+        if self.world.resource::<SceneCatalog>().is_err() {
+            self.world.insert_resource(SceneCatalog::default());
+        }
+        if let Ok(mut catalog) = self.world.resource_mut::<SceneCatalog>() {
+            catalog.register(scene.id, scene.template_path);
+        }
+        self
+    }
+
+    pub fn add_scene_template(&mut self, template_path: impl Into<String>) -> &mut Self {
+        let template_path = template_path.into();
+        let mut id = SceneRegistration::derive_id_from_template_path(&template_path);
+        if self.world.resource::<SceneCatalog>().is_err() {
+            self.world.insert_resource(SceneCatalog::default());
+        }
+        if let Ok(mut catalog) = self.world.resource_mut::<SceneCatalog>() {
+            if catalog.handle(&id).is_some() {
+                let mut suffix = 2usize;
+                let base = id.clone();
+                while catalog.handle(&format!("{base}_{suffix}")).is_some() {
+                    suffix = suffix.saturating_add(1);
+                }
+                id = format!("{base}_{suffix}");
+            }
+            catalog.register(id, template_path);
+        }
+        self
+    }
+
+    pub fn registered_scene_count(&self) -> usize {
+        self.world
+            .resource::<SceneCatalog>()
+            .map(|catalog| catalog.len())
+            .unwrap_or(0)
+    }
+
     pub fn with_control_flow(&mut self, control_flow: ControlFlow) -> &mut Self {
         self.control_flow = control_flow;
         self
@@ -176,6 +256,12 @@ impl App {
 
     pub fn run_for_frames(mut self, frame_count: usize) -> Result<Self> {
         self.set_runner(FixedFramesRunner::new(frame_count));
+        self.run_headless()?;
+        Ok(self)
+    }
+
+    pub fn run_for_ticks(mut self, tick_count: u64) -> Result<Self> {
+        self.set_runner(FixedTicksRunner::new(tick_count));
         self.run_headless()?;
         Ok(self)
     }
@@ -213,13 +299,41 @@ impl App {
             };
             self.world.insert_resource(state);
         }
+        if !self.world.has_resource::<SceneCatalog>() {
+            self.world.insert_resource(SceneCatalog::default());
+        }
+        if !self.world.has_resource::<StartupState>() {
+            self.world.insert_resource(StartupState::default());
+        }
+        if !self.world.has_resource::<SceneRuntimeState>() {
+            self.world.insert_resource(SceneRuntimeState::default());
+        }
+        if !self.world.has_resource::<UiOverlayState>() {
+            self.world.insert_resource(UiOverlayState::default());
+        }
+        if !self.world.has_resource::<GameplayRuntimeConfig>() {
+            self.world.insert_resource(GameplayRuntimeConfig::default());
+        }
+        if !self.world.has_resource::<FixedTimeConfig>() {
+            self.world.insert_resource(FixedTimeConfig::default());
+        }
+        if !self.world.has_resource::<CatchupBudget>() {
+            self.world.insert_resource(CatchupBudget::default());
+        }
+        if !self.world.has_resource::<FixedTimeState>() {
+            self.world.insert_resource(FixedTimeState::default());
+        }
+        if !self.world.has_resource::<SimulationTick>() {
+            self.world.insert_resource(SimulationTick::default());
+        }
     }
 
     fn run_headless(&mut self) -> Result<()> {
         self.prepare_for_run(true)?;
 
         let mut completed_frames = 0usize;
-        while self.runner.next_frame(completed_frames) {
+        while self.runner.next_frame(completed_frames, &self.world) {
+            self.runner.before_frame(&mut self.world);
             self.run_frame()?;
             completed_frames = completed_frames.saturating_add(1);
         }
@@ -243,11 +357,14 @@ impl App {
     }
 
     pub(crate) fn run_frame(&mut self) -> Result<()> {
+        self.scheduler.run_schedule::<PreUpdate>(&mut self.world)?;
+        self.run_fixed_update_schedule()?;
         self.scheduler.run_schedule::<Update>(&mut self.world)?;
         self.scheduler
             .run_schedule::<RenderPrepare>(&mut self.world)?;
         self.scheduler
             .run_schedule::<RenderSubmit>(&mut self.world)?;
+        self.scheduler.run_schedule::<FrameEnd>(&mut self.world)?;
         Ok(())
     }
 
@@ -257,6 +374,90 @@ impl App {
         }
         let messages: Vec<_> = self.build_errors.iter().map(ToString::to_string).collect();
         Err(anyhow!("app setup failed:\n{}", messages.join("\n")))
+    }
+
+    fn run_fixed_update_schedule(&mut self) -> Result<()> {
+        let step_seconds = self
+            .world
+            .resource::<FixedTimeConfig>()
+            .map(|config| config.step_seconds)
+            .unwrap_or(1.0 / 60.0)
+            .clamp(1.0 / 240.0, 1.0 / 15.0);
+        let delta_seconds = self
+            .world
+            .resource::<Time>()
+            .map(|time| time.delta_seconds)
+            .unwrap_or(step_seconds)
+            .clamp(0.0, 0.25);
+        let max_steps_per_frame = self
+            .world
+            .resource::<CatchupBudget>()
+            .map(|budget| budget.max_steps_per_frame)
+            .unwrap_or(4)
+            .clamp(1, 16);
+
+        {
+            let mut fixed_state = self
+                .world
+                .resource_mut::<FixedTimeState>()
+                .expect("FixedTimeState should be installed");
+            fixed_state.accumulator_seconds = (fixed_state.accumulator_seconds + delta_seconds)
+                .min(step_seconds * max_steps_per_frame as f32);
+            fixed_state.steps_ran_last_frame = 0;
+        }
+
+        let mut steps = 0u32;
+        loop {
+            let should_step = {
+                let fixed_state = self
+                    .world
+                    .resource::<FixedTimeState>()
+                    .expect("FixedTimeState should be installed");
+                fixed_state.accumulator_seconds + f32::EPSILON >= step_seconds
+                    && steps < max_steps_per_frame
+            };
+            if !should_step {
+                break;
+            }
+
+            self.scheduler
+                .run_schedule::<FixedUpdate>(&mut self.world)?;
+            steps = steps.saturating_add(1);
+
+            let mut fixed_state = self
+                .world
+                .resource_mut::<FixedTimeState>()
+                .expect("FixedTimeState should be installed");
+            fixed_state.accumulator_seconds -= step_seconds;
+            fixed_state.steps_ran_last_frame = steps;
+        }
+
+        let saturated = {
+            let fixed_state = self
+                .world
+                .resource::<FixedTimeState>()
+                .expect("FixedTimeState should be installed");
+            fixed_state.accumulator_seconds + f32::EPSILON >= step_seconds
+        };
+        if saturated {
+            let mut fixed_state = self
+                .world
+                .resource_mut::<FixedTimeState>()
+                .expect("FixedTimeState should be installed");
+            fixed_state.accumulator_seconds = 0.0;
+            fixed_state.saturated_frames = fixed_state.saturated_frames.saturating_add(1);
+            tracing::warn!("fixed-step loop saturated, dropping accumulated time");
+        }
+
+        if steps > 0 {
+            let mut tick = self
+                .world
+                .resource_mut::<SimulationTick>()
+                .expect("SimulationTick should be installed");
+            tick.0 = tick.0.saturating_add(steps as u64);
+        }
+
+        Ok(())
     }
 }
 

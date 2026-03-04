@@ -1,50 +1,50 @@
-use crate::{Component, World};
-use std::any::Any;
+use crate::{Component, Entity, EntityError, World};
 
-/// Group of components that can be spawned atomically as one entity.
-pub trait ComponentBundle {
-    fn register_components(world: &mut World);
-    fn into_components(self) -> Vec<Box<dyn Any>>;
+/// Group of components that can be inserted or removed together.
+pub trait Bundle: Sized + 'static {
+    fn register(world: &mut World);
+    fn insert(self, world: &mut World, entity: Entity) -> Result<(), EntityError>;
+    fn remove(world: &mut World, entity: Entity) -> Result<Self, EntityError>;
 }
 
-impl<T: Component> ComponentBundle for T {
-    fn register_components(world: &mut World) {
-        world.ensure_component_registered::<T>();
+impl<T: Component> Bundle for T {
+    fn register(world: &mut World) {
+        world.__register_component::<T>();
     }
 
-    fn into_components(self) -> Vec<Box<dyn Any>> {
-        vec![Box::new(self) as Box<dyn Any>]
+    fn insert(self, world: &mut World, entity: Entity) -> Result<(), EntityError> {
+        world.__insert_component(entity, self)
+    }
+
+    fn remove(world: &mut World, entity: Entity) -> Result<Self, EntityError> {
+        world.__remove_component::<T>(entity)
     }
 }
 
-macro_rules! impl_component_bundle_tuple {
+macro_rules! impl_bundle_tuple {
     ($(($ty:ident, $var:ident)),+ $(,)?) => {
-        impl<$($ty: Component),+> ComponentBundle for ($($ty,)+) {
-            fn register_components(world: &mut World) {
-                $(world.ensure_component_registered::<$ty>();)+
+        impl<$($ty: Component),+> Bundle for ($($ty,)+) {
+            fn register(world: &mut World) {
+                $(world.__register_component::<$ty>();)+
             }
 
-            fn into_components(self) -> Vec<Box<dyn Any>> {
+            fn insert(self, world: &mut World, entity: Entity) -> Result<(), EntityError> {
                 let ($($var,)+) = self;
-                vec![$(Box::new($var) as Box<dyn Any>),+]
+                $(world.__insert_component(entity, $var)?;)+
+                Ok(())
+            }
+
+            fn remove(world: &mut World, entity: Entity) -> Result<Self, EntityError> {
+                Ok((
+                    $(world.__remove_component::<$ty>(entity)?,)+
+                ))
             }
         }
     };
 }
 
-impl_component_bundle_tuple!((A, a), (B, b));
-impl_component_bundle_tuple!((A, a), (B, b), (C, c));
-impl_component_bundle_tuple!((A, a), (B, b), (C, c), (D, d));
-impl_component_bundle_tuple!((A, a), (B, b), (C, c), (D, d), (E, e));
-impl_component_bundle_tuple!((A, a), (B, b), (C, c), (D, d), (E, e), (F, f));
-impl_component_bundle_tuple!((A, a), (B, b), (C, c), (D, d), (E, e), (F, f), (G, g));
-impl_component_bundle_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h)
-);
+impl_bundle_tuple!((A, a), (B, b));
+impl_bundle_tuple!((A, a), (B, b), (C, c));
+impl_bundle_tuple!((A, a), (B, b), (C, c), (D, d));
+impl_bundle_tuple!((A, a), (B, b), (C, c), (D, d), (E, e));
+impl_bundle_tuple!((A, a), (B, b), (C, c), (D, d), (E, e), (F, f));

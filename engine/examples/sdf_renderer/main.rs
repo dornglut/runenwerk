@@ -1,12 +1,20 @@
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
+use engine::plugins::input::domain::action;
 use engine::plugins::render::domain::{
-    BuiltinRenderPassExecutor, RenderFeatureGraphSpec, RenderPassEncodeContext, RenderPassExecutor,
+    BuiltinRenderPassExecutor, RenderFeatureGraphSpec, RenderFrameResourceBindings,
+    RenderGraphRegistryResource, RenderPassEncodeContext, RenderPassExecutor,
     RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
 use engine::plugins::ui::domain::UiWorldHudStats;
-use engine::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
-use engine::{platform::App, plugins::input::domain::action};
+use engine::plugins::{
+    DebugMetricsPlugin, GridPlugin, RenderPlugin, ScenePlugin, UiInputPlugin, UiRenderPlugin,
+    default_plugins,
+};
+use engine::prelude::{
+    App, CoreSet, InputState, Plugin, Res, ResMut, SceneRuntimeState, Startup, SystemConfigExt,
+    Time, Update,
+};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::fs;
@@ -38,10 +46,17 @@ const SDF_MAX_MODELS: usize = 1;
 static SDF_CONTROLS: OnceLock<SdfControlsConfig> = OnceLock::new();
 
 fn main() -> Result<()> {
-    App::new()
-        .set_title("Grotto Quest - 3D SDF Compute Renderer")
-        .add_plugin(SdfRendererExamplePlugin)
-        .run()
+    let mut app = App::new();
+    app.set_title("Grotto Quest - 3D SDF Compute Renderer");
+    app.add_plugins(default_plugins());
+    app.add_plugin(ScenePlugin);
+    app.add_plugin(GridPlugin);
+    app.add_plugin(UiInputPlugin);
+    app.add_plugin(UiRenderPlugin);
+    app.add_plugin(DebugMetricsPlugin);
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(SdfRendererExamplePlugin);
+    app.run()
 }
 
 struct SdfRendererExamplePlugin;
@@ -94,68 +109,55 @@ impl Default for SdfWorldState {
     }
 }
 
-impl EnginePlugin for SdfRendererExamplePlugin {
-    fn name(&self) -> &'static str {
-        "sdf_renderer_example"
-    }
-
-    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
-        builder.add_node_with_edges(
-            "sdf_renderer_example_update",
-            sdf_renderer_example_update_system,
-            &["world_scene_update"],
+impl Plugin for SdfRendererExamplePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<SdfWorldState>();
+        app.init_resource::<UiWorldHudStats>();
+        app.add_systems(Startup, sdf_renderer_example_setup_system);
+        app.add_systems(
+            Update,
+            sdf_renderer_example_update_system.after(CoreSet::Scene),
         );
-        builder.add_edge("sdf_renderer_example_update", "frame_render_prepare");
-        Ok(())
     }
+}
 
-    fn setup(&self, data: &mut EngineData) -> Result<()> {
-        if data
-            .render_resources
-            .get_resource::<SdfWorldState>()
-            .is_none()
-        {
-            data.render_resources
-                .insert_resource(SdfWorldState::default());
+fn sdf_renderer_example_setup_system(
+    mut frame_bindings: ResMut<RenderFrameResourceBindings>,
+    mut render_graph_registry: ResMut<RenderGraphRegistryResource>,
+    mut render_executor_registry: ResMut<RenderPassExecutorRegistryResource>,
+    mut input: ResMut<InputState>,
+    mut state: ResMut<SdfWorldState>,
+    mut hud: ResMut<UiWorldHudStats>,
+) -> Result<()> {
+    frame_bindings.register_resource::<SdfWorldState>();
+    *hud = UiWorldHudStats::default();
+    let params_config = load_config_with_default::<SdfParamsConfig>(PARAMS_CONFIG_FILE);
+    apply_sdf_params(&mut state, &params_config);
+    let _ = SDF_CONTROLS.set(params_config.controls);
+
+    let input_bindings =
+        load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
+    let applied_bindings = apply_input_bindings(&mut input, &input_bindings);
+
+    let render_graph_config =
+        load_config_with_default::<SdfRenderGraphConfig>(RENDER_GRAPH_CONFIG_FILE);
+    let (active_render_graph_config, spec) = match render_graph_config.to_spec() {
+        Ok(spec) => (render_graph_config.clone(), spec),
+        Err(err) => {
+            tracing::error!(
+                config = RENDER_GRAPH_CONFIG_FILE,
+                ?err,
+                "invalid sdf render graph config; using built-in defaults"
+            );
+            let fallback = SdfRenderGraphConfig::default();
+            let spec = fallback.to_spec()?;
+            (fallback, spec)
         }
-        data.register_render_frame_resource::<SdfWorldState>();
-        if data
-            .render_resources
-            .get_resource::<UiWorldHudStats>()
-            .is_none()
-        {
-            data.render_resources
-                .insert_resource(UiWorldHudStats::default());
-        }
+    };
+    render_graph_registry.register_feature_graph(spec);
 
-        let params_config = load_config_with_default::<SdfParamsConfig>(PARAMS_CONFIG_FILE);
-        apply_sdf_params(data, &params_config)?;
-        let _ = SDF_CONTROLS.set(params_config.controls);
-
-        let input_bindings =
-            load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
-        let applied_bindings = apply_input_bindings(data, &input_bindings);
-
-        let render_graph_config =
-            load_config_with_default::<SdfRenderGraphConfig>(RENDER_GRAPH_CONFIG_FILE);
-        let (active_render_graph_config, spec) = match render_graph_config.to_spec() {
-            Ok(spec) => (render_graph_config.clone(), spec),
-            Err(err) => {
-                tracing::error!(
-                    config = RENDER_GRAPH_CONFIG_FILE,
-                    ?err,
-                    "invalid sdf render graph config; using built-in defaults"
-                );
-                let fallback = SdfRenderGraphConfig::default();
-                let spec = fallback.to_spec()?;
-                (fallback, spec)
-            }
-        };
-        data.render_graph_registry.register_feature_graph(spec);
-
-        let bound_executors = match active_render_graph_config
-            .register_custom_executors(&mut data.render_executor_registry)
-        {
+    let bound_executors =
+        match active_render_graph_config.register_custom_executors(&mut render_executor_registry) {
             Ok(count) => count,
             Err(err) => {
                 tracing::error!(
@@ -164,154 +166,136 @@ impl EnginePlugin for SdfRendererExamplePlugin {
                     "invalid sdf executor bindings; using built-in defaults"
                 );
                 let fallback = SdfRenderGraphConfig::default();
-                fallback.register_custom_executors(&mut data.render_executor_registry)?
+                fallback.register_custom_executors(&mut render_executor_registry)?
             }
         };
 
-        tracing::info!(
-            bindings = applied_bindings,
-            graph_passes = active_render_graph_config.passes.len(),
-            graph_compute_pipelines = active_render_graph_config.compute_pipelines.len(),
-            graph_render_pipelines = active_render_graph_config.render_builtin_pipelines.len(),
-            executor_bindings = bound_executors,
-            "sdf renderer setup applied"
-        );
+    tracing::info!(
+        bindings = applied_bindings,
+        graph_passes = active_render_graph_config.passes.len(),
+        graph_compute_pipelines = active_render_graph_config.compute_pipelines.len(),
+        graph_render_pipelines = active_render_graph_config.render_builtin_pipelines.len(),
+        executor_bindings = bound_executors,
+        "sdf renderer setup applied"
+    );
 
-        Ok(())
-    }
+    Ok(())
 }
 
-fn sdf_renderer_example_update_system(data: &mut EngineData) -> Result<()> {
-    {
-        let state = sdf_world_state_mut(data)?;
-        state.agents.clear();
-    }
+fn sdf_renderer_example_update_system(
+    input: Res<InputState>,
+    time: Res<Time>,
+    scene: Res<SceneRuntimeState>,
+    mut state: ResMut<SdfWorldState>,
+    mut hud: ResMut<UiWorldHudStats>,
+) -> Result<()> {
+    state.agents.clear();
     let controls = SDF_CONTROLS.get().copied().unwrap_or_default();
 
-    if data.input.toggle_pause_menu {
-        let next = !sdf_world_state(data)?.world_paused;
-        sdf_world_state_mut(data)?.world_paused = next;
+    if input.toggle_pause_menu {
+        state.world_paused = !state.world_paused;
     }
 
-    if !sdf_world_state(data)?.world_paused {
-        sdf_world_state_mut(data)?.elapsed_time_seconds += data.time.delta_seconds.max(0.0);
+    if !state.world_paused {
+        state.elapsed_time_seconds += time.delta_seconds.max(0.0);
     }
 
-    if data.input.left_mouse_down() {
-        let yaw_delta = data.input.mouse_delta.0 * controls.mouse_rotate_sensitivity;
-        let pitch_delta = data.input.mouse_delta.1 * controls.mouse_rotate_sensitivity;
-        let state = sdf_world_state_mut(data)?;
+    if input.left_mouse_down() {
+        let yaw_delta = input.mouse_delta.0 * controls.mouse_rotate_sensitivity;
+        let pitch_delta = input.mouse_delta.1 * controls.mouse_rotate_sensitivity;
         state.camera_yaw -= yaw_delta;
         state.camera_pitch -= pitch_delta;
     }
 
-    if data.input.scroll_delta.abs() > f32::EPSILON {
-        let zoom_delta = data.input.scroll_delta * controls.scroll_zoom_sensitivity;
-        sdf_world_state_mut(data)?.camera_distance -= zoom_delta;
+    if input.scroll_delta.abs() > f32::EPSILON {
+        let zoom_delta = input.scroll_delta * controls.scroll_zoom_sensitivity;
+        state.camera_distance -= zoom_delta;
     }
 
-    let (min_pitch, max_pitch, min_distance, max_distance) = {
-        let state = sdf_world_state(data)?;
-        let min_pitch = state.camera_pitch_min.min(state.camera_pitch_max);
-        let max_pitch = state.camera_pitch_min.max(state.camera_pitch_max);
-        let min_distance = state
-            .camera_distance_min
-            .min(state.camera_distance_max)
-            .max(0.1);
-        let max_distance = state
-            .camera_distance_min
-            .max(state.camera_distance_max)
-            .max(min_distance);
-        (min_pitch, max_pitch, min_distance, max_distance)
-    };
-    {
-        let state = sdf_world_state_mut(data)?;
-        state.camera_pitch = state.camera_pitch.clamp(min_pitch, max_pitch);
-        state.camera_distance = state.camera_distance.clamp(min_distance, max_distance);
-    }
+    let min_pitch = state.camera_pitch_min.min(state.camera_pitch_max);
+    let max_pitch = state.camera_pitch_min.max(state.camera_pitch_max);
+    let min_distance = state
+        .camera_distance_min
+        .min(state.camera_distance_max)
+        .max(0.1);
+    let max_distance = state
+        .camera_distance_min
+        .max(state.camera_distance_max)
+        .max(min_distance);
+    state.camera_pitch = state.camera_pitch.clamp(min_pitch, max_pitch);
+    state.camera_distance = state.camera_distance.clamp(min_distance, max_distance);
 
     let mut speed = controls.base_move_speed;
-    if data.input.action_down(ACTION_SPEED_UP) {
+    if input.action_down(ACTION_SPEED_UP) {
         speed *= controls.speed_up_multiplier;
     }
-    if data.input.action_down(ACTION_SPEED_DOWN) {
+    if input.action_down(ACTION_SPEED_DOWN) {
         speed *= controls.speed_down_multiplier;
     }
 
-    let move_dt = speed * data.time.delta_seconds;
-    let yaw = sdf_world_state(data)?.camera_yaw;
+    let move_dt = speed * time.delta_seconds;
+    let yaw = state.camera_yaw;
     let forward = [yaw.sin(), yaw.cos()];
     let right = [forward[1], -forward[0]];
 
-    let forward_axis = (if data.input.action_down(action::WORLD_MOVE_UP) {
+    let forward_axis = (if input.action_down(action::WORLD_MOVE_UP) {
         1.0
     } else {
         0.0
-    }) - (if data.input.action_down(action::WORLD_MOVE_DOWN) {
-        1.0
-    } else {
-        0.0
-    });
-    let strafe_axis = (if data.input.action_down(action::WORLD_MOVE_RIGHT) {
-        1.0
-    } else {
-        0.0
-    }) - (if data.input.action_down(action::WORLD_MOVE_LEFT) {
+    }) - (if input.action_down(action::WORLD_MOVE_DOWN) {
         1.0
     } else {
         0.0
     });
-    let vertical_axis = (if data.input.action_down(ACTION_UP) {
+    let strafe_axis = (if input.action_down(action::WORLD_MOVE_RIGHT) {
         1.0
     } else {
         0.0
-    }) - (if data.input.action_down(ACTION_DOWN) {
+    }) - (if input.action_down(action::WORLD_MOVE_LEFT) {
+        1.0
+    } else {
+        0.0
+    });
+    let vertical_axis = (if input.action_down(ACTION_UP) {
+        1.0
+    } else {
+        0.0
+    }) - (if input.action_down(ACTION_DOWN) {
         1.0
     } else {
         0.0
     });
 
-    {
-        let state = sdf_world_state_mut(data)?;
-        state.camera_target[0] += (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
-        state.camera_target[2] += (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;
-        state.camera_target[1] += vertical_axis * move_dt;
-        state.camera_target[1] = state.camera_target[1]
-            .clamp(controls.camera_target_y_min, controls.camera_target_y_max);
+    state.camera_target[0] += (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
+    state.camera_target[2] += (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;
+    state.camera_target[1] += vertical_axis * move_dt;
+    state.camera_target[1] =
+        state.camera_target[1].clamp(controls.camera_target_y_min, controls.camera_target_y_max);
+
+    if input.action_pressed(ACTION_DEBUG_NEXT) {
+        state.debug_view_mode = (state.debug_view_mode + 1) % 4;
+    }
+    if input.action_pressed(ACTION_DEBUG_PREV) {
+        state.debug_view_mode = (state.debug_view_mode + 3) % 4;
     }
 
-    if data.input.action_pressed(ACTION_DEBUG_NEXT) {
-        let next = (sdf_world_state(data)?.debug_view_mode + 1) % 4;
-        sdf_world_state_mut(data)?.debug_view_mode = next;
-    }
-    if data.input.action_pressed(ACTION_DEBUG_PREV) {
-        let next = (sdf_world_state(data)?.debug_view_mode + 3) % 4;
-        sdf_world_state_mut(data)?.debug_view_mode = next;
-    }
-
-    let hud_next = {
-        let state = sdf_world_state(data)?;
-        let player = state.agents.iter().find(|agent| agent.team == 0);
-        let enemies_alive = state
-            .agents
-            .iter()
-            .filter(|agent| agent.team != 0 && agent.health_ratio > 0.0)
-            .count();
-        if let Some(player) = player {
-            UiWorldHudStats {
-                visible: true,
-                player_x: player.x,
-                player_y: player.y,
-                enemies_alive,
-                enemy_kills: data.scene.world_runtime.ctx.enemy_kills,
-            }
-        } else {
-            UiWorldHudStats::default()
+    let player = state.agents.iter().find(|agent| agent.team == 0);
+    let enemies_alive = state
+        .agents
+        .iter()
+        .filter(|agent| agent.team != 0 && agent.health_ratio > 0.0)
+        .count();
+    *hud = if let Some(player) = player {
+        UiWorldHudStats {
+            visible: true,
+            player_x: player.x,
+            player_y: player.y,
+            enemies_alive,
+            enemy_kills: scene.enemy_kills,
         }
+    } else {
+        UiWorldHudStats::default()
     };
-    if let Some(hud) = data.render_resources.get_resource_mut::<UiWorldHudStats>() {
-        *hud = hud_next;
-    }
 
     Ok(())
 }
@@ -1177,13 +1161,12 @@ struct SdfRenderPassConfig {
     depends_on: Vec<String>,
 }
 
-fn apply_sdf_params(data: &mut EngineData, params: &SdfParamsConfig) -> Result<()> {
+fn apply_sdf_params(state: &mut SdfWorldState, params: &SdfParamsConfig) {
     let _ = (
         params.world_scene_label.as_str(),
         params.overlay_scene_label.as_str(),
         params.render_mesh_overlay,
     );
-    let state = sdf_world_state_mut(data)?;
     state.world_bounds = params.world_bounds;
     state.camera_target = params.camera.target;
     state.camera_yaw = params.camera.yaw;
@@ -1198,22 +1181,9 @@ fn apply_sdf_params(data: &mut EngineData, params: &SdfParamsConfig) -> Result<(
     state.debug_view_mode = params.debug_view_mode;
     state.elapsed_time_seconds = 0.0;
     state.agents.clear();
-    Ok(())
 }
 
-fn sdf_world_state(data: &EngineData) -> Result<&SdfWorldState> {
-    data.render_resources
-        .get_resource::<SdfWorldState>()
-        .ok_or_else(|| anyhow!("missing SdfWorldState resource"))
-}
-
-fn sdf_world_state_mut(data: &mut EngineData) -> Result<&mut SdfWorldState> {
-    data.render_resources
-        .get_resource_mut::<SdfWorldState>()
-        .ok_or_else(|| anyhow!("missing SdfWorldState resource"))
-}
-
-fn apply_input_bindings(data: &mut EngineData, config: &SdfInputBindingsConfig) -> usize {
+fn apply_input_bindings(input: &mut InputState, config: &SdfInputBindingsConfig) -> usize {
     let mut applied = 0usize;
     for (index, binding) in config.bindings.iter().enumerate() {
         let action = binding.action.trim();
@@ -1234,7 +1204,7 @@ fn apply_input_bindings(data: &mut EngineData, config: &SdfInputBindingsConfig) 
             );
             continue;
         };
-        data.input.map_key(action.to_string(), key);
+        input.map_key(action.to_string(), key);
         applied = applied.saturating_add(1);
     }
     applied

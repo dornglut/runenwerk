@@ -2,10 +2,13 @@
 resolver = "3"
 members = [
   "ecs",
-  "ecs_v2",
-  "ecs_v2_macros",
   "ecs_macros",
   "scheduler",
   "engine",
-  "grid"
+  "grid",
+  "engine_net",
+  "engine_net_quic",
+  "grotto_online",
+  "grotto_server",
+  "grotto_client"
 ]

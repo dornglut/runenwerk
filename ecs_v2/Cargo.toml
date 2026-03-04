@@ -1,9 +1,0 @@
-[package]
-name = "ecs_v2"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-ecs_v2_macros = { path = "../ecs_v2_macros" }
-thiserror = "2.0.18"
-

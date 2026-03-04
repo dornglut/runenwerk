@@ -1,4 +1,4 @@
-use engine::plugins::default_runtime_plugins;
+use engine::plugins::default_plugins;
 use engine::prelude::*;
 use winit::event::ElementState;
 use winit::keyboard::KeyCode;
@@ -41,7 +41,7 @@ fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<Fra
 }
 
 #[test]
-fn typed_app_runs_startup_once_and_updates_each_frame() {
+fn app_runs_startup_once_and_updates_each_frame() {
     let mut app = App::new();
     app.add_plugin(MinimalPlugin);
     let app = app.run_for_frames(3).expect("headless app should run");
@@ -154,7 +154,7 @@ struct DemoLogicPlugin;
 impl Plugin for DemoLogicPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DemoFrames>();
-        app.add_plugins(default_runtime_plugins());
+        app.add_plugins(default_plugins());
         app.add_systems(Startup, setup_demo_player);
         app.add_systems(
             Update,
@@ -208,4 +208,135 @@ fn demo_style_plugin_updates_title_and_close_state_headlessly() {
 
     let positions: Vec<_> = app.world().query::<&Position>().iter().copied().collect();
     assert_eq!(positions, vec![Position { x: 1, y: 0 }]);
+}
+
+#[derive(Debug, Default)]
+struct FixedScheduleLog(Vec<&'static str>);
+
+struct FixedTickPlugin;
+
+impl Plugin for FixedTickPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<FixedScheduleLog>();
+        app.insert_resource(FixedTimeConfig {
+            step_seconds: 1.0 / 60.0,
+        });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 4,
+        });
+        app.add_systems(PreUpdate, log_pre_update);
+        app.add_systems(FixedUpdate, log_fixed_update);
+        app.add_systems(Update, log_update);
+        app.add_systems(FrameEnd, log_frame_end);
+    }
+}
+
+fn log_pre_update(mut log: ResMut<FixedScheduleLog>) {
+    log.0.push("pre");
+}
+
+fn log_fixed_update(mut log: ResMut<FixedScheduleLog>) {
+    log.0.push("fixed");
+}
+
+fn log_update(mut log: ResMut<FixedScheduleLog>) {
+    log.0.push("update");
+}
+
+fn log_frame_end(mut log: ResMut<FixedScheduleLog>) {
+    log.0.push("frame_end");
+}
+
+#[test]
+fn run_for_ticks_executes_fixed_update_deterministically() {
+    let mut app = App::headless();
+    app.add_plugin(FixedTickPlugin);
+    let app = app
+        .run_for_ticks(3)
+        .expect("fixed-tick runner should stop on the requested tick");
+
+    assert_eq!(app.world().resource::<SimulationTick>().unwrap().0, 3);
+    assert_eq!(
+        app.world().resource::<FixedScheduleLog>().unwrap().0,
+        vec![
+            "pre",
+            "fixed",
+            "update",
+            "frame_end",
+            "pre",
+            "fixed",
+            "update",
+            "frame_end",
+            "pre",
+            "fixed",
+            "update",
+            "frame_end",
+        ]
+    );
+
+    let fixed_state = app.world().resource::<FixedTimeState>().unwrap();
+    assert_eq!(fixed_state.steps_ran_last_frame, 1);
+    assert_eq!(fixed_state.saturated_frames, 0);
+}
+
+#[derive(Debug, Default)]
+struct ScriptedDeltaState {
+    next_frame: usize,
+    fixed_updates: u32,
+}
+
+struct ScriptedDeltaPlugin;
+
+impl Plugin for ScriptedDeltaPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ScriptedDeltaState>();
+        app.insert_resource(FixedTimeConfig { step_seconds: 0.1 });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 4,
+        });
+        app.add_systems(PreUpdate, scripted_delta);
+        app.add_systems(FixedUpdate, count_fixed_update);
+    }
+}
+
+fn scripted_delta(mut time: ResMut<Time>, mut state: ResMut<ScriptedDeltaState>) {
+    time.delta_seconds = if state.next_frame == 0 { 0.0 } else { 0.35 };
+    state.next_frame += 1;
+}
+
+fn count_fixed_update(mut state: ResMut<ScriptedDeltaState>) {
+    state.fixed_updates += 1;
+}
+
+#[test]
+fn fixed_step_schedule_supports_zero_and_batched_ticks_per_frame() {
+    let mut app = App::headless();
+    app.add_plugin(ScriptedDeltaPlugin);
+    let app = app
+        .run_for_frames(2)
+        .expect("scripted fixed-step frames should run");
+
+    let state = app.world().resource::<ScriptedDeltaState>().unwrap();
+    assert_eq!(state.fixed_updates, 3);
+    assert_eq!(app.world().resource::<SimulationTick>().unwrap().0, 3);
+
+    let fixed_state = app.world().resource::<FixedTimeState>().unwrap();
+    assert_eq!(fixed_state.steps_ran_last_frame, 3);
+    assert_eq!(fixed_state.saturated_frames, 0);
+}
+
+#[test]
+fn app_tracks_scene_registrations_without_legacy_runtime() {
+    let mut app = App::headless();
+    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
+    app.add_scene_template("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
+    app.add_scene_template("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
+
+    assert_eq!(app.registered_scene_count(), 3);
+
+    let catalog = app.world().resource::<SceneCatalog>().unwrap();
+    assert_eq!(catalog.len(), 3);
+    assert!(catalog.handle("main_menu").is_some());
+    assert!(catalog.handle("main_menu_2").is_some());
+    assert!(catalog.handle("main_menu_3").is_some());
 }

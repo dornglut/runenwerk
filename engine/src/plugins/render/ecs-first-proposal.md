@@ -22,7 +22,7 @@ Render core should consume only ECS state prepared by feature/plugin systems.
 ### A) Data Production (Feature Plugins)
 
 - Feature plugins register normal ECS systems in pre-render schedule stages.
-- Those systems write/update render-relevant resources/components in `EngineData.render_resources` (or dedicated ECS worlds owned by the feature).
+- Those systems write/update render-relevant typed resources/components in the root `ecs::World`.
 - Examples:
   - camera state resource
   - world bounds resource

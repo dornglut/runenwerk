@@ -8,24 +8,25 @@ Hosts the runtime, plugin composition, and core engine-facing feature implementa
 
 - Crate: `engine`
 - Primary entry surface: `engine::App`, `engine::Plugin`, and `engine::prelude`.
-- Legacy entry surface: `engine::legacy`, `engine::runtime`, and `engine::platform`.
 - Features are organized under `engine/src/plugins/*`.
 
-### Typed Runtime
+### Runtime
 
-The typed runtime path is now the preferred API for new code:
+The runtime path is now the only supported engine runtime. New code should use:
 
 - `engine::App`
 - `engine::App::new()` for the windowed runtime
 - `engine::App::headless()` for deterministic tests/tools
 - `engine::Plugin`
-- schedule labels: `Startup`, `Update`, `RenderPrepare`, `RenderSubmit`
-- built-in runtime resources: `WindowState`, `Time`, `InputState`
+- default plugin stack: `engine::plugins::default_plugins()`
+- networking plugins: `NetworkClientPlugin`, `NetworkServerPlugin`, `ReplicationPlugin`, `PredictionPlugin`
+- schedule labels: `Startup`, `PreUpdate`, `FixedUpdate`, `Update`, `RenderPrepare`, `RenderSubmit`, `FrameEnd`
+- built-in runtime resources: `WindowState`, `Time`, `InputState`, `FixedTimeConfig`, `FixedTimeState`, `CatchupBudget`, `SimulationTick`
 - ordering helpers: `in_set`, `before`, `after`
 - system params: `Query`, `Res`, `ResMut`, `Commands`
 
-See [`engine/examples/runtime_minimal/main.rs`](/Users/joshua/Projekte/grotto-quest/engine/examples/runtime_minimal/main.rs) for the smallest headless end-to-end example.
-See [`engine/examples/window_input_demo/main.rs`](/Users/joshua/Projekte/grotto-quest/engine/examples/window_input_demo/main.rs) for the primary windowed typed-runtime demo.
+See [`engine/examples/runtime_minimal/main.rs`](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/examples/runtime_minimal/main.rs) for the smallest headless end-to-end example.
+See [`engine/examples/window_input_demo/main.rs`](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/examples/window_input_demo/main.rs) for the primary windowed runtime demo.
 
 ## Ownership Boundaries
 

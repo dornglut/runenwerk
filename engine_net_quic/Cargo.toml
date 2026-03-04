@@ -1,0 +1,8 @@
+[package]
+name = "engine_net_quic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine_net = { path = "../engine_net" }
+quinn = "0.11.9"

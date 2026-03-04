@@ -1,7 +1,8 @@
 pub use crate::{
-    Component, ComponentBundle, ComponentChangeKind, ComponentChangeRecord, EntityBuilder,
-    EntityDespawnedEvent, EntityHandle, EntitySpawnedEvent, EventChannelConfig, EventChannelStats,
-    EventLifetime, EventObserverNotification, EventTracingPolicy, MutQueryBuilder, ObserverTrigger,
-    OverflowPolicy, QueryBuilder, Resource, ResourceChangeKind, ResourceChangeRecord,
-    TypedQueryIterator, World, WorldBuilderExt, WorldQueryExt,
+    Bundle, CommandError, Commands, Component, ComponentChangeKind, ComponentChangeRecord, Entity,
+    EntityDespawnedEvent, EntityError, EntityMut, EntityRef, EntitySpawnedEvent,
+    EventChannelConfig, EventChannelStats, EventLifetime, EventObserverNotification,
+    EventTracingPolicy, Mut, ObserverTrigger, OverflowPolicy, QueryAccess, QueryBorrow,
+    QueryBorrowMut, QueryData, QueryError, QueryFilter, QueryState, QueryTypeAccess, Res, ResMut,
+    Resource, ResourceChangeKind, ResourceChangeRecord, ResourceError, With, Without, World,
 };

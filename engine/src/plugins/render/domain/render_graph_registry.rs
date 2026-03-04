@@ -1,7 +1,6 @@
 use super::PipelineKey;
 use anyhow::{Result, anyhow, bail};
-use ecs::World;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RenderFeatureId(String);
@@ -252,7 +251,7 @@ impl RegisteredPassDescriptor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OwnerRenderGraphRegistration {
     pub owner: String,
     pub pipelines: Vec<RegisteredPipelineDescriptor>,
@@ -277,11 +276,6 @@ impl OwnerRenderGraphRegistration {
         self.passes = passes;
         self
     }
-}
-
-#[derive(Debug, Clone, Default)]
-struct RenderGraphRegistryMetaResource {
-    revision: u64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -662,7 +656,8 @@ impl RenderPassSpecBuilder {
 }
 
 pub struct RenderGraphRegistryResource {
-    world: World,
+    owners: BTreeMap<String, OwnerRenderGraphRegistration>,
+    revision: u64,
 }
 
 impl std::fmt::Debug for RenderGraphRegistryResource {
@@ -676,41 +671,24 @@ impl std::fmt::Debug for RenderGraphRegistryResource {
 
 impl Default for RenderGraphRegistryResource {
     fn default() -> Self {
-        let mut world = World::new();
-        world.register_component::<OwnerRenderGraphRegistration>();
-        world.ensure_component_index::<OwnerRenderGraphRegistration, String>(|owner| {
-            owner.owner.clone()
-        });
-        world.insert_resource(RenderGraphRegistryMetaResource::default());
-        Self { world }
+        Self {
+            owners: BTreeMap::new(),
+            revision: 0,
+        }
     }
 }
 
 impl RenderGraphRegistryResource {
     pub fn revision(&self) -> u64 {
-        self.meta().revision
+        self.revision
     }
 
     pub fn owner_count(&self) -> usize {
-        self.world
-            .entities_with::<OwnerRenderGraphRegistration>()
-            .count()
+        self.owners.len()
     }
 
     pub fn upsert_owner(&mut self, registration: OwnerRenderGraphRegistration) {
-        if let Some(existing_entity) = self
-            .world
-            .find_entity_by_index::<OwnerRenderGraphRegistration, String>(&registration.owner)
-        {
-            if let Some(existing) = self
-                .world
-                .get_component_mut::<OwnerRenderGraphRegistration>(existing_entity)
-            {
-                *existing = registration;
-            }
-        } else {
-            let _ = self.world.spawn_entity_typed(registration);
-        }
+        self.owners.insert(registration.owner.clone(), registration);
         self.bump_revision();
     }
 
@@ -740,16 +718,7 @@ impl RenderGraphRegistryResource {
         if owner.is_empty() {
             return false;
         }
-        let owner_key = owner.to_string();
-        let removed = if let Some(entity) = self
-            .world
-            .find_entity_by_index::<OwnerRenderGraphRegistration, String>(&owner_key)
-        {
-            self.world.remove_entity(entity);
-            true
-        } else {
-            false
-        };
+        let removed = self.owners.remove(owner).is_some();
         if removed {
             self.bump_revision();
         }
@@ -761,48 +730,19 @@ impl RenderGraphRegistryResource {
     }
 
     pub fn clear(&mut self) {
-        let entities: Vec<_> = self
-            .world
-            .entities_with::<OwnerRenderGraphRegistration>()
-            .collect();
-        if entities.is_empty() {
+        if self.owners.is_empty() {
             return;
         }
-        for entity in entities {
-            self.world.remove_entity(entity);
-        }
+        self.owners.clear();
         self.bump_revision();
     }
 
     pub fn owners(&self) -> Vec<OwnerRenderGraphRegistration> {
-        let mut owners: Vec<_> = self
-            .world
-            .entities_with::<OwnerRenderGraphRegistration>()
-            .filter_map(|entity| {
-                self.world
-                    .get_component::<OwnerRenderGraphRegistration>(entity)
-                    .cloned()
-            })
-            .collect();
-        owners.sort_by(|a, b| a.owner.cmp(&b.owner));
-        owners
-    }
-
-    fn meta(&self) -> &RenderGraphRegistryMetaResource {
-        self.world
-            .get_resource::<RenderGraphRegistryMetaResource>()
-            .expect("render graph registry meta resource should exist")
-    }
-
-    fn meta_mut(&mut self) -> &mut RenderGraphRegistryMetaResource {
-        self.world
-            .get_resource_mut::<RenderGraphRegistryMetaResource>()
-            .expect("render graph registry meta resource should exist")
+        self.owners.values().cloned().collect()
     }
 
     fn bump_revision(&mut self) {
-        let meta = self.meta_mut();
-        meta.revision = meta.revision.saturating_add(1);
+        self.revision = self.revision.saturating_add(1);
     }
 }
 
@@ -833,7 +773,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_builder_builds_feature_graph_and_converts_to_owner_registration() {
+    fn builder_builds_feature_graph_and_converts_to_owner_registration() {
         let spec = RenderFeatureGraphSpec::builder("sdf_renderer")
             .resource("sdf.params")
             .resource("sdf.color")
@@ -857,7 +797,7 @@ mod tests {
             .depends_on(["sdf.compute"])
             .finish()
             .build()
-            .expect("typed feature graph should build");
+            .expect("feature graph should build");
 
         let owner = spec.clone().into_owner_registration();
         assert_eq!(owner.owner, "sdf_renderer");
@@ -868,7 +808,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_builder_accepts_arbitrary_render_builtin_labels() {
+    fn builder_accepts_arbitrary_render_builtin_labels() {
         let spec = RenderFeatureGraphSpec::builder("sdf_renderer")
             .resource("surface.color")
             .pipeline_render_builtin("sdf.compose.bad", "compose.unknown")

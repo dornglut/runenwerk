@@ -1,7 +1,6 @@
 use crate::plugins::ui::domain::{
     ConsoleUiTemplate, UiNodeKind, export_console_template, initialize_console_ui,
 };
-use ecs::World;
 
 #[test]
 fn console_ui_template_parses_from_ron() {
@@ -67,10 +66,12 @@ fn console_ui_component_tree_parses_from_ron() {
 
 #[test]
 fn template_apply_preserves_runtime_input_content() {
-    let mut world = World::new();
+    let mut world = ecs::World::new();
     let mut ui = initialize_console_ui(&mut world);
 
-    if let Some(input) = world.get_component_mut::<crate::plugins::ui::domain::UiText>(ui.input) {
+    if let Ok(mut entity) = world.entity_mut(ui.input)
+        && let Some(mut input) = entity.get_mut::<crate::plugins::ui::domain::UiText>()
+    {
         input.content = "grotto> user typing".to_string();
     }
 
@@ -84,30 +85,32 @@ fn template_apply_preserves_runtime_input_content() {
     text: Some((
       content: Some("Execute"),
     )),
-  )),
+    )),
 )
 "#;
     let tpl: ConsoleUiTemplate = ron::from_str(raw).expect("template should parse");
     crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl);
 
     let input = world
-        .get_component::<crate::plugins::ui::domain::UiText>(ui.input)
+        .get::<crate::plugins::ui::domain::UiText>(ui.input)
         .expect("input text should exist");
     assert_eq!(input.content, "grotto> user typing");
     assert_eq!(input.size, 18.0);
 
     let button = world
-        .get_component::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
+        .get::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
         .expect("button text should exist");
     assert_eq!(button.content, "Execute");
 }
 
 #[test]
 fn template_component_nodes_apply_by_stable_id() {
-    let mut world = World::new();
+    let mut world = ecs::World::new();
     let mut ui = initialize_console_ui(&mut world);
 
-    if let Some(input) = world.get_component_mut::<crate::plugins::ui::domain::UiText>(ui.input) {
+    if let Ok(mut entity) = world.entity_mut(ui.input)
+        && let Some(mut input) = entity.get_mut::<crate::plugins::ui::domain::UiText>()
+    {
         input.content = "grotto> keep-me".to_string();
     }
 
@@ -130,20 +133,20 @@ fn template_component_nodes_apply_by_stable_id() {
     crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl);
 
     let input = world
-        .get_component::<crate::plugins::ui::domain::UiText>(ui.input)
+        .get::<crate::plugins::ui::domain::UiText>(ui.input)
         .expect("input text should exist");
     assert_eq!(input.content, "grotto> keep-me");
     assert_eq!(input.size, 19.0);
 
     let button = world
-        .get_component::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
+        .get::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
         .expect("button text should exist");
     assert_eq!(button.content, "Ship");
 }
 
 #[test]
 fn template_component_diff_skips_unchanged_nodes() {
-    let mut world = World::new();
+    let mut world = ecs::World::new();
     let mut ui = initialize_console_ui(&mut world);
 
     let raw = r#"
@@ -162,8 +165,8 @@ fn template_component_diff_skips_unchanged_nodes() {
     let tpl: ConsoleUiTemplate = ron::from_str(raw).expect("template should parse");
     crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl.clone());
 
-    if let Some(button) =
-        world.get_component_mut::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
+    if let Ok(mut entity) = world.entity_mut(ui.confirm_button)
+        && let Some(mut button) = entity.get_mut::<crate::plugins::ui::domain::UiText>()
     {
         button.content = "Runtime override".to_string();
     }
@@ -171,14 +174,14 @@ fn template_component_diff_skips_unchanged_nodes() {
     // Same template should not re-apply unchanged node patch.
     crate::plugins::ui::domain::apply_console_template(&mut world, &mut ui, tpl);
     let button = world
-        .get_component::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
+        .get::<crate::plugins::ui::domain::UiText>(ui.confirm_button)
         .expect("button text should exist");
     assert_eq!(button.content, "Runtime override");
 }
 
 #[test]
 fn export_console_template_contains_editor_node_tree() {
-    let mut world = World::new();
+    let mut world = ecs::World::new();
     let ui = initialize_console_ui(&mut world);
 
     let template = export_console_template(&world, &ui);

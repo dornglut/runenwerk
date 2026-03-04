@@ -120,15 +120,11 @@ Backward compatibility:
 Example consumer system:
 
 ```rust
+use engine::prelude::{ResMut, WorldMut};
 use engine::plugins::scene::domain::SceneTemplateUiEvent;
-use engine::runtime::EngineData;
 
-pub fn consume_scene_template_events_system(data: &mut EngineData) -> anyhow::Result<()> {
-    let events = data
-        .scene
-        .overlay_runtime
-        .world
-        .drain_events::<SceneTemplateUiEvent>();
+pub fn consume_scene_template_events_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let events = world.drain_events::<SceneTemplateUiEvent>();
     for event in events {
         tracing::info!(
             name = %event.name,
@@ -189,8 +185,7 @@ cargo run -p engine --example scene_manager_ui
 ## Source
 
 - Entry: `engine/examples/scene_manager_ui/main.rs`
-- Scene flow runtime: `engine/src/plugins/scene/template_flow.rs`
-- App API: `engine::platform::App`
-- Scene registration type: `engine::runtime::SceneRegistration`
-- Scene handle type: `engine::runtime::SceneHandle`
+- Scene flow runtime: `engine/src/plugins/scene/mod.rs`
+- App API: `engine::App`
+- Scene registration helpers: `App::add_scene(...)`, `App::add_scene_template(...)`
 - Assets: `engine/examples/scene_manager_ui/assets/`

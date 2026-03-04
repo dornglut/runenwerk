@@ -1,5 +1,7 @@
-use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
-use anyhow::Result;
+use crate::app::App;
+use crate::plugin::Plugin;
+use crate::runtime::{CoreSet, Res, ResMut, SystemConfigExt, Update};
+use crate::state::GameplayRuntimeConfig;
 
 pub struct GridPlugin;
 
@@ -10,50 +12,41 @@ pub struct GridRuntimeConfig {
     pub infinite_world: bool,
 }
 
-impl EnginePlugin for GridPlugin {
-    fn name(&self) -> &'static str {
-        "grid"
-    }
-
-    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
-        builder.add_node_with_edges("grid_prepare", grid_prepare_system, &["world_scene_update"]);
-        builder.add_edge("grid_prepare", "frame_render_prepare");
-        Ok(())
+impl Plugin for GridPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<GameplayRuntimeConfig>();
+        app.init_resource::<GridRuntimeConfig>();
+        app.add_systems(Update, grid_prepare_system.in_set(CoreSet::Scene));
     }
 }
 
-pub fn grid_prepare_system(data: &mut EngineData) -> anyhow::Result<()> {
-    let (chunk_size, chunk_load_radius, infinite_world) = {
-        let cfg = &data.scene.world_runtime.ctx.gameplay_config;
-        (cfg.chunk_size, cfg.chunk_load_radius, cfg.infinite_world)
+fn grid_prepare_system(gameplay: Res<GameplayRuntimeConfig>, mut grid: ResMut<GridRuntimeConfig>) {
+    *grid = GridRuntimeConfig {
+        chunk_size: gameplay.chunk_size,
+        chunk_load_radius: gameplay.chunk_load_radius,
+        infinite_world: gameplay.infinite_world,
     };
-    let next = GridRuntimeConfig {
-        chunk_size,
-        chunk_load_radius,
-        infinite_world,
-    };
-    if let Some(existing) = data
-        .render_resources
-        .get_resource_mut::<GridRuntimeConfig>()
-    {
-        *existing = next;
-    } else {
-        data.render_resources.insert_resource(next);
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::GridPlugin;
-    use crate::runtime::{EnginePlugin, EngineScheduleBuilder};
+    use super::{GameplayRuntimeConfig, GridPlugin, GridRuntimeConfig};
+    use crate::prelude::*;
 
     #[test]
-    fn grid_plugin_requires_scene_plugin_nodes() {
-        let mut builder = EngineScheduleBuilder::new();
-        GridPlugin
-            .configure(&mut builder)
-            .expect("grid plugin should configure");
-        assert!(builder.build_scheduler().is_err());
+    fn grid_plugin_publishes_runtime_config_from_scene_state() {
+        let mut app = App::headless();
+        app.insert_resource(GameplayRuntimeConfig {
+            chunk_size: 48.0,
+            chunk_load_radius: 5,
+            infinite_world: false,
+        });
+        app.add_plugin(GridPlugin);
+        let app = app.run_for_frames(1).expect("grid plugin should run");
+
+        let grid = app.world().resource::<GridRuntimeConfig>().unwrap();
+        assert_eq!(grid.chunk_size, 48.0);
+        assert_eq!(grid.chunk_load_radius, 5);
+        assert!(!grid.infinite_world);
     }
 }

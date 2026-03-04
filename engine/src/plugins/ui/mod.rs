@@ -1,80 +1,41 @@
 pub mod domain;
 
+use crate::app::App;
+use crate::plugin::Plugin;
+use crate::plugins::input::domain::InputState;
 use crate::plugins::scene::domain::{OverlaySubmitMessage, WorldDebugPosition};
+use crate::plugins::scene::{SceneManager, SceneResource};
+use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::{
-    UiBatchCmd, UiButton, UiButtonClickEvent, UiDirty, UiDrawCmd, UiEditorNode, UiInputField,
-    UiInteraction, UiNode, UiPresentationMode, UiRenderShaderConfig, UiStyle, UiText, UiTransform,
-    UiWorldHudStats, reload_console_template_if_changed, save_console_template_to_disk,
+    ConsoleUiRuntimeState, UiBatchCmd, UiButton, UiButtonRuntimeClickEvent, UiDirty, UiDrawCmd,
+    UiEditorNode, UiInputField, UiInteraction, UiNode, UiPresentationMode, UiRenderShaderConfig,
+    UiStyle, UiText, UiTransform, UiWorldHudStats, reload_console_template_if_changed,
+    save_console_template_to_disk,
 };
-use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
-use anyhow::Result;
+use crate::runtime::{PreUpdate, RenderPrepare, Res, ResMut, Update};
+use crate::state::{OverlayDrawCmd, OverlayDrawList, SceneRuntimeState, UiOverlayState};
 
 pub struct UiInputPlugin;
 pub struct UiRenderPlugin;
 
-impl EnginePlugin for UiInputPlugin {
-    fn name(&self) -> &'static str {
-        "ui_input"
-    }
-
-    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
-        builder.add_node_with_edges("overlay_ui_hot_reload", ui_hot_reload_system, &["time"]);
-        builder.add_node_with_edges(
-            "overlay_ui_input",
-            ui_input_system,
-            &["overlay_ui_hot_reload"],
-        );
-        builder.add_node_with_edges("overlay_ui_editor", ui_editor_system, &["overlay_ui_input"]);
-        Ok(())
+impl Plugin for UiInputPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<SceneResource>();
+        app.add_systems(PreUpdate, ui_hot_reload_system);
+        app.add_systems(Update, ui_input_system);
+        app.add_systems(Update, ui_editor_system);
     }
 }
 
-impl EnginePlugin for UiRenderPlugin {
-    fn name(&self) -> &'static str {
-        "ui_render"
-    }
-
-    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
-        builder.add_node_with_edges(
-            "overlay_ui_layout",
-            ui_layout_system,
-            &["overlay_ui_editor"],
-        );
-        builder.add_node_with_edges(
-            "overlay_ui_build_batches",
-            ui_build_batches_system,
-            &["overlay_ui_layout"],
-        );
-        builder.add_node_with_edges(
-            "overlay_ui_render_extract",
-            ui_render_extract_system,
-            &["overlay_ui_build_batches"],
-        );
-        Ok(())
-    }
-
-    fn setup(&self, data: &mut EngineData) -> Result<()> {
-        if data
-            .scene
-            .overlay_runtime
-            .world
-            .get_resource::<UiRenderShaderConfig>()
-            .is_none()
-        {
-            data.scene
-                .overlay_runtime
-                .world
-                .insert_resource(UiRenderShaderConfig::default());
-        }
-        if data
-            .render_resources
-            .get_resource::<UiWorldHudStats>()
-            .is_none()
-        {
-            data.render_resources
-                .insert_resource(UiWorldHudStats::default());
-        }
-        Ok(())
+impl Plugin for UiRenderPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<SceneResource>();
+        app.init_resource::<UiOverlayState>();
+        app.init_resource::<UiWorldHudStats>();
+        app.init_resource::<SceneRuntimeState>();
+        app.add_systems(RenderPrepare, ui_layout_system);
+        app.add_systems(RenderPrepare, ui_build_batches_system);
+        app.add_systems(RenderPrepare, ui_render_extract_system);
     }
 }
 
@@ -84,13 +45,6 @@ const INPUT_PADDING_X: f32 = 6.0;
 const INPUT_PADDING_Y: f32 = 4.0;
 const EDITOR_BASE_NUDGE_PX: f32 = 1.0;
 const EDITOR_DRAG_SNAP_PX: f32 = 10.0;
-
-fn centered_demo_enabled(data: &EngineData) -> bool {
-    matches!(
-        data.scene.overlay_runtime.ui.presentation_mode,
-        UiPresentationMode::CenteredDemo
-    )
-}
 
 #[derive(Debug, Copy, Clone)]
 struct LogWindowRect {
@@ -137,69 +91,6 @@ fn compute_log_window_rect(
     }
 }
 
-fn world_hud_stats(data: &EngineData) -> Option<(f32, f32, usize, u32)> {
-    let stats = data.render_resources.get_resource::<UiWorldHudStats>()?;
-    if !stats.visible {
-        return None;
-    }
-    Some((
-        stats.player_x,
-        stats.player_y,
-        stats.enemies_alive,
-        stats.enemy_kills,
-    ))
-}
-
-fn push_world_stats_panel(commands: &mut Vec<UiBatchCmd>, data: &EngineData, ui_scale: f32) {
-    let Some((px, py, enemies, slain)) = world_hud_stats(data) else {
-        return;
-    };
-
-    let margin = 10.0 * ui_scale;
-    let panel_w = 300.0 * ui_scale;
-    let panel_h = 74.0 * ui_scale;
-    let panel_x = margin;
-    let panel_y = margin;
-    let panel_w =
-        panel_w.min((data.scene.overlay_runtime.ui.screen_size.0 - (margin * 2.0)).max(80.0));
-    let panel_h =
-        panel_h.min((data.scene.overlay_runtime.ui.screen_size.1 - (margin * 2.0)).max(40.0));
-    let clip = Some([panel_x, panel_y, panel_w, panel_h]);
-
-    commands.push(UiBatchCmd::Rect {
-        x: panel_x,
-        y: panel_y,
-        w: panel_w,
-        h: panel_h,
-        color: [0.05, 0.08, 0.12, 0.86],
-        radius: 8.0 * ui_scale,
-    });
-    commands.push(UiBatchCmd::Text {
-        x: panel_x + (10.0 * ui_scale),
-        y: panel_y + (10.0 * ui_scale),
-        content: "World Stats".to_string(),
-        color: [0.88, 0.95, 1.0, 1.0],
-        size: 12.0 * ui_scale,
-        clip,
-    });
-    commands.push(UiBatchCmd::Text {
-        x: panel_x + (10.0 * ui_scale),
-        y: panel_y + (30.0 * ui_scale),
-        content: format!("player=({:.1}, {:.1})", px, py),
-        color: [0.56, 0.94, 0.66, 1.0],
-        size: 11.0 * ui_scale,
-        clip,
-    });
-    commands.push(UiBatchCmd::Text {
-        x: panel_x + (10.0 * ui_scale),
-        y: panel_y + (48.0 * ui_scale),
-        content: format!("enemies={} slain={}", enemies, slain),
-        color: [0.98, 0.74, 0.42, 1.0],
-        size: 11.0 * ui_scale,
-        clip,
-    });
-}
-
 pub fn point_in_rect(point: (f32, f32), rect: &UiTransform) -> bool {
     point.0 >= rect.x
         && point.0 <= rect.x + rect.w
@@ -222,61 +113,12 @@ pub fn pick_editor_node_at(point: (f32, f32), nodes: &[EditorNodeRect]) -> Optio
         .map(|item| item.node)
 }
 
-fn selected_editor_entity(
-    ui: &crate::plugins::ui::domain::ConsoleUiState,
-) -> Option<ecs::EntityHandle> {
-    match ui.editor.selected {
-        Some(UiEditorNode::Root) => Some(ui.root),
-        Some(UiEditorNode::Scrollback) => Some(ui.scrollback),
-        Some(UiEditorNode::Input) => Some(ui.input),
-        Some(UiEditorNode::ConfirmButton) => Some(ui.confirm_button),
-        None => None,
-    }
-}
-
-fn ui_node_visible(data: &EngineData, entity: ecs::EntityHandle) -> bool {
-    data.scene
-        .overlay_runtime
-        .world
-        .get_component::<UiNode>(entity)
-        .map(|n| n.visible)
-        .unwrap_or(true)
-}
-
 fn editor_node_label(node: UiEditorNode) -> &'static str {
     match node {
         UiEditorNode::Root => "root",
         UiEditorNode::Scrollback => "scrollback",
         UiEditorNode::Input => "input",
         UiEditorNode::ConfirmButton => "confirm_button",
-    }
-}
-
-fn apply_editor_translation(data: &mut EngineData, selected_node: UiEditorNode, dx: f32, dy: f32) {
-    if dx == 0.0 && dy == 0.0 {
-        return;
-    }
-
-    let mut translate = |entity: ecs::EntityHandle| {
-        if let Some(transform) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiTransform>(entity)
-        {
-            transform.x += dx;
-            transform.y += dy;
-        }
-    };
-
-    translate(
-        selected_editor_entity(&data.scene.overlay_runtime.ui)
-            .expect("selected node should have entity"),
-    );
-    if selected_node == UiEditorNode::Root {
-        translate(data.scene.overlay_runtime.ui.scrollback);
-        translate(data.scene.overlay_runtime.ui.input);
-        translate(data.scene.overlay_runtime.ui.confirm_button);
     }
 }
 
@@ -973,260 +815,102 @@ pub fn adaptive_footer_metrics(
     (footer_y, input_h, button_w, input_w)
 }
 
-pub fn ui_hot_reload_system(data: &mut EngineData) -> anyhow::Result<()> {
-    if let Err(err) = reload_console_template_if_changed(
-        &mut data.scene.overlay_runtime.world,
-        &mut data.scene.overlay_runtime.ui,
-        false,
-    ) {
-        tracing::warn!(?err, "ui hot reload failed");
+fn apply_scroll_delta(current: usize, delta: i32) -> usize {
+    if delta >= 0 {
+        current.saturating_add(delta as usize)
+    } else {
+        current.saturating_sub((-delta) as usize)
     }
-    Ok(())
 }
 
-pub fn ui_editor_system(data: &mut EngineData) -> anyhow::Result<()> {
-    if !data.scene.overlay_runtime.ui.editor.enabled {
-        return Ok(());
+fn centered_demo_enabled(ui: &ConsoleUiRuntimeState) -> bool {
+    matches!(ui.presentation_mode, UiPresentationMode::CenteredDemo)
+}
+
+fn selected_editor_entity(ui: &ConsoleUiRuntimeState) -> Option<ecs::Entity> {
+    match ui.editor.selected {
+        Some(UiEditorNode::Root) => Some(ui.root),
+        Some(UiEditorNode::Scrollback) => Some(ui.scrollback),
+        Some(UiEditorNode::Input) => Some(ui.input),
+        Some(UiEditorNode::ConfirmButton) => Some(ui.confirm_button),
+        None => None,
+    }
+}
+
+fn ui_node_visible(manager: &SceneManager, entity: ecs::Entity) -> bool {
+    manager
+        .overlay_runtime
+        .world
+        .get::<UiNode>(entity)
+        .map(|node| node.visible)
+        .unwrap_or(true)
+}
+
+fn set_text_dirty(world: &mut ecs::World, entity: ecs::Entity) {
+    if let Ok(mut ui_entity) = world.entity_mut(entity)
+        && let Some(mut dirty) = ui_entity.get_mut::<UiDirty>()
+    {
+        dirty.text = true;
+    }
+}
+
+fn apply_editor_translation(
+    manager: &mut SceneManager,
+    selected_node: UiEditorNode,
+    dx: f32,
+    dy: f32,
+) {
+    if dx == 0.0 && dy == 0.0 {
+        return;
     }
 
-    let candidates = [
-        (UiEditorNode::Root, data.scene.overlay_runtime.ui.root),
-        (
-            UiEditorNode::Scrollback,
-            data.scene.overlay_runtime.ui.scrollback,
-        ),
-        (UiEditorNode::Input, data.scene.overlay_runtime.ui.input),
-        (
-            UiEditorNode::ConfirmButton,
-            data.scene.overlay_runtime.ui.confirm_button,
-        ),
-    ];
-
-    if data.input.left_mouse_pressed() {
-        let mut rects: Vec<EditorNodeRect> = Vec::new();
-        for (node, entity) in candidates {
-            if let (Some(transform), Some(ui_node)) = (
-                data.scene
-                    .overlay_runtime
-                    .world
-                    .get_component::<UiTransform>(entity),
-                data.scene
-                    .overlay_runtime
-                    .world
-                    .get_component::<crate::plugins::ui::domain::UiNode>(entity),
-            ) {
-                if !ui_node.visible {
-                    continue;
-                }
-                rects.push(EditorNodeRect {
-                    node,
-                    z: ui_node.z,
-                    rect: *transform,
-                });
-            }
-        }
-
-        data.scene.overlay_runtime.ui.editor.selected =
-            pick_editor_node_at(data.input.mouse_position, &rects);
-        data.scene.overlay_runtime.ui.editor.dragging = false;
-        data.scene.overlay_runtime.ui.editor.drag_pointer_offset = (0.0, 0.0);
-        match data.scene.overlay_runtime.ui.editor.selected {
-            Some(node) => {
-                if let Some(selected_rect) = rects.iter().find(|r| r.node == node).map(|r| r.rect) {
-                    data.scene.overlay_runtime.ui.editor.drag_pointer_offset = (
-                        data.input.mouse_position.0 - selected_rect.x,
-                        data.input.mouse_position.1 - selected_rect.y,
-                    );
-                    data.scene.overlay_runtime.ui.editor.dragging = true;
-                }
-                data.scene.overlay_runtime.ui.editor.status =
-                    format!("editor: selected {}", editor_node_label(node));
-            }
-            None => {
-                data.scene.overlay_runtime.ui.editor.status =
-                    "editor: nothing selected".to_string();
-            }
-        }
-    }
-
-    if data.input.left_mouse_released() {
-        data.scene.overlay_runtime.ui.editor.dragging = false;
-    }
-
-    if let Some(selected_node) = data.scene.overlay_runtime.ui.editor.selected {
-        let Some(selected) = selected_editor_entity(&data.scene.overlay_runtime.ui) else {
-            return Ok(());
-        };
-        let step = if data.input.shift_down() {
-            10.0 * data.scene.overlay_runtime.ui.scale.max(1.0)
-        } else {
-            EDITOR_BASE_NUDGE_PX * data.scene.overlay_runtime.ui.scale.max(1.0)
-        };
-        let mut dx = 0.0;
-        let mut dy = 0.0;
-        if data.input.move_left {
-            dx -= step;
-        }
-        if data.input.move_right {
-            dx += step;
-        }
-        if data.input.move_up {
-            dy -= step;
-        }
-        if data.input.move_down {
-            dy += step;
-        }
-        if (dx != 0.0 || dy != 0.0)
-            && data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component::<UiTransform>(selected)
-                .is_some()
+    let translate = |world: &mut ecs::World, entity: ecs::Entity| {
+        if let Ok(mut ui_entity) = world.entity_mut(entity)
+            && let Some(mut transform) = ui_entity.get_mut::<UiTransform>()
         {
-            apply_editor_translation(data, selected_node, dx, dy);
-            let pos = data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component::<UiTransform>(selected)
-                .map(|t| (t.x, t.y))
-                .unwrap_or((0.0, 0.0));
-            data.scene.overlay_runtime.ui.editor.status = format!(
-                "editor: nudged {} to ({:.0}, {:.0})",
-                editor_node_label(selected_node),
-                pos.0,
-                pos.1
-            );
+            transform.x += dx;
+            transform.y += dy;
         }
+    };
 
-        if data.scene.overlay_runtime.ui.editor.dragging
-            && data.input.left_mouse_down()
-            && let Some(transform) = data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component_mut::<UiTransform>(selected)
-        {
-            let mut next_x = data.input.mouse_position.0
-                - data.scene.overlay_runtime.ui.editor.drag_pointer_offset.0;
-            let mut next_y = data.input.mouse_position.1
-                - data.scene.overlay_runtime.ui.editor.drag_pointer_offset.1;
-            if data.input.shift_down() {
-                let grid = EDITOR_DRAG_SNAP_PX * data.scene.overlay_runtime.ui.scale.max(1.0);
-                next_x = snap_to_grid(next_x, grid);
-                next_y = snap_to_grid(next_y, grid);
-            }
-            let dx = next_x - transform.x;
-            let dy = next_y - transform.y;
-            let _ = transform;
-            apply_editor_translation(data, selected_node, dx, dy);
-            let pos = data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component::<UiTransform>(selected)
-                .map(|t| (t.x, t.y))
-                .unwrap_or((next_x, next_y));
-            data.scene.overlay_runtime.ui.editor.status = format!(
-                "editor: dragging {} ({:.0}, {:.0})",
-                editor_node_label(selected_node),
-                pos.0,
-                pos.1
-            );
-        }
-
-        if data.input.editor_hide_selected {
-            let can_hide = selected_node != UiEditorNode::Root;
-            if can_hide {
-                if let Some(node) = data
-                    .scene
-                    .overlay_runtime
-                    .world
-                    .get_component_mut::<UiNode>(selected)
-                {
-                    node.visible = false;
-                    data.scene.overlay_runtime.ui.editor.status = format!(
-                        "editor: hid {} (A restores hidden nodes)",
-                        editor_node_label(selected_node)
-                    );
-                }
-                data.scene.overlay_runtime.ui.editor.selected = Some(UiEditorNode::Root);
-                data.scene.overlay_runtime.ui.editor.dragging = false;
-            } else {
-                data.scene.overlay_runtime.ui.editor.status =
-                    "editor: root cannot be hidden".to_string();
-            }
+    if let Some(selected) = selected_editor_entity(&manager.overlay_runtime.ui) {
+        translate(&mut manager.overlay_runtime.world, selected);
+        if selected_node == UiEditorNode::Root {
+            let scrollback = manager.overlay_runtime.ui.scrollback;
+            let input = manager.overlay_runtime.ui.input;
+            let confirm = manager.overlay_runtime.ui.confirm_button;
+            translate(&mut manager.overlay_runtime.world, scrollback);
+            translate(&mut manager.overlay_runtime.world, input);
+            translate(&mut manager.overlay_runtime.world, confirm);
         }
     }
-
-    if data.input.editor_restore_all {
-        for entity in [
-            data.scene.overlay_runtime.ui.root,
-            data.scene.overlay_runtime.ui.scrollback,
-            data.scene.overlay_runtime.ui.input,
-            data.scene.overlay_runtime.ui.confirm_button,
-        ] {
-            if let Some(node) = data
-                .scene
-                .overlay_runtime
-                .world
-                .get_component_mut::<UiNode>(entity)
-            {
-                node.visible = true;
-            }
-        }
-        data.scene.overlay_runtime.ui.editor.status = "editor: restored all nodes".to_string();
-    }
-
-    if data.input.save_ui_template {
-        match save_console_template_to_disk(
-            &data.scene.overlay_runtime.world,
-            &mut data.scene.overlay_runtime.ui,
-        ) {
-            Ok(path) => {
-                data.scene.overlay_runtime.ui.editor.status =
-                    format!("editor: saved {}", path.display());
-                let _ = reload_console_template_if_changed(
-                    &mut data.scene.overlay_runtime.world,
-                    &mut data.scene.overlay_runtime.ui,
-                    true,
-                );
-            }
-            Err(err) => {
-                data.scene.overlay_runtime.ui.editor.status =
-                    format!("editor: save failed: {err:#}");
-            }
-        }
-    }
-
-    Ok(())
 }
 
 fn process_input_text_edit(
-    data: &mut EngineData,
-    input_entity: ecs::EntityHandle,
+    manager: &mut SceneManager,
+    input: &InputState,
+    input_entity: ecs::Entity,
     input_visible: bool,
     input_nav_metrics: Option<(f32, f32)>,
 ) -> bool {
-    let text_metrics = data.scene.overlay_runtime.ui.text_metrics.clone();
+    let text_metrics = manager.overlay_runtime.ui.text_metrics.clone();
     let mut edited_text = false;
     let mut moved_cursor = false;
     if input_visible {
-        let editor = &mut data.scene.overlay_runtime.ui.input_editor;
+        let editor = &mut manager.overlay_runtime.ui.input_editor;
         let total_chars = char_count(&editor.text);
         editor.cursor_chars = editor.cursor_chars.min(total_chars);
         let mut reset_preferred_x = false;
 
-        if !data.input.typed_text.is_empty() {
+        if !input.typed_text.is_empty() {
             let insert_at = byte_index_at_char(&editor.text, editor.cursor_chars);
-            editor.text.insert_str(insert_at, &data.input.typed_text);
-            editor.cursor_chars += char_count(&data.input.typed_text);
+            editor.text.insert_str(insert_at, &input.typed_text);
+            editor.cursor_chars += char_count(&input.typed_text);
             edited_text = true;
             reset_preferred_x = true;
         }
 
-        if data.input.insert_newline {
+        if input.insert_newline {
             let insert_at = byte_index_at_char(&editor.text, editor.cursor_chars);
             editor.text.insert(insert_at, '\n');
             editor.cursor_chars += 1;
@@ -1234,7 +918,7 @@ fn process_input_text_edit(
             reset_preferred_x = true;
         }
 
-        if data.input.backspace && editor.cursor_chars > 0 {
+        if input.backspace && editor.cursor_chars > 0 {
             let remove_at = editor.cursor_chars - 1;
             let start = byte_index_at_char(&editor.text, remove_at);
             let end = byte_index_at_char(&editor.text, editor.cursor_chars);
@@ -1244,7 +928,7 @@ fn process_input_text_edit(
             reset_preferred_x = true;
         }
 
-        if data.input.delete && editor.cursor_chars < char_count(&editor.text) {
+        if input.delete && editor.cursor_chars < char_count(&editor.text) {
             let start = byte_index_at_char(&editor.text, editor.cursor_chars);
             let end = byte_index_at_char(&editor.text, editor.cursor_chars + 1);
             editor.text.replace_range(start..end, "");
@@ -1252,22 +936,22 @@ fn process_input_text_edit(
             reset_preferred_x = true;
         }
 
-        if data.input.move_left {
+        if input.move_left {
             editor.cursor_chars = editor.cursor_chars.saturating_sub(1);
             moved_cursor = true;
             reset_preferred_x = true;
         }
-        if data.input.move_right {
+        if input.move_right {
             editor.cursor_chars = (editor.cursor_chars + 1).min(char_count(&editor.text));
             moved_cursor = true;
             reset_preferred_x = true;
         }
-        if data.input.move_home {
+        if input.move_home {
             editor.cursor_chars = 0;
             moved_cursor = true;
             reset_preferred_x = true;
         }
-        if data.input.move_end {
+        if input.move_end {
             editor.cursor_chars = char_count(&editor.text);
             moved_cursor = true;
             reset_preferred_x = true;
@@ -1278,7 +962,7 @@ fn process_input_text_edit(
         }
 
         if let Some((input_text_size, input_content_w)) = input_nav_metrics {
-            if data.input.move_up
+            if input.move_up
                 && move_cursor_vertical(
                     editor,
                     &text_metrics,
@@ -1289,7 +973,7 @@ fn process_input_text_edit(
             {
                 moved_cursor = true;
             }
-            if data.input.move_down
+            if input.move_down
                 && move_cursor_vertical(
                     editor,
                     &text_metrics,
@@ -1304,36 +988,27 @@ fn process_input_text_edit(
     }
 
     if edited_text || moved_cursor {
-        if let Some(dirty) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiDirty>(input_entity)
-        {
-            dirty.text = true;
-        }
-        data.scene.overlay_runtime.ui.caret_visible = true;
-        data.scene.overlay_runtime.ui.caret_blink_timer = 0.0;
+        set_text_dirty(&mut manager.overlay_runtime.world, input_entity);
+        manager.overlay_runtime.ui.caret_visible = true;
+        manager.overlay_runtime.ui.caret_blink_timer = 0.0;
     }
 
     edited_text || moved_cursor
 }
 
 fn process_submit_and_pointer(
-    data: &mut EngineData,
-    input_entity: ecs::EntityHandle,
-    button_entity: ecs::EntityHandle,
+    manager: &mut SceneManager,
+    input: &InputState,
+    input_entity: ecs::Entity,
+    button_entity: ecs::Entity,
     input_visible: bool,
     button_visible: bool,
 ) -> bool {
     let mut overlay_consumed = false;
 
-    if input_visible && data.input.submitted {
-        if let Some(field) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiInputField>(input_entity)
+    if input_visible && input.submitted {
+        if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(input_entity)
+            && let Some(mut field) = ui_entity.get_mut::<UiInputField>()
         {
             field.submit_requested = true;
         }
@@ -1341,21 +1016,17 @@ fn process_submit_and_pointer(
     }
 
     let hovered = button_visible
-        && data
-            .scene
+        && manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(button_entity)
-            .map(|rect| point_in_rect(data.input.mouse_position, rect))
+            .get::<UiTransform>(button_entity)
+            .map(|rect| point_in_rect(input.mouse_position, rect))
             .unwrap_or(false);
-    let clicked = hovered && data.input.left_mouse_pressed();
-    let pressed = hovered && data.input.left_mouse_down();
+    let clicked = hovered && input.left_mouse_pressed();
+    let pressed = hovered && input.left_mouse_down();
 
-    if let Some(interaction) = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component_mut::<UiInteraction>(button_entity)
+    if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(button_entity)
+        && let Some(mut interaction) = ui_entity.get_mut::<UiInteraction>()
     {
         interaction.hovered = hovered;
         interaction.clicked = clicked;
@@ -1363,19 +1034,16 @@ fn process_submit_and_pointer(
     }
 
     if button_visible && clicked {
-        if centered_demo_enabled(data) {
-            data.scene
+        if centered_demo_enabled(&manager.overlay_runtime.ui) {
+            manager
                 .overlay_runtime
                 .world
-                .emit_event(UiButtonClickEvent {
+                .emit_event(UiButtonRuntimeClickEvent {
                     entity: button_entity,
                 });
         }
-        if let Some(field) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiInputField>(input_entity)
+        if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(input_entity)
+            && let Some(mut field) = ui_entity.get_mut::<UiInputField>()
         {
             field.submit_requested = true;
         }
@@ -1383,34 +1051,27 @@ fn process_submit_and_pointer(
     }
 
     let input_clicked = input_visible
-        && data
-            .scene
+        && manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(input_entity)
-            .map(|rect| point_in_rect(data.input.mouse_position, rect))
+            .get::<UiTransform>(input_entity)
+            .map(|rect| point_in_rect(input.mouse_position, rect))
             .unwrap_or(false)
-        && data.input.left_mouse_pressed();
+        && input.left_mouse_pressed();
     if input_clicked {
-        if let Some(interaction) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiInteraction>(input_entity)
+        if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(input_entity)
+            && let Some(mut interaction) = ui_entity.get_mut::<UiInteraction>()
         {
             interaction.focused = true;
         }
-        data.scene.overlay_runtime.ui.caret_visible = true;
-        data.scene.overlay_runtime.ui.caret_blink_timer = 0.0;
+        manager.overlay_runtime.ui.caret_visible = true;
+        manager.overlay_runtime.ui.caret_blink_timer = 0.0;
         overlay_consumed = true;
     }
 
     let mut should_submit = false;
-    if let Some(field) = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component_mut::<UiInputField>(input_entity)
+    if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(input_entity)
+        && let Some(mut field) = ui_entity.get_mut::<UiInputField>()
         && field.submit_requested
     {
         field.submit_requested = false;
@@ -1420,93 +1081,70 @@ fn process_submit_and_pointer(
     if input_visible && should_submit {
         let line = format!(
             "{CONSOLE_PROMPT}{}",
-            data.scene.overlay_runtime.ui.input_editor.text
+            manager.overlay_runtime.ui.input_editor.text
         );
-        data.scene
+        manager
             .channels
             .overlay_submit
             .push(OverlaySubmitMessage::Line(line));
 
-        data.scene.overlay_runtime.ui.input_editor.text.clear();
-        data.scene.overlay_runtime.ui.input_editor.cursor_chars = 0;
-        data.scene.overlay_runtime.ui.input_editor.viewport_row = 0;
-        data.scene.overlay_runtime.ui.input_editor.preferred_caret_x = None;
-        if let Some(field) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiInputField>(input_entity)
-        {
-            field.cursor = 0;
-            field.focused = true;
+        manager.overlay_runtime.ui.input_editor.text.clear();
+        manager.overlay_runtime.ui.input_editor.cursor_chars = 0;
+        manager.overlay_runtime.ui.input_editor.viewport_row = 0;
+        manager.overlay_runtime.ui.input_editor.preferred_caret_x = None;
+        if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(input_entity) {
+            if let Some(mut field) = ui_entity.get_mut::<UiInputField>() {
+                field.cursor = 0;
+                field.focused = true;
+            }
+            if let Some(mut interaction) = ui_entity.get_mut::<UiInteraction>() {
+                interaction.focused = true;
+            }
         }
-        if let Some(dirty) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiDirty>(input_entity)
-        {
-            dirty.text = true;
-        }
-        if let Some(interaction) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiInteraction>(input_entity)
-        {
-            interaction.focused = true;
-        }
-        data.scene.overlay_runtime.ui.caret_visible = true;
-        data.scene.overlay_runtime.ui.caret_blink_timer = 0.0;
+        set_text_dirty(&mut manager.overlay_runtime.world, input_entity);
+        manager.overlay_runtime.ui.caret_visible = true;
+        manager.overlay_runtime.ui.caret_blink_timer = 0.0;
         overlay_consumed = true;
     }
 
-    if input_visible
-        && let Some(input_text) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiText>(input_entity)
-    {
-        input_text.content = format!(
-            "{CONSOLE_PROMPT}{}",
-            data.scene.overlay_runtime.ui.input_editor.text
-        );
-    }
-    if input_visible
-        && let Some(field) = data
-            .scene
-            .overlay_runtime
-            .world
-            .get_component_mut::<UiInputField>(input_entity)
-    {
-        field.cursor = data.scene.overlay_runtime.ui.input_editor.cursor_chars;
+    if input_visible {
+        if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(input_entity) {
+            if let Some(mut input_text) = ui_entity.get_mut::<UiText>() {
+                input_text.content = format!(
+                    "{CONSOLE_PROMPT}{}",
+                    manager.overlay_runtime.ui.input_editor.text
+                );
+            }
+            if let Some(mut field) = ui_entity.get_mut::<UiInputField>() {
+                field.cursor = manager.overlay_runtime.ui.input_editor.cursor_chars;
+            }
+        }
     }
 
     overlay_consumed
 }
 
 fn process_scroll_routing(
-    data: &mut EngineData,
-    scroll_entity: ecs::EntityHandle,
+    manager: &mut SceneManager,
+    input: &InputState,
+    scroll_entity: ecs::Entity,
     scroll_visible: bool,
     ui_scale: f32,
 ) -> bool {
     let console_hovered = scroll_visible
-        && data
-            .scene
+        && manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(scroll_entity)
-            .map(|rect| point_in_rect(data.input.mouse_position, rect))
+            .get::<UiTransform>(scroll_entity)
+            .map(|rect| point_in_rect(input.mouse_position, rect))
             .unwrap_or(false);
     let log_window = compute_log_window_rect(
-        &data.scene.overlay_runtime.ui.layout,
-        data.scene.overlay_runtime.ui.screen_size,
+        &manager.overlay_runtime.ui.layout,
+        manager.overlay_runtime.ui.screen_size,
         ui_scale,
     );
     let log_hovered = point_in_rect(
-        data.input.mouse_position,
+        input.mouse_position,
         &UiTransform {
             x: log_window.x,
             y: log_window.y,
@@ -1520,9 +1158,9 @@ fn process_scroll_routing(
     let mut console_delta_horizontal: i32 = 0;
     let mut log_delta_horizontal: i32 = 0;
 
-    if data.input.scroll_delta != 0.0 {
-        let scroll_step = if data.input.scroll_delta > 0.0 { 3 } else { -3 };
-        if data.input.shift_down() {
+    if input.scroll_delta != 0.0 {
+        let scroll_step = if input.scroll_delta > 0.0 { 3 } else { -3 };
+        if input.shift_down() {
             if console_hovered {
                 console_delta_horizontal -= scroll_step;
             } else if log_hovered {
@@ -1534,7 +1172,7 @@ fn process_scroll_routing(
             log_delta_lines += scroll_step;
         }
     }
-    if data.input.page_up {
+    if input.page_up {
         if console_hovered {
             console_delta_lines += 12;
         } else if log_hovered {
@@ -1543,7 +1181,7 @@ fn process_scroll_routing(
             console_delta_lines += 12;
         }
     }
-    if data.input.page_down {
+    if input.page_down {
         if console_hovered {
             console_delta_lines -= 12;
         } else if log_hovered {
@@ -1553,20 +1191,20 @@ fn process_scroll_routing(
         }
     }
 
-    data.scene.overlay_runtime.ui.scroll_lines_from_bottom = apply_scroll_delta(
-        data.scene.overlay_runtime.ui.scroll_lines_from_bottom,
+    manager.overlay_runtime.ui.scroll_lines_from_bottom = apply_scroll_delta(
+        manager.overlay_runtime.ui.scroll_lines_from_bottom,
         console_delta_lines,
     );
-    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = apply_scroll_delta(
-        data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom,
+    manager.overlay_runtime.ui.log_scroll_lines_from_bottom = apply_scroll_delta(
+        manager.overlay_runtime.ui.log_scroll_lines_from_bottom,
         log_delta_lines,
     );
-    data.scene.overlay_runtime.ui.scroll_horizontal_chars = apply_scroll_delta(
-        data.scene.overlay_runtime.ui.scroll_horizontal_chars,
+    manager.overlay_runtime.ui.scroll_horizontal_chars = apply_scroll_delta(
+        manager.overlay_runtime.ui.scroll_horizontal_chars,
         console_delta_horizontal,
     );
-    data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = apply_scroll_delta(
-        data.scene.overlay_runtime.ui.log_scroll_horizontal_chars,
+    manager.overlay_runtime.ui.log_scroll_horizontal_chars = apply_scroll_delta(
+        manager.overlay_runtime.ui.log_scroll_horizontal_chars,
         log_delta_horizontal,
     );
 
@@ -1576,221 +1214,22 @@ fn process_scroll_routing(
         || log_delta_horizontal != 0
 }
 
-fn apply_scroll_delta(current: usize, delta: i32) -> usize {
-    if delta >= 0 {
-        current.saturating_add(delta as usize)
-    } else {
-        current.saturating_sub((-delta) as usize)
-    }
-}
-
-pub fn ui_input_system(data: &mut EngineData) -> anyhow::Result<()> {
-    data.input.overlay_consumed = false;
-    if !data.scene.overlay_visible() {
-        return Ok(());
-    }
-
-    if data.input.toggle_ui_editor_mode {
-        data.scene.overlay_runtime.ui.editor.enabled =
-            !data.scene.overlay_runtime.ui.editor.enabled;
-        data.scene.overlay_runtime.ui.editor.dragging = false;
-        data.scene.overlay_runtime.ui.editor.drag_pointer_offset = (0.0, 0.0);
-        data.scene.overlay_runtime.ui.editor.status = if data
-            .scene
-            .overlay_runtime
-            .ui
-            .editor
-            .enabled
-        {
-            "editor: on (click+drag move, Shift snap, arrows nudge, X hide node, A restore, Cmd/Ctrl+S save, F1 off)"
-                .to_string()
-        } else {
-            "editor: off (F1 to toggle)".to_string()
-        };
-    }
-
-    if data.scene.overlay_runtime.ui.editor.enabled {
-        data.input.overlay_consumed = true;
-        return Ok(());
-    }
-
-    let input_entity = data.scene.overlay_runtime.ui.input;
-    let button_entity = data.scene.overlay_runtime.ui.confirm_button;
-    let scroll_entity = data.scene.overlay_runtime.ui.scrollback;
-    let input_visible = ui_node_visible(data, input_entity);
-    let button_visible = ui_node_visible(data, button_entity);
-    let scroll_visible = ui_node_visible(data, scroll_entity);
-    let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
-    let input_nav_metrics = if let (Some(transform), Some(text)) = (
-        data.scene
-            .overlay_runtime
-            .world
-            .get_component::<UiTransform>(input_entity),
-        data.scene
-            .overlay_runtime
-            .world
-            .get_component::<UiText>(input_entity),
-    ) {
-        let (_, _, content_w, _) = input_content_rect(transform, ui_scale);
-        Some((text.size * ui_scale, content_w))
-    } else {
-        None
-    };
-    let mut overlay_consumed = false;
-    overlay_consumed |=
-        process_input_text_edit(data, input_entity, input_visible, input_nav_metrics);
-    overlay_consumed |= process_submit_and_pointer(
-        data,
-        input_entity,
-        button_entity,
-        input_visible,
-        button_visible,
-    );
-
-    data.scene.overlay_runtime.ui.caret_blink_timer += data.time.delta_seconds;
-    while data.scene.overlay_runtime.ui.caret_blink_timer >= CARET_BLINK_SECONDS {
-        data.scene.overlay_runtime.ui.caret_blink_timer -= CARET_BLINK_SECONDS;
-        data.scene.overlay_runtime.ui.caret_visible = !data.scene.overlay_runtime.ui.caret_visible;
-    }
-    overlay_consumed |= process_scroll_routing(data, scroll_entity, scroll_visible, ui_scale);
-
-    data.input.overlay_consumed = overlay_consumed;
-
-    Ok(())
-}
-
-pub fn ui_layout_system(data: &mut EngineData) -> anyhow::Result<()> {
-    if !data.scene.overlay_visible() {
-        return Ok(());
-    }
-    if !data.scene.overlay_runtime.ui.layout_dirty {
-        return Ok(());
-    }
-
-    let (screen_w, screen_h) = data.scene.overlay_runtime.ui.screen_size;
-    let s = data.scene.overlay_runtime.ui.scale.max(1.0);
-    let outer_margin = data.scene.overlay_runtime.ui.layout.outer_margin * s;
-    let available_w = (screen_w - (outer_margin * 2.0)).max(1.0);
-    let available_h = (screen_h - (outer_margin * 2.0)).max(1.0);
-    let panel_w = clamp_panel_dimension(
-        screen_w * data.scene.overlay_runtime.ui.layout.panel_width_ratio,
-        data.scene.overlay_runtime.ui.layout.panel_min_width * s,
-        available_w,
-    );
-    let panel_h = clamp_panel_dimension(
-        screen_h * data.scene.overlay_runtime.ui.layout.panel_height_ratio,
-        data.scene.overlay_runtime.ui.layout.panel_min_height * s,
-        available_h,
-    );
-    let centered_demo = centered_demo_enabled(data);
-    let panel_x = if centered_demo {
-        ((screen_w - panel_w) * 0.5).max(outer_margin)
-    } else {
-        outer_margin
-    };
-    let panel_y = if centered_demo {
-        ((screen_h - panel_h) * 0.5).max(outer_margin)
-    } else {
-        (screen_h - panel_h - outer_margin).max(outer_margin)
-    };
-    let inner_padding = data.scene.overlay_runtime.ui.layout.inner_padding * s;
-    let panel_inner_w = (panel_w - inner_padding * 2.0).max(1.0);
-    let (footer_y, input_h, button_w, input_w) = adaptive_footer_metrics(
-        panel_inner_w,
-        panel_h,
-        inner_padding,
-        s,
-        data.scene.overlay_runtime.ui.layout.footer_offset,
-        data.scene.overlay_runtime.ui.layout.input_height,
-        data.scene.overlay_runtime.ui.layout.button_width,
-        data.scene.overlay_runtime.ui.layout.input_button_gap,
-    );
-
-    if let Some(root) = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.root)
-    {
-        root.x = panel_x;
-        root.y = panel_y;
-        root.w = panel_w;
-        root.h = panel_h;
-    }
-
-    if let Some(scroll) = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.scrollback)
-    {
-        if centered_demo {
-            let scroll_h =
-                (panel_h * 0.34).clamp(52.0 * s, (panel_h - (inner_padding * 2.0)).max(1.0));
-            let scroll_y = (panel_y + ((panel_h - scroll_h) * 0.30)).clamp(
-                panel_y + inner_padding,
-                panel_y + panel_h - inner_padding - scroll_h,
-            );
-            scroll.x = panel_x + inner_padding;
-            scroll.y = scroll_y;
-            scroll.w = panel_inner_w;
-            scroll.h = scroll_h;
-        } else {
-            scroll.x = panel_x + inner_padding;
-            scroll.y = panel_y + inner_padding;
-            scroll.w = panel_inner_w;
-            scroll.h = panel_h - footer_y - inner_padding;
-        }
-    }
-
-    if let Some(input) = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.input)
-    {
-        input.x = if centered_demo {
-            panel_x + ((panel_w - input_w) * 0.5).max(inner_padding)
-        } else {
-            panel_x + inner_padding
-        };
-        input.y = panel_y + panel_h - footer_y;
-        input.w = input_w;
-        input.h = input_h;
-    }
-
-    if let Some(button) = data
-        .scene
-        .overlay_runtime
-        .world
-        .get_component_mut::<UiTransform>(data.scene.overlay_runtime.ui.confirm_button)
-    {
-        button.x = if centered_demo {
-            panel_x + ((panel_w - button_w) * 0.5).max(inner_padding)
-        } else {
-            panel_x + panel_w - inner_padding - button_w
-        };
-        button.y = panel_y + panel_h - footer_y;
-        button.w = button_w;
-        button.h = input_h;
-    }
-
-    data.scene.overlay_runtime.ui.layout_dirty = false;
-    Ok(())
-}
-
-fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
-    let centered_demo = centered_demo_enabled(data);
+fn build_console_batches(
+    manager: &mut SceneManager,
+    commands: &mut Vec<UiBatchCmd>,
+    ui_scale: f32,
+) {
+    let centered_demo = centered_demo_enabled(&manager.overlay_runtime.ui);
     if let (Some(transform), Some(style)) = (
-        data.scene
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(data.scene.overlay_runtime.ui.root),
-        data.scene
+            .get::<UiTransform>(manager.overlay_runtime.ui.root),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiStyle>(data.scene.overlay_runtime.ui.root),
-    ) && ui_node_visible(data, data.scene.overlay_runtime.ui.root)
+            .get::<UiStyle>(manager.overlay_runtime.ui.root),
+    ) && ui_node_visible(manager, manager.overlay_runtime.ui.root)
     {
         commands.push(UiBatchCmd::Rect {
             x: transform.x,
@@ -1803,36 +1242,36 @@ fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, 
     }
 
     if let (Some(transform), Some(text)) = (
-        data.scene
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(data.scene.overlay_runtime.ui.scrollback),
-        data.scene
+            .get::<UiTransform>(manager.overlay_runtime.ui.scrollback),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiText>(data.scene.overlay_runtime.ui.scrollback),
-    ) && ui_node_visible(data, data.scene.overlay_runtime.ui.scrollback)
+            .get::<UiText>(manager.overlay_runtime.ui.scrollback),
+    ) && ui_node_visible(manager, manager.overlay_runtime.ui.scrollback)
     {
         let text_size = text.size * ui_scale;
         let visible_capacity = visible_line_capacity(transform.h, text_size);
         let line_max_w = (transform.w - (8.0 * ui_scale)).max(1.0);
         let viewport = build_scroll_viewport(ScrollViewportSpec {
-            lines: &data.scene.overlay_runtime.ui.lines,
-            lines_from_bottom: data.scene.overlay_runtime.ui.scroll_lines_from_bottom,
+            lines: &manager.overlay_runtime.ui.lines,
+            lines_from_bottom: manager.overlay_runtime.ui.scroll_lines_from_bottom,
             visible_capacity,
-            horizontal_chars: data.scene.overlay_runtime.ui.scroll_horizontal_chars,
+            horizontal_chars: manager.overlay_runtime.ui.scroll_horizontal_chars,
             max_width: line_max_w,
             text_size,
-            metrics: &data.scene.overlay_runtime.ui.text_metrics,
+            metrics: &manager.overlay_runtime.ui.text_metrics,
         });
-        data.scene.overlay_runtime.ui.scroll_horizontal_chars = viewport.clamped_horizontal_chars;
-        data.scene.overlay_runtime.ui.scroll_lines_from_bottom = viewport.clamped_lines_from_bottom;
+        manager.overlay_runtime.ui.scroll_horizontal_chars = viewport.clamped_horizontal_chars;
+        manager.overlay_runtime.ui.scroll_lines_from_bottom = viewport.clamped_lines_from_bottom;
 
         for (line_idx, line) in viewport.view_rows.iter().enumerate() {
             let (line_color, stripped) = scrollback_line_style(line, text.color);
             let line_x = if centered_demo {
                 let text_w = measure_text_advance_precise(
-                    &data.scene.overlay_runtime.ui.text_metrics,
+                    &manager.overlay_runtime.ui.text_metrics,
                     stripped,
                     text_size,
                 );
@@ -1849,7 +1288,7 @@ fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, 
                 clip: Some([transform.x, transform.y, transform.w, transform.h]),
             });
         }
-        if !centered_demo && data.scene.overlay_runtime.ui.layout.show_scroll_indicators {
+        if !centered_demo && manager.overlay_runtime.ui.layout.show_scroll_indicators {
             push_scroll_indicators(
                 commands,
                 transform,
@@ -1862,7 +1301,7 @@ fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, 
                 [0.62, 0.74, 0.86, 0.95],
             );
         }
-        if !centered_demo && data.scene.overlay_runtime.ui.layout.show_scroll_hints {
+        if !centered_demo && manager.overlay_runtime.ui.layout.show_scroll_hints {
             commands.push(UiBatchCmd::Text {
                 x: transform.x + (4.0 * ui_scale),
                 y: (transform.y + transform.h - (14.0 * ui_scale)).max(transform.y),
@@ -1875,26 +1314,26 @@ fn build_console_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, 
     }
 }
 
-fn build_logs_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
+fn build_logs_batches(manager: &mut SceneManager, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
     let log_rect = compute_log_window_rect(
-        &data.scene.overlay_runtime.ui.layout,
-        data.scene.overlay_runtime.ui.screen_size,
+        &manager.overlay_runtime.ui.layout,
+        manager.overlay_runtime.ui.screen_size,
         ui_scale,
     );
     let log_text_size = 12.0 * ui_scale;
     let log_header_h = 24.0 * ui_scale;
     let log_visible_capacity = visible_line_capacity(log_rect.body_h, log_text_size);
     let viewport = build_scroll_viewport(ScrollViewportSpec {
-        lines: &data.scene.overlay_runtime.ui.log_lines,
-        lines_from_bottom: data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom,
+        lines: &manager.overlay_runtime.ui.log_lines,
+        lines_from_bottom: manager.overlay_runtime.ui.log_scroll_lines_from_bottom,
         visible_capacity: log_visible_capacity,
-        horizontal_chars: data.scene.overlay_runtime.ui.log_scroll_horizontal_chars,
+        horizontal_chars: manager.overlay_runtime.ui.log_scroll_horizontal_chars,
         max_width: log_rect.body_w,
         text_size: log_text_size,
-        metrics: &data.scene.overlay_runtime.ui.text_metrics,
+        metrics: &manager.overlay_runtime.ui.text_metrics,
     });
-    data.scene.overlay_runtime.ui.log_scroll_horizontal_chars = viewport.clamped_horizontal_chars;
-    data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = viewport.clamped_lines_from_bottom;
+    manager.overlay_runtime.ui.log_scroll_horizontal_chars = viewport.clamped_horizontal_chars;
+    manager.overlay_runtime.ui.log_scroll_lines_from_bottom = viewport.clamped_lines_from_bottom;
 
     commands.push(UiBatchCmd::Rect {
         x: log_rect.x,
@@ -1912,10 +1351,10 @@ fn build_logs_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_
         color: [0.11, 0.17, 0.23, 0.96],
         radius: 6.0 * ui_scale,
     });
-    let pause_status = if data.scene.overlay_runtime.ui.logs_paused {
+    let pause_status = if manager.overlay_runtime.ui.logs_paused {
         format!(
             "PAUSED ({})",
-            data.scene.overlay_runtime.ui.log_paused_lines.len()
+            manager.overlay_runtime.ui.log_paused_lines.len()
         )
     } else {
         "LIVE".to_string()
@@ -1924,7 +1363,7 @@ fn build_logs_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_
         x: log_rect.x + (8.0 * ui_scale),
         y: log_rect.y + (6.0 * ui_scale),
         content: format!("Logs [{pause_status}]"),
-        color: if data.scene.overlay_runtime.ui.logs_paused {
+        color: if manager.overlay_runtime.ui.logs_paused {
             [0.98, 0.72, 0.42, 1.0]
         } else {
             [0.72, 0.91, 0.78, 1.0]
@@ -1948,7 +1387,7 @@ fn build_logs_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_
             ]),
         });
     }
-    if data.scene.overlay_runtime.ui.layout.show_scroll_indicators {
+    if manager.overlay_runtime.ui.layout.show_scroll_indicators {
         let log_content_rect = UiTransform {
             x: log_rect.x + (4.0 * ui_scale),
             y: log_rect.body_y,
@@ -1969,17 +1408,17 @@ fn build_logs_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_
     }
 }
 
-fn build_input_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
+fn build_input_batches(manager: &mut SceneManager, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
     if let (Some(transform), Some(style)) = (
-        data.scene
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(data.scene.overlay_runtime.ui.input),
-        data.scene
+            .get::<UiTransform>(manager.overlay_runtime.ui.input),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiStyle>(data.scene.overlay_runtime.ui.root),
-    ) && ui_node_visible(data, data.scene.overlay_runtime.ui.input)
+            .get::<UiStyle>(manager.overlay_runtime.ui.root),
+    ) && ui_node_visible(manager, manager.overlay_runtime.ui.input)
     {
         commands.push(UiBatchCmd::Rect {
             x: transform.x,
@@ -1997,25 +1436,25 @@ fn build_input_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui
     }
 
     if let (Some(transform), Some(text), Some(input_field)) = (
-        data.scene
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(data.scene.overlay_runtime.ui.input),
-        data.scene
+            .get::<UiTransform>(manager.overlay_runtime.ui.input),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiText>(data.scene.overlay_runtime.ui.input),
-        data.scene
+            .get::<UiText>(manager.overlay_runtime.ui.input),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiInputField>(data.scene.overlay_runtime.ui.input),
-    ) && ui_node_visible(data, data.scene.overlay_runtime.ui.input)
+            .get::<UiInputField>(manager.overlay_runtime.ui.input),
+    ) && ui_node_visible(manager, manager.overlay_runtime.ui.input)
     {
         let scaled_text_size = text.size * ui_scale;
         let (content_x, content_y, content_w, content_h) = input_content_rect(transform, ui_scale);
         let layout = build_visible_multiline_input(
-            &mut data.scene.overlay_runtime.ui.input_editor,
-            &data.scene.overlay_runtime.ui.text_metrics,
+            &mut manager.overlay_runtime.ui.input_editor,
+            &manager.overlay_runtime.ui.text_metrics,
             scaled_text_size,
             content_w,
             content_h,
@@ -2029,7 +1468,7 @@ fn build_input_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui
             clip: Some([transform.x, transform.y, transform.w, transform.h]),
         });
 
-        if data.scene.overlay_runtime.ui.caret_visible && input_field.focused {
+        if manager.overlay_runtime.ui.caret_visible && input_field.focused {
             let caret_w = (2.0 * ui_scale).max(1.0);
             let caret_h = (scaled_text_size * 0.9).min(content_h).max(1.0);
             let max_caret_x = (content_x + content_w - caret_w).max(content_x);
@@ -2048,27 +1487,27 @@ fn build_input_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui
     }
 
     if let (Some(transform), Some(style), Some(button), Some(interaction), Some(text)) = (
-        data.scene
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(data.scene.overlay_runtime.ui.confirm_button),
-        data.scene
+            .get::<UiTransform>(manager.overlay_runtime.ui.confirm_button),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiStyle>(data.scene.overlay_runtime.ui.confirm_button),
-        data.scene
+            .get::<UiStyle>(manager.overlay_runtime.ui.confirm_button),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiButton>(data.scene.overlay_runtime.ui.confirm_button),
-        data.scene
+            .get::<UiButton>(manager.overlay_runtime.ui.confirm_button),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiInteraction>(data.scene.overlay_runtime.ui.confirm_button),
-        data.scene
+            .get::<UiInteraction>(manager.overlay_runtime.ui.confirm_button),
+        manager
             .overlay_runtime
             .world
-            .get_component::<UiText>(data.scene.overlay_runtime.ui.confirm_button),
-    ) && ui_node_visible(data, data.scene.overlay_runtime.ui.confirm_button)
+            .get::<UiText>(manager.overlay_runtime.ui.confirm_button),
+    ) && ui_node_visible(manager, manager.overlay_runtime.ui.confirm_button)
     {
         let color = if !button.enabled {
             tint_color(style.bg_color, 0.6)
@@ -2103,16 +1542,77 @@ fn build_input_batches(data: &mut EngineData, commands: &mut Vec<UiBatchCmd>, ui
     }
 }
 
-fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, ui_scale: f32) {
-    push_world_stats_panel(commands, data, ui_scale);
+fn push_world_stats_panel(
+    commands: &mut Vec<UiBatchCmd>,
+    stats: &UiWorldHudStats,
+    ui: &ConsoleUiRuntimeState,
+    ui_scale: f32,
+) {
+    if !stats.visible {
+        return;
+    }
 
-    if data.scene.overlay_runtime.ui.editor.enabled {
-        if let Some(selected_entity) = selected_editor_entity(&data.scene.overlay_runtime.ui)
-            && let Some(selected_rect) = data
-                .scene
+    let margin = 10.0 * ui_scale;
+    let panel_w = 300.0 * ui_scale;
+    let panel_h = 74.0 * ui_scale;
+    let panel_x = margin;
+    let panel_y = margin;
+    let panel_w = panel_w.min((ui.screen_size.0 - (margin * 2.0)).max(80.0));
+    let panel_h = panel_h.min((ui.screen_size.1 - (margin * 2.0)).max(40.0));
+    let clip = Some([panel_x, panel_y, panel_w, panel_h]);
+
+    commands.push(UiBatchCmd::Rect {
+        x: panel_x,
+        y: panel_y,
+        w: panel_w,
+        h: panel_h,
+        color: [0.05, 0.08, 0.12, 0.86],
+        radius: 8.0 * ui_scale,
+    });
+    commands.push(UiBatchCmd::Text {
+        x: panel_x + (10.0 * ui_scale),
+        y: panel_y + (10.0 * ui_scale),
+        content: "World Stats".to_string(),
+        color: [0.88, 0.95, 1.0, 1.0],
+        size: 12.0 * ui_scale,
+        clip,
+    });
+    commands.push(UiBatchCmd::Text {
+        x: panel_x + (10.0 * ui_scale),
+        y: panel_y + (30.0 * ui_scale),
+        content: format!("player=({:.1}, {:.1})", stats.player_x, stats.player_y),
+        color: [0.56, 0.94, 0.66, 1.0],
+        size: 11.0 * ui_scale,
+        clip,
+    });
+    commands.push(UiBatchCmd::Text {
+        x: panel_x + (10.0 * ui_scale),
+        y: panel_y + (48.0 * ui_scale),
+        content: format!(
+            "enemies={} slain={}",
+            stats.enemies_alive, stats.enemy_kills
+        ),
+        color: [0.98, 0.74, 0.42, 1.0],
+        size: 11.0 * ui_scale,
+        clip,
+    });
+}
+
+fn build_diagnostics_batches(
+    manager: &SceneManager,
+    input: &InputState,
+    stats: &UiWorldHudStats,
+    commands: &mut Vec<UiBatchCmd>,
+    ui_scale: f32,
+) {
+    push_world_stats_panel(commands, stats, &manager.overlay_runtime.ui, ui_scale);
+
+    if manager.overlay_runtime.ui.editor.enabled {
+        if let Some(selected_entity) = selected_editor_entity(&manager.overlay_runtime.ui)
+            && let Some(selected_rect) = manager
                 .overlay_runtime
                 .world
-                .get_component::<UiTransform>(selected_entity)
+                .get::<UiTransform>(selected_entity)
         {
             push_outline(
                 commands,
@@ -2122,31 +1622,28 @@ fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, 
             );
         }
 
-        if let Some(root_rect) = data
-            .scene
+        if let Some(root_rect) = manager
             .overlay_runtime
             .world
-            .get_component::<UiTransform>(data.scene.overlay_runtime.ui.root)
+            .get::<UiTransform>(manager.overlay_runtime.ui.root)
         {
-            let stack_labels = data
-                .scene
+            let stack_labels = manager
                 .overlays
                 .iter()
                 .map(|slot| slot.active.label())
                 .collect::<Vec<_>>()
                 .join(" > ");
-            let debug_pos = data
-                .scene
+            let debug_pos = manager
                 .world_runtime
                 .ctx
                 .world
-                .get_component::<WorldDebugPosition>(data.scene.world_runtime.ctx.debug_entity)
+                .get::<WorldDebugPosition>(manager.world_runtime.ctx.debug_entity)
                 .map(|p| format!("({:.1}, {:.1})", p.x, p.y))
                 .unwrap_or_else(|| "(n/a)".to_string());
             commands.push(UiBatchCmd::Text {
                 x: root_rect.x + (8.0 * ui_scale),
                 y: root_rect.y + (8.0 * ui_scale),
-                content: data.scene.overlay_runtime.ui.editor.status.clone(),
+                content: manager.overlay_runtime.ui.editor.status.clone(),
                 color: [0.98, 0.84, 0.52, 1.0],
                 size: 12.0 * ui_scale,
                 clip: Some([root_rect.x, root_rect.y, root_rect.w, root_rect.h]),
@@ -2156,8 +1653,8 @@ fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, 
                 y: root_rect.y + (24.0 * ui_scale),
                 content: format!(
                     "scene world={} paused={} overlays=[{}]",
-                    data.scene.world.active.label(),
-                    data.scene.world.paused,
+                    manager.world.active.label(),
+                    manager.world.paused,
                     stack_labels
                 ),
                 color: [0.76, 0.87, 0.98, 1.0],
@@ -2169,9 +1666,7 @@ fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, 
                 y: root_rect.y + (39.0 * ui_scale),
                 content: format!(
                     "world_tick={} overlay_consumed={} debug_pos={}",
-                    data.scene.world_runtime.ctx.frame_count,
-                    data.input.overlay_consumed,
-                    debug_pos
+                    manager.world_runtime.ctx.frame_count, input.overlay_consumed, debug_pos
                 ),
                 color: [0.72, 0.86, 0.84, 1.0],
                 size: 11.0 * ui_scale,
@@ -2181,34 +1676,477 @@ fn build_diagnostics_batches(data: &EngineData, commands: &mut Vec<UiBatchCmd>, 
     }
 }
 
-pub fn ui_build_batches_system(data: &mut EngineData) -> anyhow::Result<()> {
-    let ui_scale = data.scene.overlay_runtime.ui.scale.max(1.0);
-    let centered_demo = centered_demo_enabled(data);
-    let mut commands: Vec<UiBatchCmd> = Vec::new();
-    if !data.scene.overlay_visible() {
-        if !centered_demo {
-            build_diagnostics_batches(data, &mut commands, ui_scale);
-        }
-        data.scene.overlay_runtime.ui.batches.commands = commands;
+fn ui_hot_reload_system(mut scene_resource: ResMut<SceneResource>) -> anyhow::Result<()> {
+    let Some(manager) = scene_resource.manager.as_mut() else {
         return Ok(());
+    };
+    if !manager
+        .overlay_runtime
+        .world
+        .has_resource::<UiRenderShaderConfig>()
+    {
+        manager
+            .overlay_runtime
+            .world
+            .insert_resource(UiRenderShaderConfig::default());
     }
-
-    build_console_batches(data, &mut commands, ui_scale);
-    if !centered_demo {
-        build_logs_batches(data, &mut commands, ui_scale);
+    if let Err(err) = reload_console_template_if_changed(
+        &mut manager.overlay_runtime.world,
+        &mut manager.overlay_runtime.ui,
+        false,
+    ) {
+        tracing::warn!(?err, "ui hot reload failed");
     }
-    build_input_batches(data, &mut commands, ui_scale);
-    if !centered_demo {
-        build_diagnostics_batches(data, &mut commands, ui_scale);
-    }
-
-    data.scene.overlay_runtime.ui.batches.commands = commands;
     Ok(())
 }
 
-pub fn ui_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> {
-    let commands = data
-        .scene
+fn ui_input_system(
+    time: Res<Time>,
+    mut input: ResMut<InputState>,
+    mut scene_resource: ResMut<SceneResource>,
+) -> anyhow::Result<()> {
+    input.overlay_consumed = false;
+    let Some(manager) = scene_resource.manager.as_mut() else {
+        return Ok(());
+    };
+    if !manager.overlay_visible() {
+        return Ok(());
+    }
+
+    if input.toggle_ui_editor_mode {
+        manager.overlay_runtime.ui.editor.enabled = !manager.overlay_runtime.ui.editor.enabled;
+        manager.overlay_runtime.ui.editor.dragging = false;
+        manager.overlay_runtime.ui.editor.drag_pointer_offset = (0.0, 0.0);
+        manager.overlay_runtime.ui.editor.status = if manager.overlay_runtime.ui.editor.enabled {
+            "editor: on (click+drag move, Shift snap, arrows nudge, X hide node, A restore, Cmd/Ctrl+S save, F1 off)"
+                .to_string()
+        } else {
+            "editor: off (F1 to toggle)".to_string()
+        };
+    }
+
+    if manager.overlay_runtime.ui.editor.enabled {
+        input.overlay_consumed = true;
+        return Ok(());
+    }
+
+    let input_entity = manager.overlay_runtime.ui.input;
+    let button_entity = manager.overlay_runtime.ui.confirm_button;
+    let scroll_entity = manager.overlay_runtime.ui.scrollback;
+    let input_visible = ui_node_visible(manager, input_entity);
+    let button_visible = ui_node_visible(manager, button_entity);
+    let scroll_visible = ui_node_visible(manager, scroll_entity);
+    let ui_scale = manager.overlay_runtime.ui.scale.max(1.0);
+    let input_nav_metrics = if let (Some(transform), Some(text)) = (
+        manager
+            .overlay_runtime
+            .world
+            .get::<UiTransform>(input_entity),
+        manager.overlay_runtime.world.get::<UiText>(input_entity),
+    ) {
+        let (_, _, content_w, _) = input_content_rect(transform, ui_scale);
+        Some((text.size * ui_scale, content_w))
+    } else {
+        None
+    };
+
+    let input_ref: &InputState = &input;
+    let mut overlay_consumed = false;
+    overlay_consumed |= process_input_text_edit(
+        manager,
+        input_ref,
+        input_entity,
+        input_visible,
+        input_nav_metrics,
+    );
+    overlay_consumed |= process_submit_and_pointer(
+        manager,
+        input_ref,
+        input_entity,
+        button_entity,
+        input_visible,
+        button_visible,
+    );
+
+    manager.overlay_runtime.ui.caret_blink_timer += time.delta_seconds;
+    while manager.overlay_runtime.ui.caret_blink_timer >= CARET_BLINK_SECONDS {
+        manager.overlay_runtime.ui.caret_blink_timer -= CARET_BLINK_SECONDS;
+        manager.overlay_runtime.ui.caret_visible = !manager.overlay_runtime.ui.caret_visible;
+    }
+    overlay_consumed |=
+        process_scroll_routing(manager, input_ref, scroll_entity, scroll_visible, ui_scale);
+
+    input.overlay_consumed = overlay_consumed;
+    Ok(())
+}
+
+fn ui_editor_system(
+    input: Res<InputState>,
+    mut scene_resource: ResMut<SceneResource>,
+) -> anyhow::Result<()> {
+    let Some(manager) = scene_resource.manager.as_mut() else {
+        return Ok(());
+    };
+    if !manager.overlay_runtime.ui.editor.enabled {
+        return Ok(());
+    }
+
+    let candidates = [
+        (UiEditorNode::Root, manager.overlay_runtime.ui.root),
+        (
+            UiEditorNode::Scrollback,
+            manager.overlay_runtime.ui.scrollback,
+        ),
+        (UiEditorNode::Input, manager.overlay_runtime.ui.input),
+        (
+            UiEditorNode::ConfirmButton,
+            manager.overlay_runtime.ui.confirm_button,
+        ),
+    ];
+
+    if input.left_mouse_pressed() {
+        let mut rects: Vec<EditorNodeRect> = Vec::new();
+        for (node, entity) in candidates {
+            if let (Some(transform), Some(ui_node)) = (
+                manager.overlay_runtime.world.get::<UiTransform>(entity),
+                manager.overlay_runtime.world.get::<UiNode>(entity),
+            ) {
+                if !ui_node.visible {
+                    continue;
+                }
+                rects.push(EditorNodeRect {
+                    node,
+                    z: ui_node.z,
+                    rect: *transform,
+                });
+            }
+        }
+
+        manager.overlay_runtime.ui.editor.selected =
+            pick_editor_node_at(input.mouse_position, &rects);
+        manager.overlay_runtime.ui.editor.dragging = false;
+        manager.overlay_runtime.ui.editor.drag_pointer_offset = (0.0, 0.0);
+        match manager.overlay_runtime.ui.editor.selected {
+            Some(node) => {
+                if let Some(selected_rect) = rects.iter().find(|r| r.node == node).map(|r| r.rect) {
+                    manager.overlay_runtime.ui.editor.drag_pointer_offset = (
+                        input.mouse_position.0 - selected_rect.x,
+                        input.mouse_position.1 - selected_rect.y,
+                    );
+                    manager.overlay_runtime.ui.editor.dragging = true;
+                }
+                manager.overlay_runtime.ui.editor.status =
+                    format!("editor: selected {}", editor_node_label(node));
+            }
+            None => {
+                manager.overlay_runtime.ui.editor.status = "editor: nothing selected".to_string();
+            }
+        }
+    }
+
+    if input.left_mouse_released() {
+        manager.overlay_runtime.ui.editor.dragging = false;
+    }
+
+    if let Some(selected_node) = manager.overlay_runtime.ui.editor.selected {
+        let Some(selected) = selected_editor_entity(&manager.overlay_runtime.ui) else {
+            return Ok(());
+        };
+        let step = if input.shift_down() {
+            10.0 * manager.overlay_runtime.ui.scale.max(1.0)
+        } else {
+            EDITOR_BASE_NUDGE_PX * manager.overlay_runtime.ui.scale.max(1.0)
+        };
+        let mut dx = 0.0;
+        let mut dy = 0.0;
+        if input.move_left {
+            dx -= step;
+        }
+        if input.move_right {
+            dx += step;
+        }
+        if input.move_up {
+            dy -= step;
+        }
+        if input.move_down {
+            dy += step;
+        }
+        if (dx != 0.0 || dy != 0.0)
+            && manager
+                .overlay_runtime
+                .world
+                .get::<UiTransform>(selected)
+                .is_some()
+        {
+            apply_editor_translation(manager, selected_node, dx, dy);
+            let pos = manager
+                .overlay_runtime
+                .world
+                .get::<UiTransform>(selected)
+                .map(|t| (t.x, t.y))
+                .unwrap_or((0.0, 0.0));
+            manager.overlay_runtime.ui.editor.status = format!(
+                "editor: nudged {} to ({:.0}, {:.0})",
+                editor_node_label(selected_node),
+                pos.0,
+                pos.1
+            );
+        }
+
+        if manager.overlay_runtime.ui.editor.dragging
+            && input.left_mouse_down()
+            && let Some(current) = manager
+                .overlay_runtime
+                .world
+                .get::<UiTransform>(selected)
+                .copied()
+        {
+            let mut next_x =
+                input.mouse_position.0 - manager.overlay_runtime.ui.editor.drag_pointer_offset.0;
+            let mut next_y =
+                input.mouse_position.1 - manager.overlay_runtime.ui.editor.drag_pointer_offset.1;
+            if input.shift_down() {
+                let grid = EDITOR_DRAG_SNAP_PX * manager.overlay_runtime.ui.scale.max(1.0);
+                next_x = snap_to_grid(next_x, grid);
+                next_y = snap_to_grid(next_y, grid);
+            }
+            let dx = next_x - current.x;
+            let dy = next_y - current.y;
+            apply_editor_translation(manager, selected_node, dx, dy);
+            let pos = manager
+                .overlay_runtime
+                .world
+                .get::<UiTransform>(selected)
+                .map(|t| (t.x, t.y))
+                .unwrap_or((next_x, next_y));
+            manager.overlay_runtime.ui.editor.status = format!(
+                "editor: dragging {} ({:.0}, {:.0})",
+                editor_node_label(selected_node),
+                pos.0,
+                pos.1
+            );
+        }
+
+        if input.editor_hide_selected {
+            let can_hide = selected_node != UiEditorNode::Root;
+            if can_hide {
+                if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(selected)
+                    && let Some(mut node) = ui_entity.get_mut::<UiNode>()
+                {
+                    node.visible = false;
+                    manager.overlay_runtime.ui.editor.status = format!(
+                        "editor: hid {} (A restores hidden nodes)",
+                        editor_node_label(selected_node)
+                    );
+                }
+                manager.overlay_runtime.ui.editor.selected = Some(UiEditorNode::Root);
+                manager.overlay_runtime.ui.editor.dragging = false;
+            } else {
+                manager.overlay_runtime.ui.editor.status =
+                    "editor: root cannot be hidden".to_string();
+            }
+        }
+    }
+
+    if input.editor_restore_all {
+        for entity in [
+            manager.overlay_runtime.ui.root,
+            manager.overlay_runtime.ui.scrollback,
+            manager.overlay_runtime.ui.input,
+            manager.overlay_runtime.ui.confirm_button,
+        ] {
+            if let Ok(mut ui_entity) = manager.overlay_runtime.world.entity_mut(entity)
+                && let Some(mut node) = ui_entity.get_mut::<UiNode>()
+            {
+                node.visible = true;
+            }
+        }
+        manager.overlay_runtime.ui.editor.status = "editor: restored all nodes".to_string();
+    }
+
+    if input.save_ui_template {
+        match save_console_template_to_disk(
+            &manager.overlay_runtime.world,
+            &mut manager.overlay_runtime.ui,
+        ) {
+            Ok(path) => {
+                manager.overlay_runtime.ui.editor.status =
+                    format!("editor: saved {}", path.display());
+                let _ = reload_console_template_if_changed(
+                    &mut manager.overlay_runtime.world,
+                    &mut manager.overlay_runtime.ui,
+                    true,
+                );
+            }
+            Err(err) => {
+                manager.overlay_runtime.ui.editor.status = format!("editor: save failed: {err:#}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn ui_layout_system(mut scene_resource: ResMut<SceneResource>) -> anyhow::Result<()> {
+    let Some(manager) = scene_resource.manager.as_mut() else {
+        return Ok(());
+    };
+    if !manager.overlay_visible() {
+        return Ok(());
+    }
+    if !manager.overlay_runtime.ui.layout_dirty {
+        return Ok(());
+    }
+
+    let (screen_w, screen_h) = manager.overlay_runtime.ui.screen_size;
+    let s = manager.overlay_runtime.ui.scale.max(1.0);
+    let outer_margin = manager.overlay_runtime.ui.layout.outer_margin * s;
+    let available_w = (screen_w - (outer_margin * 2.0)).max(1.0);
+    let available_h = (screen_h - (outer_margin * 2.0)).max(1.0);
+    let panel_w = clamp_panel_dimension(
+        screen_w * manager.overlay_runtime.ui.layout.panel_width_ratio,
+        manager.overlay_runtime.ui.layout.panel_min_width * s,
+        available_w,
+    );
+    let panel_h = clamp_panel_dimension(
+        screen_h * manager.overlay_runtime.ui.layout.panel_height_ratio,
+        manager.overlay_runtime.ui.layout.panel_min_height * s,
+        available_h,
+    );
+    let centered_demo = centered_demo_enabled(&manager.overlay_runtime.ui);
+    let panel_x = if centered_demo {
+        ((screen_w - panel_w) * 0.5).max(outer_margin)
+    } else {
+        outer_margin
+    };
+    let panel_y = if centered_demo {
+        ((screen_h - panel_h) * 0.5).max(outer_margin)
+    } else {
+        (screen_h - panel_h - outer_margin).max(outer_margin)
+    };
+    let inner_padding = manager.overlay_runtime.ui.layout.inner_padding * s;
+    let panel_inner_w = (panel_w - inner_padding * 2.0).max(1.0);
+    let (footer_y, input_h, button_w, input_w) = adaptive_footer_metrics(
+        panel_inner_w,
+        panel_h,
+        inner_padding,
+        s,
+        manager.overlay_runtime.ui.layout.footer_offset,
+        manager.overlay_runtime.ui.layout.input_height,
+        manager.overlay_runtime.ui.layout.button_width,
+        manager.overlay_runtime.ui.layout.input_button_gap,
+    );
+
+    if let Ok(mut ui_entity) = manager
+        .overlay_runtime
+        .world
+        .entity_mut(manager.overlay_runtime.ui.root)
+        && let Some(mut root) = ui_entity.get_mut::<UiTransform>()
+    {
+        root.x = panel_x;
+        root.y = panel_y;
+        root.w = panel_w;
+        root.h = panel_h;
+    }
+    if let Ok(mut ui_entity) = manager
+        .overlay_runtime
+        .world
+        .entity_mut(manager.overlay_runtime.ui.scrollback)
+        && let Some(mut scroll) = ui_entity.get_mut::<UiTransform>()
+    {
+        if centered_demo {
+            let scroll_h =
+                (panel_h * 0.34).clamp(52.0 * s, (panel_h - (inner_padding * 2.0)).max(1.0));
+            let scroll_y = (panel_y + ((panel_h - scroll_h) * 0.30)).clamp(
+                panel_y + inner_padding,
+                panel_y + panel_h - inner_padding - scroll_h,
+            );
+            scroll.x = panel_x + inner_padding;
+            scroll.y = scroll_y;
+            scroll.w = panel_inner_w;
+            scroll.h = scroll_h;
+        } else {
+            scroll.x = panel_x + inner_padding;
+            scroll.y = panel_y + inner_padding;
+            scroll.w = panel_inner_w;
+            scroll.h = panel_h - footer_y - inner_padding;
+        }
+    }
+    if let Ok(mut ui_entity) = manager
+        .overlay_runtime
+        .world
+        .entity_mut(manager.overlay_runtime.ui.input)
+        && let Some(mut input_transform) = ui_entity.get_mut::<UiTransform>()
+    {
+        input_transform.x = if centered_demo {
+            panel_x + ((panel_w - input_w) * 0.5).max(inner_padding)
+        } else {
+            panel_x + inner_padding
+        };
+        input_transform.y = panel_y + panel_h - footer_y;
+        input_transform.w = input_w;
+        input_transform.h = input_h;
+    }
+    if let Ok(mut ui_entity) = manager
+        .overlay_runtime
+        .world
+        .entity_mut(manager.overlay_runtime.ui.confirm_button)
+        && let Some(mut button) = ui_entity.get_mut::<UiTransform>()
+    {
+        button.x = if centered_demo {
+            panel_x + ((panel_w - button_w) * 0.5).max(inner_padding)
+        } else {
+            panel_x + panel_w - inner_padding - button_w
+        };
+        button.y = panel_y + panel_h - footer_y;
+        button.w = button_w;
+        button.h = input_h;
+    }
+
+    manager.overlay_runtime.ui.layout_dirty = false;
+    Ok(())
+}
+
+fn ui_build_batches_system(
+    input: Res<InputState>,
+    hud_stats: Res<UiWorldHudStats>,
+    mut scene_resource: ResMut<SceneResource>,
+) -> anyhow::Result<()> {
+    let Some(manager) = scene_resource.manager.as_mut() else {
+        return Ok(());
+    };
+    let ui_scale = manager.overlay_runtime.ui.scale.max(1.0);
+    let centered_demo = centered_demo_enabled(&manager.overlay_runtime.ui);
+    let mut commands: Vec<UiBatchCmd> = Vec::new();
+
+    if !manager.overlay_visible() {
+        if !centered_demo {
+            build_diagnostics_batches(manager, &input, &hud_stats, &mut commands, ui_scale);
+        }
+        manager.overlay_runtime.ui.batches.commands = commands;
+        return Ok(());
+    }
+
+    build_console_batches(manager, &mut commands, ui_scale);
+    if !centered_demo {
+        build_logs_batches(manager, &mut commands, ui_scale);
+    }
+    build_input_batches(manager, &mut commands, ui_scale);
+    if !centered_demo {
+        build_diagnostics_batches(manager, &input, &hud_stats, &mut commands, ui_scale);
+    }
+    manager.overlay_runtime.ui.batches.commands = commands;
+    Ok(())
+}
+
+fn ui_render_extract_system(
+    mut ui_overlay: ResMut<UiOverlayState>,
+    mut scene_resource: ResMut<SceneResource>,
+) -> anyhow::Result<()> {
+    let Some(manager) = scene_resource.manager.as_mut() else {
+        return Ok(());
+    };
+    let commands: Vec<UiDrawCmd> = manager
         .overlay_runtime
         .ui
         .batches
@@ -2248,6 +2186,43 @@ pub fn ui_render_extract_system(data: &mut EngineData) -> anyhow::Result<()> {
         })
         .collect();
 
-    data.scene.overlay_runtime.ui.draw_list.commands = commands;
+    manager.overlay_runtime.ui.draw_list.commands = commands.clone();
+    ui_overlay.draw_list = OverlayDrawList {
+        commands: commands
+            .into_iter()
+            .map(|cmd| match cmd {
+                UiDrawCmd::Rect {
+                    x,
+                    y,
+                    w,
+                    h,
+                    color,
+                    radius,
+                } => OverlayDrawCmd::Rect {
+                    x,
+                    y,
+                    w,
+                    h,
+                    color,
+                    radius,
+                },
+                UiDrawCmd::Text {
+                    x,
+                    y,
+                    content,
+                    color,
+                    size,
+                    clip,
+                } => OverlayDrawCmd::Text {
+                    x,
+                    y,
+                    content,
+                    color,
+                    size,
+                    clip,
+                },
+            })
+            .collect(),
+    };
     Ok(())
 }

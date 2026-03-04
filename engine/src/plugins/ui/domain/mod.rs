@@ -4,7 +4,6 @@ mod text;
 pub use template::*;
 pub use text::*;
 
-use ecs::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -72,9 +71,13 @@ pub struct UiSubmitEvent {
     pub line: String,
 }
 
+pub type UiEntity = ecs::Entity;
+pub type ConsoleUiRuntimeState = ConsoleUiState<UiEntity>;
+pub type UiButtonRuntimeClickEvent = UiButtonClickEvent<UiEntity>;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct UiButtonClickEvent {
-    pub entity: EntityHandle,
+pub struct UiButtonClickEvent<E = ecs::Entity> {
+    pub entity: E,
 }
 
 #[derive(Debug, Clone)]
@@ -258,11 +261,11 @@ pub enum UiPresentationMode {
 }
 
 #[derive(Debug)]
-pub struct ConsoleUiState {
-    pub root: EntityHandle,
-    pub scrollback: EntityHandle,
-    pub input: EntityHandle,
-    pub confirm_button: EntityHandle,
+pub struct ConsoleUiState<E = ecs::Entity> {
+    pub root: E,
+    pub scrollback: E,
+    pub input: E,
+    pub confirm_button: E,
     pub batches: UiBatchList,
     pub draw_list: UiDrawList,
     pub input_editor: EditorBuffer,
@@ -289,7 +292,7 @@ pub struct ConsoleUiState {
     pub editor: UiEditorState,
 }
 
-pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
+pub fn initialize_console_ui(world: &mut ecs::World) -> ConsoleUiRuntimeState {
     let font_provider = FileFontProvider;
     let atlas = font_provider.load_default_font();
     let fallback_advance = atlas
@@ -303,7 +306,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         fallback_advance,
     };
 
-    let root = world.spawn_bundle((
+    let root = world.spawn((
         UiNode {
             visible: true,
             z: 0,
@@ -327,7 +330,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         },
     ));
 
-    let scrollback = world.spawn_bundle((
+    let scrollback = world.spawn((
         UiNode {
             visible: true,
             z: 1,
@@ -350,7 +353,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         },
     ));
 
-    let input = world.spawn_bundle((
+    let input = world.spawn((
         UiNode {
             visible: true,
             z: 1,
@@ -384,7 +387,7 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
         },
     ));
 
-    let confirm_button = world.spawn_bundle((
+    let confirm_button = world.spawn((
         UiNode {
             visible: true,
             z: 2,
@@ -413,12 +416,14 @@ pub fn initialize_console_ui(world: &mut World) -> ConsoleUiState {
             clicked: false,
             focused: false,
         },
-        UiDirty {
+    ));
+    if let Ok(mut entity) = world.entity_mut(confirm_button) {
+        let _ = entity.insert(UiDirty {
             layout: true,
             style: true,
             text: true,
-        },
-    ));
+        });
+    }
 
     ConsoleUiState {
         root,

@@ -1,9 +1,10 @@
-#[derive(Copy, Clone, Eq, Hash, PartialEq, Debug)]
-pub struct EntityHandle {
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct Entity {
     pub id: u32,
     pub generation: u32,
 }
 
+#[derive(Default)]
 pub struct EntityAllocator {
     next_id: u32,
     free_list: Vec<u32>,
@@ -12,31 +13,27 @@ pub struct EntityAllocator {
 
 impl EntityAllocator {
     pub fn new() -> Self {
-        Self {
-            next_id: 0,
-            free_list: Vec::new(),
-            generations: Vec::new(),
-        }
+        Self::default()
     }
 
-    pub fn allocate(&mut self) -> EntityHandle {
+    pub fn allocate(&mut self) -> Entity {
         if let Some(id) = self.free_list.pop() {
-            let generation = self.generations[id as usize];
-            EntityHandle { id, generation }
+            Entity {
+                id,
+                generation: self.generations[id as usize],
+            }
         } else {
             let id = self.next_id;
             self.next_id += 1;
             self.generations.push(0);
-            EntityHandle { id, generation: 0 }
+            Entity { id, generation: 0 }
         }
     }
 
-    pub fn free(&mut self, entity: EntityHandle) {
-        self.generations[entity.id as usize] += 1;
-        self.free_list.push(entity.id);
-    }
-
-    pub fn generation(&self, entity: EntityHandle) -> u32 {
-        self.generations[entity.id as usize]
+    pub fn free(&mut self, entity: Entity) {
+        if let Some(generation) = self.generations.get_mut(entity.id as usize) {
+            *generation = generation.saturating_add(1);
+            self.free_list.push(entity.id);
+        }
     }
 }

@@ -1,95 +1,145 @@
 pub mod domain;
 
-use self::domain::{RenderFrameDataRegistry, ShaderHandle};
+use self::domain::{
+    Gfx, RenderFrameDataRegistry, RenderFrameResourceBindings, RenderGraphRegistryResource,
+    RenderPassExecutorRegistryResource, ShaderHandle, ShaderRegistryResource,
+};
+use crate::app::App;
+use crate::plugin::Plugin;
+use crate::plugins::scene::SceneResource;
+use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::UiRenderShaderConfig;
-use crate::runtime::{EngineData, EnginePlugin, EngineScheduleBuilder};
-use anyhow::Result;
+use crate::runtime::{RenderPrepare, RenderSubmit, Res, ResMut, WorldMut};
+use crate::state::{DebugMetricsState, StartupState};
 use scheduler::set_slow_node_logging_enabled;
 use wgpu::SurfaceError;
 
 pub struct RenderPlugin;
 
-impl EnginePlugin for RenderPlugin {
-    fn name(&self) -> &'static str {
-        "render"
-    }
-
-    fn configure(&self, builder: &mut EngineScheduleBuilder) -> Result<()> {
-        builder.add_node_with_edges(
-            "frame_render_prepare",
-            frame_render_prepare_system,
-            &["overlay_ui_render_extract"],
-        );
-        builder.add_node_with_edges(
-            "frame_render_submit",
-            ui_render_submit_system,
-            &["frame_render_prepare"],
-        );
-        Ok(())
+impl Plugin for RenderPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<SceneResource>();
+        app.init_resource::<RenderFrameResourceBindings>();
+        app.init_resource::<ShaderRegistryResource>();
+        app.init_resource::<RenderGraphRegistryResource>();
+        app.init_resource::<RenderPassExecutorRegistryResource>();
+        app.init_resource::<StartupState>();
+        app.init_resource::<DebugMetricsState>();
+        app.add_systems(RenderPrepare, frame_render_prepare_system);
+        app.add_systems(RenderSubmit, ui_render_submit_system);
     }
 }
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
 const MESH_HOT_PATH_LOG_THRESHOLD_MS: f32 = 8.0;
 
-pub fn frame_render_prepare_system(_data: &mut EngineData) -> anyhow::Result<()> {
+fn frame_render_prepare_system() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
+fn ui_render_submit_system(
+    mut world: WorldMut,
+    time: Res<Time>,
+    mut scene_resource: ResMut<SceneResource>,
+    mut startup: ResMut<StartupState>,
+    mut debug_metrics: ResMut<DebugMetricsState>,
+) -> anyhow::Result<()> {
+    let Some(manager) = scene_resource.manager.as_mut() else {
+        return Ok(());
+    };
+
     let _submit_span = tracing::info_span!("systems.ui_render_submit").entered();
-    let startup_ready_before = data.startup.is_ready();
-    // Keep scheduler slow-node logs muted while startup warmup is still in loading.
+    let startup_ready_before = startup.is_ready();
     set_slow_node_logging_enabled(startup_ready_before);
 
-    let _ = data.shader_registry.poll_updates();
-    let shader_reload_messages = data.shader_registry.drain_event_lines();
+    let Some(mut shader_registry) = world.remove_resource::<ShaderRegistryResource>() else {
+        return Ok(());
+    };
+    let _ = shader_registry.poll_updates();
+    let shader_reload_messages = shader_registry.drain_event_lines();
     if !shader_reload_messages.is_empty() {
         for msg in shader_reload_messages {
-            data.scene
+            manager
                 .overlay_runtime
                 .ui
                 .log_lines
                 .push(format!("[world] {msg}"));
         }
         clamp_lines(
-            &mut data.scene.overlay_runtime.ui.log_lines,
-            data.scene.overlay_runtime.ui.max_lines,
+            &mut manager.overlay_runtime.ui.log_lines,
+            manager.overlay_runtime.ui.max_lines,
         );
-        data.scene.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
+        manager.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
     }
-    let mut frame_data = RenderFrameDataRegistry::new();
-    data.render_frame_bindings
-        .collect_frame_data(&data.render_resources, &mut frame_data);
-    let ui_rect_shader: Option<ShaderHandle> = data
-        .scene
+
+    let ui_rect_shader_id = manager
         .overlay_runtime
         .world
-        .get_resource::<UiRenderShaderConfig>()
+        .resource::<UiRenderShaderConfig>()
+        .ok()
         .map(|config| config.rect_shader_asset_id.trim().to_string())
-        .filter(|id| !id.is_empty())
-        .and_then(|id| data.shader_registry.handle(id));
+        .filter(|id| !id.is_empty());
 
-    match data.gfx.render(
-        &frame_data,
-        &data.scene.overlay_runtime.ui.draw_list,
-        &mut data.shader_registry,
-        &data.render_graph_registry,
-        &data.render_executor_registry,
-        ui_rect_shader,
-    ) {
+    let Some(mut gfx) = world.remove_resource::<Gfx>() else {
+        world.insert_resource(shader_registry);
+        return Ok(());
+    };
+
+    let render_frame_bindings = match world.resource::<RenderFrameResourceBindings>() {
+        Ok(bindings) => bindings,
+        Err(_) => {
+            world.insert_resource(shader_registry);
+            world.insert_resource(gfx);
+            return Ok(());
+        }
+    };
+
+    let mut frame_data = RenderFrameDataRegistry::new();
+    render_frame_bindings.collect_frame_data(&world, &mut frame_data);
+
+    let render_result = {
+        let render_graph_registry = match world.resource::<RenderGraphRegistryResource>() {
+            Ok(registry) => registry,
+            Err(_) => {
+                world.insert_resource(shader_registry);
+                world.insert_resource(gfx);
+                return Ok(());
+            }
+        };
+        let render_executor_registry = match world.resource::<RenderPassExecutorRegistryResource>()
+        {
+            Ok(registry) => registry,
+            Err(_) => {
+                world.insert_resource(shader_registry);
+                world.insert_resource(gfx);
+                return Ok(());
+            }
+        };
+        let ui_rect_shader: Option<ShaderHandle> =
+            ui_rect_shader_id.and_then(|id| shader_registry.handle(id));
+
+        gfx.render(
+            &frame_data,
+            &manager.overlay_runtime.ui.draw_list,
+            &mut shader_registry,
+            &render_graph_registry,
+            &render_executor_registry,
+            ui_rect_shader,
+        )
+    };
+
+    let result = match render_result {
         Ok(timings) => {
-            data.debug_metrics.last_timings = Some(timings);
+            debug_metrics.last_timings = Some(timings);
             let mesh_hot = timings.renderer.mesh_hot_path;
             let warm_frame = mesh_hot.is_warm_frame();
-            let warmup_completed = data
-                .startup
-                .observe_render_warm_frame(warm_frame, data.time.delta_seconds);
+            let warmup_completed =
+                startup.observe_render_warm_frame(warm_frame, time.delta_seconds.max(0.0));
             if warmup_completed {
                 tracing::info!(
-                    elapsed_loading_seconds = data.startup.elapsed_loading_seconds,
-                    stable_frames = data.startup.stable_frames,
-                    required_stable_frames = data.startup.required_stable_frames,
+                    elapsed_loading_seconds = startup.elapsed_loading_seconds,
+                    stable_frames = startup.stable_frames,
+                    required_stable_frames = startup.required_stable_frames,
                     warm_frame,
                     "startup warmup complete; scene flow can transition out of loading screen"
                 );
@@ -100,7 +150,6 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
                 + timings.renderer.world_prepare_ms
                 + timings.renderer.encode_submit_ms
                 + timings.present_ms;
-            // "Workload" excludes swapchain acquire/present waiting (vsync/compositor pacing).
             let workload_ms = timings.renderer.prepare_ui_ms
                 + timings.renderer.prepare_mesh_ms
                 + timings.renderer.world_prepare_ms
@@ -172,14 +221,18 @@ pub fn ui_render_submit_system(data: &mut EngineData) -> anyhow::Result<()> {
             Ok(())
         }
         Err(SurfaceError::Lost | SurfaceError::Outdated) => {
-            let (w, h) = data.scene.overlay_runtime.ui.screen_size;
-            data.gfx.resize(w as u32, h as u32);
+            let (w, h) = manager.overlay_runtime.ui.screen_size;
+            gfx.resize(w as u32, h as u32);
             Ok(())
         }
         Err(SurfaceError::Timeout) => Ok(()),
         Err(SurfaceError::OutOfMemory) => anyhow::bail!("surface out of memory"),
         Err(SurfaceError::Other) => Ok(()),
-    }
+    };
+
+    world.insert_resource(shader_registry);
+    world.insert_resource(gfx);
+    result
 }
 
 fn clamp_lines(lines: &mut Vec<String>, max_lines: usize) {

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use engine::platform::App;
+use engine::App;
 
 fn main() -> Result<()> {
     App::new().run()

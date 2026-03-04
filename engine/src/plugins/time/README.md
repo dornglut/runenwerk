@@ -7,11 +7,10 @@ Updates frame timing state each engine tick.
 ## Usage
 
 - Plugin: `TimePlugin`
-- Typed schedule: `Update`
+- Typed schedule: `PreUpdate`
 - Typed set: `CoreSet::Time`
-- Legacy scheduler node: `time`
 
-The plugin advances `Time` once per frame on the typed runtime and `EngineData.time` on the legacy runtime.
+The plugin advances `Time` once per frame on the runtime.
 
 ## Ownership Boundaries
 

@@ -366,7 +366,7 @@ Bad use:
 
 Recommended split:
 
-- `ecs_v2`: typed runtime core
+- `ecs`: runtime core
 - `engine/authoring`: schemas, loaders, compilers, reload
 - optional reflection/tooling layer on top
 

@@ -13,7 +13,7 @@ Provides action-mapped input state and frame pulse handling, decoupling gameplay
 - Primary state type: `InputState` (`engine/src/plugins/input/domain.rs`)
 
 OS input events are consumed through `InputState::handle_window_event` and `InputState::handle_device_event`.
-The typed runtime also feeds normalized platform events through the same `InputState` methods.
+The runtime also feeds normalized platform events through the same `InputState` methods.
 
 ## Ownership Boundaries
 

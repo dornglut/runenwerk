@@ -1,12 +1,5 @@
 # ECS Requests
 
-Implemented:
+Open requests:
 
-- secondary component indexes (default + named indexes)
-- mutable query builder with `with/without` filters (`query_mut_components`)
-- component/resource change ticks
-- fine-grained component/resource change records
-- entity lifecycle events (`EntitySpawnedEvent`, `EntityDespawnedEvent`)
-- event drain helpers (`drain_events_map`, `drain_events_filter`)
-
-Open requests: none.
+- continue improving the engine ECS foundation and runtime hooks

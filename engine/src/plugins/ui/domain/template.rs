@@ -1,6 +1,5 @@
-use super::{ConsoleUiState, UiNode, UiStyle, UiText};
+use super::{ConsoleUiRuntimeState, ConsoleUiState, UiNode, UiStyle, UiText};
 use anyhow::Context;
-use ecs::{EntityHandle, World};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -137,7 +136,7 @@ fn apply_text(text: &mut UiText, patch: UiTextTemplate, apply_content: bool) {
     }
 }
 
-fn apply_layout(ui: &mut ConsoleUiState, patch: UiLayoutTemplate) {
+fn apply_layout<E>(ui: &mut ConsoleUiState<E>, patch: UiLayoutTemplate) {
     if let Some(v) = patch.panel_width_ratio {
         ui.layout.panel_width_ratio = v.clamp(0.1, 1.0);
     }
@@ -191,7 +190,7 @@ fn apply_layout(ui: &mut ConsoleUiState, patch: UiLayoutTemplate) {
     }
 }
 
-fn entity_for_id(ui: &ConsoleUiState, id: &str) -> Option<EntityHandle> {
+fn entity_for_id<E: Copy>(ui: &ConsoleUiState<E>, id: &str) -> Option<E> {
     match id {
         "root" => Some(ui.root),
         "scrollback" => Some(ui.scrollback),
@@ -211,32 +210,38 @@ fn expected_kind_for_id(id: &str) -> Option<UiNodeKind> {
     }
 }
 
-fn apply_single_node_template(world: &mut World, ui: &ConsoleUiState, node: &UiNodeTemplate) {
+fn apply_single_node_template(
+    world: &mut ecs::World,
+    ui: &ConsoleUiRuntimeState,
+    node: &UiNodeTemplate,
+) {
     let Some(entity) = entity_for_id(ui, &node.id) else {
         return;
     };
     if let (Some(expected), Some(kind)) = (expected_kind_for_id(&node.id), node.kind.as_ref()) {
         if kind != &expected {
-            // Skip mismatched declarations to avoid applying a wrong template subtree.
             return;
         }
     }
     if let Some(visible) = node.visible
-        && let Some(ui_node) = world.get_component_mut::<UiNode>(entity)
+        && let Ok(mut entity_ref) = world.entity_mut(entity)
+        && let Some(mut ui_node) = entity_ref.get_mut::<UiNode>()
     {
         ui_node.visible = visible;
     }
 
-    if let Some(style_patch) = node.style {
-        if let Some(style) = world.get_component_mut::<UiStyle>(entity) {
-            apply_style(style, style_patch);
-        }
+    if let Some(style_patch) = node.style
+        && let Ok(mut entity_ref) = world.entity_mut(entity)
+        && let Some(mut style) = entity_ref.get_mut::<UiStyle>()
+    {
+        apply_style(&mut style, style_patch);
     }
-    if let Some(text_patch) = node.text.clone() {
-        if let Some(text) = world.get_component_mut::<UiText>(entity) {
-            let apply_content = !matches!(node.id.as_str(), "input" | "scrollback");
-            apply_text(text, text_patch, apply_content);
-        }
+    if let Some(text_patch) = node.text.clone()
+        && let Ok(mut entity_ref) = world.entity_mut(entity)
+        && let Some(mut text) = entity_ref.get_mut::<UiText>()
+    {
+        let apply_content = !matches!(node.id.as_str(), "input" | "scrollback");
+        apply_text(&mut text, text_patch, apply_content);
     }
 }
 
@@ -251,8 +256,8 @@ fn node_local_hash(node: &UiNodeTemplate) -> u64 {
 }
 
 fn apply_nodes_diff(
-    world: &mut World,
-    ui: &mut ConsoleUiState,
+    world: &mut ecs::World,
+    ui: &mut ConsoleUiRuntimeState,
     previous: &HashMap<String, u64>,
     next: &mut HashMap<String, u64>,
     node: &UiNodeTemplate,
@@ -270,7 +275,11 @@ fn apply_nodes_diff(
     }
 }
 
-pub fn apply_console_template(world: &mut World, ui: &mut ConsoleUiState, tpl: ConsoleUiTemplate) {
+pub fn apply_console_template(
+    world: &mut ecs::World,
+    ui: &mut ConsoleUiRuntimeState,
+    tpl: ConsoleUiTemplate,
+) {
     if let Some(v) = tpl.max_lines {
         ui.max_lines = v.max(1);
     }
@@ -279,36 +288,39 @@ pub fn apply_console_template(world: &mut World, ui: &mut ConsoleUiState, tpl: C
         apply_layout(ui, patch);
     }
 
-    if let Some(patch) = tpl.root_style {
-        if let Some(style) = world.get_component_mut::<UiStyle>(ui.root) {
-            apply_style(style, patch);
-        }
+    if let Some(patch) = tpl.root_style
+        && let Ok(mut entity_ref) = world.entity_mut(ui.root)
+        && let Some(mut style) = entity_ref.get_mut::<UiStyle>()
+    {
+        apply_style(&mut style, patch);
     }
 
-    if let Some(patch) = tpl.scrollback_text {
-        if let Some(text) = world.get_component_mut::<UiText>(ui.scrollback) {
-            // Keep runtime-generated content unless explicitly requested.
-            apply_text(text, patch, false);
-        }
+    if let Some(patch) = tpl.scrollback_text
+        && let Ok(mut entity_ref) = world.entity_mut(ui.scrollback)
+        && let Some(mut text) = entity_ref.get_mut::<UiText>()
+    {
+        apply_text(&mut text, patch, false);
     }
 
-    if let Some(patch) = tpl.input_text {
-        if let Some(text) = world.get_component_mut::<UiText>(ui.input) {
-            // Preserve what the player has typed during hot reloads.
-            apply_text(text, patch, false);
-        }
+    if let Some(patch) = tpl.input_text
+        && let Ok(mut entity_ref) = world.entity_mut(ui.input)
+        && let Some(mut text) = entity_ref.get_mut::<UiText>()
+    {
+        apply_text(&mut text, patch, false);
     }
 
     if let Some(button) = tpl.confirm_button {
-        if let Some(style_patch) = button.style {
-            if let Some(style) = world.get_component_mut::<UiStyle>(ui.confirm_button) {
-                apply_style(style, style_patch);
-            }
+        if let Some(style_patch) = button.style
+            && let Ok(mut entity_ref) = world.entity_mut(ui.confirm_button)
+            && let Some(mut style) = entity_ref.get_mut::<UiStyle>()
+        {
+            apply_style(&mut style, style_patch);
         }
-        if let Some(text_patch) = button.text {
-            if let Some(text) = world.get_component_mut::<UiText>(ui.confirm_button) {
-                apply_text(text, text_patch, true);
-            }
+        if let Some(text_patch) = button.text
+            && let Ok(mut entity_ref) = world.entity_mut(ui.confirm_button)
+            && let Some(mut text) = entity_ref.get_mut::<UiText>()
+        {
+            apply_text(&mut text, text_patch, true);
         }
     }
 
@@ -326,15 +338,15 @@ pub fn apply_console_template(world: &mut World, ui: &mut ConsoleUiState, tpl: C
     ui.layout_dirty = true;
 }
 
-pub fn initialize_template_tracking(ui: &mut ConsoleUiState) {
+pub fn initialize_template_tracking<E>(ui: &mut ConsoleUiState<E>) {
     if ui.template_path.is_none() {
         ui.template_path = discover_default_template_path();
     }
 }
 
 pub fn reload_console_template_if_changed(
-    world: &mut World,
-    ui: &mut ConsoleUiState,
+    world: &mut ecs::World,
+    ui: &mut ConsoleUiRuntimeState,
     force: bool,
 ) -> anyhow::Result<bool> {
     initialize_template_tracking(ui);
@@ -358,7 +370,6 @@ pub fn reload_console_template_if_changed(
     let template: ConsoleUiTemplate = match ron::from_str(&raw) {
         Ok(template) => template,
         Err(err) => {
-            // Avoid spamming the same parse error every frame; retry after next file modification.
             ui.template_modified = modified;
             return Err(anyhow::anyhow!(err))
                 .with_context(|| format!("failed parsing RON UI template at {}", path.display()));
@@ -371,12 +382,11 @@ pub fn reload_console_template_if_changed(
 }
 
 pub fn load_console_template(
-    world: &mut World,
-    ui: &mut ConsoleUiState,
+    world: &mut ecs::World,
+    ui: &mut ConsoleUiRuntimeState,
     path: &Path,
 ) -> anyhow::Result<()> {
     ui.template_path = Some(path.to_path_buf());
-    // Force re-parse/apply even when switching back to a template with identical file timestamp.
     ui.template_modified = None;
     let _ = reload_console_template_if_changed(world, ui, true)?;
     Ok(())
@@ -409,25 +419,28 @@ fn serialize_text(text: &UiText, include_content: bool) -> UiTextTemplate {
     }
 }
 
-pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiTemplate {
+pub fn export_console_template(
+    world: &ecs::World,
+    ui: &ConsoleUiRuntimeState,
+) -> ConsoleUiTemplate {
     let root_style = world
-        .get_component::<UiStyle>(ui.root)
+        .get::<UiStyle>(ui.root)
         .map(serialize_style)
         .unwrap_or_default();
     let scroll_text = world
-        .get_component::<UiText>(ui.scrollback)
+        .get::<UiText>(ui.scrollback)
         .map(|t| serialize_text(t, false))
         .unwrap_or_default();
     let input_text = world
-        .get_component::<UiText>(ui.input)
+        .get::<UiText>(ui.input)
         .map(|t| serialize_text(t, false))
         .unwrap_or_default();
     let button_style = world
-        .get_component::<UiStyle>(ui.confirm_button)
+        .get::<UiStyle>(ui.confirm_button)
         .map(serialize_style)
         .unwrap_or_default();
     let button_text = world
-        .get_component::<UiText>(ui.confirm_button)
+        .get::<UiText>(ui.confirm_button)
         .map(|t| serialize_text(t, true))
         .unwrap_or_default();
 
@@ -464,16 +477,14 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
         nodes: Some(vec![UiNodeTemplate {
             id: "root".to_string(),
             kind: Some(UiNodeKind::Panel),
-            visible: world.get_component::<UiNode>(ui.root).map(|n| n.visible),
+            visible: world.get::<UiNode>(ui.root).map(|n| n.visible),
             style: None,
             text: None,
             children: vec![
                 UiNodeTemplate {
                     id: "scrollback".to_string(),
                     kind: Some(UiNodeKind::Scrollback),
-                    visible: world
-                        .get_component::<UiNode>(ui.scrollback)
-                        .map(|n| n.visible),
+                    visible: world.get::<UiNode>(ui.scrollback).map(|n| n.visible),
                     style: None,
                     text: None,
                     children: Vec::new(),
@@ -481,7 +492,7 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
                 UiNodeTemplate {
                     id: "input".to_string(),
                     kind: Some(UiNodeKind::Input),
-                    visible: world.get_component::<UiNode>(ui.input).map(|n| n.visible),
+                    visible: world.get::<UiNode>(ui.input).map(|n| n.visible),
                     style: None,
                     text: None,
                     children: Vec::new(),
@@ -489,9 +500,7 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
                 UiNodeTemplate {
                     id: "confirm_button".to_string(),
                     kind: Some(UiNodeKind::Button),
-                    visible: world
-                        .get_component::<UiNode>(ui.confirm_button)
-                        .map(|n| n.visible),
+                    visible: world.get::<UiNode>(ui.confirm_button).map(|n| n.visible),
                     style: None,
                     text: None,
                     children: Vec::new(),
@@ -502,8 +511,8 @@ pub fn export_console_template(world: &World, ui: &ConsoleUiState) -> ConsoleUiT
 }
 
 pub fn save_console_template_to_disk(
-    world: &World,
-    ui: &mut ConsoleUiState,
+    world: &ecs::World,
+    ui: &mut ConsoleUiRuntimeState,
 ) -> anyhow::Result<PathBuf> {
     initialize_template_tracking(ui);
     let path = ui

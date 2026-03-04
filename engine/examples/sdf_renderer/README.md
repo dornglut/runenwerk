@@ -60,7 +60,7 @@ Current config split:
 Authoring API direction:
 
 - Primary: typed builder API (`RenderFeatureGraphSpec::builder(...)`).
-- Secondary: `render_graph.ron` import that converts into the same typed runtime model.
+- Secondary: `render_graph.ron` import that converts into the same runtime model.
 - Load/validate/compile/apply should move into the shared engine authoring pipeline over time.
 
 `sdf.params` clarification:

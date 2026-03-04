@@ -15,7 +15,7 @@ The plugin appends UI draw commands to the overlay UI draw list each frame when 
 ## Ownership Boundaries
 
 - Owns debug metrics visibility toggle and overlay rendering content.
-- Consumes runtime timing/state (`EngineData.debug_metrics`, startup state, scene labels).
+- Consumes runtime timing/state (`DebugMetricsState`, startup state, scene labels).
 - Does not own frame submission or UI extraction orchestration.
 
 ## Extension Points

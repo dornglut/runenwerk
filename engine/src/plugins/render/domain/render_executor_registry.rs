@@ -1,8 +1,7 @@
 use super::PipelineKey;
 use anyhow::{Result, bail};
-use ecs::{Component, World};
 use std::any::{Any, TypeId};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use wgpu::{CommandEncoder, Device, Queue, TextureFormat, TextureView};
 
@@ -251,23 +250,6 @@ impl std::fmt::Debug for ExecutorBindingKind {
     }
 }
 
-#[derive(Clone)]
-struct RenderExecutorBindingComponent {
-    executor_id: String,
-    binding: ExecutorBindingKind,
-}
-
-impl Component for RenderExecutorBindingComponent {}
-
-impl std::fmt::Debug for RenderExecutorBindingComponent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RenderExecutorBindingComponent")
-            .field("executor_id", &self.executor_id)
-            .field("binding", &self.binding)
-            .finish()
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderPassExecutorRegistryEventKind {
     RegisteredBuiltin,
@@ -285,13 +267,10 @@ pub struct RenderPassExecutorRegistryEvent {
     pub details: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
-struct RenderPassExecutorRegistryMetaResource {
-    revision: u64,
-}
-
 pub struct RenderPassExecutorRegistryResource {
-    world: World,
+    bindings: BTreeMap<String, ExecutorBindingKind>,
+    events: Vec<RenderPassExecutorRegistryEvent>,
+    revision: u64,
 }
 
 impl std::fmt::Debug for RenderPassExecutorRegistryResource {
@@ -305,26 +284,21 @@ impl std::fmt::Debug for RenderPassExecutorRegistryResource {
 
 impl Default for RenderPassExecutorRegistryResource {
     fn default() -> Self {
-        let mut world = World::new();
-        world.register_component::<RenderExecutorBindingComponent>();
-        world.ensure_component_index::<RenderExecutorBindingComponent, String>(|binding| {
-            binding.executor_id.clone()
-        });
-        world.ensure_event_channel::<RenderPassExecutorRegistryEvent>();
-        world.insert_resource(RenderPassExecutorRegistryMetaResource::default());
-        Self { world }
+        Self {
+            bindings: BTreeMap::new(),
+            events: Vec::new(),
+            revision: 0,
+        }
     }
 }
 
 impl RenderPassExecutorRegistryResource {
     pub fn revision(&self) -> u64 {
-        self.meta().revision
+        self.revision
     }
 
     pub fn binding_count(&self) -> usize {
-        self.world
-            .entities_with::<RenderExecutorBindingComponent>()
-            .count()
+        self.bindings.len()
     }
 
     pub fn register_builtin(
@@ -337,33 +311,18 @@ impl RenderPassExecutorRegistryResource {
             return;
         }
 
-        let mut changed = false;
-        if let Some(entity) = self.binding_entity(&executor_id) {
-            if let Some(binding) = self
-                .world
-                .get_component_mut::<RenderExecutorBindingComponent>(entity)
-            {
-                changed = !matches!(
-                    binding.binding,
-                    ExecutorBindingKind::Builtin(current) if current == builtin
-                );
-                if changed {
-                    binding.binding = ExecutorBindingKind::Builtin(builtin);
-                }
-            }
-        } else {
-            let _ = self
-                .world
-                .spawn_entity_typed(RenderExecutorBindingComponent {
-                    executor_id: executor_id.clone(),
-                    binding: ExecutorBindingKind::Builtin(builtin),
-                });
-            changed = true;
+        let changed = !matches!(
+            self.bindings.get(&executor_id),
+            Some(ExecutorBindingKind::Builtin(current)) if *current == builtin
+        );
+        if changed {
+            self.bindings
+                .insert(executor_id.clone(), ExecutorBindingKind::Builtin(builtin));
         }
 
         if changed {
             let revision = self.bump_revision();
-            self.world.emit_event(RenderPassExecutorRegistryEvent {
+            self.events.push(RenderPassExecutorRegistryEvent {
                 kind: RenderPassExecutorRegistryEventKind::RegisteredBuiltin,
                 executor_id: Some(executor_id),
                 builtin: Some(builtin),
@@ -383,33 +342,20 @@ impl RenderPassExecutorRegistryResource {
             return;
         }
 
-        let mut changed = false;
-        if let Some(entity) = self.binding_entity(&executor_id) {
-            if let Some(binding) = self
-                .world
-                .get_component_mut::<RenderExecutorBindingComponent>(entity)
-            {
-                changed = match &binding.binding {
-                    ExecutorBindingKind::Custom(current) => !Arc::ptr_eq(current, &executor),
-                    ExecutorBindingKind::Builtin(_) => true,
-                };
-                if changed {
-                    binding.binding = ExecutorBindingKind::Custom(Arc::clone(&executor));
-                }
-            }
-        } else {
-            let _ = self
-                .world
-                .spawn_entity_typed(RenderExecutorBindingComponent {
-                    executor_id: executor_id.clone(),
-                    binding: ExecutorBindingKind::Custom(Arc::clone(&executor)),
-                });
-            changed = true;
+        let changed = match self.bindings.get(&executor_id) {
+            Some(ExecutorBindingKind::Custom(current)) => !Arc::ptr_eq(current, &executor),
+            Some(ExecutorBindingKind::Builtin(_)) | None => true,
+        };
+        if changed {
+            self.bindings.insert(
+                executor_id.clone(),
+                ExecutorBindingKind::Custom(Arc::clone(&executor)),
+            );
         }
 
         if changed {
             let revision = self.bump_revision();
-            self.world.emit_event(RenderPassExecutorRegistryEvent {
+            self.events.push(RenderPassExecutorRegistryEvent {
                 kind: RenderPassExecutorRegistryEventKind::RegisteredCustom,
                 executor_id: Some(executor_id),
                 builtin: None,
@@ -424,12 +370,11 @@ impl RenderPassExecutorRegistryResource {
         if executor_id.is_empty() {
             return false;
         }
-        let Some(entity) = self.binding_entity(&executor_id) else {
+        if self.bindings.remove(&executor_id).is_none() {
             return false;
-        };
-        self.world.remove_entity(entity);
+        }
         let revision = self.bump_revision();
-        self.world.emit_event(RenderPassExecutorRegistryEvent {
+        self.events.push(RenderPassExecutorRegistryEvent {
             kind: RenderPassExecutorRegistryEventKind::Removed,
             executor_id: Some(executor_id),
             builtin: None,
@@ -440,16 +385,14 @@ impl RenderPassExecutorRegistryResource {
     }
 
     pub fn resolve_builtin(&self, executor_id: &str) -> Option<BuiltinRenderPassExecutor> {
-        let binding = self.binding(executor_id)?;
-        match binding.binding {
-            ExecutorBindingKind::Builtin(builtin) => Some(builtin),
+        match self.binding(executor_id)? {
+            ExecutorBindingKind::Builtin(builtin) => Some(*builtin),
             ExecutorBindingKind::Custom(_) => None,
         }
     }
 
     pub fn resolve_custom(&self, executor_id: &str) -> Option<Arc<dyn RenderPassExecutor>> {
-        let binding = self.binding(executor_id)?;
-        match &binding.binding {
+        match self.binding(executor_id)? {
             ExecutorBindingKind::Builtin(_) => None,
             ExecutorBindingKind::Custom(custom) => Some(Arc::clone(custom)),
         }
@@ -460,26 +403,26 @@ impl RenderPassExecutorRegistryResource {
     }
 
     pub fn clear_custom(&mut self) {
-        let entities: Vec<_> = self
-            .world
-            .entities_with::<RenderExecutorBindingComponent>()
+        let custom_ids: Vec<_> = self
+            .bindings
+            .iter()
+            .filter_map(|(executor_id, binding)| {
+                if matches!(binding, ExecutorBindingKind::Custom(_)) {
+                    Some(executor_id.clone())
+                } else {
+                    None
+                }
+            })
             .collect();
-        let mut removed_any = false;
-        for entity in entities {
-            let remove = self
-                .world
-                .get_component::<RenderExecutorBindingComponent>(entity)
-                .is_some_and(|binding| matches!(binding.binding, ExecutorBindingKind::Custom(_)));
-            if remove {
-                self.world.remove_entity(entity);
-                removed_any = true;
-            }
+        let removed_any = !custom_ids.is_empty();
+        for executor_id in custom_ids {
+            self.bindings.remove(&executor_id);
         }
         if !removed_any {
             return;
         }
         let revision = self.bump_revision();
-        self.world.emit_event(RenderPassExecutorRegistryEvent {
+        self.events.push(RenderPassExecutorRegistryEvent {
             kind: RenderPassExecutorRegistryEventKind::ClearedCustom,
             executor_id: None,
             builtin: None,
@@ -489,57 +432,24 @@ impl RenderPassExecutorRegistryResource {
     }
 
     pub fn read_events(&self) -> &[RenderPassExecutorRegistryEvent] {
-        self.world.read_events::<RenderPassExecutorRegistryEvent>()
+        &self.events
     }
 
     pub fn drain_events(&mut self) -> Vec<RenderPassExecutorRegistryEvent> {
-        self.world.drain_events::<RenderPassExecutorRegistryEvent>()
+        std::mem::take(&mut self.events)
     }
 
-    fn binding(&self, executor_id: &str) -> Option<&RenderExecutorBindingComponent> {
+    fn binding(&self, executor_id: &str) -> Option<&ExecutorBindingKind> {
         let executor_id = normalize_executor_id(executor_id);
         if executor_id.is_empty() {
             return None;
         }
-        self.world
-            .entities_with::<RenderExecutorBindingComponent>()
-            .find_map(|entity| {
-                let binding = self
-                    .world
-                    .get_component::<RenderExecutorBindingComponent>(entity)?;
-                if binding.executor_id == executor_id {
-                    Some(binding)
-                } else {
-                    None
-                }
-            })
-    }
-
-    fn binding_entity(&mut self, executor_id: &str) -> Option<ecs::EntityHandle> {
-        let executor_id = normalize_executor_id(executor_id);
-        if executor_id.is_empty() {
-            return None;
-        }
-        self.world
-            .find_entity_by_index::<RenderExecutorBindingComponent, String>(&executor_id)
-    }
-
-    fn meta(&self) -> &RenderPassExecutorRegistryMetaResource {
-        self.world
-            .get_resource::<RenderPassExecutorRegistryMetaResource>()
-            .expect("render executor registry meta resource should exist")
-    }
-
-    fn meta_mut(&mut self) -> &mut RenderPassExecutorRegistryMetaResource {
-        self.world
-            .get_resource_mut::<RenderPassExecutorRegistryMetaResource>()
-            .expect("render executor registry meta resource should exist")
+        self.bindings.get(&executor_id)
     }
 
     fn bump_revision(&mut self) -> u64 {
-        let meta = self.meta_mut();
-        meta.revision = meta.revision.saturating_add(1);
-        meta.revision
+        self.revision = self.revision.saturating_add(1);
+        self.revision
     }
 }
 
@@ -566,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_data_registry_supports_typed_lookup() {
+    fn frame_data_registry_supports_lookup() {
         let value = 42_u32;
         let registry = RenderFrameDataRegistry::new().with(&value);
         assert_eq!(registry.get::<u32>(), Some(&42_u32));

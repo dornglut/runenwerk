@@ -1,7 +1,7 @@
 use crate::plugins::shared::{
     ReloadStatusPayload, file_modified, should_poll, should_reload, watch_status_line,
 };
-use ecs::{EntityHandle, World};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -9,15 +9,15 @@ use std::time::SystemTime;
 pub const DEFAULT_SHADER_ASSET_ROOT: &str = "assets/shaders";
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ShaderHandle(EntityHandle);
+pub struct ShaderHandle(usize);
 
 impl ShaderHandle {
-    pub fn entity(self) -> EntityHandle {
+    pub fn index(self) -> usize {
         self.0
     }
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default)]
 pub struct ShaderAssetComponent {
     pub id: String,
     pub path: String,
@@ -79,7 +79,10 @@ pub struct ShaderStatus {
 }
 
 pub struct ShaderRegistryResource {
-    world: World,
+    assets: Vec<ShaderAssetComponent>,
+    by_id: HashMap<String, usize>,
+    config: ShaderRegistryConfigResource,
+    events: Vec<ShaderRegistryEvent>,
 }
 
 impl std::fmt::Debug for ShaderRegistryResource {
@@ -95,13 +98,13 @@ impl std::fmt::Debug for ShaderRegistryResource {
 
 impl Clone for ShaderRegistryResource {
     fn clone(&self) -> Self {
-        // ECS world clone is intentionally shallow-by-state here: use statuses + config replay.
-        let mut next = Self::with_roots(self.roots().to_vec());
-        next.set_watch_enabled(self.watch_enabled());
-        for status in self.statuses() {
-            let _ = next.register_shader(status.id, status.path);
+        let assets = self.assets.clone();
+        Self {
+            by_id: build_shader_index(&assets),
+            assets,
+            config: self.config.clone(),
+            events: Vec::new(),
         }
-        next
     }
 }
 
@@ -121,27 +124,27 @@ impl ShaderRegistryResource {
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        let mut world = World::new();
-        world.register_component::<ShaderAssetComponent>();
-        world.ensure_component_index::<ShaderAssetComponent, String>(|asset| asset.id.clone());
-        world.ensure_event_channel::<ShaderRegistryEvent>();
-        world.insert_resource(ShaderRegistryConfigResource {
-            roots: normalize_roots(roots),
-            ..ShaderRegistryConfigResource::default()
-        });
-        Self { world }
+        Self {
+            assets: Vec::new(),
+            by_id: HashMap::new(),
+            config: ShaderRegistryConfigResource {
+                roots: normalize_roots(roots),
+                ..ShaderRegistryConfigResource::default()
+            },
+            events: Vec::new(),
+        }
     }
 
     pub fn revision(&self) -> u64 {
-        self.config().revision
+        self.config.revision
     }
 
     pub fn shader_count(&self) -> usize {
-        self.world.entities_with::<ShaderAssetComponent>().count()
+        self.assets.len()
     }
 
     pub fn roots(&self) -> &[String] {
-        &self.config().roots
+        &self.config.roots
     }
 
     pub fn set_roots<I, S>(&mut self, roots: I)
@@ -149,9 +152,8 @@ impl ShaderRegistryResource {
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        let config = self.config_mut();
-        config.roots = normalize_roots(roots);
-        config.force_reload = true;
+        self.config.roots = normalize_roots(roots);
+        self.config.force_reload = true;
     }
 
     pub fn add_root(&mut self, root: impl Into<String>) {
@@ -160,24 +162,23 @@ impl ShaderRegistryResource {
         if root.is_empty() {
             return;
         }
-        let config = self.config_mut();
-        if config.roots.iter().any(|value| value == root) {
+        if self.config.roots.iter().any(|value| value == root) {
             return;
         }
-        config.roots.push(root.to_string());
-        config.force_reload = true;
+        self.config.roots.push(root.to_string());
+        self.config.force_reload = true;
     }
 
     pub fn watch_enabled(&self) -> bool {
-        self.config().watch_enabled
+        self.config.watch_enabled
     }
 
     pub fn set_watch_enabled(&mut self, enabled: bool) {
-        self.config_mut().watch_enabled = enabled;
+        self.config.watch_enabled = enabled;
     }
 
     pub fn request_reload(&mut self) {
-        self.config_mut().force_reload = true;
+        self.config.force_reload = true;
     }
 
     pub fn register_shader(
@@ -193,9 +194,7 @@ impl ShaderRegistryResource {
 
         if let Some(existing) = self.handle(&id) {
             let mut event = None;
-            if let Some(asset) = self
-                .world
-                .get_component_mut::<ShaderAssetComponent>(existing.entity())
+            if let Some(asset) = self.asset_mut(existing)
                 && asset.path != path
             {
                 asset.path = path.clone();
@@ -210,19 +209,21 @@ impl ShaderRegistryResource {
                 });
             }
             if let Some(event) = event {
-                self.config_mut().force_reload = true;
-                self.world.emit_event(event);
+                self.config.force_reload = true;
+                self.events.push(event);
             }
             return existing;
         }
 
-        let handle = ShaderHandle(self.world.spawn_entity_typed(ShaderAssetComponent {
+        let handle = ShaderHandle(self.assets.len());
+        self.assets.push(ShaderAssetComponent {
             id: id.clone(),
             path: path.clone(),
             ..ShaderAssetComponent::default()
-        }));
-        self.config_mut().force_reload = true;
-        self.world.emit_event(ShaderRegistryEvent {
+        });
+        self.by_id.insert(id.clone(), handle.index());
+        self.config.force_reload = true;
+        self.events.push(ShaderRegistryEvent {
             kind: ShaderRegistryEventKind::Registered,
             id,
             path,
@@ -233,14 +234,12 @@ impl ShaderRegistryResource {
         handle
     }
 
-    pub fn handle(&mut self, id: impl AsRef<str>) -> Option<ShaderHandle> {
+    pub fn handle(&self, id: impl AsRef<str>) -> Option<ShaderHandle> {
         let id = normalize_shader_id(id.as_ref());
-        self.world
-            .find_entity_by_index::<ShaderAssetComponent, String>(&id)
-            .map(ShaderHandle)
+        self.by_id.get(&id).copied().map(ShaderHandle)
     }
 
-    pub fn source_or<'a>(&'a mut self, id: &str, fallback: &'a str) -> &'a str {
+    pub fn source_or<'a>(&'a self, id: &str, fallback: &'a str) -> &'a str {
         self.handle(id)
             .and_then(|handle| self.asset(handle))
             .and_then(|asset| {
@@ -263,7 +262,7 @@ impl ShaderRegistryResource {
             .unwrap_or(fallback)
     }
 
-    pub fn revision_for(&mut self, id: &str) -> u64 {
+    pub fn revision_for(&self, id: &str) -> u64 {
         self.handle(id)
             .map(|handle| self.revision_for_handle(handle))
             .unwrap_or(0)
@@ -275,11 +274,12 @@ impl ShaderRegistryResource {
 
     pub fn statuses(&self) -> Vec<ShaderStatus> {
         let mut statuses: Vec<ShaderStatus> = self
-            .world
-            .entities_with::<ShaderAssetComponent>()
-            .filter_map(|entity| {
-                let handle = ShaderHandle(entity);
-                self.asset(handle).map(|asset| ShaderStatus {
+            .assets
+            .iter()
+            .enumerate()
+            .map(|(index, asset)| {
+                let handle = ShaderHandle(index);
+                ShaderStatus {
                     handle,
                     id: asset.id.clone(),
                     path: asset.path.clone(),
@@ -287,7 +287,7 @@ impl ShaderRegistryResource {
                     loaded: asset.source.is_some(),
                     modified: asset.modified,
                     last_error: asset.last_error.clone(),
-                })
+                }
             })
             .collect();
         statuses.sort_by(|a, b| a.id.cmp(&b.id));
@@ -337,11 +337,11 @@ impl ShaderRegistryResource {
     }
 
     pub fn read_events(&self) -> &[ShaderRegistryEvent] {
-        self.world.read_events::<ShaderRegistryEvent>()
+        &self.events
     }
 
     pub fn drain_events(&mut self) -> Vec<ShaderRegistryEvent> {
-        self.world.drain_events::<ShaderRegistryEvent>()
+        std::mem::take(&mut self.events)
     }
 
     pub fn drain_event_lines(&mut self) -> Vec<String> {
@@ -366,25 +366,21 @@ impl ShaderRegistryResource {
     }
 
     pub fn finish_event_frame(&mut self) {
-        self.world.finish_event_frame();
+        self.events.clear();
     }
 
     pub fn poll_updates(&mut self) -> Vec<String> {
         let watch_enabled = self.watch_enabled();
-        let force_reload = self.config().force_reload;
+        let force_reload = self.config.force_reload;
         if !should_poll(watch_enabled, force_reload) {
             return Vec::new();
         }
-        self.config_mut().force_reload = false;
+        self.config.force_reload = false;
 
         let mut lines = self.discover_from_roots();
         let mut changed = false;
 
-        let handles: Vec<_> = self
-            .world
-            .entities_with::<ShaderAssetComponent>()
-            .map(ShaderHandle)
-            .collect();
+        let handles: Vec<_> = (0..self.assets.len()).map(ShaderHandle).collect();
         for handle in handles {
             let Some(snapshot) = self.asset(handle).map(|asset| {
                 (
@@ -426,7 +422,7 @@ impl ShaderRegistryResource {
                         )
                         .line(),
                     );
-                    self.world.emit_event(ShaderRegistryEvent {
+                    self.events.push(ShaderRegistryEvent {
                         kind: ShaderRegistryEventKind::Reloaded,
                         id,
                         path,
@@ -454,7 +450,7 @@ impl ShaderRegistryResource {
                         )
                         .line(),
                     );
-                    self.world.emit_event(ShaderRegistryEvent {
+                    self.events.push(ShaderRegistryEvent {
                         kind: ShaderRegistryEventKind::SkippedEmpty,
                         id,
                         path,
@@ -482,7 +478,7 @@ impl ShaderRegistryResource {
                         )
                         .line(),
                     );
-                    self.world.emit_event(ShaderRegistryEvent {
+                    self.events.push(ShaderRegistryEvent {
                         kind: ShaderRegistryEventKind::Failed,
                         id,
                         path,
@@ -495,7 +491,7 @@ impl ShaderRegistryResource {
         }
 
         if changed {
-            self.config_mut().revision = self.config().revision.saturating_add(1);
+            self.config.revision = self.config.revision.saturating_add(1);
         }
 
         lines
@@ -531,7 +527,7 @@ impl ShaderRegistryResource {
                             )
                             .line(),
                         );
-                        self.world.emit_event(ShaderRegistryEvent {
+                        self.events.push(ShaderRegistryEvent {
                             kind: ShaderRegistryEventKind::DuplicateId,
                             id: id.clone(),
                             path: path_string,
@@ -546,11 +542,13 @@ impl ShaderRegistryResource {
                     continue;
                 }
 
-                let _ = self.world.spawn_entity_typed(ShaderAssetComponent {
+                let handle = ShaderHandle(self.assets.len());
+                self.assets.push(ShaderAssetComponent {
                     id: id.clone(),
                     path: path_string.clone(),
                     ..ShaderAssetComponent::default()
                 });
+                self.by_id.insert(id.clone(), handle.index());
                 lines.push(
                     ReloadStatusPayload::new(
                         "shader",
@@ -565,7 +563,7 @@ impl ShaderRegistryResource {
                     )
                     .line(),
                 );
-                self.world.emit_event(ShaderRegistryEvent {
+                self.events.push(ShaderRegistryEvent {
                     kind: ShaderRegistryEventKind::Discovered,
                     id,
                     path: path_string,
@@ -579,27 +577,21 @@ impl ShaderRegistryResource {
         lines
     }
 
-    fn config(&self) -> &ShaderRegistryConfigResource {
-        self.world
-            .get_resource::<ShaderRegistryConfigResource>()
-            .expect("shader registry config resource should exist")
-    }
-
-    fn config_mut(&mut self) -> &mut ShaderRegistryConfigResource {
-        self.world
-            .get_resource_mut::<ShaderRegistryConfigResource>()
-            .expect("shader registry config resource should exist")
-    }
-
     fn asset(&self, handle: ShaderHandle) -> Option<&ShaderAssetComponent> {
-        self.world
-            .get_component::<ShaderAssetComponent>(handle.entity())
+        self.assets.get(handle.index())
     }
 
     fn asset_mut(&mut self, handle: ShaderHandle) -> Option<&mut ShaderAssetComponent> {
-        self.world
-            .get_component_mut::<ShaderAssetComponent>(handle.entity())
+        self.assets.get_mut(handle.index())
     }
+}
+
+fn build_shader_index(assets: &[ShaderAssetComponent]) -> HashMap<String, usize> {
+    assets
+        .iter()
+        .enumerate()
+        .map(|(index, asset)| (asset.id.clone(), index))
+        .collect()
 }
 
 fn normalize_roots<I, S>(roots: I) -> Vec<String>

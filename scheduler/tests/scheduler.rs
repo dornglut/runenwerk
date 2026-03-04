@@ -118,7 +118,7 @@ fn builder_fails_on_duplicate_node_name() {
 }
 
 #[test]
-fn typed_scheduler_runs_systems_in_schedule_order() {
+fn scheduler_runs_systems_in_schedule_order() {
     let log = Arc::new(Mutex::new(Vec::new()));
     let mut scheduler = ExecutionScheduler::<Vec<String>>::new();
 
@@ -168,7 +168,7 @@ fn typed_scheduler_runs_systems_in_schedule_order() {
 }
 
 #[test]
-fn typed_scheduler_records_conflicts_but_stays_serial() {
+fn scheduler_records_conflicts_but_stays_serial() {
     let mut scheduler = ExecutionScheduler::<Vec<String>>::new();
     let conflicting_access = SystemAccess::new().with_write(AccessKey::resource::<u32>("counter"));
 

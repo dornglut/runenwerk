@@ -19,7 +19,7 @@ By default logs every `120` frames.
 - Consumes runtime state for logging only.
 - Does not own scheduler execution or render submission.
 
-The typed runtime variant currently logs `Time` and `WindowState` only. Scene-specific diagnostics remain on the legacy path until scene migration happens.
+The runtime diagnostics currently log `Time` and `WindowState`. Scene-specific diagnostics can be extended from the scene plugin state as needed.
 
 ## Extension Points
 

@@ -1,12 +1,12 @@
-use crate::plugins::ui::domain::{ConsoleUiState, initialize_console_ui, load_console_template};
+use crate::plugins::ui::domain::{
+    ConsoleUiRuntimeState, initialize_console_ui, load_console_template,
+};
 use anyhow::Result;
-use ecs::prelude::*;
 use scheduler::{Node, Scheduler, SchedulerBuilder};
 use std::time::SystemTime;
 
 mod config;
 mod lifecycle;
-mod manager;
 mod registry;
 
 pub use config::{
@@ -14,7 +14,6 @@ pub use config::{
     load_gameplay_config_with_modified, load_gameplay_config_with_modified_and_error,
 };
 pub use lifecycle::{SceneLifecycleEvent, SceneLifecyclePhase};
-pub use manager::SceneManager;
 pub use registry::{SceneDescriptor, SceneRegistry};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -134,7 +133,7 @@ pub struct WorldDebugVelocity {
 }
 
 pub struct WorldSceneContext {
-    pub world: World,
+    pub world: ecs::World,
     pub world_scene_label: String,
     pub gameplay_config: GameplayConfig,
     pub delta_seconds: f32,
@@ -149,8 +148,8 @@ pub struct WorldSceneContext {
     pub camera_yaw: f32,
     pub camera_pitch: f32,
     pub camera_distance: f32,
-    pub tick_entity: EntityHandle,
-    pub debug_entity: EntityHandle,
+    pub tick_entity: ecs::Entity,
+    pub debug_entity: ecs::Entity,
     pub frame_count: u64,
     pub enemy_kills: u32,
     pub outbound_notifications: Vec<WorldToOverlayMessage>,
@@ -162,8 +161,8 @@ pub struct WorldSceneRuntime {
 }
 
 pub struct OverlaySceneRuntime {
-    pub world: World,
-    pub ui: ConsoleUiState,
+    pub world: ecs::World,
+    pub ui: ConsoleUiRuntimeState,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -223,13 +222,13 @@ pub enum QuestState {
     Completed,
 }
 
-fn build_overlay_runtime(
+pub fn build_overlay_runtime(
     scene: SceneId,
     screen_size: (f32, f32),
     scale: f32,
     registry: &SceneRegistry,
 ) -> Result<OverlaySceneRuntime> {
-    let mut world = World::new();
+    let mut world = ecs::World::new();
     let mut ui = initialize_console_ui(&mut world);
     ui.screen_size = screen_size;
     ui.scale = scale;
@@ -253,9 +252,8 @@ fn world_scene_tick_system(ctx: &mut WorldSceneContext) -> Result<()> {
     if ctx.overlay_consumed {
         return Ok(());
     }
-    if let Some(counter) = ctx
-        .world
-        .get_component_mut::<WorldFrameCounter>(ctx.tick_entity)
+    if let Ok(mut entity) = ctx.world.entity_mut(ctx.tick_entity)
+        && let Some(mut counter) = entity.get_mut::<WorldFrameCounter>()
     {
         counter.value = counter.value.saturating_add(1);
         ctx.frame_count = counter.value;
@@ -291,13 +289,12 @@ fn world_scene_debug_motion_system(ctx: &mut WorldSceneContext) -> Result<()> {
     }
     let mut velocity = ctx
         .world
-        .get_component::<WorldDebugVelocity>(ctx.debug_entity)
+        .get::<WorldDebugVelocity>(ctx.debug_entity)
         .copied()
         .unwrap_or(WorldDebugVelocity { x: 0.0, y: 0.0 });
     let sim_step = ctx.delta_seconds.clamp(0.0, 0.25);
-    if let Some(position) = ctx
-        .world
-        .get_component_mut::<WorldDebugPosition>(ctx.debug_entity)
+    if let Ok(mut entity) = ctx.world.entity_mut(ctx.debug_entity)
+        && let Some(mut position) = entity.get_mut::<WorldDebugPosition>()
     {
         position.x += velocity.x * sim_step;
         position.y += velocity.y * sim_step;
@@ -314,20 +311,19 @@ fn world_scene_debug_motion_system(ctx: &mut WorldSceneContext) -> Result<()> {
             position.y = position.y.clamp(min_y, max_y);
         }
     }
-    if let Some(velocity_mut) = ctx
-        .world
-        .get_component_mut::<WorldDebugVelocity>(ctx.debug_entity)
+    if let Ok(mut entity) = ctx.world.entity_mut(ctx.debug_entity)
+        && let Some(mut velocity_mut) = entity.get_mut::<WorldDebugVelocity>()
     {
         *velocity_mut = velocity;
     }
     Ok(())
 }
 
-fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
+pub fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
     let (gameplay_config, gameplay_config_modified) = load_gameplay_config_with_modified();
-    let mut world = World::new();
-    let tick_entity = world.spawn_entity_typed(WorldFrameCounter { value: 0 });
-    let debug_entity = world.spawn_bundle((
+    let mut world = ecs::World::new();
+    let tick_entity = world.spawn(WorldFrameCounter { value: 0 });
+    let debug_entity = world.spawn((
         WorldDebugPosition { x: 0.0, y: 0.0 },
         WorldDebugVelocity { x: 1.25, y: 0.75 },
     ));
@@ -377,105 +373,9 @@ fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
 #[cfg(test)]
 mod tests {
     use super::{
-        OverlaySceneRuntime, SceneCommand, SceneId, SceneLifecyclePhase, SceneManager,
-        WorldDebugPosition, WorldFrameCounter, WorldToOverlayMessage, build_world_scene_runtime,
-        load_gameplay_config,
+        SceneId, WorldDebugPosition, WorldFrameCounter, WorldToOverlayMessage,
+        build_overlay_runtime, build_world_scene_runtime, load_gameplay_config,
     };
-    use crate::plugins::ui::domain::initialize_console_ui;
-    use ecs::World;
-
-    fn make_overlay_runtime() -> OverlaySceneRuntime {
-        let mut world = World::new();
-        let ui = initialize_console_ui(&mut world);
-        OverlaySceneRuntime { world, ui }
-    }
-
-    #[test]
-    fn replace_overlay_switches_active_overlay() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        assert_eq!(manager.active_overlay(), SceneId::ConsoleUi);
-        manager.queue(SceneCommand::ReplaceOverlay(SceneId::HudUi));
-        let result = manager.apply_pending().expect("apply should succeed");
-        assert!(result.overlay_changed);
-        assert_eq!(manager.active_overlay(), SceneId::HudUi);
-    }
-
-    #[test]
-    fn replace_world_switches_active_world() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        assert_eq!(manager.world.active, SceneId::GameplayStub);
-        manager.queue(SceneCommand::ReplaceWorld(SceneId::HubStub));
-        let result = manager.apply_pending().expect("apply should succeed");
-        assert!(result.world_changed);
-        assert_eq!(manager.world.active, SceneId::HubStub);
-    }
-
-    #[test]
-    fn replace_world_by_label_switches_active_world() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        assert_eq!(manager.world.active, SceneId::GameplayStub);
-        manager.queue(SceneCommand::ReplaceWorldByLabel("hub_stub".to_string()));
-        let result = manager.apply_pending().expect("apply should succeed");
-        assert!(result.world_changed);
-        assert_eq!(manager.world.active, SceneId::HubStub);
-    }
-
-    #[test]
-    fn replace_overlay_by_label_switches_active_overlay() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        assert_eq!(manager.active_overlay(), SceneId::ConsoleUi);
-        manager.queue(SceneCommand::ReplaceOverlayByLabel("hud_ui".to_string()));
-        let result = manager.apply_pending().expect("apply should succeed");
-        assert!(result.overlay_changed);
-        assert_eq!(manager.active_overlay(), SceneId::HudUi);
-    }
-
-    #[test]
-    fn pause_world_command_toggles_pause_flag() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        assert!(!manager.world.paused);
-
-        manager.queue(SceneCommand::PauseWorld(true));
-        let paused = manager.apply_pending().expect("apply should succeed");
-        assert!(paused.world_pause_changed);
-        assert!(manager.world.paused);
-
-        manager.queue(SceneCommand::PauseWorld(false));
-        let resumed = manager.apply_pending().expect("apply should succeed");
-        assert!(resumed.world_pause_changed);
-        assert!(!manager.world.paused);
-    }
-
-    #[test]
-    fn lifecycle_events_include_pause_and_resume() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        manager.channels.lifecycle_events.clear();
-
-        manager.queue(SceneCommand::PushOverlay(SceneId::HudUi));
-        let _ = manager.apply_pending().expect("push should succeed");
-        assert!(manager.channels.lifecycle_events.iter().any(|event| {
-            event.scene == SceneId::ConsoleUi && event.phase == SceneLifecyclePhase::Pause
-        }));
-        assert!(manager.channels.lifecycle_events.iter().any(|event| {
-            event.scene == SceneId::HudUi && event.phase == SceneLifecyclePhase::Enter
-        }));
-
-        manager.channels.lifecycle_events.clear();
-        manager.queue(SceneCommand::PopOverlay);
-        let _ = manager.apply_pending().expect("pop should succeed");
-        assert!(manager.channels.lifecycle_events.iter().any(|event| {
-            event.scene == SceneId::HudUi && event.phase == SceneLifecyclePhase::Exit
-        }));
-        assert!(manager.channels.lifecycle_events.iter().any(|event| {
-            event.scene == SceneId::ConsoleUi && event.phase == SceneLifecyclePhase::Resume
-        }));
-    }
 
     #[test]
     fn gameplay_config_loads_with_positive_core_values() {
@@ -489,32 +389,11 @@ mod tests {
     }
 
     #[test]
-    fn pop_overlay_keeps_at_least_one_overlay() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        manager.queue(SceneCommand::PopOverlay);
-        let result = manager.apply_pending().expect("apply should succeed");
-        assert!(!result.overlay_changed);
-        assert_eq!(manager.overlays.len(), 1);
-        assert_eq!(manager.active_overlay(), SceneId::ConsoleUi);
-    }
-
-    #[test]
-    fn push_and_pop_overlay_restores_previous_runtime_state() {
-        let mut manager =
-            SceneManager::new(make_overlay_runtime()).expect("scene manager should build");
-        manager.overlay_runtime.ui.editor.status = "editor: custom console".to_string();
-        manager.queue(SceneCommand::PushOverlay(SceneId::HudUi));
-        let _ = manager.apply_pending().expect("push should succeed");
-        manager.overlay_runtime.ui.editor.status = "editor: hud custom".to_string();
-
-        manager.queue(SceneCommand::PopOverlay);
-        let _ = manager.apply_pending().expect("pop should succeed");
-        assert_eq!(manager.active_overlay(), SceneId::ConsoleUi);
-        assert_eq!(
-            manager.overlay_runtime.ui.editor.status,
-            "editor: custom console"
-        );
+    fn overlay_cycle_includes_inventory_scene() {
+        assert_eq!(SceneId::ConsoleUi.next_overlay(), SceneId::HudUi);
+        assert_eq!(SceneId::HudUi.next_overlay(), SceneId::InventoryUi);
+        assert_eq!(SceneId::InventoryUi.next_overlay(), SceneId::ConsoleUi);
+        assert_eq!(SceneId::ConsoleUi.previous_overlay(), SceneId::InventoryUi);
     }
 
     #[test]
@@ -525,7 +404,7 @@ mod tests {
         let initial_pos = runtime
             .ctx
             .world
-            .get_component::<WorldDebugPosition>(runtime.ctx.debug_entity)
+            .get::<WorldDebugPosition>(runtime.ctx.debug_entity)
             .expect("position component should exist")
             .to_owned();
         runtime
@@ -536,7 +415,7 @@ mod tests {
         let blocked_pos = runtime
             .ctx
             .world
-            .get_component::<WorldDebugPosition>(runtime.ctx.debug_entity)
+            .get::<WorldDebugPosition>(runtime.ctx.debug_entity)
             .expect("position component should exist")
             .to_owned();
         assert_eq!(blocked_pos.x, initial_pos.x);
@@ -551,14 +430,14 @@ mod tests {
         let value = runtime
             .ctx
             .world
-            .get_component::<WorldFrameCounter>(runtime.ctx.tick_entity)
+            .get::<WorldFrameCounter>(runtime.ctx.tick_entity)
             .expect("counter component should exist")
             .value;
         assert_eq!(value, 1);
         let moved_pos = runtime
             .ctx
             .world
-            .get_component::<WorldDebugPosition>(runtime.ctx.debug_entity)
+            .get::<WorldDebugPosition>(runtime.ctx.debug_entity)
             .expect("position component should exist")
             .to_owned();
         assert_ne!(moved_pos.x, blocked_pos.x);
@@ -586,10 +465,17 @@ mod tests {
     }
 
     #[test]
-    fn overlay_cycle_includes_inventory_scene() {
-        assert_eq!(SceneId::ConsoleUi.next_overlay(), SceneId::HudUi);
-        assert_eq!(SceneId::HudUi.next_overlay(), SceneId::InventoryUi);
-        assert_eq!(SceneId::InventoryUi.next_overlay(), SceneId::ConsoleUi);
-        assert_eq!(SceneId::ConsoleUi.previous_overlay(), SceneId::InventoryUi);
+    fn overlay_runtime_initializes_console_ui() {
+        let registry = super::SceneRegistry::load();
+        let runtime = build_overlay_runtime(SceneId::ConsoleUi, (1280.0, 720.0), 1.0, &registry)
+            .expect("overlay runtime should build");
+        assert_eq!(runtime.ui.screen_size, (1280.0, 720.0));
+        assert_eq!(runtime.ui.scale, 1.0);
+        assert!(
+            runtime
+                .world
+                .get::<crate::plugins::ui::domain::UiNode>(runtime.ui.root)
+                .is_some()
+        );
     }
 }

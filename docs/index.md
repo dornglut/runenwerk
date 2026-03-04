@@ -10,9 +10,6 @@
 - `engine/README.md`
 - `engine/requests.md`
 - `ecs/README.md`
-- `ecs/requests.md`
-- `ecs_macros/README.md`
-- `ecs_macros/requests.md`
 - `scheduler/README.md`
 - `scheduler/requests.md`
 - `grid/README.md`

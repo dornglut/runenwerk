@@ -1,6 +1,6 @@
 # Runtime Minimal
 
-Headless proof example for the typed engine runtime.
+Headless proof example for the engine runtime.
 
 It demonstrates:
 
@@ -9,7 +9,7 @@ It demonstrates:
 - `engine::Plugin`
 - `Startup` and `Update` schedules
 - `Query`, `ResMut`, and `Commands`
-- `ecs_v2`-backed world state without `EngineData`
+- `ecs`-backed world state with typed resources and queries
 
 Run it with:
 

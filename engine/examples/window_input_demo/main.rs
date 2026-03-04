@@ -1,5 +1,5 @@
 use anyhow::Result;
-use engine::plugins::default_runtime_plugins;
+use engine::plugins::default_plugins;
 use engine::plugins::input::domain::action;
 use engine::prelude::*;
 
@@ -16,7 +16,7 @@ struct WindowInputDemoPlugin;
 
 impl Plugin for WindowInputDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(default_runtime_plugins());
+        app.add_plugins(default_plugins());
         app.add_systems(Startup, setup);
         app.add_systems(
             Update,

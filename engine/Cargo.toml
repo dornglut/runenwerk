@@ -26,9 +26,9 @@ gltf = "1.4.1"
 glam = "0.30.8"
 
 ecs = { path = "../ecs" }
-ecs_v2 = { path = "../ecs_v2" }
 scheduler = { path = "../scheduler" }
 grid = { path = "../grid" }
+engine_net = { path = "../engine_net" }
 
 [[example]]
 name = "scene_manager_ui"

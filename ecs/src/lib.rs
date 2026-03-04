@@ -2,31 +2,26 @@ extern crate self as ecs;
 
 mod bundle;
 mod component;
-mod component_registry;
 mod entity;
-mod entity_builder;
+mod errors;
 pub mod prelude;
-mod query;
+pub mod query;
 mod resource;
-mod table;
-mod utils;
 mod world;
 
-pub use bundle::ComponentBundle;
+pub use bundle::Bundle;
 pub use component::Component;
-pub use component_registry::{ComponentKey, ComponentRegistry};
-pub use ecs_macros::{Component, ComponentBundle};
-pub use entity::{EntityAllocator, EntityHandle};
-pub use entity_builder::{EntityBuilder, WorldBuilderExt};
-pub use query::{ComponentTuple, QueryBuilder, TypedQueryIterator, WorldQueryExt};
-pub use resource::Resource;
-pub use table::{Archetype, ArchetypeKey, RowError};
-pub use utils::init_tracing;
-pub use world::{
-    ComponentChangeKind, ComponentChangeRecord, EntityDespawnedEvent, EntitySpawnedEvent,
-    EventChannelConfig, EventChannelStats, EventLifetime, EventObserverNotification,
-    EventTracingPolicy, MutQueryBuilder, ObserverTrigger, OverflowPolicy, ResourceChangeKind,
-    ResourceChangeRecord, World,
+pub use ecs_macros::{Bundle, Component};
+pub use entity::{Entity, EntityAllocator};
+pub use errors::{CommandError, EntityError, QueryError, ResourceError};
+pub use query::{
+    QueryAccess, QueryBorrow, QueryBorrowMut, QueryData, QueryFilter, QueryState, QueryTypeAccess,
+    With, Without,
 };
-
-pub(crate) use table::{AnyStorage, Column, Row};
+pub use resource::Resource;
+pub use world::{
+    Commands, ComponentChangeKind, ComponentChangeRecord, EntityDespawnedEvent, EntityMut,
+    EntityRef, EntitySpawnedEvent, EventChannelConfig, EventChannelStats, EventLifetime,
+    EventObserverNotification, EventTracingPolicy, Mut, ObserverTrigger, OverflowPolicy, Res,
+    ResMut, ResourceChangeKind, ResourceChangeRecord, World,
+};

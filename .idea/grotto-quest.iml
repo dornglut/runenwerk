@@ -12,6 +12,7 @@
       <sourceFolder url="file://$MODULE_DIR$/scheduler/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scheduler/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/engine/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/engine/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
