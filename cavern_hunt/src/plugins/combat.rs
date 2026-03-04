@@ -410,7 +410,12 @@ fn move_player_with_control(
         }
     }
 
-    let next = constrained_move(&layout, [current.x, current.y], delta, radius);
+    let next = constrained_move(
+        &layout,
+        [current.x, current.y],
+        delta,
+        movement_footprint_radius(radius),
+    );
     let aim = world.get::<AimTarget2>(entity).copied();
     if let Some(mut transform) = world.get_mut::<Transform2>(entity) {
         transform.x = next[0];
@@ -760,6 +765,10 @@ fn camera_relative_movement(
         right_axis[0] * strafe + forward_axis[0] * forward,
         right_axis[1] * strafe + forward_axis[1] * forward,
     )
+}
+
+fn movement_footprint_radius(radius: f32) -> f32 {
+    (radius * 0.72).max(0.18)
 }
 
 fn distance_squared(a: [f32; 2], b: [f32; 2]) -> f32 {

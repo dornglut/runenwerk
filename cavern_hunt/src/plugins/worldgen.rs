@@ -186,7 +186,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     }
 
     if let Ok(mut camera) = world.resource_mut::<CavernCameraState>() {
-        camera.target = [start_room.center[0], 1.6, start_room.center[1]];
+        camera.target = [start_room.center[0], 1.9, start_room.center[1]];
     }
     if let Ok(mut director) = world.resource_mut::<SpawnDirector>() {
         director.initialized = true;
@@ -251,7 +251,7 @@ pub(crate) fn spawn_player_entity(
             10.0 + meta_profile.bonus_max_health as f32 + spawn_profile.bonus_health,
         ),
         faction: Faction::Hunters,
-        collider_radius: ColliderRadius(0.55),
+        collider_radius: ColliderRadius(0.45),
         aim_target: AimTarget2 {
             x: start_room.spawn_anchor[0] + 2.0,
             y: start_room.spawn_anchor[1],

@@ -140,7 +140,7 @@ pub(crate) fn setup_render_resources(world: &mut World) -> Result<()> {
 pub(crate) fn update_camera_and_hud_system(
     world: WorldRef,
     input: Res<InputState>,
-    time: Res<Time>,
+    _time: Res<Time>,
     mut camera: ResMut<CavernCameraState>,
 ) -> Result<()> {
     let local_player_ref = world.resource::<LocalPlayerRef>()?;
@@ -164,15 +164,11 @@ pub(crate) fn update_camera_and_hud_system(
             (camera.distance - zoom_delta).clamp(camera.distance_min, camera.distance_max);
     }
 
-    let target = [transform.x, 0.9, transform.y];
-    let blend = (time.delta_seconds * 7.0).clamp(0.0, 1.0);
-    camera.target[0] += (target[0] - camera.target[0]) * blend;
-    camera.target[1] += (target[1] - camera.target[1]) * blend;
-    camera.target[2] += (target[2] - camera.target[2]) * blend;
+    camera.target = [transform.x, 1.55, transform.y];
 
     if input.left_mouse_down() || input.right_mouse_down() {
-        camera.target[0] += (aim.world_point[0] - transform.x) * 0.01;
-        camera.target[2] += (aim.world_point[1] - transform.y) * 0.01;
+        camera.target[0] += (aim.world_point[0] - transform.x) * 0.035;
+        camera.target[2] += (aim.world_point[1] - transform.y) * 0.035;
     }
 
     Ok(())
