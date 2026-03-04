@@ -1,12 +1,13 @@
 use crate::domain::{
-    CavernControlState, CavernRunDeltaV1, CavernRunSnapshotV1, apply_cavern_run_delta,
-    build_cavern_run_delta, capture_cavern_run_snapshot, restore_cavern_run_snapshot,
+    CavernControlState, CavernPredictedFrame, CavernPredictionState, CavernRunDeltaV1,
+    CavernRunSnapshotV1, apply_cavern_run_delta, build_cavern_run_delta,
+    capture_cavern_run_snapshot, restore_cavern_run_snapshot,
 };
 use anyhow::Result;
 use engine::prelude::{
-    App, AuthorityRole, CoreSet, FixedUpdate, NetworkClientOutbox, NetworkInboundQueue,
-    NetworkServerOutbox, NetworkSessionStatus, Plugin, PreUpdate, SimulationProfileConfig,
-    SimulationTick, SystemConfigExt, World, WorldMut,
+    App, AuthorityRole, CoreSet, FixedTimeConfig, FixedUpdate, NetworkClientOutbox,
+    NetworkInboundQueue, NetworkServerOutbox, NetworkSessionStatus, Plugin, PreUpdate,
+    SimulationProfileConfig, SimulationTick, SystemConfigExt, World, WorldMut,
 };
 use engine_net::{
     AbilityCommand, AimCommand, ClientCommandEnvelope, ClientMessage, InputFrame, InteractCommand,
@@ -50,7 +51,9 @@ impl Plugin for CavernHuntNetSyncPlugin {
         app.add_systems(
             PreUpdate,
             (
-                client_send_control_input_system.after(CoreSet::NetReceive),
+                client_send_control_input_system
+                    .after(CoreSet::NetReceive)
+                    .after(CoreSet::Input),
                 server_capture_control_input_system.after(CoreSet::NetReceive),
                 client_apply_replication_events_system.after(CoreSet::NetReceive),
             ),
@@ -81,11 +84,27 @@ fn client_send_control_input(world: &mut World) -> Result<()> {
     let tick = world
         .resource::<SimulationTick>()
         .copied()
+        .map(|tick| SimulationTick(tick.0.saturating_add(1)))
         .unwrap_or_default();
-    let control = match world.resource::<CavernControlState>() {
+    let mut control = match world.resource::<CavernControlState>() {
         Ok(control) => *control,
         Err(_) => return Ok(()),
     };
+    control.source_tick = tick;
+    if let Ok(mut prediction) = world.resource_mut::<CavernPredictionState>() {
+        if let Some(existing) = prediction
+            .pending_frames
+            .iter_mut()
+            .find(|frame| frame.tick == tick)
+        {
+            existing.control = control;
+        } else {
+            prediction
+                .pending_frames
+                .push(CavernPredictedFrame { tick, control });
+        }
+        prediction.pending_frames.sort_by_key(|frame| frame.tick.0);
+    }
     if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
         let mut commands = vec![
             ClientCommandEnvelope::Move(MoveCommand {
@@ -141,6 +160,13 @@ fn server_capture_control_input(world: &mut World) -> Result<()> {
     let Some(frame) = latest_frame else {
         return Ok(());
     };
+    let current_source_tick = world
+        .resource::<CavernControlState>()
+        .map(|control| control.source_tick)
+        .unwrap_or_default();
+    if frame.tick.0 < current_source_tick.0 {
+        return Ok(());
+    }
 
     let mut movement = [0.0, 0.0];
     let mut aim_world = [0.0, 0.0];
@@ -281,14 +307,12 @@ fn client_apply_replication_events(world: &mut World) -> Result<()> {
         match message {
             ServerMessage::RunEvent(run_event) if run_event.code == RUN_EVENT_SNAPSHOT => {
                 let event: CavernSnapshotEventV1 = postcard::from_bytes(&run_event.payload)?;
-                restore_cavern_run_snapshot(world, &event.snapshot)?;
-                if let Ok(mut state) = world.resource_mut::<CavernNetSyncState>() {
-                    state.last_received_cursor = event.cursor;
-                    state.last_received_snapshot = Some(event.snapshot);
-                }
-                if let Ok(mut tick) = world.resource_mut::<SimulationTick>() {
-                    *tick = event.tick;
-                }
+                apply_authoritative_cavern_snapshot(
+                    world,
+                    event.tick,
+                    event.cursor,
+                    event.snapshot,
+                )?;
             }
             ServerMessage::RunEvent(run_event) if run_event.code == RUN_EVENT_DELTA => {
                 let event: CavernDeltaEventV1 = postcard::from_bytes(&run_event.payload)?;
@@ -302,16 +326,67 @@ fn client_apply_replication_events(world: &mut World) -> Result<()> {
                     }
                     apply_cavern_run_delta(base, &event.delta)
                 };
-                restore_cavern_run_snapshot(world, &rebuilt)?;
-                if let Ok(mut state) = world.resource_mut::<CavernNetSyncState>() {
-                    state.last_received_cursor = event.cursor;
-                    state.last_received_snapshot = Some(rebuilt);
-                }
-                if let Ok(mut tick) = world.resource_mut::<SimulationTick>() {
-                    *tick = event.tick;
-                }
+                apply_authoritative_cavern_snapshot(world, event.tick, event.cursor, rebuilt)?;
             }
             _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn apply_authoritative_cavern_snapshot(
+    world: &mut World,
+    authoritative_tick: SimulationTick,
+    cursor: u64,
+    snapshot: CavernRunSnapshotV1,
+) -> Result<()> {
+    let local_simulated_tick = world
+        .resource::<SimulationTick>()
+        .copied()
+        .unwrap_or_default();
+    restore_cavern_run_snapshot(world, &snapshot)?;
+    if let Ok(mut state) = world.resource_mut::<CavernNetSyncState>() {
+        state.last_received_cursor = cursor;
+        state.last_received_snapshot = Some(snapshot);
+    }
+    if let Ok(mut tick) = world.resource_mut::<SimulationTick>() {
+        *tick = authoritative_tick;
+    }
+    replay_pending_prediction_frames(world, authoritative_tick, local_simulated_tick)
+}
+
+fn replay_pending_prediction_frames(
+    world: &mut World,
+    authoritative_tick: SimulationTick,
+    local_simulated_tick: SimulationTick,
+) -> Result<()> {
+    let fixed_dt = world
+        .resource::<FixedTimeConfig>()
+        .map(|config| config.step_seconds.max(1.0 / 120.0))
+        .unwrap_or(1.0 / 60.0);
+    let frames_to_replay = {
+        let mut prediction = world.resource_mut::<CavernPredictionState>()?;
+        prediction
+            .pending_frames
+            .retain(|frame| frame.tick.0 > authoritative_tick.0);
+        let replay = prediction
+            .pending_frames
+            .iter()
+            .copied()
+            .filter(|frame| frame.tick.0 <= local_simulated_tick.0)
+            .collect::<Vec<_>>();
+        if !replay.is_empty() {
+            prediction.corrections_applied = prediction.corrections_applied.saturating_add(1);
+        }
+        prediction.last_authoritative_tick = authoritative_tick;
+        replay
+    };
+
+    for frame in frames_to_replay {
+        crate::plugins::combat::replay_predicted_local_frame(world, frame.control, fixed_dt)?;
+        if let Ok(mut tick) = world.resource_mut::<SimulationTick>() {
+            *tick = frame.tick;
         }
     }
 
@@ -325,14 +400,14 @@ mod tests {
         RUN_EVENT_SNAPSHOT, client_apply_replication_events, server_emit_replication,
     };
     use crate::domain::{
-        CavernAimState, CavernCameraState, CavernControlState, CavernMetaProfile, CavernRunConfig,
-        CavernRunState, LocalPlayerRef, LootTableRegistry, SpawnDirector,
-        capture_cavern_run_snapshot,
+        CavernAimState, CavernCameraState, CavernControlState, CavernMetaProfile,
+        CavernPredictionState, CavernRunConfig, CavernRunState, LocalPlayerRef, LootTableRegistry,
+        SpawnDirector, capture_cavern_run_snapshot, restore_cavern_run_snapshot,
     };
     use crate::plugins::{combat, worldgen};
     use engine::prelude::{
-        NetworkInboundQueue, NetworkServerOutbox, NetworkSessionStatus, SimulationProfile,
-        SimulationProfileConfig, SimulationTick, World,
+        FixedTimeConfig, NetworkInboundQueue, NetworkServerOutbox, NetworkSessionStatus,
+        SimulationProfile, SimulationProfileConfig, SimulationTick, World,
     };
     use engine_net::{ConnectionId, RunEvent, ServerMessage};
 
@@ -348,6 +423,7 @@ mod tests {
         world.insert_resource(CavernCameraState::default());
         world.insert_resource(CavernAimState::default());
         world.insert_resource(CavernControlState::default());
+        world.insert_resource(CavernPredictionState::default());
         world.insert_resource(NetworkServerOutbox::default());
         world.insert_resource(NetworkSessionStatus {
             phase: engine_net::SessionPhase::Active,
@@ -413,6 +489,8 @@ mod tests {
         let mut client = World::new();
         client.insert_resource(NetworkInboundQueue::default());
         client.insert_resource(CavernNetSyncState::default());
+        client.insert_resource(CavernPredictionState::default());
+        client.insert_resource(FixedTimeConfig::default());
         client.insert_resource(LocalPlayerRef::default());
         client.insert_resource(SimulationProfileConfig {
             profile: SimulationProfile::DedicatedAuthority,
@@ -467,5 +545,76 @@ mod tests {
         client_apply_replication_events(&mut client).unwrap();
         let rebuilt = capture_cavern_run_snapshot(&client).unwrap();
         assert_eq!(rebuilt, current);
+    }
+
+    #[test]
+    fn client_replays_pending_predicted_frame_after_authoritative_snapshot() {
+        let server = server_world();
+        let snapshot = capture_cavern_run_snapshot(&server).unwrap();
+        let mut client = World::new();
+        client.insert_resource(NetworkInboundQueue::default());
+        client.insert_resource(CavernNetSyncState::default());
+        client.insert_resource(CavernPredictionState {
+            pending_frames: vec![crate::domain::CavernPredictedFrame {
+                tick: SimulationTick(2),
+                control: CavernControlState {
+                    movement: [1.0, 0.0],
+                    aim_world: [100.0, 0.0],
+                    fire_pressed: false,
+                    dash_pressed: false,
+                    interact_pressed: false,
+                    source_tick: SimulationTick(2),
+                },
+            }],
+            corrections_applied: 0,
+            last_authoritative_tick: SimulationTick::default(),
+        });
+        client.insert_resource(FixedTimeConfig::default());
+        client.insert_resource(LocalPlayerRef::default());
+        client.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: engine::prelude::AuthorityRole::Client,
+            determinism: engine::prelude::DeterminismLevel::Validated,
+        });
+        client.insert_resource(SimulationTick(2));
+        client
+            .resource_mut::<NetworkInboundQueue>()
+            .unwrap()
+            .push_server(ServerMessage::RunEvent(RunEvent {
+                code: RUN_EVENT_SNAPSHOT.to_string(),
+                payload: postcard::to_allocvec(&CavernSnapshotEventV1 {
+                    tick: SimulationTick(1),
+                    cursor: 1,
+                    snapshot: snapshot.clone(),
+                })
+                .unwrap(),
+            }));
+
+        let mut expected = World::new();
+        expected.insert_resource(FixedTimeConfig::default());
+        expected.insert_resource(LocalPlayerRef::default());
+        restore_cavern_run_snapshot(&mut expected, &snapshot).unwrap();
+        combat::replay_predicted_local_frame(
+            &mut expected,
+            CavernControlState {
+                movement: [1.0, 0.0],
+                aim_world: [100.0, 0.0],
+                fire_pressed: false,
+                dash_pressed: false,
+                interact_pressed: false,
+                source_tick: SimulationTick(2),
+            },
+            FixedTimeConfig::default().step_seconds,
+        )
+        .unwrap();
+
+        client_apply_replication_events(&mut client).unwrap();
+        let rebuilt = capture_cavern_run_snapshot(&client).unwrap();
+        let expected_snapshot = capture_cavern_run_snapshot(&expected).unwrap();
+        assert_eq!(rebuilt, expected_snapshot);
+        let prediction = client.resource::<CavernPredictionState>().unwrap();
+        assert_eq!(prediction.pending_frames.len(), 1);
+        assert_eq!(prediction.last_authoritative_tick, SimulationTick(1));
+        assert_eq!(prediction.corrections_applied, 1);
     }
 }

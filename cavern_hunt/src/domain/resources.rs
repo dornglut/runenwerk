@@ -182,6 +182,19 @@ impl Default for CavernControlState {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+pub struct CavernPredictedFrame {
+    pub tick: SimulationTick,
+    pub control: CavernControlState,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CavernPredictionState {
+    pub pending_frames: Vec<CavernPredictedFrame>,
+    pub corrections_applied: u64,
+    pub last_authoritative_tick: SimulationTick,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CavernSdfAgent {
     pub pos: [f32; 2],
     pub radius: f32,

@@ -6,16 +6,19 @@ use crate::domain::{
 use crate::plugins::render_sdf;
 use anyhow::Result;
 use engine::prelude::{
-    App, AuthorityRole, Entity, FixedUpdate, InputState, Plugin, PreUpdate,
-    SimulationProfileConfig, Time, WindowState, World, WorldMut,
+    App, AuthorityRole, CoreSet, Entity, FixedUpdate, InputState, Plugin, PreUpdate,
+    SimulationProfileConfig, SimulationTick, SystemConfigExt, Time, WindowState, World, WorldMut,
 };
 
 pub struct CavernHuntCombatPlugin;
 
 impl Plugin for CavernHuntCombatPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, update_local_aim_system);
-        app.add_systems(FixedUpdate, fixed_step_combat_system);
+        app.add_systems(PreUpdate, update_local_aim_system.in_set(CoreSet::Input));
+        app.add_systems(
+            FixedUpdate,
+            fixed_step_combat_system.in_set(CoreSet::Simulation),
+        );
     }
 }
 
@@ -62,11 +65,17 @@ pub(crate) fn update_local_aim(world: &mut World) -> Result<()> {
             input.right_mouse_down(),
         )
     };
+    let next_tick = world
+        .resource::<SimulationTick>()
+        .copied()
+        .map(|tick| SimulationTick(tick.0.saturating_add(1)))
+        .unwrap_or_default();
     if let Ok(mut control) = world.resource_mut::<CavernControlState>() {
         control.movement = movement;
         control.aim_world = aim_world;
         control.fire_pressed = fire_pressed;
         control.dash_pressed = dash_pressed;
+        control.source_tick = next_tick;
     }
 
     if let Some(entity) = local_entity {
@@ -85,11 +94,47 @@ fn fixed_step_combat_system(mut world: WorldMut) -> Result<()> {
         return Ok(());
     }
 
-    tick_cooldowns(&mut world, dt);
-    move_local_player(&mut world, dt)?;
-    fire_local_player_weapon(&mut world)?;
-    step_projectiles(&mut world, dt)?;
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+    match authority {
+        AuthorityRole::Client | AuthorityRole::Peer => run_predicted_local_step(&mut world, dt),
+        AuthorityRole::Local | AuthorityRole::Server => {
+            run_authoritative_combat_step(&mut world, dt)
+        }
+    }
+}
+
+fn run_authoritative_combat_step(world: &mut World, dt: f32) -> Result<()> {
+    tick_cooldowns(world, dt);
+    move_local_player(world, dt)?;
+    fire_local_player_weapon(world)?;
+    step_projectiles(world, dt, ProjectileStepMode::Authoritative)?;
     Ok(())
+}
+
+fn run_predicted_local_step(world: &mut World, dt: f32) -> Result<()> {
+    tick_local_player_cooldowns(world, dt);
+    move_local_player(world, dt)?;
+    fire_local_player_weapon(world)?;
+    step_projectiles(world, dt, ProjectileStepMode::PredictedLocal)?;
+    Ok(())
+}
+
+pub(crate) fn replay_predicted_local_frame(
+    world: &mut World,
+    control: CavernControlState,
+    dt: f32,
+) -> Result<()> {
+    let previous = world
+        .resource::<CavernControlState>()
+        .copied()
+        .unwrap_or_default();
+    world.insert_resource(control);
+    let result = run_predicted_local_step(world, dt);
+    world.insert_resource(previous);
+    result
 }
 
 fn tick_cooldowns(world: &mut World, dt: f32) {
@@ -113,6 +158,23 @@ fn tick_cooldowns(world: &mut World, dt: f32) {
         if let Some(mut dash) = world.get_mut::<DashState>(entity) {
             dash.cooldown_remaining = (dash.cooldown_remaining - dt).max(0.0);
         }
+    }
+}
+
+fn tick_local_player_cooldowns(world: &mut World, dt: f32) {
+    let Some(entity) = world
+        .resource::<LocalPlayerRef>()
+        .ok()
+        .and_then(|local| local.entity)
+    else {
+        return;
+    };
+
+    if let Some(mut weapon) = world.get_mut::<WeaponState>(entity) {
+        weapon.cooldown_remaining = (weapon.cooldown_remaining - dt).max(0.0);
+    }
+    if let Some(mut dash) = world.get_mut::<DashState>(entity) {
+        dash.cooldown_remaining = (dash.cooldown_remaining - dt).max(0.0);
     }
 }
 
@@ -249,7 +311,13 @@ fn fire_local_player_weapon(world: &mut World) -> Result<()> {
     Ok(())
 }
 
-fn step_projectiles(world: &mut World, dt: f32) -> Result<()> {
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum ProjectileStepMode {
+    Authoritative,
+    PredictedLocal,
+}
+
+fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Result<()> {
     let phase = world.resource::<CavernRunState>()?.phase;
     if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
         return Ok(());
@@ -285,6 +353,9 @@ fn step_projectiles(world: &mut World, dt: f32) -> Result<()> {
             .get::<Faction>(entity)
             .copied()
             .unwrap_or(Faction::Neutral);
+        if matches!(mode, ProjectileStepMode::PredictedLocal) && faction != Faction::Hunters {
+            continue;
+        }
         let Some(mut transform) = world.get_mut::<Transform2>(entity) else {
             despawns.push(entity);
             continue;
@@ -343,7 +414,9 @@ fn step_projectiles(world: &mut World, dt: f32) -> Result<()> {
         }
 
         if let Some(target) = hit_target {
-            if let Some(mut health) = world.get_mut::<Health>(target) {
+            if matches!(mode, ProjectileStepMode::Authoritative)
+                && let Some(mut health) = world.get_mut::<Health>(target)
+            {
                 health.current = (health.current - projectile.damage).max(0.0);
             }
             despawns.push(entity);

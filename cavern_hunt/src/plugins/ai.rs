@@ -4,7 +4,9 @@ use crate::domain::{
 };
 use crate::plugins::combat::{constrained_move, spawn_projectile};
 use anyhow::Result;
-use engine::prelude::{App, Entity, FixedUpdate, Plugin, Time, World, WorldMut};
+use engine::prelude::{
+    App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, Time, World, WorldMut,
+};
 
 pub struct CavernHuntAiPlugin;
 
@@ -15,6 +17,14 @@ impl Plugin for CavernHuntAiPlugin {
 }
 
 fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+    if matches!(authority, AuthorityRole::Client) {
+        return Ok(());
+    }
+
     let phase = world.resource::<CavernRunState>()?.phase;
     if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
         return Ok(());

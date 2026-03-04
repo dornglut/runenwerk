@@ -7,7 +7,8 @@ use crate::domain::{
 use crate::plugins::meta;
 use anyhow::Result;
 use engine::prelude::{
-    App, Entity, FixedUpdate, Plugin, SimulationRng, SimulationTick, World, WorldMut,
+    App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, SimulationRng,
+    SimulationTick, World, WorldMut,
 };
 
 pub struct CavernHuntLootPlugin;
@@ -19,6 +20,14 @@ impl Plugin for CavernHuntLootPlugin {
 }
 
 fn resolve_loot_and_run_state_system(mut world: WorldMut) -> Result<()> {
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+    if matches!(authority, AuthorityRole::Client) {
+        return Ok(());
+    }
+
     resolve_enemy_deaths(&mut world)?;
     collect_pickups(&mut world)?;
     resolve_run_state(&mut world)?;
