@@ -1,6 +1,6 @@
 use crate::domain::geometry_graph::{GeometryEditEvent, GeometryPrimitiveId};
 use crate::domain::loot::EnemyDropTable;
-use crate::domain::worldgen::{CavernLayout, CavernRoom, CavernTunnel, RoomId, RoomRole};
+use crate::domain::worldgen::{RoomId, RoomRole};
 use engine::prelude::{Entity, SimulationTick};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -520,13 +520,6 @@ pub struct CavernSdfAgent {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct CavernSdfBlocker {
-    pub center: [f32; 3],
-    pub radius: f32,
-    pub half_height: f32,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CavernSdfGeometryPrimitive {
     pub shape_kind: u32,
     pub op_kind: u32,
@@ -541,9 +534,6 @@ pub struct CavernSdfWorldFrame {
     pub floor_height: f32,
     pub rock_height: f32,
     pub camera: CavernCameraState,
-    pub rooms: Vec<CavernRoom>,
-    pub tunnels: Vec<CavernTunnel>,
-    pub blockers: Vec<CavernSdfBlocker>,
     pub geometry_primitives: Vec<CavernSdfGeometryPrimitive>,
     pub agents: Vec<CavernSdfAgent>,
 }
@@ -555,23 +545,8 @@ impl Default for CavernSdfWorldFrame {
             floor_height: 0.0,
             rock_height: 3.8,
             camera: CavernCameraState::default(),
-            rooms: Vec::new(),
-            tunnels: Vec::new(),
-            blockers: Vec::new(),
             geometry_primitives: Vec::new(),
             agents: Vec::new(),
         }
-    }
-}
-
-impl CavernSdfWorldFrame {
-    pub fn rebuild_from_layout(&mut self, layout: &CavernLayout, camera: &CavernCameraState) {
-        self.world_bounds = layout.world_bounds;
-        self.camera = camera.clone();
-        self.rooms = layout.rooms.clone();
-        self.tunnels = layout.connections.clone();
-        self.blockers.clear();
-        self.geometry_primitives.clear();
-        self.agents.clear();
     }
 }

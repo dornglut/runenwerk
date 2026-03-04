@@ -1,9 +1,9 @@
 use crate::domain::{
     CavernCameraState, CavernGeometryGraph, CavernLayout, CavernSdfAgent,
-    CavernSdfGeometryPrimitive, CavernSdfWorldFrame, CavernTopology, CavernTunnel, Chest,
-    ColliderRadius, EnemyKind, ExtractionZone, GeometryOp, GeometryPrimitiveShape3, Health,
-    LocalPlayerRef, LootDrop, Pickup, Player, PlayerCompanion, PlayerSpectator, Projectile,
-    ProjectileVisualState, RoomId, RoomRole, Transform2, is_active_player_entity,
+    CavernSdfGeometryPrimitive, CavernSdfWorldFrame, CavernTopology, Chest, ColliderRadius,
+    EnemyKind, ExtractionZone, GeometryOp, GeometryPrimitiveShape3, Health, LocalPlayerRef,
+    LootDrop, Pickup, Player, PlayerCompanion, PlayerSpectator, Projectile, ProjectileVisualState,
+    Transform2, is_active_player_entity,
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
@@ -171,42 +171,23 @@ pub(crate) fn build_sdf_world_frame_system(
         .map(|topology| topology.to_layout_2d())
         .unwrap_or_else(|_| layout.clone());
 
-    let (render_bounds, render_rooms, render_tunnels) =
-        if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
-            let topology = world.resource::<CavernTopology>().ok();
-            let (rooms, tunnels) =
-                derive_render_footprint_from_geometry_graph(&graph, topology.as_deref());
-            (
-                [
-                    graph.bounds.min[0],
-                    graph.bounds.min[2],
-                    graph.bounds.max[0],
-                    graph.bounds.max[2],
-                ],
-                rooms,
-                tunnels,
-            )
-        } else {
-            (
-                fallback_layout.world_bounds,
-                fallback_layout.rooms.clone(),
-                fallback_layout.connections.clone(),
-            )
-        };
-
-    frame.world_bounds = render_bounds;
-    frame.camera = camera.clone();
-    frame.rooms = render_rooms;
-    frame.tunnels = render_tunnels;
-    frame.blockers.clear();
-    frame.geometry_primitives.clear();
-    frame.agents.clear();
-
-    if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
-        frame.geometry_primitives = geometry_primitives_from_graph(&graph);
+    frame.world_bounds = if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
+        [
+            graph.bounds.min[0],
+            graph.bounds.min[2],
+            graph.bounds.max[0],
+            graph.bounds.max[2],
+        ]
     } else {
-        frame.geometry_primitives = geometry_primitives_from_layout(&fallback_layout);
-    }
+        fallback_layout.world_bounds
+    };
+    frame.camera = camera.clone();
+    frame.agents.clear();
+    frame.geometry_primitives = if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
+        geometry_primitives_from_graph(&graph)
+    } else {
+        geometry_primitives_from_layout(&fallback_layout)
+    };
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
         if is_active_player_entity(&world, entity) {
@@ -341,87 +322,6 @@ pub(crate) fn build_sdf_world_frame_system(
     }
 
     Ok(())
-}
-
-fn derive_render_footprint_from_geometry_graph(
-    graph: &CavernGeometryGraph,
-    topology: Option<&CavernTopology>,
-) -> (Vec<crate::domain::CavernRoom>, Vec<CavernTunnel>) {
-    let mut rooms = Vec::new();
-    let mut tunnels = Vec::new();
-    let mut room_index = 0usize;
-    let mut tunnel_index = 0usize;
-
-    for primitive in graph
-        .primitives
-        .iter()
-        .filter(|primitive| primitive.enabled)
-    {
-        let is_walkable_void = matches!(
-            primitive.op,
-            GeometryOp::SubtractVoid | GeometryOp::MaskWalkable
-        );
-        if !is_walkable_void {
-            continue;
-        }
-
-        match &primitive.shape {
-            GeometryPrimitiveShape3::Ellipsoid { center, radii } => {
-                let (room_id, role, spawn_anchor) = topology
-                    .and_then(|topology| topology.rooms.get(room_index))
-                    .map(|room| {
-                        (
-                            room.id,
-                            room.role,
-                            [room.spawn_anchor[0], room.spawn_anchor[2]],
-                        )
-                    })
-                    .unwrap_or_else(|| {
-                        (
-                            RoomId(primitive.id.0.min(u64::from(u16::MAX)) as u16),
-                            RoomRole::Combat,
-                            [center[0], center[2]],
-                        )
-                    });
-                rooms.push(crate::domain::CavernRoom {
-                    id: room_id,
-                    role,
-                    center: [center[0], center[2]],
-                    radii: [radii[0], radii[2]],
-                    spawn_anchor,
-                });
-                room_index = room_index.saturating_add(1);
-            }
-            GeometryPrimitiveShape3::Capsule { start, end, radius } => {
-                let (from, to) = topology
-                    .and_then(|topology| topology.connections.get(tunnel_index))
-                    .map(|connection| (connection.from, connection.to))
-                    .unwrap_or((RoomId(0), RoomId(0)));
-                tunnels.push(CavernTunnel {
-                    from,
-                    to,
-                    start: [start[0], start[2]],
-                    end: [end[0], end[2]],
-                    radius: *radius,
-                });
-                tunnel_index = tunnel_index.saturating_add(1);
-            }
-            GeometryPrimitiveShape3::TunnelSplineCapsuleChain { points, radius } => {
-                for segment in points.windows(2) {
-                    tunnels.push(CavernTunnel {
-                        from: RoomId(0),
-                        to: RoomId(0),
-                        start: [segment[0][0], segment[0][2]],
-                        end: [segment[1][0], segment[1][2]],
-                        radius: *radius,
-                    });
-                }
-            }
-            _ => {}
-        }
-    }
-
-    (rooms, tunnels)
 }
 
 const SHAPE_SPHERE: u32 = 0;
@@ -1068,12 +968,9 @@ impl RenderPassExecutor for CavernComposeExecutor {
 mod tests {
     use super::{
         OP_ADD_SOLID, OP_BLOCKER, OP_SUBTRACT_VOID, SHAPE_CAPSULE, SHAPE_ELLIPSOID, SHAPE_SPHERE,
-        derive_render_footprint_from_geometry_graph, geometry_primitives_from_graph,
+        geometry_primitives_from_graph,
     };
-    use crate::domain::{
-        CavernGeometryGraph, CavernRunConfig, CavernSeed, CavernTopology, GeometryEdit,
-        GeometryEditKind, GeometryPrimitiveShape3, GeometryRevision,
-    };
+    use crate::domain::{CavernGeometryGraph, GeometryPrimitiveShape3, GeometryRevision};
 
     #[test]
     fn geometry_primitives_from_graph_preserves_ops_and_flattens_splines() {
@@ -1129,40 +1026,5 @@ mod tests {
         assert_eq!(primitives[2].op_kind, OP_SUBTRACT_VOID);
         assert_eq!(primitives[3].shape_kind, SHAPE_ELLIPSOID);
         assert_eq!(primitives[3].op_kind, OP_BLOCKER);
-    }
-
-    #[test]
-    fn derive_render_footprint_uses_geometry_graph_primitives() {
-        let layout =
-            crate::domain::CavernLayout::generate(CavernSeed(42), &CavernRunConfig::default());
-        let topology = CavernTopology::from_layout(&layout, CavernSeed(42));
-        let graph = CavernGeometryGraph::from_topology(&topology);
-        let (rooms, tunnels) = derive_render_footprint_from_geometry_graph(&graph, Some(&topology));
-        assert_eq!(rooms.len(), topology.rooms.len());
-        assert_eq!(tunnels.len(), topology.connections.len());
-        assert_eq!(
-            rooms.first().map(|room| room.role),
-            Some(topology.rooms[0].role)
-        );
-    }
-
-    #[test]
-    fn derive_render_footprint_ignores_non_void_geometry_edits() {
-        let layout =
-            crate::domain::CavernLayout::generate(CavernSeed(7), &CavernRunConfig::default());
-        let topology = CavernTopology::from_layout(&layout, CavernSeed(7));
-        let mut graph = CavernGeometryGraph::from_topology(&topology);
-        let base_void_room_count = topology.rooms.len();
-        let base_void_tunnel_count = topology.connections.len();
-        let _ = graph.apply_edit(&GeometryEdit {
-            kind: GeometryEditKind::AddBlocker(GeometryPrimitiveShape3::Cylinder {
-                center: [0.0, 2.0, 0.0],
-                radius: 1.0,
-                half_height: 1.5,
-            }),
-        });
-        let (rooms, tunnels) = derive_render_footprint_from_geometry_graph(&graph, Some(&topology));
-        assert_eq!(rooms.len(), base_void_room_count);
-        assert_eq!(tunnels.len(), base_void_tunnel_count);
     }
 }
