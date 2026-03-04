@@ -58,6 +58,9 @@ pub struct Player;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct PlayerId(pub u32);
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct PlayerActive;
+
 #[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
 pub struct AimTarget2 {
     pub x: f32,

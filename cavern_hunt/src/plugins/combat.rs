@@ -1,7 +1,8 @@
 use crate::domain::{
     AimTarget2, CavernAimState, CavernControlState, CavernLayout, CavernRunPhase, CavernRunState,
-    CavernServerControlMap, ColliderRadius, DashState, Faction, Health, LocalPlayerRef, PlayerId,
-    Projectile, Transform2, Velocity2, WeaponState,
+    CavernServerControlMap, ColliderRadius, DashState, Faction, Health, LocalPlayerRef,
+    PlayerActive, PlayerId, Projectile, Transform2, Velocity2, WeaponState,
+    is_active_player_entity,
 };
 use crate::plugins::render_sdf;
 use anyhow::Result;
@@ -197,7 +198,12 @@ fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
     let players = world
         .query::<(Entity, &PlayerId)>()
         .iter()
-        .map(|(entity, player_id)| (entity, player_id.0))
+        .filter_map(|(entity, player_id)| {
+            world
+                .get::<PlayerActive>(entity)
+                .is_some()
+                .then_some((entity, player_id.0))
+        })
         .collect::<Vec<_>>();
     for (entity, player_id) in players {
         let mut control = controls
@@ -356,6 +362,7 @@ fn resolve_local_player_entity(world: &World) -> Option<Entity> {
     let local = world.resource::<LocalPlayerRef>().ok()?;
     if let Some(entity) = local.entity
         && world.get::<PlayerId>(entity).is_some()
+        && world.get::<PlayerActive>(entity).is_some()
     {
         return Some(entity);
     }
@@ -363,13 +370,19 @@ fn resolve_local_player_entity(world: &World) -> Option<Entity> {
         return world
             .query::<(Entity, &PlayerId)>()
             .iter()
-            .find_map(|(entity, id)| (id.0 == player_id).then_some(entity));
+            .find_map(|(entity, id)| {
+                (id.0 == player_id && world.get::<PlayerActive>(entity).is_some()).then_some(entity)
+            });
     }
     world
         .query::<(Entity, &PlayerId)>()
         .iter()
-        .map(|(entity, _)| entity)
-        .next()
+        .find_map(|(entity, _)| {
+            world
+                .get::<PlayerActive>(entity)
+                .is_some()
+                .then_some(entity)
+        })
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -450,6 +463,10 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
                 continue;
             };
             if target_health.current <= 0.0 {
+                continue;
+            }
+            if world.get::<PlayerId>(*target).is_some() && !is_active_player_entity(world, *target)
+            {
                 continue;
             }
             let Some(target_faction) = world.get::<Faction>(*target).copied() else {
@@ -560,7 +577,7 @@ mod tests {
     use crate::domain::{
         CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
         CavernRunConfig, CavernRunState, CavernServerControlMap, LocalPlayerRef, LootTableRegistry,
-        SpawnDirector,
+        PlayerActive, SpawnDirector,
     };
     use crate::plugins::worldgen;
     use engine::prelude::{
@@ -636,6 +653,7 @@ mod tests {
             .collect::<Vec<_>>();
         let (_, target_id) = players[1];
         let target_entity = players[1].0;
+        let _ = world.insert(target_entity, PlayerActive);
         let before = world
             .get::<crate::domain::Transform2>(target_entity)
             .copied()

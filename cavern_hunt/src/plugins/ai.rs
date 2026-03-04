@@ -1,6 +1,7 @@
 use crate::domain::{
     AggroState, CavernLayout, CavernRunPhase, CavernRunState, ColliderRadius, EnemyKind, Faction,
-    Health, MeleeAttack, Player, ProjectileAttack, Transform2, Velocity2, WeaponState,
+    Health, MeleeAttack, ProjectileAttack, Transform2, Velocity2, WeaponState,
+    is_active_player_entity,
 };
 use crate::plugins::combat::{constrained_move, spawn_projectile};
 use anyhow::Result;
@@ -195,7 +196,7 @@ fn collect_living_players(world: &World) -> Vec<PlayerTarget> {
         .query::<(Entity, &Transform2)>()
         .iter()
         .filter_map(|(entity, transform)| {
-            if world.get::<Player>(entity).is_none() {
+            if !is_active_player_entity(world, entity) {
                 return None;
             }
             let health = world.get::<Health>(entity).copied()?;

@@ -2,8 +2,8 @@ use crate::domain::{
     AggroState, AimTarget2, CavernCameraState, CavernLayout, CavernMetaProfile, CavernRunConfig,
     CavernRunPhase, CavernRunState, Chest, ColliderRadius, DashState, EliteObjective, Enemy,
     EnemyKind, ExtractionZone, Faction, Health, InventoryRunState, LocalPlayerRef,
-    LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerId, ProjectileAttack,
-    RoomAnchor, SpawnDirector, SpawnRoom, Transform2, Velocity2, WeaponState,
+    LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerId,
+    ProjectileAttack, RoomAnchor, SpawnDirector, SpawnRoom, Transform2, Velocity2, WeaponState,
 };
 use anyhow::Result;
 use engine::prelude::{Bundle, Entity, World};
@@ -106,6 +106,9 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
                 room_id: start_room.id,
             },
         });
+        if assign_local_player && index == 0 {
+            let _ = world.insert(entity, PlayerActive);
+        }
         if assign_local_player && index == 0 {
             let mut local = world
                 .resource_mut::<LocalPlayerRef>()

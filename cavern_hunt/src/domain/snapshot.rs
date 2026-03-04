@@ -1,9 +1,10 @@
 use crate::domain::components::{
     AggroState, AimTarget2, Chest, ColliderRadius, DashState, EliteObjective, Enemy, EnemyKind,
     Extracting, ExtractionZone, Faction, Health, InventoryRunState, LootDrop, Pickup, Player,
-    PlayerId, Projectile, ProjectileAttack, RoomAnchor, SpawnRoom, Transform2, Velocity2,
-    WeaponState,
+    PlayerActive, PlayerId, Projectile, ProjectileAttack, RoomAnchor, SpawnRoom, Transform2,
+    Velocity2, WeaponState,
 };
+use crate::domain::is_active_player_entity;
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
 use crate::domain::resources::{
     CavernPlayerOwnershipState, CavernRunPhase, CavernRunState, CavernSeed, LocalPlayerRef,
@@ -197,7 +198,7 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
     let mut extraction_zones = Vec::new();
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
-        if world.get::<Player>(entity).is_some() {
+        if is_active_player_entity(world, entity) {
             let velocity = world.get::<Velocity2>(entity).copied().unwrap_or_default();
             let health = world
                 .get::<Health>(entity)
@@ -491,6 +492,17 @@ pub fn restore_cavern_run_snapshot(
         party_alive_count: snapshot.party_alive_count,
         enemy_kills: snapshot.enemy_kills,
     });
+    world.insert_resource(CavernPlayerOwnershipState {
+        by_connection_id: snapshot
+            .players
+            .iter()
+            .filter_map(|player| {
+                player
+                    .owner_connection_id
+                    .map(|connection_id| (connection_id, player.player_id))
+            })
+            .collect(),
+    });
 
     let mut restored_local_entity = None;
 
@@ -530,6 +542,7 @@ pub fn restore_cavern_run_snapshot(
         if preferred_local_player_id == Some(player.player_id) || restored_local_entity.is_none() {
             restored_local_entity = Some(entity);
         }
+        let _ = world.insert(entity, PlayerActive);
     }
 
     for enemy in &snapshot.enemies {
@@ -680,11 +693,11 @@ mod tests {
     use crate::domain::{
         CavernAimState, CavernCameraState, CavernMetaProfile, CavernPlayerOwnershipState,
         CavernRunConfig, CavernRunState, Faction, Health, LocalPlayerRef, LootTableRegistry,
-        SpawnDirector, Transform2,
+        PlayerActive, PlayerId, SpawnDirector, Transform2,
     };
     use crate::plugins::{combat, worldgen};
     use engine::prelude::{
-        InputState, NetworkSessionStatus, SimulationRng, SimulationSeed, WindowState, World,
+        Entity, InputState, NetworkSessionStatus, SimulationRng, SimulationSeed, WindowState, World,
     };
     use engine_net::ConnectionId;
 
@@ -756,6 +769,12 @@ mod tests {
         source.insert_resource(CavernPlayerOwnershipState {
             by_connection_id: std::iter::once((99, 2)).collect(),
         });
+        let second_player = source
+            .query::<(Entity, &PlayerId)>()
+            .iter()
+            .find_map(|(entity, player_id)| (player_id.0 == 2).then_some(entity))
+            .unwrap();
+        let _ = source.insert(second_player, PlayerActive);
         let snapshot = capture_cavern_run_snapshot(&source).unwrap();
 
         let mut restored = World::new();

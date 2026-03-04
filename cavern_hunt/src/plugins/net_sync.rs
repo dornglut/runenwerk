@@ -494,7 +494,7 @@ mod tests {
         CavernServerControlMap, LocalPlayerRef, LootTableRegistry, SpawnDirector,
         capture_cavern_run_snapshot, restore_cavern_run_snapshot,
     };
-    use crate::plugins::{combat, worldgen};
+    use crate::plugins::{combat, game, worldgen};
     use engine::prelude::{
         FixedTimeConfig, NetworkInboundQueue, NetworkServerOutbox, NetworkSessionStatus,
         SimulationProfile, SimulationProfileConfig, SimulationTick, World,
@@ -561,6 +561,7 @@ mod tests {
         }
 
         server_capture_control_input(&mut world).unwrap();
+        game::sync_active_player_slots(&mut world).unwrap();
 
         let ownership = world.resource::<CavernPlayerOwnershipState>().unwrap();
         assert_eq!(ownership.by_connection_id.get(&11), Some(&1));
@@ -580,6 +581,10 @@ mod tests {
     #[test]
     fn server_emits_snapshot_then_delta_events() {
         let mut world = server_world();
+        world.insert_resource(CavernPlayerOwnershipState {
+            by_connection_id: [(7, 1)].into_iter().collect(),
+        });
+        game::sync_active_player_slots(&mut world).unwrap();
         server_emit_replication(&mut world).unwrap();
         let messages = world.resource_mut::<NetworkServerOutbox>().unwrap().drain();
         assert!(matches!(
@@ -610,6 +615,10 @@ mod tests {
     #[test]
     fn client_applies_snapshot_and_delta_events() {
         let mut server = server_world();
+        server.insert_resource(CavernPlayerOwnershipState {
+            by_connection_id: [(7, 1)].into_iter().collect(),
+        });
+        game::sync_active_player_slots(&mut server).unwrap();
         let snapshot = capture_cavern_run_snapshot(&server).unwrap();
         let snapshot_event = RunEvent {
             code: RUN_EVENT_SNAPSHOT.to_string(),
@@ -684,7 +693,11 @@ mod tests {
 
     #[test]
     fn client_replays_pending_predicted_frame_after_authoritative_snapshot() {
-        let server = server_world();
+        let mut server = server_world();
+        server.insert_resource(CavernPlayerOwnershipState {
+            by_connection_id: [(7, 1)].into_iter().collect(),
+        });
+        game::sync_active_player_slots(&mut server).unwrap();
         let snapshot = capture_cavern_run_snapshot(&server).unwrap();
         let mut client = World::new();
         client.insert_resource(NetworkInboundQueue::default());

@@ -1,8 +1,8 @@
 use crate::domain::{
     CavernMetaProfile, CavernRunConfig, CavernRunPhase, CavernRunState, ColliderRadius, DashState,
     EliteObjective, EnemyKind, ExtractionZone, Health, InventoryRunState, LootDrop,
-    LootTableRegistry, Pickup, PickupKind, Player, RelicKind, Transform2, WeaponModKind,
-    WeaponState,
+    LootTableRegistry, Pickup, PickupKind, RelicKind, Transform2, WeaponModKind, WeaponState,
+    is_active_player_entity,
 };
 use crate::plugins::meta;
 use anyhow::Result;
@@ -88,7 +88,7 @@ fn collect_pickups(world: &mut World) -> Result<()> {
         .query::<(Entity, &Transform2)>()
         .iter()
         .filter_map(|(entity, transform)| {
-            if world.get::<Player>(entity).is_none() {
+            if !is_active_player_entity(world, entity) {
                 return None;
             }
             let health = world.get::<Health>(entity).copied()?;
@@ -149,7 +149,7 @@ fn resolve_run_state(world: &mut World) -> Result<()> {
         .query::<(Entity, &Transform2)>()
         .iter()
         .filter_map(|(entity, transform)| {
-            if world.get::<Player>(entity).is_none() {
+            if !is_active_player_entity(world, entity) {
                 return None;
             }
             let health = world.get::<Health>(entity).copied()?;
@@ -370,7 +370,9 @@ fn total_party_scrap(world: &World) -> u32 {
     world
         .query::<(Entity, &InventoryRunState)>()
         .iter()
-        .filter_map(|(entity, inventory)| world.get::<Player>(entity).map(|_| inventory.scrap))
+        .filter_map(|(entity, inventory)| {
+            is_active_player_entity(world, entity).then_some(inventory.scrap)
+        })
         .sum()
 }
 
