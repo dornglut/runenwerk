@@ -168,6 +168,24 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
                     active_player_ids.insert(player_id);
                 }
             }
+            if session.admitted {
+                let desired_total = session
+                    .ai_fill_target
+                    .max(active_player_ids.len().clamp(1, u8::MAX as usize) as u8)
+                    .min(max_players);
+                let mut next_player_id = 1_u32;
+                while active_player_ids.len() < usize::from(desired_total) {
+                    if next_player_id <= u32::from(max_players)
+                        && !active_player_ids.contains(&next_player_id)
+                    {
+                        active_player_ids.insert(next_player_id);
+                    }
+                    next_player_id = next_player_id.saturating_add(1);
+                    if next_player_id > u32::from(max_players).saturating_add(1) {
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -183,11 +201,21 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
     for (spawn_index, player_id) in active_player_ids.iter().copied().enumerate() {
         if !existing_ids.contains(&player_id) {
             let roster_index = player_id.saturating_sub(1) as usize;
+            let is_companion = !ownership
+                .by_connection_id
+                .values()
+                .any(|owned| *owned == player_id);
             let player_code = session
                 .roster_player_codes
                 .get(roster_index)
                 .cloned()
-                .unwrap_or_else(|| format!("hunter_{player_id}"));
+                .unwrap_or_else(|| {
+                    if is_companion {
+                        format!("companion_{player_id}")
+                    } else {
+                        format!("hunter_{player_id}")
+                    }
+                });
             let entity = worldgen::spawn_player_entity(
                 world,
                 player_id,
@@ -196,6 +224,7 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
                 &meta_profile,
                 player_code,
                 roster_index as u8,
+                is_companion,
             );
             player_entities.push((entity, player_id));
         }
@@ -244,7 +273,8 @@ mod tests {
         CavernAimState, CavernCameraState, CavernLayout, CavernMetaPersistenceConfig,
         CavernMetaProfile, CavernMetaRewardState, CavernPlayerOwnershipState, CavernRunConfig,
         CavernRunState, CavernSdfWorldFrame, CavernServerControlMap, LocalPlayerRef,
-        LootTableRegistry, PlayerActive, PlayerId, PlayerRosterIdentity, SpawnDirector,
+        LootTableRegistry, PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity,
+        SpawnDirector,
     };
     use crate::plugins::worldgen;
     use engine::plugins::ui::domain::UiWorldHudStats;
@@ -358,6 +388,63 @@ mod tests {
                 .resource::<CavernRunState>()
                 .unwrap()
                 .party_alive_count,
+            2
+        );
+    }
+
+    #[test]
+    fn server_can_fill_missing_party_slots_with_companions() {
+        let mut world = World::new();
+        world.insert_resource(CavernRunConfig::default());
+        world.insert_resource(CavernRunState::default());
+        world.insert_resource(CavernLayout::default());
+        world.insert_resource(SpawnDirector::default());
+        world.insert_resource(LootTableRegistry::default());
+        world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(CavernMetaPersistenceConfig { enabled: false });
+        world.insert_resource(CavernMetaRewardState::default());
+        world.insert_resource(SessionRuntimeState {
+            admitted: true,
+            lobby_id: Some("lobby-fill".into()),
+            roster_player_codes: vec!["alpha".into()],
+            max_players: 4,
+            ai_fill_target: 3,
+            settings_json: None,
+        });
+        world.insert_resource(LocalPlayerRef::default());
+        world.insert_resource(CavernCameraState::default());
+        world.insert_resource(CavernAimState::default());
+        world.insert_resource(CavernServerControlMap::default());
+        world.insert_resource(CavernPlayerOwnershipState {
+            by_connection_id: [(11, 1)].into_iter().collect(),
+        });
+        world.insert_resource(CavernSdfWorldFrame::default());
+        world.insert_resource(UiWorldHudStats::default());
+        world.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: AuthorityRole::Server,
+            determinism: DeterminismLevel::Validated,
+        });
+        worldgen::initialize_run_world(&mut world, false).unwrap();
+
+        sync_active_player_slots(&mut world).unwrap();
+
+        let active_players = world
+            .query::<(engine::prelude::Entity, &PlayerId)>()
+            .iter()
+            .filter_map(|(entity, player_id)| {
+                world
+                    .get::<PlayerActive>(entity)
+                    .is_some()
+                    .then_some((entity, player_id.0))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(active_players.len(), 3);
+        assert_eq!(
+            active_players
+                .iter()
+                .filter(|(entity, _)| world.get::<PlayerCompanion>(*entity).is_some())
+                .count(),
             2
         );
     }

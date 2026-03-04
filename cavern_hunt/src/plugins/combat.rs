@@ -1,7 +1,7 @@
 use crate::domain::{
     AimTarget2, CavernAimState, CavernControlState, CavernLayout, CavernRunPhase, CavernRunState,
-    CavernServerControlMap, ColliderRadius, DashState, Faction, Health, LocalPlayerRef,
-    PlayerActive, PlayerId, Projectile, Transform2, Velocity2, WeaponState,
+    CavernServerControlMap, ColliderRadius, DashState, EnemyKind, Faction, Health, LocalPlayerRef,
+    PlayerActive, PlayerCompanion, PlayerId, Projectile, Transform2, Velocity2, WeaponState,
     is_active_player_entity,
 };
 use crate::plugins::render_sdf;
@@ -206,11 +206,19 @@ fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
         })
         .collect::<Vec<_>>();
     for (entity, player_id) in players {
-        let mut control = controls
-            .by_player_id
-            .get(&player_id)
-            .copied()
-            .unwrap_or_default();
+        let mut control = if world.get::<PlayerCompanion>(entity).is_some() {
+            controls
+                .by_player_id
+                .get(&player_id)
+                .copied()
+                .unwrap_or_else(|| build_companion_control(world, entity))
+        } else {
+            controls
+                .by_player_id
+                .get(&player_id)
+                .copied()
+                .unwrap_or_default()
+        };
         if control.source_tick == SimulationTick::default() {
             control.source_tick = world
                 .resource::<SimulationTick>()
@@ -221,6 +229,77 @@ fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
         fire_player_weapon_with_control(world, entity, control)?;
     }
     Ok(())
+}
+
+fn build_companion_control(world: &World, entity: Entity) -> CavernControlState {
+    let tick = world
+        .resource::<SimulationTick>()
+        .copied()
+        .unwrap_or_default();
+    let Some(transform) = world.get::<Transform2>(entity).copied() else {
+        return CavernControlState {
+            source_tick: tick,
+            ..CavernControlState::default()
+        };
+    };
+    let Some(health) = world.get::<Health>(entity).copied() else {
+        return CavernControlState {
+            source_tick: tick,
+            ..CavernControlState::default()
+        };
+    };
+    if health.current <= 0.0 {
+        return CavernControlState {
+            source_tick: tick,
+            ..CavernControlState::default()
+        };
+    }
+
+    let nearest_enemy = world
+        .query::<(Entity, &Transform2)>()
+        .iter()
+        .filter_map(|(candidate, enemy_transform)| {
+            let _kind = world.get::<EnemyKind>(candidate)?;
+            let enemy_health = world.get::<Health>(candidate).copied()?;
+            if enemy_health.current <= 0.0 {
+                return None;
+            }
+            let dx = enemy_transform.x - transform.x;
+            let dy = enemy_transform.y - transform.y;
+            let distance_sq = dx * dx + dy * dy;
+            Some((distance_sq, [enemy_transform.x, enemy_transform.y]))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+
+    let Some((distance_sq, enemy_pos)) = nearest_enemy else {
+        return CavernControlState {
+            aim_world: [transform.x + 1.0, transform.y],
+            source_tick: tick,
+            ..CavernControlState::default()
+        };
+    };
+
+    let dx = enemy_pos[0] - transform.x;
+    let dy = enemy_pos[1] - transform.y;
+    let (move_x, move_y) = normalized_vector(dx, dy);
+    let distance = distance_sq.sqrt();
+    let desired_range = 5.0;
+    let movement = if distance > desired_range {
+        [move_x, move_y]
+    } else if distance < 2.0 {
+        [-move_x, -move_y]
+    } else {
+        [0.0, 0.0]
+    };
+
+    CavernControlState {
+        movement,
+        aim_world: enemy_pos,
+        fire_pressed: distance <= 12.0,
+        dash_pressed: false,
+        interact_pressed: false,
+        source_tick: tick,
+    }
 }
 
 fn move_player_with_control(
@@ -577,13 +656,15 @@ mod tests {
     use crate::domain::{
         CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
         CavernPlayerOwnershipState, CavernRunConfig, CavernRunState, CavernServerControlMap,
-        LocalPlayerRef, LootTableRegistry, PlayerActive, SpawnDirector,
+        EnemyKind, LocalPlayerRef, LootTableRegistry, PlayerActive, PlayerCompanion, SpawnDirector,
+        Transform2,
     };
     use crate::plugins::{game, worldgen};
     use engine::prelude::{
         AuthorityRole, InputState, SimulationProfile, SimulationProfileConfig, Time, WindowState,
         World,
     };
+    use engine::state::SessionRuntimeState;
 
     #[test]
     fn constrained_move_stays_inside_layout() {
@@ -685,5 +766,63 @@ mod tests {
             .copied()
             .unwrap();
         assert!(after.x > before.x);
+    }
+
+    #[test]
+    fn ai_fill_companion_fires_at_nearby_enemy() {
+        let mut world = World::new();
+        world.insert_resource(CavernRunConfig::default());
+        world.insert_resource(CavernRunState::default());
+        world.insert_resource(CavernLayout::default());
+        world.insert_resource(SpawnDirector::default());
+        world.insert_resource(LootTableRegistry::default());
+        world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(LocalPlayerRef::default());
+        world.insert_resource(CavernCameraState::default());
+        world.insert_resource(CavernAimState::default());
+        world.insert_resource(CavernServerControlMap::default());
+        world.insert_resource(CavernPlayerOwnershipState {
+            by_connection_id: [(11, 1)].into_iter().collect(),
+        });
+        world.insert_resource(SessionRuntimeState {
+            admitted: true,
+            lobby_id: Some("lobby-fill".into()),
+            roster_player_codes: vec!["alpha".into()],
+            max_players: 4,
+            ai_fill_target: 2,
+            settings_json: None,
+        });
+        world.insert_resource(Time::default());
+        world.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: AuthorityRole::Server,
+            determinism: engine::prelude::DeterminismLevel::Validated,
+        });
+        worldgen::initialize_run_world(&mut world, false).unwrap();
+        game::sync_active_player_slots(&mut world).unwrap();
+
+        let companion = world
+            .query::<(engine::prelude::Entity, &crate::domain::PlayerId)>()
+            .iter()
+            .find_map(|(entity, _)| world.get::<PlayerCompanion>(entity).map(|_| entity))
+            .expect("expected ai-fill companion to spawn");
+        let enemy = world
+            .query::<(engine::prelude::Entity, &EnemyKind)>()
+            .iter()
+            .find_map(|(entity, kind)| (*kind == EnemyKind::Swarmer).then_some(entity))
+            .expect("expected swarmer enemy");
+
+        let companion_pos = world.get::<Transform2>(companion).copied().unwrap();
+        if let Some(mut transform) = world.get_mut::<Transform2>(enemy) {
+            transform.x = companion_pos.x + 3.0;
+            transform.y = companion_pos.y;
+        }
+
+        let projectile_count_before = world.query::<&crate::domain::Projectile>().iter().count();
+
+        super::run_authoritative_combat_step(&mut world, 1.0 / 60.0).unwrap();
+
+        let projectile_count_after = world.query::<&crate::domain::Projectile>().iter().count();
+        assert!(projectile_count_after > projectile_count_before);
     }
 }

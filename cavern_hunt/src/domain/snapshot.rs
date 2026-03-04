@@ -1,8 +1,8 @@
 use crate::domain::components::{
     AggroState, AimTarget2, Chest, ColliderRadius, DashState, EliteObjective, Enemy, EnemyKind,
     Extracting, ExtractionZone, Faction, Health, InventoryRunState, LootDrop, Pickup, Player,
-    PlayerActive, PlayerId, PlayerRosterIdentity, Projectile, ProjectileAttack, RoomAnchor,
-    SpawnRoom, Transform2, Velocity2, WeaponState,
+    PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity, Projectile, ProjectileAttack,
+    RoomAnchor, SpawnRoom, Transform2, Velocity2, WeaponState,
 };
 use crate::domain::is_active_player_entity;
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
@@ -28,6 +28,7 @@ pub struct CavernPlayerSnapshotV1 {
     pub owner_connection_id: Option<u64>,
     pub player_code: String,
     pub roster_index: u8,
+    pub ai_controlled: bool,
     pub x: f32,
     pub y: f32,
     pub yaw: f32,
@@ -257,6 +258,7 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 owner_connection_id,
                 player_code: roster_identity.player_code,
                 roster_index: roster_identity.roster_index,
+                ai_controlled: world.get::<PlayerCompanion>(entity).is_some(),
                 x: transform.x,
                 y: transform.y,
                 yaw: transform.yaw,
@@ -555,6 +557,14 @@ pub fn restore_cavern_run_snapshot(
         if player.extracting {
             let _ = world.insert(entity, Extracting);
         }
+        if player.ai_controlled {
+            let _ = world.insert(
+                entity,
+                PlayerCompanion {
+                    fill_slot: player.roster_index,
+                },
+            );
+        }
         if preferred_local_player_id == Some(player.player_id) || restored_local_entity.is_none() {
             restored_local_entity = Some(entity);
         }
@@ -790,6 +800,7 @@ mod tests {
             &CavernMetaProfile::default(),
             "hunter_2",
             1,
+            false,
         );
         source.insert_resource(CavernPlayerOwnershipState {
             by_connection_id: std::iter::once((99, 2)).collect(),

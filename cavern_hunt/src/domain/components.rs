@@ -61,6 +61,11 @@ pub struct PlayerId(pub u32);
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct PlayerActive;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct PlayerCompanion {
+    pub fill_slot: u8,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct PlayerRosterIdentity {
     pub player_code: String,

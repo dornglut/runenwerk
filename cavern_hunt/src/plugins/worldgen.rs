@@ -2,9 +2,9 @@ use crate::domain::{
     AggroState, AimTarget2, CavernCameraState, CavernLayout, CavernMetaProfile, CavernRunConfig,
     CavernRunPhase, CavernRunState, Chest, ColliderRadius, DashState, EliteObjective, Enemy,
     EnemyKind, ExtractionZone, Faction, Health, InventoryRunState, LocalPlayerRef,
-    LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerId,
-    PlayerRosterIdentity, ProjectileAttack, RoomAnchor, SpawnDirector, SpawnRoom, Transform2,
-    Velocity2, WeaponState,
+    LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerCompanion,
+    PlayerId, PlayerRosterIdentity, ProjectileAttack, RoomAnchor, SpawnDirector, SpawnRoom,
+    Transform2, Velocity2, WeaponState,
 };
 use anyhow::Result;
 use engine::prelude::{AuthorityRole, Bundle, Entity, SimulationProfileConfig, World};
@@ -79,6 +79,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
             &meta_profile,
             "local_hunter_1",
             0,
+            false,
         );
         if assign_local_player {
             let mut local = world
@@ -166,6 +167,7 @@ pub(crate) fn spawn_player_entity(
     meta_profile: &CavernMetaProfile,
     player_code: impl Into<String>,
     roster_index: u8,
+    is_companion: bool,
 ) -> Entity {
     let layout = world
         .resource::<CavernLayout>()
@@ -224,6 +226,14 @@ pub(crate) fn spawn_player_entity(
     });
     if active {
         let _ = world.insert(entity, PlayerActive);
+    }
+    if is_companion {
+        let _ = world.insert(
+            entity,
+            PlayerCompanion {
+                fill_slot: roster_index,
+            },
+        );
     }
     entity
 }
