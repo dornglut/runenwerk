@@ -216,13 +216,49 @@ impl CavernLayout {
     }
 
     pub fn contains_point(&self, point: [f32; 2], margin: f32) -> bool {
-        self.rooms
-            .iter()
-            .any(|room| point_in_room(point, room, margin))
-            || self
-                .connections
-                .iter()
-                .any(|tunnel| point_in_tunnel(point, tunnel, margin))
+        self.walkable_signed_distance(point) <= -margin
+    }
+
+    pub fn walkable_signed_distance(&self, point: [f32; 2]) -> f32 {
+        let mut distance = f32::INFINITY;
+        for room in &self.rooms {
+            distance = distance.min(sd_ellipse2(
+                [point[0] - room.center[0], point[1] - room.center[1]],
+                room.radii,
+            ));
+        }
+        for tunnel in &self.connections {
+            distance = distance.min(sd_capsule2(point, tunnel.start, tunnel.end, tunnel.radius));
+        }
+        distance
+    }
+
+    pub fn walkable_normal(&self, point: [f32; 2]) -> [f32; 2] {
+        let e = 0.025;
+        let dx = self.walkable_signed_distance([point[0] + e, point[1]])
+            - self.walkable_signed_distance([point[0] - e, point[1]]);
+        let dy = self.walkable_signed_distance([point[0], point[1] + e])
+            - self.walkable_signed_distance([point[0], point[1] - e]);
+        let length = (dx * dx + dy * dy).sqrt();
+        if length <= 0.0001 {
+            [0.0, 0.0]
+        } else {
+            [dx / length, dy / length]
+        }
+    }
+
+    pub fn segment_hits_wall(&self, start: [f32; 2], end: [f32; 2], radius: f32) -> bool {
+        let travel = [end[0] - start[0], end[1] - start[1]];
+        let length = (travel[0] * travel[0] + travel[1] * travel[1]).sqrt();
+        let steps = ((length / 0.18).ceil() as usize).max(1);
+        for step in 1..=steps {
+            let t = step as f32 / steps as f32;
+            let sample = [start[0] + travel[0] * t, start[1] + travel[1] * t];
+            if self.walkable_signed_distance(sample) > -radius {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn adjacency(&self) -> HashMap<RoomId, HashSet<RoomId>> {
@@ -238,26 +274,23 @@ impl CavernLayout {
     }
 }
 
-fn point_in_room(point: [f32; 2], room: &CavernRoom, margin: f32) -> bool {
-    let rx = (room.radii[0] + margin).max(0.1);
-    let ry = (room.radii[1] + margin).max(0.1);
-    let dx = (point[0] - room.center[0]) / rx;
-    let dy = (point[1] - room.center[1]) / ry;
-    dx * dx + dy * dy <= 1.0
+fn sd_ellipse2(p: [f32; 2], radii: [f32; 2]) -> f32 {
+    let rx = radii[0].max(0.001);
+    let ry = radii[1].max(0.001);
+    let qx = p[0] / rx;
+    let qy = p[1] / ry;
+    ((qx * qx + qy * qy).sqrt() - 1.0) * rx.min(ry)
 }
 
-fn point_in_tunnel(point: [f32; 2], tunnel: &CavernTunnel, margin: f32) -> bool {
-    let pa = [point[0] - tunnel.start[0], point[1] - tunnel.start[1]];
-    let ba = [
-        tunnel.end[0] - tunnel.start[0],
-        tunnel.end[1] - tunnel.start[1],
-    ];
+fn sd_capsule2(point: [f32; 2], start: [f32; 2], end: [f32; 2], radius: f32) -> f32 {
+    let pa = [point[0] - start[0], point[1] - start[1]];
+    let ba = [end[0] - start[0], end[1] - start[1]];
     let denom = (ba[0] * ba[0] + ba[1] * ba[1]).max(0.0001);
     let h = ((pa[0] * ba[0] + pa[1] * ba[1]) / denom).clamp(0.0, 1.0);
-    let closest = [tunnel.start[0] + ba[0] * h, tunnel.start[1] + ba[1] * h];
+    let closest = [start[0] + ba[0] * h, start[1] + ba[1] * h];
     let dx = point[0] - closest[0];
     let dy = point[1] - closest[1];
-    dx * dx + dy * dy <= (tunnel.radius + margin).powi(2)
+    (dx * dx + dy * dy).sqrt() - radius
 }
 
 #[derive(Debug, Clone)]

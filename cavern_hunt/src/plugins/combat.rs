@@ -585,13 +585,14 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
             continue;
         };
 
+        let previous_pos = [transform.x, transform.y];
         transform.x += velocity.x * dt;
         transform.y += velocity.y * dt;
         transform.yaw = velocity.y.atan2(velocity.x);
         let current_pos = [transform.x, transform.y];
         drop(transform);
 
-        if !layout.contains_point(current_pos, radius) {
+        if layout.segment_hits_wall(previous_pos, current_pos, radius) {
             despawns.push(entity);
             continue;
         }
@@ -699,17 +700,50 @@ pub(crate) fn constrained_move(
     radius: f32,
 ) -> [f32; 2] {
     let candidate = [current[0] + delta[0], current[1] + delta[1]];
-    if layout.contains_point(candidate, radius) {
+    if layout.walkable_signed_distance(candidate) <= -radius {
         return candidate;
     }
 
+    let normal = layout.walkable_normal(candidate);
+    let penetration = layout.walkable_signed_distance(candidate) + radius;
+    if (normal[0].abs() > f32::EPSILON || normal[1].abs() > f32::EPSILON) && penetration > 0.0 {
+        let pushed = [
+            candidate[0] - normal[0] * (penetration + 0.02),
+            candidate[1] - normal[1] * (penetration + 0.02),
+        ];
+        if layout.walkable_signed_distance(pushed) <= -radius {
+            return pushed;
+        }
+    }
+
+    let tangent = [-normal[1], normal[0]];
+    if tangent[0].abs() > f32::EPSILON || tangent[1].abs() > f32::EPSILON {
+        let slide_amount = delta[0] * tangent[0] + delta[1] * tangent[1];
+        let slide_candidate = [
+            current[0] + tangent[0] * slide_amount,
+            current[1] + tangent[1] * slide_amount,
+        ];
+        let slide_penetration = layout.walkable_signed_distance(slide_candidate) + radius;
+        if slide_penetration <= 0.0 {
+            return slide_candidate;
+        }
+
+        let slide_pushed = [
+            slide_candidate[0] - normal[0] * (slide_penetration + 0.02),
+            slide_candidate[1] - normal[1] * (slide_penetration + 0.02),
+        ];
+        if layout.walkable_signed_distance(slide_pushed) <= -radius {
+            return slide_pushed;
+        }
+    }
+
     let x_only = [current[0] + delta[0], current[1]];
-    if layout.contains_point(x_only, radius) {
+    if layout.walkable_signed_distance(x_only) <= -radius {
         return x_only;
     }
 
     let y_only = [current[0], current[1] + delta[1]];
-    if layout.contains_point(y_only, radius) {
+    if layout.walkable_signed_distance(y_only) <= -radius {
         return y_only;
     }
 
