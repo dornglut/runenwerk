@@ -899,6 +899,11 @@ impl RenderPassExecutor for CavernComputeExecutor {
                 frame.camera.fov_y_radians,
             ],
         };
+        let roof_clip_y = frame.camera.target[1] + 1.6;
+        let params = CavernWorldParamsRaw {
+            floor_rock_height: [frame.floor_height, frame.rock_height, roof_clip_y, 0.0],
+            ..params
+        };
         ctx.queue()
             .write_buffer(&pass.params_buffer, 0, bytemuck::bytes_of(&params));
 

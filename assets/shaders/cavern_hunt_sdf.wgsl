@@ -142,6 +142,13 @@ fn terrain_distance(p : vec3<f32>) -> f32 {
         }
     }
 
+    // Camera-driven roof cutaway: anything above this plane is treated as void.
+    // This keeps players readable under a fixed external camera.
+    let roof_cut_y = params.floor_rock_height.z;
+    let roof_void = roof_cut_y - p.y;
+    subtract_void = min(subtract_void, roof_void);
+    has_void = true;
+
     var solid = 1e9;
     if (has_add) {
         solid = add_solid;
