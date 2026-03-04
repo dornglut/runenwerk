@@ -11,8 +11,8 @@ use crate::plugins::{ai, combat, hud, loot, meta, net_sync, render_sdf, worldgen
 use anyhow::Result;
 use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::prelude::{
-    App, AuthorityRole, CoreSet, Plugin, PreUpdate, RenderPrepare, Res, ResMut,
-    SimulationProfileConfig, Startup, SystemConfigExt, Update, World, WorldMut,
+    App, AuthorityRole, CoreSet, Plugin, PreUpdate, Res, ResMut, SimulationProfileConfig, Startup,
+    SystemConfigExt, Update, World, WorldMut,
 };
 use engine::state::SessionRuntimeState;
 use engine_net::ServerSessionState;
@@ -71,8 +71,13 @@ impl Plugin for CavernHuntPlugin {
 impl Plugin for CavernHuntClientPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, client_setup_system);
-        app.add_systems(Update, render_sdf::update_camera_and_hud_system);
-        app.add_systems(RenderPrepare, render_sdf::build_sdf_world_frame_system);
+        app.add_systems(
+            Update,
+            (
+                render_sdf::update_camera_and_hud_system,
+                render_sdf::build_sdf_world_frame_system,
+            ),
+        );
     }
 }
 
