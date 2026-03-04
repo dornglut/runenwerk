@@ -32,6 +32,19 @@ Current profile IDs:
 - `balanced`
 - `quality`
 
+## Quick Start
+
+Use this for the active material path:
+
+```bash
+CAVERN_RENDER_MODE=material_graph CAVERN_MATERIAL_PROFILE=balanced scripts/run_cavern_client.sh
+```
+
+On successful load, logs should include:
+
+- `cavern material runtime ready`
+- non-zero counts for `graph_count` and `class_program_count`
+
 ## Runtime Modules
 
 - Graph schema/compiler: [material_graph.rs](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/cavern_hunt/src/domain/material_graph.rs)
@@ -74,6 +87,24 @@ Material graph outputs:
 
 The active profile sets defaults; env vars are applied as the final override layer.
 
+## Asset Authoring Rules
+
+The current RON schema is strict. Most common failure:
+
+- `ConstantVec3` must use tuple syntax, not array syntax.
+
+Correct:
+
+```ron
+kind: ConstantVec3(value: (0.42, 0.28, 0.20))
+```
+
+Incorrect:
+
+```ron
+kind: ConstantVec3(value: [0.42, 0.28, 0.20])
+```
+
 ## Safety/Fallback Rules
 
 - material graph compile failures keep the previous valid compiled program
@@ -86,3 +117,18 @@ The active profile sets defaults; env vars are applied as the final override lay
 - no normal-map perturb output integration yet
 - probe GI data population is scaffolded but not fully implemented
 - this is still a game-owned system, not an extracted engine-wide framework
+
+## Troubleshooting
+
+If the cave still looks grey:
+
+1. Check `logs/engine.log` for:
+   - `cavern material runtime ready`
+   - `graph_count`
+   - `class_program_count`
+2. If counts are `0`, fix parsing errors reported as:
+   - `cavern material diagnostic`
+3. Force fallback check:
+   - `CAVERN_RENDER_MODE=legacy`
+4. Return to material mode:
+   - `CAVERN_RENDER_MODE=material_graph`

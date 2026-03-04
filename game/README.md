@@ -8,6 +8,7 @@ Contains game-specific direction, design, and eventually game-owned content/runt
 
 - Start from [CAVERN_HUNT_GDD.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_GDD.md) for the current primary game concept.
 - Use [CAVERN_HUNT_MATERIALS.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_MATERIALS.md) for the material graph, PBR-lite, and GI rollout details.
+- Use [CAVERN_HUNT_PLAYTEST.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_PLAYTEST.md) for launch/test flow and troubleshooting.
 - Keep engine-agnostic gameplay vision here instead of mixing it into engine/plugin docs.
 - Treat this folder as the home for game-specific plans, progression rules, content direction, and run structure.
 

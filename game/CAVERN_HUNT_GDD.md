@@ -258,6 +258,12 @@ The current renderer direction combines:
 
 This keeps the look flexible and data-driven without requiring a heavy content pipeline.
 
+Current baseline profile target:
+
+- default look-dev profile: `balanced`
+- default runtime mode: `material_graph`
+- fallback mode for safety: `legacy`
+
 ## MVP Slice
 
 The first playable `Cavern Hunt` slice should include:

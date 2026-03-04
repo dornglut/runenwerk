@@ -28,6 +28,7 @@ The runtime migration is complete enough that the current path should be treated
   - fixed-camera SDF 3D rendering
   - asset-driven material graph shading (`RON`) with triplanar procedural surfaces
   - PBR-lite lighting and staged GI modes (`off`, `AO+bent normal`, probe scaffold)
+  - client/server tracing enabled by default with material diagnostics in `logs/engine.log`
   - 1-4 player dedicated-authority live sessions
   - AI fill companions
   - elite -> extraction run flow

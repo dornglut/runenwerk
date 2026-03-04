@@ -36,7 +36,7 @@
 
 - `game/README.md`
 - `game/CAVERN_HUNT_GDD.md` - current primary game concept and first game design document.
-- `game/CAVERN_HUNT_MATERIALS.md` - material graph assets, PBR-lite integration, GI staging, and runtime mode controls.
+- `game/CAVERN_HUNT_MATERIALS.md` - material graph assets, PBR-lite integration, GI staging, runtime mode controls, and troubleshooting.
 - `game/CAVERN_HUNT_PLAYTEST.md` - local/dev playtest bootstrap and friend-test instructions.
 
 ## Plugin Docs

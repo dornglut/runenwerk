@@ -73,6 +73,16 @@ These are optional for the local fallback path:
   - default: `http://api.localhost`
 - `AXIOM_DEVICE_ID`
   - client-only device identifier for local/Axiom testing
+- `CAVERN_RENDER_MODE`
+  - `legacy` or `material_graph`
+  - default: material profile setting (normally `material_graph`)
+- `CAVERN_MATERIAL_PROFILE`
+  - `performance`, `balanced`, or `quality`
+  - default: `balanced`
+- `CAVERN_GI_MODE`
+  - `off`, `ao`, `probes`
+- `CAVERN_GI_QUALITY`
+  - `low`, `medium`, `high`
 
 ## Optional Axiom-Backed Flow
 
@@ -117,3 +127,16 @@ For the current vertical slice, a successful run is:
 - the run uses one biome and one player archetype
 - reconnect assumes the same logical server stays alive
 - the local/dev playtest path is the primary supported path right now, not a full menu/lobby flow
+- occasional render graph warning may appear for UI composite binding during startup
+
+## Troubleshooting
+
+### Materials still look grey
+
+1. Ensure the client runs with:
+   - `CAVERN_RENDER_MODE=material_graph`
+   - `CAVERN_MATERIAL_PROFILE=balanced`
+2. Check `logs/engine.log` for:
+   - `cavern material runtime ready`
+   - non-zero `graph_count` and `class_program_count`
+3. Fix any `cavern material diagnostic` parse errors in material assets.

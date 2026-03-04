@@ -91,6 +91,7 @@ The important public runtime state now includes:
   - asset-driven material graph runtime (`RON` graphs + profile presets)
   - triplanar procedural floor/wall differentiation
   - PBR-lite shading and GI mode switches
+  - runtime material diagnostics via tracing (`logs/engine.log`)
   - live multi-client dedicated-authority play
   - reconnect inside active runs
   - AI fill companions
@@ -115,6 +116,7 @@ This is enough for a friend-testable vertical slice, but not yet enough for a la
 - material graphs are asset-authored only; there is no editor yet
 - `ProbeGi` is scaffolded as a mode but does not yet have full probe update/population logic
 - normal perturb output exists in graph/schema but is not yet fully integrated into the SDF normal path
+- UI composite pass binding warning still appears in some runs (`ui_composite->builtin_ui_composite`) and should be cleaned up in render graph wiring
 
 ### Multiplayer maturity gaps
 
@@ -145,5 +147,10 @@ Defined but not yet implemented as full runtime profiles:
 
 ## Verification
 
-The current update was validated with formatting and targeted static inspection.  
-Full workspace verification is currently blocked by an existing upstream `engine` scheduler API mismatch unrelated to the `cavern_hunt` material changes.
+The current baseline has been validated with:
+
+- `cargo check --workspace`
+- `cargo check -p grotto_client -p grotto_server -p cavern_hunt`
+- `cargo test -p cavern_hunt --lib`
+
+All of the above passed on `2026-03-04`.
