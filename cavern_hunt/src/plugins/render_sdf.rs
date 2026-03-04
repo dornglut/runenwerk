@@ -964,3 +964,34 @@ impl RenderPassExecutor for CavernComposeExecutor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::blocker_from_shape;
+    use crate::domain::GeometryPrimitiveShape3;
+
+    #[test]
+    fn blocker_from_shape_preserves_cylinder_dimensions() {
+        let shape = GeometryPrimitiveShape3::Cylinder {
+            center: [2.0, 1.5, -3.0],
+            radius: 1.25,
+            half_height: 2.0,
+        };
+        let blocker = blocker_from_shape(&shape).expect("cylinder should map to blocker");
+        assert_eq!(blocker.center, [2.0, 1.5, -3.0]);
+        assert_eq!(blocker.radius, 1.25);
+        assert_eq!(blocker.half_height, 2.0);
+    }
+
+    #[test]
+    fn blocker_from_shape_maps_box_to_cylindrical_approximation() {
+        let shape = GeometryPrimitiveShape3::Box {
+            center: [0.0, 2.0, 0.0],
+            half_extents: [1.0, 0.8, 1.6],
+        };
+        let blocker = blocker_from_shape(&shape).expect("box should map to blocker");
+        assert_eq!(blocker.center, [0.0, 2.0, 0.0]);
+        assert_eq!(blocker.radius, 1.6);
+        assert_eq!(blocker.half_height, 0.8);
+    }
+}
