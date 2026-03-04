@@ -1,5 +1,5 @@
 use crate::domain::{
-    CavernAimState, CavernCameraState, CavernLayout, CavernSdfAgent, CavernSdfWorldFrame, Chest,
+    CavernCameraState, CavernLayout, CavernSdfAgent, CavernSdfWorldFrame, Chest, ColliderRadius,
     EnemyKind, ExtractionZone, Health, LocalPlayerRef, LootDrop, Pickup, Player, PlayerCompanion,
     PlayerSpectator, Projectile, ProjectileVisualState, Transform2, is_active_player_entity,
 };
@@ -144,7 +144,6 @@ pub(crate) fn update_camera_and_hud_system(
     mut camera: ResMut<CavernCameraState>,
 ) -> Result<()> {
     let local_player_ref = world.resource::<LocalPlayerRef>()?;
-    let aim = world.resource::<CavernAimState>()?;
     let local_player = local_player_ref.entity.and_then(|entity| {
         world.get::<Transform2>(entity).copied().map(|transform| {
             let health = world
@@ -166,11 +165,6 @@ pub(crate) fn update_camera_and_hud_system(
 
     camera.target = [transform.x, 1.55, transform.y];
 
-    if input.left_mouse_down() || input.right_mouse_down() {
-        camera.target[0] += (aim.world_point[0] - transform.x) * 0.035;
-        camera.target[2] += (aim.world_point[1] - transform.y) * 0.035;
-    }
-
     Ok(())
 }
 
@@ -188,9 +182,14 @@ pub(crate) fn build_sdf_world_frame_system(
                 .get::<Health>(entity)
                 .copied()
                 .unwrap_or_else(|| Health::new(1.0));
+            let radius = world
+                .get::<ColliderRadius>(entity)
+                .copied()
+                .unwrap_or(ColliderRadius(0.45))
+                .0;
             frame.agents.push(CavernSdfAgent {
                 pos: [transform.x, transform.y],
-                radius: 0.58,
+                radius: radius,
                 health_ratio: health.ratio(),
                 team: if world.get::<PlayerCompanion>(entity).is_some() {
                     4
@@ -213,14 +212,19 @@ pub(crate) fn build_sdf_world_frame_system(
                 .get::<Health>(entity)
                 .copied()
                 .unwrap_or_else(|| Health::new(1.0));
+            let radius = world
+                .get::<ColliderRadius>(entity)
+                .copied()
+                .unwrap_or(match kind {
+                    EnemyKind::Swarmer => ColliderRadius(0.42),
+                    EnemyKind::Bruiser => ColliderRadius(0.78),
+                    EnemyKind::Spitter => ColliderRadius(0.58),
+                    EnemyKind::NestGuardian => ColliderRadius(0.92),
+                })
+                .0;
             frame.agents.push(CavernSdfAgent {
                 pos: [transform.x, transform.y],
-                radius: match kind {
-                    EnemyKind::Swarmer => 0.42,
-                    EnemyKind::Bruiser => 0.78,
-                    EnemyKind::Spitter => 0.58,
-                    EnemyKind::NestGuardian => 0.92,
-                },
+                radius,
                 health_ratio: health.ratio(),
                 team: 1,
                 kind: match kind {
@@ -324,7 +328,7 @@ pub(crate) fn project_mouse_to_world(
     let ndc_y = 1.0 - (cursor.1 / size.1) * 2.0;
     [
         (camera.target[0] + ndc_x * view_w).clamp(layout.world_bounds[0], layout.world_bounds[2]),
-        (camera.target[2] + ndc_y * view_h).clamp(layout.world_bounds[1], layout.world_bounds[3]),
+        (camera.target[2] - ndc_y * view_h).clamp(layout.world_bounds[1], layout.world_bounds[3]),
     ]
 }
 
