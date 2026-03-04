@@ -1,7 +1,7 @@
 use crate::domain::{
     AimTarget2, CavernAimState, CavernControlState, CavernLayout, CavernRunPhase, CavernRunState,
-    ColliderRadius, DashState, Faction, Health, LocalPlayerRef, Projectile, Transform2, Velocity2,
-    WeaponState,
+    CavernServerControlMap, ColliderRadius, DashState, Faction, Health, LocalPlayerRef, PlayerId,
+    Projectile, Transform2, Velocity2, WeaponState,
 };
 use crate::plugins::render_sdf;
 use anyhow::Result;
@@ -108,16 +108,22 @@ fn fixed_step_combat_system(mut world: WorldMut) -> Result<()> {
 
 fn run_authoritative_combat_step(world: &mut World, dt: f32) -> Result<()> {
     tick_cooldowns(world, dt);
-    move_local_player(world, dt)?;
-    fire_local_player_weapon(world)?;
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+    if matches!(authority, AuthorityRole::Server) {
+        step_server_controlled_players(world, dt)?;
+    } else {
+        step_local_controlled_player(world, dt)?;
+    }
     step_projectiles(world, dt, ProjectileStepMode::Authoritative)?;
     Ok(())
 }
 
 fn run_predicted_local_step(world: &mut World, dt: f32) -> Result<()> {
     tick_local_player_cooldowns(world, dt);
-    move_local_player(world, dt)?;
-    fire_local_player_weapon(world)?;
+    step_local_controlled_player(world, dt)?;
     step_projectiles(world, dt, ProjectileStepMode::PredictedLocal)?;
     Ok(())
 }
@@ -162,11 +168,7 @@ fn tick_cooldowns(world: &mut World, dt: f32) {
 }
 
 fn tick_local_player_cooldowns(world: &mut World, dt: f32) {
-    let Some(entity) = world
-        .resource::<LocalPlayerRef>()
-        .ok()
-        .and_then(|local| local.entity)
-    else {
+    let Some(entity) = resolve_local_player_entity(world) else {
         return;
     };
 
@@ -178,20 +180,60 @@ fn tick_local_player_cooldowns(world: &mut World, dt: f32) {
     }
 }
 
-fn move_local_player(world: &mut World, dt: f32) -> Result<()> {
+fn step_local_controlled_player(world: &mut World, dt: f32) -> Result<()> {
+    let Some(entity) = resolve_local_player_entity(world) else {
+        return Ok(());
+    };
+    let control = world.resource::<CavernControlState>()?.to_owned();
+    move_player_with_control(world, entity, control, dt)?;
+    fire_player_weapon_with_control(world, entity, control)
+}
+
+fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
+    let controls = world
+        .resource::<CavernServerControlMap>()
+        .cloned()
+        .unwrap_or_default();
+    let players = world
+        .query::<(Entity, &PlayerId)>()
+        .iter()
+        .map(|(entity, player_id)| (entity, player_id.0))
+        .collect::<Vec<_>>();
+    for (entity, player_id) in players {
+        let mut control = controls
+            .by_player_id
+            .get(&player_id)
+            .copied()
+            .unwrap_or_default();
+        if control.source_tick == SimulationTick::default() {
+            control.source_tick = world
+                .resource::<SimulationTick>()
+                .copied()
+                .unwrap_or_default();
+        }
+        move_player_with_control(world, entity, control, dt)?;
+        fire_player_weapon_with_control(world, entity, control)?;
+    }
+    Ok(())
+}
+
+fn move_player_with_control(
+    world: &mut World,
+    entity: Entity,
+    control: CavernControlState,
+    dt: f32,
+) -> Result<()> {
     let phase = world.resource::<CavernRunState>()?.phase;
     if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
         return Ok(());
     }
 
-    let local_entity = world.resource::<LocalPlayerRef>()?.entity;
-    let Some(entity) = local_entity else {
-        return Ok(());
-    };
-
-    let control = world.resource::<CavernControlState>()?.to_owned();
     let move_input = control.movement;
     let dash_pressed = control.dash_pressed;
+    if let Some(mut aim) = world.get_mut::<AimTarget2>(entity) {
+        aim.x = control.aim_world[0];
+        aim.y = control.aim_world[1];
+    }
 
     let layout = world.resource::<CavernLayout>()?.clone();
     let Some(health) = world.get::<Health>(entity).copied() else {
@@ -248,18 +290,17 @@ fn move_local_player(world: &mut World, dt: f32) -> Result<()> {
     Ok(())
 }
 
-fn fire_local_player_weapon(world: &mut World) -> Result<()> {
+fn fire_player_weapon_with_control(
+    world: &mut World,
+    entity: Entity,
+    control: CavernControlState,
+) -> Result<()> {
     let phase = world.resource::<CavernRunState>()?.phase;
     if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
         return Ok(());
     }
 
-    let local_entity = world.resource::<LocalPlayerRef>()?.entity;
-    let Some(entity) = local_entity else {
-        return Ok(());
-    };
-
-    let should_fire = world.resource::<CavernControlState>()?.fire_pressed;
+    let should_fire = control.fire_pressed;
     if !should_fire {
         return Ok(());
     }
@@ -309,6 +350,26 @@ fn fire_local_player_weapon(world: &mut World) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn resolve_local_player_entity(world: &World) -> Option<Entity> {
+    let local = world.resource::<LocalPlayerRef>().ok()?;
+    if let Some(entity) = local.entity
+        && world.get::<PlayerId>(entity).is_some()
+    {
+        return Some(entity);
+    }
+    if let Some(player_id) = local.player_id {
+        return world
+            .query::<(Entity, &PlayerId)>()
+            .iter()
+            .find_map(|(entity, id)| (id.0 == player_id).then_some(entity));
+    }
+    world
+        .query::<(Entity, &PlayerId)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .next()
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -497,11 +558,15 @@ fn distance_squared(a: [f32; 2], b: [f32; 2]) -> f32 {
 mod tests {
     use super::{constrained_move, update_local_aim};
     use crate::domain::{
-        CavernAimState, CavernCameraState, CavernLayout, CavernMetaProfile, CavernRunConfig,
-        CavernRunState, LocalPlayerRef, LootTableRegistry, SpawnDirector,
+        CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
+        CavernRunConfig, CavernRunState, CavernServerControlMap, LocalPlayerRef, LootTableRegistry,
+        SpawnDirector,
     };
     use crate::plugins::worldgen;
-    use engine::prelude::{InputState, WindowState, World};
+    use engine::prelude::{
+        AuthorityRole, InputState, SimulationProfile, SimulationProfileConfig, Time, WindowState,
+        World,
+    };
 
     #[test]
     fn constrained_move_stays_inside_layout() {
@@ -542,5 +607,61 @@ mod tests {
                 .unwrap()
                 .contains_point(aim.world_point, 0.0)
         );
+    }
+
+    #[test]
+    fn server_control_map_moves_targeted_player() {
+        let mut world = World::new();
+        world.insert_resource(CavernRunConfig::default());
+        world.insert_resource(CavernRunState::default());
+        world.insert_resource(CavernLayout::default());
+        world.insert_resource(SpawnDirector::default());
+        world.insert_resource(LootTableRegistry::default());
+        world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(LocalPlayerRef::default());
+        world.insert_resource(CavernCameraState::default());
+        world.insert_resource(CavernAimState::default());
+        world.insert_resource(CavernServerControlMap::default());
+        world.insert_resource(Time::default());
+        world.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: AuthorityRole::Server,
+            determinism: engine::prelude::DeterminismLevel::Validated,
+        });
+        worldgen::initialize_run_world(&mut world, false).unwrap();
+        let players = world
+            .query::<(engine::prelude::Entity, &crate::domain::PlayerId)>()
+            .iter()
+            .map(|(entity, player_id)| (entity, player_id.0))
+            .collect::<Vec<_>>();
+        let (_, target_id) = players[1];
+        let target_entity = players[1].0;
+        let before = world
+            .get::<crate::domain::Transform2>(target_entity)
+            .copied()
+            .unwrap();
+        world
+            .resource_mut::<CavernServerControlMap>()
+            .unwrap()
+            .by_player_id
+            .insert(
+                target_id,
+                CavernControlState {
+                    movement: [1.0, 0.0],
+                    aim_world: [before.x + 10.0, before.y],
+                    fire_pressed: false,
+                    dash_pressed: false,
+                    interact_pressed: false,
+                    source_tick: engine::prelude::SimulationTick(1),
+                },
+            );
+
+        super::run_authoritative_combat_step(&mut world, 1.0 / 60.0).unwrap();
+
+        let after = world
+            .get::<crate::domain::Transform2>(target_entity)
+            .copied()
+            .unwrap();
+        assert!(after.x > before.x);
     }
 }

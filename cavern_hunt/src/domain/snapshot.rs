@@ -444,12 +444,14 @@ pub fn restore_cavern_run_snapshot(
     world: &mut World,
     snapshot: &CavernRunSnapshotV1,
 ) -> Result<()> {
-    let previous_local_player_id = world
-        .resource::<LocalPlayerRef>()
-        .ok()
-        .and_then(|local| local.entity)
-        .and_then(|entity| world.get::<PlayerId>(entity).copied())
-        .map(|player_id| player_id.0);
+    let previous_local_player_id = world.resource::<LocalPlayerRef>().ok().and_then(|local| {
+        local.player_id.or_else(|| {
+            local
+                .entity
+                .and_then(|entity| world.get::<PlayerId>(entity).copied())
+                .map(|player_id| player_id.0)
+        })
+    });
 
     clear_cavern_run_entities(world);
     world.insert_resource(snapshot.layout.layout.clone());
@@ -604,7 +606,12 @@ pub fn restore_cavern_run_snapshot(
         }
     }
 
+    let restored_local_player_id = restored_local_entity
+        .and_then(|entity| world.get::<PlayerId>(entity).copied())
+        .map(|player_id| player_id.0)
+        .or(previous_local_player_id);
     if let Ok(mut local_player) = world.resource_mut::<LocalPlayerRef>() {
+        local_player.player_id = restored_local_player_id;
         local_player.entity = restored_local_entity;
     }
 

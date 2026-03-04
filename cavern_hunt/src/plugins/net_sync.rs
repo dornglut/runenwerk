@@ -1,7 +1,7 @@
 use crate::domain::{
     CavernControlState, CavernPredictedFrame, CavernPredictionState, CavernRunDeltaV1,
-    CavernRunSnapshotV1, apply_cavern_run_delta, build_cavern_run_delta,
-    capture_cavern_run_snapshot, restore_cavern_run_snapshot,
+    CavernRunSnapshotV1, CavernServerControlMap, PlayerId, apply_cavern_run_delta,
+    build_cavern_run_delta, capture_cavern_run_snapshot, restore_cavern_run_snapshot,
 };
 use anyhow::Result;
 use engine::prelude::{
@@ -186,13 +186,26 @@ fn server_capture_control_input(world: &mut World) -> Result<()> {
         }
     }
 
+    let target_player_id = world
+        .query::<(engine::prelude::Entity, &PlayerId)>()
+        .iter()
+        .map(|(_, player_id)| player_id.0)
+        .next();
+    let control_state = CavernControlState {
+        movement,
+        aim_world,
+        fire_pressed,
+        dash_pressed,
+        interact_pressed,
+        source_tick: frame.tick,
+    };
+    if let Some(player_id) = target_player_id
+        && let Ok(mut controls) = world.resource_mut::<CavernServerControlMap>()
+    {
+        controls.by_player_id.insert(player_id, control_state);
+    }
     if let Ok(mut control) = world.resource_mut::<CavernControlState>() {
-        control.movement = movement;
-        control.aim_world = aim_world;
-        control.fire_pressed = fire_pressed;
-        control.dash_pressed = dash_pressed;
-        control.interact_pressed = interact_pressed;
-        control.source_tick = frame.tick;
+        *control = control_state;
     }
     Ok(())
 }

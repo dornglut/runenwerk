@@ -2,6 +2,7 @@ use crate::domain::loot::EnemyDropTable;
 use crate::domain::worldgen::{CavernLayout, CavernRoom, CavernTunnel};
 use engine::prelude::{Entity, SimulationTick};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CavernSeed(pub u64);
@@ -121,6 +122,7 @@ impl Default for CavernMetaProfile {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LocalPlayerRef {
+    pub player_id: Option<u32>,
     pub entity: Option<Entity>,
 }
 
@@ -192,6 +194,11 @@ pub struct CavernPredictionState {
     pub pending_frames: Vec<CavernPredictedFrame>,
     pub corrections_applied: u64,
     pub last_authoritative_tick: SimulationTick,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CavernServerControlMap {
+    pub by_player_id: BTreeMap<u32, CavernControlState>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]

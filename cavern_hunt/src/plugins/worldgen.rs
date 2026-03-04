@@ -110,6 +110,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
             let mut local = world
                 .resource_mut::<LocalPlayerRef>()
                 .expect("local player resource initialized");
+            local.player_id = Some(index as u32 + 1);
             local.entity = Some(entity);
         }
     }
