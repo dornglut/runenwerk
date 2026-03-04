@@ -5,27 +5,12 @@ struct WorldParams {
     _pad1 : vec2<f32>,
     world_max : vec2<f32>,
     _pad2 : vec2<f32>,
-    room_count : u32,
-    tunnel_count : u32,
-    blocker_count : u32,
+    primitive_count : u32,
     agent_count : u32,
+    _pad3 : vec2<u32>,
     floor_rock_height : vec4<f32>,
     camera_target_time : vec4<f32>,
     camera_orbit : vec4<f32>,
-};
-
-struct Room {
-    center : vec2<f32>,
-    radii : vec2<f32>,
-    role : u32,
-    _pad0 : vec3<u32>,
-};
-
-struct Tunnel {
-    start : vec2<f32>,
-    end : vec2<f32>,
-    radius : f32,
-    _pad0 : f32,
 };
 
 struct Agent {
@@ -37,12 +22,27 @@ struct Agent {
     _pad0 : vec2<u32>,
 };
 
-struct Blocker {
-    center : vec3<f32>,
-    radius : f32,
-    half_height : f32,
-    _pad0 : vec3<f32>,
+struct GeometryPrimitive {
+    shape_kind : u32,
+    op_kind : u32,
+    _pad0 : vec2<u32>,
+    p0 : vec4<f32>,
+    p1 : vec4<f32>,
+    p2 : vec4<f32>,
 };
+
+const SHAPE_SPHERE : u32 = 0u;
+const SHAPE_ELLIPSOID : u32 = 1u;
+const SHAPE_CAPSULE : u32 = 2u;
+const SHAPE_BOX : u32 = 3u;
+const SHAPE_ROUNDED_BOX : u32 = 4u;
+const SHAPE_CYLINDER : u32 = 5u;
+
+const OP_ADD_SOLID : u32 = 0u;
+const OP_SUBTRACT_VOID : u32 = 1u;
+const OP_MASK_WALKABLE : u32 = 2u;
+const OP_BLOCKER : u32 = 3u;
+const OP_HAZARD : u32 = 4u;
 
 @group(0) @binding(0)
 var output_tex : texture_storage_2d<rgba8unorm, write>;
@@ -51,33 +51,30 @@ var output_tex : texture_storage_2d<rgba8unorm, write>;
 var<uniform> params : WorldParams;
 
 @group(0) @binding(2)
-var<storage, read> rooms : array<Room>;
+var<storage, read> primitives : array<GeometryPrimitive>;
 @group(0) @binding(3)
-var<storage, read> tunnels : array<Tunnel>;
-@group(0) @binding(4)
 var<storage, read> agents : array<Agent>;
-@group(0) @binding(5)
-var<storage, read> blockers : array<Blocker>;
 
-fn sd_box2(p: vec2<f32>, b: vec2<f32>) -> f32 {
-    let q = abs(p) - b;
-    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0);
-}
-
-fn sd_ellipse2(p: vec2<f32>, r: vec2<f32>) -> f32 {
-    let q = p / max(r, vec2<f32>(0.001, 0.001));
-    return (length(q) - 1.0) * min(r.x, r.y);
-}
-
-fn sd_capsule2(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
-    let pa = p - a;
-    let ba = b - a;
-    let h = clamp(dot(pa, ba) / max(dot(ba, ba), 0.0001), 0.0, 1.0);
-    return length(pa - ba * h) - r;
+fn sd_box3(p: vec3<f32>, center: vec3<f32>, half_extents: vec3<f32>) -> f32 {
+    let q = abs(p - center) - half_extents;
+    return length(max(q, vec3<f32>(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
 fn sd_sphere(p: vec3<f32>, r: f32) -> f32 {
     return length(p) - r;
+}
+
+fn sd_ellipsoid(p: vec3<f32>, center: vec3<f32>, radii: vec3<f32>) -> f32 {
+    let safe_radii = max(radii, vec3<f32>(0.001));
+    let q = (p - center) / safe_radii;
+    return (length(q) - 1.0) * min(safe_radii.x, min(safe_radii.y, safe_radii.z));
+}
+
+fn sd_capsule3(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
+    let pa = p - a;
+    let ba = b - a;
+    let h = clamp(dot(pa, ba) / max(dot(ba, ba), 0.0001), 0.0, 1.0);
+    return length(pa - ba * h) - r;
 }
 
 fn sd_cylinder_y(p: vec3<f32>, center: vec3<f32>, radius: f32, half_height: f32) -> f32 {
@@ -88,62 +85,94 @@ fn sd_cylinder_y(p: vec3<f32>, center: vec3<f32>, radius: f32, half_height: f32)
     return min(max(radial, y), 0.0) + outside;
 }
 
-fn op_smooth_union(a: f32, b: f32, k: f32) -> f32 {
-    let h = clamp(0.5 + 0.5 * (b - a) / max(k, 0.0001), 0.0, 1.0);
-    return mix(b, a, h) - k * h * (1.0 - h);
+fn sd_rounded_box(p: vec3<f32>, center: vec3<f32>, half_extents: vec3<f32>, radius: f32) -> f32 {
+    return sd_box3(p, center, half_extents) - radius;
 }
 
-fn sd_extruded(d2: f32, y: f32, half_h: f32) -> f32 {
-    let w = vec2<f32>(d2, abs(y) - half_h);
-    return min(max(w.x, w.y), 0.0) + length(max(w, vec2<f32>(0.0)));
-}
-
-fn cave_footprint(p: vec2<f32>) -> f32 {
-    var d = 1e9;
-    for (var i = 0u; i < params.room_count; i = i + 1u) {
-        d = min(d, sd_ellipse2(p - rooms[i].center, rooms[i].radii));
+fn primitive_distance(primitive : GeometryPrimitive, p : vec3<f32>) -> f32 {
+    let center = primitive.p0.xyz;
+    let shape = primitive.shape_kind;
+    if (shape == SHAPE_SPHERE) {
+        return sd_sphere(p - center, primitive.p0.w);
     }
-    for (var i = 0u; i < params.tunnel_count; i = i + 1u) {
-        d = min(d, sd_capsule2(p, tunnels[i].start, tunnels[i].end, tunnels[i].radius));
+    if (shape == SHAPE_ELLIPSOID) {
+        return sd_ellipsoid(p, center, primitive.p1.xyz);
     }
-    return d;
-}
-
-fn rock_distance(p: vec3<f32>) -> f32 {
-    let world_center = (params.world_min + params.world_max) * 0.5;
-    let world_half = (params.world_max - params.world_min) * 0.5;
-    let world_sdf = sd_box2(p.xz - world_center, world_half);
-    let cave_sdf = cave_footprint(p.xz);
-    let rock_footprint = max(world_sdf, -cave_sdf);
-    let rock_height = max(params.floor_rock_height.y, 0.5);
-    return sd_extruded(rock_footprint, p.y - rock_height * 0.5, rock_height * 0.5);
-}
-
-fn floor_distance(p: vec3<f32>) -> f32 {
-    let floor_half_h = 0.04;
-    let cave_sdf = cave_footprint(p.xz);
-    return sd_extruded(cave_sdf, p.y - params.floor_rock_height.x, floor_half_h);
-}
-
-fn blockers_distance(p: vec3<f32>) -> f32 {
-    var d = 1e9;
-    for (var i = 0u; i < params.blocker_count; i = i + 1u) {
-        d = min(
-            d,
-            sd_cylinder_y(
-                p,
-                blockers[i].center,
-                blockers[i].radius,
-                blockers[i].half_height,
-            ),
-        );
+    if (shape == SHAPE_CAPSULE) {
+        return sd_capsule3(p, primitive.p0.xyz, primitive.p1.xyz, primitive.p0.w);
     }
-    return d;
+    if (shape == SHAPE_BOX) {
+        return sd_box3(p, center, primitive.p1.xyz);
+    }
+    if (shape == SHAPE_ROUNDED_BOX) {
+        return sd_rounded_box(p, center, primitive.p1.xyz, primitive.p0.w);
+    }
+    if (shape == SHAPE_CYLINDER) {
+        return sd_cylinder_y(p, center, primitive.p0.w, primitive.p1.x);
+    }
+    return 1e9;
+}
+
+fn terrain_distance(p : vec3<f32>) -> f32 {
+    var add_solid = 1e9;
+    var subtract_void = 1e9;
+    var blockers = 1e9;
+    var has_add = false;
+    var has_void = false;
+    var has_blocker = false;
+
+    for (var i = 0u; i < params.primitive_count; i = i + 1u) {
+        let primitive = primitives[i];
+        let d = primitive_distance(primitive, p);
+        let op = primitive.op_kind;
+        if (op == OP_ADD_SOLID) {
+            add_solid = min(add_solid, d);
+            has_add = true;
+            continue;
+        }
+        if (op == OP_SUBTRACT_VOID || op == OP_MASK_WALKABLE) {
+            subtract_void = min(subtract_void, d);
+            has_void = true;
+            continue;
+        }
+        if (op == OP_BLOCKER || op == OP_HAZARD) {
+            blockers = min(blockers, d);
+            has_blocker = true;
+            continue;
+        }
+    }
+
+    var solid = 1e9;
+    if (has_add) {
+        solid = add_solid;
+    }
+    if (has_void) {
+        let carved = -subtract_void;
+        if (has_add) {
+            solid = max(solid, carved);
+        } else {
+            solid = carved;
+        }
+    }
+    if (has_blocker) {
+        solid = min(solid, blockers);
+    }
+    return solid;
+}
+
+fn blocker_surface_distance(p : vec3<f32>) -> f32 {
+    var blockers = 1e9;
+    for (var i = 0u; i < params.primitive_count; i = i + 1u) {
+        let primitive = primitives[i];
+        if (primitive.op_kind == OP_BLOCKER) {
+            blockers = min(blockers, primitive_distance(primitive, p));
+        }
+    }
+    return blockers;
 }
 
 fn scene_distance(p: vec3<f32>) -> f32 {
-    var scene = min(rock_distance(p), floor_distance(p));
-    scene = min(scene, blockers_distance(p));
+    var scene = terrain_distance(p);
     for (var i = 0u; i < params.agent_count; i = i + 1u) {
         let h = select(0.45, 0.18, agents[i].kind == 5u || agents[i].kind == 6u);
         let d = sd_sphere(
@@ -169,21 +198,15 @@ fn sky_color(rd: vec3<f32>) -> vec3<f32> {
 }
 
 fn material_color(p: vec3<f32>) -> vec3<f32> {
-    let rock_d = rock_distance(p);
-    let floor_d = floor_distance(p);
-    let blocker_d = blockers_distance(p);
-    var best = floor_d;
-    var color = vec3<f32>(0.06, 0.07, 0.08);
-
-    if (rock_d < best) {
-        best = rock_d;
-        let cave_edge = clamp(-cave_footprint(p.xz) * 0.18, 0.0, 1.0);
-        color = mix(vec3<f32>(0.11, 0.12, 0.13), vec3<f32>(0.19, 0.22, 0.24), cave_edge);
-    }
-
-    if (blocker_d < best) {
+    var best = terrain_distance(p);
+    var color = vec3<f32>(0.12, 0.14, 0.16);
+    let blocker_d = blocker_surface_distance(p);
+    if (blocker_d < best + 0.02) {
         best = blocker_d;
         color = vec3<f32>(0.24, 0.21, 0.19);
+    } else {
+        let edge = clamp(exp(-abs(best) * 0.6), 0.0, 1.0);
+        color = mix(vec3<f32>(0.10, 0.12, 0.14), vec3<f32>(0.20, 0.23, 0.26), edge);
     }
 
     for (var i = 0u; i < params.agent_count; i = i + 1u) {

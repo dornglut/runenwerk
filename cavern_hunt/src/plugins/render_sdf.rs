@@ -1,9 +1,9 @@
 use crate::domain::{
-    CavernCameraState, CavernGeometryGraph, CavernLayout, CavernSdfAgent, CavernSdfBlocker,
-    CavernSdfWorldFrame, CavernTopology, CavernTunnel, Chest, ColliderRadius, EnemyKind,
-    ExtractionZone, GeometryOp, GeometryPrimitiveShape3, Health, LocalPlayerRef, LootDrop, Pickup,
-    Player, PlayerCompanion, PlayerSpectator, Projectile, ProjectileVisualState, RoomId, RoomRole,
-    Transform2, is_active_player_entity,
+    CavernCameraState, CavernGeometryGraph, CavernLayout, CavernSdfAgent,
+    CavernSdfGeometryPrimitive, CavernSdfWorldFrame, CavernTopology, CavernTunnel, Chest,
+    ColliderRadius, EnemyKind, ExtractionZone, GeometryOp, GeometryPrimitiveShape3, Health,
+    LocalPlayerRef, LootDrop, Pickup, Player, PlayerCompanion, PlayerSpectator, Projectile,
+    ProjectileVisualState, RoomId, RoomRole, Transform2, is_active_player_entity,
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
@@ -34,9 +34,7 @@ const COMPOSE_EXECUTOR_ID: &str = "cavern_hunt.compose";
 const SHADER_PATH: &str = "assets/shaders/cavern_hunt_sdf.wgsl";
 const COMPOSE_SHADER: &str = include_str!("../../../assets/shaders/world_compose_fullscreen.wgsl");
 const COMPUTE_SHADER: &str = include_str!("../../../assets/shaders/cavern_hunt_sdf.wgsl");
-const MAX_ROOMS: usize = 16;
-const MAX_TUNNELS: usize = 24;
-const MAX_BLOCKERS: usize = 64;
+const MAX_GEOMETRY_PRIMITIVES: usize = 384;
 const MAX_AGENTS: usize = 96;
 const CLEAR_COLOR: Color = Color {
     r: 0.01,
@@ -54,31 +52,12 @@ struct CavernWorldParamsRaw {
     _pad1: [f32; 2],
     world_max: [f32; 2],
     _pad2: [f32; 2],
-    room_count: u32,
-    tunnel_count: u32,
-    blocker_count: u32,
+    primitive_count: u32,
     agent_count: u32,
+    _pad3: [u32; 2],
     floor_rock_height: [f32; 4],
     camera_target_time: [f32; 4],
     camera_orbit: [f32; 4],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct CavernRoomRaw {
-    center: [f32; 2],
-    radii: [f32; 2],
-    role: u32,
-    _pad0: [u32; 3],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct CavernTunnelRaw {
-    start: [f32; 2],
-    end: [f32; 2],
-    radius: f32,
-    _pad0: f32,
 }
 
 #[repr(C)]
@@ -94,11 +73,13 @@ struct CavernAgentRaw {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct CavernBlockerRaw {
-    center: [f32; 3],
-    radius: f32,
-    half_height: f32,
-    _pad0: [f32; 3],
+struct CavernGeometryPrimitiveRaw {
+    shape_kind: u32,
+    op_kind: u32,
+    _pad0: [u32; 2],
+    p0: [f32; 4],
+    p1: [f32; 4],
+    p2: [f32; 4],
 }
 
 #[derive(Default)]
@@ -110,9 +91,7 @@ struct CavernGpuPass {
     surface_format: TextureFormat,
     size: (u32, u32),
     params_buffer: Buffer,
-    rooms_buffer: Buffer,
-    tunnels_buffer: Buffer,
-    blockers_buffer: Buffer,
+    primitives_buffer: Buffer,
     agents_buffer: Buffer,
     compute_bind_group: BindGroup,
     compose_bind_group: BindGroup,
@@ -220,18 +199,13 @@ pub(crate) fn build_sdf_world_frame_system(
     frame.rooms = render_rooms;
     frame.tunnels = render_tunnels;
     frame.blockers.clear();
+    frame.geometry_primitives.clear();
     frame.agents.clear();
 
     if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
-        for primitive in graph
-            .primitives
-            .iter()
-            .filter(|primitive| primitive.enabled && primitive.op == GeometryOp::Blocker)
-        {
-            if let Some(blocker) = blocker_from_shape(&primitive.shape) {
-                frame.blockers.push(blocker);
-            }
-        }
+        frame.geometry_primitives = geometry_primitives_from_graph(&graph);
+    } else {
+        frame.geometry_primitives = geometry_primitives_from_layout(&fallback_layout);
     }
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
@@ -450,64 +424,163 @@ fn derive_render_footprint_from_geometry_graph(
     (rooms, tunnels)
 }
 
-fn blocker_from_shape(shape: &GeometryPrimitiveShape3) -> Option<CavernSdfBlocker> {
+const SHAPE_SPHERE: u32 = 0;
+const SHAPE_ELLIPSOID: u32 = 1;
+const SHAPE_CAPSULE: u32 = 2;
+const SHAPE_BOX: u32 = 3;
+const SHAPE_ROUNDED_BOX: u32 = 4;
+const SHAPE_CYLINDER: u32 = 5;
+
+const OP_ADD_SOLID: u32 = 0;
+const OP_SUBTRACT_VOID: u32 = 1;
+const OP_MASK_WALKABLE: u32 = 2;
+const OP_BLOCKER: u32 = 3;
+const OP_HAZARD: u32 = 4;
+
+fn op_kind(op: GeometryOp) -> u32 {
+    match op {
+        GeometryOp::AddSolid => OP_ADD_SOLID,
+        GeometryOp::SubtractVoid => OP_SUBTRACT_VOID,
+        GeometryOp::MaskWalkable => OP_MASK_WALKABLE,
+        GeometryOp::Blocker => OP_BLOCKER,
+        GeometryOp::HazardVolume => OP_HAZARD,
+    }
+}
+
+fn geometry_primitives_from_graph(graph: &CavernGeometryGraph) -> Vec<CavernSdfGeometryPrimitive> {
+    let mut out = Vec::with_capacity(graph.primitives.len());
+    for primitive in graph
+        .primitives
+        .iter()
+        .filter(|primitive| primitive.enabled)
+    {
+        append_shape_primitive(&mut out, primitive.op, &primitive.shape);
+    }
+    out
+}
+
+fn geometry_primitives_from_layout(layout: &CavernLayout) -> Vec<CavernSdfGeometryPrimitive> {
+    let mut out = Vec::with_capacity(layout.rooms.len() + layout.connections.len() + 1);
+    let center = [
+        (layout.world_bounds[0] + layout.world_bounds[2]) * 0.5,
+        2.2,
+        (layout.world_bounds[1] + layout.world_bounds[3]) * 0.5,
+    ];
+    let half_extents = [
+        (layout.world_bounds[2] - layout.world_bounds[0]) * 0.5,
+        5.8,
+        (layout.world_bounds[3] - layout.world_bounds[1]) * 0.5,
+    ];
+    out.push(CavernSdfGeometryPrimitive {
+        shape_kind: SHAPE_BOX,
+        op_kind: OP_ADD_SOLID,
+        p0: [center[0], center[1], center[2], 0.0],
+        p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
+        p2: [0.0; 4],
+    });
+    for room in &layout.rooms {
+        out.push(CavernSdfGeometryPrimitive {
+            shape_kind: SHAPE_ELLIPSOID,
+            op_kind: OP_SUBTRACT_VOID,
+            p0: [room.center[0], 2.4, room.center[1], 0.0],
+            p1: [room.radii[0], 2.2, room.radii[1], 0.0],
+            p2: [0.0; 4],
+        });
+    }
+    for tunnel in &layout.connections {
+        out.push(CavernSdfGeometryPrimitive {
+            shape_kind: SHAPE_CAPSULE,
+            op_kind: OP_SUBTRACT_VOID,
+            p0: [tunnel.start[0], 2.2, tunnel.start[1], tunnel.radius],
+            p1: [tunnel.end[0], 2.2, tunnel.end[1], 0.0],
+            p2: [0.0; 4],
+        });
+    }
+    out
+}
+
+fn append_shape_primitive(
+    out: &mut Vec<CavernSdfGeometryPrimitive>,
+    op: GeometryOp,
+    shape: &GeometryPrimitiveShape3,
+) {
+    let op_kind = op_kind(op);
     match shape {
-        GeometryPrimitiveShape3::Cylinder {
-            center,
-            radius,
-            half_height,
-        } => Some(CavernSdfBlocker {
-            center: *center,
-            radius: *radius,
-            half_height: *half_height,
-        }),
-        GeometryPrimitiveShape3::Sphere { center, radius } => Some(CavernSdfBlocker {
-            center: *center,
-            radius: *radius,
-            half_height: *radius,
-        }),
+        GeometryPrimitiveShape3::Sphere { center, radius } => {
+            out.push(CavernSdfGeometryPrimitive {
+                shape_kind: SHAPE_SPHERE,
+                op_kind,
+                p0: [center[0], center[1], center[2], *radius],
+                p1: [0.0; 4],
+                p2: [0.0; 4],
+            });
+        }
+        GeometryPrimitiveShape3::Ellipsoid { center, radii } => {
+            out.push(CavernSdfGeometryPrimitive {
+                shape_kind: SHAPE_ELLIPSOID,
+                op_kind,
+                p0: [center[0], center[1], center[2], 0.0],
+                p1: [radii[0], radii[1], radii[2], 0.0],
+                p2: [0.0; 4],
+            });
+        }
         GeometryPrimitiveShape3::Capsule { start, end, radius } => {
-            let center = [
-                (start[0] + end[0]) * 0.5,
-                (start[1] + end[1]) * 0.5,
-                (start[2] + end[2]) * 0.5,
-            ];
-            let half_height = ((start[1] - end[1]).abs() * 0.5 + *radius).max(0.1);
-            Some(CavernSdfBlocker {
-                center,
-                radius: *radius,
-                half_height,
-            })
+            out.push(CavernSdfGeometryPrimitive {
+                shape_kind: SHAPE_CAPSULE,
+                op_kind,
+                p0: [start[0], start[1], start[2], *radius],
+                p1: [end[0], end[1], end[2], 0.0],
+                p2: [0.0; 4],
+            });
         }
         GeometryPrimitiveShape3::Box {
             center,
             half_extents,
-        } => Some(CavernSdfBlocker {
-            center: *center,
-            radius: half_extents[0].max(half_extents[2]).max(0.1),
-            half_height: half_extents[1].max(0.1),
-        }),
+        } => {
+            out.push(CavernSdfGeometryPrimitive {
+                shape_kind: SHAPE_BOX,
+                op_kind,
+                p0: [center[0], center[1], center[2], 0.0],
+                p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
+                p2: [0.0; 4],
+            });
+        }
         GeometryPrimitiveShape3::RoundedBox {
             center,
             half_extents,
             radius,
-        } => Some(CavernSdfBlocker {
-            center: *center,
-            radius: (half_extents[0].max(half_extents[2]) + *radius).max(0.1),
-            half_height: (half_extents[1] + *radius).max(0.1),
-        }),
-        GeometryPrimitiveShape3::Ellipsoid { center, radii } => Some(CavernSdfBlocker {
-            center: *center,
-            radius: radii[0].max(radii[2]).max(0.1),
-            half_height: radii[1].max(0.1),
-        }),
+        } => {
+            out.push(CavernSdfGeometryPrimitive {
+                shape_kind: SHAPE_ROUNDED_BOX,
+                op_kind,
+                p0: [center[0], center[1], center[2], *radius],
+                p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
+                p2: [0.0; 4],
+            });
+        }
+        GeometryPrimitiveShape3::Cylinder {
+            center,
+            radius,
+            half_height,
+        } => {
+            out.push(CavernSdfGeometryPrimitive {
+                shape_kind: SHAPE_CYLINDER,
+                op_kind,
+                p0: [center[0], center[1], center[2], *radius],
+                p1: [*half_height, 0.0, 0.0, 0.0],
+                p2: [0.0; 4],
+            });
+        }
         GeometryPrimitiveShape3::TunnelSplineCapsuleChain { points, radius } => {
-            let center = points.first().copied()?;
-            Some(CavernSdfBlocker {
-                center,
-                radius: *radius,
-                half_height: *radius,
-            })
+            for segment in points.windows(2) {
+                out.push(CavernSdfGeometryPrimitive {
+                    shape_kind: SHAPE_CAPSULE,
+                    op_kind,
+                    p0: [segment[0][0], segment[0][1], segment[0][2], *radius],
+                    p1: [segment[1][0], segment[1][1], segment[1][2], 0.0],
+                    p2: [0.0; 4],
+                });
+            }
         }
     }
 }
@@ -536,9 +609,7 @@ pub(crate) fn project_mouse_to_world(
 fn build_feature_graph_spec() -> Result<RenderFeatureGraphSpec> {
     let mut builder = RenderFeatureGraphSpec::builder(FEATURE_ID)
         .resource("cavern.params")
-        .resource("cavern.rooms")
-        .resource("cavern.tunnels")
-        .resource("cavern.blockers")
+        .resource("cavern.primitives")
         .resource("cavern.agents")
         .resource("cavern.color")
         .resource("surface.color")
@@ -551,13 +622,7 @@ fn build_feature_graph_spec() -> Result<RenderFeatureGraphSpec> {
         .compute_pass("cavern_hunt.compute")
         .pipeline("cavern_hunt.compute.raymarch")
         .executor(COMPUTE_EXECUTOR_ID)
-        .reads([
-            "cavern.params",
-            "cavern.rooms",
-            "cavern.tunnels",
-            "cavern.blockers",
-            "cavern.agents",
-        ])
+        .reads(["cavern.params", "cavern.primitives", "cavern.agents"])
         .writes(["cavern.color"])
         .finish();
     builder = builder
@@ -599,21 +664,9 @@ fn build_gpu_pass(
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let rooms_buffer = device.create_buffer(&BufferDescriptor {
-        label: Some("cavern_hunt_rooms_buffer"),
-        size: (std::mem::size_of::<CavernRoomRaw>() * MAX_ROOMS) as u64,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-    let tunnels_buffer = device.create_buffer(&BufferDescriptor {
-        label: Some("cavern_hunt_tunnels_buffer"),
-        size: (std::mem::size_of::<CavernTunnelRaw>() * MAX_TUNNELS) as u64,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-    let blockers_buffer = device.create_buffer(&BufferDescriptor {
-        label: Some("cavern_hunt_blockers_buffer"),
-        size: (std::mem::size_of::<CavernBlockerRaw>() * MAX_BLOCKERS) as u64,
+    let primitives_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("cavern_hunt_geometry_primitives_buffer"),
+        size: (std::mem::size_of::<CavernGeometryPrimitiveRaw>() * MAX_GEOMETRY_PRIMITIVES) as u64,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -693,26 +746,6 @@ fn build_gpu_pass(
                 },
                 count: None,
             },
-            BindGroupLayoutEntry {
-                binding: 4,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 5,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
         ],
     });
     let compute_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -729,19 +762,11 @@ fn build_gpu_pass(
             },
             BindGroupEntry {
                 binding: 2,
-                resource: rooms_buffer.as_entire_binding(),
+                resource: primitives_buffer.as_entire_binding(),
             },
             BindGroupEntry {
                 binding: 3,
-                resource: tunnels_buffer.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 4,
                 resource: agents_buffer.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 5,
-                resource: blockers_buffer.as_entire_binding(),
             },
         ],
     });
@@ -837,9 +862,7 @@ fn build_gpu_pass(
         surface_format,
         size,
         params_buffer,
-        rooms_buffer,
-        tunnels_buffer,
-        blockers_buffer,
+        primitives_buffer,
         agents_buffer,
         compute_bind_group,
         compose_bind_group,
@@ -904,10 +927,9 @@ impl RenderPassExecutor for CavernComputeExecutor {
             _pad1: [0.0; 2],
             world_max: [frame.world_bounds[2], frame.world_bounds[3]],
             _pad2: [0.0; 2],
-            room_count: frame.rooms.len().min(MAX_ROOMS) as u32,
-            tunnel_count: frame.tunnels.len().min(MAX_TUNNELS) as u32,
-            blocker_count: frame.blockers.len().min(MAX_BLOCKERS) as u32,
+            primitive_count: frame.geometry_primitives.len().min(MAX_GEOMETRY_PRIMITIVES) as u32,
             agent_count: frame.agents.len().min(MAX_AGENTS) as u32,
+            _pad3: [0; 2],
             floor_rock_height: [frame.floor_height, frame.rock_height, 0.0, 0.0],
             camera_target_time: [
                 frame.camera.target[0],
@@ -925,59 +947,25 @@ impl RenderPassExecutor for CavernComputeExecutor {
         ctx.queue()
             .write_buffer(&pass.params_buffer, 0, bytemuck::bytes_of(&params));
 
-        let rooms = frame
-            .rooms
+        let primitives = frame
+            .geometry_primitives
             .iter()
-            .take(MAX_ROOMS)
-            .map(|room| CavernRoomRaw {
-                center: room.center,
-                radii: room.radii,
-                role: match room.role {
-                    crate::domain::RoomRole::Start => 0,
-                    crate::domain::RoomRole::Combat => 1,
-                    crate::domain::RoomRole::Loot => 2,
-                    crate::domain::RoomRole::Fork => 3,
-                    crate::domain::RoomRole::Elite => 4,
-                    crate::domain::RoomRole::Extraction => 5,
-                },
-                _pad0: [0; 3],
+            .take(MAX_GEOMETRY_PRIMITIVES)
+            .map(|primitive| CavernGeometryPrimitiveRaw {
+                shape_kind: primitive.shape_kind,
+                op_kind: primitive.op_kind,
+                _pad0: [0; 2],
+                p0: primitive.p0,
+                p1: primitive.p1,
+                p2: primitive.p2,
             })
             .collect::<Vec<_>>();
-        if !rooms.is_empty() {
-            ctx.queue()
-                .write_buffer(&pass.rooms_buffer, 0, bytemuck::cast_slice(&rooms));
-        }
-
-        let tunnels = frame
-            .tunnels
-            .iter()
-            .take(MAX_TUNNELS)
-            .map(|tunnel| CavernTunnelRaw {
-                start: tunnel.start,
-                end: tunnel.end,
-                radius: tunnel.radius,
-                _pad0: 0.0,
-            })
-            .collect::<Vec<_>>();
-        if !tunnels.is_empty() {
-            ctx.queue()
-                .write_buffer(&pass.tunnels_buffer, 0, bytemuck::cast_slice(&tunnels));
-        }
-
-        let blockers = frame
-            .blockers
-            .iter()
-            .take(MAX_BLOCKERS)
-            .map(|blocker| CavernBlockerRaw {
-                center: blocker.center,
-                radius: blocker.radius,
-                half_height: blocker.half_height,
-                _pad0: [0.0; 3],
-            })
-            .collect::<Vec<_>>();
-        if !blockers.is_empty() {
-            ctx.queue()
-                .write_buffer(&pass.blockers_buffer, 0, bytemuck::cast_slice(&blockers));
+        if !primitives.is_empty() {
+            ctx.queue().write_buffer(
+                &pass.primitives_buffer,
+                0,
+                bytemuck::cast_slice(&primitives),
+            );
         }
 
         let agents = frame
@@ -1078,35 +1066,69 @@ impl RenderPassExecutor for CavernComposeExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::{blocker_from_shape, derive_render_footprint_from_geometry_graph};
+    use super::{
+        OP_ADD_SOLID, OP_BLOCKER, OP_SUBTRACT_VOID, SHAPE_CAPSULE, SHAPE_ELLIPSOID, SHAPE_SPHERE,
+        derive_render_footprint_from_geometry_graph, geometry_primitives_from_graph,
+    };
     use crate::domain::{
         CavernGeometryGraph, CavernRunConfig, CavernSeed, CavernTopology, GeometryEdit,
-        GeometryEditKind, GeometryPrimitiveShape3,
+        GeometryEditKind, GeometryPrimitiveShape3, GeometryRevision,
     };
 
     #[test]
-    fn blocker_from_shape_preserves_cylinder_dimensions() {
-        let shape = GeometryPrimitiveShape3::Cylinder {
-            center: [2.0, 1.5, -3.0],
-            radius: 1.25,
-            half_height: 2.0,
+    fn geometry_primitives_from_graph_preserves_ops_and_flattens_splines() {
+        let mut graph = CavernGeometryGraph {
+            revision: GeometryRevision(1),
+            bounds: crate::domain::GeometryBounds3::default(),
+            primitives: Vec::new(),
         };
-        let blocker = blocker_from_shape(&shape).expect("cylinder should map to blocker");
-        assert_eq!(blocker.center, [2.0, 1.5, -3.0]);
-        assert_eq!(blocker.radius, 1.25);
-        assert_eq!(blocker.half_height, 2.0);
-    }
-
-    #[test]
-    fn blocker_from_shape_maps_box_to_cylindrical_approximation() {
-        let shape = GeometryPrimitiveShape3::Box {
-            center: [0.0, 2.0, 0.0],
-            half_extents: [1.0, 0.8, 1.6],
-        };
-        let blocker = blocker_from_shape(&shape).expect("box should map to blocker");
-        assert_eq!(blocker.center, [0.0, 2.0, 0.0]);
-        assert_eq!(blocker.radius, 1.6);
-        assert_eq!(blocker.half_height, 0.8);
+        graph.primitives.push(crate::domain::GeometryPrimitive3 {
+            id: crate::domain::GeometryPrimitiveId(1),
+            layer: crate::domain::GeometryLayer::Terrain,
+            material: crate::domain::GeometryMaterial::Rock,
+            op: crate::domain::GeometryOp::AddSolid,
+            enabled: true,
+            shape: GeometryPrimitiveShape3::Sphere {
+                center: [0.0, 0.0, 0.0],
+                radius: 5.0,
+            },
+        });
+        graph.primitives.push(crate::domain::GeometryPrimitive3 {
+            id: crate::domain::GeometryPrimitiveId(2),
+            layer: crate::domain::GeometryLayer::Walkable,
+            material: crate::domain::GeometryMaterial::CavernVoid,
+            op: crate::domain::GeometryOp::SubtractVoid,
+            enabled: true,
+            shape: GeometryPrimitiveShape3::TunnelSplineCapsuleChain {
+                points: vec![[0.0, 2.0, 0.0], [2.0, 2.0, 0.0], [4.0, 2.0, 0.0]],
+                radius: 1.0,
+            },
+        });
+        graph.primitives.push(crate::domain::GeometryPrimitive3 {
+            id: crate::domain::GeometryPrimitiveId(3),
+            layer: crate::domain::GeometryLayer::Blocker,
+            material: crate::domain::GeometryMaterial::Barrier,
+            op: crate::domain::GeometryOp::Blocker,
+            enabled: true,
+            shape: GeometryPrimitiveShape3::Ellipsoid {
+                center: [1.0, 1.0, 1.0],
+                radii: [0.5, 0.7, 0.9],
+            },
+        });
+        let primitives = geometry_primitives_from_graph(&graph);
+        assert_eq!(
+            primitives.len(),
+            4,
+            "spline chain should flatten to two capsules"
+        );
+        assert_eq!(primitives[0].shape_kind, SHAPE_SPHERE);
+        assert_eq!(primitives[0].op_kind, OP_ADD_SOLID);
+        assert_eq!(primitives[1].shape_kind, SHAPE_CAPSULE);
+        assert_eq!(primitives[1].op_kind, OP_SUBTRACT_VOID);
+        assert_eq!(primitives[2].shape_kind, SHAPE_CAPSULE);
+        assert_eq!(primitives[2].op_kind, OP_SUBTRACT_VOID);
+        assert_eq!(primitives[3].shape_kind, SHAPE_ELLIPSOID);
+        assert_eq!(primitives[3].op_kind, OP_BLOCKER);
     }
 
     #[test]

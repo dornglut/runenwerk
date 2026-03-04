@@ -526,6 +526,15 @@ pub struct CavernSdfBlocker {
     pub half_height: f32,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct CavernSdfGeometryPrimitive {
+    pub shape_kind: u32,
+    pub op_kind: u32,
+    pub p0: [f32; 4],
+    pub p1: [f32; 4],
+    pub p2: [f32; 4],
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CavernSdfWorldFrame {
     pub world_bounds: [f32; 4],
@@ -535,6 +544,7 @@ pub struct CavernSdfWorldFrame {
     pub rooms: Vec<CavernRoom>,
     pub tunnels: Vec<CavernTunnel>,
     pub blockers: Vec<CavernSdfBlocker>,
+    pub geometry_primitives: Vec<CavernSdfGeometryPrimitive>,
     pub agents: Vec<CavernSdfAgent>,
 }
 
@@ -548,6 +558,7 @@ impl Default for CavernSdfWorldFrame {
             rooms: Vec::new(),
             tunnels: Vec::new(),
             blockers: Vec::new(),
+            geometry_primitives: Vec::new(),
             agents: Vec::new(),
         }
     }
@@ -560,6 +571,7 @@ impl CavernSdfWorldFrame {
         self.rooms = layout.rooms.clone();
         self.tunnels = layout.connections.clone();
         self.blockers.clear();
+        self.geometry_primitives.clear();
         self.agents.clear();
     }
 }
