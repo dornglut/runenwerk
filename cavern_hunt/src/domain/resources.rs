@@ -426,14 +426,14 @@ pub struct CavernCameraState {
 impl Default for CavernCameraState {
     fn default() -> Self {
         Self {
-            target: [0.0, 0.8, 0.0],
+            target: [0.0, 1.4, 0.0],
             yaw: std::f32::consts::PI,
-            pitch: 0.78,
-            distance: 24.0,
-            pitch_min: 0.45,
-            pitch_max: 1.15,
-            distance_min: 10.0,
-            distance_max: 42.0,
+            pitch: 1.02,
+            distance: 30.0,
+            pitch_min: 0.75,
+            pitch_max: 1.28,
+            distance_min: 14.0,
+            distance_max: 48.0,
             fov_y_radians: 52.0_f32.to_radians(),
         }
     }
@@ -528,7 +528,7 @@ impl Default for CavernSdfWorldFrame {
         Self {
             world_bounds: [-24.0, -24.0, 24.0, 24.0],
             floor_height: 0.0,
-            rock_height: 8.0,
+            rock_height: 5.5,
             camera: CavernCameraState::default(),
             rooms: Vec::new(),
             tunnels: Vec::new(),

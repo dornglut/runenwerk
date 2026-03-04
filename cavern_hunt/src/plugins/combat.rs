@@ -57,10 +57,7 @@ pub(crate) fn update_local_aim(world: &mut World) -> Result<()> {
     });
     let (movement, fire_pressed, dash_pressed) = {
         let input = world.resource::<InputState>()?;
-        let movement = normalized_vector(
-            (input.world_move_right as i32 - input.world_move_left as i32) as f32,
-            (input.world_move_up as i32 - input.world_move_down as i32) as f32,
-        );
+        let movement = camera_relative_movement(&camera, &input);
         (
             [movement.0, movement.1],
             input.left_mouse_down(),
@@ -751,6 +748,20 @@ fn normalized_vector(x: f32, y: f32) -> (f32, f32) {
     }
 }
 
+fn camera_relative_movement(
+    camera: &crate::domain::CavernCameraState,
+    input: &InputState,
+) -> (f32, f32) {
+    let strafe = (input.world_move_right as i32 - input.world_move_left as i32) as f32;
+    let forward = (input.world_move_up as i32 - input.world_move_down as i32) as f32;
+    let forward_axis = [camera.yaw.sin(), camera.yaw.cos()];
+    let right_axis = [-forward_axis[1], forward_axis[0]];
+    normalized_vector(
+        right_axis[0] * strafe + forward_axis[0] * forward,
+        right_axis[1] * strafe + forward_axis[1] * forward,
+    )
+}
+
 fn distance_squared(a: [f32; 2], b: [f32; 2]) -> f32 {
     let dx = a[0] - b[0];
     let dy = a[1] - b[1];
@@ -796,6 +807,7 @@ mod tests {
         world.insert_resource(LocalPlayerRef::default());
         world.insert_resource(CavernCameraState::default());
         world.insert_resource(CavernAimState::default());
+        world.insert_resource(CavernControlState::default());
         world.insert_resource(InputState::default());
         world.insert_resource(WindowState::headless("test"));
         worldgen::initialize_run_world(&mut world, true).unwrap();
@@ -811,6 +823,35 @@ mod tests {
                 .resource::<CavernLayout>()
                 .unwrap()
                 .contains_point(aim.world_point, 0.0)
+        );
+    }
+
+    #[test]
+    fn local_move_input_is_camera_relative() {
+        let mut world = World::new();
+        world.insert_resource(CavernRunConfig::default());
+        world.insert_resource(CavernRunState::default());
+        world.insert_resource(CavernLayout::default());
+        world.insert_resource(SpawnDirector::default());
+        world.insert_resource(LootTableRegistry::default());
+        world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(LocalPlayerRef::default());
+        world.insert_resource(CavernCameraState::default());
+        world.insert_resource(CavernAimState::default());
+        world.insert_resource(CavernControlState::default());
+        world.insert_resource(InputState::default());
+        world.insert_resource(WindowState::headless("test"));
+        worldgen::initialize_run_world(&mut world, true).unwrap();
+        {
+            let input = &mut *world.resource_mut::<InputState>().unwrap();
+            input.world_move_up = true;
+        }
+
+        update_local_aim(&mut world).unwrap();
+        let movement = world.resource::<CavernControlState>().unwrap().movement;
+        assert!(
+            movement[1] < -0.9,
+            "W should move toward negative world Y for the default camera"
         );
     }
 

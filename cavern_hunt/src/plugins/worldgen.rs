@@ -186,7 +186,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     }
 
     if let Ok(mut camera) = world.resource_mut::<CavernCameraState>() {
-        camera.target = [start_room.center[0], 1.0, start_room.center[1]];
+        camera.target = [start_room.center[0], 1.6, start_room.center[1]];
     }
     if let Ok(mut director) = world.resource_mut::<SpawnDirector>() {
         director.initialized = true;
