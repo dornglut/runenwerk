@@ -390,10 +390,15 @@ fn geometry_primitives_from_topology(topology: &CavernTopology) -> Vec<CavernSdf
     });
     for room in &topology.rooms {
         out.push(CavernSdfGeometryPrimitive {
-            shape_kind: SHAPE_ELLIPSOID,
+            shape_kind: SHAPE_CYLINDER,
             op_kind: OP_SUBTRACT_VOID,
-            p0: [room.center[0], room.center[1], room.center[2], 0.0],
-            p1: [room.radii[0], room.radii[1], room.radii[2], 0.0],
+            p0: [
+                room.center[0],
+                room.center[1],
+                room.center[2],
+                room.radii[0].max(room.radii[2]),
+            ],
+            p1: [room.radii[1], 0.0, 0.0, 0.0],
             p2: [0.0; 4],
         });
     }
@@ -435,10 +440,15 @@ fn geometry_primitives_from_layout(layout: &CavernLayout) -> Vec<CavernSdfGeomet
     });
     for room in &layout.rooms {
         out.push(CavernSdfGeometryPrimitive {
-            shape_kind: SHAPE_ELLIPSOID,
+            shape_kind: SHAPE_CYLINDER,
             op_kind: OP_SUBTRACT_VOID,
-            p0: [room.center[0], 2.4, room.center[1], 0.0],
-            p1: [room.radii[0], 2.2, room.radii[1], 0.0],
+            p0: [
+                room.center[0],
+                2.4,
+                room.center[1],
+                room.radii[0].max(room.radii[1]),
+            ],
+            p1: [2.2, 0.0, 0.0, 0.0],
             p2: [0.0; 4],
         });
     }
@@ -1027,8 +1037,8 @@ impl RenderPassExecutor for CavernComposeExecutor {
 #[cfg(test)]
 mod tests {
     use super::{
-        OP_ADD_SOLID, OP_BLOCKER, OP_SUBTRACT_VOID, SHAPE_CAPSULE, SHAPE_ELLIPSOID, SHAPE_SPHERE,
-        geometry_primitives_from_graph, geometry_primitives_from_topology,
+        OP_ADD_SOLID, OP_BLOCKER, OP_SUBTRACT_VOID, SHAPE_CAPSULE, SHAPE_CYLINDER, SHAPE_ELLIPSOID,
+        SHAPE_SPHERE, geometry_primitives_from_graph, geometry_primitives_from_topology,
     };
     use crate::domain::{CavernGeometryGraph, GeometryPrimitiveShape3, GeometryRevision};
 
@@ -1110,9 +1120,14 @@ mod tests {
         let first_room_prim = primitives
             .iter()
             .find(|primitive| {
-                primitive.shape_kind == SHAPE_ELLIPSOID && primitive.op_kind == OP_SUBTRACT_VOID
+                primitive.shape_kind == SHAPE_CYLINDER && primitive.op_kind == OP_SUBTRACT_VOID
             })
-            .expect("expected room ellipsoid primitive");
+            .expect("expected room cylinder primitive");
         assert_eq!(first_room_prim.p0[1], first_room.center[1]);
+        assert_eq!(
+            first_room_prim.p0[3],
+            first_room.radii[0].max(first_room.radii[2])
+        );
+        assert_eq!(first_room_prim.p1[0], first_room.radii[1]);
     }
 }

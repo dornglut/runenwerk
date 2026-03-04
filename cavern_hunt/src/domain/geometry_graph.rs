@@ -477,9 +477,10 @@ impl CavernGeometryGraph {
                 material: GeometryMaterial::CavernVoid,
                 op: GeometryOp::SubtractVoid,
                 enabled: true,
-                shape: GeometryPrimitiveShape3::Ellipsoid {
+                shape: GeometryPrimitiveShape3::Cylinder {
                     center: room.center,
-                    radii: room.radii,
+                    radius: room.radii[0].max(room.radii[2]),
+                    half_height: room.radii[1],
                 },
             });
             next_id += 1;
