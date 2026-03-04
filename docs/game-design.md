@@ -3,6 +3,10 @@
 ## Vision
 Grotto Quest is a 3D action dungeon crawler centered on build expression, party tactics, and procedural replayability.
 
+Current concrete game concept:
+
+- [`Cavern Hunt`](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_GDD.md) is the active game-specific direction on top of the runtime.
+
 ## Design Pillars
 - Meaningful player choice in character and build setup.
 - Replayability through encounter and dungeon variation.

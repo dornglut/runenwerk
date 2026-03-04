@@ -32,6 +32,11 @@
 - `docs/game-design.md` - high-level game design direction.
 - `docs/authoring-layer.md` - authoring/runtime split and implementation direction for data-driven engine features.
 
+## Game Docs
+
+- `game/README.md`
+- `game/CAVERN_HUNT_GDD.md` - current primary game concept and first game design document.
+
 ## Plugin Docs
 
 - `engine/src/plugins/debug_metrics/README.md`
