@@ -36,6 +36,7 @@ impl AppRunner for SignalRunner {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
+    let _tracing_guard = engine::utils::setup_tracing();
     let mut app = App::new();
     app.set_title("Cavern Hunt Client");
     app.set_simulation_profile(SimulationProfile::DedicatedAuthority);

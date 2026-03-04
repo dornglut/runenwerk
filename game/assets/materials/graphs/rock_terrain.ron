@@ -41,11 +41,11 @@
         ),
         (
             id: "wall_noise_gain",
-            kind: ConstantScalar(value: 0.22),
+            kind: ConstantScalar(value: 0.30),
         ),
         (
             id: "floor_noise_gain",
-            kind: ConstantScalar(value: 0.14),
+            kind: ConstantScalar(value: 0.20),
         ),
         (
             id: "wall_noise_scaled",
@@ -71,11 +71,11 @@
         ),
         (
             id: "wall_tint",
-            kind: ConstantVec3(value: [0.30, 0.29, 0.27]),
+            kind: ConstantVec3(value: [0.42, 0.28, 0.20]),
         ),
         (
             id: "floor_tint",
-            kind: ConstantVec3(value: [0.16, 0.18, 0.15]),
+            kind: ConstantVec3(value: [0.12, 0.34, 0.22]),
         ),
         (
             id: "wall_color",
@@ -101,11 +101,11 @@
         ),
         (
             id: "wall_rough",
-            kind: ConstantScalar(value: 0.87),
+            kind: ConstantScalar(value: 0.92),
         ),
         (
             id: "floor_rough",
-            kind: ConstantScalar(value: 0.62),
+            kind: ConstantScalar(value: 0.48),
         ),
         (
             id: "roughness",
