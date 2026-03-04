@@ -532,6 +532,7 @@ async fn run_client_runtime_task(
                     &mut command_rx,
                     event_tx.clone(),
                     RuntimeRole::Client,
+                    bootstrap.state.connection_id,
                     &mut pending_commands,
                 )
                 .await?;
@@ -607,6 +608,7 @@ async fn run_server_runtime_task(
             &mut command_rx,
             event_tx.clone(),
             RuntimeRole::Server,
+            bootstrap.state.active_connection,
             &mut server_pending_commands,
         )
         .await?
@@ -640,6 +642,7 @@ async fn run_live_connection_loop(
     command_rx: &mut UnboundedReceiver<QuicSessionCommand>,
     event_tx: UnboundedSender<QuicSessionEvent>,
     role: RuntimeRole,
+    source_connection_id: Option<engine_net::ConnectionId>,
     pending_commands: &mut Vec<QuicSessionCommand>,
 ) -> Result<LoopOutcome> {
     for command in pending_commands.drain(..) {
@@ -668,7 +671,10 @@ async fn run_live_connection_loop(
                         let envelope: MessageEnvelope = decode_message(&bytes)?;
                         match envelope {
                             MessageEnvelope::Client(message) => {
-                                let _ = event_tx.send(QuicSessionEvent::ClientMessage(message));
+                                let _ = event_tx.send(QuicSessionEvent::ClientMessage {
+                                    connection_id: source_connection_id,
+                                    message,
+                                });
                             }
                             MessageEnvelope::Server(message) => {
                                 if let ServerMessage::JoinRejected(JoinRejected { reason }) = &message {
@@ -1100,10 +1106,16 @@ mod tests {
                 && let Some(event) = event
             {
                 match event {
-                    QuicSessionEvent::ClientMessage(ClientMessage::InputFrame(_)) => {
+                    QuicSessionEvent::ClientMessage {
+                        message: ClientMessage::InputFrame(_),
+                        ..
+                    } => {
                         saw_input = true;
                     }
-                    QuicSessionEvent::ClientMessage(ClientMessage::Ack(_)) => {
+                    QuicSessionEvent::ClientMessage {
+                        message: ClientMessage::Ack(_),
+                        ..
+                    } => {
                         saw_ack = true;
                     }
                     _ => {}

@@ -103,8 +103,14 @@ impl NetworkServerOutbox {
 
 #[derive(Debug, Clone, Default)]
 pub struct NetworkInboundQueue {
-    client_messages: Vec<ClientMessage>,
+    client_messages: Vec<InboundClientMessage>,
     server_messages: Vec<ServerMessage>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InboundClientMessage {
+    pub connection_id: Option<ConnectionId>,
+    pub message: ClientMessage,
 }
 
 impl NetworkInboundQueue {
@@ -113,15 +119,18 @@ impl NetworkInboundQueue {
         self.server_messages.clear();
     }
 
-    pub fn push_client(&mut self, message: ClientMessage) {
-        self.client_messages.push(message);
+    pub fn push_client(&mut self, connection_id: Option<ConnectionId>, message: ClientMessage) {
+        self.client_messages.push(InboundClientMessage {
+            connection_id,
+            message,
+        });
     }
 
     pub fn push_server(&mut self, message: ServerMessage) {
         self.server_messages.push(message);
     }
 
-    pub fn client_messages(&self) -> &[ClientMessage] {
+    pub fn client_messages(&self) -> &[InboundClientMessage] {
         &self.client_messages
     }
 
@@ -388,9 +397,12 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                     health.connected = true;
                 }
             }
-            SessionRuntimeEvent::ClientMessage(message) => {
+            SessionRuntimeEvent::ClientMessage {
+                connection_id,
+                message,
+            } => {
                 if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
-                    inbound.push_client(message.clone());
+                    inbound.push_client(connection_id, message.clone());
                 }
                 if let Ok(mut inbox) = world.resource_mut::<NetworkServerInbox>() {
                     inbox.push(message);

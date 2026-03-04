@@ -201,6 +201,11 @@ pub struct CavernServerControlMap {
     pub by_player_id: BTreeMap<u32, CavernControlState>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CavernPlayerOwnershipState {
+    pub by_connection_id: BTreeMap<u64, u32>,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CavernSdfAgent {
     pub pos: [f32; 2],

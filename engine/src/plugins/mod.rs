@@ -16,11 +16,12 @@ pub use fixed_step::FixedStepPlugin;
 pub use grid::GridPlugin;
 pub use input::InputFinalizePlugin;
 pub use net::{
-    ConnectionHealth, NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
-    NetworkClientPlugin, NetworkDiagnostics, NetworkInboundQueue, NetworkOutboundQueue,
-    NetworkRuntimeHandle, NetworkServerInbox, NetworkServerOutbox, NetworkServerPlugin,
-    NetworkSessionStatus, PredictionDiagnostics, PredictionPlugin, PredictionState,
-    ReplicationDiagnostics, ReplicationPlugin, RoundTripMetrics, SnapshotReplicationState,
+    ConnectionHealth, InboundClientMessage, NetworkAdmissionState, NetworkClientInbox,
+    NetworkClientOutbox, NetworkClientPlugin, NetworkDiagnostics, NetworkInboundQueue,
+    NetworkOutboundQueue, NetworkRuntimeHandle, NetworkServerInbox, NetworkServerOutbox,
+    NetworkServerPlugin, NetworkSessionStatus, PredictionDiagnostics, PredictionPlugin,
+    PredictionState, ReplicationDiagnostics, ReplicationPlugin, RoundTripMetrics,
+    SnapshotReplicationState,
 };
 pub use render::RenderPlugin;
 pub use replay::{

@@ -21,11 +21,11 @@ pub use plugin::Plugin;
 pub use plugins::fixed_step::FixedStepPlugin;
 pub use plugins::input::domain::InputState;
 pub use plugins::net::{
-    ConnectionHealth, NetworkClientInbox, NetworkClientOutbox, NetworkClientPlugin,
-    NetworkDiagnostics, NetworkInboundQueue, NetworkOutboundQueue, NetworkRuntimeHandle,
-    NetworkServerInbox, NetworkServerOutbox, NetworkServerPlugin, NetworkSessionStatus,
-    PredictionDiagnostics, PredictionPlugin, PredictionState, ReplicationDiagnostics,
-    ReplicationPlugin, RoundTripMetrics, SnapshotReplicationState,
+    ConnectionHealth, InboundClientMessage, NetworkClientInbox, NetworkClientOutbox,
+    NetworkClientPlugin, NetworkDiagnostics, NetworkInboundQueue, NetworkOutboundQueue,
+    NetworkRuntimeHandle, NetworkServerInbox, NetworkServerOutbox, NetworkServerPlugin,
+    NetworkSessionStatus, PredictionDiagnostics, PredictionPlugin, PredictionState,
+    ReplicationDiagnostics, ReplicationPlugin, RoundTripMetrics, SnapshotReplicationState,
 };
 pub use plugins::replay::{
     ReplayControllerResource, ReplayMode, ReplayPlugin, ReplayRecorderResource, ReplaySessionInfo,

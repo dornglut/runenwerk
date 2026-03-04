@@ -80,16 +80,29 @@ pub enum SessionRuntimeCommand {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SessionRuntimeEvent {
-    Connected { connection_id: Option<ConnectionId> },
-    ClientMessage(ClientMessage),
+    Connected {
+        connection_id: Option<ConnectionId>,
+    },
+    ClientMessage {
+        connection_id: Option<ConnectionId>,
+        message: ClientMessage,
+    },
     ServerMessage(ServerMessage),
     Phase(SessionPhase),
-    Reconnecting { attempt: u32 },
+    Reconnecting {
+        attempt: u32,
+    },
     JoinAccepted(JoinAccepted),
     JoinRejected(DisconnectReason),
-    RttUpdated { millis: u32 },
-    ConnectionClosed { reason: Option<DisconnectReason> },
-    Error { message: String },
+    RttUpdated {
+        millis: u32,
+    },
+    ConnectionClosed {
+        reason: Option<DisconnectReason>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 impl Default for ServerSessionState {

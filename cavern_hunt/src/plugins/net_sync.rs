@@ -1,7 +1,8 @@
 use crate::domain::{
-    CavernControlState, CavernPredictedFrame, CavernPredictionState, CavernRunDeltaV1,
-    CavernRunSnapshotV1, CavernServerControlMap, PlayerId, apply_cavern_run_delta,
-    build_cavern_run_delta, capture_cavern_run_snapshot, restore_cavern_run_snapshot,
+    CavernControlState, CavernPlayerOwnershipState, CavernPredictedFrame, CavernPredictionState,
+    CavernRunDeltaV1, CavernRunSnapshotV1, CavernServerControlMap, PlayerId,
+    apply_cavern_run_delta, build_cavern_run_delta, capture_cavern_run_snapshot,
+    restore_cavern_run_snapshot,
 };
 use anyhow::Result;
 use engine::prelude::{
@@ -10,8 +11,8 @@ use engine::prelude::{
     SimulationProfileConfig, SimulationTick, SystemConfigExt, World, WorldMut,
 };
 use engine_net::{
-    AbilityCommand, AimCommand, ClientCommandEnvelope, ClientMessage, InputFrame, InteractCommand,
-    MoveCommand, RunEvent, ServerMessage,
+    AbilityCommand, AimCommand, ClientCommandEnvelope, ClientMessage, ConnectionId, InputFrame,
+    InteractCommand, MoveCommand, RunEvent, ServerMessage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -144,30 +145,81 @@ fn server_capture_control_input(world: &mut World) -> Result<()> {
     if !matches!(authority, AuthorityRole::Server) {
         return Ok(());
     }
-    let latest_frame = world
+    let input_frames = world
         .resource::<NetworkInboundQueue>()
         .ok()
-        .and_then(|queue| {
+        .map(|queue| {
             queue
                 .client_messages()
                 .iter()
-                .rev()
-                .find_map(|message| match message {
-                    ClientMessage::InputFrame(frame) => Some(frame.clone()),
+                .filter_map(|incoming| match &incoming.message {
+                    ClientMessage::InputFrame(frame) => {
+                        Some((incoming.connection_id, frame.clone()))
+                    }
                     _ => None,
                 })
-        });
-    let Some(frame) = latest_frame else {
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if input_frames.is_empty() {
         return Ok(());
-    };
+    }
+
+    let mut spawned_player_ids = world
+        .query::<(engine::prelude::Entity, &PlayerId)>()
+        .iter()
+        .map(|(_, player_id)| player_id.0)
+        .collect::<Vec<_>>();
+    spawned_player_ids.sort_unstable();
+
+    let mut ownership = world
+        .resource::<CavernPlayerOwnershipState>()
+        .cloned()
+        .unwrap_or_default();
+    let mut controls = world
+        .resource::<CavernServerControlMap>()
+        .cloned()
+        .unwrap_or_default();
     let current_source_tick = world
         .resource::<CavernControlState>()
         .map(|control| control.source_tick)
         .unwrap_or_default();
-    if frame.tick.0 < current_source_tick.0 {
-        return Ok(());
+    let mut latest_global_control = world
+        .resource::<CavernControlState>()
+        .copied()
+        .unwrap_or_default();
+
+    for (connection_id, frame) in input_frames {
+        let control_state = control_state_from_frame(frame);
+        if control_state.source_tick.0 >= latest_global_control.source_tick.0 {
+            latest_global_control = control_state;
+        }
+        if control_state.source_tick.0 < current_source_tick.0 {
+            continue;
+        }
+        if let Some(player_id) =
+            resolve_owned_player_id(&spawned_player_ids, &mut ownership, connection_id)
+        {
+            let should_replace = controls
+                .by_player_id
+                .get(&player_id)
+                .map(|existing| existing.source_tick.0 <= control_state.source_tick.0)
+                .unwrap_or(true);
+            if should_replace {
+                controls.by_player_id.insert(player_id, control_state);
+            }
+        }
     }
 
+    world.insert_resource(ownership);
+    world.insert_resource(controls);
+    if latest_global_control.source_tick.0 >= current_source_tick.0 {
+        world.insert_resource(latest_global_control);
+    }
+    Ok(())
+}
+
+fn control_state_from_frame(frame: InputFrame) -> CavernControlState {
     let mut movement = [0.0, 0.0];
     let mut aim_world = [0.0, 0.0];
     let mut fire_pressed = false;
@@ -186,28 +238,51 @@ fn server_capture_control_input(world: &mut World) -> Result<()> {
         }
     }
 
-    let target_player_id = world
-        .query::<(engine::prelude::Entity, &PlayerId)>()
-        .iter()
-        .map(|(_, player_id)| player_id.0)
-        .next();
-    let control_state = CavernControlState {
+    CavernControlState {
         movement,
         aim_world,
         fire_pressed,
         dash_pressed,
         interact_pressed,
         source_tick: frame.tick,
+    }
+}
+
+fn resolve_owned_player_id(
+    spawned_player_ids: &[u32],
+    ownership: &mut CavernPlayerOwnershipState,
+    connection_id: Option<ConnectionId>,
+) -> Option<u32> {
+    if spawned_player_ids.is_empty() {
+        ownership.by_connection_id.clear();
+        return None;
+    }
+
+    ownership
+        .by_connection_id
+        .retain(|_, player_id| spawned_player_ids.contains(player_id));
+
+    let Some(connection_id) = connection_id else {
+        return spawned_player_ids.first().copied();
     };
-    if let Some(player_id) = target_player_id
-        && let Ok(mut controls) = world.resource_mut::<CavernServerControlMap>()
-    {
-        controls.by_player_id.insert(player_id, control_state);
+    if let Some(existing) = ownership.by_connection_id.get(&connection_id.0).copied() {
+        return Some(existing);
     }
-    if let Ok(mut control) = world.resource_mut::<CavernControlState>() {
-        *control = control_state;
-    }
-    Ok(())
+
+    let assigned = ownership
+        .by_connection_id
+        .values()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    let player_id = spawned_player_ids
+        .iter()
+        .copied()
+        .find(|player_id| !assigned.contains(player_id))
+        .or_else(|| spawned_player_ids.first().copied())?;
+    ownership
+        .by_connection_id
+        .insert(connection_id.0, player_id);
+    Some(player_id)
 }
 
 fn server_emit_replication_system(mut world: WorldMut) -> Result<()> {
@@ -410,19 +485,24 @@ fn replay_pending_prediction_frames(
 mod tests {
     use super::{
         CavernDeltaEventV1, CavernNetSyncState, CavernSnapshotEventV1, RUN_EVENT_DELTA,
-        RUN_EVENT_SNAPSHOT, client_apply_replication_events, server_emit_replication,
+        RUN_EVENT_SNAPSHOT, client_apply_replication_events, server_capture_control_input,
+        server_emit_replication,
     };
     use crate::domain::{
         CavernAimState, CavernCameraState, CavernControlState, CavernMetaProfile,
-        CavernPredictionState, CavernRunConfig, CavernRunState, LocalPlayerRef, LootTableRegistry,
-        SpawnDirector, capture_cavern_run_snapshot, restore_cavern_run_snapshot,
+        CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig, CavernRunState,
+        CavernServerControlMap, LocalPlayerRef, LootTableRegistry, SpawnDirector,
+        capture_cavern_run_snapshot, restore_cavern_run_snapshot,
     };
     use crate::plugins::{combat, worldgen};
     use engine::prelude::{
         FixedTimeConfig, NetworkInboundQueue, NetworkServerOutbox, NetworkSessionStatus,
         SimulationProfile, SimulationProfileConfig, SimulationTick, World,
     };
-    use engine_net::{ConnectionId, RunEvent, ServerMessage};
+    use engine_net::{
+        ClientCommandEnvelope, ClientMessage, ConnectionId, InputFrame, MoveCommand, RunEvent,
+        ServerMessage,
+    };
 
     fn server_world() -> World {
         let mut world = World::new();
@@ -437,6 +517,8 @@ mod tests {
         world.insert_resource(CavernAimState::default());
         world.insert_resource(CavernControlState::default());
         world.insert_resource(CavernPredictionState::default());
+        world.insert_resource(CavernServerControlMap::default());
+        world.insert_resource(CavernPlayerOwnershipState::default());
         world.insert_resource(NetworkServerOutbox::default());
         world.insert_resource(NetworkSessionStatus {
             phase: engine_net::SessionPhase::Active,
@@ -453,6 +535,46 @@ mod tests {
         world.insert_resource(SimulationTick(1));
         worldgen::initialize_run_world(&mut world, false).unwrap();
         world
+    }
+
+    #[test]
+    fn server_maps_input_frames_to_stable_player_ids_by_connection() {
+        let mut world = server_world();
+        world.insert_resource(NetworkInboundQueue::default());
+
+        {
+            let mut inbound = world.resource_mut::<NetworkInboundQueue>().unwrap();
+            inbound.push_client(
+                Some(ConnectionId(11)),
+                ClientMessage::InputFrame(InputFrame {
+                    tick: SimulationTick(3),
+                    commands: vec![ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 })],
+                }),
+            );
+            inbound.push_client(
+                Some(ConnectionId(22)),
+                ClientMessage::InputFrame(InputFrame {
+                    tick: SimulationTick(4),
+                    commands: vec![ClientCommandEnvelope::Move(MoveCommand { x: 0.0, y: 1.0 })],
+                }),
+            );
+        }
+
+        server_capture_control_input(&mut world).unwrap();
+
+        let ownership = world.resource::<CavernPlayerOwnershipState>().unwrap();
+        assert_eq!(ownership.by_connection_id.get(&11), Some(&1));
+        assert_eq!(ownership.by_connection_id.get(&22), Some(&2));
+
+        let controls = world.resource::<CavernServerControlMap>().unwrap();
+        assert_eq!(
+            controls.by_player_id.get(&1).map(|state| state.movement),
+            Some([1.0, 0.0])
+        );
+        assert_eq!(
+            controls.by_player_id.get(&2).map(|state| state.movement),
+            Some([0.0, 1.0])
+        );
     }
 
     #[test]
