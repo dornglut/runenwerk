@@ -333,6 +333,8 @@ dependencies = [
  "bytemuck",
  "ecs",
  "engine",
+ "engine_net",
+ "postcard",
  "serde",
  "serde_json",
  "tracing",

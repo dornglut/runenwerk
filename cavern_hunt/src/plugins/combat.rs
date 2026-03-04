@@ -1,11 +1,13 @@
 use crate::domain::{
-    AimTarget2, CavernAimState, CavernLayout, CavernRunPhase, CavernRunState, ColliderRadius,
-    DashState, Faction, Health, LocalPlayerRef, Projectile, Transform2, Velocity2, WeaponState,
+    AimTarget2, CavernAimState, CavernControlState, CavernLayout, CavernRunPhase, CavernRunState,
+    ColliderRadius, DashState, Faction, Health, LocalPlayerRef, Projectile, Transform2, Velocity2,
+    WeaponState,
 };
 use crate::plugins::render_sdf;
 use anyhow::Result;
 use engine::prelude::{
-    App, Entity, FixedUpdate, InputState, Plugin, PreUpdate, Time, WindowState, World, WorldMut,
+    App, AuthorityRole, Entity, FixedUpdate, InputState, Plugin, PreUpdate,
+    SimulationProfileConfig, Time, WindowState, World, WorldMut,
 };
 
 pub struct CavernHuntCombatPlugin;
@@ -22,6 +24,14 @@ fn update_local_aim_system(mut world: WorldMut) -> Result<()> {
 }
 
 pub(crate) fn update_local_aim(world: &mut World) -> Result<()> {
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+    if matches!(authority, AuthorityRole::Server) {
+        return Ok(());
+    }
+
     let layout = world.resource::<CavernLayout>()?.clone();
     let camera = world
         .resource::<crate::domain::CavernCameraState>()?
@@ -40,6 +50,24 @@ pub(crate) fn update_local_aim(world: &mut World) -> Result<()> {
     world.insert_resource(CavernAimState {
         world_point: aim_world,
     });
+    let (movement, fire_pressed, dash_pressed) = {
+        let input = world.resource::<InputState>()?;
+        let movement = normalized_vector(
+            (input.world_move_right as i32 - input.world_move_left as i32) as f32,
+            (input.world_move_up as i32 - input.world_move_down as i32) as f32,
+        );
+        (
+            [movement.0, movement.1],
+            input.left_mouse_down(),
+            input.right_mouse_down(),
+        )
+    };
+    if let Ok(mut control) = world.resource_mut::<CavernControlState>() {
+        control.movement = movement;
+        control.aim_world = aim_world;
+        control.fire_pressed = fire_pressed;
+        control.dash_pressed = dash_pressed;
+    }
 
     if let Some(entity) = local_entity {
         if let Some(mut aim) = world.get_mut::<AimTarget2>(entity) {
@@ -99,14 +127,9 @@ fn move_local_player(world: &mut World, dt: f32) -> Result<()> {
         return Ok(());
     };
 
-    let (move_input, dash_pressed) = {
-        let input = world.resource::<InputState>()?;
-        let movement = normalized_vector(
-            (input.world_move_right as i32 - input.world_move_left as i32) as f32,
-            (input.world_move_up as i32 - input.world_move_down as i32) as f32,
-        );
-        ([movement.0, movement.1], input.right_mouse_down())
-    };
+    let control = world.resource::<CavernControlState>()?.to_owned();
+    let move_input = control.movement;
+    let dash_pressed = control.dash_pressed;
 
     let layout = world.resource::<CavernLayout>()?.clone();
     let Some(health) = world.get::<Health>(entity).copied() else {
@@ -174,10 +197,7 @@ fn fire_local_player_weapon(world: &mut World) -> Result<()> {
         return Ok(());
     };
 
-    let should_fire = {
-        let input = world.resource::<InputState>()?;
-        input.left_mouse_down()
-    };
+    let should_fire = world.resource::<CavernControlState>()?.fire_pressed;
     if !should_fire {
         return Ok(());
     }

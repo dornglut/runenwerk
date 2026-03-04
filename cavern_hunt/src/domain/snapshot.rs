@@ -1,6 +1,6 @@
 use crate::domain::components::{
     AggroState, AimTarget2, Chest, ColliderRadius, DashState, EliteObjective, Enemy, EnemyKind,
-    ExtractionZone, Extracting, Faction, Health, InventoryRunState, LootDrop, Pickup, Player,
+    Extracting, ExtractionZone, Faction, Health, InventoryRunState, LootDrop, Pickup, Player,
     PlayerId, Projectile, ProjectileAttack, RoomAnchor, SpawnRoom, Transform2, Velocity2,
     WeaponState,
 };
@@ -191,10 +191,7 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
         if world.get::<Player>(entity).is_some() {
-            let velocity = world
-                .get::<Velocity2>(entity)
-                .copied()
-                .unwrap_or_default();
+            let velocity = world.get::<Velocity2>(entity).copied().unwrap_or_default();
             let health = world
                 .get::<Health>(entity)
                 .copied()
@@ -204,20 +201,27 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 .copied()
                 .unwrap_or(ColliderRadius(0.55))
                 .0;
-            let aim = world.get::<AimTarget2>(entity).copied().unwrap_or(AimTarget2 {
-                x: transform.x,
-                y: transform.y,
-            });
-            let dash = world.get::<DashState>(entity).copied().unwrap_or_default();
-            let weapon = world.get::<WeaponState>(entity).copied().unwrap_or_default();
-            let inventory = world
-                .get::<InventoryRunState>(entity)
-                .cloned()
-                .unwrap_or(InventoryRunState {
-                    scrap: 0,
-                    weapon_mods: Vec::new(),
-                    relics: Vec::new(),
+            let aim = world
+                .get::<AimTarget2>(entity)
+                .copied()
+                .unwrap_or(AimTarget2 {
+                    x: transform.x,
+                    y: transform.y,
                 });
+            let dash = world.get::<DashState>(entity).copied().unwrap_or_default();
+            let weapon = world
+                .get::<WeaponState>(entity)
+                .copied()
+                .unwrap_or_default();
+            let inventory =
+                world
+                    .get::<InventoryRunState>(entity)
+                    .cloned()
+                    .unwrap_or(InventoryRunState {
+                        scrap: 0,
+                        weapon_mods: Vec::new(),
+                        relics: Vec::new(),
+                    });
             let player_id = world
                 .get::<PlayerId>(entity)
                 .copied()
@@ -247,10 +251,7 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
         }
 
         if let Some(kind) = world.get::<EnemyKind>(entity).copied() {
-            let velocity = world
-                .get::<Velocity2>(entity)
-                .copied()
-                .unwrap_or_default();
+            let velocity = world.get::<Velocity2>(entity).copied().unwrap_or_default();
             let health = world
                 .get::<Health>(entity)
                 .copied()
@@ -281,10 +282,7 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
         }
 
         if let Some(projectile) = world.get::<Projectile>(entity).copied() {
-            let velocity = world
-                .get::<Velocity2>(entity)
-                .copied()
-                .unwrap_or_default();
+            let velocity = world.get::<Velocity2>(entity).copied().unwrap_or_default();
             let collider_radius = world
                 .get::<ColliderRadius>(entity)
                 .copied()
@@ -419,13 +417,22 @@ pub fn apply_cavern_run_delta(
         party_alive_count: delta.party_alive_count.unwrap_or(base.party_alive_count),
         enemy_kills: delta.enemy_kills.unwrap_or(base.enemy_kills),
         layout: delta.layout.clone().unwrap_or_else(|| base.layout.clone()),
-        players: delta.players.clone().unwrap_or_else(|| base.players.clone()),
-        enemies: delta.enemies.clone().unwrap_or_else(|| base.enemies.clone()),
+        players: delta
+            .players
+            .clone()
+            .unwrap_or_else(|| base.players.clone()),
+        enemies: delta
+            .enemies
+            .clone()
+            .unwrap_or_else(|| base.enemies.clone()),
         projectiles: delta
             .projectiles
             .clone()
             .unwrap_or_else(|| base.projectiles.clone()),
-        pickups: delta.pickups.clone().unwrap_or_else(|| base.pickups.clone()),
+        pickups: delta
+            .pickups
+            .clone()
+            .unwrap_or_else(|| base.pickups.clone()),
         extraction_zones: delta
             .extraction_zones
             .clone()
@@ -433,7 +440,10 @@ pub fn apply_cavern_run_delta(
     }
 }
 
-pub fn restore_cavern_run_snapshot(world: &mut World, snapshot: &CavernRunSnapshotV1) -> Result<()> {
+pub fn restore_cavern_run_snapshot(
+    world: &mut World,
+    snapshot: &CavernRunSnapshotV1,
+) -> Result<()> {
     let previous_local_player_id = world
         .resource::<LocalPlayerRef>()
         .ok()
@@ -526,7 +536,12 @@ pub fn restore_cavern_run_snapshot(world: &mut World, snapshot: &CavernRunSnapsh
             let _ = world.insert(entity, SpawnRoom(spawn_room));
         }
         if let Some(room_anchor) = enemy.room_anchor {
-            let _ = world.insert(entity, RoomAnchor { room_id: room_anchor });
+            let _ = world.insert(
+                entity,
+                RoomAnchor {
+                    room_id: room_anchor,
+                },
+            );
         }
         if enemy.elite_objective {
             let _ = world.insert(entity, EliteObjective);
@@ -551,7 +566,9 @@ pub fn restore_cavern_run_snapshot(world: &mut World, snapshot: &CavernRunSnapsh
 
     for pickup in &snapshot.pickups {
         let entity = world.spawn(PickupSnapshotBundle {
-            pickup: Pickup { kind: pickup.pickup },
+            pickup: Pickup {
+                kind: pickup.pickup,
+            },
             transform: Transform2::new(pickup.x, pickup.y, pickup.yaw),
             collider_radius: ColliderRadius(pickup.collider_radius),
         });
@@ -562,7 +579,12 @@ pub fn restore_cavern_run_snapshot(world: &mut World, snapshot: &CavernRunSnapsh
             let _ = world.insert(entity, Chest);
         }
         if let Some(room_anchor) = pickup.room_anchor {
-            let _ = world.insert(entity, RoomAnchor { room_id: room_anchor });
+            let _ = world.insert(
+                entity,
+                RoomAnchor {
+                    room_id: room_anchor,
+                },
+            );
         }
     }
 
@@ -573,7 +595,12 @@ pub fn restore_cavern_run_snapshot(world: &mut World, snapshot: &CavernRunSnapsh
             collider_radius: ColliderRadius(zone.collider_radius),
         });
         if let Some(room_anchor) = zone.room_anchor {
-            let _ = world.insert(entity, RoomAnchor { room_id: room_anchor });
+            let _ = world.insert(
+                entity,
+                RoomAnchor {
+                    room_id: room_anchor,
+                },
+            );
         }
     }
 

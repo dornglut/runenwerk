@@ -1,8 +1,9 @@
 use crate::domain::{
-    CavernAimState, CavernCameraState, CavernLayout, CavernMetaProfile, CavernRunConfig,
-    CavernRunState, CavernSdfWorldFrame, LocalPlayerRef, LootTableRegistry, SpawnDirector,
+    CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
+    CavernRunConfig, CavernRunState, CavernSdfWorldFrame, LocalPlayerRef, LootTableRegistry,
+    SpawnDirector,
 };
-use crate::plugins::{ai, combat, loot, meta, render_sdf, worldgen};
+use crate::plugins::{ai, combat, loot, meta, net_sync, render_sdf, worldgen};
 use anyhow::Result;
 use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::prelude::{
@@ -26,12 +27,14 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<LocalPlayerRef>();
         app.init_resource::<CavernCameraState>();
         app.init_resource::<CavernAimState>();
+        app.init_resource::<CavernControlState>();
         app.init_resource::<CavernSdfWorldFrame>();
         app.init_resource::<UiWorldHudStats>();
         app.add_plugins((
             combat::CavernHuntCombatPlugin,
             ai::CavernHuntAiPlugin,
             loot::CavernHuntLootPlugin,
+            net_sync::CavernHuntNetSyncPlugin,
         ));
         app.add_systems(
             PreUpdate,

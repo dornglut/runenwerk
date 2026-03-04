@@ -159,6 +159,29 @@ pub struct CavernAimState {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+pub struct CavernControlState {
+    pub movement: [f32; 2],
+    pub aim_world: [f32; 2],
+    pub fire_pressed: bool,
+    pub dash_pressed: bool,
+    pub interact_pressed: bool,
+    pub source_tick: SimulationTick,
+}
+
+impl Default for CavernControlState {
+    fn default() -> Self {
+        Self {
+            movement: [0.0, 0.0],
+            aim_world: [0.0, 0.0],
+            fire_pressed: false,
+            dash_pressed: false,
+            interact_pressed: false,
+            source_tick: SimulationTick::default(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CavernSdfAgent {
     pub pos: [f32; 2],
     pub radius: f32,
