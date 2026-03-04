@@ -13,6 +13,7 @@ use engine_net::{
     PlayerCommandBuffer, ServerMessage, ServerSessionConfig, ServerSessionState, SessionPhase,
     SessionRuntimeCommand, SessionRuntimeEvent, SimulationProfile, SimulationProfileConfig,
     SimulationTick, Snapshot, SnapshotCursor, handle_client_message, observe_server_message,
+    remove_server_connection,
 };
 use std::mem;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
@@ -381,7 +382,7 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
             Ok(Some(event)) => event,
             Ok(None) => break,
             Err(TryRecvError::Disconnected) => {
-                update_connection_closed(&mut world, None);
+                update_connection_closed(&mut world, None, None);
                 break;
             }
             Err(TryRecvError::Empty) => break,
@@ -437,6 +438,20 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                 }
             }
             SessionRuntimeEvent::JoinAccepted(join) => {
+                let authority = world
+                    .resource::<SimulationProfileConfig>()
+                    .map(|config| config.authority)
+                    .unwrap_or(AuthorityRole::Local);
+                if matches!(authority, AuthorityRole::Server)
+                    && let Ok(mut session) = world.resource_mut::<ServerSessionState>()
+                {
+                    let connection = ConnectionId(join.connection_id);
+                    session.phase = SessionPhase::Active;
+                    session.active_connection = Some(connection);
+                    session.active_connections.insert(connection);
+                    session.last_disconnect = None;
+                    session.last_join_state = Some(join.join_state.clone());
+                }
                 if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
                     status.phase = SessionPhase::Active;
                     status.connected = true;
@@ -470,8 +485,11 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                     metrics.samples = metrics.samples.saturating_add(1);
                 }
             }
-            SessionRuntimeEvent::ConnectionClosed { reason } => {
-                update_connection_closed(&mut world, reason);
+            SessionRuntimeEvent::ConnectionClosed {
+                connection_id,
+                reason,
+            } => {
+                update_connection_closed(&mut world, connection_id, reason);
             }
             SessionRuntimeEvent::Error { message } => {
                 if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
@@ -659,16 +677,17 @@ fn server_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
             (
                 session.phase.clone(),
                 session.active_connection,
+                !session.active_connections.is_empty(),
                 session.last_disconnect.clone(),
             )
         });
-        if let Some((phase, connection_id, last_disconnect)) = session_state
+        if let Some((phase, connection_id, has_active_connections, last_disconnect)) = session_state
             && let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>()
         {
             status.phase = phase.clone();
             status.connection_id = connection_id;
             status.last_disconnect = last_disconnect;
-            status.connected = matches!(phase, SessionPhase::Active);
+            status.connected = has_active_connections;
         }
         if !matches!(previous_phase, SessionPhase::Active)
             && matches!(phase, SessionPhase::Active)
@@ -875,8 +894,50 @@ fn prediction_step_system(mut world: WorldMut) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn update_connection_closed(world: &mut ecs::World, reason: Option<DisconnectReason>) {
-    if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+fn update_connection_closed(
+    world: &mut ecs::World,
+    connection_id: Option<ConnectionId>,
+    reason: Option<DisconnectReason>,
+) {
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+
+    if matches!(authority, AuthorityRole::Server) {
+        let mut active_connection = None;
+        let mut has_active_connections = false;
+        if let Ok(mut session) = world.resource_mut::<ServerSessionState>() {
+            match connection_id {
+                Some(connection_id) => {
+                    remove_server_connection(&mut session, connection_id, reason.clone());
+                }
+                None => {
+                    session.active_connections.clear();
+                    session.active_connection = None;
+                    session.phase = SessionPhase::Closed;
+                    session.last_disconnect = reason.clone();
+                }
+            }
+            active_connection = session.active_connection;
+            has_active_connections = !session.active_connections.is_empty();
+        }
+        if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+            status.connected = has_active_connections;
+            status.phase = if has_active_connections {
+                SessionPhase::Active
+            } else {
+                SessionPhase::Closed
+            };
+            status.connection_id = active_connection;
+            status.last_disconnect = reason.clone();
+        }
+        if let Ok(mut state) = world.resource_mut::<SnapshotReplicationState>()
+            && (connection_id.is_none() || state.active_connection == connection_id)
+        {
+            reset_replication_for_connection(&mut state, active_connection);
+        }
+    } else if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
         status.connected = false;
         status.phase = SessionPhase::Closed;
         status.last_disconnect = reason.clone();

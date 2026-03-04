@@ -19,6 +19,7 @@ pub use session::{
     AuthoritativeJoinState, ClientSessionState, ClientSessionTarget, ServerSessionConfig,
     ServerSessionState, SessionPhase, SessionRuntimeCommand, SessionRuntimeEvent,
     begin_client_session, configure_server_session, handle_client_message, observe_server_message,
+    remove_server_connection,
 };
 #[allow(deprecated)]
 pub use simulation::{

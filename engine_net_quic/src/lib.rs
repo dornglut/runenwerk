@@ -11,6 +11,7 @@ use quinn::{ClientConfig, Connection, Endpoint, RecvStream, SendStream, ServerCo
 use rustls::RootCertStore;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use thiserror::Error;
@@ -350,7 +351,10 @@ impl QuicTransport {
                 let _ = event_tx.send(QuicSessionEvent::Error {
                     message: error.to_string(),
                 });
-                let _ = event_tx.send(QuicSessionEvent::ConnectionClosed { reason: None });
+                let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                    connection_id: None,
+                    reason: None,
+                });
             }
         });
         Ok(QuicRuntimeClientHandle {
@@ -395,7 +399,10 @@ impl QuicTransport {
                 let _ = event_tx.send(QuicSessionEvent::Error {
                     message: error.to_string(),
                 });
-                let _ = event_tx.send(QuicSessionEvent::ConnectionClosed { reason: None });
+                let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                    connection_id: None,
+                    reason: None,
+                });
             }
         });
         Ok(QuicRuntimeServerHandle {
@@ -487,8 +494,10 @@ async fn run_client_runtime_task(
                         if !wait_for_reconnect_backoff(&mut command_rx, &mut pending_commands)
                             .await?
                         {
-                            let _ =
-                                event_tx.send(QuicSessionEvent::ConnectionClosed { reason: None });
+                            let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                                connection_id: None,
+                                reason: None,
+                            });
                             return Ok(());
                         }
                         continue;
@@ -531,7 +540,6 @@ async fn run_client_runtime_task(
                     Some(bootstrap.endpoint),
                     &mut command_rx,
                     event_tx.clone(),
-                    RuntimeRole::Client,
                     bootstrap.state.connection_id,
                     &mut pending_commands,
                 )
@@ -548,6 +556,7 @@ async fn run_client_runtime_task(
                 if let Some(reason) = parse_join_rejection_reason(&message) {
                     let _ = event_tx.send(QuicSessionEvent::JoinRejected(reason.clone()));
                     let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                        connection_id: None,
                         reason: Some(reason),
                     });
                     return Ok(());
@@ -555,7 +564,10 @@ async fn run_client_runtime_task(
                 let _ = event_tx.send(QuicSessionEvent::Error { message });
                 reconnect_attempt = reconnect_attempt.saturating_add(1);
                 if !wait_for_reconnect_backoff(&mut command_rx, &mut pending_commands).await? {
-                    let _ = event_tx.send(QuicSessionEvent::ConnectionClosed { reason: None });
+                    let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                        connection_id: None,
+                        reason: None,
+                    });
                     return Ok(());
                 }
             }
@@ -573,61 +585,94 @@ async fn run_server_runtime_task(
 ) -> Result<()> {
     let mut session_state = ServerSessionState::default();
     engine_net::configure_server_session(&mut session_state, session_config);
-    let mut server_pending_commands = Vec::new();
+    let (peer_event_tx, mut peer_event_rx) = unbounded_channel::<ServerPeerEvent>();
+    let mut server_peers =
+        BTreeMap::<engine_net::ConnectionId, UnboundedSender<ServerMessage>>::new();
     loop {
-        let Some(incoming) = wait_for_server_connection(&endpoint, &mut command_rx).await? else {
-            let _ = event_tx.send(QuicSessionEvent::ConnectionClosed { reason: None });
-            return Ok(());
-        };
-        let bootstrap =
-            accept_incoming_connection(incoming, &mut session_state, verifier.as_deref()).await?;
-        let _ = event_tx.send(QuicSessionEvent::Connected {
-            connection_id: bootstrap.state.active_connection,
-        });
-        let _ = event_tx.send(QuicSessionEvent::Phase(bootstrap.state.phase.clone()));
-        if let Some(connection_id) = bootstrap.state.active_connection {
-            let _ = event_tx.send(QuicSessionEvent::JoinAccepted(JoinAccepted {
-                connection_id: connection_id.0,
-                tick_rate_hz: bootstrap.state.config.tick_rate_hz,
-                join_state: bootstrap.state.last_join_state.clone().unwrap_or_default(),
-            }));
-        }
-        if let SessionPhase::Rejected(reason) = bootstrap.state.phase.clone() {
-            let _ = event_tx.send(QuicSessionEvent::JoinRejected(reason.clone()));
-            let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
-                reason: Some(reason),
-            });
-            continue;
-        }
-        let _ = event_tx.send(QuicSessionEvent::RttUpdated {
-            millis: bootstrap.connection.rtt().as_millis().min(u32::MAX as u128) as u32,
-        });
-        match run_live_connection_loop(
-            bootstrap.connection,
-            None,
-            &mut command_rx,
-            event_tx.clone(),
-            RuntimeRole::Server,
-            bootstrap.state.active_connection,
-            &mut server_pending_commands,
-        )
-        .await?
-        {
-            LoopOutcome::Shutdown => {
-                let _ = event_tx.send(QuicSessionEvent::ConnectionClosed { reason: None });
-                return Ok(());
+        tokio::select! {
+            command = command_rx.recv() => {
+                match command {
+                    Some(QuicSessionCommand::Shutdown) | None => {
+                        endpoint.close(0u32.into(), b"shutdown");
+                        let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                            connection_id: None,
+                            reason: None,
+                        });
+                        return Ok(());
+                    }
+                    Some(QuicSessionCommand::Server(message)) => {
+                        let stale_connections = server_peers
+                            .iter()
+                            .filter_map(|(connection_id, sender)| {
+                                sender.send(message.clone()).err().map(|_| *connection_id)
+                            })
+                            .collect::<Vec<_>>();
+                        for connection_id in stale_connections {
+                            server_peers.remove(&connection_id);
+                            engine_net::remove_server_connection(&mut session_state, connection_id, None);
+                        }
+                    }
+                    Some(QuicSessionCommand::Client(_)) => {}
+                }
             }
-            LoopOutcome::ConnectionClosed => {
-                continue;
+            peer_event = peer_event_rx.recv() => {
+                if let Some(ServerPeerEvent::Closed { connection_id, reason }) = peer_event {
+                    server_peers.remove(&connection_id);
+                    engine_net::remove_server_connection(&mut session_state, connection_id, reason);
+                }
+            }
+            incoming = endpoint.accept() => {
+                let Some(incoming) = incoming else {
+                    let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                        connection_id: None,
+                        reason: None,
+                    });
+                    return Ok(());
+                };
+                let bootstrap =
+                    accept_incoming_connection(incoming, &mut session_state, verifier.as_deref()).await?;
+                let _ = event_tx.send(QuicSessionEvent::Connected {
+                    connection_id: bootstrap.state.active_connection,
+                });
+                let _ = event_tx.send(QuicSessionEvent::Phase(bootstrap.state.phase.clone()));
+                if let SessionPhase::Rejected(reason) = bootstrap.state.phase.clone() {
+                    let _ = event_tx.send(QuicSessionEvent::JoinRejected(reason.clone()));
+                    let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                        connection_id: None,
+                        reason: Some(reason),
+                    });
+                    continue;
+                }
+                if let Some(connection_id) = bootstrap.state.active_connection {
+                    let _ = event_tx.send(QuicSessionEvent::JoinAccepted(JoinAccepted {
+                        connection_id: connection_id.0,
+                        tick_rate_hz: bootstrap.state.config.tick_rate_hz,
+                        join_state: bootstrap.state.last_join_state.clone().unwrap_or_default(),
+                    }));
+                    let _ = event_tx.send(QuicSessionEvent::RttUpdated {
+                        millis: bootstrap.connection.rtt().as_millis().min(u32::MAX as u128) as u32,
+                    });
+                    let (peer_tx, peer_rx) = unbounded_channel();
+                    server_peers.insert(connection_id, peer_tx);
+                    tokio::spawn(run_server_peer_task(
+                        bootstrap.connection,
+                        connection_id,
+                        peer_rx,
+                        event_tx.clone(),
+                        peer_event_tx.clone(),
+                    ));
+                }
             }
         }
     }
 }
 
-#[derive(Copy, Clone)]
-enum RuntimeRole {
-    Client,
-    Server,
+#[derive(Debug, Clone)]
+enum ServerPeerEvent {
+    Closed {
+        connection_id: engine_net::ConnectionId,
+        reason: Option<DisconnectReason>,
+    },
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -641,12 +686,11 @@ async fn run_live_connection_loop(
     _endpoint: Option<Endpoint>,
     command_rx: &mut UnboundedReceiver<QuicSessionCommand>,
     event_tx: UnboundedSender<QuicSessionEvent>,
-    role: RuntimeRole,
     source_connection_id: Option<engine_net::ConnectionId>,
     pending_commands: &mut Vec<QuicSessionCommand>,
 ) -> Result<LoopOutcome> {
     for command in pending_commands.drain(..) {
-        if dispatch_runtime_command(&connection, &event_tx, role, command).await? {
+        if dispatch_runtime_command(&connection, &event_tx, command).await? {
             return Ok(LoopOutcome::ConnectionClosed);
         }
     }
@@ -659,7 +703,7 @@ async fn run_live_connection_loop(
                         return Ok(LoopOutcome::Shutdown);
                     }
                     Some(command) => {
-                        if dispatch_runtime_command(&connection, &event_tx, role, command).await? {
+                        if dispatch_runtime_command(&connection, &event_tx, command).await? {
                             return Ok(LoopOutcome::ConnectionClosed);
                         }
                     }
@@ -685,6 +729,7 @@ async fn run_live_connection_loop(
                                 }
                                 if let ServerMessage::Disconnect(reason) = &message {
                                     let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                                        connection_id: source_connection_id,
                                         reason: Some(reason.clone()),
                                     });
                                     return Ok(LoopOutcome::ConnectionClosed);
@@ -700,8 +745,114 @@ async fn run_live_connection_loop(
                         let _ = event_tx.send(QuicSessionEvent::Error {
                             message: error.to_string(),
                         });
-                        let _ = event_tx.send(QuicSessionEvent::ConnectionClosed { reason: None });
+                        let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                            connection_id: source_connection_id,
+                            reason: None,
+                        });
                         return Ok(LoopOutcome::ConnectionClosed);
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn run_server_peer_task(
+    connection: Connection,
+    connection_id: engine_net::ConnectionId,
+    mut message_rx: UnboundedReceiver<ServerMessage>,
+    event_tx: UnboundedSender<QuicSessionEvent>,
+    peer_event_tx: UnboundedSender<ServerPeerEvent>,
+) {
+    loop {
+        tokio::select! {
+            message = message_rx.recv() => {
+                match message {
+                    Some(message) => {
+                        let should_close = matches!(message, ServerMessage::Disconnect(_));
+                        let disconnect_reason = if let ServerMessage::Disconnect(reason) = &message {
+                            Some(reason.clone())
+                        } else {
+                            None
+                        };
+                        let send_result: Result<()> = (|| {
+                            let bytes = encode_message(&MessageEnvelope::Server(message))?;
+                            connection
+                                .send_datagram(bytes.into())
+                                .context("failed to send server datagram")?;
+                            Ok(())
+                        })();
+                        if let Err(error) = send_result {
+                            let _ = event_tx.send(QuicSessionEvent::Error {
+                                message: error.to_string(),
+                            });
+                            let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                                connection_id: Some(connection_id),
+                                reason: disconnect_reason.clone(),
+                            });
+                            let _ = peer_event_tx.send(ServerPeerEvent::Closed {
+                                connection_id,
+                                reason: disconnect_reason,
+                            });
+                            return;
+                        }
+                        if should_close {
+                            connection.close(0u32.into(), b"server disconnect");
+                            let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                                connection_id: Some(connection_id),
+                                reason: disconnect_reason.clone(),
+                            });
+                            let _ = peer_event_tx.send(ServerPeerEvent::Closed {
+                                connection_id,
+                                reason: disconnect_reason,
+                            });
+                            return;
+                        }
+                    }
+                    None => {
+                        connection.close(0u32.into(), b"server peer dropped");
+                        let _ = peer_event_tx.send(ServerPeerEvent::Closed {
+                            connection_id,
+                            reason: None,
+                        });
+                        return;
+                    }
+                }
+            }
+            incoming = connection.read_datagram() => {
+                match incoming {
+                    Ok(bytes) => {
+                        match decode_message::<MessageEnvelope>(&bytes) {
+                            Ok(MessageEnvelope::Client(message)) => {
+                                let _ = event_tx.send(QuicSessionEvent::ClientMessage {
+                                    connection_id: Some(connection_id),
+                                    message,
+                                });
+                                let _ = event_tx.send(QuicSessionEvent::RttUpdated {
+                                    millis: connection.rtt().as_millis().min(u32::MAX as u128) as u32,
+                                });
+                            }
+                            Ok(MessageEnvelope::Server(_)) => {}
+                            Err(error) => {
+                                let _ = event_tx.send(QuicSessionEvent::Error {
+                                    message: error.to_string(),
+                                });
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        let _ = event_tx.send(QuicSessionEvent::Error {
+                            message: error.to_string(),
+                        });
+                        let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
+                            connection_id: Some(connection_id),
+                            reason: None,
+                        });
+                        let _ = peer_event_tx.send(ServerPeerEvent::Closed {
+                            connection_id,
+                            reason: None,
+                        });
+                        return;
                     }
                 }
             }
@@ -711,36 +862,15 @@ async fn run_live_connection_loop(
 
 async fn dispatch_runtime_command(
     connection: &Connection,
-    event_tx: &UnboundedSender<QuicSessionEvent>,
-    role: RuntimeRole,
+    _event_tx: &UnboundedSender<QuicSessionEvent>,
     command: QuicSessionCommand,
 ) -> Result<bool> {
     match command {
-        QuicSessionCommand::Client(message) if matches!(role, RuntimeRole::Client) => {
+        QuicSessionCommand::Client(message) => {
             let bytes = encode_message(&MessageEnvelope::Client(message))?;
             connection
                 .send_datagram(bytes.into())
                 .context("failed to send client datagram")?;
-            Ok(false)
-        }
-        QuicSessionCommand::Server(message) if matches!(role, RuntimeRole::Server) => {
-            let should_close = matches!(message, ServerMessage::Disconnect(_));
-            let disconnect_reason = if let ServerMessage::Disconnect(reason) = &message {
-                Some(reason.clone())
-            } else {
-                None
-            };
-            let bytes = encode_message(&MessageEnvelope::Server(message))?;
-            connection
-                .send_datagram(bytes.into())
-                .context("failed to send server datagram")?;
-            if should_close {
-                connection.close(0u32.into(), b"server disconnect");
-                let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
-                    reason: disconnect_reason,
-                });
-                return Ok(true);
-            }
             Ok(false)
         }
         _ => Ok(false),
@@ -786,25 +916,6 @@ fn parse_join_rejection_reason(message: &str) -> Option<engine_net::DisconnectRe
         return Some(engine_net::DisconnectReason::TimedOut);
     }
     None
-}
-
-async fn wait_for_server_connection(
-    endpoint: &Endpoint,
-    command_rx: &mut UnboundedReceiver<QuicSessionCommand>,
-) -> Result<Option<quinn::Incoming>> {
-    loop {
-        tokio::select! {
-            command = command_rx.recv() => {
-                match command {
-                    Some(QuicSessionCommand::Shutdown) | None => return Ok(None),
-                    Some(_) => continue,
-                }
-            }
-            incoming = endpoint.accept() => {
-                return Ok(incoming);
-            }
-        }
-    }
 }
 
 async fn accept_incoming_connection(
@@ -1264,6 +1375,192 @@ mod tests {
         }
         assert_eq!(second_join, Some(2));
 
+        second_client_tx
+            .send(QuicSessionCommand::Shutdown)
+            .expect("second client shutdown should send");
+        server_tx
+            .send(QuicSessionCommand::Shutdown)
+            .expect("server shutdown should send");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn server_runtime_broadcasts_to_multiple_connected_clients() {
+        let transport = QuicTransport::default();
+        let server_handle = transport
+            .spawn_server_runtime(
+                default_client_bind_addr(),
+                "localhost",
+                ServerSessionConfig {
+                    server_id: "srv-local".to_string(),
+                    protocol: ProtocolVersion::new(1, 1, 1),
+                    tick_rate_hz: 60,
+                },
+            )
+            .expect("server runtime should spawn");
+        let local_addr = server_handle.local_addr;
+        let server_cert = server_handle.certificate.clone();
+        let fingerprint = server_handle.certificate_fingerprint_sha256.clone();
+        let server_name = server_handle.server_name.clone();
+        let (server_tx, mut server_events) = server_handle.into_channels();
+
+        let spawn_client = |ticket: &str| {
+            transport
+                .spawn_client_runtime(
+                    default_client_bind_addr(),
+                    &server_name,
+                    ClientSessionTarget {
+                        server_id: "srv-local".to_string(),
+                        server_endpoint: local_addr.to_string(),
+                        transport: TransportKind::Quic,
+                        protocol: ProtocolVersion::new(1, 1, 1),
+                        server_cert_fingerprint_sha256: fingerprint.clone(),
+                        ticket: ticket.to_string(),
+                    },
+                    QuicTrustPolicy::PinnedServer {
+                        expected_fingerprint_sha256: fingerprint.clone(),
+                        trusted_certificates: vec![server_cert.clone()],
+                    },
+                )
+                .expect("client runtime should spawn")
+        };
+
+        let first_client = spawn_client("ticket-1");
+        let (first_client_tx, mut first_client_events) = first_client.into_channels();
+        let second_client = spawn_client("ticket-2");
+        let (second_client_tx, mut second_client_events) = second_client.into_channels();
+
+        let mut first_join = None;
+        let mut second_join = None;
+        for _ in 0..30 {
+            if first_join.is_none()
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    first_client_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::JoinAccepted(join)) = event
+            {
+                first_join = Some(join.connection_id);
+            }
+            if second_join.is_none()
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    second_client_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::JoinAccepted(join)) = event
+            {
+                second_join = Some(join.connection_id);
+            }
+            if first_join.is_some() && second_join.is_some() {
+                break;
+            }
+        }
+        assert!(matches!(first_join, Some(1 | 2)));
+        assert!(matches!(second_join, Some(1 | 2)));
+        assert_ne!(first_join, second_join);
+
+        first_client_tx
+            .send(QuicSessionCommand::Client(ClientMessage::InputFrame(
+                InputFrame {
+                    tick: engine_net::SimulationTick(10),
+                    commands: vec![ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 })],
+                },
+            )))
+            .expect("first client input should send");
+        second_client_tx
+            .send(QuicSessionCommand::Client(ClientMessage::InputFrame(
+                InputFrame {
+                    tick: engine_net::SimulationTick(10),
+                    commands: vec![ClientCommandEnvelope::Move(MoveCommand { x: 0.0, y: 1.0 })],
+                },
+            )))
+            .expect("second client input should send");
+        server_tx
+            .send(QuicSessionCommand::Server(ServerMessage::Snapshot(
+                Snapshot {
+                    tick: engine_net::SimulationTick(11),
+                    cursor: SnapshotCursor(3),
+                    last_applied: SnapshotCursor(0),
+                    entity_ids: Vec::new(),
+                    payload: vec![9, 9, 9],
+                },
+            )))
+            .expect("server snapshot should send");
+
+        let mut saw_input_1 = false;
+        let mut saw_input_2 = false;
+        for _ in 0..60 {
+            if let Ok(event) =
+                tokio::time::timeout(std::time::Duration::from_millis(250), server_events.recv())
+                    .await
+                && let Some(event) = event
+            {
+                match event {
+                    QuicSessionEvent::ClientMessage {
+                        connection_id: Some(ConnectionId(connection_id)),
+                        message: ClientMessage::InputFrame(_),
+                    } if Some(connection_id) == first_join => {
+                        saw_input_1 = true;
+                    }
+                    QuicSessionEvent::ClientMessage {
+                        connection_id: Some(ConnectionId(connection_id)),
+                        message: ClientMessage::InputFrame(_),
+                    } if Some(connection_id) == second_join => {
+                        saw_input_2 = true;
+                    }
+                    _ => {}
+                }
+            }
+            if saw_input_1 && saw_input_2 {
+                break;
+            }
+        }
+        assert!(saw_input_1, "server should receive input from connection 1");
+        assert!(saw_input_2, "server should receive input from connection 2");
+
+        let mut first_saw_snapshot = false;
+        let mut second_saw_snapshot = false;
+        for _ in 0..40 {
+            if !first_saw_snapshot
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    first_client_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::ServerMessage(ServerMessage::Snapshot(snapshot))) =
+                    event
+            {
+                first_saw_snapshot = snapshot.cursor == SnapshotCursor(3);
+            }
+            if !second_saw_snapshot
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    second_client_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::ServerMessage(ServerMessage::Snapshot(snapshot))) =
+                    event
+            {
+                second_saw_snapshot = snapshot.cursor == SnapshotCursor(3);
+            }
+            if first_saw_snapshot && second_saw_snapshot {
+                break;
+            }
+        }
+
+        assert!(
+            first_saw_snapshot,
+            "first client should receive broadcast snapshot"
+        );
+        assert!(
+            second_saw_snapshot,
+            "second client should receive broadcast snapshot"
+        );
+
+        first_client_tx
+            .send(QuicSessionCommand::Shutdown)
+            .expect("first client shutdown should send");
         second_client_tx
             .send(QuicSessionCommand::Shutdown)
             .expect("second client shutdown should send");
