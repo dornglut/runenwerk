@@ -1,3 +1,4 @@
+use crate::domain::geometry_graph::{GeometryEditEvent, GeometryPrimitiveId};
 use crate::domain::loot::EnemyDropTable;
 use crate::domain::worldgen::{CavernLayout, CavernRoom, CavernTunnel, RoomId, RoomRole};
 use engine::prelude::{Entity, SimulationTick};
@@ -501,6 +502,12 @@ impl CavernPlayerOwnershipState {
         self.by_connection_id
             .retain(|connection_id, _| active_connections.contains(connection_id));
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct CavernGeometryRuntimeState {
+    pub extraction_seal_primitive: Option<GeometryPrimitiveId>,
+    pub edit_events: Vec<GeometryEditEvent>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]

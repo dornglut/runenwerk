@@ -1,12 +1,13 @@
 use crate::domain::{
     CavernAimState, CavernCameraState, CavernCollisionField, CavernControlState,
-    CavernGeometryGraph, CavernHudState, CavernLayout, CavernMetaPersistenceConfig,
-    CavernMetaProfile, CavernMetaRewardState, CavernObjectiveKind, CavernObjectiveState,
-    CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig, CavernRunState,
-    CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings, CavernTopology,
-    EnemyCombatTuning, ExtractionState, LocalPlayerRef, LootTableRegistry, PlayerActive,
-    PlayerCombatTuning, PlayerId, PlayerSpawnProfile, RoomEncounterRegistry, RoomEncounterState,
-    RoomEncounterStatus, RoomRole, RunDifficultyProfile, SessionSpawnPolicy, SpawnDirector,
+    CavernGeometryGraph, CavernGeometryRuntimeState, CavernHudState, CavernLayout,
+    CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState, CavernObjectiveKind,
+    CavernObjectiveState, CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig,
+    CavernRunState, CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings,
+    CavernTopology, EnemyCombatTuning, ExtractionState, LocalPlayerRef, LootTableRegistry,
+    PlayerActive, PlayerCombatTuning, PlayerId, PlayerSpawnProfile, RoomEncounterRegistry,
+    RoomEncounterState, RoomEncounterStatus, RoomRole, RunDifficultyProfile, SessionSpawnPolicy,
+    SpawnDirector,
 };
 use crate::plugins::{ai, combat, hud, loot, meta, net_sync, render_sdf, worldgen};
 use anyhow::Result;
@@ -44,6 +45,7 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<CavernServerControlMap>();
         app.init_resource::<CavernPlayerOwnershipState>();
         app.init_resource::<CavernSdfWorldFrame>();
+        app.init_resource::<CavernGeometryRuntimeState>();
         app.init_resource::<SessionSpawnPolicy>();
         app.init_resource::<RoomEncounterRegistry>();
         app.init_resource::<CavernObjectiveState>();

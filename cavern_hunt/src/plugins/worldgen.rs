@@ -1,11 +1,13 @@
 use crate::domain::{
-    AggroState, AimTarget2, CavernCameraState, CavernCollisionField, CavernGeometryGraph,
-    CavernLayout, CavernMetaProfile, CavernObjectiveState, CavernRunConfig, CavernRunPhase,
-    CavernRunState, CavernTopology, Chest, ColliderRadius, DashState, EliteObjective, Enemy,
-    EnemyKind, ExtractionState, ExtractionZone, Faction, Health, InventoryRunState, LocalPlayerRef,
-    LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerCompanion,
-    PlayerId, PlayerRosterIdentity, PlayerSpawnProfile, PlayerSpawnState, ProjectileAttack,
-    RoomAnchor, RoomEncounterRegistry, RoomEncounterState, RoomEncounterStatus, SessionSpawnPolicy,
+    AggroState, AimTarget2, CAVERN_GAMEPLAY_HEIGHT, CavernCameraState, CavernCollisionField,
+    CavernGeometryGraph, CavernGeometryRuntimeState, CavernLayout, CavernMetaProfile,
+    CavernObjectiveState, CavernRunConfig, CavernRunPhase, CavernRunState, CavernTopology, Chest,
+    ColliderRadius, DashState, EliteObjective, Enemy, EnemyKind, ExtractionState, ExtractionZone,
+    Faction, GeometryEdit, GeometryEditEvent, GeometryEditKind, GeometryPrimitiveShape3, Health,
+    InventoryRunState, LocalPlayerRef, LootTableRegistry,
+    MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerCompanion, PlayerId,
+    PlayerRosterIdentity, PlayerSpawnProfile, PlayerSpawnState, ProjectileAttack, RoomAnchor,
+    RoomEncounterRegistry, RoomEncounterState, RoomEncounterStatus, SessionSpawnPolicy,
     SpawnDirector, SpawnRoom, Transform2, Velocity2, WeaponState,
 };
 use anyhow::Result;
@@ -55,6 +57,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     world.insert_resource(topology);
     world.insert_resource(geometry_graph);
     world.insert_resource(collision_field);
+    world.insert_resource(CavernGeometryRuntimeState::default());
 
     let mut run_state = CavernRunState::default();
     run_state.seed = config.seed;
@@ -189,6 +192,27 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
                 room_id: extraction_room.id,
             },
         ));
+        let seal_id = world
+            .resource::<CavernGeometryGraph>()
+            .ok()
+            .map(|graph| graph.next_primitive_id());
+        let seal_edit = GeometryEdit {
+            kind: GeometryEditKind::AddBlocker(GeometryPrimitiveShape3::Cylinder {
+                center: [
+                    extraction_room.center[0],
+                    CAVERN_GAMEPLAY_HEIGHT,
+                    extraction_room.center[1],
+                ],
+                radius: 1.95,
+                half_height: 2.7,
+            }),
+        };
+        let _ = apply_runtime_geometry_edit(world, &seal_edit);
+        if let (Some(seal_id), Ok(mut runtime)) =
+            (seal_id, world.resource_mut::<CavernGeometryRuntimeState>())
+        {
+            runtime.extraction_seal_primitive = Some(seal_id);
+        }
     }
 
     if let Ok(mut camera) = world.resource_mut::<CavernCameraState>() {
@@ -199,6 +223,34 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     }
 
     Ok(())
+}
+
+pub(crate) fn apply_runtime_geometry_edit(world: &mut World, edit: &GeometryEdit) -> bool {
+    let mut graph = match world.resource_mut::<CavernGeometryGraph>() {
+        Ok(graph) => graph,
+        Err(_) => return false,
+    };
+    let affected = graph.apply_edit(edit);
+    let revision = graph.revision;
+    let world_bounds = graph.bounds;
+    let event = GeometryEditEvent {
+        revision,
+        edit: edit.clone(),
+    };
+    drop(graph);
+
+    if let Some(bounds) = affected
+        && let Ok(mut field) = world.resource_mut::<CavernCollisionField>()
+    {
+        field.invalidate_bounds(bounds);
+        field.revision_seen = revision;
+        field.world_bounds = world_bounds;
+    }
+
+    if let Ok(mut runtime) = world.resource_mut::<CavernGeometryRuntimeState>() {
+        runtime.edit_events.push(event);
+    }
+    true
 }
 
 pub(crate) fn spawn_player_entity(

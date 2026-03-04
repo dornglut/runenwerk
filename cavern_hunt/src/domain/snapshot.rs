@@ -8,12 +8,16 @@ use crate::domain::components::{
 use crate::domain::is_active_player_entity;
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
 use crate::domain::resources::{
-    CavernObjectiveState, CavernPlayerOwnershipState, CavernRunPhase, CavernRunState, CavernSeed,
-    ExtractionState, LocalPlayerRef, PlayerSpawnProfile, RoomEncounterRegistry,
+    CavernGeometryRuntimeState, CavernObjectiveState, CavernPlayerOwnershipState, CavernRunPhase,
+    CavernRunState, CavernSeed, ExtractionState, LocalPlayerRef, PlayerSpawnProfile,
+    RoomEncounterRegistry,
 };
 use crate::domain::worldgen::CavernLayout;
 use crate::domain::worldgen::RoomId;
-use crate::domain::{CavernCollisionField, CavernGeometryGraph, CavernTopology};
+use crate::domain::{
+    CavernCollisionField, CavernGeometryGraph, CavernTopology, GeometryEditEvent,
+    GeometryPrimitiveId,
+};
 use anyhow::Result;
 use engine::prelude::{Bundle, Entity, NetworkSessionStatus, SimulationTick, World};
 use serde::{Deserialize, Serialize};
@@ -141,6 +145,9 @@ pub struct CavernRunSnapshotV1 {
     pub layout: CavernLayoutSnapshotV1,
     pub topology: Option<CavernTopologySnapshotV1>,
     pub geometry: Option<CavernGeometrySnapshotV1>,
+    pub geometry_revision: u64,
+    pub geometry_edits: Vec<GeometryEditEvent>,
+    pub extraction_seal_primitive: Option<GeometryPrimitiveId>,
     pub players: Vec<CavernPlayerSnapshotV1>,
     pub enemies: Vec<CavernEnemySnapshotV1>,
     pub projectiles: Vec<CavernProjectileSnapshotV1>,
@@ -164,6 +171,9 @@ pub struct CavernRunDeltaV1 {
     pub layout: Option<CavernLayoutSnapshotV1>,
     pub topology: Option<CavernTopologySnapshotV1>,
     pub geometry: Option<CavernGeometrySnapshotV1>,
+    pub geometry_revision: Option<u64>,
+    pub geometry_edits: Option<Vec<GeometryEditEvent>>,
+    pub extraction_seal_primitive: Option<Option<GeometryPrimitiveId>>,
     pub players: Option<Vec<CavernPlayerSnapshotV1>>,
     pub enemies: Option<Vec<CavernEnemySnapshotV1>>,
     pub projectiles: Option<Vec<CavernProjectileSnapshotV1>>,
@@ -233,6 +243,10 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
         .resource::<CavernGeometryGraph>()
         .cloned()
         .unwrap_or_else(|_| CavernGeometryGraph::from_topology(&topology));
+    let runtime_geometry = world
+        .resource::<CavernGeometryRuntimeState>()
+        .cloned()
+        .unwrap_or_default();
     let objective = world.resource::<CavernObjectiveState>()?.clone();
     let extraction = world.resource::<ExtractionState>()?.clone();
     let encounters = world
@@ -465,6 +479,12 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
             revision: geometry.revision.0,
             graph: geometry,
         }),
+        geometry_revision: world
+            .resource::<CavernGeometryGraph>()
+            .map(|graph| graph.revision.0)
+            .unwrap_or_default(),
+        geometry_edits: runtime_geometry.edit_events,
+        extraction_seal_primitive: runtime_geometry.extraction_seal_primitive,
         players,
         enemies,
         projectiles,
@@ -505,6 +525,13 @@ pub fn build_cavern_run_delta(
         } else {
             None
         },
+        geometry_revision: (base.geometry_revision != current.geometry_revision)
+            .then_some(current.geometry_revision),
+        geometry_edits: (base.geometry_edits != current.geometry_edits)
+            .then_some(current.geometry_edits.clone()),
+        extraction_seal_primitive: (base.extraction_seal_primitive
+            != current.extraction_seal_primitive)
+            .then_some(current.extraction_seal_primitive),
         players: (base.players != current.players).then_some(current.players.clone()),
         enemies: (base.enemies != current.enemies).then_some(current.enemies.clone()),
         projectiles: (base.projectiles != current.projectiles)
@@ -545,6 +572,14 @@ pub fn apply_cavern_run_delta(
         layout: delta.layout.clone().unwrap_or_else(|| base.layout.clone()),
         topology: delta.topology.clone().or_else(|| base.topology.clone()),
         geometry: delta.geometry.clone().or_else(|| base.geometry.clone()),
+        geometry_revision: delta.geometry_revision.unwrap_or(base.geometry_revision),
+        geometry_edits: delta
+            .geometry_edits
+            .clone()
+            .unwrap_or_else(|| base.geometry_edits.clone()),
+        extraction_seal_primitive: delta
+            .extraction_seal_primitive
+            .unwrap_or(base.extraction_seal_primitive),
         players: delta
             .players
             .clone()
@@ -599,22 +634,30 @@ pub fn restore_cavern_run_snapshot(
         .topology
         .as_ref()
         .map(|snapshot| snapshot.topology.clone())
-        .or_else(|| world.resource::<CavernTopology>().ok().map(|topology| topology.clone()))
+        .or_else(|| {
+            world
+                .resource::<CavernTopology>()
+                .ok()
+                .map(|topology| topology.clone())
+        })
         .unwrap_or_else(|| CavernTopology::from_layout(&layout, snapshot.seed));
     world.insert_resource(topology.clone());
-    let geometry = snapshot
+    let mut geometry = snapshot
         .geometry
         .as_ref()
         .map(|snapshot| snapshot.graph.clone())
-        .or_else(|| {
-            world
-                .resource::<CavernGeometryGraph>()
-                .ok()
-                .map(|graph| graph.clone())
-        })
         .unwrap_or_else(|| CavernGeometryGraph::from_topology(&topology));
+    if snapshot.geometry.is_none() {
+        for event in &snapshot.geometry_edits {
+            let _ = geometry.apply_edit(&event.edit);
+        }
+    }
     world.insert_resource(geometry.clone());
     world.insert_resource(CavernCollisionField::from_graph(&geometry));
+    world.insert_resource(CavernGeometryRuntimeState {
+        extraction_seal_primitive: snapshot.extraction_seal_primitive,
+        edit_events: snapshot.geometry_edits.clone(),
+    });
     world.insert_resource(CavernRunState {
         run_id: snapshot.run_id,
         seed: snapshot.seed,

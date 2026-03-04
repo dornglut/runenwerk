@@ -1,9 +1,11 @@
 use crate::domain::{
-    CavernControlState, CavernRunConfig, CavernRunPhase, CavernRunState, CavernServerControlMap,
-    Chest, ColliderRadius, DashState, EliteObjective, EnemyKind, ExtractionZone, Health,
-    InventoryRunState, LootDrop, LootTableRegistry, Pickup, PickupKind, PlayerId, PlayerSpectator,
-    RelicKind, Transform2, WeaponModKind, WeaponState, is_active_player_entity,
+    CavernControlState, CavernGeometryRuntimeState, CavernRunConfig, CavernRunPhase,
+    CavernRunState, CavernServerControlMap, Chest, ColliderRadius, DashState, EliteObjective,
+    EnemyKind, ExtractionZone, GeometryEdit, GeometryEditKind, Health, InventoryRunState, LootDrop,
+    LootTableRegistry, Pickup, PickupKind, PlayerId, PlayerSpectator, RelicKind, Transform2,
+    WeaponModKind, WeaponState, is_active_player_entity,
 };
+use crate::plugins::worldgen::apply_runtime_geometry_edit;
 use anyhow::Result;
 use engine::prelude::{
     App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, SimulationRng,
@@ -71,6 +73,17 @@ fn resolve_enemy_deaths(world: &mut World) -> Result<()> {
             run_state.elite_defeated = true;
             run_state.extraction_active = true;
             run_state.phase = CavernRunPhase::Extraction;
+            drop(run_state);
+            if let Ok(runtime) = world.resource::<CavernGeometryRuntimeState>()
+                && let Some(seal_id) = runtime.extraction_seal_primitive
+            {
+                let _ = apply_runtime_geometry_edit(
+                    world,
+                    &GeometryEdit {
+                        kind: GeometryEditKind::DisablePrimitive(seal_id),
+                    },
+                );
+            }
         }
         {
             let mut run_state = world.resource_mut::<CavernRunState>()?;
@@ -459,6 +472,23 @@ mod tests {
         let run_state = world.resource::<CavernRunState>().unwrap();
         assert!(run_state.elite_defeated);
         assert!(run_state.extraction_active);
+        let geometry = world
+            .resource::<crate::domain::CavernGeometryGraph>()
+            .unwrap();
+        let runtime = world
+            .resource::<crate::domain::CavernGeometryRuntimeState>()
+            .unwrap();
+        let seal_id = runtime
+            .extraction_seal_primitive
+            .expect("extraction seal primitive should be tracked");
+        let seal = geometry
+            .primitive(seal_id)
+            .expect("extraction seal primitive should still exist");
+        assert!(!seal.enabled);
+        assert!(runtime.edit_events.iter().any(|event| matches!(
+            event.edit.kind,
+            crate::domain::GeometryEditKind::DisablePrimitive(id) if id == seal_id
+        )));
     }
 
     #[test]
