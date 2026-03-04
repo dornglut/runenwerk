@@ -179,7 +179,11 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
         last_server_players = server_players.clone();
         last_client_a_local = client_a_local;
         last_client_b_local = client_b_local;
-        if server_players.len() == 2 && client_a_local.is_some() && client_b_local.is_some() {
+        if server_players.len() == 2
+            && client_a_local.is_some()
+            && client_b_local.is_some()
+            && client_a_local != client_b_local
+        {
             connected_round = Some(round);
             break;
         }
@@ -207,10 +211,6 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
     let client_b_player_id = client_b.world().resource::<LocalPlayerRef>()?.player_id;
     assert!(client_a_player_id.is_some(), "client A should own a player");
     assert!(client_b_player_id.is_some(), "client B should own a player");
-    assert_ne!(
-        client_a_player_id, client_b_player_id,
-        "client players should map to different slots"
-    );
 
     {
         let input = &mut *client_a
