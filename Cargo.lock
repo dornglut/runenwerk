@@ -334,9 +334,11 @@ dependencies = [
  "ecs",
  "engine",
  "engine_net",
+ "engine_net_quic",
  "postcard",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "wgpu",
 ]

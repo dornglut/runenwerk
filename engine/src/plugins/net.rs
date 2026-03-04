@@ -452,6 +452,14 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                     session.last_disconnect = None;
                     session.last_join_state = Some(join.join_state.clone());
                 }
+                if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer)
+                    && let Ok(mut session) = world.resource_mut::<ClientSessionState>()
+                {
+                    observe_server_message(
+                        &mut session,
+                        &ServerMessage::JoinAccepted(join.clone()),
+                    );
+                }
                 if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
                     status.phase = SessionPhase::Active;
                     status.connected = true;
@@ -469,6 +477,14 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                 apply_session_runtime_join_state(&mut world, &join.join_state);
             }
             SessionRuntimeEvent::JoinRejected(reason) => {
+                if let Ok(mut session) = world.resource_mut::<ClientSessionState>() {
+                    observe_server_message(
+                        &mut session,
+                        &ServerMessage::JoinRejected(engine_net::JoinRejected {
+                            reason: reason.clone(),
+                        }),
+                    );
+                }
                 if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
                     status.phase = SessionPhase::Rejected(reason.clone());
                     status.last_disconnect = Some(reason.clone());

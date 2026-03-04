@@ -69,10 +69,18 @@ fn sync_session_runtime_config_system(
     session: Res<SessionRuntimeState>,
     mut config: ResMut<CavernRunConfig>,
 ) -> Result<()> {
-    if session.max_players > 0 {
-        config.max_players = session.max_players.max(1);
-    }
+    sync_session_runtime_config(&session, &mut config);
     Ok(())
+}
+
+fn sync_session_runtime_config(session: &SessionRuntimeState, config: &mut CavernRunConfig) {
+    if session.max_players > 0 {
+        // Local/dev dedicated-authority sessions can admit with a fallback join state
+        // that carries `max_players = 1`. Do not collapse the game-configured run
+        // capacity in that case; only widen capacity here until real lobby metadata
+        // becomes mandatory for all admissions.
+        config.max_players = config.max_players.max(session.max_players.max(1));
+    }
 }
 
 fn client_setup_system(mut world: WorldMut) -> Result<()> {
@@ -203,6 +211,24 @@ mod tests {
     use engine::prelude::{
         AuthorityRole, DeterminismLevel, SimulationProfile, SimulationProfileConfig, World,
     };
+    use engine::state::SessionRuntimeState;
+
+    #[test]
+    fn session_sync_does_not_shrink_default_party_capacity_for_dev_join_state() {
+        let session = SessionRuntimeState {
+            admitted: true,
+            max_players: 1,
+            ..SessionRuntimeState::default()
+        };
+        let mut config = CavernRunConfig {
+            max_players: 4,
+            ..CavernRunConfig::default()
+        };
+
+        super::sync_session_runtime_config(&session, &mut config);
+
+        assert_eq!(config.max_players, 4);
+    }
 
     #[test]
     fn server_activation_follows_owned_connections() {

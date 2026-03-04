@@ -254,6 +254,12 @@ fn client_plugin_marks_session_active_on_join_accept() {
     );
     let diagnostics = app.world().resource::<NetworkDiagnostics>().unwrap();
     assert_eq!(diagnostics.accepted_connections, 1);
+    let runtime_status = app.world().resource::<NetworkSessionStatus>().unwrap();
+    assert_eq!(runtime_status.phase, SessionPhase::Active);
+    assert_eq!(
+        runtime_status.connection_id,
+        Some(engine_net::ConnectionId(7))
+    );
 }
 
 #[test]
