@@ -1,6 +1,7 @@
 use crate::domain::{
-    CavernCameraState, CavernLayout, CavernSdfAgent, CavernSdfWorldFrame, CavernTopology, Chest,
-    ColliderRadius, EnemyKind, ExtractionZone, Health, LocalPlayerRef, LootDrop, Pickup, Player,
+    CavernCameraState, CavernGeometryGraph, CavernLayout, CavernSdfAgent, CavernSdfBlocker,
+    CavernSdfWorldFrame, CavernTopology, Chest, ColliderRadius, EnemyKind, ExtractionZone,
+    GeometryOp, GeometryPrimitiveShape3, Health, LocalPlayerRef, LootDrop, Pickup, Player,
     PlayerCompanion, PlayerSpectator, Projectile, ProjectileVisualState, Transform2,
     is_active_player_entity,
 };
@@ -35,6 +36,7 @@ const COMPOSE_SHADER: &str = include_str!("../../../assets/shaders/world_compose
 const COMPUTE_SHADER: &str = include_str!("../../../assets/shaders/cavern_hunt_sdf.wgsl");
 const MAX_ROOMS: usize = 16;
 const MAX_TUNNELS: usize = 24;
+const MAX_BLOCKERS: usize = 64;
 const MAX_AGENTS: usize = 96;
 const CLEAR_COLOR: Color = Color {
     r: 0.01,
@@ -54,8 +56,8 @@ struct CavernWorldParamsRaw {
     _pad2: [f32; 2],
     room_count: u32,
     tunnel_count: u32,
+    blocker_count: u32,
     agent_count: u32,
-    _pad3: u32,
     floor_rock_height: [f32; 4],
     camera_target_time: [f32; 4],
     camera_orbit: [f32; 4],
@@ -90,6 +92,15 @@ struct CavernAgentRaw {
     _pad0: [u32; 2],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct CavernBlockerRaw {
+    center: [f32; 3],
+    radius: f32,
+    half_height: f32,
+    _pad0: [f32; 3],
+}
+
 #[derive(Default)]
 struct CavernGpuSharedState {
     pass: Option<CavernGpuPass>,
@@ -101,6 +112,7 @@ struct CavernGpuPass {
     params_buffer: Buffer,
     rooms_buffer: Buffer,
     tunnels_buffer: Buffer,
+    blockers_buffer: Buffer,
     agents_buffer: Buffer,
     compute_bind_group: BindGroup,
     compose_bind_group: BindGroup,
@@ -180,6 +192,17 @@ pub(crate) fn build_sdf_world_frame_system(
         .map(|topology| topology.to_layout_2d())
         .unwrap_or_else(|_| layout.clone());
     frame.rebuild_from_layout(&render_layout, &camera);
+    if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
+        for primitive in graph
+            .primitives
+            .iter()
+            .filter(|primitive| primitive.enabled && primitive.op == GeometryOp::Blocker)
+        {
+            if let Some(blocker) = blocker_from_shape(&primitive.shape) {
+                frame.blockers.push(blocker);
+            }
+        }
+    }
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
         if is_active_player_entity(&world, entity) {
@@ -316,6 +339,68 @@ pub(crate) fn build_sdf_world_frame_system(
     Ok(())
 }
 
+fn blocker_from_shape(shape: &GeometryPrimitiveShape3) -> Option<CavernSdfBlocker> {
+    match shape {
+        GeometryPrimitiveShape3::Cylinder {
+            center,
+            radius,
+            half_height,
+        } => Some(CavernSdfBlocker {
+            center: *center,
+            radius: *radius,
+            half_height: *half_height,
+        }),
+        GeometryPrimitiveShape3::Sphere { center, radius } => Some(CavernSdfBlocker {
+            center: *center,
+            radius: *radius,
+            half_height: *radius,
+        }),
+        GeometryPrimitiveShape3::Capsule { start, end, radius } => {
+            let center = [
+                (start[0] + end[0]) * 0.5,
+                (start[1] + end[1]) * 0.5,
+                (start[2] + end[2]) * 0.5,
+            ];
+            let half_height = ((start[1] - end[1]).abs() * 0.5 + *radius).max(0.1);
+            Some(CavernSdfBlocker {
+                center,
+                radius: *radius,
+                half_height,
+            })
+        }
+        GeometryPrimitiveShape3::Box {
+            center,
+            half_extents,
+        } => Some(CavernSdfBlocker {
+            center: *center,
+            radius: half_extents[0].max(half_extents[2]).max(0.1),
+            half_height: half_extents[1].max(0.1),
+        }),
+        GeometryPrimitiveShape3::RoundedBox {
+            center,
+            half_extents,
+            radius,
+        } => Some(CavernSdfBlocker {
+            center: *center,
+            radius: (half_extents[0].max(half_extents[2]) + *radius).max(0.1),
+            half_height: (half_extents[1] + *radius).max(0.1),
+        }),
+        GeometryPrimitiveShape3::Ellipsoid { center, radii } => Some(CavernSdfBlocker {
+            center: *center,
+            radius: radii[0].max(radii[2]).max(0.1),
+            half_height: radii[1].max(0.1),
+        }),
+        GeometryPrimitiveShape3::TunnelSplineCapsuleChain { points, radius } => {
+            let center = points.first().copied()?;
+            Some(CavernSdfBlocker {
+                center,
+                radius: *radius,
+                half_height: *radius,
+            })
+        }
+    }
+}
+
 pub(crate) fn project_mouse_to_world(
     camera: &CavernCameraState,
     window: &WindowState,
@@ -342,6 +427,7 @@ fn build_feature_graph_spec() -> Result<RenderFeatureGraphSpec> {
         .resource("cavern.params")
         .resource("cavern.rooms")
         .resource("cavern.tunnels")
+        .resource("cavern.blockers")
         .resource("cavern.agents")
         .resource("cavern.color")
         .resource("surface.color")
@@ -358,6 +444,7 @@ fn build_feature_graph_spec() -> Result<RenderFeatureGraphSpec> {
             "cavern.params",
             "cavern.rooms",
             "cavern.tunnels",
+            "cavern.blockers",
             "cavern.agents",
         ])
         .writes(["cavern.color"])
@@ -410,6 +497,12 @@ fn build_gpu_pass(
     let tunnels_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("cavern_hunt_tunnels_buffer"),
         size: (std::mem::size_of::<CavernTunnelRaw>() * MAX_TUNNELS) as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let blockers_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("cavern_hunt_blockers_buffer"),
+        size: (std::mem::size_of::<CavernBlockerRaw>() * MAX_BLOCKERS) as u64,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -499,6 +592,16 @@ fn build_gpu_pass(
                 },
                 count: None,
             },
+            BindGroupLayoutEntry {
+                binding: 5,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
     let compute_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -524,6 +627,10 @@ fn build_gpu_pass(
             BindGroupEntry {
                 binding: 4,
                 resource: agents_buffer.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 5,
+                resource: blockers_buffer.as_entire_binding(),
             },
         ],
     });
@@ -621,6 +728,7 @@ fn build_gpu_pass(
         params_buffer,
         rooms_buffer,
         tunnels_buffer,
+        blockers_buffer,
         agents_buffer,
         compute_bind_group,
         compose_bind_group,
@@ -687,8 +795,8 @@ impl RenderPassExecutor for CavernComputeExecutor {
             _pad2: [0.0; 2],
             room_count: frame.rooms.len().min(MAX_ROOMS) as u32,
             tunnel_count: frame.tunnels.len().min(MAX_TUNNELS) as u32,
+            blocker_count: frame.blockers.len().min(MAX_BLOCKERS) as u32,
             agent_count: frame.agents.len().min(MAX_AGENTS) as u32,
-            _pad3: 0,
             floor_rock_height: [frame.floor_height, frame.rock_height, 0.0, 0.0],
             camera_target_time: [
                 frame.camera.target[0],
@@ -743,6 +851,22 @@ impl RenderPassExecutor for CavernComputeExecutor {
         if !tunnels.is_empty() {
             ctx.queue()
                 .write_buffer(&pass.tunnels_buffer, 0, bytemuck::cast_slice(&tunnels));
+        }
+
+        let blockers = frame
+            .blockers
+            .iter()
+            .take(MAX_BLOCKERS)
+            .map(|blocker| CavernBlockerRaw {
+                center: blocker.center,
+                radius: blocker.radius,
+                half_height: blocker.half_height,
+                _pad0: [0.0; 3],
+            })
+            .collect::<Vec<_>>();
+        if !blockers.is_empty() {
+            ctx.queue()
+                .write_buffer(&pass.blockers_buffer, 0, bytemuck::cast_slice(&blockers));
         }
 
         let agents = frame

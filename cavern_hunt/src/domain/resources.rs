@@ -519,6 +519,13 @@ pub struct CavernSdfAgent {
     pub kind: u32,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct CavernSdfBlocker {
+    pub center: [f32; 3],
+    pub radius: f32,
+    pub half_height: f32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CavernSdfWorldFrame {
     pub world_bounds: [f32; 4],
@@ -527,6 +534,7 @@ pub struct CavernSdfWorldFrame {
     pub camera: CavernCameraState,
     pub rooms: Vec<CavernRoom>,
     pub tunnels: Vec<CavernTunnel>,
+    pub blockers: Vec<CavernSdfBlocker>,
     pub agents: Vec<CavernSdfAgent>,
 }
 
@@ -539,6 +547,7 @@ impl Default for CavernSdfWorldFrame {
             camera: CavernCameraState::default(),
             rooms: Vec::new(),
             tunnels: Vec::new(),
+            blockers: Vec::new(),
             agents: Vec::new(),
         }
     }
@@ -550,6 +559,7 @@ impl CavernSdfWorldFrame {
         self.camera = camera.clone();
         self.rooms = layout.rooms.clone();
         self.tunnels = layout.connections.clone();
+        self.blockers.clear();
         self.agents.clear();
     }
 }

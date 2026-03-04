@@ -7,8 +7,8 @@ struct WorldParams {
     _pad2 : vec2<f32>,
     room_count : u32,
     tunnel_count : u32,
+    blocker_count : u32,
     agent_count : u32,
-    _pad3 : u32,
     floor_rock_height : vec4<f32>,
     camera_target_time : vec4<f32>,
     camera_orbit : vec4<f32>,
@@ -37,6 +37,13 @@ struct Agent {
     _pad0 : vec2<u32>,
 };
 
+struct Blocker {
+    center : vec3<f32>,
+    radius : f32,
+    half_height : f32,
+    _pad0 : vec3<f32>,
+};
+
 @group(0) @binding(0)
 var output_tex : texture_storage_2d<rgba8unorm, write>;
 
@@ -49,6 +56,8 @@ var<storage, read> rooms : array<Room>;
 var<storage, read> tunnels : array<Tunnel>;
 @group(0) @binding(4)
 var<storage, read> agents : array<Agent>;
+@group(0) @binding(5)
+var<storage, read> blockers : array<Blocker>;
 
 fn sd_box2(p: vec2<f32>, b: vec2<f32>) -> f32 {
     let q = abs(p) - b;
@@ -69,6 +78,14 @@ fn sd_capsule2(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
 
 fn sd_sphere(p: vec3<f32>, r: f32) -> f32 {
     return length(p) - r;
+}
+
+fn sd_cylinder_y(p: vec3<f32>, center: vec3<f32>, radius: f32, half_height: f32) -> f32 {
+    let q = p - center;
+    let radial = length(q.xz) - radius;
+    let y = abs(q.y) - half_height;
+    let outside = length(max(vec2<f32>(radial, y), vec2<f32>(0.0)));
+    return min(max(radial, y), 0.0) + outside;
 }
 
 fn op_smooth_union(a: f32, b: f32, k: f32) -> f32 {
@@ -108,8 +125,25 @@ fn floor_distance(p: vec3<f32>) -> f32 {
     return sd_extruded(cave_sdf, p.y - params.floor_rock_height.x, floor_half_h);
 }
 
+fn blockers_distance(p: vec3<f32>) -> f32 {
+    var d = 1e9;
+    for (var i = 0u; i < params.blocker_count; i = i + 1u) {
+        d = min(
+            d,
+            sd_cylinder_y(
+                p,
+                blockers[i].center,
+                blockers[i].radius,
+                blockers[i].half_height,
+            ),
+        );
+    }
+    return d;
+}
+
 fn scene_distance(p: vec3<f32>) -> f32 {
     var scene = min(rock_distance(p), floor_distance(p));
+    scene = min(scene, blockers_distance(p));
     for (var i = 0u; i < params.agent_count; i = i + 1u) {
         let h = select(0.45, 0.18, agents[i].kind == 5u || agents[i].kind == 6u);
         let d = sd_sphere(
@@ -137,6 +171,7 @@ fn sky_color(rd: vec3<f32>) -> vec3<f32> {
 fn material_color(p: vec3<f32>) -> vec3<f32> {
     let rock_d = rock_distance(p);
     let floor_d = floor_distance(p);
+    let blocker_d = blockers_distance(p);
     var best = floor_d;
     var color = vec3<f32>(0.06, 0.07, 0.08);
 
@@ -144,6 +179,11 @@ fn material_color(p: vec3<f32>) -> vec3<f32> {
         best = rock_d;
         let cave_edge = clamp(-cave_footprint(p.xz) * 0.18, 0.0, 1.0);
         color = mix(vec3<f32>(0.11, 0.12, 0.13), vec3<f32>(0.19, 0.22, 0.24), cave_edge);
+    }
+
+    if (blocker_d < best) {
+        best = blocker_d;
+        color = vec3<f32>(0.24, 0.21, 0.19);
     }
 
     for (var i = 0u; i < params.agent_count; i = i + 1u) {
