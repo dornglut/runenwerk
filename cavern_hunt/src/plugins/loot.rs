@@ -1,10 +1,8 @@
 use crate::domain::{
-    CavernMetaProfile, CavernRunConfig, CavernRunPhase, CavernRunState, ColliderRadius, DashState,
-    EliteObjective, EnemyKind, ExtractionZone, Health, InventoryRunState, LootDrop,
-    LootTableRegistry, Pickup, PickupKind, RelicKind, Transform2, WeaponModKind, WeaponState,
-    is_active_player_entity,
+    CavernRunConfig, CavernRunPhase, CavernRunState, ColliderRadius, DashState, EliteObjective,
+    EnemyKind, ExtractionZone, Health, InventoryRunState, LootDrop, LootTableRegistry, Pickup,
+    PickupKind, RelicKind, Transform2, WeaponModKind, WeaponState, is_active_player_entity,
 };
-use crate::plugins::meta;
 use anyhow::Result;
 use engine::prelude::{
     App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, SimulationRng,
@@ -247,24 +245,9 @@ fn resolve_run_state(world: &mut World) -> Result<()> {
 
     let elapsed = (current_tick.saturating_sub(started_at.0)) as f32 * fixed_dt;
     if elapsed >= countdown_seconds {
-        let total_scrap = total_party_scrap(world);
         {
             let mut run_state = world.resource_mut::<CavernRunState>()?;
             run_state.phase = CavernRunPhase::Success;
-        }
-        if total_scrap > 0 {
-            let updated_profile = {
-                let mut profile = world
-                    .resource_mut::<CavernMetaProfile>()
-                    .unwrap_or_else(|_| {
-                        panic!("meta profile should be initialized on game startup")
-                    });
-                profile.cavern_marks = profile.cavern_marks.saturating_add(total_scrap);
-                profile.clone()
-            };
-            if let Err(err) = meta::save_meta_profile(&updated_profile) {
-                tracing::warn!(?err, "failed to persist Cavern Hunt meta profile");
-            }
         }
     }
 
@@ -373,16 +356,6 @@ fn apply_pickup(world: &mut World, player_entity: Entity, pickup: PickupKind) ->
         }
     }
     Ok(())
-}
-
-fn total_party_scrap(world: &World) -> u32 {
-    world
-        .query::<(Entity, &InventoryRunState)>()
-        .iter()
-        .filter_map(|(entity, inventory)| {
-            is_active_player_entity(world, entity).then_some(inventory.scrap)
-        })
-        .sum()
 }
 
 fn distance_squared(a: [f32; 2], b: [f32; 2]) -> f32 {

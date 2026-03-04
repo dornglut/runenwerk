@@ -1,5 +1,9 @@
 use anyhow::{Result, bail};
-use cavern_hunt::domain::{LocalPlayerRef, PlayerActive, PlayerId, Transform2};
+use cavern_hunt::domain::{
+    CavernMetaPersistenceConfig, CavernMetaProfile, CavernRunConfig, CavernRunPhase,
+    CavernRunState, EnemyKind, ExtractionZone, Health, InventoryRunState, LocalPlayerRef,
+    PlayerActive, PlayerId, Transform2,
+};
 use cavern_hunt::{CavernHuntPlugin, CavernHuntServerPlugin};
 use engine::plugins::{
     NetworkClientPlugin, NetworkRuntimeHandle, NetworkServerPlugin, default_plugins,
@@ -36,7 +40,20 @@ fn build_client_app(handle: NetworkRuntimeHandle) -> App {
     app.add_plugins(default_plugins());
     app.add_plugins((NetworkClientPlugin, CavernHuntPlugin));
     app.world_mut().insert_resource(handle);
+    app.world_mut()
+        .insert_resource(CavernMetaPersistenceConfig { enabled: false });
     app
+}
+
+fn clear_client_input(app: &mut App) -> Result<()> {
+    let input = &mut *app
+        .world_mut()
+        .resource_mut::<engine::prelude::InputState>()?;
+    input.world_move_left = false;
+    input.world_move_right = false;
+    input.world_move_up = false;
+    input.world_move_down = false;
+    Ok(())
 }
 
 fn step_tick(mut app: App) -> Result<App> {
@@ -202,6 +219,90 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
 
     assert!(player_one.x > 0.5, "player one should have moved right");
     assert!(player_two.y > 0.5, "player two should have moved up");
+
+    clear_client_input(&mut client_a)?;
+    clear_client_input(&mut client_b)?;
+
+    {
+        let extraction_pos = server
+            .world()
+            .query::<(engine::prelude::Entity, &Transform2)>()
+            .iter()
+            .find_map(|(entity, transform)| {
+                server
+                    .world()
+                    .get::<ExtractionZone>(entity)
+                    .map(|_| [transform.x, transform.y])
+            })
+            .expect("server should have an extraction zone");
+        let player_entities = server
+            .world()
+            .query::<(engine::prelude::Entity, &PlayerId)>()
+            .iter()
+            .filter_map(|(entity, player_id)| {
+                server
+                    .world()
+                    .get::<PlayerActive>(entity)
+                    .is_some()
+                    .then_some((entity, player_id.0))
+            })
+            .collect::<Vec<_>>();
+        for (entity, player_id) in player_entities {
+            if let Some(mut inventory) = server.world_mut().get_mut::<InventoryRunState>(entity) {
+                inventory.scrap = if player_id == 1 { 11 } else { 17 };
+            }
+            if let Some(mut transform) = server.world_mut().get_mut::<Transform2>(entity) {
+                transform.x = extraction_pos[0];
+                transform.y = extraction_pos[1];
+            }
+        }
+        if let Some(elite) = server
+            .world()
+            .query::<(engine::prelude::Entity, &EnemyKind)>()
+            .iter()
+            .find_map(|(entity, kind)| (*kind == EnemyKind::NestGuardian).then_some(entity))
+            && let Some(mut health) = server.world_mut().get_mut::<Health>(elite)
+        {
+            health.current = 0.0;
+        }
+        if let Ok(mut config) = server.world_mut().resource_mut::<CavernRunConfig>() {
+            config.extract_countdown_seconds = 0.0;
+        }
+    }
+
+    let mut saw_success = false;
+    for _ in 0..30 {
+        (server, client_a, client_b) = pump_round(server, client_a, client_b).await?;
+        let server_phase = server.world().resource::<CavernRunState>()?.phase;
+        let client_a_phase = client_a.world().resource::<CavernRunState>()?.phase;
+        let client_b_phase = client_b.world().resource::<CavernRunState>()?.phase;
+        if matches!(server_phase, CavernRunPhase::Success)
+            && matches!(client_a_phase, CavernRunPhase::Success)
+            && matches!(client_b_phase, CavernRunPhase::Success)
+        {
+            saw_success = true;
+            break;
+        }
+    }
+
+    assert!(
+        saw_success,
+        "server and clients should converge on run success"
+    );
+    assert_eq!(
+        client_a
+            .world()
+            .resource::<CavernMetaProfile>()?
+            .cavern_marks,
+        11
+    );
+    assert_eq!(
+        client_b
+            .world()
+            .resource::<CavernMetaProfile>()?
+            .cavern_marks,
+        17
+    );
 
     server
         .world()

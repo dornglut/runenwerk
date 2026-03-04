@@ -1,5 +1,6 @@
 use crate::domain::{
-    CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
+    CavernAimState, CavernCameraState, CavernControlState, CavernLayout,
+    CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState,
     CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig, CavernRunState,
     CavernSdfWorldFrame, CavernServerControlMap, LocalPlayerRef, LootTableRegistry, PlayerActive,
     PlayerId, SpawnDirector,
@@ -26,6 +27,8 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<SpawnDirector>();
         app.init_resource::<LootTableRegistry>();
         app.init_resource::<CavernMetaProfile>();
+        app.init_resource::<CavernMetaPersistenceConfig>();
+        app.init_resource::<CavernMetaRewardState>();
         app.init_resource::<LocalPlayerRef>();
         app.init_resource::<CavernCameraState>();
         app.init_resource::<CavernAimState>();
@@ -48,6 +51,7 @@ impl Plugin for CavernHuntPlugin {
                 sync_active_player_slots_system.after(CoreSet::NetReceive),
             ),
         );
+        app.add_systems(PreUpdate, meta::apply_run_meta_rewards_system);
     }
 }
 
@@ -201,10 +205,10 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
 mod tests {
     use super::sync_active_player_slots;
     use crate::domain::{
-        CavernAimState, CavernCameraState, CavernLayout, CavernMetaProfile,
-        CavernPlayerOwnershipState, CavernRunConfig, CavernRunState, CavernSdfWorldFrame,
-        CavernServerControlMap, LocalPlayerRef, LootTableRegistry, PlayerActive, PlayerId,
-        SpawnDirector,
+        CavernAimState, CavernCameraState, CavernLayout, CavernMetaPersistenceConfig,
+        CavernMetaProfile, CavernMetaRewardState, CavernPlayerOwnershipState, CavernRunConfig,
+        CavernRunState, CavernSdfWorldFrame, CavernServerControlMap, LocalPlayerRef,
+        LootTableRegistry, PlayerActive, PlayerId, SpawnDirector,
     };
     use crate::plugins::worldgen;
     use engine::plugins::ui::domain::UiWorldHudStats;
@@ -239,6 +243,8 @@ mod tests {
         world.insert_resource(SpawnDirector::default());
         world.insert_resource(LootTableRegistry::default());
         world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(CavernMetaPersistenceConfig { enabled: false });
+        world.insert_resource(CavernMetaRewardState::default());
         world.insert_resource(LocalPlayerRef::default());
         world.insert_resource(CavernCameraState::default());
         world.insert_resource(CavernAimState::default());

@@ -120,6 +120,22 @@ impl Default for CavernMetaProfile {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct CavernMetaPersistenceConfig {
+    pub enabled: bool,
+}
+
+impl Default for CavernMetaPersistenceConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub struct CavernMetaRewardState {
+    pub last_awarded_run_id: Option<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LocalPlayerRef {
     pub player_id: Option<u32>,
