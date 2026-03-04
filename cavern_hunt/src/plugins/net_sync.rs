@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 const RUN_EVENT_SNAPSHOT: &str = "cavern_hunt.snapshot.v1";
 const RUN_EVENT_DELTA: &str = "cavern_hunt.delta.v1";
 const RUN_EVENT_GEOMETRY_EDITS: &str = "cavern_hunt.geometry.edits.v1";
+const REPLICATION_DELTA_INTERVAL_TICKS: u64 = 2;
+const REPLICATION_FULL_SNAPSHOT_INTERVAL_TICKS: u64 = 30;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct CavernNetSyncState {
@@ -339,8 +341,7 @@ fn server_emit_replication(world: &mut World) -> Result<()> {
         .resource::<CavernGeometryRuntimeState>()
         .cloned()
         .unwrap_or_default();
-
-    let geometry_event_payload = {
+    {
         let mut state = world.resource_mut::<CavernNetSyncState>()?;
         if state.active_connection_id != connection_id {
             state.active_connection_id = connection_id;
@@ -349,7 +350,10 @@ fn server_emit_replication(world: &mut World) -> Result<()> {
             state.last_sent_snapshot = None;
             state.last_sent_geometry_edit_count = 0;
         }
+    }
 
+    let geometry_event_payload = {
+        let mut state = world.resource_mut::<CavernNetSyncState>()?;
         if state.initial_snapshot_sent
             && runtime_geometry.edit_events.len() > state.last_sent_geometry_edit_count
         {
@@ -378,19 +382,21 @@ fn server_emit_replication(world: &mut World) -> Result<()> {
         }));
     }
 
+    let should_emit_replication = {
+        let state = world.resource::<CavernNetSyncState>()?;
+        !state.initial_snapshot_sent || tick.0 % REPLICATION_DELTA_INTERVAL_TICKS == 0
+    };
+    if !should_emit_replication {
+        return Ok(());
+    }
+
     let (event_code, payload) = {
         let mut state = world.resource_mut::<CavernNetSyncState>()?;
-        if state.active_connection_id != connection_id {
-            state.active_connection_id = connection_id;
-            state.initial_snapshot_sent = false;
-            state.last_cursor = 0;
-            state.last_sent_snapshot = None;
-            state.last_sent_geometry_edit_count = 0;
-        }
-
+        let emit_full_snapshot =
+            !state.initial_snapshot_sent || tick.0 % REPLICATION_FULL_SNAPSHOT_INTERVAL_TICKS == 0;
         state.last_cursor = state.last_cursor.saturating_add(1);
         let cursor = state.last_cursor;
-        if !state.initial_snapshot_sent {
+        if emit_full_snapshot {
             state.initial_snapshot_sent = true;
             state.last_sent_geometry_edit_count = runtime_geometry.edit_events.len();
             state.last_sent_snapshot = Some(snapshot.clone());
@@ -459,37 +465,76 @@ fn client_apply_replication_events(world: &mut World) -> Result<()> {
         return Ok(());
     }
 
+    let mut geometry_events = Vec::new();
+    let mut latest_snapshot: Option<CavernSnapshotEventV1> = None;
+    let mut latest_delta: Option<CavernDeltaEventV1> = None;
+
     for message in events {
         match message {
             ServerMessage::RunEvent(run_event) if run_event.code == RUN_EVENT_GEOMETRY_EDITS => {
                 let event: CavernGeometryEditsEventV1 = postcard::from_bytes(&run_event.payload)?;
-                apply_authoritative_geometry_edits(world, event)?;
+                geometry_events.push(event);
             }
             ServerMessage::RunEvent(run_event) if run_event.code == RUN_EVENT_SNAPSHOT => {
                 let event: CavernSnapshotEventV1 = postcard::from_bytes(&run_event.payload)?;
-                apply_authoritative_cavern_snapshot(
-                    world,
-                    event.tick,
-                    event.cursor,
-                    event.snapshot,
-                )?;
+                if latest_snapshot
+                    .as_ref()
+                    .map(|latest| event.cursor > latest.cursor)
+                    .unwrap_or(true)
+                {
+                    latest_snapshot = Some(event);
+                }
             }
             ServerMessage::RunEvent(run_event) if run_event.code == RUN_EVENT_DELTA => {
                 let event: CavernDeltaEventV1 = postcard::from_bytes(&run_event.payload)?;
-                let rebuilt = {
-                    let state = world.resource::<CavernNetSyncState>()?;
-                    let Some(base) = state.last_received_snapshot.as_ref() else {
-                        continue;
-                    };
-                    if state.last_received_cursor != event.base_cursor {
-                        continue;
-                    }
-                    apply_cavern_run_delta(base, &event.delta)
-                };
-                apply_authoritative_cavern_snapshot(world, event.tick, event.cursor, rebuilt)?;
+                if latest_delta
+                    .as_ref()
+                    .map(|latest| event.cursor > latest.cursor)
+                    .unwrap_or(true)
+                {
+                    latest_delta = Some(event);
+                }
             }
             _ => {}
         }
+    }
+
+    for event in geometry_events {
+        apply_authoritative_geometry_edits(world, event)?;
+    }
+
+    let latest_snapshot_cursor = latest_snapshot
+        .as_ref()
+        .map(|event| event.cursor)
+        .unwrap_or(0);
+    let latest_delta_cursor = latest_delta.as_ref().map(|event| event.cursor).unwrap_or(0);
+    if latest_delta_cursor > latest_snapshot_cursor {
+        if let Some(event) = latest_delta {
+            let rebuilt = {
+                let state = world.resource::<CavernNetSyncState>()?;
+                let Some(base) = state.last_received_snapshot.as_ref() else {
+                    return Ok(());
+                };
+                if state.last_received_cursor != event.base_cursor {
+                    if let Some(snapshot) = latest_snapshot {
+                        apply_authoritative_cavern_snapshot(
+                            world,
+                            snapshot.tick,
+                            snapshot.cursor,
+                            snapshot.snapshot,
+                        )?;
+                    }
+                    return Ok(());
+                }
+                apply_cavern_run_delta(base, &event.delta)
+            };
+            apply_authoritative_cavern_snapshot(world, event.tick, event.cursor, rebuilt)?;
+            return Ok(());
+        }
+    }
+
+    if let Some(event) = latest_snapshot {
+        apply_authoritative_cavern_snapshot(world, event.tick, event.cursor, event.snapshot)?;
     }
 
     Ok(())

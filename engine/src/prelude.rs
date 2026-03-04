@@ -39,4 +39,4 @@ pub use engine_sim::{
     SimulationCommandFrame, SimulationHash, SimulationProfile, SimulationProfileConfig,
     SimulationRng, SimulationSeed, SimulationSessionId,
 };
-pub use scheduler::SystemSet;
+pub use scheduler::label::SystemSet;

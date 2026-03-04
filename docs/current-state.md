@@ -88,6 +88,9 @@ The important public runtime state now includes:
 - `Cavern Hunt` friend-test vertical slice:
   - procedural cavern generation
   - fixed-camera SDF 3D rendering
+  - asset-driven material graph runtime (`RON` graphs + profile presets)
+  - triplanar procedural floor/wall differentiation
+  - PBR-lite shading and GI mode switches
   - live multi-client dedicated-authority play
   - reconnect inside active runs
   - AI fill companions
@@ -106,6 +109,12 @@ The generic runtime path is still intentionally narrow, but `Cavern Hunt` now ow
 - admitted roster identity, AI fill, and session-derived spawn policy
 
 This is enough for a friend-testable vertical slice, but not yet enough for a larger production content set.
+
+### Rendering/material maturity gaps
+
+- material graphs are asset-authored only; there is no editor yet
+- `ProbeGi` is scaffolded as a mode but does not yet have full probe update/population logic
+- normal perturb output exists in graph/schema but is not yet fully integrated into the SDF normal path
 
 ### Multiplayer maturity gaps
 
@@ -136,9 +145,5 @@ Defined but not yet implemented as full runtime profiles:
 
 ## Verification
 
-The current workspace baseline has been exercised with:
-
-- `cargo fmt`
-- `cargo test --workspace`
-
-At the time of this update, the full workspace test suite passed.
+The current update was validated with formatting and targeted static inspection.  
+Full workspace verification is currently blocked by an existing upstream `engine` scheduler API mismatch unrelated to the `cavern_hunt` material changes.

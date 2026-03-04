@@ -1,0 +1,74 @@
+(
+    version: 1,
+    id: "barrier_rock",
+    nodes: [
+        (
+            id: "world_pos",
+            kind: WorldPos,
+        ),
+        (
+            id: "world_normal",
+            kind: WorldNormal,
+        ),
+        (
+            id: "grain",
+            kind: TriplanarNoise(
+                position: "world_pos",
+                normal: "world_normal",
+                scale: 0.34,
+                sharpness: 6.0,
+                seed: 51.0,
+            ),
+        ),
+        (
+            id: "grain_amp",
+            kind: ConstantScalar(value: 0.18),
+        ),
+        (
+            id: "grain_scaled",
+            kind: Multiply(
+                a: "grain",
+                b: "grain_amp",
+            ),
+        ),
+        (
+            id: "grain_vec",
+            kind: ToVec3(input: "grain_scaled"),
+        ),
+        (
+            id: "base_tint",
+            kind: ConstantVec3(value: [0.20, 0.17, 0.15]),
+        ),
+        (
+            id: "base_color",
+            kind: Add(
+                a: "base_tint",
+                b: "grain_vec",
+            ),
+        ),
+        (
+            id: "roughness",
+            kind: ConstantScalar(value: 0.92),
+        ),
+        (
+            id: "metallic",
+            kind: ConstantScalar(value: 0.03),
+        ),
+        (
+            id: "ao",
+            kind: ConstantScalar(value: 0.92),
+        ),
+        (
+            id: "emissive",
+            kind: ConstantVec3(value: [0.0, 0.0, 0.0]),
+        ),
+    ],
+    outputs: (
+        base_color: "base_color",
+        roughness: "roughness",
+        metallic: "metallic",
+        normal_perturb: None,
+        ao: Some("ao"),
+        emissive: Some("emissive"),
+    ),
+)

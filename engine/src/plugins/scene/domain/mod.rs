@@ -2,7 +2,9 @@ use crate::plugins::ui::domain::{
     ConsoleUiRuntimeState, initialize_console_ui, load_console_template,
 };
 use anyhow::Result;
-use scheduler::{Node, Scheduler, SchedulerBuilder};
+use scheduler::builder::SchedulerBuilder;
+use scheduler::node::Node;
+use scheduler::scheduler_core::Scheduler;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 

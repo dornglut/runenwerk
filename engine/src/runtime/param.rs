@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use ecs::query::{MutableQueryData, QueryFilter, ReadOnlyQueryData};
 use ecs::{Bundle, Entity, QueryState, Resource, World};
-use scheduler::{AccessKey, SystemAccess};
+use scheduler::access::{AccessKey, SystemAccess};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;

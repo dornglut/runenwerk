@@ -1,8 +1,9 @@
 use crate::domain::{
-    CavernCameraState, CavernGeometryGraph, CavernLayout, CavernSdfAgent,
-    CavernSdfGeometryPrimitive, CavernSdfWorldFrame, CavernTopology, Chest, ColliderRadius,
-    EnemyKind, ExtractionZone, GeometryOp, GeometryPrimitiveShape3, Health, LocalPlayerRef,
-    LootDrop, Pickup, Player, PlayerCompanion, PlayerSpectator, Projectile, ProjectileVisualState,
+    CavernCameraState, CavernGeometryGraph, CavernLayout, CavernMaterialQualityConfig,
+    CavernMaterialRuntimeState, CavernSdfAgent, CavernSdfGeometryPrimitive, CavernSdfMaterialOp,
+    CavernSdfWorldFrame, CavernTopology, Chest, ColliderRadius, EnemyKind, ExtractionZone,
+    GeometryMaterial, GeometryOp, GeometryPrimitiveShape3, Health, LocalPlayerRef, LootDrop,
+    Pickup, Player, PlayerCompanion, PlayerSpectator, Projectile, ProjectileVisualState,
     Transform2, is_active_player_entity,
 };
 use anyhow::{Result, anyhow};
@@ -36,6 +37,9 @@ const COMPOSE_SHADER: &str = include_str!("../../../assets/shaders/world_compose
 const COMPUTE_SHADER: &str = include_str!("../../../assets/shaders/cavern_hunt_sdf.wgsl");
 const MAX_GEOMETRY_PRIMITIVES: usize = 384;
 const MAX_AGENTS: usize = 96;
+const MAX_MATERIAL_PROGRAMS: usize = 16;
+const MAX_MATERIAL_OPS: usize = 512;
+const MAX_MATERIAL_CONSTANTS: usize = 256;
 const CLEAR_COLOR: Color = Color {
     r: 0.01,
     g: 0.015,
@@ -54,7 +58,14 @@ struct CavernWorldParamsRaw {
     _pad2: [f32; 2],
     primitive_count: u32,
     agent_count: u32,
-    _pad3: [u32; 2],
+    material_program_count: u32,
+    material_op_count: u32,
+    material_constant_count: u32,
+    render_mode: u32,
+    gi_mode: u32,
+    gi_quality: u32,
+    gi_sample_budget: u32,
+    _pad3: [u32; 3],
     floor_rock_height: [f32; 4],
     camera_target_time: [f32; 4],
     camera_orbit: [f32; 4],
@@ -76,10 +87,41 @@ struct CavernAgentRaw {
 struct CavernGeometryPrimitiveRaw {
     shape_kind: u32,
     op_kind: u32,
-    _pad0: [u32; 2],
+    material_class: u32,
+    material_instance: u32,
     p0: [f32; 4],
     p1: [f32; 4],
     p2: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct CavernMaterialProgramHeaderRaw {
+    class_id: u32,
+    op_offset: u32,
+    op_count: u32,
+    const_offset: u32,
+    const_count: u32,
+    base_color_slot: u32,
+    roughness_slot: u32,
+    metallic_slot: u32,
+    normal_perturb_slot: u32,
+    ao_slot: u32,
+    emissive_slot: u32,
+    _pad0: [u32; 3],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct CavernMaterialOpRaw {
+    op: u32,
+    dst: u32,
+    src_a: u32,
+    src_b: u32,
+    src_c: u32,
+    const_idx: u32,
+    flags: u32,
+    _pad0: u32,
 }
 
 #[derive(Default)]
@@ -93,6 +135,9 @@ struct CavernGpuPass {
     params_buffer: Buffer,
     primitives_buffer: Buffer,
     agents_buffer: Buffer,
+    material_program_headers_buffer: Buffer,
+    material_ops_buffer: Buffer,
+    material_constants_buffer: Buffer,
     compute_bind_group: BindGroup,
     compose_bind_group: BindGroup,
     compute_pipeline: ComputePipeline,
@@ -196,8 +241,18 @@ pub(crate) fn build_sdf_world_frame_system(
 
     frame.world_bounds = world_bounds;
     frame.camera = camera.clone();
+    frame.material_program_headers.clear();
+    frame.material_ops.clear();
+    frame.material_constants.clear();
     frame.agents.clear();
     frame.geometry_primitives = geometry_primitives;
+
+    if let Ok(quality) = world.resource::<CavernMaterialQualityConfig>() {
+        frame.render_mode = quality.render_mode.as_gpu_u32();
+        frame.gi_mode = quality.gi.mode.as_gpu_u32();
+        frame.gi_quality = quality.gi.quality.as_gpu_u32();
+        frame.gi_sample_budget = quality.gi.sample_budget.max(1);
+    }
 
     for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
         if is_active_player_entity(&world, entity) {
@@ -331,6 +386,45 @@ pub(crate) fn build_sdf_world_frame_system(
         }
     }
 
+    if let Ok(runtime) = world.resource::<CavernMaterialRuntimeState>() {
+        let payload = runtime.build_gpu_payload(
+            MAX_MATERIAL_PROGRAMS,
+            MAX_MATERIAL_OPS,
+            MAX_MATERIAL_CONSTANTS,
+        );
+        frame.material_program_headers = payload
+            .headers
+            .iter()
+            .map(|header| crate::domain::CavernSdfMaterialProgramHeader {
+                class_id: header.class_id,
+                op_offset: header.op_offset,
+                op_count: header.op_count,
+                const_offset: header.const_offset,
+                const_count: header.const_count,
+                base_color_slot: header.base_color_slot,
+                roughness_slot: header.roughness_slot,
+                metallic_slot: header.metallic_slot,
+                normal_perturb_slot: header.normal_perturb_slot,
+                ao_slot: header.ao_slot,
+                emissive_slot: header.emissive_slot,
+            })
+            .collect();
+        frame.material_ops = payload
+            .ops
+            .iter()
+            .map(|op| CavernSdfMaterialOp {
+                op: op.op,
+                dst: op.dst,
+                src_a: op.src_a,
+                src_b: op.src_b,
+                src_c: op.src_c,
+                const_idx: op.const_idx,
+                flags: op.flags,
+            })
+            .collect();
+        frame.material_constants = payload.constants;
+    }
+
     Ok(())
 }
 
@@ -346,6 +440,15 @@ const OP_SUBTRACT_VOID: u32 = 1;
 const OP_MASK_WALKABLE: u32 = 2;
 const OP_BLOCKER: u32 = 3;
 const OP_HAZARD: u32 = 4;
+
+fn material_class_from_geometry(material: GeometryMaterial) -> u32 {
+    match material {
+        GeometryMaterial::Rock | GeometryMaterial::CavernVoid => crate::domain::MATERIAL_CLASS_ROCK,
+        GeometryMaterial::Barrier => crate::domain::MATERIAL_CLASS_BARRIER,
+        GeometryMaterial::Hazard => crate::domain::MATERIAL_CLASS_HAZARD,
+        GeometryMaterial::Marker => crate::domain::MATERIAL_CLASS_MARKER,
+    }
+}
 
 fn op_kind(op: GeometryOp) -> u32 {
     match op {
@@ -364,7 +467,13 @@ fn geometry_primitives_from_graph(graph: &CavernGeometryGraph) -> Vec<CavernSdfG
         .iter()
         .filter(|primitive| primitive.enabled)
     {
-        append_shape_primitive(&mut out, primitive.op, &primitive.shape);
+        append_shape_primitive(
+            &mut out,
+            primitive.op,
+            &primitive.shape,
+            material_class_from_geometry(primitive.material),
+            primitive.id.0 as u32,
+        );
     }
     out
 }
@@ -384,6 +493,8 @@ fn geometry_primitives_from_topology(topology: &CavernTopology) -> Vec<CavernSdf
     out.push(CavernSdfGeometryPrimitive {
         shape_kind: SHAPE_BOX,
         op_kind: OP_ADD_SOLID,
+        material_class: crate::domain::MATERIAL_CLASS_ROCK,
+        material_instance: 0,
         p0: [center[0], center[1], center[2], 0.0],
         p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
         p2: [0.0; 4],
@@ -392,6 +503,8 @@ fn geometry_primitives_from_topology(topology: &CavernTopology) -> Vec<CavernSdf
         out.push(CavernSdfGeometryPrimitive {
             shape_kind: SHAPE_CYLINDER,
             op_kind: OP_SUBTRACT_VOID,
+            material_class: crate::domain::MATERIAL_CLASS_ROCK,
+            material_instance: room.id.0 as u32,
             p0: [
                 room.center[0],
                 room.center[1],
@@ -406,6 +519,8 @@ fn geometry_primitives_from_topology(topology: &CavernTopology) -> Vec<CavernSdf
         out.push(CavernSdfGeometryPrimitive {
             shape_kind: SHAPE_CAPSULE,
             op_kind: OP_SUBTRACT_VOID,
+            material_class: crate::domain::MATERIAL_CLASS_ROCK,
+            material_instance: 0,
             p0: [
                 connection.start[0],
                 connection.start[1],
@@ -434,6 +549,8 @@ fn geometry_primitives_from_layout(layout: &CavernLayout) -> Vec<CavernSdfGeomet
     out.push(CavernSdfGeometryPrimitive {
         shape_kind: SHAPE_BOX,
         op_kind: OP_ADD_SOLID,
+        material_class: crate::domain::MATERIAL_CLASS_ROCK,
+        material_instance: 0,
         p0: [center[0], center[1], center[2], 0.0],
         p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
         p2: [0.0; 4],
@@ -442,6 +559,8 @@ fn geometry_primitives_from_layout(layout: &CavernLayout) -> Vec<CavernSdfGeomet
         out.push(CavernSdfGeometryPrimitive {
             shape_kind: SHAPE_CYLINDER,
             op_kind: OP_SUBTRACT_VOID,
+            material_class: crate::domain::MATERIAL_CLASS_ROCK,
+            material_instance: room.id.0 as u32,
             p0: [
                 room.center[0],
                 2.4,
@@ -456,6 +575,8 @@ fn geometry_primitives_from_layout(layout: &CavernLayout) -> Vec<CavernSdfGeomet
         out.push(CavernSdfGeometryPrimitive {
             shape_kind: SHAPE_CAPSULE,
             op_kind: OP_SUBTRACT_VOID,
+            material_class: crate::domain::MATERIAL_CLASS_ROCK,
+            material_instance: 0,
             p0: [tunnel.start[0], 2.2, tunnel.start[1], tunnel.radius],
             p1: [tunnel.end[0], 2.2, tunnel.end[1], 0.0],
             p2: [0.0; 4],
@@ -468,6 +589,8 @@ fn append_shape_primitive(
     out: &mut Vec<CavernSdfGeometryPrimitive>,
     op: GeometryOp,
     shape: &GeometryPrimitiveShape3,
+    material_class: u32,
+    material_instance: u32,
 ) {
     let op_kind = op_kind(op);
     match shape {
@@ -475,6 +598,8 @@ fn append_shape_primitive(
             out.push(CavernSdfGeometryPrimitive {
                 shape_kind: SHAPE_SPHERE,
                 op_kind,
+                material_class,
+                material_instance,
                 p0: [center[0], center[1], center[2], *radius],
                 p1: [0.0; 4],
                 p2: [0.0; 4],
@@ -484,6 +609,8 @@ fn append_shape_primitive(
             out.push(CavernSdfGeometryPrimitive {
                 shape_kind: SHAPE_ELLIPSOID,
                 op_kind,
+                material_class,
+                material_instance,
                 p0: [center[0], center[1], center[2], 0.0],
                 p1: [radii[0], radii[1], radii[2], 0.0],
                 p2: [0.0; 4],
@@ -493,6 +620,8 @@ fn append_shape_primitive(
             out.push(CavernSdfGeometryPrimitive {
                 shape_kind: SHAPE_CAPSULE,
                 op_kind,
+                material_class,
+                material_instance,
                 p0: [start[0], start[1], start[2], *radius],
                 p1: [end[0], end[1], end[2], 0.0],
                 p2: [0.0; 4],
@@ -505,6 +634,8 @@ fn append_shape_primitive(
             out.push(CavernSdfGeometryPrimitive {
                 shape_kind: SHAPE_BOX,
                 op_kind,
+                material_class,
+                material_instance,
                 p0: [center[0], center[1], center[2], 0.0],
                 p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
                 p2: [0.0; 4],
@@ -518,6 +649,8 @@ fn append_shape_primitive(
             out.push(CavernSdfGeometryPrimitive {
                 shape_kind: SHAPE_ROUNDED_BOX,
                 op_kind,
+                material_class,
+                material_instance,
                 p0: [center[0], center[1], center[2], *radius],
                 p1: [half_extents[0], half_extents[1], half_extents[2], 0.0],
                 p2: [0.0; 4],
@@ -531,6 +664,8 @@ fn append_shape_primitive(
             out.push(CavernSdfGeometryPrimitive {
                 shape_kind: SHAPE_CYLINDER,
                 op_kind,
+                material_class,
+                material_instance,
                 p0: [center[0], center[1], center[2], *radius],
                 p1: [*half_height, 0.0, 0.0, 0.0],
                 p2: [0.0; 4],
@@ -541,6 +676,8 @@ fn append_shape_primitive(
                 out.push(CavernSdfGeometryPrimitive {
                     shape_kind: SHAPE_CAPSULE,
                     op_kind,
+                    material_class,
+                    material_instance,
                     p0: [segment[0][0], segment[0][1], segment[0][2], *radius],
                     p1: [segment[1][0], segment[1][1], segment[1][2], 0.0],
                     p2: [0.0; 4],
@@ -641,6 +778,25 @@ fn build_gpu_pass(
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let material_program_headers_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("cavern_hunt_material_program_headers_buffer"),
+        size: (std::mem::size_of::<CavernMaterialProgramHeaderRaw>() * MAX_MATERIAL_PROGRAMS)
+            as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let material_ops_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("cavern_hunt_material_ops_buffer"),
+        size: (std::mem::size_of::<CavernMaterialOpRaw>() * MAX_MATERIAL_OPS) as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let material_constants_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("cavern_hunt_material_constants_buffer"),
+        size: (std::mem::size_of::<[f32; 4]>() * MAX_MATERIAL_CONSTANTS) as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
 
     let world_texture = device.create_texture(&TextureDescriptor {
         label: Some("cavern_hunt_world_texture"),
@@ -711,6 +867,36 @@ fn build_gpu_pass(
                 },
                 count: None,
             },
+            BindGroupLayoutEntry {
+                binding: 4,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: 5,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: 6,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
     let compute_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -732,6 +918,18 @@ fn build_gpu_pass(
             BindGroupEntry {
                 binding: 3,
                 resource: agents_buffer.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 4,
+                resource: material_program_headers_buffer.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 5,
+                resource: material_ops_buffer.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 6,
+                resource: material_constants_buffer.as_entire_binding(),
             },
         ],
     });
@@ -829,6 +1027,9 @@ fn build_gpu_pass(
         params_buffer,
         primitives_buffer,
         agents_buffer,
+        material_program_headers_buffer,
+        material_ops_buffer,
+        material_constants_buffer,
         compute_bind_group,
         compose_bind_group,
         compute_pipeline,
@@ -894,7 +1095,18 @@ impl RenderPassExecutor for CavernComputeExecutor {
             _pad2: [0.0; 2],
             primitive_count: frame.geometry_primitives.len().min(MAX_GEOMETRY_PRIMITIVES) as u32,
             agent_count: frame.agents.len().min(MAX_AGENTS) as u32,
-            _pad3: [0; 2],
+            material_program_count: frame
+                .material_program_headers
+                .len()
+                .min(MAX_MATERIAL_PROGRAMS) as u32,
+            material_op_count: frame.material_ops.len().min(MAX_MATERIAL_OPS) as u32,
+            material_constant_count: frame.material_constants.len().min(MAX_MATERIAL_CONSTANTS)
+                as u32,
+            render_mode: frame.render_mode,
+            gi_mode: frame.gi_mode,
+            gi_quality: frame.gi_quality,
+            gi_sample_budget: frame.gi_sample_budget.max(1),
+            _pad3: [0; 3],
             floor_rock_height: [frame.floor_height, frame.rock_height, 0.0, 0.0],
             camera_target_time: [
                 frame.camera.target[0],
@@ -924,7 +1136,8 @@ impl RenderPassExecutor for CavernComputeExecutor {
             .map(|primitive| CavernGeometryPrimitiveRaw {
                 shape_kind: primitive.shape_kind,
                 op_kind: primitive.op_kind,
-                _pad0: [0; 2],
+                material_class: primitive.material_class,
+                material_instance: primitive.material_instance,
                 p0: primitive.p0,
                 p1: primitive.p1,
                 p2: primitive.p2,
@@ -954,6 +1167,70 @@ impl RenderPassExecutor for CavernComputeExecutor {
         if !agents.is_empty() {
             ctx.queue()
                 .write_buffer(&pass.agents_buffer, 0, bytemuck::cast_slice(&agents));
+        }
+
+        let program_headers = frame
+            .material_program_headers
+            .iter()
+            .take(MAX_MATERIAL_PROGRAMS)
+            .map(|header| CavernMaterialProgramHeaderRaw {
+                class_id: header.class_id,
+                op_offset: header.op_offset,
+                op_count: header.op_count,
+                const_offset: header.const_offset,
+                const_count: header.const_count,
+                base_color_slot: header.base_color_slot,
+                roughness_slot: header.roughness_slot,
+                metallic_slot: header.metallic_slot,
+                normal_perturb_slot: header.normal_perturb_slot,
+                ao_slot: header.ao_slot,
+                emissive_slot: header.emissive_slot,
+                _pad0: [0; 3],
+            })
+            .collect::<Vec<_>>();
+        if !program_headers.is_empty() {
+            ctx.queue().write_buffer(
+                &pass.material_program_headers_buffer,
+                0,
+                bytemuck::cast_slice(&program_headers),
+            );
+        }
+
+        let material_ops = frame
+            .material_ops
+            .iter()
+            .take(MAX_MATERIAL_OPS)
+            .map(|op| CavernMaterialOpRaw {
+                op: op.op,
+                dst: op.dst,
+                src_a: op.src_a,
+                src_b: op.src_b,
+                src_c: op.src_c,
+                const_idx: op.const_idx,
+                flags: op.flags,
+                _pad0: 0,
+            })
+            .collect::<Vec<_>>();
+        if !material_ops.is_empty() {
+            ctx.queue().write_buffer(
+                &pass.material_ops_buffer,
+                0,
+                bytemuck::cast_slice(&material_ops),
+            );
+        }
+
+        let material_constants = frame
+            .material_constants
+            .iter()
+            .take(MAX_MATERIAL_CONSTANTS)
+            .copied()
+            .collect::<Vec<_>>();
+        if !material_constants.is_empty() {
+            ctx.queue().write_buffer(
+                &pass.material_constants_buffer,
+                0,
+                bytemuck::cast_slice(&material_constants),
+            );
         }
 
         Ok(())

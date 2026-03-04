@@ -607,6 +607,7 @@ pub fn restore_cavern_run_snapshot(
     world: &mut World,
     snapshot: &CavernRunSnapshotV1,
 ) -> Result<()> {
+    let previous_geometry = world.resource::<CavernGeometryGraph>().ok().cloned();
     let current_connection_id = world
         .resource::<NetworkSessionStatus>()
         .ok()
@@ -652,8 +653,18 @@ pub fn restore_cavern_run_snapshot(
             let _ = geometry.apply_edit(&event.edit);
         }
     }
+    let geometry_changed = previous_geometry
+        .as_ref()
+        .map(|previous| previous != &geometry)
+        .unwrap_or(true);
     world.insert_resource(geometry.clone());
-    world.insert_resource(CavernCollisionField::from_graph(&geometry));
+    if geometry_changed {
+        world.insert_resource(CavernCollisionField::from_graph(&geometry));
+    } else if let Ok(mut field) = world.resource_mut::<CavernCollisionField>() {
+        field.sync_revision(&geometry);
+    } else {
+        world.insert_resource(CavernCollisionField::from_graph(&geometry));
+    }
     world.insert_resource(CavernGeometryRuntimeState {
         extraction_seal_primitive: snapshot.extraction_seal_primitive,
         edit_events: snapshot.geometry_edits.clone(),

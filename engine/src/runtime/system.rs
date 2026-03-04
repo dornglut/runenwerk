@@ -1,9 +1,10 @@
 use crate::runtime::param::SystemParam;
 use anyhow::{Result, anyhow};
 use ecs::World;
-use scheduler::{
-    ExecutionScheduler, RegisteredSystem, ScheduleLabel, SystemAccess, SystemSet, SystemSetKey,
-};
+use scheduler::access::SystemAccess;
+use scheduler::label::{ScheduleLabel, SystemSet, SystemSetKey};
+use scheduler::plan::ExecutionScheduler;
+use scheduler::system::RegisteredSystem;
 use std::marker::PhantomData;
 
 pub trait SystemOutput {

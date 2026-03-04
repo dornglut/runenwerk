@@ -21,7 +21,8 @@ use engine_sim::{
     AuthorityRole, SimulationProfile, SimulationProfileConfig, SimulationRng, SimulationSeed,
     SimulationSessionId,
 };
-use scheduler::{ExecutionScheduler, ScheduleLabel};
+use scheduler::label::ScheduleLabel;
+use scheduler::plan::ExecutionScheduler;
 use winit::event_loop::ControlFlow;
 
 const DEFAULT_WINDOW_TITLE: &str = "Grotto Quest - Engine";

@@ -4,3 +4,4 @@
 logs/*.log
 logs/*.tracy
 assets/models/*.blend1
+var/dev/server-cert.der

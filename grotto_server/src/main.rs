@@ -1,5 +1,6 @@
 use anyhow::Result;
 use cavern_hunt::{CavernHuntPlugin, CavernHuntServerPlugin};
+use engine::plugins::render::domain::ShaderRegistryResource;
 use engine::plugins::{
     NetworkRuntimeHandle, NetworkServerPlugin, PredictionPlugin, RenderPlugin, ReplicationPlugin,
     ScenePlugin, UiInputPlugin, UiRenderPlugin, default_plugins,
@@ -46,6 +47,12 @@ async fn main() -> Result<()> {
         PredictionPlugin,
     ));
     app.add_plugins((CavernHuntPlugin, CavernHuntServerPlugin));
+    if let Ok(mut shaders) = app.world_mut().resource_mut::<ShaderRegistryResource>() {
+        let watch_enabled = std::env::var("GROTTO_SHADER_WATCH")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        shaders.set_watch_enabled(watch_enabled);
+    }
 
     let protocol = ProtocolVersion::new(1, 1, 1);
     let session_config = ServerSessionConfig {

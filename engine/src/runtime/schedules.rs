@@ -1,5 +1,5 @@
 use crate::runtime::system::IntoSystemSetKey;
-use scheduler::{ScheduleLabel, SystemSetKey};
+use scheduler::label::{ScheduleLabel, SystemSetKey};
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Startup;

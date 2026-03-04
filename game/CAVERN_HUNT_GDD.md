@@ -244,6 +244,20 @@ Avoid for the first version:
 - heavy cinematic camera work
 - over-detailed material complexity
 
+### Material/Lighting Direction
+
+The current renderer direction combines:
+
+- asset-authored material graphs (`RON`)
+- triplanar procedural surface generation (no UV seams)
+- PBR-lite direct lighting (GGX/Smith/Schlick)
+- staged GI:
+  - `Off`
+  - `AO + bent normal ambient`
+  - probe-based GI (incremental follow-on)
+
+This keeps the look flexible and data-driven without requiring a heavy content pipeline.
+
 ## MVP Slice
 
 The first playable `Cavern Hunt` slice should include:

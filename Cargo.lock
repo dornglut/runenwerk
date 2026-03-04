@@ -336,6 +336,7 @@ dependencies = [
  "engine_net",
  "engine_net_quic",
  "postcard",
+ "ron 0.11.0",
  "rustls",
  "serde",
  "serde_json",
@@ -667,7 +668,7 @@ dependencies = [
  "image",
  "pollster",
  "postcard",
- "ron",
+ "ron 0.8.1",
  "rusttype",
  "scheduler",
  "serde",
@@ -2498,6 +2499,19 @@ dependencies = [
  "bitflags 2.11.0",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "ron"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db09040cc89e461f1a265139777a2bde7f8d8c67c4936f700c63ce3e2904d468"
+dependencies = [
+ "base64 0.22.1",
+ "bitflags 2.11.0",
+ "serde",
+ "serde_derive",
+ "unicode-ident",
 ]
 
 [[package]]

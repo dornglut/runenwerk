@@ -1,5 +1,5 @@
 use crate::domain::geometry_graph::{
-    CavernGeometryGraph, GeometryBounds3, GeometryOp, GeometryRevision,
+    CavernGeometryGraph, GeometryBounds3, GeometryOp, GeometryPrimitive3, GeometryRevision,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -127,24 +127,14 @@ impl CavernCollisionField {
     }
 
     pub fn distance_analytic(&self, graph: &CavernGeometryGraph, point: [f32; 3]) -> f32 {
-        let mut walkable = f32::INFINITY;
-        for primitive in graph
-            .primitives
-            .iter()
-            .filter(|primitive| primitive.enabled)
-        {
-            let sdf = primitive.shape.signed_distance(point);
-            match primitive.op {
-                GeometryOp::SubtractVoid | GeometryOp::MaskWalkable => {
-                    walkable = walkable.min(sdf);
-                }
-                GeometryOp::Blocker => {
-                    walkable = walkable.max(-sdf);
-                }
-                GeometryOp::AddSolid | GeometryOp::HazardVolume => {}
-            }
-        }
-        walkable
+        distance_analytic_from_primitives(
+            &graph
+                .primitives
+                .iter()
+                .filter(|primitive| primitive.enabled)
+                .collect::<Vec<_>>(),
+            point,
+        )
     }
 
     pub fn normal(&mut self, graph: &CavernGeometryGraph, point: [f32; 3]) -> [f32; 3] {
@@ -314,7 +304,7 @@ impl CavernCollisionField {
             return;
         }
         let bounds = self.bounds_for_chunk(key);
-        let overlapping_primitives = graph
+        let overlapping = graph
             .primitives
             .iter()
             .filter(|primitive| primitive.enabled)
@@ -327,9 +317,12 @@ impl CavernCollisionField {
                         max: bounds.max,
                     })
             })
+            .collect::<Vec<_>>();
+        let overlapping_primitives = overlapping
+            .iter()
             .map(|primitive| primitive.id.0)
             .collect::<Vec<_>>();
-        let brick = self.build_brick(graph, bounds);
+        let brick = self.build_brick(bounds, &overlapping);
         self.chunks.insert(
             key,
             CollisionChunk {
@@ -346,8 +339,8 @@ impl CavernCollisionField {
 
     fn build_brick(
         &self,
-        graph: &CavernGeometryGraph,
         bounds: CollisionChunkBounds,
+        primitives: &[&GeometryPrimitive3],
     ) -> ChunkBrick3 {
         let resolution = self.brick_resolution;
         let mut distances = Vec::with_capacity(resolution[0] * resolution[1] * resolution[2]);
@@ -359,7 +352,7 @@ impl CavernCollisionField {
                         lerp(bounds.min[1], bounds.max[1], sample_t(y, resolution[1])),
                         lerp(bounds.min[2], bounds.max[2], sample_t(z, resolution[2])),
                     ];
-                    distances.push(self.distance_analytic(graph, sample));
+                    distances.push(distance_analytic_from_primitives(primitives, sample));
                 }
             }
         }
@@ -473,6 +466,23 @@ fn brick_value(brick: &ChunkBrick3, x: usize, y: usize, z: usize) -> f32 {
     let width = brick.resolution[0];
     let height = brick.resolution[1];
     brick.distances[z * width * height + y * width + x]
+}
+
+fn distance_analytic_from_primitives(primitives: &[&GeometryPrimitive3], point: [f32; 3]) -> f32 {
+    let mut walkable = f32::INFINITY;
+    for primitive in primitives {
+        let sdf = primitive.shape.signed_distance(point);
+        match primitive.op {
+            GeometryOp::SubtractVoid | GeometryOp::MaskWalkable => {
+                walkable = walkable.min(sdf);
+            }
+            GeometryOp::Blocker => {
+                walkable = walkable.max(-sdf);
+            }
+            GeometryOp::AddSolid | GeometryOp::HazardVolume => {}
+        }
+    }
+    walkable
 }
 
 fn normalize3(v: [f32; 3]) -> [f32; 3] {

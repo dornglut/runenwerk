@@ -1,0 +1,13 @@
+(
+    version: 1,
+    id: "quality",
+    render_mode: MaterialGraph,
+    gi_mode: ProbeGi,
+    gi_quality: High,
+    class_graphs: {
+        0: "rock_terrain",
+        1: "barrier_rock",
+        2: "hazard_glow",
+        3: "marker_signal",
+    },
+)

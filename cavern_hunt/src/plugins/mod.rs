@@ -3,6 +3,7 @@ pub mod combat;
 pub mod game;
 pub mod hud;
 pub mod loot;
+pub mod materials;
 pub mod meta;
 pub mod net_sync;
 pub mod render_sdf;

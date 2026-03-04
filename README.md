@@ -26,6 +26,8 @@ The runtime migration is complete enough that the current path should be treated
 - `Cavern Hunt` as the current game vertical slice, including:
   - deterministic cavern generation
   - fixed-camera SDF 3D rendering
+  - asset-driven material graph shading (`RON`) with triplanar procedural surfaces
+  - PBR-lite lighting and staged GI modes (`off`, `AO+bent normal`, probe scaffold)
   - 1-4 player dedicated-authority live sessions
   - AI fill companions
   - elite -> extraction run flow

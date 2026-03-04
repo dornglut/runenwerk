@@ -9,7 +9,7 @@ use crate::domain::{
     RoomEncounterState, RoomEncounterStatus, RoomRole, RunDifficultyProfile, SessionSpawnPolicy,
     SpawnDirector,
 };
-use crate::plugins::{ai, combat, hud, loot, meta, net_sync, render_sdf, worldgen};
+use crate::plugins::{ai, combat, hud, loot, materials, meta, net_sync, render_sdf, worldgen};
 use anyhow::Result;
 use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::prelude::{
@@ -55,6 +55,7 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<EnemyCombatTuning>();
         app.init_resource::<UiWorldHudStats>();
         app.add_plugins((
+            materials::CavernHuntMaterialPlugin,
             combat::CavernHuntCombatPlugin,
             ai::CavernHuntAiPlugin,
             hud::CavernHuntHudPlugin,

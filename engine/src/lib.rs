@@ -39,7 +39,7 @@ pub use runtime::{
     SystemConfigExt, Update, WindowState,
 };
 pub use runtime::{WorldMut, WorldRef};
-pub use scheduler::SystemSet;
+pub use scheduler::label::SystemSet;
 pub use state::{
     DebugMetricsState, GameplayRuntimeConfig, OverlayDrawCmd, OverlayDrawList, RegisteredScene,
     SceneCatalog, SceneHandle, SceneRegistration, SceneRuntimeState, SessionRuntimeState,
