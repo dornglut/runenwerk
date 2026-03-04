@@ -5,11 +5,13 @@ use crate::domain::components::{
     WeaponState,
 };
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
-use crate::domain::resources::{CavernRunPhase, CavernRunState, CavernSeed, LocalPlayerRef};
+use crate::domain::resources::{
+    CavernPlayerOwnershipState, CavernRunPhase, CavernRunState, CavernSeed, LocalPlayerRef,
+};
 use crate::domain::worldgen::CavernLayout;
 use crate::domain::worldgen::RoomId;
 use anyhow::Result;
-use engine::prelude::{Bundle, Entity, SimulationTick, World};
+use engine::prelude::{Bundle, Entity, NetworkSessionStatus, SimulationTick, World};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -22,6 +24,7 @@ pub struct CavernInventorySnapshotV1 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CavernPlayerSnapshotV1 {
     pub player_id: u32,
+    pub owner_connection_id: Option<u64>,
     pub x: f32,
     pub y: f32,
     pub yaw: f32,
@@ -183,6 +186,10 @@ struct ExtractionSnapshotBundle {
 pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1> {
     let layout = world.resource::<CavernLayout>()?.clone();
     let run_state = world.resource::<CavernRunState>()?.clone();
+    let ownership = world
+        .resource::<CavernPlayerOwnershipState>()
+        .cloned()
+        .unwrap_or_default();
     let mut players = Vec::new();
     let mut enemies = Vec::new();
     let mut projectiles = Vec::new();
@@ -227,8 +234,16 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 .copied()
                 .unwrap_or(PlayerId(0))
                 .0;
+            let owner_connection_id =
+                ownership
+                    .by_connection_id
+                    .iter()
+                    .find_map(|(connection_id, owned_player_id)| {
+                        (*owned_player_id == player_id).then_some(*connection_id)
+                    });
             players.push(CavernPlayerSnapshotV1 {
                 player_id,
+                owner_connection_id,
                 x: transform.x,
                 y: transform.y,
                 yaw: transform.yaw,
@@ -444,6 +459,10 @@ pub fn restore_cavern_run_snapshot(
     world: &mut World,
     snapshot: &CavernRunSnapshotV1,
 ) -> Result<()> {
+    let current_connection_id = world
+        .resource::<NetworkSessionStatus>()
+        .ok()
+        .and_then(|status| status.connection_id.map(|connection_id| connection_id.0));
     let previous_local_player_id = world.resource::<LocalPlayerRef>().ok().and_then(|local| {
         local.player_id.or_else(|| {
             local
@@ -452,6 +471,13 @@ pub fn restore_cavern_run_snapshot(
                 .map(|player_id| player_id.0)
         })
     });
+    let preferred_local_player_id = current_connection_id
+        .and_then(|connection_id| {
+            snapshot.players.iter().find_map(|player| {
+                (player.owner_connection_id == Some(connection_id)).then_some(player.player_id)
+            })
+        })
+        .or(previous_local_player_id);
 
     clear_cavern_run_entities(world);
     world.insert_resource(snapshot.layout.layout.clone());
@@ -501,7 +527,7 @@ pub fn restore_cavern_run_snapshot(
         if player.extracting {
             let _ = world.insert(entity, Extracting);
         }
-        if previous_local_player_id == Some(player.player_id) || restored_local_entity.is_none() {
+        if preferred_local_player_id == Some(player.player_id) || restored_local_entity.is_none() {
             restored_local_entity = Some(entity);
         }
     }
@@ -609,7 +635,7 @@ pub fn restore_cavern_run_snapshot(
     let restored_local_player_id = restored_local_entity
         .and_then(|entity| world.get::<PlayerId>(entity).copied())
         .map(|player_id| player_id.0)
-        .or(previous_local_player_id);
+        .or(preferred_local_player_id);
     if let Ok(mut local_player) = world.resource_mut::<LocalPlayerRef>() {
         local_player.player_id = restored_local_player_id;
         local_player.entity = restored_local_entity;
@@ -652,11 +678,15 @@ mod tests {
         restore_cavern_run_snapshot,
     };
     use crate::domain::{
-        CavernAimState, CavernCameraState, CavernMetaProfile, CavernRunConfig, CavernRunState,
-        Faction, Health, LocalPlayerRef, LootTableRegistry, SpawnDirector, Transform2,
+        CavernAimState, CavernCameraState, CavernMetaProfile, CavernPlayerOwnershipState,
+        CavernRunConfig, CavernRunState, Faction, Health, LocalPlayerRef, LootTableRegistry,
+        SpawnDirector, Transform2,
     };
     use crate::plugins::{combat, worldgen};
-    use engine::prelude::{InputState, SimulationRng, SimulationSeed, WindowState, World};
+    use engine::prelude::{
+        InputState, NetworkSessionStatus, SimulationRng, SimulationSeed, WindowState, World,
+    };
+    use engine_net::ConnectionId;
 
     fn seeded_world() -> World {
         let mut world = World::new();
@@ -718,5 +748,26 @@ mod tests {
         restore_cavern_run_snapshot(&mut restored, &snapshot).unwrap();
         let restored_snapshot = capture_cavern_run_snapshot(&restored).unwrap();
         assert_eq!(restored_snapshot, snapshot);
+    }
+
+    #[test]
+    fn restoring_snapshot_prefers_player_owned_by_current_connection() {
+        let mut source = seeded_world();
+        source.insert_resource(CavernPlayerOwnershipState {
+            by_connection_id: std::iter::once((99, 2)).collect(),
+        });
+        let snapshot = capture_cavern_run_snapshot(&source).unwrap();
+
+        let mut restored = World::new();
+        restored.insert_resource(LocalPlayerRef::default());
+        restored.insert_resource(NetworkSessionStatus {
+            connection_id: Some(ConnectionId(99)),
+            connected: true,
+            ..Default::default()
+        });
+        restore_cavern_run_snapshot(&mut restored, &snapshot).unwrap();
+
+        let local_player = restored.resource::<LocalPlayerRef>().unwrap();
+        assert_eq!(local_player.player_id, Some(2));
     }
 }
