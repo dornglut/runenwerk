@@ -37,7 +37,7 @@
         ),
         (
             id: "base_tint",
-            kind: ConstantVec3(value: [0.22, 0.10, 0.09]),
+            kind: ConstantVec3(value: (0.22, 0.10, 0.09)),
         ),
         (
             id: "base_color",
@@ -86,7 +86,7 @@
         ),
         (
             id: "emissive_tint",
-            kind: ConstantVec3(value: [1.0, 0.26, 0.10]),
+            kind: ConstantVec3(value: (1.0, 0.26, 0.10)),
         ),
         (
             id: "emissive",

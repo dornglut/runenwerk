@@ -71,11 +71,11 @@
         ),
         (
             id: "wall_tint",
-            kind: ConstantVec3(value: [0.42, 0.28, 0.20]),
+            kind: ConstantVec3(value: (0.42, 0.28, 0.20)),
         ),
         (
             id: "floor_tint",
-            kind: ConstantVec3(value: [0.12, 0.34, 0.22]),
+            kind: ConstantVec3(value: (0.12, 0.34, 0.22)),
         ),
         (
             id: "wall_color",
@@ -130,7 +130,7 @@
         ),
         (
             id: "emissive",
-            kind: ConstantVec3(value: [0.0, 0.0, 0.0]),
+            kind: ConstantVec3(value: (0.0, 0.0, 0.0)),
         ),
     ],
     outputs: (
