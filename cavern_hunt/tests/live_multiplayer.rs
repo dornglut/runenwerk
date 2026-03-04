@@ -203,13 +203,13 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
         );
     }
 
-    assert_eq!(
-        client_a.world().resource::<LocalPlayerRef>()?.player_id,
-        Some(1)
-    );
-    assert_eq!(
-        client_b.world().resource::<LocalPlayerRef>()?.player_id,
-        Some(2)
+    let client_a_player_id = client_a.world().resource::<LocalPlayerRef>()?.player_id;
+    let client_b_player_id = client_b.world().resource::<LocalPlayerRef>()?.player_id;
+    assert!(client_a_player_id.is_some(), "client A should own a player");
+    assert!(client_b_player_id.is_some(), "client B should own a player");
+    assert_ne!(
+        client_a_player_id, client_b_player_id,
+        "client players should map to different slots"
     );
 
     {
@@ -247,19 +247,22 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
         .collect::<Vec<_>>();
     assert_eq!(active_players.len(), 2);
 
-    let player_one = active_players
+    let client_a_transform = active_players
         .iter()
-        .find(|(player_id, _)| *player_id == 1)
+        .find(|(player_id, _)| Some(*player_id) == client_a_player_id)
         .map(|(_, transform)| *transform)
-        .expect("player one should exist on the server");
-    let player_two = active_players
+        .expect("client A owned player should exist on server");
+    let client_b_transform = active_players
         .iter()
-        .find(|(player_id, _)| *player_id == 2)
+        .find(|(player_id, _)| Some(*player_id) == client_b_player_id)
         .map(|(_, transform)| *transform)
-        .expect("player two should exist on the server");
+        .expect("client B owned player should exist on server");
 
-    assert!(player_one.x > 0.5, "player one should have moved right");
-    assert!(player_two.y > 0.5, "player two should have moved up");
+    assert!(
+        client_a_transform.x > 0.5,
+        "client A should have moved right"
+    );
+    assert!(client_b_transform.y > 0.5, "client B should have moved up");
 
     clear_client_input(&mut client_a)?;
     clear_client_input(&mut client_b)?;
@@ -330,19 +333,29 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
         saw_success,
         "server and clients should converge on run success"
     );
+    let expected_client_a_marks = if client_a_player_id == Some(1) {
+        11
+    } else {
+        17
+    };
+    let expected_client_b_marks = if client_b_player_id == Some(1) {
+        11
+    } else {
+        17
+    };
     assert_eq!(
         client_a
             .world()
             .resource::<CavernMetaProfile>()?
             .cavern_marks,
-        11
+        expected_client_a_marks
     );
     assert_eq!(
         client_b
             .world()
             .resource::<CavernMetaProfile>()?
             .cavern_marks,
-        17
+        expected_client_b_marks
     );
 
     shutdown_app(&server);

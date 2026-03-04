@@ -1,7 +1,9 @@
 use crate::domain::{
-    CavernControlState, CavernPlayerOwnershipState, CavernPredictedFrame, CavernPredictionState,
-    CavernRunDeltaV1, CavernRunSnapshotV1, CavernServerControlMap, apply_cavern_run_delta,
-    build_cavern_run_delta, capture_cavern_run_snapshot, restore_cavern_run_snapshot,
+    CavernCollisionField, CavernControlState, CavernGeometryGraph, CavernGeometryRuntimeState,
+    CavernPlayerOwnershipState, CavernPredictedFrame, CavernPredictionState, CavernRunDeltaV1,
+    CavernRunSnapshotV1, CavernServerControlMap, GeometryEditEvent, GeometryPrimitiveId,
+    apply_cavern_run_delta, build_cavern_run_delta, capture_cavern_run_snapshot,
+    restore_cavern_run_snapshot,
 };
 use anyhow::Result;
 use engine::prelude::{
@@ -17,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 const RUN_EVENT_SNAPSHOT: &str = "cavern_hunt.snapshot.v1";
 const RUN_EVENT_DELTA: &str = "cavern_hunt.delta.v1";
+const RUN_EVENT_GEOMETRY_EDITS: &str = "cavern_hunt.geometry.edits.v1";
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct CavernNetSyncState {
@@ -24,6 +27,7 @@ struct CavernNetSyncState {
     initial_snapshot_sent: bool,
     last_cursor: u64,
     last_sent_snapshot: Option<CavernRunSnapshotV1>,
+    last_sent_geometry_edit_count: usize,
     last_received_cursor: u64,
     last_received_snapshot: Option<CavernRunSnapshotV1>,
 }
@@ -41,6 +45,15 @@ struct CavernDeltaEventV1 {
     base_cursor: u64,
     cursor: u64,
     delta: CavernRunDeltaV1,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct CavernGeometryEditsEventV1 {
+    tick: SimulationTick,
+    from_index: usize,
+    to_index: usize,
+    extraction_seal_primitive: Option<GeometryPrimitiveId>,
+    edits: Vec<GeometryEditEvent>,
 }
 
 pub struct CavernHuntNetSyncPlugin;
@@ -322,6 +335,48 @@ fn server_emit_replication(world: &mut World) -> Result<()> {
         .resource::<SimulationTick>()
         .copied()
         .unwrap_or_default();
+    let runtime_geometry = world
+        .resource::<CavernGeometryRuntimeState>()
+        .cloned()
+        .unwrap_or_default();
+
+    let geometry_event_payload = {
+        let mut state = world.resource_mut::<CavernNetSyncState>()?;
+        if state.active_connection_id != connection_id {
+            state.active_connection_id = connection_id;
+            state.initial_snapshot_sent = false;
+            state.last_cursor = 0;
+            state.last_sent_snapshot = None;
+            state.last_sent_geometry_edit_count = 0;
+        }
+
+        if state.initial_snapshot_sent
+            && runtime_geometry.edit_events.len() > state.last_sent_geometry_edit_count
+        {
+            let from_index = state.last_sent_geometry_edit_count;
+            let to_index = runtime_geometry.edit_events.len();
+            let edits = runtime_geometry.edit_events[from_index..to_index].to_vec();
+            state.last_sent_geometry_edit_count = to_index;
+            Some(postcard::to_allocvec(&CavernGeometryEditsEventV1 {
+                tick,
+                from_index,
+                to_index,
+                extraction_seal_primitive: runtime_geometry.extraction_seal_primitive,
+                edits,
+            })?)
+        } else {
+            None
+        }
+    };
+
+    if let Some(payload) = geometry_event_payload
+        && let Ok(mut outbox) = world.resource_mut::<NetworkServerOutbox>()
+    {
+        outbox.push(ServerMessage::RunEvent(RunEvent {
+            code: RUN_EVENT_GEOMETRY_EDITS.to_string(),
+            payload,
+        }));
+    }
 
     let (event_code, payload) = {
         let mut state = world.resource_mut::<CavernNetSyncState>()?;
@@ -330,12 +385,14 @@ fn server_emit_replication(world: &mut World) -> Result<()> {
             state.initial_snapshot_sent = false;
             state.last_cursor = 0;
             state.last_sent_snapshot = None;
+            state.last_sent_geometry_edit_count = 0;
         }
 
         state.last_cursor = state.last_cursor.saturating_add(1);
         let cursor = state.last_cursor;
         if !state.initial_snapshot_sent {
             state.initial_snapshot_sent = true;
+            state.last_sent_geometry_edit_count = runtime_geometry.edit_events.len();
             state.last_sent_snapshot = Some(snapshot.clone());
             (
                 RUN_EVENT_SNAPSHOT.to_string(),
@@ -404,6 +461,10 @@ fn client_apply_replication_events(world: &mut World) -> Result<()> {
 
     for message in events {
         match message {
+            ServerMessage::RunEvent(run_event) if run_event.code == RUN_EVENT_GEOMETRY_EDITS => {
+                let event: CavernGeometryEditsEventV1 = postcard::from_bytes(&run_event.payload)?;
+                apply_authoritative_geometry_edits(world, event)?;
+            }
             ServerMessage::RunEvent(run_event) if run_event.code == RUN_EVENT_SNAPSHOT => {
                 let event: CavernSnapshotEventV1 = postcard::from_bytes(&run_event.payload)?;
                 apply_authoritative_cavern_snapshot(
@@ -431,6 +492,45 @@ fn client_apply_replication_events(world: &mut World) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn apply_authoritative_geometry_edits(
+    world: &mut World,
+    event: CavernGeometryEditsEventV1,
+) -> Result<()> {
+    let mut runtime = world
+        .resource::<CavernGeometryRuntimeState>()
+        .cloned()
+        .unwrap_or_default();
+    if runtime.edit_events.len() != event.from_index {
+        return Ok(());
+    }
+
+    let mut graph = world
+        .resource::<CavernGeometryGraph>()
+        .cloned()
+        .unwrap_or_default();
+    let mut invalidated_bounds = Vec::new();
+    for edit_event in &event.edits {
+        if let Some(bounds) = graph.apply_edit(&edit_event.edit) {
+            invalidated_bounds.push(bounds);
+        }
+    }
+    world.insert_resource(graph.clone());
+
+    if !invalidated_bounds.is_empty()
+        && let Ok(mut field) = world.resource_mut::<CavernCollisionField>()
+    {
+        for bounds in invalidated_bounds {
+            field.invalidate_bounds(bounds);
+        }
+        field.sync_revision(&graph);
+    }
+
+    runtime.edit_events.extend(event.edits);
+    runtime.extraction_seal_primitive = event.extraction_seal_primitive;
+    world.insert_resource(runtime);
     Ok(())
 }
 
@@ -495,14 +595,15 @@ fn replay_pending_prediction_frames(
 #[cfg(test)]
 mod tests {
     use super::{
-        CavernDeltaEventV1, CavernNetSyncState, CavernSnapshotEventV1, RUN_EVENT_DELTA,
-        RUN_EVENT_SNAPSHOT, client_apply_replication_events, server_capture_control_input,
-        server_emit_replication,
+        CavernDeltaEventV1, CavernGeometryEditsEventV1, CavernNetSyncState, CavernSnapshotEventV1,
+        RUN_EVENT_DELTA, RUN_EVENT_GEOMETRY_EDITS, RUN_EVENT_SNAPSHOT,
+        client_apply_replication_events, server_capture_control_input, server_emit_replication,
     };
     use crate::domain::{
         CavernAimState, CavernCameraState, CavernControlState, CavernMetaProfile,
         CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig, CavernRunState,
-        CavernServerControlMap, LocalPlayerRef, LootTableRegistry, SpawnDirector,
+        CavernServerControlMap, GeometryEdit, GeometryEditKind, GeometryOp,
+        GeometryPrimitiveShape3, LocalPlayerRef, LootTableRegistry, SpawnDirector,
         capture_cavern_run_snapshot, restore_cavern_run_snapshot,
     };
     use crate::plugins::{combat, game, worldgen};
@@ -624,6 +725,33 @@ mod tests {
     }
 
     #[test]
+    fn server_emits_geometry_edit_event_when_runtime_geometry_changes() {
+        let mut world = server_world();
+        server_emit_replication(&mut world).unwrap();
+        world.resource_mut::<NetworkServerOutbox>().unwrap().drain();
+
+        let _ = crate::plugins::worldgen::apply_runtime_geometry_edit(
+            &mut world,
+            &GeometryEdit {
+                kind: GeometryEditKind::AddBlocker(GeometryPrimitiveShape3::Cylinder {
+                    center: [0.0, crate::domain::CAVERN_GAMEPLAY_HEIGHT, 0.0],
+                    radius: 1.2,
+                    half_height: 1.4,
+                }),
+            },
+        );
+
+        server_emit_replication(&mut world).unwrap();
+        let messages = world.resource_mut::<NetworkServerOutbox>().unwrap().drain();
+        assert!(messages.iter().any(|message| {
+            matches!(
+                message,
+                ServerMessage::RunEvent(RunEvent { code, .. }) if code == RUN_EVENT_GEOMETRY_EDITS
+            )
+        }));
+    }
+
+    #[test]
     fn client_applies_snapshot_and_delta_events() {
         let mut server = server_world();
         server.insert_resource(CavernPlayerOwnershipState {
@@ -700,6 +828,91 @@ mod tests {
         client_apply_replication_events(&mut client).unwrap();
         let rebuilt = capture_cavern_run_snapshot(&client).unwrap();
         assert_eq!(rebuilt, current);
+    }
+
+    #[test]
+    fn client_applies_geometry_edit_event_incrementally() {
+        let mut client = World::new();
+        client.insert_resource(NetworkInboundQueue::default());
+        client.insert_resource(CavernNetSyncState::default());
+        client.insert_resource(CavernPredictionState::default());
+        client.insert_resource(FixedTimeConfig::default());
+        client.insert_resource(LocalPlayerRef::default());
+        client.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: engine::prelude::AuthorityRole::Client,
+            determinism: engine::prelude::DeterminismLevel::Validated,
+        });
+        client.insert_resource(SimulationTick::default());
+        client.insert_resource(CavernRunConfig::default());
+        client.insert_resource(CavernRunState::default());
+        client.insert_resource(crate::domain::CavernLayout::default());
+        client.insert_resource(SpawnDirector::default());
+        client.insert_resource(LootTableRegistry::default());
+        client.insert_resource(CavernMetaProfile::default());
+        client.insert_resource(CavernCameraState::default());
+        client.insert_resource(CavernAimState::default());
+        crate::plugins::worldgen::initialize_run_world(&mut client, true).unwrap();
+        let baseline_runtime = client
+            .resource::<crate::domain::CavernGeometryRuntimeState>()
+            .unwrap()
+            .clone();
+        let baseline_edit_count = baseline_runtime.edit_events.len();
+        let baseline_blocker_count = client
+            .resource::<crate::domain::CavernGeometryGraph>()
+            .unwrap()
+            .primitives
+            .iter()
+            .filter(|primitive| primitive.op == GeometryOp::Blocker)
+            .count();
+        let next_revision = client
+            .resource::<crate::domain::CavernGeometryGraph>()
+            .unwrap()
+            .revision
+            .0
+            .saturating_add(1);
+
+        let edits = vec![crate::domain::GeometryEditEvent {
+            revision: crate::domain::GeometryRevision(next_revision),
+            edit: GeometryEdit {
+                kind: GeometryEditKind::AddBlocker(GeometryPrimitiveShape3::Cylinder {
+                    center: [0.0, crate::domain::CAVERN_GAMEPLAY_HEIGHT, 0.0],
+                    radius: 1.2,
+                    half_height: 1.4,
+                }),
+            },
+        }];
+        client
+            .resource_mut::<NetworkInboundQueue>()
+            .unwrap()
+            .push_server(ServerMessage::RunEvent(RunEvent {
+                code: RUN_EVENT_GEOMETRY_EDITS.to_string(),
+                payload: postcard::to_allocvec(&CavernGeometryEditsEventV1 {
+                    tick: SimulationTick(5),
+                    from_index: baseline_edit_count,
+                    to_index: baseline_edit_count + edits.len(),
+                    extraction_seal_primitive: None,
+                    edits: edits.clone(),
+                })
+                .unwrap(),
+            }));
+
+        client_apply_replication_events(&mut client).unwrap();
+
+        let runtime = client
+            .resource::<crate::domain::CavernGeometryRuntimeState>()
+            .unwrap();
+        assert_eq!(runtime.edit_events.len(), baseline_edit_count + edits.len());
+        assert_eq!(runtime.edit_events.last(), edits.last());
+        let graph = client
+            .resource::<crate::domain::CavernGeometryGraph>()
+            .unwrap();
+        let blocker_count = graph
+            .primitives
+            .iter()
+            .filter(|primitive| primitive.op == GeometryOp::Blocker)
+            .count();
+        assert_eq!(blocker_count, baseline_blocker_count + 1);
     }
 
     #[test]
