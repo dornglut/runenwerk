@@ -182,7 +182,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
 
     let forward = normalize(vec3<f32>(
         cos(pitch) * sin(yaw),
-        sin(pitch),
+        -sin(pitch),
         cos(pitch) * cos(yaw),
     ));
     let world_up = vec3<f32>(0.0, 1.0, 0.0);
