@@ -1,7 +1,7 @@
 use crate::domain::{
-    AggroState, CavernLayout, CavernRunPhase, CavernRunState, ColliderRadius, EnemyKind, Faction,
-    Health, MeleeAttack, ProjectileAttack, Transform2, Velocity2, WeaponState,
-    is_active_player_entity,
+    AggroState, CavernLayout, CavernRunPhase, CavernRunState, ColliderRadius, EnemyCombatTuning,
+    EnemyKind, Faction, Health, MeleeAttack, ProjectileAttack, RoomAnchor, RoomEncounterRegistry,
+    RoomEncounterState, Transform2, Velocity2, WeaponState, is_active_player_entity,
 };
 use crate::plugins::combat::{constrained_move, spawn_projectile};
 use anyhow::Result;
@@ -37,6 +37,14 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
     }
 
     let layout = world.resource::<CavernLayout>()?.clone();
+    let encounter_registry = world
+        .resource::<RoomEncounterRegistry>()
+        .cloned()
+        .unwrap_or_default();
+    let tuning = world
+        .resource::<EnemyCombatTuning>()
+        .copied()
+        .unwrap_or_default();
     let living_players = collect_living_players(&world);
     if living_players.is_empty() {
         return Ok(());
@@ -63,6 +71,19 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
         let Some(transform) = world.get::<Transform2>(entity).copied() else {
             continue;
         };
+        let room_anchor = world.get::<RoomAnchor>(entity).map(|anchor| anchor.room_id);
+        let room_active = room_anchor
+            .and_then(|room_id| encounter_registry.by_room_id.get(&room_id))
+            .map(|status| {
+                matches!(
+                    status.state,
+                    RoomEncounterState::Active | RoomEncounterState::Cleared
+                )
+            })
+            .unwrap_or(true);
+        if !room_active {
+            continue;
+        }
         let radius = world
             .get::<ColliderRadius>(entity)
             .copied()
@@ -90,10 +111,10 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
         };
 
         let speed = match kind {
-            EnemyKind::Swarmer => 3.4,
-            EnemyKind::Bruiser => 2.1,
-            EnemyKind::Spitter => 1.6,
-            EnemyKind::NestGuardian => 2.5,
+            EnemyKind::Swarmer => tuning.swarmer_speed,
+            EnemyKind::Bruiser => tuning.bruiser_speed,
+            EnemyKind::Spitter => tuning.spitter_speed,
+            EnemyKind::NestGuardian => tuning.elite_speed,
         };
         let stop_distance = if world.get::<ProjectileAttack>(entity).is_some()
             && world.get::<MeleeAttack>(entity).is_none()

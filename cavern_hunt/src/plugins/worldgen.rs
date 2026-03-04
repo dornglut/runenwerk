@@ -1,10 +1,12 @@
 use crate::domain::{
-    AggroState, AimTarget2, CavernCameraState, CavernLayout, CavernMetaProfile, CavernRunConfig,
-    CavernRunPhase, CavernRunState, Chest, ColliderRadius, DashState, EliteObjective, Enemy,
-    EnemyKind, ExtractionZone, Faction, Health, InventoryRunState, LocalPlayerRef,
-    LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player, PlayerActive, PlayerCompanion,
-    PlayerId, PlayerRosterIdentity, ProjectileAttack, RoomAnchor, SpawnDirector, SpawnRoom,
-    Transform2, Velocity2, WeaponState,
+    AggroState, AimTarget2, CavernCameraState, CavernLayout, CavernMetaProfile,
+    CavernObjectiveState, CavernRunConfig, CavernRunPhase, CavernRunState, Chest, ColliderRadius,
+    DashState, EliteObjective, Enemy, EnemyKind, ExtractionState, ExtractionZone, Faction, Health,
+    InventoryRunState, LocalPlayerRef, LootTableRegistry, MeleeAttack, Pickup, PickupKind, Player,
+    PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity, PlayerSpawnProfile,
+    PlayerSpawnState, ProjectileAttack, RoomAnchor, RoomEncounterRegistry, RoomEncounterState,
+    RoomEncounterStatus, SessionSpawnPolicy, SpawnDirector, SpawnRoom, Transform2, Velocity2,
+    WeaponState,
 };
 use anyhow::Result;
 use engine::prelude::{AuthorityRole, Bundle, Entity, SimulationProfileConfig, World};
@@ -54,6 +56,32 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     run_state.party_alive_count = if assign_local_player { 1 } else { 0 };
     world.insert_resource(run_state);
     world.insert_resource(LootTableRegistry::default());
+    world.insert_resource(CavernObjectiveState::default());
+    world.insert_resource(ExtractionState::default());
+    world.insert_resource(RoomEncounterRegistry {
+        by_room_id: layout
+            .rooms
+            .iter()
+            .map(|room| {
+                (
+                    room.id,
+                    RoomEncounterStatus {
+                        room_id: room.id,
+                        role: room.role,
+                        state: if room.role == crate::domain::RoomRole::Start {
+                            RoomEncounterState::Cleared
+                        } else {
+                            RoomEncounterState::Dormant
+                        },
+                        has_reward: matches!(
+                            room.role,
+                            crate::domain::RoomRole::Loot | crate::domain::RoomRole::Elite
+                        ),
+                    },
+                )
+            })
+            .collect(),
+    });
 
     if world.query::<&Player>().iter().next().is_some() {
         return Ok(());
@@ -77,6 +105,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
             0,
             assign_local_player,
             &meta_profile,
+            &PlayerSpawnProfile::default(),
             "local_hunter_1",
             0,
             false,
@@ -107,18 +136,25 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     }
 
     if let Some(elite_room) = layout.room(layout.elite_room).cloned() {
+        let difficulty = world
+            .resource::<SessionSpawnPolicy>()
+            .map(|policy| policy.difficulty)
+            .unwrap_or_default();
         let entity = spawn_enemy(world, &elite_room, EnemyKind::NestGuardian);
         let _ = world.insert(
             entity,
             (
                 EliteObjective,
-                Health::new(24.0),
+                Health {
+                    current: 24.0 * difficulty.enemy_health_scale + difficulty.elite_health_bonus,
+                    max: 24.0 * difficulty.enemy_health_scale + difficulty.elite_health_bonus,
+                },
                 ColliderRadius(0.85),
                 WeaponState {
                     cooldown_remaining: 0.0,
                     fire_interval_seconds: 1.0,
                     projectile_speed: 9.0,
-                    damage: 4.0,
+                    damage: 4.0 * difficulty.enemy_damage_scale,
                 },
             ),
         );
@@ -165,6 +201,7 @@ pub(crate) fn spawn_player_entity(
     spawn_index: usize,
     active: bool,
     meta_profile: &CavernMetaProfile,
+    spawn_profile: &PlayerSpawnProfile,
     player_code: impl Into<String>,
     roster_index: u8,
     is_companion: bool,
@@ -182,7 +219,21 @@ pub(crate) fn spawn_player_entity(
         .unwrap_or(1)
         .max(spawn_index + 1);
     let angle = spawn_index as f32 / player_count as f32 * std::f32::consts::TAU;
-    let offset = [angle.cos() * 1.1, angle.sin() * 1.1];
+    let companion_spacing = world
+        .resource::<SessionSpawnPolicy>()
+        .map(|policy| policy.companion_spacing)
+        .unwrap_or(1.25);
+    let radius = if spawn_profile.is_human {
+        spawn_profile.spawn_radius
+    } else {
+        spawn_profile.spawn_radius + companion_spacing * 0.35
+    };
+    let offset = [angle.cos() * radius, angle.sin() * radius];
+    let fire_interval = (WeaponState::default().fire_interval_seconds
+        * spawn_profile.weapon_cooldown_scale)
+        .max(0.18);
+    let projectile_speed =
+        WeaponState::default().projectile_speed * spawn_profile.projectile_speed_scale;
     let entity = world.spawn(PlayerSpawnBundle {
         player: Player,
         player_id: PlayerId(player_id),
@@ -196,7 +247,9 @@ pub(crate) fn spawn_player_entity(
             angle,
         ),
         velocity: Velocity2::default(),
-        health: Health::new(10.0 + meta_profile.bonus_max_health as f32),
+        health: Health::new(
+            10.0 + meta_profile.bonus_max_health as f32 + spawn_profile.bonus_health,
+        ),
         faction: Faction::Hunters,
         collider_radius: ColliderRadius(0.55),
         aim_target: AimTarget2 {
@@ -209,10 +262,11 @@ pub(crate) fn spawn_player_entity(
         },
         weapon_state: WeaponState {
             fire_interval_seconds: if meta_profile.unlocked_weapon_mod_slot {
-                0.32
+                (fire_interval - 0.03).max(0.18)
             } else {
-                WeaponState::default().fire_interval_seconds
+                fire_interval
             },
+            projectile_speed,
             ..WeaponState::default()
         },
         inventory: InventoryRunState {
@@ -224,6 +278,12 @@ pub(crate) fn spawn_player_entity(
             room_id: start_room.id,
         },
     });
+    let _ = world.insert(
+        entity,
+        PlayerSpawnState {
+            profile: *spawn_profile,
+        },
+    );
     if active {
         let _ = world.insert(entity, PlayerActive);
     }
@@ -239,12 +299,22 @@ pub(crate) fn spawn_player_entity(
 }
 
 fn spawn_enemy(world: &mut World, room: &crate::domain::CavernRoom, kind: EnemyKind) -> Entity {
-    let (health, radius, yaw) = match kind {
+    let difficulty = world
+        .resource::<SessionSpawnPolicy>()
+        .map(|policy| policy.difficulty)
+        .unwrap_or_default();
+    let (mut health, radius, yaw) = match kind {
         EnemyKind::Swarmer => (Health::new(3.5), 0.42, 0.0),
         EnemyKind::Bruiser => (Health::new(8.0), 0.78, 0.5),
         EnemyKind::Spitter => (Health::new(5.5), 0.58, 1.0),
         EnemyKind::NestGuardian => (Health::new(18.0), 0.92, 0.8),
     };
+    health.max *= difficulty.enemy_health_scale;
+    health.current = health.max;
+    if kind == EnemyKind::NestGuardian {
+        health.max += difficulty.elite_health_bonus;
+        health.current = health.max;
+    }
     let entity = world.spawn(EnemySpawnBundle {
         enemy: Enemy,
         enemy_kind: kind,
@@ -270,13 +340,13 @@ fn spawn_enemy(world: &mut World, room: &crate::domain::CavernRoom, kind: EnemyK
                 (
                     MeleeAttack {
                         range: 0.85,
-                        damage: 0.9,
+                        damage: 0.9 * difficulty.enemy_damage_scale,
                     },
                     WeaponState {
                         cooldown_remaining: 0.0,
                         fire_interval_seconds: 0.7,
                         projectile_speed: 0.0,
-                        damage: 0.9,
+                        damage: 0.9 * difficulty.enemy_damage_scale,
                     },
                 ),
             );
@@ -287,13 +357,13 @@ fn spawn_enemy(world: &mut World, room: &crate::domain::CavernRoom, kind: EnemyK
                 (
                     MeleeAttack {
                         range: 1.1,
-                        damage: 1.5,
+                        damage: 1.5 * difficulty.enemy_damage_scale,
                     },
                     WeaponState {
                         cooldown_remaining: 0.0,
                         fire_interval_seconds: 1.2,
                         projectile_speed: 0.0,
-                        damage: 1.5,
+                        damage: 1.5 * difficulty.enemy_damage_scale,
                     },
                 ),
             );
@@ -310,7 +380,7 @@ fn spawn_enemy(world: &mut World, room: &crate::domain::CavernRoom, kind: EnemyK
                         cooldown_remaining: 0.0,
                         fire_interval_seconds: 1.3,
                         projectile_speed: 8.5,
-                        damage: 1.1,
+                        damage: 1.1 * difficulty.enemy_damage_scale,
                     },
                 ),
             );
@@ -321,7 +391,7 @@ fn spawn_enemy(world: &mut World, room: &crate::domain::CavernRoom, kind: EnemyK
                 (
                     MeleeAttack {
                         range: 1.3,
-                        damage: 2.2,
+                        damage: 2.2 * difficulty.enemy_damage_scale,
                     },
                     ProjectileAttack {
                         cooldown_seconds: 1.0,
@@ -331,7 +401,7 @@ fn spawn_enemy(world: &mut World, room: &crate::domain::CavernRoom, kind: EnemyK
                         cooldown_remaining: 0.0,
                         fire_interval_seconds: 1.0,
                         projectile_speed: 9.0,
-                        damage: 2.0,
+                        damage: 2.0 * difficulty.enemy_damage_scale,
                     },
                 ),
             );

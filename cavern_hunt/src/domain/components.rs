@@ -1,4 +1,5 @@
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
+use crate::domain::resources::{CompanionBehaviorRole, PlayerSpawnProfile};
 use crate::domain::worldgen::RoomId;
 use engine::prelude::Component;
 use serde::{Deserialize, Serialize};
@@ -62,6 +63,9 @@ pub struct PlayerId(pub u32);
 pub struct PlayerActive;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct PlayerSpectator;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct PlayerCompanion {
     pub fill_slot: u8,
 }
@@ -70,6 +74,11 @@ pub struct PlayerCompanion {
 pub struct PlayerRosterIdentity {
     pub player_code: String,
     pub roster_index: u8,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+pub struct PlayerSpawnState {
+    pub profile: PlayerSpawnProfile,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
@@ -83,6 +92,8 @@ pub struct DashState {
     pub cooldown_remaining: f32,
     pub cooldown_seconds: f32,
     pub dash_distance: f32,
+    pub invulnerability_remaining: f32,
+    pub invulnerability_seconds: f32,
 }
 
 impl Default for DashState {
@@ -91,6 +102,8 @@ impl Default for DashState {
             cooldown_remaining: 0.0,
             cooldown_seconds: 2.5,
             dash_distance: 3.5,
+            invulnerability_remaining: 0.0,
+            invulnerability_seconds: 0.15,
         }
     }
 }
@@ -120,11 +133,28 @@ pub struct Projectile {
     pub lifetime_seconds: f32,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+pub struct ProjectileVisualState {
+    pub source_team: u8,
+    pub life_elapsed_seconds: f32,
+}
+
 #[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
 pub struct InventoryRunState {
     pub scrap: u32,
     pub weapon_mods: Vec<WeaponModKind>,
     pub relics: Vec<RelicKind>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+pub struct HitFlashState {
+    pub remaining_seconds: f32,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+pub struct DamageFeedbackState {
+    pub last_damage_taken: f32,
+    pub last_damage_dealt: f32,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
@@ -182,3 +212,12 @@ pub struct RoomAnchor {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct EliteObjective;
+
+impl PlayerCompanion {
+    pub fn behavior_role(self) -> CompanionBehaviorRole {
+        match self.fill_slot % 2 {
+            0 => CompanionBehaviorRole::Skirmisher,
+            _ => CompanionBehaviorRole::SupportShooter,
+        }
+    }
+}

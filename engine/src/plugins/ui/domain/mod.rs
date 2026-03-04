@@ -118,13 +118,15 @@ impl Default for UiRenderShaderConfig {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct UiWorldHudStats {
     pub visible: bool,
     pub player_x: f32,
     pub player_y: f32,
     pub enemies_alive: usize,
     pub enemy_kills: u32,
+    pub panel_title: String,
+    pub lines: Vec<String>,
 }
 
 impl Default for UiWorldHudStats {
@@ -135,6 +137,8 @@ impl Default for UiWorldHudStats {
             player_y: 0.0,
             enemies_alive: 0,
             enemy_kills: 0,
+            panel_title: "World Stats".to_string(),
+            lines: Vec::new(),
         }
     }
 }

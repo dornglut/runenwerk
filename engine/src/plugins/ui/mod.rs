@@ -1554,7 +1554,9 @@ fn push_world_stats_panel(
 
     let margin = 10.0 * ui_scale;
     let panel_w = 300.0 * ui_scale;
-    let panel_h = 74.0 * ui_scale;
+    let base_lines = 2_usize;
+    let total_lines = base_lines + stats.lines.len();
+    let panel_h = (40.0 + total_lines as f32 * 18.0).max(74.0) * ui_scale;
     let panel_x = margin;
     let panel_y = margin;
     let panel_w = panel_w.min((ui.screen_size.0 - (margin * 2.0)).max(80.0));
@@ -1572,7 +1574,7 @@ fn push_world_stats_panel(
     commands.push(UiBatchCmd::Text {
         x: panel_x + (10.0 * ui_scale),
         y: panel_y + (10.0 * ui_scale),
-        content: "World Stats".to_string(),
+        content: stats.panel_title.clone(),
         color: [0.88, 0.95, 1.0, 1.0],
         size: 12.0 * ui_scale,
         clip,
@@ -1596,6 +1598,16 @@ fn push_world_stats_panel(
         size: 11.0 * ui_scale,
         clip,
     });
+    for (index, line) in stats.lines.iter().enumerate() {
+        commands.push(UiBatchCmd::Text {
+            x: panel_x + (10.0 * ui_scale),
+            y: panel_y + ((66.0 + index as f32 * 16.0) * ui_scale),
+            content: line.clone(),
+            color: [0.84, 0.9, 0.98, 1.0],
+            size: 10.0 * ui_scale,
+            clip,
+        });
+    }
 }
 
 fn build_diagnostics_batches(

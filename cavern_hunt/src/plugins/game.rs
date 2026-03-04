@@ -1,11 +1,13 @@
 use crate::domain::{
-    CavernAimState, CavernCameraState, CavernControlState, CavernLayout,
-    CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState,
-    CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig, CavernRunState,
-    CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings, LocalPlayerRef,
-    LootTableRegistry, PlayerActive, PlayerId, SpawnDirector,
+    CavernAimState, CavernCameraState, CavernControlState, CavernHudState, CavernLayout,
+    CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState, CavernObjectiveKind,
+    CavernObjectiveState, CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig,
+    CavernRunState, CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings,
+    EnemyCombatTuning, ExtractionState, LocalPlayerRef, LootTableRegistry, PlayerActive,
+    PlayerCombatTuning, PlayerId, PlayerSpawnProfile, RoomEncounterRegistry, RoomEncounterState,
+    RoomEncounterStatus, RoomRole, RunDifficultyProfile, SessionSpawnPolicy, SpawnDirector,
 };
-use crate::plugins::{ai, combat, loot, meta, net_sync, render_sdf, worldgen};
+use crate::plugins::{ai, combat, hud, loot, meta, net_sync, render_sdf, worldgen};
 use anyhow::Result;
 use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::prelude::{
@@ -13,6 +15,7 @@ use engine::prelude::{
     SimulationProfileConfig, Startup, SystemConfigExt, Update, World, WorldMut,
 };
 use engine::state::SessionRuntimeState;
+use engine_net::ServerSessionState;
 use std::collections::BTreeSet;
 
 pub struct CavernHuntPlugin;
@@ -37,10 +40,18 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<CavernServerControlMap>();
         app.init_resource::<CavernPlayerOwnershipState>();
         app.init_resource::<CavernSdfWorldFrame>();
+        app.init_resource::<SessionSpawnPolicy>();
+        app.init_resource::<RoomEncounterRegistry>();
+        app.init_resource::<CavernObjectiveState>();
+        app.init_resource::<ExtractionState>();
+        app.init_resource::<CavernHudState>();
+        app.init_resource::<PlayerCombatTuning>();
+        app.init_resource::<EnemyCombatTuning>();
         app.init_resource::<UiWorldHudStats>();
         app.add_plugins((
             combat::CavernHuntCombatPlugin,
             ai::CavernHuntAiPlugin,
+            hud::CavernHuntHudPlugin,
             loot::CavernHuntLootPlugin,
             net_sync::CavernHuntNetSyncPlugin,
         ));
@@ -48,10 +59,12 @@ impl Plugin for CavernHuntPlugin {
             PreUpdate,
             (
                 sync_session_runtime_config_system.after(CoreSet::NetReceive),
+                sync_session_spawn_policy_system.after(CoreSet::NetReceive),
                 sync_active_player_slots_system.after(CoreSet::NetReceive),
             ),
         );
-        app.add_systems(PreUpdate, meta::apply_run_meta_rewards_system);
+        app.add_systems(Update, sync_run_presentation_state_system);
+        app.add_systems(Update, meta::apply_run_meta_rewards_system);
     }
 }
 
@@ -77,6 +90,15 @@ fn sync_session_runtime_config_system(
     Ok(())
 }
 
+fn sync_session_spawn_policy_system(
+    session: Res<SessionRuntimeState>,
+    config: Res<CavernRunConfig>,
+    mut policy: ResMut<SessionSpawnPolicy>,
+) -> Result<()> {
+    sync_session_spawn_policy(&session, &config, &mut policy);
+    Ok(())
+}
+
 fn sync_session_runtime_config(session: &SessionRuntimeState, config: &mut CavernRunConfig) {
     if session.max_players > 0 {
         // Local/dev dedicated-authority sessions can admit with a fallback join state
@@ -99,6 +121,40 @@ fn sync_session_runtime_config(session: &SessionRuntimeState, config: &mut Caver
             config.base_scrap_reward = base_scrap_reward;
         }
     }
+}
+
+fn sync_session_spawn_policy(
+    session: &SessionRuntimeState,
+    config: &CavernRunConfig,
+    policy: &mut SessionSpawnPolicy,
+) {
+    let desired_human_players = session.roster_player_codes.len().clamp(1, u8::MAX as usize) as u8;
+    let desired_total_participants = if session.admitted {
+        session
+            .ai_fill_target
+            .max(desired_human_players)
+            .min(config.max_players)
+    } else {
+        1
+    };
+    let companion_target_count = desired_total_participants.saturating_sub(desired_human_players);
+    let settings = parse_cavern_session_settings(session).unwrap_or_default();
+    policy.desired_human_players = desired_human_players;
+    policy.desired_total_participants = desired_total_participants;
+    policy.companion_target_count = companion_target_count;
+    policy.spawn_radius = settings.spawn_radius.unwrap_or(1.1).max(0.6);
+    policy.companion_spacing = settings.companion_spacing.unwrap_or(1.25).max(0.75);
+    policy.roster_display_names = session
+        .roster_player_codes
+        .iter()
+        .enumerate()
+        .map(|(index, code)| (index as u8, code.clone()))
+        .collect();
+    policy.difficulty = RunDifficultyProfile {
+        enemy_health_scale: settings.enemy_health_scale.unwrap_or(1.0).max(0.5),
+        enemy_damage_scale: settings.enemy_damage_scale.unwrap_or(1.0).max(0.5),
+        elite_health_bonus: settings.elite_health_bonus.unwrap_or(0.0).max(0.0),
+    };
 }
 
 fn parse_cavern_session_settings(session: &SessionRuntimeState) -> Option<CavernSessionSettings> {
@@ -136,7 +192,7 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
         .resource::<LocalPlayerRef>()
         .cloned()
         .unwrap_or_default();
-    let ownership = world
+    let mut ownership = world
         .resource::<CavernPlayerOwnershipState>()
         .cloned()
         .unwrap_or_default();
@@ -148,6 +204,10 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
         .resource::<CavernRunConfig>()
         .map(|config| config.max_players.max(1))
         .unwrap_or(1);
+    let spawn_policy = world
+        .resource::<SessionSpawnPolicy>()
+        .cloned()
+        .unwrap_or_default();
     let meta_profile = world
         .resource::<CavernMetaProfile>()
         .cloned()
@@ -163,6 +223,17 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
             }
         }
         AuthorityRole::Server => {
+            if let Ok(session_state) = world.resource::<ServerSessionState>() {
+                if !session_state.active_connections.is_empty() {
+                    let live_connections = session_state
+                        .active_connections
+                        .iter()
+                        .map(|connection_id| connection_id.0)
+                        .collect::<Vec<_>>();
+                    ownership.retain_active_connections(live_connections);
+                    world.insert_resource(ownership.clone());
+                }
+            }
             for player_id in ownership.by_connection_id.values().copied() {
                 if player_id >= 1 && player_id <= u32::from(max_players) {
                     active_player_ids.insert(player_id);
@@ -205,6 +276,18 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
                 .by_connection_id
                 .values()
                 .any(|owned| *owned == player_id);
+            let companion_slot = active_player_ids
+                .iter()
+                .copied()
+                .filter(|candidate| {
+                    !ownership
+                        .by_connection_id
+                        .values()
+                        .any(|owned| *owned == *candidate)
+                        && *candidate <= player_id
+                })
+                .count()
+                .saturating_sub(1) as u8;
             let player_code = session
                 .roster_player_codes
                 .get(roster_index)
@@ -216,12 +299,36 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
                         format!("hunter_{player_id}")
                     }
                 });
+            let spawn_profile = if is_companion {
+                PlayerSpawnProfile {
+                    is_human: false,
+                    role: Some(match companion_slot % 2 {
+                        0 => crate::domain::CompanionBehaviorRole::Skirmisher,
+                        _ => crate::domain::CompanionBehaviorRole::SupportShooter,
+                    }),
+                    spawn_radius: spawn_policy.spawn_radius
+                        + spawn_policy.companion_spacing * companion_slot as f32 * 0.15,
+                    weapon_cooldown_scale: if companion_slot % 2 == 0 { 0.95 } else { 1.1 },
+                    projectile_speed_scale: if companion_slot % 2 == 0 { 1.05 } else { 1.15 },
+                    bonus_health: if companion_slot % 2 == 0 { 1.0 } else { 0.0 },
+                }
+            } else {
+                PlayerSpawnProfile {
+                    is_human: true,
+                    role: None,
+                    spawn_radius: spawn_policy.spawn_radius,
+                    weapon_cooldown_scale: 1.0,
+                    projectile_speed_scale: 1.0,
+                    bonus_health: 0.0,
+                }
+            };
             let entity = worldgen::spawn_player_entity(
                 world,
                 player_id,
                 spawn_index,
                 true,
                 &meta_profile,
+                &spawn_profile,
                 player_code,
                 roster_index as u8,
                 is_companion,
@@ -264,6 +371,205 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn sync_run_presentation_state_system(mut world: WorldMut) -> Result<()> {
+    sync_run_presentation_state(&mut world)
+}
+
+fn sync_run_presentation_state(world: &mut World) -> Result<()> {
+    let layout = world.resource::<CavernLayout>()?.clone();
+    let run_state = world.resource::<CavernRunState>()?.clone();
+
+    let mut encounters = world
+        .resource::<RoomEncounterRegistry>()
+        .cloned()
+        .unwrap_or_default();
+    if encounters.by_room_id.is_empty() {
+        encounters.by_room_id = layout
+            .rooms
+            .iter()
+            .map(|room| {
+                (
+                    room.id,
+                    RoomEncounterStatus {
+                        room_id: room.id,
+                        role: room.role,
+                        state: if room.role == RoomRole::Start {
+                            RoomEncounterState::Cleared
+                        } else {
+                            RoomEncounterState::Dormant
+                        },
+                        has_reward: matches!(room.role, RoomRole::Loot | RoomRole::Elite),
+                    },
+                )
+            })
+            .collect();
+    }
+
+    let living_player_positions = world
+        .query::<(engine::prelude::Entity, &crate::domain::Transform2)>()
+        .iter()
+        .filter_map(|(entity, transform)| {
+            crate::domain::is_active_player_entity(world, entity)
+                .then(|| world.get::<crate::domain::Health>(entity).copied())
+                .flatten()
+                .filter(|health| health.current > 0.0)
+                .map(|_| [transform.x, transform.y])
+        })
+        .collect::<Vec<_>>();
+    let occupied_rooms = living_player_positions
+        .iter()
+        .filter_map(|position| room_containing_point(&layout, *position))
+        .collect::<BTreeSet<_>>();
+    let living_enemies_by_room = world
+        .query::<(engine::prelude::Entity, &crate::domain::EnemyKind)>()
+        .iter()
+        .filter_map(|(entity, _)| {
+            let health = world.get::<crate::domain::Health>(entity).copied()?;
+            if health.current <= 0.0 {
+                return None;
+            }
+            world
+                .get::<crate::domain::RoomAnchor>(entity)
+                .map(|room| room.room_id)
+        })
+        .fold(BTreeSet::new(), |mut set, room_id| {
+            set.insert(room_id);
+            set
+        });
+
+    for (room_id, status) in &mut encounters.by_room_id {
+        status.state =
+            if occupied_rooms.contains(room_id) && living_enemies_by_room.contains(room_id) {
+                RoomEncounterState::Active
+            } else if !living_enemies_by_room.contains(room_id)
+                && !matches!(status.role, RoomRole::Start | RoomRole::Fork)
+            {
+                RoomEncounterState::Cleared
+            } else {
+                status.state
+            };
+    }
+
+    let extraction_remaining = if run_state.extraction_active {
+        let fixed_dt = world
+            .resource::<engine::prelude::Time>()
+            .map(|time| time.delta_seconds.max(1.0 / 60.0))
+            .unwrap_or(1.0 / 60.0);
+        run_state
+            .extraction_started_at_tick
+            .map(|started| {
+                let current_tick = world
+                    .resource::<engine::prelude::SimulationTick>()
+                    .copied()
+                    .unwrap_or_default();
+                let elapsed = current_tick.0.saturating_sub(started.0) as f32 * fixed_dt;
+                (world
+                    .resource::<CavernRunConfig>()
+                    .map(|config| config.extract_countdown_seconds)
+                    .unwrap_or(0.0)
+                    - elapsed)
+                    .max(0.0)
+            })
+            .unwrap_or_else(|| {
+                world
+                    .resource::<CavernRunConfig>()
+                    .map(|config| config.extract_countdown_seconds)
+                    .unwrap_or(0.0)
+            })
+    } else {
+        0.0
+    };
+
+    let objective = match run_state.phase {
+        crate::domain::CavernRunPhase::Success => CavernObjectiveState {
+            kind: CavernObjectiveKind::Success,
+            title: "Extraction successful".to_string(),
+            detail: "Cash out and run it back".to_string(),
+            elite_room: Some(layout.elite_room),
+            extraction_room: Some(layout.extraction_room),
+        },
+        crate::domain::CavernRunPhase::Failure => CavernObjectiveState {
+            kind: CavernObjectiveKind::Failure,
+            title: "Run failed".to_string(),
+            detail: "The hunt is over".to_string(),
+            elite_room: Some(layout.elite_room),
+            extraction_room: Some(layout.extraction_room),
+        },
+        crate::domain::CavernRunPhase::Extraction
+            if run_state.extraction_started_at_tick.is_some() =>
+        {
+            CavernObjectiveState {
+                kind: CavernObjectiveKind::ExtractionCountdown,
+                title: "Reach extraction".to_string(),
+                detail: format!("Hold for {:.1}s", extraction_remaining),
+                elite_room: Some(layout.elite_room),
+                extraction_room: Some(layout.extraction_room),
+            }
+        }
+        crate::domain::CavernRunPhase::Extraction => CavernObjectiveState {
+            kind: CavernObjectiveKind::ReachExtraction,
+            title: "Reach extraction".to_string(),
+            detail: "The exit is live".to_string(),
+            elite_room: Some(layout.elite_room),
+            extraction_room: Some(layout.extraction_room),
+        },
+        crate::domain::CavernRunPhase::EliteAvailable => CavernObjectiveState {
+            kind: CavernObjectiveKind::HuntElite,
+            title: "Defeat the Nest Guardian".to_string(),
+            detail: "Push into the elite room".to_string(),
+            elite_room: Some(layout.elite_room),
+            extraction_room: Some(layout.extraction_room),
+        },
+        crate::domain::CavernRunPhase::Exploring => {
+            let combats_cleared = encounters
+                .by_room_id
+                .values()
+                .filter(|room| {
+                    room.role == RoomRole::Combat && room.state == RoomEncounterState::Cleared
+                })
+                .count();
+            if combats_cleared >= 1 {
+                CavernObjectiveState {
+                    kind: CavernObjectiveKind::HuntElite,
+                    title: "Defeat the Nest Guardian".to_string(),
+                    detail: "Follow the deeper path".to_string(),
+                    elite_room: Some(layout.elite_room),
+                    extraction_room: Some(layout.extraction_room),
+                }
+            } else {
+                CavernObjectiveState {
+                    kind: CavernObjectiveKind::Explore,
+                    title: "Explore the caverns".to_string(),
+                    detail: "Find the Nest Guardian".to_string(),
+                    elite_room: Some(layout.elite_room),
+                    extraction_room: Some(layout.extraction_room),
+                }
+            }
+        }
+    };
+
+    let extraction = ExtractionState {
+        active: run_state.extraction_active,
+        room_id: Some(layout.extraction_room),
+        countdown_started_at_tick: run_state.extraction_started_at_tick,
+        countdown_remaining_seconds: extraction_remaining,
+        occupied_by_alive_player: occupied_rooms.contains(&layout.extraction_room),
+    };
+
+    world.insert_resource(encounters);
+    world.insert_resource(objective);
+    world.insert_resource(extraction);
+    Ok(())
+}
+
+fn room_containing_point(layout: &CavernLayout, point: [f32; 2]) -> Option<crate::domain::RoomId> {
+    layout.rooms.iter().find_map(|room| {
+        let dx = (point[0] - room.center[0]) / room.radii[0].max(0.1);
+        let dy = (point[1] - room.center[1]) / room.radii[1].max(0.1);
+        ((dx * dx) + (dy * dy) <= 1.0).then_some(room.id)
+    })
 }
 
 #[cfg(test)]

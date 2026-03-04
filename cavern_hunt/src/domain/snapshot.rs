@@ -1,13 +1,15 @@
 use crate::domain::components::{
     AggroState, AimTarget2, Chest, ColliderRadius, DashState, EliteObjective, Enemy, EnemyKind,
     Extracting, ExtractionZone, Faction, Health, InventoryRunState, LootDrop, Pickup, Player,
-    PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity, Projectile, ProjectileAttack,
-    RoomAnchor, SpawnRoom, Transform2, Velocity2, WeaponState,
+    PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity, PlayerSpawnState,
+    PlayerSpectator, Projectile, ProjectileAttack, ProjectileVisualState, RoomAnchor, SpawnRoom,
+    Transform2, Velocity2, WeaponState,
 };
 use crate::domain::is_active_player_entity;
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
 use crate::domain::resources::{
-    CavernPlayerOwnershipState, CavernRunPhase, CavernRunState, CavernSeed, LocalPlayerRef,
+    CavernObjectiveState, CavernPlayerOwnershipState, CavernRunPhase, CavernRunState, CavernSeed,
+    ExtractionState, LocalPlayerRef, PlayerSpawnProfile, RoomEncounterRegistry,
 };
 use crate::domain::worldgen::CavernLayout;
 use crate::domain::worldgen::RoomId;
@@ -29,6 +31,8 @@ pub struct CavernPlayerSnapshotV1 {
     pub player_code: String,
     pub roster_index: u8,
     pub ai_controlled: bool,
+    pub spectator: bool,
+    pub spawn_profile: PlayerSpawnProfile,
     pub x: f32,
     pub y: f32,
     pub yaw: f32,
@@ -42,6 +46,13 @@ pub struct CavernPlayerSnapshotV1 {
     pub inventory: CavernInventorySnapshotV1,
     pub room_anchor: Option<RoomId>,
     pub extracting: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RoomEncounterSnapshotV1 {
+    pub room_id: RoomId,
+    pub state: crate::domain::RoomEncounterState,
+    pub has_reward: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -112,6 +123,9 @@ pub struct CavernRunSnapshotV1 {
     pub extraction_started_at_tick: Option<SimulationTick>,
     pub party_alive_count: u8,
     pub enemy_kills: u32,
+    pub objective: CavernObjectiveState,
+    pub extraction: ExtractionState,
+    pub encounters: Vec<RoomEncounterSnapshotV1>,
     pub layout: CavernLayoutSnapshotV1,
     pub players: Vec<CavernPlayerSnapshotV1>,
     pub enemies: Vec<CavernEnemySnapshotV1>,
@@ -130,6 +144,9 @@ pub struct CavernRunDeltaV1 {
     pub extraction_started_at_tick: Option<Option<SimulationTick>>,
     pub party_alive_count: Option<u8>,
     pub enemy_kills: Option<u32>,
+    pub objective: Option<CavernObjectiveState>,
+    pub extraction: Option<ExtractionState>,
+    pub encounters: Option<Vec<RoomEncounterSnapshotV1>>,
     pub layout: Option<CavernLayoutSnapshotV1>,
     pub players: Option<Vec<CavernPlayerSnapshotV1>>,
     pub enemies: Option<Vec<CavernEnemySnapshotV1>>,
@@ -168,6 +185,7 @@ struct EnemySnapshotBundle {
 #[derive(Bundle)]
 struct ProjectileSnapshotBundle {
     projectile: Projectile,
+    projectile_visual_state: ProjectileVisualState,
     transform: Transform2,
     velocity: Velocity2,
     collider_radius: ColliderRadius,
@@ -191,6 +209,22 @@ struct ExtractionSnapshotBundle {
 pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1> {
     let layout = world.resource::<CavernLayout>()?.clone();
     let run_state = world.resource::<CavernRunState>()?.clone();
+    let objective = world.resource::<CavernObjectiveState>()?.clone();
+    let extraction = world.resource::<ExtractionState>()?.clone();
+    let encounters = world
+        .resource::<RoomEncounterRegistry>()
+        .map(|registry| {
+            registry
+                .by_room_id
+                .values()
+                .map(|status| RoomEncounterSnapshotV1 {
+                    room_id: status.room_id,
+                    state: status.state,
+                    has_reward: status.has_reward,
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     let ownership = world
         .resource::<CavernPlayerOwnershipState>()
         .cloned()
@@ -259,6 +293,11 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 player_code: roster_identity.player_code,
                 roster_index: roster_identity.roster_index,
                 ai_controlled: world.get::<PlayerCompanion>(entity).is_some(),
+                spectator: world.get::<PlayerSpectator>(entity).is_some(),
+                spawn_profile: world
+                    .get::<PlayerSpawnState>(entity)
+                    .map(|state| state.profile)
+                    .unwrap_or_default(),
                 x: transform.x,
                 y: transform.y,
                 yaw: transform.yaw,
@@ -390,6 +429,9 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
         extraction_started_at_tick: run_state.extraction_started_at_tick,
         party_alive_count: run_state.party_alive_count,
         enemy_kills: run_state.enemy_kills,
+        objective,
+        extraction,
+        encounters,
         layout: CavernLayoutSnapshotV1 {
             seed: run_state.seed,
             layout,
@@ -420,6 +462,9 @@ pub fn build_cavern_run_delta(
         party_alive_count: (base.party_alive_count != current.party_alive_count)
             .then_some(current.party_alive_count),
         enemy_kills: (base.enemy_kills != current.enemy_kills).then_some(current.enemy_kills),
+        objective: (base.objective != current.objective).then_some(current.objective.clone()),
+        extraction: (base.extraction != current.extraction).then_some(current.extraction.clone()),
+        encounters: (base.encounters != current.encounters).then_some(current.encounters.clone()),
         layout: (base.layout != current.layout).then_some(current.layout.clone()),
         players: (base.players != current.players).then_some(current.players.clone()),
         enemies: (base.enemies != current.enemies).then_some(current.enemies.clone()),
@@ -446,6 +491,18 @@ pub fn apply_cavern_run_delta(
             .unwrap_or(base.extraction_started_at_tick),
         party_alive_count: delta.party_alive_count.unwrap_or(base.party_alive_count),
         enemy_kills: delta.enemy_kills.unwrap_or(base.enemy_kills),
+        objective: delta
+            .objective
+            .clone()
+            .unwrap_or_else(|| base.objective.clone()),
+        extraction: delta
+            .extraction
+            .clone()
+            .unwrap_or_else(|| base.extraction.clone()),
+        encounters: delta
+            .encounters
+            .clone()
+            .unwrap_or_else(|| base.encounters.clone()),
         layout: delta.layout.clone().unwrap_or_else(|| base.layout.clone()),
         players: delta
             .players
@@ -506,6 +563,30 @@ pub fn restore_cavern_run_snapshot(
         party_alive_count: snapshot.party_alive_count,
         enemy_kills: snapshot.enemy_kills,
     });
+    world.insert_resource(snapshot.objective.clone());
+    world.insert_resource(snapshot.extraction.clone());
+    world.insert_resource(RoomEncounterRegistry {
+        by_room_id: snapshot
+            .encounters
+            .iter()
+            .map(|encounter| {
+                (
+                    encounter.room_id,
+                    crate::domain::RoomEncounterStatus {
+                        room_id: encounter.room_id,
+                        role: snapshot
+                            .layout
+                            .layout
+                            .room(encounter.room_id)
+                            .map(|room| room.role)
+                            .unwrap_or(crate::domain::RoomRole::Combat),
+                        state: encounter.state,
+                        has_reward: encounter.has_reward,
+                    },
+                )
+            })
+            .collect(),
+    });
     world.insert_resource(CavernPlayerOwnershipState {
         by_connection_id: snapshot
             .players
@@ -551,11 +632,20 @@ pub fn restore_cavern_run_snapshot(
                 relics: player.inventory.relics.clone(),
             },
         });
+        let _ = world.insert(
+            entity,
+            PlayerSpawnState {
+                profile: player.spawn_profile,
+            },
+        );
         if let Some(room_id) = player.room_anchor {
             let _ = world.insert(entity, RoomAnchor { room_id });
         }
         if player.extracting {
             let _ = world.insert(entity, Extracting);
+        }
+        if player.spectator {
+            let _ = world.insert(entity, PlayerSpectator);
         }
         if player.ai_controlled {
             let _ = world.insert(
@@ -620,6 +710,14 @@ pub fn restore_cavern_run_snapshot(
             projectile: Projectile {
                 damage: projectile.damage,
                 lifetime_seconds: projectile.lifetime_seconds,
+            },
+            projectile_visual_state: ProjectileVisualState {
+                source_team: if projectile.faction == Faction::Hunters {
+                    0
+                } else {
+                    1
+                },
+                life_elapsed_seconds: 0.0,
             },
             transform: Transform2::new(projectile.x, projectile.y, projectile.yaw),
             velocity: Velocity2 {
@@ -798,6 +896,7 @@ mod tests {
             1,
             true,
             &CavernMetaProfile::default(),
+            &crate::domain::PlayerSpawnProfile::default(),
             "hunter_2",
             1,
             false,

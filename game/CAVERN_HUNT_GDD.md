@@ -257,6 +257,28 @@ The first playable `Cavern Hunt` slice should include:
 - a small loot pool
 - one simple persistent reward loop
 
+## Current Vertical Slice
+
+The current implementation target is a friend-testable local/dev slice:
+
+- fixed soft-isometric SDF 3D camera
+- one procedural cavern layout per run
+- one hunter archetype
+- ranged primary fire
+- dash
+- `Swarmer`, `Bruiser`, `Spitter`, and `NestGuardian`
+- elite kill unlocks extraction
+- 1 to 4 live clients on a dedicated-authority server
+- AI fill for missing slots
+- reconnect into the same live run
+- local `CavernMarks` rewards on successful extraction
+
+This slice is intended to prove:
+
+- the run is readable and finishable by real players
+- multiple clients can share the same run reliably
+- the SDF presentation works for real moment-to-moment combat, not just an example scene
+
 That slice should prove:
 
 - exploration is fun

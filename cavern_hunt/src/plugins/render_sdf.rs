@@ -1,7 +1,7 @@
 use crate::domain::{
-    CavernAimState, CavernCameraState, CavernLayout, CavernRunState, CavernSdfAgent,
-    CavernSdfWorldFrame, Chest, EnemyKind, ExtractionZone, Health, LocalPlayerRef, LootDrop,
-    Pickup, Player, Projectile, Transform2, is_active_player_entity,
+    CavernAimState, CavernCameraState, CavernLayout, CavernSdfAgent, CavernSdfWorldFrame, Chest,
+    EnemyKind, ExtractionZone, Health, LocalPlayerRef, LootDrop, Pickup, Player, PlayerCompanion,
+    PlayerSpectator, Projectile, ProjectileVisualState, Transform2, is_active_player_entity,
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
@@ -10,7 +10,6 @@ use engine::plugins::render::domain::{
     RenderPassEncodeContext, RenderPassExecutor, RenderPassExecutorRegistryResource,
     RenderPassPrepareContext,
 };
-use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::prelude::{Entity, InputState, Res, ResMut, Time, WindowState, World, WorldRef};
 use std::sync::{Arc, Mutex};
 use wgpu::{
@@ -143,11 +142,9 @@ pub(crate) fn update_camera_and_hud_system(
     input: Res<InputState>,
     time: Res<Time>,
     mut camera: ResMut<CavernCameraState>,
-    mut hud: ResMut<UiWorldHudStats>,
 ) -> Result<()> {
     let local_player_ref = world.resource::<LocalPlayerRef>()?;
     let aim = world.resource::<CavernAimState>()?;
-    let run_state = world.resource::<CavernRunState>()?;
     let local_player = local_player_ref.entity.and_then(|entity| {
         world.get::<Transform2>(entity).copied().map(|transform| {
             let health = world
@@ -157,7 +154,7 @@ pub(crate) fn update_camera_and_hud_system(
             (transform, health)
         })
     });
-    let Some((transform, health)) = local_player else {
+    let Some((transform, _health)) = local_player else {
         return Ok(());
     };
 
@@ -173,20 +170,9 @@ pub(crate) fn update_camera_and_hud_system(
     camera.target[1] += (target[1] - camera.target[1]) * blend;
     camera.target[2] += (target[2] - camera.target[2]) * blend;
 
-    let enemy_count = world.query::<&EnemyKind>().iter().count();
-    hud.visible = true;
-    hud.player_x = transform.x;
-    hud.player_y = transform.y;
-    hud.enemies_alive = enemy_count;
-    hud.enemy_kills = run_state.enemy_kills;
-
     if input.left_mouse_down() || input.right_mouse_down() {
         camera.target[0] += (aim.world_point[0] - transform.x) * 0.01;
         camera.target[2] += (aim.world_point[1] - transform.y) * 0.01;
-    }
-
-    if health.current <= 0.0 {
-        hud.visible = true;
     }
 
     Ok(())
@@ -210,8 +196,18 @@ pub(crate) fn build_sdf_world_frame_system(
                 pos: [transform.x, transform.y],
                 radius: 0.58,
                 health_ratio: health.ratio(),
-                team: 0,
-                kind: 0,
+                team: if world.get::<PlayerCompanion>(entity).is_some() {
+                    4
+                } else {
+                    0
+                },
+                kind: if world.get::<PlayerSpectator>(entity).is_some() {
+                    13
+                } else if world.get::<PlayerCompanion>(entity).is_some() {
+                    12
+                } else {
+                    0
+                },
             });
             continue;
         }
@@ -289,7 +285,11 @@ pub(crate) fn build_sdf_world_frame_system(
             };
             frame.agents.push(CavernSdfAgent {
                 pos: [transform.x, transform.y],
-                radius: 0.16,
+                radius: if let Some(visual) = world.get::<ProjectileVisualState>(entity) {
+                    (0.16 + visual.life_elapsed_seconds.min(0.12) * 0.3).max(0.16)
+                } else {
+                    0.16
+                },
                 health_ratio: 1.0,
                 team,
                 kind: 11,

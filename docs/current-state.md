@@ -85,21 +85,27 @@ The important public runtime state now includes:
 - reconnect baseline reset
 - scene snapshot replication and delta application
 - Axiom handoff contracts plus optional live HTTP verification
+- `Cavern Hunt` friend-test vertical slice:
+  - procedural cavern generation
+  - fixed-camera SDF 3D rendering
+  - live multi-client dedicated-authority play
+  - reconnect inside active runs
+  - AI fill companions
+  - elite/extraction success flow
+  - local client reward persistence
 
 ## What Is Still Narrow or Incomplete
 
 ### Gameplay scope
 
-The authoritative replicated state is still the current scene-stub subset:
+The generic runtime path is still intentionally narrow, but `Cavern Hunt` now owns a game-specific replicated slice on top of it:
 
-- debug position/velocity
-- scene/world labels
-- current gameplay config values
-- frame/tick counters
-- enemy kill count
-- admitted session settings
+- player transforms, aim, dash, and projectile state
+- enemy pressure and elite objective state
+- loot, extraction, and local reward flow
+- admitted roster identity, AI fill, and session-derived spawn policy
 
-This is enough for runtime proof and net-path validation, but not enough for the intended co-op action game yet.
+This is enough for a friend-testable vertical slice, but not yet enough for a larger production content set.
 
 ### Multiplayer maturity gaps
 
@@ -123,10 +129,10 @@ Defined but not yet implemented as full runtime profiles:
 
 ## Recommended Next Steps
 
-1. Use `SessionRuntimeState` to configure the live run itself: max player count, AI fill target, and runtime settings application.
-2. Expand the authoritative replicated state beyond the current scene-stub fields into actual gameplay entities/components.
+1. Polish Cavern Hunt combat feel, HUD clarity, and encounter pacing for friend tests.
+2. Expand the live playtest flow to the documented 4-player local/dev path and keep it green under reconnect.
 3. Build the full client control-plane flow so `grotto_client` boots from restored Axiom auth/session/lobby state rather than env vars.
-4. Add richer reconnect recovery and then move on to the next runtime profile work.
+4. After Cavern Hunt feels stable, resume broader profile work and richer gameplay replication.
 
 ## Verification
 

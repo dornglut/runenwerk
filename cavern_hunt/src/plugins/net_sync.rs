@@ -11,7 +11,7 @@ use engine::prelude::{
 };
 use engine_net::{
     AbilityCommand, AimCommand, ClientCommandEnvelope, ClientMessage, ConnectionId, InputFrame,
-    InteractCommand, MoveCommand, RunEvent, ServerMessage,
+    InteractCommand, MoveCommand, RunEvent, ServerMessage, ServerSessionState,
 };
 use serde::{Deserialize, Serialize};
 
@@ -173,6 +173,16 @@ fn server_capture_control_input(world: &mut World) -> Result<()> {
         .resource::<CavernPlayerOwnershipState>()
         .cloned()
         .unwrap_or_default();
+    if let Ok(session_state) = world.resource::<ServerSessionState>() {
+        if !session_state.active_connections.is_empty() {
+            ownership.retain_active_connections(
+                session_state
+                    .active_connections
+                    .iter()
+                    .map(|connection_id| connection_id.0),
+            );
+        }
+    }
     let mut controls = world
         .resource::<CavernServerControlMap>()
         .cloned()

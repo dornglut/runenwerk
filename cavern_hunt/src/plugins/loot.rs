@@ -1,7 +1,8 @@
 use crate::domain::{
-    CavernRunConfig, CavernRunPhase, CavernRunState, ColliderRadius, DashState, EliteObjective,
-    EnemyKind, ExtractionZone, Health, InventoryRunState, LootDrop, LootTableRegistry, Pickup,
-    PickupKind, RelicKind, Transform2, WeaponModKind, WeaponState, is_active_player_entity,
+    CavernControlState, CavernRunConfig, CavernRunPhase, CavernRunState, CavernServerControlMap,
+    Chest, ColliderRadius, DashState, EliteObjective, EnemyKind, ExtractionZone, Health,
+    InventoryRunState, LootDrop, LootTableRegistry, Pickup, PickupKind, PlayerId, PlayerSpectator,
+    RelicKind, Transform2, WeaponModKind, WeaponState, is_active_player_entity,
 };
 use anyhow::Result;
 use engine::prelude::{
@@ -125,6 +126,11 @@ fn collect_pickups(world: &mut World) -> Result<()> {
             if distance_squared([transform.x, transform.y], *player_pos)
                 <= (pickup_radius + *player_radius).powi(2)
             {
+                if world.get::<Chest>(pickup_entity).is_some()
+                    && !player_requested_interact(world, *player_entity)
+                {
+                    continue;
+                }
                 receiver = Some(*player_entity);
                 break;
             }
@@ -158,6 +164,19 @@ fn resolve_run_state(world: &mut World) -> Result<()> {
         let mut run_state = world.resource_mut::<CavernRunState>()?;
         run_state.party_alive_count = alive_players.len() as u8;
     }
+    let spectator_entities = world
+        .query::<(Entity, &Health)>()
+        .iter()
+        .filter_map(|(entity, health)| {
+            (world.get::<PlayerId>(entity).is_some()
+                && world.get::<crate::domain::PlayerActive>(entity).is_some()
+                && health.current <= 0.0)
+                .then_some(entity)
+        })
+        .collect::<Vec<_>>();
+    for entity in spectator_entities {
+        let _ = world.insert(entity, PlayerSpectator);
+    }
 
     let current_phase = world.resource::<CavernRunState>()?.phase;
     if matches!(
@@ -185,6 +204,22 @@ fn resolve_run_state(world: &mut World) -> Result<()> {
 
     let extraction_active = world.resource::<CavernRunState>()?.extraction_active;
     if !extraction_active {
+        let elite_room = world.resource::<crate::domain::CavernLayout>()?.elite_room;
+        let players_in_elite_room = alive_players.iter().any(|(_, position)| {
+            world
+                .resource::<crate::domain::CavernLayout>()
+                .ok()
+                .and_then(|layout| layout.room(elite_room))
+                .map(|room| {
+                    let dx = (position[0] - room.center[0]) / room.radii[0].max(0.1);
+                    let dy = (position[1] - room.center[1]) / room.radii[1].max(0.1);
+                    (dx * dx) + (dy * dy) <= 1.0
+                })
+                .unwrap_or(false)
+        });
+        if players_in_elite_room {
+            world.resource_mut::<CavernRunState>()?.phase = CavernRunPhase::EliteAvailable;
+        }
         return Ok(());
     }
 
@@ -252,6 +287,31 @@ fn resolve_run_state(world: &mut World) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn player_requested_interact(world: &World, player_entity: Entity) -> bool {
+    let authority = world
+        .resource::<SimulationProfileConfig>()
+        .map(|config| config.authority)
+        .unwrap_or(AuthorityRole::Local);
+    match authority {
+        AuthorityRole::Server => {
+            let Some(player_id) = world.get::<PlayerId>(player_entity).copied().map(|id| id.0)
+            else {
+                return false;
+            };
+            world
+                .resource::<CavernServerControlMap>()
+                .ok()
+                .and_then(|controls| controls.by_player_id.get(&player_id).copied())
+                .map(|control| control.interact_pressed)
+                .unwrap_or(false)
+        }
+        _ => world
+            .resource::<CavernControlState>()
+            .map(|control| control.interact_pressed)
+            .unwrap_or(false),
+    }
 }
 
 fn build_enemy_drops(world: &mut World, kind: EnemyKind) -> Result<Vec<PickupKind>> {

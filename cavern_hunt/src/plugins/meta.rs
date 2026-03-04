@@ -1,6 +1,6 @@
 use crate::domain::{
     CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState, CavernRunPhase,
-    CavernRunState, InventoryRunState, LocalPlayerRef,
+    CavernRunState, InventoryRunState, LocalPlayerRef, PlayerId,
 };
 use anyhow::{Context, Result};
 use engine::prelude::{AuthorityRole, SimulationProfileConfig, World, WorldMut};
@@ -60,7 +60,9 @@ pub(crate) fn apply_run_meta_rewards(world: &mut World) -> Result<()> {
         return Ok(());
     }
 
-    let reward = local_player_scrap_reward(world);
+    let Some(reward) = resolve_local_player_scrap_reward(world) else {
+        return Ok(());
+    };
     let should_persist = world
         .resource::<CavernMetaPersistenceConfig>()
         .map(|config| config.enabled)
@@ -82,18 +84,32 @@ pub(crate) fn apply_run_meta_rewards(world: &mut World) -> Result<()> {
     Ok(())
 }
 
-fn local_player_scrap_reward(world: &World) -> u32 {
-    let Some(entity) = world
-        .resource::<LocalPlayerRef>()
-        .ok()
-        .and_then(|local| local.entity)
-    else {
-        return 0;
+fn resolve_local_player_scrap_reward(world: &World) -> Option<u32> {
+    let local_player = match world.resource::<LocalPlayerRef>() {
+        Ok(local) => local.clone(),
+        Err(_) => return None,
+    };
+    if let Some(entity) = local_player.entity
+        && let Some(inventory) = world.get::<InventoryRunState>(entity)
+    {
+        return Some(inventory.scrap);
+    }
+
+    let Some(player_id) = local_player.player_id else {
+        return None;
     };
     world
-        .get::<InventoryRunState>(entity)
-        .map(|inventory| inventory.scrap)
-        .unwrap_or(0)
+        .query::<(engine::prelude::Entity, &PlayerId)>()
+        .iter()
+        .find_map(|(entity, current_player_id)| {
+            (current_player_id.0 == player_id)
+                .then(|| {
+                    world
+                        .get::<InventoryRunState>(entity)
+                        .map(|inventory| inventory.scrap)
+                })
+                .flatten()
+        })
 }
 
 #[cfg(test)]

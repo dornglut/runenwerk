@@ -1,8 +1,9 @@
 use crate::domain::{
     AimTarget2, CavernAimState, CavernControlState, CavernLayout, CavernRunPhase, CavernRunState,
-    CavernServerControlMap, ColliderRadius, DashState, EnemyKind, Faction, Health, LocalPlayerRef,
-    PlayerActive, PlayerCompanion, PlayerId, Projectile, Transform2, Velocity2, WeaponState,
-    is_active_player_entity,
+    CavernServerControlMap, ColliderRadius, DamageFeedbackState, DashState, EnemyKind, Faction,
+    Health, HitFlashState, LocalPlayerRef, PlayerActive, PlayerCombatTuning, PlayerCompanion,
+    PlayerId, PlayerSpectator, Projectile, ProjectileVisualState, Transform2, Velocity2,
+    WeaponState, is_active_player_entity,
 };
 use crate::plugins::render_sdf;
 use anyhow::Result;
@@ -164,6 +165,23 @@ fn tick_cooldowns(world: &mut World, dt: f32) {
     for entity in dash_entities {
         if let Some(mut dash) = world.get_mut::<DashState>(entity) {
             dash.cooldown_remaining = (dash.cooldown_remaining - dt).max(0.0);
+            dash.invulnerability_remaining = (dash.invulnerability_remaining - dt).max(0.0);
+        }
+    }
+
+    let flashed_entities = world
+        .query::<(Entity, &HitFlashState)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    for entity in flashed_entities {
+        let mut clear = false;
+        if let Some(mut flash) = world.get_mut::<HitFlashState>(entity) {
+            flash.remaining_seconds = (flash.remaining_seconds - dt).max(0.0);
+            clear = flash.remaining_seconds <= f32::EPSILON;
+        }
+        if clear {
+            let _ = world.remove::<HitFlashState>(entity);
         }
     }
 }
@@ -178,6 +196,7 @@ fn tick_local_player_cooldowns(world: &mut World, dt: f32) {
     }
     if let Some(mut dash) = world.get_mut::<DashState>(entity) {
         dash.cooldown_remaining = (dash.cooldown_remaining - dt).max(0.0);
+        dash.invulnerability_remaining = (dash.invulnerability_remaining - dt).max(0.0);
     }
 }
 
@@ -255,11 +274,15 @@ fn build_companion_control(world: &World, entity: Entity) -> CavernControlState 
         };
     }
 
+    let companion_role = world
+        .get::<PlayerCompanion>(entity)
+        .copied()
+        .map(|companion| companion.behavior_role());
     let nearest_enemy = world
         .query::<(Entity, &Transform2)>()
         .iter()
         .filter_map(|(candidate, enemy_transform)| {
-            let _kind = world.get::<EnemyKind>(candidate)?;
+            let kind = world.get::<EnemyKind>(candidate)?;
             let enemy_health = world.get::<Health>(candidate).copied()?;
             if enemy_health.current <= 0.0 {
                 return None;
@@ -267,11 +290,33 @@ fn build_companion_control(world: &World, entity: Entity) -> CavernControlState 
             let dx = enemy_transform.x - transform.x;
             let dy = enemy_transform.y - transform.y;
             let distance_sq = dx * dx + dy * dy;
-            Some((distance_sq, [enemy_transform.x, enemy_transform.y]))
+            let priority = if distance_sq <= 14.0_f32.powi(2) {
+                match (companion_role, *kind) {
+                    (_, EnemyKind::NestGuardian) => 0_u8,
+                    (_, EnemyKind::Spitter) => 1,
+                    (
+                        Some(crate::domain::CompanionBehaviorRole::Skirmisher),
+                        EnemyKind::Bruiser,
+                    ) => 2,
+                    (
+                        Some(crate::domain::CompanionBehaviorRole::SupportShooter),
+                        EnemyKind::Bruiser,
+                    ) => 3,
+                    (_, EnemyKind::Bruiser) => 2,
+                    (_, EnemyKind::Swarmer) => 4,
+                }
+            } else {
+                10
+            };
+            Some((
+                priority,
+                distance_sq,
+                [enemy_transform.x, enemy_transform.y],
+            ))
         })
-        .min_by(|a, b| a.0.total_cmp(&b.0));
+        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)));
 
-    let Some((distance_sq, enemy_pos)) = nearest_enemy else {
+    let Some((_, distance_sq, enemy_pos)) = nearest_enemy else {
         return CavernControlState {
             aim_world: [transform.x + 1.0, transform.y],
             source_tick: tick,
@@ -283,7 +328,11 @@ fn build_companion_control(world: &World, entity: Entity) -> CavernControlState 
     let dy = enemy_pos[1] - transform.y;
     let (move_x, move_y) = normalized_vector(dx, dy);
     let distance = distance_sq.sqrt();
-    let desired_range = 5.0;
+    let desired_range = match companion_role {
+        Some(crate::domain::CompanionBehaviorRole::Skirmisher) => 4.0,
+        Some(crate::domain::CompanionBehaviorRole::SupportShooter) => 6.5,
+        None => 5.0,
+    };
     let movement = if distance > desired_range {
         [move_x, move_y]
     } else if distance < 2.0 {
@@ -325,6 +374,7 @@ fn move_player_with_control(
         return Ok(());
     };
     if health.current <= 0.0 {
+        let _ = world.insert(entity, PlayerSpectator);
         if let Some(mut velocity) = world.get_mut::<Velocity2>(entity) {
             velocity.x = 0.0;
             velocity.y = 0.0;
@@ -342,7 +392,14 @@ fn move_player_with_control(
         .unwrap_or(ColliderRadius(0.45))
         .0;
 
-    let mut delta = [move_input[0] * 5.5 * dt, move_input[1] * 5.5 * dt];
+    let move_speed = world
+        .resource::<PlayerCombatTuning>()
+        .map(|tuning| tuning.move_speed)
+        .unwrap_or(5.5);
+    let mut delta = [
+        move_input[0] * move_speed * dt,
+        move_input[1] * move_speed * dt,
+    ];
     if dash_pressed && (move_input[0].abs() > f32::EPSILON || move_input[1].abs() > f32::EPSILON) {
         if let Some(mut dash) = world.get_mut::<DashState>(entity) {
             if dash.cooldown_remaining <= f32::EPSILON {
@@ -351,6 +408,7 @@ fn move_player_with_control(
                     move_input[1] * dash.dash_distance,
                 ];
                 dash.cooldown_remaining = dash.cooldown_seconds;
+                dash.invulnerability_remaining = dash.invulnerability_seconds;
             }
         }
     }
@@ -395,6 +453,7 @@ fn fire_player_weapon_with_control(
         .copied()
         .unwrap_or_else(|| Health::new(1.0));
     if health.current <= 0.0 {
+        let _ = world.insert(entity, PlayerSpectator);
         return Ok(());
     }
 
@@ -433,6 +492,16 @@ fn fire_player_weapon_with_control(
     if let Some(mut weapon) = world.get_mut::<WeaponState>(entity) {
         weapon.cooldown_remaining = weapon.fire_interval_seconds;
     }
+    let _ = world.insert(
+        entity,
+        DamageFeedbackState {
+            last_damage_taken: world
+                .get::<DamageFeedbackState>(entity)
+                .map(|feedback| feedback.last_damage_taken)
+                .unwrap_or(0.0),
+            last_damage_dealt: weapon.damage,
+        },
+    );
 
     Ok(())
 }
@@ -532,6 +601,9 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
                 continue;
             }
         }
+        if let Some(mut visual) = world.get_mut::<ProjectileVisualState>(entity) {
+            visual.life_elapsed_seconds += dt;
+        }
 
         let mut hit_target = None;
         for target in &target_entities {
@@ -557,6 +629,11 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
             let Some(target_transform) = world.get::<Transform2>(*target).copied() else {
                 continue;
             };
+            if let Some(dash) = world.get::<DashState>(*target).copied()
+                && dash.invulnerability_remaining > f32::EPSILON
+            {
+                continue;
+            }
             let target_radius = world
                 .get::<ColliderRadius>(*target)
                 .copied()
@@ -571,10 +648,36 @@ fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Res
         }
 
         if let Some(target) = hit_target {
-            if matches!(mode, ProjectileStepMode::Authoritative)
-                && let Some(mut health) = world.get_mut::<Health>(target)
-            {
-                health.current = (health.current - projectile.damage).max(0.0);
+            if matches!(mode, ProjectileStepMode::Authoritative) {
+                let previous = world
+                    .get::<Health>(target)
+                    .copied()
+                    .unwrap_or_else(|| Health::new(1.0));
+                let previous_feedback_dealt = world
+                    .get::<DamageFeedbackState>(target)
+                    .map(|feedback| feedback.last_damage_dealt)
+                    .unwrap_or(0.0);
+                let mut new_health_current = previous.current;
+                if let Some(mut health) = world.get_mut::<Health>(target) {
+                    health.current = (health.current - projectile.damage).max(0.0);
+                    new_health_current = health.current;
+                }
+                let _ = world.insert(
+                    target,
+                    HitFlashState {
+                        remaining_seconds: 0.12,
+                    },
+                );
+                let _ = world.insert(
+                    target,
+                    DamageFeedbackState {
+                        last_damage_taken: projectile.damage,
+                        last_damage_dealt: previous_feedback_dealt,
+                    },
+                );
+                if previous.current > 0.0 && new_health_current <= 0.0 {
+                    let _ = world.insert(target, PlayerSpectator);
+                }
             }
             despawns.push(entity);
         }
@@ -624,6 +727,10 @@ pub(crate) fn spawn_projectile(
         Projectile {
             damage,
             lifetime_seconds: 1.4,
+        },
+        ProjectileVisualState {
+            source_team: if faction == Faction::Hunters { 0 } else { 1 },
+            life_elapsed_seconds: 0.0,
         },
         Transform2::new(origin[0], origin[1], direction[1].atan2(direction[0])),
         Velocity2 {

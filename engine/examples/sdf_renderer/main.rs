@@ -292,6 +292,7 @@ fn sdf_renderer_example_update_system(
             player_y: player.y,
             enemies_alive,
             enemy_kills: scene.enemy_kills,
+            ..UiWorldHudStats::default()
         }
     } else {
         UiWorldHudStats::default()

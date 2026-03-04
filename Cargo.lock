@@ -336,6 +336,7 @@ dependencies = [
  "engine_net",
  "engine_net_quic",
  "postcard",
+ "rustls",
  "serde",
  "serde_json",
  "tokio",

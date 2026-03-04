@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod combat;
 pub mod game;
+pub mod hud;
 pub mod loot;
 pub mod meta;
 pub mod net_sync;
