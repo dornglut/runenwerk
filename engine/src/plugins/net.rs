@@ -7,6 +7,7 @@ use crate::plugins::scene::{
 };
 use crate::runtime::{CoreSet, FixedUpdate, FrameEnd, PreUpdate, SystemConfigExt, WorldMut};
 use crate::state::SessionRuntimeState;
+use anyhow::Context;
 use engine_net::{
     Ack, AuthoritativeJoinState, AuthorityRole, ClientCommandEnvelope, ClientMessage,
     ClientSessionState, ConnectionId, DeltaSnapshot, DisconnectReason, InputFrame,
@@ -442,6 +443,12 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                     .resource::<SimulationProfileConfig>()
                     .map(|config| config.authority)
                     .unwrap_or(AuthorityRole::Local);
+                tracing::info!(
+                    ?authority,
+                    connection_id = join.connection_id,
+                    tick_rate_hz = join.tick_rate_hz,
+                    "network join accepted"
+                );
                 if matches!(authority, AuthorityRole::Server)
                     && let Ok(mut session) = world.resource_mut::<ServerSessionState>()
                 {
@@ -451,6 +458,10 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                     session.active_connections.insert(connection);
                     session.last_disconnect = None;
                     session.last_join_state = Some(join.join_state.clone());
+                    if let Ok(mut replication) = world.resource_mut::<SnapshotReplicationState>() {
+                        // New joins need a full baseline snapshot before deltas are valid.
+                        reset_replication_for_connection(&mut replication, Some(connection));
+                    }
                 }
                 if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer)
                     && let Ok(mut session) = world.resource_mut::<ClientSessionState>()
@@ -477,6 +488,7 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                 apply_session_runtime_join_state(&mut world, &join.join_state);
             }
             SessionRuntimeEvent::JoinRejected(reason) => {
+                tracing::warn!(?reason, "network join rejected");
                 if let Ok(mut session) = world.resource_mut::<ClientSessionState>() {
                     observe_server_message(
                         &mut session,
@@ -505,6 +517,7 @@ fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                 connection_id,
                 reason,
             } => {
+                tracing::warn!(?connection_id, ?reason, "network connection closed");
                 update_connection_closed(&mut world, connection_id, reason);
             }
             SessionRuntimeEvent::Error { message } => {
@@ -556,44 +569,82 @@ fn client_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
                 apply_session_runtime_join_state(&mut world, &join.join_state);
             }
             ServerMessage::Snapshot(snapshot) => {
-                let corrected = apply_authoritative_snapshot(
+                let result = apply_authoritative_snapshot(
                     &mut world,
                     snapshot.tick,
                     snapshot.cursor,
                     None,
                     &snapshot.payload,
-                )?;
-                if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
-                    outbox.push(ClientMessage::Ack(Ack {
-                        cursor: snapshot.cursor,
-                        last_received_tick: snapshot.tick,
-                    }));
-                }
-                if corrected
-                    && let Ok(mut diagnostics) = world.resource_mut::<PredictionDiagnostics>()
-                {
-                    diagnostics.corrections_applied =
-                        diagnostics.corrections_applied.saturating_add(1);
+                )
+                .with_context(|| {
+                    format!(
+                        "failed applying snapshot tick={} cursor={} payload_len={}",
+                        snapshot.tick.0,
+                        snapshot.cursor.0,
+                        snapshot.payload.len()
+                    )
+                });
+                match result {
+                    Ok(corrected) => {
+                        if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
+                            outbox.push(ClientMessage::Ack(Ack {
+                                cursor: snapshot.cursor,
+                                last_received_tick: snapshot.tick,
+                            }));
+                        }
+                        if corrected
+                            && let Ok(mut diagnostics) =
+                                world.resource_mut::<PredictionDiagnostics>()
+                        {
+                            diagnostics.corrections_applied =
+                                diagnostics.corrections_applied.saturating_add(1);
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %format!("{error:#}"),
+                            "network snapshot apply failed"
+                        );
+                    }
                 }
             }
             ServerMessage::DeltaSnapshot(snapshot) => {
-                let corrected = apply_authoritative_delta(
+                let result = apply_authoritative_delta(
                     &mut world,
                     snapshot.tick,
                     snapshot.cursor,
                     &snapshot.payload,
-                )?;
-                if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
-                    outbox.push(ClientMessage::Ack(Ack {
-                        cursor: snapshot.cursor,
-                        last_received_tick: snapshot.tick,
-                    }));
-                }
-                if corrected
-                    && let Ok(mut diagnostics) = world.resource_mut::<PredictionDiagnostics>()
-                {
-                    diagnostics.corrections_applied =
-                        diagnostics.corrections_applied.saturating_add(1);
+                )
+                .with_context(|| {
+                    format!(
+                        "failed applying delta snapshot tick={} cursor={} payload_len={}",
+                        snapshot.tick.0,
+                        snapshot.cursor.0,
+                        snapshot.payload.len()
+                    )
+                });
+                match result {
+                    Ok(corrected) => {
+                        if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
+                            outbox.push(ClientMessage::Ack(Ack {
+                                cursor: snapshot.cursor,
+                                last_received_tick: snapshot.tick,
+                            }));
+                        }
+                        if corrected
+                            && let Ok(mut diagnostics) =
+                                world.resource_mut::<PredictionDiagnostics>()
+                        {
+                            diagnostics.corrections_applied =
+                                diagnostics.corrections_applied.saturating_add(1);
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %format!("{error:#}"),
+                            "network delta snapshot apply failed"
+                        );
+                    }
                 }
             }
             _ => {}
@@ -781,6 +832,8 @@ fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
 }
 
 fn replication_step_system(mut world: WorldMut) -> anyhow::Result<()> {
+    const FULL_SNAPSHOT_INTERVAL_TICKS: u64 = 30;
+
     if let Ok(mut diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
         diagnostics.fixed_steps_observed = diagnostics.fixed_steps_observed.saturating_add(1);
     }
@@ -827,7 +880,9 @@ fn replication_step_system(mut world: WorldMut) -> anyhow::Result<()> {
     if let Some(snapshot) = captured_snapshot
         && let Ok(mut outbox) = world.resource_mut::<NetworkServerOutbox>()
     {
-        if initial_snapshot_sent {
+        let should_send_full_snapshot =
+            !initial_snapshot_sent || cursor.0 % FULL_SNAPSHOT_INTERVAL_TICKS == 0;
+        if !should_send_full_snapshot {
             let base_snapshot = last_sent_snapshot.unwrap_or_else(|| snapshot.clone());
             let delta = build_scene_simulation_delta(&base_snapshot, &snapshot);
             outbox.push(ServerMessage::DeltaSnapshot(DeltaSnapshot {
@@ -1010,13 +1065,17 @@ fn apply_authoritative_snapshot(
     });
 
     ensure_scene_manager(world)?;
-    {
+    let restored = {
         let mut scene_resource = world.resource_mut::<SceneResource>()?;
-        let manager = scene_resource
-            .manager
-            .as_mut()
-            .expect("scene manager should exist after initialization");
-        restore_scene_simulation_snapshot(manager, &snapshot)?;
+        if let Some(manager) = scene_resource.manager.as_mut() {
+            restore_scene_simulation_snapshot(manager, &snapshot)?;
+            true
+        } else {
+            false
+        }
+    };
+    if !restored {
+        return Ok(false);
     }
     republish_scene_resources(world)?;
 
@@ -1085,7 +1144,14 @@ fn ensure_scene_manager(world: &mut ecs::World) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let window = world.resource::<crate::runtime::WindowState>()?.clone();
+    let Ok(window) = world
+        .resource::<crate::runtime::WindowState>()
+        .map(|state| state.clone())
+    else {
+        // Window-less worlds (or very early startup frames) can receive network
+        // snapshots before scene resources are ready; retry on a later frame.
+        return Ok(());
+    };
     let mut scene_resource = world.resource_mut::<SceneResource>()?;
     if scene_resource.manager.is_none() {
         scene_resource.manager = Some(crate::plugins::scene::SceneManager::new(&window)?);

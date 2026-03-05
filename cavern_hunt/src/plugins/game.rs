@@ -1,15 +1,21 @@
 use crate::domain::{
-    CavernAimState, CavernCameraState, CavernCollisionField, CavernControlState,
-    CavernGeometryGraph, CavernGeometryRuntimeState, CavernHudState, CavernLayout,
-    CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState, CavernObjectiveKind,
-    CavernObjectiveState, CavernPlayerOwnershipState, CavernPredictionState, CavernRunConfig,
-    CavernRunState, CavernSdfWorldFrame, CavernServerControlMap, CavernSessionSettings,
-    CavernTopology, EnemyCombatTuning, ExtractionState, LocalPlayerRef, LootTableRegistry,
-    PlayerActive, PlayerCombatTuning, PlayerId, PlayerSpawnProfile, RoomEncounterRegistry,
-    RoomEncounterState, RoomEncounterStatus, RoomRole, RunDifficultyProfile, SessionSpawnPolicy,
-    SpawnDirector,
+    AdaptiveSmoothingState, CavernAimState, CavernCameraState, CavernCollisionField,
+    CavernControlState, CavernGeometryGraph, CavernGeometryRuntimeState, CavernHudState,
+    CavernLayout, CavernMetaPersistenceConfig, CavernMetaProfile, CavernMetaRewardState,
+    CavernObjectiveKind, CavernObjectiveState, CavernPlayerOwnershipState, CavernPredictionState,
+    CavernRunConfig, CavernRunState, CavernSdfWorldFrame, CavernServerAppliedInputTickMap,
+    CavernServerControlMap, CavernSessionSettings, CavernTopology, ClientReplicationMap,
+    CorrectionStats, EnemyCombatTuning, ExtractionState, InterpolationConfig, LocalPlayerRef,
+    LootTableRegistry, NetDiagnosticsConfigAssetV1, NetSyncModeConfig, PlayerActive,
+    PlayerCombatTuning, PlayerId, PlayerSpawnProfile, ReplicationBudgetConfig,
+    ReplicationCadenceConfig, ReplicationKeyframeConfig, ReplicationLoadShedConfig,
+    ReplicationRuntimeMetrics, RoomEncounterRegistry, RoomEncounterState, RoomEncounterStatus,
+    RoomRole, RunDifficultyProfile, ServerReplicationMap, SessionSpawnPolicy, SpawnDirector,
 };
-use crate::plugins::{ai, combat, hud, loot, materials, meta, net_sync, render_sdf, worldgen};
+use crate::plugins::{
+    ai, combat, hud, loot, materials, meta, net_config, net_sync, render_sdf,
+    timing::fixed_step_seconds, worldgen,
+};
 use anyhow::Result;
 use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::prelude::{
@@ -42,8 +48,21 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<CavernAimState>();
         app.init_resource::<CavernControlState>();
         app.init_resource::<CavernPredictionState>();
+        app.init_resource::<ServerReplicationMap>();
+        app.init_resource::<ClientReplicationMap>();
         app.init_resource::<CavernServerControlMap>();
+        app.init_resource::<CavernServerAppliedInputTickMap>();
         app.init_resource::<CavernPlayerOwnershipState>();
+        app.init_resource::<InterpolationConfig>();
+        app.init_resource::<AdaptiveSmoothingState>();
+        app.init_resource::<CorrectionStats>();
+        app.init_resource::<ReplicationBudgetConfig>();
+        app.init_resource::<ReplicationCadenceConfig>();
+        app.init_resource::<ReplicationLoadShedConfig>();
+        app.init_resource::<ReplicationKeyframeConfig>();
+        app.init_resource::<ReplicationRuntimeMetrics>();
+        app.init_resource::<NetSyncModeConfig>();
+        app.init_resource::<NetDiagnosticsConfigAssetV1>();
         app.init_resource::<CavernSdfWorldFrame>();
         app.init_resource::<CavernGeometryRuntimeState>();
         app.init_resource::<SessionSpawnPolicy>();
@@ -56,6 +75,7 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<UiWorldHudStats>();
         app.add_plugins((
             materials::CavernHuntMaterialPlugin,
+            net_config::CavernHuntNetConfigPlugin,
             combat::CavernHuntCombatPlugin,
             ai::CavernHuntAiPlugin,
             hud::CavernHuntHudPlugin,
@@ -230,6 +250,9 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
             active_player_ids.insert(local_player.player_id.unwrap_or(1));
         }
         AuthorityRole::Client | AuthorityRole::Peer => {
+            for (_, player_id) in world.query::<(engine::prelude::Entity, &PlayerId)>().iter() {
+                active_player_ids.insert(player_id.0);
+            }
             if let Some(player_id) = local_player.player_id {
                 active_player_ids.insert(player_id);
             }
@@ -242,7 +265,24 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
                         .iter()
                         .map(|connection_id| connection_id.0)
                         .collect::<Vec<_>>();
-                    ownership.retain_active_connections(live_connections);
+                    ownership.retain_active_connections(live_connections.clone());
+                    let mut assigned_ids = ownership
+                        .by_connection_id
+                        .values()
+                        .copied()
+                        .filter(|player_id| *player_id >= 1 && *player_id <= u32::from(max_players))
+                        .collect::<std::collections::BTreeSet<_>>();
+                    for connection_id in live_connections {
+                        if ownership.by_connection_id.contains_key(&connection_id) {
+                            continue;
+                        }
+                        if let Some(player_id) =
+                            (1..=u32::from(max_players)).find(|id| !assigned_ids.contains(id))
+                        {
+                            ownership.by_connection_id.insert(connection_id, player_id);
+                            assigned_ids.insert(player_id);
+                        }
+                    }
                     world.insert_resource(ownership.clone());
                 }
             }
@@ -465,10 +505,7 @@ fn sync_run_presentation_state(world: &mut World) -> Result<()> {
     }
 
     let extraction_remaining = if run_state.extraction_active {
-        let fixed_dt = world
-            .resource::<engine::prelude::Time>()
-            .map(|time| time.delta_seconds.max(1.0 / 60.0))
-            .unwrap_or(1.0 / 60.0);
+        let fixed_dt = fixed_step_seconds(world);
         run_state
             .extraction_started_at_tick
             .map(|started| {
@@ -600,6 +637,7 @@ mod tests {
         AuthorityRole, DeterminismLevel, SimulationProfile, SimulationProfileConfig, World,
     };
     use engine::state::SessionRuntimeState;
+    use engine_net::{ConnectionId, ServerSessionConfig, ServerSessionState, SessionPhase};
 
     #[test]
     fn session_sync_does_not_shrink_default_party_capacity_for_dev_join_state() {
@@ -765,5 +803,144 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn client_keeps_replicated_remote_players_active() {
+        let mut world = World::new();
+        world.insert_resource(CavernRunConfig::default());
+        world.insert_resource(CavernRunState::default());
+        world.insert_resource(CavernLayout::default());
+        world.insert_resource(SpawnDirector::default());
+        world.insert_resource(LootTableRegistry::default());
+        world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(CavernMetaPersistenceConfig { enabled: false });
+        world.insert_resource(CavernMetaRewardState::default());
+        world.insert_resource(SessionRuntimeState {
+            admitted: true,
+            lobby_id: Some("lobby-client".into()),
+            roster_player_codes: vec!["alpha".into(), "beta".into()],
+            max_players: 2,
+            ai_fill_target: 2,
+            settings_json: None,
+        });
+        world.insert_resource(LocalPlayerRef {
+            player_id: Some(1),
+            entity: None,
+        });
+        world.insert_resource(CavernCameraState::default());
+        world.insert_resource(CavernAimState::default());
+        world.insert_resource(CavernServerControlMap::default());
+        world.insert_resource(CavernPlayerOwnershipState::default());
+        world.insert_resource(CavernSdfWorldFrame::default());
+        world.insert_resource(UiWorldHudStats::default());
+        world.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: AuthorityRole::Client,
+            determinism: DeterminismLevel::Validated,
+        });
+        worldgen::initialize_run_world(&mut world, true).unwrap();
+        let meta = world.resource::<CavernMetaProfile>().unwrap().clone();
+        worldgen::spawn_player_entity(
+            &mut world,
+            2,
+            1,
+            true,
+            &meta,
+            &crate::domain::PlayerSpawnProfile::default(),
+            "beta",
+            1,
+            false,
+        );
+
+        sync_active_player_slots(&mut world).unwrap();
+
+        let mut active_ids = world
+            .query::<(engine::prelude::Entity, &PlayerId)>()
+            .iter()
+            .filter_map(|(entity, player_id)| {
+                world
+                    .get::<PlayerActive>(entity)
+                    .is_some()
+                    .then_some(player_id.0)
+            })
+            .collect::<Vec<_>>();
+        active_ids.sort_unstable();
+        assert_eq!(active_ids, vec![1, 2]);
+    }
+
+    #[test]
+    fn server_assigns_player_slots_for_active_connections_without_input_frames() {
+        let mut world = World::new();
+        world.insert_resource(CavernRunConfig::default());
+        world.insert_resource(CavernRunState::default());
+        world.insert_resource(CavernLayout::default());
+        world.insert_resource(SpawnDirector::default());
+        world.insert_resource(LootTableRegistry::default());
+        world.insert_resource(CavernMetaProfile::default());
+        world.insert_resource(CavernMetaPersistenceConfig { enabled: false });
+        world.insert_resource(CavernMetaRewardState::default());
+        world.insert_resource(SessionRuntimeState {
+            admitted: true,
+            lobby_id: Some("lobby-connections".into()),
+            roster_player_codes: vec![
+                "alpha".into(),
+                "beta".into(),
+                "gamma".into(),
+                "delta".into(),
+            ],
+            max_players: 4,
+            ai_fill_target: 4,
+            settings_json: None,
+        });
+        world.insert_resource(LocalPlayerRef::default());
+        world.insert_resource(CavernCameraState::default());
+        world.insert_resource(CavernAimState::default());
+        world.insert_resource(CavernServerControlMap::default());
+        world.insert_resource(CavernPlayerOwnershipState::default());
+        world.insert_resource(CavernSdfWorldFrame::default());
+        world.insert_resource(UiWorldHudStats::default());
+        world.insert_resource(ServerSessionState {
+            phase: SessionPhase::Active,
+            config: ServerSessionConfig::default(),
+            next_connection_id: 5,
+            active_connection: Some(ConnectionId(4)),
+            active_connections: [
+                ConnectionId(1),
+                ConnectionId(2),
+                ConnectionId(3),
+                ConnectionId(4),
+            ]
+            .into_iter()
+            .collect(),
+            last_join_request: None,
+            last_join_state: None,
+            last_disconnect: None,
+        });
+        world.insert_resource(SimulationProfileConfig {
+            profile: SimulationProfile::DedicatedAuthority,
+            authority: AuthorityRole::Server,
+            determinism: DeterminismLevel::Validated,
+        });
+        worldgen::initialize_run_world(&mut world, false).unwrap();
+
+        sync_active_player_slots(&mut world).unwrap();
+
+        let ownership = world.resource::<CavernPlayerOwnershipState>().unwrap();
+        assert_eq!(ownership.by_connection_id.len(), 4);
+        let mut mapped_ids = ownership
+            .by_connection_id
+            .values()
+            .copied()
+            .collect::<Vec<_>>();
+        mapped_ids.sort_unstable();
+        assert_eq!(mapped_ids, vec![1, 2, 3, 4]);
+
+        let active_players = world
+            .query::<(engine::prelude::Entity, &PlayerId)>()
+            .iter()
+            .filter(|(entity, _)| world.get::<PlayerActive>(*entity).is_some())
+            .count();
+        assert_eq!(active_players, 4);
     }
 }

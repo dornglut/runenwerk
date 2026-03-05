@@ -1,5 +1,5 @@
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
-use crate::domain::resources::{CompanionBehaviorRole, PlayerSpawnProfile};
+use crate::domain::resources::{CompanionBehaviorRole, NetworkEntityId, PlayerSpawnProfile};
 use crate::domain::worldgen::RoomId;
 use engine::prelude::Component;
 use serde::{Deserialize, Serialize};
@@ -183,6 +183,9 @@ pub struct Projectile {
     pub lifetime_seconds: f32,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct ProjectileReplicationId(pub NetworkEntityId);
+
 #[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
 pub struct ProjectileVisualState {
     pub source_team: u8,
@@ -212,6 +215,9 @@ pub struct Extracting;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct Enemy;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct EnemyReplicationId(pub NetworkEntityId);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub enum EnemyKind {
@@ -250,10 +256,16 @@ pub struct Pickup {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct PickupReplicationId(pub NetworkEntityId);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct Chest;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct ExtractionZone;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+pub struct ExtractionReplicationId(pub NetworkEntityId);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct RoomAnchor {

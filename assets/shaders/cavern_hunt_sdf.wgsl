@@ -266,6 +266,20 @@ fn sky_color(rd: vec3<f32>) -> vec3<f32> {
     return mix(vec3<f32>(0.01, 0.015, 0.025), vec3<f32>(0.05, 0.10, 0.14), h);
 }
 
+fn hunter_team_color(team: u32) -> vec3<f32> {
+    let slot = team % 8u;
+    switch slot {
+        case 0u: { return vec3<f32>(0.30, 0.75, 0.98); } // cyan
+        case 1u: { return vec3<f32>(0.98, 0.48, 0.28); } // orange
+        case 2u: { return vec3<f32>(0.90, 0.30, 0.95); } // magenta
+        case 3u: { return vec3<f32>(0.30, 0.92, 0.45); } // green
+        case 4u: { return vec3<f32>(0.98, 0.88, 0.28); } // yellow
+        case 5u: { return vec3<f32>(0.96, 0.40, 0.70); } // pink
+        case 6u: { return vec3<f32>(0.50, 0.78, 0.99); } // light blue
+        default: { return vec3<f32>(0.85, 0.85, 0.85); } // neutral
+    }
+}
+
 fn legacy_material_color(p: vec3<f32>) -> vec3<f32> {
     var best = terrain_distance(p);
     var color = vec3<f32>(0.12, 0.14, 0.16);
@@ -288,7 +302,7 @@ fn legacy_material_color(p: vec3<f32>) -> vec3<f32> {
             best = d;
             switch agents[i].kind {
                 case 0u: {
-                    color = vec3<f32>(0.30, 0.75, 0.98);
+                    color = hunter_team_color(agents[i].team);
                 }
                 case 1u: {
                     color = vec3<f32>(0.79, 0.34, 0.31);
@@ -307,6 +321,12 @@ fn legacy_material_color(p: vec3<f32>) -> vec3<f32> {
                 }
                 case 6u: {
                     color = vec3<f32>(0.20, 0.96, 0.58);
+                }
+                case 12u: {
+                    color = mix(hunter_team_color(agents[i].team), vec3<f32>(0.88, 0.96, 0.78), 0.35);
+                }
+                case 13u: {
+                    color = mix(hunter_team_color(agents[i].team), vec3<f32>(0.16, 0.16, 0.16), 0.65);
                 }
                 default: {
                     color = vec3<f32>(0.85, 0.85, 0.85);

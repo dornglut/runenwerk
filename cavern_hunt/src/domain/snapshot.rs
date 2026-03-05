@@ -1,15 +1,17 @@
 use crate::domain::components::{
     AggroState, AimTarget2, Chest, ColliderRadius, DashState, EliteObjective, Enemy, EnemyKind,
-    Extracting, ExtractionZone, Faction, Health, InventoryRunState, LootDrop, Pickup, Player,
-    PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity, PlayerSpawnState,
-    PlayerSpectator, Projectile, ProjectileAttack, ProjectileVisualState, RoomAnchor, SpawnRoom,
+    EnemyReplicationId, Extracting, ExtractionReplicationId, ExtractionZone, Faction, Health,
+    InventoryRunState, LootDrop, Pickup, PickupReplicationId, Player, PlayerActive,
+    PlayerCompanion, PlayerId, PlayerRosterIdentity, PlayerSpawnState, PlayerSpectator, Projectile,
+    ProjectileAttack, ProjectileReplicationId, ProjectileVisualState, RoomAnchor, SpawnRoom,
     Transform2, Velocity2, WeaponState,
 };
 use crate::domain::is_active_player_entity;
 use crate::domain::loot::{PickupKind, RelicKind, WeaponModKind};
 use crate::domain::resources::{
     CavernGeometryRuntimeState, CavernObjectiveState, CavernPlayerOwnershipState, CavernRunPhase,
-    CavernRunState, CavernSeed, ExtractionState, LocalPlayerRef, PlayerSpawnProfile,
+    CavernRunState, CavernSeed, CavernServerAppliedInputTickMap, CavernServerControlMap,
+    ExtractionState, LocalPlayerRef, NetworkEntityId, PlayerSpawnProfile, ReplicationCursor,
     RoomEncounterRegistry,
 };
 use crate::domain::worldgen::CavernLayout;
@@ -49,6 +51,8 @@ pub struct CavernPlayerSnapshotV1 {
     pub dash: DashState,
     pub weapon: WeaponState,
     pub inventory: CavernInventorySnapshotV1,
+    #[serde(default)]
+    pub authoritative_input_tick: Option<SimulationTick>,
     pub room_anchor: Option<RoomId>,
     pub extracting: bool,
 }
@@ -62,6 +66,8 @@ pub struct RoomEncounterSnapshotV1 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CavernEnemySnapshotV1 {
+    #[serde(default)]
+    pub network_entity_id: NetworkEntityId,
     pub kind: EnemyKind,
     pub x: f32,
     pub y: f32,
@@ -81,6 +87,8 @@ pub struct CavernEnemySnapshotV1 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CavernProjectileSnapshotV1 {
+    #[serde(default)]
+    pub network_entity_id: NetworkEntityId,
     pub x: f32,
     pub y: f32,
     pub yaw: f32,
@@ -93,6 +101,8 @@ pub struct CavernProjectileSnapshotV1 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CavernPickupSnapshotV1 {
+    #[serde(default)]
+    pub network_entity_id: NetworkEntityId,
     pub x: f32,
     pub y: f32,
     pub yaw: f32,
@@ -105,6 +115,8 @@ pub struct CavernPickupSnapshotV1 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CavernExtractionSnapshotV1 {
+    #[serde(default)]
+    pub network_entity_id: NetworkEntityId,
     pub x: f32,
     pub y: f32,
     pub yaw: f32,
@@ -179,6 +191,129 @@ pub struct CavernRunDeltaV1 {
     pub projectiles: Option<Vec<CavernProjectileSnapshotV1>>,
     pub pickups: Option<Vec<CavernPickupSnapshotV1>>,
     pub extraction_zones: Option<Vec<CavernExtractionSnapshotV1>>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CavernPatchPriorityV2 {
+    Critical,
+    High,
+    Medium,
+    Low,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CavernPlayerPatchOpV2 {
+    Spawn {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernPlayerSnapshotV1,
+    },
+    Patch {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernPlayerSnapshotV1,
+    },
+    Despawn {
+        entity_id: NetworkEntityId,
+        player_id: u32,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CavernRunStatePatchV2 {
+    pub phase: Option<CavernRunPhase>,
+    pub elite_defeated: Option<bool>,
+    pub extraction_active: Option<bool>,
+    pub extraction_started_at_tick: Option<Option<SimulationTick>>,
+    pub party_alive_count: Option<u8>,
+    pub enemy_kills: Option<u32>,
+    pub objective: Option<CavernObjectiveState>,
+    pub extraction: Option<ExtractionState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CavernKeyframeEventV2 {
+    pub cursor: ReplicationCursor,
+    pub snapshot: CavernRunSnapshotV1,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CavernPatchEventV2 {
+    pub cursor: ReplicationCursor,
+    pub run_state: Option<CavernRunStatePatchV2>,
+    pub player_ops: Vec<CavernPlayerPatchOpV2>,
+    pub enemy_ops: Vec<CavernEnemyPatchOpV2>,
+    pub projectile_ops: Vec<CavernProjectilePatchOpV2>,
+    pub pickup_ops: Vec<CavernPickupPatchOpV2>,
+    pub extraction_ops: Vec<CavernExtractionPatchOpV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CavernEnemyPatchOpV2 {
+    Spawn {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernEnemySnapshotV1,
+    },
+    Patch {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernEnemySnapshotV1,
+    },
+    Despawn {
+        entity_id: NetworkEntityId,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CavernProjectilePatchOpV2 {
+    Spawn {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernProjectileSnapshotV1,
+    },
+    Patch {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernProjectileSnapshotV1,
+    },
+    Despawn {
+        entity_id: NetworkEntityId,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CavernPickupPatchOpV2 {
+    Spawn {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernPickupSnapshotV1,
+    },
+    Patch {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernPickupSnapshotV1,
+    },
+    Despawn {
+        entity_id: NetworkEntityId,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CavernExtractionPatchOpV2 {
+    Spawn {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernExtractionSnapshotV1,
+    },
+    Patch {
+        entity_id: NetworkEntityId,
+        priority: CavernPatchPriorityV2,
+        state: CavernExtractionSnapshotV1,
+    },
+    Despawn {
+        entity_id: NetworkEntityId,
+    },
 }
 
 #[derive(Bundle)]
@@ -267,6 +402,14 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
         .resource::<CavernPlayerOwnershipState>()
         .cloned()
         .unwrap_or_default();
+    let applied_input_ticks = world
+        .resource::<CavernServerAppliedInputTickMap>()
+        .cloned()
+        .unwrap_or_default();
+    let server_controls = world
+        .resource::<CavernServerControlMap>()
+        .cloned()
+        .unwrap_or_default();
     let mut players = Vec::new();
     let mut enemies = Vec::new();
     let mut projectiles = Vec::new();
@@ -311,6 +454,18 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 .copied()
                 .unwrap_or(PlayerId(0))
                 .0;
+            let authoritative_input_tick = sanitize_authoritative_input_tick(
+                applied_input_ticks
+                    .by_player_id
+                    .get(&player_id)
+                    .copied()
+                    .or_else(|| {
+                        server_controls
+                            .by_player_id
+                            .get(&player_id)
+                            .map(|control| control.source_tick)
+                    }),
+            );
             let owner_connection_id =
                 ownership
                     .by_connection_id
@@ -351,6 +506,7 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                     weapon_mods: inventory.weapon_mods,
                     relics: inventory.relics,
                 },
+                authoritative_input_tick,
                 room_anchor: world.get::<RoomAnchor>(entity).map(|anchor| anchor.room_id),
                 extracting: world.get::<Extracting>(entity).is_some(),
             });
@@ -369,6 +525,10 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 .unwrap_or(ColliderRadius(0.6))
                 .0;
             enemies.push(CavernEnemySnapshotV1 {
+                network_entity_id: world
+                    .get::<EnemyReplicationId>(entity)
+                    .map(|id| id.0)
+                    .unwrap_or_else(|| network_entity_id_from_entity(entity)),
                 kind,
                 x: transform.x,
                 y: transform.y,
@@ -400,6 +560,10 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 .copied()
                 .unwrap_or(Faction::Neutral);
             projectiles.push(CavernProjectileSnapshotV1 {
+                network_entity_id: world
+                    .get::<ProjectileReplicationId>(entity)
+                    .map(|id| id.0)
+                    .unwrap_or_else(|| network_entity_id_from_entity(entity)),
                 x: transform.x,
                 y: transform.y,
                 yaw: transform.yaw,
@@ -419,6 +583,10 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 .unwrap_or(ColliderRadius(0.38))
                 .0;
             pickups.push(CavernPickupSnapshotV1 {
+                network_entity_id: world
+                    .get::<PickupReplicationId>(entity)
+                    .map(|id| id.0)
+                    .unwrap_or_else(|| network_entity_id_from_entity(entity)),
                 x: transform.x,
                 y: transform.y,
                 yaw: transform.yaw,
@@ -438,6 +606,10 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
                 .unwrap_or(ColliderRadius(1.25))
                 .0;
             extraction_zones.push(CavernExtractionSnapshotV1 {
+                network_entity_id: world
+                    .get::<ExtractionReplicationId>(entity)
+                    .map(|id| id.0)
+                    .unwrap_or_else(|| network_entity_id_from_entity(entity)),
                 x: transform.x,
                 y: transform.y,
                 yaw: transform.yaw,
@@ -714,6 +886,16 @@ pub fn restore_cavern_run_snapshot(
             })
             .collect(),
     });
+    world.insert_resource(CavernServerAppliedInputTickMap {
+        by_player_id: snapshot
+            .players
+            .iter()
+            .filter_map(|player| {
+                sanitize_authoritative_input_tick(player.authoritative_input_tick)
+                    .map(|tick| (player.player_id, tick))
+            })
+            .collect(),
+    });
 
     let mut restored_local_entity = None;
 
@@ -793,6 +975,7 @@ pub fn restore_cavern_run_snapshot(
             faction: Faction::CavernBeasts,
             collider_radius: ColliderRadius(enemy.collider_radius),
         });
+        let _ = world.insert(entity, EnemyReplicationId(enemy.network_entity_id));
         if let Some(aggro) = enemy.aggro {
             let _ = world.insert(entity, aggro);
         }
@@ -822,7 +1005,7 @@ pub fn restore_cavern_run_snapshot(
     }
 
     for projectile in &snapshot.projectiles {
-        world.spawn(ProjectileSnapshotBundle {
+        let entity = world.spawn(ProjectileSnapshotBundle {
             projectile: Projectile {
                 damage: projectile.damage,
                 lifetime_seconds: projectile.lifetime_seconds,
@@ -843,6 +1026,10 @@ pub fn restore_cavern_run_snapshot(
             collider_radius: ColliderRadius(projectile.collider_radius),
             faction: projectile.faction,
         });
+        let _ = world.insert(
+            entity,
+            ProjectileReplicationId(projectile.network_entity_id),
+        );
     }
 
     for pickup in &snapshot.pickups {
@@ -853,6 +1040,7 @@ pub fn restore_cavern_run_snapshot(
             transform: Transform2::new(pickup.x, pickup.y, pickup.yaw),
             collider_radius: ColliderRadius(pickup.collider_radius),
         });
+        let _ = world.insert(entity, PickupReplicationId(pickup.network_entity_id));
         if pickup.loot_drop {
             let _ = world.insert(entity, LootDrop);
         }
@@ -875,6 +1063,7 @@ pub fn restore_cavern_run_snapshot(
             transform: Transform2::new(zone.x, zone.y, zone.yaw),
             collider_radius: ColliderRadius(zone.collider_radius),
         });
+        let _ = world.insert(entity, ExtractionReplicationId(zone.network_entity_id));
         if let Some(room_anchor) = zone.room_anchor {
             let _ = world.insert(
                 entity,
@@ -924,6 +1113,14 @@ fn enemy_kind_order(kind: EnemyKind) -> u8 {
     }
 }
 
+fn network_entity_id_from_entity(entity: Entity) -> NetworkEntityId {
+    NetworkEntityId(((entity.generation as u64) << 32) | entity.id as u64)
+}
+
+fn sanitize_authoritative_input_tick(tick: Option<SimulationTick>) -> Option<SimulationTick> {
+    tick.filter(|tick| tick.0 > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -931,13 +1128,15 @@ mod tests {
         restore_cavern_run_snapshot,
     };
     use crate::domain::{
-        CavernAimState, CavernCameraState, CavernMetaProfile, CavernPlayerOwnershipState,
-        CavernRunConfig, CavernRunState, Faction, Health, LocalPlayerRef, LootTableRegistry,
-        PlayerActive, SpawnDirector, Transform2,
+        CavernAimState, CavernCameraState, CavernControlState, CavernMetaProfile,
+        CavernPlayerOwnershipState, CavernRunConfig, CavernRunState,
+        CavernServerAppliedInputTickMap, CavernServerControlMap, Faction, Health, LocalPlayerRef,
+        LootTableRegistry, PlayerActive, SpawnDirector, Transform2,
     };
     use crate::plugins::{combat, worldgen};
     use engine::prelude::{
-        InputState, NetworkSessionStatus, SimulationRng, SimulationSeed, WindowState, World,
+        InputState, NetworkSessionStatus, SimulationRng, SimulationSeed, SimulationTick,
+        WindowState, World,
     };
     use engine_net::ConnectionId;
 
@@ -1034,5 +1233,71 @@ mod tests {
 
         let local_player = restored.resource::<LocalPlayerRef>().unwrap();
         assert_eq!(local_player.player_id, Some(2));
+    }
+
+    #[test]
+    fn capture_and_restore_preserves_authoritative_input_tick_for_players() {
+        let mut source = seeded_world();
+        let local_entity = source.resource::<LocalPlayerRef>().unwrap().entity.unwrap();
+        let local_player_id = source
+            .get::<crate::domain::PlayerId>(local_entity)
+            .unwrap()
+            .0;
+        source.insert_resource(CavernServerAppliedInputTickMap {
+            by_player_id: std::iter::once((local_player_id, SimulationTick(77))).collect(),
+        });
+
+        let snapshot = capture_cavern_run_snapshot(&source).unwrap();
+        let local_snapshot = snapshot
+            .players
+            .iter()
+            .find(|player| player.player_id == local_player_id)
+            .unwrap();
+        assert_eq!(
+            local_snapshot.authoritative_input_tick,
+            Some(SimulationTick(77))
+        );
+
+        let mut restored = World::new();
+        restored.insert_resource(LocalPlayerRef::default());
+        restore_cavern_run_snapshot(&mut restored, &snapshot).unwrap();
+        let restored_ticks = restored
+            .resource::<CavernServerAppliedInputTickMap>()
+            .unwrap();
+        assert_eq!(
+            restored_ticks.by_player_id.get(&local_player_id),
+            Some(&SimulationTick(77))
+        );
+    }
+
+    #[test]
+    fn capture_uses_control_source_tick_when_applied_tick_map_is_missing() {
+        let mut source = seeded_world();
+        let local_entity = source.resource::<LocalPlayerRef>().unwrap().entity.unwrap();
+        let local_player_id = source
+            .get::<crate::domain::PlayerId>(local_entity)
+            .unwrap()
+            .0;
+        source.insert_resource(CavernServerControlMap {
+            by_player_id: std::iter::once((
+                local_player_id,
+                CavernControlState {
+                    source_tick: SimulationTick(42),
+                    ..CavernControlState::default()
+                },
+            ))
+            .collect(),
+        });
+
+        let snapshot = capture_cavern_run_snapshot(&source).unwrap();
+        let local_snapshot = snapshot
+            .players
+            .iter()
+            .find(|player| player.player_id == local_player_id)
+            .unwrap();
+        assert_eq!(
+            local_snapshot.authoritative_input_tick,
+            Some(SimulationTick(42))
+        );
     }
 }

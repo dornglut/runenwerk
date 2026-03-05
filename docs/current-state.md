@@ -1,6 +1,6 @@
 # Current Project State
 
-Updated: 2026-03-04
+Updated: 2026-03-05
 
 ## Summary
 
@@ -45,9 +45,11 @@ The codebase is no longer in a migration state. The remaining work is feature ex
   - client/server handshake
   - long-lived QUIC runtime tasks
   - reconnect
-  - full snapshot bootstrap
-  - real scene delta snapshots
-  - client-side authoritative apply and first-pass prediction correction
+  - staged hybrid replication (V2):
+    - periodic keyframes (`cavern_hunt.keyframe.v2`)
+    - in-place patch stream (`cavern_hunt.patch.v2`)
+    - adaptive load-shed levels with per-channel budget/cadence controls
+  - client-side authoritative apply and adaptive correction/smoothing
 
 ### Axiom integration
 
@@ -56,8 +58,17 @@ The codebase is no longer in a migration state. The remaining work is feature ex
   - validate join grants
   - consume join tickets
   - map consumed admission data into runtime-facing join state
-- `grotto_client` and `grotto_server` can use those live hooks when the expected env vars are present
-- local/dev fallback paths still exist when Axiom config is absent
+- `grotto_online` now also provides an operator WebSocket bridge contract for runtime commands, snapshots, and event streaming
+- `grotto_server` now supports opt-in operator runtime control:
+  - drain mode
+  - targeted connection disconnect
+  - shutdown orchestration and structured runtime snapshots/events
+- `grotto_fleet_control` now runs as a separate lifecycle/log control process with a Kubernetes provider and Axiom WebSocket command bridge
+  - `stop_server` issues runtime drain+shutdown dispatch first, then Kubernetes force-stop fallback
+  - bridge URLs now target Axiom `/v2/operator/runtime/ws` and `/v2/operator/fleet/ws`
+  - runtime/fleet bridge config can be overridden via env/CLI for local ops workflows
+- `grotto_client` and `grotto_server` now load multiplayer/network settings from versioned `.ron` assets
+- local/dev fallback paths still exist when Axiom handoff is disabled in config
 
 ## Current Runtime State Model
 
@@ -83,8 +94,12 @@ The important public runtime state now includes:
 - dedicated-authority session bootstrap
 - live QUIC runtime handles
 - reconnect baseline reset
-- scene snapshot replication and delta application
+- V2 keyframe+patch replication path (`NetSyncModeConfig::V2` in client/server networking assets)
+- adaptive per-channel patch cadence and op-budget load shedding from server networking profiles
+- tunable client reconciliation thresholds from client networking profiles
 - Axiom handoff contracts plus optional live HTTP verification
+- Axiom operator runtime bridge path for in-process server control and observability (opt-in)
+- fleet lifecycle/log control service baseline with Kubernetes-backed implementation
 - `Cavern Hunt` friend-test vertical slice:
   - procedural cavern generation
   - fixed-camera SDF 3D rendering
@@ -120,11 +135,12 @@ This is enough for a friend-testable vertical slice, but not yet enough for a la
 
 ### Multiplayer maturity gaps
 
-- no full combat replication model yet
+- V2 patching is in-place for player/enemy/projectile/pickup/extraction channels with periodic keyframe recovery; AOI/relevancy is still missing
 - no AOI/relevancy model yet
 - no shard/zone partitioning
 - reconnect still assumes the same logical host rather than reallocation to a new host
 - Axiom consume metadata is now retained, but the runtime still needs deeper gameplay/session orchestration on top of it
+- lifecycle service deployment/inventory wiring is not yet integrated into production ops automation
 
 ### Profile maturity
 
@@ -141,8 +157,8 @@ Defined but not yet implemented as full runtime profiles:
 ## Recommended Next Steps
 
 1. Polish Cavern Hunt combat feel, HUD clarity, and encounter pacing for friend tests.
-2. Expand the live playtest flow to the documented 4-player local/dev path and keep it green under reconnect.
-3. Build the full client control-plane flow so `grotto_client` boots from restored Axiom auth/session/lobby state rather than env vars.
+2. Keep the 2-local smoothness target green, then expand the 4-local best-effort path under reconnect.
+3. Build the full client control-plane flow so `grotto_client` boots from restored Axiom auth/session/lobby state rather than static local config.
 4. After Cavern Hunt feels stable, resume broader profile work and richer gameplay replication.
 
 ## Verification
@@ -151,6 +167,11 @@ The current baseline has been validated with:
 
 - `cargo check --workspace`
 - `cargo check -p grotto_client -p grotto_server -p cavern_hunt`
+- `cargo test -p grotto_online`
+- `cargo test -p engine_net_quic`
+- `cargo test -p cavern_hunt net_config`
+- `cargo test -p grotto_fleet_control`
 - `cargo test -p cavern_hunt --lib`
+- `cargo test -p cavern_hunt net_sync -- --nocapture`
 
-All of the above passed on `2026-03-04`.
+All of the above passed on `2026-03-05`.

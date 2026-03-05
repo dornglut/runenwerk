@@ -1,6 +1,6 @@
 # Cavern Hunt Playtest Guide
 
-Updated: 2026-03-04
+Updated: 2026-03-05
 
 ## Goal
 
@@ -11,6 +11,12 @@ The local/dev flow does not require Axiom. It uses:
 - one local dedicated server
 - 1 to 4 local clients
 - the dev QUIC certificate written by the server
+- prebuilt binaries (party script builds once, then launches directly)
+
+Primary local target:
+
+- smooth 2-local clients + dedicated server on one machine
+- 4-local is best-effort and expected to degrade on lower-end laptops
 
 The optional Axiom-backed path is still supported for advanced testing.
 
@@ -39,13 +45,19 @@ scripts/run_cavern_client.sh
 Run the client script once per client, or use:
 
 ```bash
-scripts/run_cavern_party_local.sh 4
+scripts/run_cavern_party_local.sh
 ```
 
 That starts:
 
 - one local server
-- four local clients
+- two local clients by default
+
+Use explicit 4-client mode when needed:
+
+```bash
+scripts/run_cavern_party_local.sh 4
+```
 
 Client and server logs are written to:
 
@@ -55,49 +67,121 @@ Client and server logs are written to:
 - `/tmp/cavern_hunt_client_3.log`
 - `/tmp/cavern_hunt_client_4.log`
 
-## Local/Dev Environment Variables
+## Networking Config Assets
 
-These are optional for the local fallback path:
+Network and multiplayer settings now come from `.ron` assets loaded at process startup.
 
-- `GROTTO_SERVER_ID`
-  - default: `srv-local`
-- `GROTTO_SERVER_NAME`
-  - default: `localhost`
-- `GROTTO_SERVER_ENDPOINT`
-  - default: `127.0.0.1:7000`
-- `GROTTO_JOIN_TICKET`
-  - default: `local-ticket`
-- `GROTTO_SERVER_CERT_PATH`
-  - default: `var/dev/server-cert.der`
-- `AXIOM_API_BASE_URL`
-  - default: `http://api.localhost`
-- `AXIOM_DEVICE_ID`
-  - client-only device identifier for local/Axiom testing
+Default paths:
+
+- client: `game/assets/networking/client/local_dev.ron`
+- server: `game/assets/networking/server/local_dev.ron`
+
+Built-in profiles:
+
+- `local_dev`
+- `two_local_balanced`
+- `four_local_conservative`
+
+Script profile selection:
+
+- `CAVERN_NET_PROFILE=two_local_balanced scripts/run_cavern_party_local.sh`
+- `CAVERN_NET_PROFILE=four_local_conservative scripts/run_cavern_party_local.sh 4`
+
+Explicit config override:
+
+- `CAVERN_CLIENT_CONFIG_PATH=... scripts/run_cavern_client.sh`
+- `CAVERN_SERVER_CONFIG_PATH=... scripts/run_cavern_server.sh`
+
+Direct binary usage:
+
+- `target/debug/grotto_client --config game/assets/networking/client/local_dev.ron`
+- `target/debug/grotto_server --config game/assets/networking/server/local_dev.ron`
+
+Hot reload:
+
+- config hot reload is controlled per file via `hot_reload.enabled` and `hot_reload.poll_interval_seconds`
+- only safe runtime fields are applied live (cadence/budgets/interpolation/diagnostics/mode)
+
+## Optional Environment Variables
+
+These remain useful for local rendering/dev workflow:
+
 - `CAVERN_RENDER_MODE`
   - `legacy` or `material_graph`
   - default: material profile setting (normally `material_graph`)
 - `CAVERN_MATERIAL_PROFILE`
   - `performance`, `balanced`, or `quality`
-  - default: `balanced`
+  - default: `performance` in local party script
 - `CAVERN_GI_MODE`
   - `off`, `ao`, `probes`
 - `CAVERN_GI_QUALITY`
   - `low`, `medium`, `high`
+- `CAVERN_RELEASE`
+  - default: `1` for local party script (release binaries)
+- `CAVERN_CLIENT_START_STAGGER_SECONDS`
+  - default: `0.15`
+  - staggers local client startup to reduce burst contention
 
 ## Optional Axiom-Backed Flow
 
-The client can request a live join grant instead of using the local fallback target when these are set:
+Enable these fields in your client/server `.ron` profiles:
 
-- `AXIOM_API_BASE_URL`
-- `AXIOM_LOBBY_ID`
-- `AXIOM_ACCESS_TOKEN` or `AXIOM_REFRESH_TOKEN`
-- `AXIOM_DEVICE_ID`
+- client:
+  - `use_axiom_handoff = true`
+  - `axiom_api_base_url`
+  - `axiom_lobby_id`
+  - `axiom_access_token` or `axiom_refresh_token`
+  - `axiom_device_id`
+- server:
+  - `use_axiom_verifier = true`
+  - `axiom_api_base_url`
+  - `dedicated_server_shared_secret`
 
-The server can verify join tickets against Axiom when this is set:
+If these are unset, local fallback join remains active.
 
-- `DEDICATED_SERVER_SHARED_SECRET`
+## Optional Axiom Operator Console (Runtime Control)
 
-If those are missing, the local fallback path stays active.
+Server profiles now include an `axiom_operator` block (disabled by default):
+
+- `enabled`
+- `ws_url`
+- `runtime_token`
+- `heartbeat_seconds`
+- `snapshot_interval_ticks`
+- `max_buffered_events`
+
+Bridge endpoints (Axiom):
+
+- runtime bridge: `/v2/operator/runtime/ws`
+- fleet bridge: `/v2/operator/fleet/ws`
+
+You can still hardcode values in `.ron` config, but local/dev is easier with env overrides:
+
+- `CAVERN_AXIOM_OPERATOR_ENABLED`
+- `CAVERN_AXIOM_OPERATOR_WS_URL`
+- `CAVERN_AXIOM_OPERATOR_RUNTIME_TOKEN`
+- `GROTTO_FLEET_AXIOM_ENABLED`
+- `GROTTO_FLEET_AXIOM_WS_URL`
+- `GROTTO_FLEET_AXIOM_COMMAND_TOKEN`
+- `GROTTO_FLEET_AXIOM_SERVICE_ID`
+
+Helper to issue bridge tokens from Axiom and print export commands:
+
+```bash
+AXIOM_OPERATOR_PASSWORD=... scripts/axiom_issue_operator_bridge_tokens.sh
+```
+
+Runtime bridge launch:
+
+```bash
+scripts/run_cavern_server.sh
+```
+
+Phase 2 lifecycle/log control process:
+
+- `cargo run -p grotto_fleet_control -- --config ops/fleet/kubernetes.ron`
+
+When operator/fleet bridge env vars are unset, local scripts and non-Axiom flow remain unchanged.
 
 ## What a Successful Run Looks Like
 

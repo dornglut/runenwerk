@@ -1,10 +1,11 @@
 use crate::domain::{
-    CavernHudState, CavernObjectiveState, CavernRunState, DamageFeedbackState, DashState, Health,
-    InventoryRunState, LocalPlayerRef, PlayerCompanion, PlayerId, PlayerSpectator,
-    PlayerStatusPanel, RoomEncounterRegistry,
+    AdaptiveSmoothingState, CavernHudState, CavernObjectiveState, CavernRunState, CorrectionStats,
+    DamageFeedbackState, DashState, Health, InventoryRunState, LocalPlayerRef, PlayerCompanion,
+    PlayerId, PlayerSpectator, PlayerStatusPanel, ReplicationRuntimeMetrics, RoomEncounterRegistry,
 };
 use anyhow::Result;
 use engine::plugins::ui::domain::UiWorldHudStats;
+use engine::prelude::RoundTripMetrics;
 use engine::prelude::{App, Plugin, Update, World};
 
 pub struct CavernHuntHudPlugin;
@@ -82,6 +83,8 @@ pub(crate) fn update_cavern_hud(world: &mut World) -> Result<()> {
     let extraction = world.resource::<crate::domain::ExtractionState>()?.clone();
     let encounter_summary = summarize_encounters(world);
     let feedback_summary = summarize_feedback(world);
+    let network_summary = summarize_network(world);
+    let smoothing_summary = summarize_smoothing(world);
     let player_position = local_entity
         .and_then(|entity| world.get::<crate::domain::Transform2>(entity).copied())
         .map(|transform| [transform.x, transform.y])
@@ -125,6 +128,8 @@ pub(crate) fn update_cavern_hud(world: &mut World) -> Result<()> {
         ),
         encounter_summary,
         feedback_summary,
+        network_summary,
+        smoothing_summary,
     ];
     world.insert_resource(hud_state.clone());
 
@@ -207,5 +212,74 @@ fn summarize_feedback(world: &World) -> String {
     format!(
         "recent dmg taken {:.1} dealt {:.1}",
         feedback.last_damage_taken, feedback.last_damage_dealt
+    )
+}
+
+fn summarize_network(world: &World) -> String {
+    let metrics = world
+        .resource::<ReplicationRuntimeMetrics>()
+        .copied()
+        .unwrap_or_default();
+    format!(
+        "net l{} tx {}B(rx {}B) patch_us {} key {} patch {} restore {} ops p/e/pr/pu/ex {}/{}/{}/{}/{} drop e/pr/pu/ex {}/{}/{}/{} smooth n {} err {:.2}/{:.2} a {:.2} ex {:.0}ms",
+        metrics.load_shed_level_last_tick,
+        metrics.bytes_sent_last_tick,
+        metrics.bytes_received_last_frame,
+        metrics.patch_apply_micros_last,
+        metrics.keyframes_applied,
+        metrics.patches_applied,
+        metrics.full_world_restores,
+        metrics.patch_player_ops_last_tick,
+        metrics.patch_enemy_ops_last_tick,
+        metrics.patch_projectile_ops_last_tick,
+        metrics.patch_pickup_ops_last_tick,
+        metrics.patch_extraction_ops_last_tick,
+        metrics.dropped_enemy_ops_last_tick,
+        metrics.dropped_projectile_ops_last_tick,
+        metrics.dropped_pickup_ops_last_tick,
+        metrics.dropped_extraction_ops_last_tick,
+        metrics.smoothing_samples_last_frame,
+        metrics.smoothing_error_mean_last_frame,
+        metrics.smoothing_error_max_last_frame,
+        metrics.smoothing_alpha_mean_last_frame,
+        metrics.smoothing_extrapolation_ms_last_frame
+    )
+}
+
+fn summarize_smoothing(world: &World) -> String {
+    let metrics = world
+        .resource::<ReplicationRuntimeMetrics>()
+        .copied()
+        .unwrap_or_default();
+    let rtt = world
+        .resource::<RoundTripMetrics>()
+        .ok()
+        .and_then(|metrics| metrics.last_rtt_millis.map(|millis| millis as f32))
+        .unwrap_or(0.0);
+    let smoothing = world
+        .resource::<AdaptiveSmoothingState>()
+        .copied()
+        .unwrap_or_default();
+    let correction = world
+        .resource::<CorrectionStats>()
+        .copied()
+        .unwrap_or_default();
+    format!(
+        "rtt {:.0}ms jitter {:.0}ms smooth {:.0}ms corr s/m/l/h {}/{}/{}/{} ({:.2} ema {:.2}) rem err {:.2}/{:.2}",
+        if rtt > 0.0 {
+            rtt
+        } else {
+            smoothing.last_rtt_ms
+        },
+        smoothing.jitter_ms,
+        smoothing.effective_delay_ms,
+        correction.small_corrections,
+        correction.medium_corrections,
+        correction.large_corrections,
+        correction.hard_snaps,
+        correction.last_distance,
+        correction.ema_distance,
+        metrics.smoothing_error_mean_last_frame,
+        metrics.smoothing_error_max_last_frame
     )
 }

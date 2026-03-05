@@ -441,6 +441,27 @@ async fn four_live_clients_complete_run_and_reconnect_one_client() -> Result<()>
     assert!(saw_full_party, "four clients should converge into one run");
     owned_ids.sort_unstable();
     assert_eq!(owned_ids, vec![1, 2, 3, 4]);
+    let mut clients_have_full_party_view = false;
+    for _ in 0..120 {
+        (server, clients) = pump_round_many(server, clients).await?;
+        let all_clients_see_four_players = clients.iter().all(|client| {
+            client
+                .world()
+                .query::<(engine::prelude::Entity, &PlayerId)>()
+                .iter()
+                .filter(|(entity, _)| client.world().get::<PlayerActive>(*entity).is_some())
+                .count()
+                == 4
+        });
+        if all_clients_see_four_players {
+            clients_have_full_party_view = true;
+            break;
+        }
+    }
+    assert!(
+        clients_have_full_party_view,
+        "every client should render all active players in the shared run"
+    );
 
     for (index, client) in clients.iter_mut().enumerate() {
         let input = &mut *client

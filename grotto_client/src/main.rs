@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use cavern_hunt::domain::{NetConfigHotReloadState, load_client_network_config_from_path};
 use cavern_hunt::{CavernHuntClientPlugin, CavernHuntPlugin};
 use engine::plugins::render::domain::ShaderRegistryResource;
 use engine::plugins::{
-    NetworkClientPlugin, NetworkRuntimeHandle, PredictionPlugin, RenderPlugin, ReplicationPlugin,
-    ScenePlugin, UiInputPlugin, UiRenderPlugin, default_plugins,
+    NetworkClientPlugin, NetworkRuntimeHandle, RenderPlugin, ScenePlugin, UiInputPlugin,
+    UiRenderPlugin, default_plugins,
 };
 use engine::{App, AppRunner, AuthorityRole, SimulationProfile};
 use engine_net::{ProtocolVersion, Transport};
@@ -19,6 +20,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
+
+const DEFAULT_CLIENT_CONFIG_PATH: &str = "game/assets/networking/client/local_dev.ron";
 
 struct SignalRunner {
     running: Arc<AtomicBool>,
@@ -36,6 +39,14 @@ impl AppRunner for SignalRunner {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
+    let launch = parse_client_launch_options()?;
+    let config = load_client_network_config_from_path(&launch.config_path).with_context(|| {
+        format!(
+            "failed loading client config {}",
+            launch.config_path.display()
+        )
+    })?;
+
     let _tracing_guard = engine::utils::setup_tracing();
     let mut app = App::new();
     app.set_title("Cavern Hunt Client");
@@ -48,35 +59,26 @@ async fn main() -> Result<()> {
         UiRenderPlugin,
         RenderPlugin,
         NetworkClientPlugin,
-        ReplicationPlugin,
-        PredictionPlugin,
     ));
     app.add_plugins((CavernHuntPlugin, CavernHuntClientPlugin));
+    app.world_mut().insert_resource(config.clone());
+    app.world_mut()
+        .insert_resource(NetConfigHotReloadState::new(
+            launch.config_path.clone(),
+            config.hot_reload.enabled,
+            config.hot_reload.poll_interval_seconds,
+        ));
     if let Ok(mut shaders) = app.world_mut().resource_mut::<ShaderRegistryResource>() {
-        let watch_enabled = std::env::var("GROTTO_SHADER_WATCH")
-            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
-        shaders.set_watch_enabled(watch_enabled);
+        shaders.set_watch_enabled(config.shader_watch);
     }
 
-    let protocol = ProtocolVersion::new(1, 1, 1);
+    let protocol = ProtocolVersion::from(&config.protocol);
     let transport = QuicTransport::default();
-    let server_id = std::env::var("GROTTO_SERVER_ID").unwrap_or_else(|_| "srv-local".to_string());
-    let server_name =
-        std::env::var("GROTTO_SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
-    let server_endpoint =
-        std::env::var("GROTTO_SERVER_ENDPOINT").unwrap_or_else(|_| "127.0.0.1:7000".to_string());
-    let ticket = std::env::var("GROTTO_JOIN_TICKET").unwrap_or_else(|_| "local-ticket".to_string());
-    let axiom_api_base_url =
-        std::env::var("AXIOM_API_BASE_URL").unwrap_or_else(|_| "http://api.localhost".to_string());
-    let axiom_lobby_id = std::env::var("AXIOM_LOBBY_ID").ok();
-    let axiom_access_token = std::env::var("AXIOM_ACCESS_TOKEN").ok();
-    let axiom_refresh_token = std::env::var("AXIOM_REFRESH_TOKEN").ok();
-    let axiom_device_id =
-        std::env::var("AXIOM_DEVICE_ID").unwrap_or_else(|_| "grotto-client-local".to_string());
-    let cert_path = std::env::var("GROTTO_SERVER_CERT_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("var/dev/server-cert.der"));
+    let server_id = config.server_id.clone();
+    let server_name = config.server_name.clone();
+    let server_endpoint = config.server_endpoint.clone();
+    let ticket = config.join_ticket.clone();
+    let cert_path = PathBuf::from(&config.cert_path);
     let cert_bytes = std::fs::read(&cert_path).with_context(|| {
         format!(
             "failed to read server certificate from {}",
@@ -84,25 +86,34 @@ async fn main() -> Result<()> {
         )
     })?;
     let trusted_certificate = CertificateDer::from(cert_bytes);
-    let fingerprint = std::env::var("GROTTO_SERVER_CERT_FINGERPRINT")
-        .unwrap_or_else(|_| certificate_fingerprint_sha256(&trusted_certificate));
+    let fingerprint = config
+        .cert_fingerprint_sha256
+        .clone()
+        .unwrap_or_else(|| certificate_fingerprint_sha256(&trusted_certificate));
 
-    let maybe_axiom_provider = axiom_lobby_id
-        .as_ref()
-        .map(|lobby_id| {
-            let api = AxiomHttpClient::new(axiom_api_base_url.clone())?;
-            Ok::<_, anyhow::Error>(Arc::new(AxiomJoinGrantProvider::new(
+    let maybe_axiom_provider = if config.use_axiom_handoff {
+        if let Some(lobby_id) = &config.axiom_lobby_id {
+            let api = AxiomHttpClient::new(config.axiom_api_base_url.clone())?;
+            Some(Arc::new(AxiomJoinGrantProvider::new(
                 api,
                 AxiomAuthState::new(
-                    axiom_device_id.clone(),
-                    axiom_access_token.clone(),
-                    axiom_refresh_token.clone(),
+                    config.axiom_device_id.clone(),
+                    config.axiom_access_token.clone(),
+                    config.axiom_refresh_token.clone(),
                 ),
                 lobby_id.clone(),
                 Some(fingerprint.clone()),
             )) as Arc<dyn QuicClientTargetProvider>)
-        })
-        .transpose()?;
+        } else {
+            eprintln!(
+                "client config requested Axiom handoff but axiom_lobby_id is missing; using local join"
+            );
+            None
+        }
+    } else {
+        None
+    };
+    let using_axiom_handoff = maybe_axiom_provider.is_some();
 
     let fallback_target = JoinGrant {
         server_id: server_id.clone(),
@@ -118,6 +129,7 @@ async fn main() -> Result<()> {
     } else {
         fallback_target
     };
+    let target_endpoint = target.server_endpoint.clone();
     let trust_policy = QuicTrustPolicy::PinnedServer {
         expected_fingerprint_sha256: target.server_cert_fingerprint_sha256.clone(),
         trusted_certificates: vec![trusted_certificate],
@@ -151,16 +163,47 @@ async fn main() -> Result<()> {
     app.set_runner(SignalRunner { running });
 
     println!(
-        "grotto_client live profile={:?} authority={:?} protocol={protocol:?} transport={:?} target={} server_name={} cert_path={} cert_fingerprint_sha256={}",
+        "grotto_client live profile={:?} authority={:?} protocol={protocol:?} transport={:?} join_mode={} target={} server_name={} cert_path={} cert_fingerprint_sha256={} config={}",
         SimulationProfile::DedicatedAuthority,
         AuthorityRole::Client,
         transport.kind(),
-        server_endpoint,
+        if using_axiom_handoff {
+            "axiom"
+        } else {
+            "local"
+        },
+        target_endpoint,
         server_name,
         cert_path.display(),
         fingerprint,
+        launch.config_path.display(),
     );
 
     app.run()?;
     Ok(())
+}
+
+struct ClientLaunchOptions {
+    config_path: PathBuf,
+}
+
+fn parse_client_launch_options() -> Result<ClientLaunchOptions> {
+    let mut config_path = PathBuf::from(DEFAULT_CLIENT_CONFIG_PATH);
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--config" => {
+                let Some(value) = args.next() else {
+                    anyhow::bail!("missing value for --config");
+                };
+                config_path = PathBuf::from(value);
+            }
+            "--help" | "-h" => {
+                println!("Usage: grotto_client [--config <path>]");
+                std::process::exit(0);
+            }
+            unknown => anyhow::bail!("unknown argument '{unknown}'"),
+        }
+    }
+    Ok(ClientLaunchOptions { config_path })
 }

@@ -5,6 +5,7 @@ use crate::domain::{
     LootTableRegistry, Pickup, PickupKind, PlayerId, PlayerSpectator, RelicKind, Transform2,
     WeaponModKind, WeaponState, is_active_player_entity,
 };
+use crate::plugins::timing::fixed_step_seconds;
 use crate::plugins::worldgen::apply_runtime_geometry_edit;
 use anyhow::Result;
 use engine::prelude::{
@@ -280,10 +281,7 @@ fn resolve_run_state(world: &mut World) -> Result<()> {
     let countdown_seconds = world
         .resource::<CavernRunConfig>()?
         .extract_countdown_seconds;
-    let fixed_dt = world
-        .resource::<engine::prelude::Time>()?
-        .delta_seconds
-        .max(1.0 / 60.0);
+    let fixed_dt = fixed_step_seconds(world);
     let started_at = {
         let mut run_state = world.resource_mut::<CavernRunState>()?;
         *run_state

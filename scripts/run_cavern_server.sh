@@ -4,10 +4,34 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-export AXIOM_API_BASE_URL="${AXIOM_API_BASE_URL:-http://api.localhost}"
-export DEDICATED_SERVER_SHARED_SECRET="${DEDICATED_SERVER_SHARED_SECRET:-}"
+NET_PROFILE="${CAVERN_NET_PROFILE:-local_dev}"
+CONFIG_PATH="${CAVERN_SERVER_CONFIG_PATH:-game/assets/networking/server/${NET_PROFILE}.ron}"
+if [[ ! -f "$CONFIG_PATH" ]]; then
+  echo "Missing server config at $CONFIG_PATH" >&2
+  echo "Set CAVERN_SERVER_CONFIG_PATH or CAVERN_NET_PROFILE." >&2
+  exit 1
+fi
 
-echo "Starting Cavern Hunt dedicated server on 127.0.0.1:7000"
-echo "Dev certificate will be written to var/dev/server-cert.der"
+echo "Starting Cavern Hunt dedicated server with config ${CONFIG_PATH}"
 
-exec cargo run -p grotto_server "$@"
+CARGO_PROFILE_ARGS=()
+if [[ "${CAVERN_RELEASE:-1}" == "1" || "${CAVERN_RELEASE:-1}" == "true" || "${CAVERN_RELEASE:-1}" == "TRUE" ]]; then
+  CARGO_PROFILE_ARGS+=(--release)
+fi
+
+USE_PREBUILT="${CAVERN_USE_PREBUILT:-0}"
+if [[ "$USE_PREBUILT" == "1" || "$USE_PREBUILT" == "true" || "$USE_PREBUILT" == "TRUE" ]]; then
+  BIN_PROFILE_DIR="debug"
+  if [[ "${#CARGO_PROFILE_ARGS[@]}" -gt 0 ]]; then
+    BIN_PROFILE_DIR="release"
+  fi
+  BIN_PATH="target/${BIN_PROFILE_DIR}/grotto_server"
+  if [[ ! -x "$BIN_PATH" ]]; then
+    echo "Missing prebuilt server binary at $BIN_PATH" >&2
+    echo "Build first with: cargo build ${CARGO_PROFILE_ARGS[*]} -p grotto_server" >&2
+    exit 1
+  fi
+  exec "$BIN_PATH" --config "$CONFIG_PATH" "$@"
+fi
+
+exec cargo run "${CARGO_PROFILE_ARGS[@]}" -p grotto_server -- --config "$CONFIG_PATH" "$@"

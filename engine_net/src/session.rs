@@ -77,6 +77,13 @@ pub struct ServerSessionState {
 pub enum SessionRuntimeCommand {
     Client(ClientMessage),
     Server(ServerMessage),
+    SetDrainMode {
+        enabled: bool,
+    },
+    DisconnectConnection {
+        connection_id: ConnectionId,
+        reason: DisconnectReason,
+    },
     Shutdown,
 }
 

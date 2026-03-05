@@ -588,8 +588,10 @@ async fn run_server_runtime_task(
     let (peer_event_tx, mut peer_event_rx) = unbounded_channel::<ServerPeerEvent>();
     let mut server_peers =
         BTreeMap::<engine_net::ConnectionId, UnboundedSender<ServerMessage>>::new();
+    let mut drain_mode = false;
     loop {
         tokio::select! {
+            biased;
             command = command_rx.recv() => {
                 match command {
                     Some(QuicSessionCommand::Shutdown) | None => {
@@ -613,6 +615,17 @@ async fn run_server_runtime_task(
                         }
                     }
                     Some(QuicSessionCommand::Client(_)) => {}
+                    Some(QuicSessionCommand::SetDrainMode { enabled }) => {
+                        drain_mode = enabled;
+                    }
+                    Some(QuicSessionCommand::DisconnectConnection {
+                        connection_id,
+                        reason,
+                    }) => {
+                        if let Some(sender) = server_peers.get(&connection_id) {
+                            let _ = sender.send(ServerMessage::Disconnect(reason));
+                        }
+                    }
                 }
             }
             peer_event = peer_event_rx.recv() => {
@@ -630,7 +643,13 @@ async fn run_server_runtime_task(
                     return Ok(());
                 };
                 let bootstrap =
-                    accept_incoming_connection(incoming, &mut session_state, verifier.as_deref()).await?;
+                    accept_incoming_connection(
+                        incoming,
+                        &mut session_state,
+                        verifier.as_deref(),
+                        drain_mode,
+                    )
+                    .await?;
                 let _ = event_tx.send(QuicSessionEvent::Connected {
                     connection_id: bootstrap.state.active_connection,
                 });
@@ -639,7 +658,13 @@ async fn run_server_runtime_task(
                     let _ = event_tx.send(QuicSessionEvent::JoinRejected(reason.clone()));
                     let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
                         connection_id: None,
-                        reason: Some(reason),
+                        reason: Some(reason.clone()),
+                    });
+                    let close_reason = format!("{reason:?}");
+                    let rejected_connection = bootstrap.connection;
+                    tokio::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                        rejected_connection.close(0u32.into(), close_reason.as_bytes());
                     });
                     continue;
                 }
@@ -742,12 +767,14 @@ async fn run_live_connection_loop(
                         });
                     }
                     Err(error) => {
+                        let message = error.to_string();
+                        let reason = parse_join_rejection_reason(&message);
                         let _ = event_tx.send(QuicSessionEvent::Error {
-                            message: error.to_string(),
+                            message,
                         });
                         let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
                             connection_id: source_connection_id,
-                            reason: None,
+                            reason,
                         });
                         return Ok(LoopOutcome::ConnectionClosed);
                     }
@@ -797,7 +824,11 @@ async fn run_server_peer_task(
                             return;
                         }
                         if should_close {
-                            connection.close(0u32.into(), b"server disconnect");
+                            let close_reason = disconnect_reason
+                                .as_ref()
+                                .map(|reason| format!("{reason:?}"))
+                                .unwrap_or_else(|| "server disconnect".to_string());
+                            connection.close(0u32.into(), close_reason.as_bytes());
                             let _ = event_tx.send(QuicSessionEvent::ConnectionClosed {
                                 connection_id: Some(connection_id),
                                 reason: disconnect_reason.clone(),
@@ -922,6 +953,7 @@ async fn accept_incoming_connection(
     incoming: quinn::Incoming,
     state: &mut ServerSessionState,
     verifier: Option<&dyn QuicServerJoinVerifier>,
+    drain_mode: bool,
 ) -> Result<QuicServerBootstrap> {
     state.phase = SessionPhase::Idle;
     state.active_connection = None;
@@ -934,6 +966,19 @@ async fn accept_incoming_connection(
         let MessageEnvelope::Client(client_message) = message else {
             continue;
         };
+        if drain_mode && let ClientMessage::JoinRequest(request) = &client_message {
+            let reason = DisconnectReason::ServerShuttingDown;
+            state.last_join_request = Some(request.clone());
+            state.last_join_state = None;
+            state.phase = SessionPhase::Rejected(reason.clone());
+            state.last_disconnect = Some(reason.clone());
+            write_message(
+                &mut send,
+                &MessageEnvelope::Server(ServerMessage::JoinRejected(JoinRejected { reason })),
+            )
+            .await?;
+            break;
+        }
         if let ClientMessage::JoinRequest(request) = &client_message
             && let Some(verifier) = verifier
         {
@@ -1556,6 +1601,255 @@ mod tests {
         assert!(
             second_saw_snapshot,
             "second client should receive broadcast snapshot"
+        );
+
+        first_client_tx
+            .send(QuicSessionCommand::Shutdown)
+            .expect("first client shutdown should send");
+        second_client_tx
+            .send(QuicSessionCommand::Shutdown)
+            .expect("second client shutdown should send");
+        server_tx
+            .send(QuicSessionCommand::Shutdown)
+            .expect("server shutdown should send");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn server_runtime_drain_mode_rejects_new_join_requests() {
+        let transport = QuicTransport::default();
+        let server_handle = transport
+            .spawn_server_runtime(
+                default_client_bind_addr(),
+                "localhost",
+                ServerSessionConfig {
+                    server_id: "srv-local".to_string(),
+                    protocol: ProtocolVersion::new(1, 1, 1),
+                    tick_rate_hz: 60,
+                },
+            )
+            .expect("server runtime should spawn");
+        let local_addr = server_handle.local_addr;
+        let server_cert = server_handle.certificate.clone();
+        let fingerprint = server_handle.certificate_fingerprint_sha256.clone();
+        let server_name = server_handle.server_name.clone();
+        let (server_tx, _server_events) = server_handle.into_channels();
+
+        server_tx
+            .send(QuicSessionCommand::SetDrainMode { enabled: true })
+            .expect("drain mode command should send");
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let client_handle = transport
+            .spawn_client_runtime(
+                default_client_bind_addr(),
+                &server_name,
+                ClientSessionTarget {
+                    server_id: "srv-local".to_string(),
+                    server_endpoint: local_addr.to_string(),
+                    transport: TransportKind::Quic,
+                    protocol: ProtocolVersion::new(1, 1, 1),
+                    server_cert_fingerprint_sha256: fingerprint,
+                    ticket: "ticket-drain".to_string(),
+                },
+                QuicTrustPolicy::PinnedServer {
+                    expected_fingerprint_sha256: certificate_fingerprint_sha256(&server_cert),
+                    trusted_certificates: vec![server_cert],
+                },
+            )
+            .expect("client runtime should spawn");
+        let (client_tx, mut client_events) = client_handle.into_channels();
+
+        let mut join_rejected = None;
+        for _ in 0..30 {
+            if let Ok(event) =
+                tokio::time::timeout(std::time::Duration::from_millis(250), client_events.recv())
+                    .await
+                && let Some(QuicSessionEvent::JoinRejected(reason)) = event
+            {
+                join_rejected = Some(reason);
+                break;
+            }
+        }
+        assert_eq!(join_rejected, Some(DisconnectReason::ServerShuttingDown));
+
+        let _ = client_tx.send(QuicSessionCommand::Shutdown);
+        server_tx
+            .send(QuicSessionCommand::Shutdown)
+            .expect("server shutdown should send");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn server_runtime_disconnect_connection_targets_only_one_peer() {
+        let transport = QuicTransport::default();
+        let server_handle = transport
+            .spawn_server_runtime(
+                default_client_bind_addr(),
+                "localhost",
+                ServerSessionConfig {
+                    server_id: "srv-local".to_string(),
+                    protocol: ProtocolVersion::new(1, 1, 1),
+                    tick_rate_hz: 60,
+                },
+            )
+            .expect("server runtime should spawn");
+        let local_addr = server_handle.local_addr;
+        let server_cert = server_handle.certificate.clone();
+        let fingerprint = server_handle.certificate_fingerprint_sha256.clone();
+        let server_name = server_handle.server_name.clone();
+        let (server_tx, mut server_events) = server_handle.into_channels();
+
+        let spawn_client = |ticket: &str| {
+            transport
+                .spawn_client_runtime(
+                    default_client_bind_addr(),
+                    &server_name,
+                    ClientSessionTarget {
+                        server_id: "srv-local".to_string(),
+                        server_endpoint: local_addr.to_string(),
+                        transport: TransportKind::Quic,
+                        protocol: ProtocolVersion::new(1, 1, 1),
+                        server_cert_fingerprint_sha256: fingerprint.clone(),
+                        ticket: ticket.to_string(),
+                    },
+                    QuicTrustPolicy::PinnedServer {
+                        expected_fingerprint_sha256: fingerprint.clone(),
+                        trusted_certificates: vec![server_cert.clone()],
+                    },
+                )
+                .expect("client runtime should spawn")
+        };
+
+        let first_client = spawn_client("ticket-a");
+        let second_client = spawn_client("ticket-b");
+        let (first_client_tx, mut first_client_events) = first_client.into_channels();
+        let (second_client_tx, mut second_client_events) = second_client.into_channels();
+
+        let mut first_join = None;
+        let mut second_join = None;
+        for _ in 0..40 {
+            if first_join.is_none()
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    first_client_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::JoinAccepted(join)) = event
+            {
+                first_join = Some(join.connection_id);
+            }
+            if second_join.is_none()
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    second_client_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::JoinAccepted(join)) = event
+            {
+                second_join = Some(join.connection_id);
+            }
+            if first_join.is_some() && second_join.is_some() {
+                break;
+            }
+        }
+        assert!(first_join.is_some(), "first client should join");
+        assert!(second_join.is_some(), "second client should join");
+        assert_ne!(first_join, second_join);
+
+        let disconnect_connection_id = first_join.expect("first join connection id");
+        server_tx
+            .send(QuicSessionCommand::DisconnectConnection {
+                connection_id: ConnectionId(disconnect_connection_id),
+                reason: DisconnectReason::TimedOut,
+            })
+            .expect("targeted disconnect should send");
+
+        let mut first_disconnected = false;
+        for _ in 0..30 {
+            if let Ok(event) = tokio::time::timeout(
+                std::time::Duration::from_millis(250),
+                first_client_events.recv(),
+            )
+            .await
+                && let Some(event) = event
+            {
+                match event {
+                    QuicSessionEvent::ConnectionClosed {
+                        reason: Some(DisconnectReason::TimedOut),
+                        ..
+                    }
+                    | QuicSessionEvent::ServerMessage(ServerMessage::Disconnect(
+                        DisconnectReason::TimedOut,
+                    )) => {
+                        first_disconnected = true;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        assert!(
+            first_disconnected,
+            "disconnected client should observe timed-out disconnect"
+        );
+
+        server_tx
+            .send(QuicSessionCommand::Server(ServerMessage::Snapshot(
+                Snapshot {
+                    tick: engine_net::SimulationTick(99),
+                    cursor: SnapshotCursor(9),
+                    last_applied: SnapshotCursor(0),
+                    entity_ids: Vec::new(),
+                    payload: vec![7, 7, 7],
+                },
+            )))
+            .expect("server snapshot should send");
+        second_client_tx
+            .send(QuicSessionCommand::Client(ClientMessage::InputFrame(
+                InputFrame {
+                    tick: engine_net::SimulationTick(99),
+                    commands: vec![ClientCommandEnvelope::Move(MoveCommand { x: 0.5, y: 0.0 })],
+                },
+            )))
+            .expect("second client input should send");
+
+        let mut second_saw_snapshot = false;
+        let mut server_saw_second_input = false;
+        for _ in 0..40 {
+            if !second_saw_snapshot
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    second_client_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::ServerMessage(ServerMessage::Snapshot(_))) = event
+            {
+                second_saw_snapshot = true;
+            }
+            if !server_saw_second_input
+                && let Ok(event) = tokio::time::timeout(
+                    std::time::Duration::from_millis(250),
+                    server_events.recv(),
+                )
+                .await
+                && let Some(QuicSessionEvent::ClientMessage {
+                    connection_id: Some(ConnectionId(id)),
+                    message: ClientMessage::InputFrame(_),
+                }) = event
+                && Some(id) == second_join
+            {
+                server_saw_second_input = true;
+            }
+            if second_saw_snapshot && server_saw_second_input {
+                break;
+            }
+        }
+        assert!(
+            second_saw_snapshot,
+            "remaining client should still receive snapshots"
+        );
+        assert!(
+            server_saw_second_input,
+            "server should still receive input from remaining client"
         );
 
         first_client_tx

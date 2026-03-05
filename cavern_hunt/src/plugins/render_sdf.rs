@@ -3,7 +3,7 @@ use crate::domain::{
     CavernMaterialRuntimeState, CavernSdfAgent, CavernSdfGeometryPrimitive, CavernSdfMaterialOp,
     CavernSdfWorldFrame, CavernTopology, Chest, ColliderRadius, EnemyKind, ExtractionZone,
     GeometryMaterial, GeometryOp, GeometryPrimitiveShape3, Health, LocalPlayerRef, LootDrop,
-    Pickup, Player, PlayerCompanion, PlayerSpectator, Projectile, ProjectileVisualState,
+    Pickup, Player, PlayerCompanion, PlayerId, PlayerSpectator, Projectile, ProjectileVisualState,
     Transform2, is_active_player_entity,
 };
 use anyhow::{Result, anyhow};
@@ -265,15 +265,15 @@ pub(crate) fn build_sdf_world_frame_system(
                 .copied()
                 .unwrap_or(ColliderRadius(0.45))
                 .0;
+            let player_palette_slot = world
+                .get::<PlayerId>(entity)
+                .map(|player_id| player_id.0.saturating_sub(1) % 8)
+                .unwrap_or(0);
             frame.agents.push(CavernSdfAgent {
                 pos: [transform.x, transform.y],
                 radius: radius,
                 health_ratio: health.ratio(),
-                team: if world.get::<PlayerCompanion>(entity).is_some() {
-                    4
-                } else {
-                    0
-                },
+                team: player_palette_slot,
                 kind: if world.get::<PlayerSpectator>(entity).is_some() {
                     13
                 } else if world.get::<PlayerCompanion>(entity).is_some() {

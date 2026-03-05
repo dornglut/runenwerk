@@ -1,16 +1,19 @@
 use crate::domain::{
     AimTarget2, CAVERN_GAMEPLAY_HEIGHT, CavernAimState, CavernCollisionField, CavernControlState,
-    CavernGeometryGraph, CavernLayout, CavernRunPhase, CavernRunState, CavernServerControlMap,
-    ColliderRadius, DamageFeedbackState, DashState, EnemyKind, Faction, Health, HitFlashState,
-    LocalPlayerRef, PlayerActive, PlayerCombatTuning, PlayerCompanion, PlayerId, PlayerSpectator,
-    Projectile, ProjectileVisualState, Transform2, Velocity2, WeaponState, is_active_player_entity,
+    CavernGeometryGraph, CavernLayout, CavernRunPhase, CavernRunState,
+    CavernServerAppliedInputTickMap, CavernServerControlMap, ColliderRadius, DamageFeedbackState,
+    DashState, EnemyKind, Faction, Health, HitFlashState, LocalPlayerRef, PlayerActive,
+    PlayerCombatTuning, PlayerCompanion, PlayerId, PlayerSpectator, Projectile,
+    ProjectileVisualState, Transform2, Velocity2, WeaponState, is_active_player_entity,
 };
 use crate::plugins::render_sdf;
+use crate::plugins::timing::fixed_step_seconds;
 use anyhow::Result;
 use engine::prelude::{
     App, AuthorityRole, CoreSet, Entity, FixedUpdate, InputState, Plugin, PreUpdate,
-    SimulationProfileConfig, SimulationTick, SystemConfigExt, Time, WindowState, World, WorldMut,
+    SimulationProfileConfig, SimulationTick, SystemConfigExt, WindowState, World, WorldMut,
 };
+use std::collections::BTreeSet;
 
 pub struct CavernHuntCombatPlugin;
 
@@ -88,7 +91,7 @@ pub(crate) fn update_local_aim(world: &mut World) -> Result<()> {
 }
 
 fn fixed_step_combat_system(mut world: WorldMut) -> Result<()> {
-    let dt = world.resource::<Time>()?.delta_seconds.max(0.0);
+    let dt = fixed_step_seconds(&world);
     if dt <= f32::EPSILON {
         return Ok(());
     }
@@ -211,6 +214,10 @@ fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
         .resource::<CavernServerControlMap>()
         .cloned()
         .unwrap_or_default();
+    let mut applied_input_ticks = world
+        .resource::<CavernServerAppliedInputTickMap>()
+        .cloned()
+        .unwrap_or_default();
     let players = world
         .query::<(Entity, &PlayerId)>()
         .iter()
@@ -221,7 +228,9 @@ fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
                 .then_some((entity, player_id.0))
         })
         .collect::<Vec<_>>();
+    let mut active_player_ids = BTreeSet::new();
     for (entity, player_id) in players {
+        active_player_ids.insert(player_id);
         let mut control = if world.get::<PlayerCompanion>(entity).is_some() {
             controls
                 .by_player_id
@@ -243,7 +252,14 @@ fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
         }
         move_player_with_control(world, entity, control, dt)?;
         fire_player_weapon_with_control(world, entity, control)?;
+        applied_input_ticks
+            .by_player_id
+            .insert(player_id, control.source_tick);
     }
+    applied_input_ticks
+        .by_player_id
+        .retain(|player_id, _| active_player_ids.contains(player_id));
+    world.insert_resource(applied_input_ticks);
     Ok(())
 }
 

@@ -12,6 +12,7 @@ members = [
   "engine_net_quic",
   "cavern_hunt",
   "grotto_online",
+  "grotto_fleet_control",
   "grotto_server",
   "grotto_client"
 ]

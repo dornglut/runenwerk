@@ -33,6 +33,17 @@ impl Plugin for RenderPlugin {
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
 const MESH_HOT_PATH_LOG_THRESHOLD_MS: f32 = 8.0;
 
+fn render_timing_logging_enabled() -> bool {
+    std::env::var("GROTTO_RENDER_TIMING_LOG")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
 fn frame_render_prepare_system() -> anyhow::Result<()> {
     Ok(())
 }
@@ -50,6 +61,7 @@ fn ui_render_submit_system(
 
     let _submit_span = tracing::info_span!("systems.ui_render_submit").entered();
     let startup_ready_before = startup.is_ready();
+    let timing_log_enabled = render_timing_logging_enabled();
     set_slow_node_logging_enabled(startup_ready_before);
 
     let Some(mut shader_registry) = world.remove_resource::<ShaderRegistryResource>() else {
@@ -154,7 +166,10 @@ fn ui_render_submit_system(
                 + timings.renderer.prepare_mesh_ms
                 + timings.renderer.world_prepare_ms
                 + timings.renderer.encode_submit_ms;
-            if startup_ready_before && workload_ms > FRAME_TIMING_LOG_THRESHOLD_MS {
+            if startup_ready_before
+                && timing_log_enabled
+                && workload_ms > FRAME_TIMING_LOG_THRESHOLD_MS
+            {
                 tracing::info!(
                     workload_ms = workload_ms,
                     total_ms = total_ms,
@@ -190,6 +205,7 @@ fn ui_render_submit_system(
                 );
             }
             if startup_ready_before
+                && timing_log_enabled
                 && timings.renderer.prepare_mesh_ms > MESH_HOT_PATH_LOG_THRESHOLD_MS
             {
                 tracing::info!(

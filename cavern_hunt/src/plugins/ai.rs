@@ -5,9 +5,10 @@ use crate::domain::{
     is_active_player_entity,
 };
 use crate::plugins::combat::{constrained_move, spawn_projectile};
+use crate::plugins::timing::fixed_step_seconds;
 use anyhow::Result;
 use engine::prelude::{
-    App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, Time, World, WorldMut,
+    App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, World, WorldMut,
 };
 
 pub struct CavernHuntAiPlugin;
@@ -32,7 +33,7 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
         return Ok(());
     }
 
-    let dt = world.resource::<Time>()?.delta_seconds.max(0.0);
+    let dt = fixed_step_seconds(&world);
     if dt <= f32::EPSILON {
         return Ok(());
     }

@@ -340,7 +340,7 @@ impl ApplicationHandler for WinitRunner {
                     .and_then(|_| self.run_frame())
                     .and_then(|_| self.apply_window_effects(event_loop));
                 if let Err(err) = frame_result {
-                    tracing::error!(error = %err, "runtime frame failed");
+                    tracing::error!(error = %format!("{err:#}"), "runtime frame failed");
                     event_loop.exit();
                 }
                 return;
@@ -349,7 +349,7 @@ impl ApplicationHandler for WinitRunner {
         };
 
         if let Err(err) = result.and_then(|_| self.apply_window_effects(event_loop)) {
-            tracing::error!(error = %err, "runtime window event failed");
+            tracing::error!(error = %format!("{err:#}"), "runtime window event failed");
             event_loop.exit();
         }
     }
@@ -369,7 +369,7 @@ impl ApplicationHandler for WinitRunner {
         };
 
         if let Err(err) = result.and_then(|_| self.apply_window_effects(event_loop)) {
-            tracing::error!(error = %err, "runtime device event failed");
+            tracing::error!(error = %format!("{err:#}"), "runtime device event failed");
             event_loop.exit();
         }
     }
