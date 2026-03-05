@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "multiplayer-stack.fleetControlName" . }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fleet-control
+spec:
+  replicas: {{ .Values.fleetControl.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "multiplayer-stack.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: fleet-control
+  template:
+    metadata:
+      labels:
+        {{- include "multiplayer-stack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: fleet-control
+    spec:
+      serviceAccountName: {{ include "multiplayer-stack.fleetControlName" . }}
+      containers:
+        - name: fleet-control
+          image: {{ printf "%s:%s" .Values.images.grottoFleetControl.repository .Values.images.grottoFleetControl.tag | quote }}
+          imagePullPolicy: {{ .Values.images.grottoFleetControl.pullPolicy }}
+          command: ["/usr/local/bin/grotto_fleet_control", "--config", "/app/config/fleet.ron"]
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.fleetControl.rustLog | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ include "multiplayer-stack.fleetBridgeEnvSecretName" . }}
+          volumeMounts:
+            - name: fleet-config
+              mountPath: /app/config/fleet.ron
+              subPath: fleet.ron
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep -f grotto_fleet_control >/dev/null"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep -f grotto_fleet_control >/dev/null"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: fleet-config
+          configMap:
+            name: {{ include "multiplayer-stack.fleetConfigName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "multiplayer-stack.fleetControlServiceName" . }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fleet-control
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "multiplayer-stack.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: fleet-control
+  ports:
+    - name: control
+      port: 9090
+      targetPort: 9090

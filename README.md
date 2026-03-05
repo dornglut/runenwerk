@@ -48,6 +48,7 @@ The runtime migration is complete enough that the current path should be treated
 - Project status: [docs/current-state.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/current-state.md)
 - Engine overview: [engine/README.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/README.md)
 - Documentation index: [docs/index.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/index.md)
+- Local Kubernetes operator runbook: [docs/kubernetes-local-operator-demo.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/kubernetes-local-operator-demo.md)
 - Cavern Hunt GDD: [game/CAVERN_HUNT_GDD.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_GDD.md)
 - Cavern Hunt playtest guide: [game/CAVERN_HUNT_PLAYTEST.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_PLAYTEST.md)
 - Operator/fleet architecture map: [docs/axiom-operator-console.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/axiom-operator-console.md)

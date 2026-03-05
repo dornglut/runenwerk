@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "multiplayer-stack.serverConfigName" . }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+data:
+  server.ron: |-
+{{ tpl .Values.serverConfigRon . | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "multiplayer-stack.fleetConfigName" . }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+data:
+  fleet.ron: |-
+{{ tpl .Values.fleetConfigRon . | nindent 4 }}
+{{- if .Values.caddy.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "multiplayer-stack.caddyName" . }}-config
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+data:
+  Caddyfile: |-
+    {
+      auto_https off
+    }
+
+    :80 {
+      encode zstd gzip
+
+      header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+      }
+
+      @v2 path /v2*
+      handle @v2 {
+        reverse_proxy {{ include "multiplayer-stack.coreApiServiceName" . }}:{{ .Values.coreApi.containerPort }}
+      }
+
+      reverse_proxy {{ include "multiplayer-stack.operatorConsoleServiceName" . }}:{{ .Values.operatorConsole.containerPort }}
+    }
+{{- end }}

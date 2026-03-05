@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "grotto-server-%s" .Values.grottoServer.serverId | replace "_" "-" | lower }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grotto-server
+    grotto.server_id: {{ .Values.grottoServer.serverId | quote }}
+spec:
+  replicas: {{ .Values.grottoServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "multiplayer-stack.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: grotto-server
+      grotto.server_id: {{ .Values.grottoServer.serverId | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "multiplayer-stack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: grotto-server
+        grotto.server_id: {{ .Values.grottoServer.serverId | quote }}
+    spec:
+      containers:
+        - name: grotto-server
+          image: {{ printf "%s:%s" .Values.images.grottoServer.repository .Values.images.grottoServer.tag | quote }}
+          imagePullPolicy: {{ .Values.images.grottoServer.pullPolicy }}
+          command: ["/usr/local/bin/grotto_server", "--config", "/app/config/server.ron"]
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.grottoServer.rustLog | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ include "multiplayer-stack.runtimeBridgeEnvSecretName" . }}
+          ports:
+            - name: quic
+              containerPort: {{ .Values.grottoServer.quicPort }}
+              protocol: UDP
+          volumeMounts:
+            - name: server-config
+              mountPath: /app/config/server.ron
+              subPath: server.ron
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep -f grotto_server >/dev/null"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep -f grotto_server >/dev/null"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: server-config
+          configMap:
+            name: {{ include "multiplayer-stack.serverConfigName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "multiplayer-stack.grottoServerServiceName" . }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grotto-server
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "multiplayer-stack.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: grotto-server
+    grotto.server_id: {{ .Values.grottoServer.serverId | quote }}
+  ports:
+    - name: quic-udp
+      port: {{ .Values.grottoServer.quicPort }}
+      targetPort: quic
+      protocol: UDP

@@ -1,0 +1,65 @@
+{{- if .Values.caddy.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "multiplayer-stack.caddyName" . }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: caddy
+spec:
+  replicas: {{ .Values.caddy.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "multiplayer-stack.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: caddy
+  template:
+    metadata:
+      labels:
+        {{- include "multiplayer-stack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: caddy
+    spec:
+      containers:
+        - name: caddy
+          image: {{ printf "%s:%s" .Values.images.caddy.repository .Values.images.caddy.tag | quote }}
+          imagePullPolicy: {{ .Values.images.caddy.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.caddy.containerPort }}
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy/Caddyfile
+              subPath: Caddyfile
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: caddy-config
+          configMap:
+            name: {{ include "multiplayer-stack.caddyName" . }}-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "multiplayer-stack.caddyName" . }}
+  labels:
+    {{- include "multiplayer-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: caddy
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "multiplayer-stack.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: caddy
+  ports:
+    - name: http
+      port: {{ .Values.caddy.servicePort }}
+      targetPort: http
+{{- end }}

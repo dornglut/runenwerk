@@ -32,6 +32,7 @@
 - `docs/current-state.md` - current runtime, networking, replay, and delivery status.
 - `docs/engine-multiplayer-architecture.md` - engine/runtime, networking stack, and multiplayer ownership map with recommended reading order.
 - `docs/axiom-operator-console.md` - operator bridge, runtime control, fleet lifecycle, and log inspection ownership map.
+- `docs/kubernetes-local-operator-demo.md` - local kind/k3d full-stack Kubernetes runbook for operator start/stop/inspect flow.
 - `docs/game-design.md` - high-level game design direction.
 - `docs/authoring-layer.md` - authoring/runtime split and implementation direction for data-driven engine features.
 

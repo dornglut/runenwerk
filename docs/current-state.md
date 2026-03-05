@@ -67,6 +67,10 @@ The codebase is no longer in a migration state. The remaining work is feature ex
   - `stop_server` issues runtime drain+shutdown dispatch first, then Kubernetes force-stop fallback
   - bridge URLs now target Axiom `/v2/operator/runtime/ws` and `/v2/operator/fleet/ws`
   - runtime/fleet bridge config can be overridden via env/CLI for local ops workflows
+- full-stack local Kubernetes operator demo assets now exist:
+  - Helm chart: `ops/helm/multiplayer-stack`
+  - bootstrap scripts: `scripts/k8s/bootstrap_local_stack.sh`, `scripts/k8s/bootstrap_operator_bridges.sh`
+  - smoke script: `scripts/k8s/smoke_operator_flow.sh`
 - `grotto_client` and `grotto_server` now load multiplayer/network settings from versioned `.ron` assets
 - local/dev fallback paths still exist when Axiom handoff is disabled in config
 

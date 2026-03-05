@@ -183,6 +183,24 @@ Phase 2 lifecycle/log control process:
 
 When operator/fleet bridge env vars are unset, local scripts and non-Axiom flow remain unchanged.
 
+### Kubernetes Quickstart (Local kind/k3d)
+
+From `grotto-quest` root:
+
+```bash
+scripts/k8s/bootstrap_local_stack.sh
+scripts/k8s/bootstrap_operator_bridges.sh
+scripts/k8s/smoke_operator_flow.sh
+```
+
+Then port-forward the in-cluster gateway and open operator console:
+
+```bash
+kubectl -n multiplayer-dev port-forward svc/multiplayer-stack-caddy 8081:80
+```
+
+Browse `http://127.0.0.1:8081` and log in with local operator credentials.
+
 ## What a Successful Run Looks Like
 
 For the current vertical slice, a successful run is:

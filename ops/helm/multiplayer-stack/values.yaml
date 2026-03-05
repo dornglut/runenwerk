@@ -1,0 +1,229 @@
+namespace: multiplayer-dev
+
+images:
+  coreApi:
+    repository: local/core-api
+    tag: dev
+    pullPolicy: IfNotPresent
+  operatorConsole:
+    repository: local/operator-console
+    tag: dev
+    pullPolicy: IfNotPresent
+  grottoFleetControl:
+    repository: local/grotto-fleet-control
+    tag: dev
+    pullPolicy: IfNotPresent
+  grottoServer:
+    repository: local/grotto-server
+    tag: dev
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: postgres
+    tag: "16"
+    pullPolicy: IfNotPresent
+  redis:
+    repository: redis
+    tag: "7"
+    pullPolicy: IfNotPresent
+  caddy:
+    repository: caddy
+    tag: "2"
+    pullPolicy: IfNotPresent
+
+postgres:
+  username: postgres
+  password: postgres
+  database: axiom
+  port: 5432
+  storageSize: 2Gi
+
+redis:
+  port: 6379
+
+coreApi:
+  replicaCount: 1
+  containerPort: 3000
+  rustLog: debug
+  publicBaseUrl: http://api.localhost
+  trustProxyHeaders: false
+  discordClientId: local-discord-client
+  discordClientSecret: local-discord-secret
+  discordRedirectUri: http://api.localhost/v2/auth/discord/callback
+  devLoginEnabled: true
+  devLoginSharedSecret: local-dev-login-secret
+  jwtIssuer: axiom-local
+  jwtAudience: axiom-godot
+  jwtAccessSecret: local-jwt-access-secret
+  refreshTokenHmacSecret: local-refresh-hmac-secret
+  operatorAuthUsername: axiom-operator
+  operatorAuthPassword: operator-password
+  operatorJwtIssuer: axiom-operator-local
+  operatorJwtAudience: axiom-operator-console
+  operatorJwtSecret: local-operator-jwt-secret
+  operatorBridgeJwtIssuer: axiom-operator-bridge-local
+  operatorBridgeJwtAudience: axiom-operator-bridge
+  operatorBridgeJwtSecret: local-operator-bridge-secret
+  operatorTokenTtlSeconds: "28800"
+  operatorBridgeTokenTtlSeconds: "86400"
+  serverAuthMode: shared_secret
+  dedicatedServerIdHeader: x-axiom-server-id
+  dedicatedServerSharedSecret: local-dedicated-server-secret
+
+operatorConsole:
+  replicaCount: 1
+  containerPort: 3001
+  host: 0.0.0.0
+  port: 3001
+  origin: http://ops.localhost
+
+fleetControl:
+  replicaCount: 1
+  rustLog: info
+  startupTimeoutSeconds: 90
+  shutdownTimeoutSeconds: 30
+  logDefaultLimit: 200
+  logMaxLimit: 2000
+  serviceId: fleet-control-default
+  allowedServerIds:
+    - srv-local
+
+grottoServer:
+  replicaCount: 0
+  rustLog: info
+  quicPort: 7000
+  serverId: srv-local
+  serverName: srv-local
+
+bridge:
+  runtime:
+    enabled: "0"
+    wsUrl: ws://multiplayer-stack-core-api.multiplayer-dev.svc.cluster.local:3000/v2/operator/runtime/ws
+    runtimeToken: ""
+    heartbeatSeconds: "10"
+    snapshotIntervalTicks: "60"
+    maxBufferedEvents: "256"
+  fleet:
+    enabled: "0"
+    wsUrl: ws://multiplayer-stack-core-api.multiplayer-dev.svc.cluster.local:3000/v2/operator/fleet/ws
+    commandToken: ""
+    serviceId: fleet-control-default
+    heartbeatSeconds: "10"
+    reconnectBackoffMs: "500"
+    maxBufferedEvents: "512"
+
+caddy:
+  enabled: true
+  replicaCount: 1
+  containerPort: 80
+  servicePort: 80
+
+serverConfigRon: |-
+  (
+      version: 1,
+      profile_id: "local_dev",
+      protocol: (
+          protocol_version: 1,
+          game_content_version: 1,
+          schema_version: 1,
+      ),
+      server_id: "{{ .Values.grottoServer.serverId }}",
+      server_name: "{{ .Values.grottoServer.serverName }}",
+      bind_endpoint: "0.0.0.0:{{ .Values.grottoServer.quicPort }}",
+      tick_rate_hz: 60,
+      cert_output_path: "/tmp/server-cert.der",
+      use_axiom_verifier: false,
+      axiom_api_base_url: "http://{{ include "multiplayer-stack.coreApiServiceName" . }}:{{ .Values.coreApi.containerPort }}",
+      dedicated_server_shared_secret: None,
+      shader_watch: false,
+      net_sync_mode: V2,
+      replication_budget: (
+          enemy_ops_per_patch_level0: 128,
+          enemy_ops_per_patch_level1: 72,
+          enemy_ops_per_patch_level2: 36,
+          projectile_ops_per_patch_level0: 256,
+          projectile_ops_per_patch_level1: 128,
+          projectile_ops_per_patch_level2: 64,
+          pickup_ops_per_patch_level0: 64,
+          pickup_ops_per_patch_level1: 32,
+          pickup_ops_per_patch_level2: 16,
+          extraction_ops_per_patch_level0: 16,
+          extraction_ops_per_patch_level1: 8,
+          extraction_ops_per_patch_level2: 4,
+      ),
+      replication_cadence: (
+          patch_emit_interval_level0: 1,
+          patch_emit_interval_level1: 2,
+          patch_emit_interval_level2: 3,
+          enemy_patch_interval_level0: 1,
+          enemy_patch_interval_level1: 2,
+          enemy_patch_interval_level2: 4,
+          projectile_patch_interval_level0: 1,
+          projectile_patch_interval_level1: 2,
+          projectile_patch_interval_level2: 3,
+          pickup_patch_interval_level0: 4,
+          pickup_patch_interval_level1: 6,
+          pickup_patch_interval_level2: 10,
+          extraction_patch_interval_level0: 1,
+          extraction_patch_interval_level1: 1,
+          extraction_patch_interval_level2: 2,
+      ),
+      load_shed: (
+          bytes_threshold_level1: 60000,
+          bytes_threshold_level2: 100000,
+          dropped_ops_threshold_level1: 1,
+          dropped_ops_threshold_level2: 24,
+          connections_force_level1_at_or_above: 3,
+          connections_force_level2_bytes_threshold: 45000,
+      ),
+      keyframe: (
+          interval_ticks: 60,
+          emit_on_cursor_mismatch: true,
+          emit_on_reconnect: true,
+      ),
+      diagnostics: (
+          enable_periodic_log: false,
+          log_interval_ticks: 60,
+          hud_network_lines_enabled: true,
+      ),
+      hot_reload: (
+          enabled: false,
+          poll_interval_seconds: 0.5,
+      ),
+      axiom_operator: (
+          enabled: false,
+          ws_url: "",
+          runtime_token: None,
+          heartbeat_seconds: 10,
+          snapshot_interval_ticks: 60,
+          max_buffered_events: 256,
+      ),
+  )
+
+fleetConfigRon: |-
+  (
+      kubernetes: (
+          namespace: "{{ .Release.Namespace }}",
+          server_id_label_key: "grotto.server_id",
+          deployment_name_prefix: "grotto-server-",
+          image: "{{ .Values.images.grottoServer.repository }}:{{ .Values.images.grottoServer.tag }}",
+          container_name: "grotto-server",
+          server_args: ["--config", "/app/config/server.ron"],
+          startup_timeout_seconds: {{ .Values.fleetControl.startupTimeoutSeconds }},
+          shutdown_timeout_seconds: {{ .Values.fleetControl.shutdownTimeoutSeconds }},
+          log_default_limit: {{ .Values.fleetControl.logDefaultLimit }},
+          log_max_limit: {{ .Values.fleetControl.logMaxLimit }},
+      ),
+      axiom: (
+          enabled: false,
+          ws_url: "",
+          command_token: "",
+          service_id: "{{ .Values.fleetControl.serviceId }}",
+          heartbeat_seconds: 10,
+          reconnect_backoff_ms: 500,
+          max_buffered_events: 512,
+          runtime_graceful_stop_enabled: true,
+          runtime_graceful_default_timeout_ms: 8000,
+          runtime_force_stop_timeout_ms: 15000,
+          allowed_server_ids: [{{- range $index, $id := .Values.fleetControl.allowedServerIds }}{{ if $index }}, {{ end }}"{{ $id }}"{{- end }}],
+      ),
+  )

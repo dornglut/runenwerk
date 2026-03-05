@@ -101,6 +101,20 @@ Local helper script:
   - issues runtime + fleet bridge tokens
   - prints env exports consumed by `grotto_server` and `grotto_fleet_control`
 
+## Local Kubernetes runbook
+
+The local full-stack Kubernetes flow is now implemented with:
+
+- Helm chart: `ops/helm/multiplayer-stack`
+- local bootstrap scripts:
+  - `scripts/k8s/bootstrap_local_stack.sh`
+  - `scripts/k8s/bootstrap_operator_bridges.sh`
+  - `scripts/k8s/smoke_operator_flow.sh`
+
+Exact command sequence and known limits:
+
+- `docs/kubernetes-local-operator-demo.md`
+
 ## Where to read first
 
 1. `docs/engine-multiplayer-architecture.md`
