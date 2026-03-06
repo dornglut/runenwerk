@@ -1,4 +1,4 @@
-# Local Kubernetes Operator Demo (kind/k3d)
+# Local Kubernetes Operator Demo (Docker Desktop / kind / k3d)
 
 Updated: 2026-03-05
 
@@ -24,15 +24,33 @@ An in-cluster `caddy` gateway is also deployed for same-origin browser access to
 - `helm`
 - `curl`
 - `jq`
-- one local cluster tool:
+- a local Kubernetes cluster from one of:
+  - Docker Desktop Kubernetes (`docker-desktop` context), or
   - `kind`, or
   - `k3d`
+
+## Docker Desktop Setup
+
+1. Docker Desktop -> Settings -> Kubernetes -> Enable Kubernetes.
+2. Verify context exists:
+
+```bash
+kubectl config get-contexts docker-desktop
+kubectl config use-context docker-desktop
+```
+
+3. Install Helm if missing:
+
+```bash
+brew install helm
+```
 
 ## Quickstart
 
 From `grotto-quest` root:
 
 ```bash
+export K8S_PROVIDER=docker-desktop
 scripts/k8s/bootstrap_local_stack.sh
 scripts/k8s/bootstrap_operator_bridges.sh
 scripts/k8s/smoke_operator_flow.sh

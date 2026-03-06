@@ -28,11 +28,15 @@ require_cmd() {
 }
 
 resolve_provider() {
-  if [[ "$K8S_PROVIDER" == "kind" || "$K8S_PROVIDER" == "k3d" ]]; then
+  if [[ "$K8S_PROVIDER" == "kind" || "$K8S_PROVIDER" == "k3d" || "$K8S_PROVIDER" == "docker-desktop" ]]; then
     echo "$K8S_PROVIDER"
     return
   fi
 
+  if kubectl config get-contexts docker-desktop >/dev/null 2>&1; then
+    echo "docker-desktop"
+    return
+  fi
   if command -v kind >/dev/null 2>&1; then
     echo "kind"
     return
@@ -42,7 +46,7 @@ resolve_provider() {
     return
   fi
 
-  echo "unable to auto-detect Kubernetes provider; install kind or k3d, or set K8S_PROVIDER" >&2
+  echo "unable to auto-detect Kubernetes provider; enable Docker Desktop Kubernetes, install kind/k3d, or set K8S_PROVIDER" >&2
   exit 1
 }
 
@@ -51,8 +55,10 @@ use_cluster_context() {
   local context
   if [[ "$provider" == "kind" ]]; then
     context="kind-${CLUSTER_NAME}"
-  else
+  elif [[ "$provider" == "k3d" ]]; then
     context="k3d-${CLUSTER_NAME}"
+  else
+    context="docker-desktop"
   fi
   kubectl config use-context "$context" >/dev/null
 }
@@ -66,7 +72,7 @@ ensure_cluster() {
     else
       kind create cluster --name "$CLUSTER_NAME"
     fi
-  else
+  elif [[ "$provider" == "k3d" ]]; then
     if k3d cluster list --no-headers 2>/dev/null | awk '{print $1}' | grep -x "$CLUSTER_NAME" >/dev/null 2>&1; then
       echo "k3d cluster ${CLUSTER_NAME} already exists"
     else
@@ -83,8 +89,10 @@ import_image_into_cluster() {
 
   if [[ "$provider" == "kind" ]]; then
     kind load docker-image "$image" --name "$CLUSTER_NAME"
-  else
+  elif [[ "$provider" == "k3d" ]]; then
     k3d image import "$image" -c "$CLUSTER_NAME"
+  else
+    echo "docker-desktop provider selected: skipping explicit image import for ${image}"
   fi
 }
 

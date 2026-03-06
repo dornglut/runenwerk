@@ -52,7 +52,7 @@ coreApi:
   devLoginEnabled: true
   devLoginSharedSecret: local-dev-login-secret
   jwtIssuer: axiom-local
-  jwtAudience: axiom-godot
+  jwtAudience: axiom-grotto
   jwtAccessSecret: local-jwt-access-secret
   refreshTokenHmacSecret: local-refresh-hmac-secret
   operatorAuthUsername: axiom-operator
