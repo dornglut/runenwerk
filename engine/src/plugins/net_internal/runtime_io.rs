@@ -1,0 +1,466 @@
+// Owner: Engine Network Plugin - Runtime IO Systems
+fn network_runtime_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let Some(mut handle) = world.remove_resource::<NetworkRuntimeHandle>() else {
+        if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
+            inbound.clear();
+        }
+        return Ok(());
+    };
+
+    if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
+        inbound.clear();
+    }
+
+    loop {
+        let event = match handle.try_recv() {
+            Ok(Some(event)) => event,
+            Ok(None) => break,
+            Err(TryRecvError::Disconnected) => {
+                update_connection_closed(&mut world, None, None);
+                break;
+            }
+            Err(TryRecvError::Empty) => break,
+        };
+
+        match event {
+            SessionRuntimeEvent::Connected { connection_id } => {
+                if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+                    status.connected = true;
+                    status.connection_id = connection_id;
+                }
+                if let Ok(mut health) = world.resource_mut::<ConnectionHealth>() {
+                    health.connected = true;
+                }
+            }
+            SessionRuntimeEvent::ClientMessage {
+                connection_id,
+                message,
+            } => {
+                if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
+                    inbound.push_client(connection_id, message.clone());
+                }
+                if let Ok(mut inbox) = world.resource_mut::<NetworkServerInbox>() {
+                    inbox.push(message);
+                }
+            }
+            SessionRuntimeEvent::ServerMessage(message) => {
+                if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
+                    inbound.push_server(message.clone());
+                }
+                if let Ok(mut inbox) = world.resource_mut::<NetworkClientInbox>() {
+                    inbox.push(message);
+                }
+            }
+            SessionRuntimeEvent::Phase(phase) => {
+                if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+                    status.phase = phase;
+                }
+            }
+            SessionRuntimeEvent::Reconnecting { attempt } => {
+                if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+                    status.connected = false;
+                    status.reconnect_attempt = Some(attempt);
+                    status.phase = SessionPhase::Handshaking;
+                }
+                if let Ok(mut health) = world.resource_mut::<ConnectionHealth>() {
+                    health.connected = false;
+                    health.reconnect_events = health.reconnect_events.saturating_add(1);
+                }
+                if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
+                    diagnostics.reconnect_attempts =
+                        diagnostics.reconnect_attempts.saturating_add(1);
+                }
+            }
+            SessionRuntimeEvent::JoinAccepted(join) => {
+                let authority = world
+                    .resource::<SimulationProfileConfig>()
+                    .map(|config| config.authority)
+                    .unwrap_or(AuthorityRole::Local);
+                tracing::info!(
+                    ?authority,
+                    connection_id = join.connection_id,
+                    tick_rate_hz = join.tick_rate_hz,
+                    "network join accepted"
+                );
+                if matches!(authority, AuthorityRole::Server)
+                    && let Ok(mut session) = world.resource_mut::<ServerSessionState>()
+                {
+                    let connection = ConnectionId(join.connection_id);
+                    session.phase = SessionPhase::Active;
+                    session.active_connection = Some(connection);
+                    session.active_connections.insert(connection);
+                    session.last_disconnect = None;
+                    session.last_join_state = Some(join.join_state.clone());
+                    if let Ok(mut replication) = world.resource_mut::<SnapshotReplicationState>() {
+                        // New joins need a full baseline snapshot before deltas are valid.
+                        reset_replication_for_connection(&mut replication, Some(connection));
+                    }
+                }
+                if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer)
+                    && let Ok(mut session) = world.resource_mut::<ClientSessionState>()
+                {
+                    observe_server_message(
+                        &mut session,
+                        &ServerMessage::JoinAccepted(join.clone()),
+                    );
+                }
+                if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+                    status.phase = SessionPhase::Active;
+                    status.connected = true;
+                    status.connection_id = Some(ConnectionId(join.connection_id));
+                    status.last_disconnect = None;
+                    status.reconnect_attempt = None;
+                }
+                if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
+                    diagnostics.accepted_connections =
+                        diagnostics.accepted_connections.saturating_add(1);
+                }
+                if let Ok(mut admission) = world.resource_mut::<NetworkAdmissionState>() {
+                    admission.authoritative_join = Some(join.join_state.clone());
+                }
+                apply_session_runtime_join_state(&mut world, &join.join_state);
+            }
+            SessionRuntimeEvent::JoinRejected(reason) => {
+                tracing::warn!(?reason, "network join rejected");
+                if let Ok(mut session) = world.resource_mut::<ClientSessionState>() {
+                    observe_server_message(
+                        &mut session,
+                        &ServerMessage::JoinRejected(engine_net::JoinRejected {
+                            reason: reason.clone(),
+                        }),
+                    );
+                }
+                if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+                    status.phase = SessionPhase::Rejected(reason.clone());
+                    status.last_disconnect = Some(reason.clone());
+                }
+                clear_session_runtime_state(&mut world);
+                if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
+                    diagnostics.rejected_connections =
+                        diagnostics.rejected_connections.saturating_add(1);
+                }
+            }
+            SessionRuntimeEvent::RttUpdated { millis } => {
+                if let Ok(mut metrics) = world.resource_mut::<RoundTripMetrics>() {
+                    metrics.last_rtt_millis = Some(millis);
+                    metrics.samples = metrics.samples.saturating_add(1);
+                }
+            }
+            SessionRuntimeEvent::ConnectionClosed {
+                connection_id,
+                reason,
+            } => {
+                tracing::warn!(?connection_id, ?reason, "network connection closed");
+                update_connection_closed(&mut world, connection_id, reason);
+            }
+            SessionRuntimeEvent::Error { message } => {
+                if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+                    status.last_error = Some(message);
+                }
+                if let Ok(mut health) = world.resource_mut::<ConnectionHealth>() {
+                    health.error_events = health.error_events.saturating_add(1);
+                }
+            }
+        }
+    }
+
+    world.insert_resource(handle);
+    Ok(())
+}
+
+fn client_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let len = world.resource::<NetworkClientInbox>()?.len();
+    if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
+        diagnostics.processed_server_messages_last_frame = len;
+    }
+    let messages = world.resource_mut::<NetworkClientInbox>()?.drain();
+
+    for message in messages {
+        let previous_phase = world
+            .resource::<ClientSessionState>()
+            .map(|session| session.phase.clone())
+            .unwrap_or_default();
+        if let Ok(mut session) = world.resource_mut::<ClientSessionState>() {
+            observe_server_message(&mut session, &message);
+            let phase = session.phase.clone();
+            let connection_id = session.connection_id;
+            let last_disconnect = session.last_disconnect.clone();
+            drop(session);
+            if let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>() {
+                status.phase = phase.clone();
+                status.connection_id = connection_id;
+                status.last_disconnect = last_disconnect;
+                status.connected = matches!(phase, SessionPhase::Active);
+            }
+        }
+
+        match message {
+            ServerMessage::JoinAccepted(join) => {
+                if let Ok(mut admission) = world.resource_mut::<NetworkAdmissionState>() {
+                    admission.authoritative_join = Some(join.join_state.clone());
+                }
+                apply_session_runtime_join_state(&mut world, &join.join_state);
+            }
+            ServerMessage::Snapshot(snapshot) => {
+                let result = apply_authoritative_snapshot(
+                    &mut world,
+                    snapshot.tick,
+                    snapshot.cursor,
+                    None,
+                    &snapshot.payload,
+                )
+                .with_context(|| {
+                    format!(
+                        "failed applying snapshot tick={} cursor={} payload_len={}",
+                        snapshot.tick.0,
+                        snapshot.cursor.0,
+                        snapshot.payload.len()
+                    )
+                });
+                match result {
+                    Ok(corrected) => {
+                        if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
+                            outbox.push(ClientMessage::Ack(Ack {
+                                cursor: snapshot.cursor,
+                                last_received_tick: snapshot.tick,
+                            }));
+                        }
+                        if corrected
+                            && let Ok(mut diagnostics) =
+                                world.resource_mut::<PredictionDiagnostics>()
+                        {
+                            diagnostics.corrections_applied =
+                                diagnostics.corrections_applied.saturating_add(1);
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %format!("{error:#}"),
+                            "network snapshot apply failed"
+                        );
+                    }
+                }
+            }
+            ServerMessage::DeltaSnapshot(snapshot) => {
+                let result = apply_authoritative_delta(
+                    &mut world,
+                    snapshot.tick,
+                    snapshot.cursor,
+                    &snapshot.payload,
+                )
+                .with_context(|| {
+                    format!(
+                        "failed applying delta snapshot tick={} cursor={} payload_len={}",
+                        snapshot.tick.0,
+                        snapshot.cursor.0,
+                        snapshot.payload.len()
+                    )
+                });
+                match result {
+                    Ok(corrected) => {
+                        if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
+                            outbox.push(ClientMessage::Ack(Ack {
+                                cursor: snapshot.cursor,
+                                last_received_tick: snapshot.tick,
+                            }));
+                        }
+                        if corrected
+                            && let Ok(mut diagnostics) =
+                                world.resource_mut::<PredictionDiagnostics>()
+                        {
+                            diagnostics.corrections_applied =
+                                diagnostics.corrections_applied.saturating_add(1);
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %format!("{error:#}"),
+                            "network delta snapshot apply failed"
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        let phase = world
+            .resource::<ClientSessionState>()
+            .map(|session| session.phase.clone())
+            .unwrap_or_default();
+        if !matches!(previous_phase, SessionPhase::Active)
+            && matches!(phase, SessionPhase::Active)
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+        {
+            diagnostics.accepted_connections = diagnostics.accepted_connections.saturating_add(1);
+        }
+        if !matches!(previous_phase, SessionPhase::Rejected(_))
+            && matches!(phase, SessionPhase::Rejected(_))
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+        {
+            diagnostics.rejected_connections = diagnostics.rejected_connections.saturating_add(1);
+        }
+    }
+
+    Ok(())
+}
+
+fn server_receive_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let config = world
+        .resource::<ServerSessionConfig>()
+        .map(|resource| resource.clone())
+        .unwrap_or_default();
+    if let Ok(mut session) = world.resource_mut::<ServerSessionState>()
+        && session.config != config
+    {
+        session.config = config;
+    }
+
+    let len = world.resource::<NetworkServerInbox>()?.len();
+    if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
+        diagnostics.processed_client_messages_last_frame = len;
+    }
+    let messages = world.resource_mut::<NetworkServerInbox>()?.drain();
+
+    for message in messages {
+        if let ClientMessage::Ack(ack) = &message
+            && let Ok(mut state) = world.resource_mut::<SnapshotReplicationState>()
+        {
+            state.last_acknowledged_cursor = ack.cursor;
+            state.last_received_tick = ack.last_received_tick;
+        }
+        if let ClientMessage::InputFrame(frame) = &message
+            && let Ok(mut buffer) = world.resource_mut::<PlayerCommandBuffer>()
+        {
+            for command in &frame.commands {
+                buffer.push(command.clone());
+            }
+        }
+
+        let (previous_phase, previous_connection) = world
+            .resource::<ServerSessionState>()
+            .map(|session| (session.phase.clone(), session.active_connection))
+            .unwrap_or((SessionPhase::Idle, None));
+        let responses = {
+            let mut session = world.resource_mut::<ServerSessionState>()?;
+            handle_client_message(&mut session, &message)
+        };
+        if let Ok(mut outbox) = world.resource_mut::<NetworkServerOutbox>() {
+            for response in responses {
+                outbox.push(response);
+            }
+        }
+        let phase = world
+            .resource::<ServerSessionState>()
+            .map(|session| session.phase.clone())
+            .unwrap_or_default();
+        let current_connection = world
+            .resource::<ServerSessionState>()
+            .ok()
+            .and_then(|session| session.active_connection);
+        if current_connection != previous_connection
+            && current_connection.is_some()
+            && let Ok(mut replication) = world.resource_mut::<SnapshotReplicationState>()
+        {
+            reset_replication_for_connection(&mut replication, current_connection);
+        }
+        let latest_join_state = world
+            .resource::<ServerSessionState>()
+            .ok()
+            .and_then(|session| session.last_join_state.clone());
+        if let Ok(mut admission) = world.resource_mut::<NetworkAdmissionState>() {
+            admission.authoritative_join = latest_join_state.clone();
+        }
+        if let Some(join_state) = latest_join_state.as_ref() {
+            apply_session_runtime_join_state(&mut world, join_state);
+        }
+        let session_state = world.resource::<ServerSessionState>().ok().map(|session| {
+            (
+                session.phase.clone(),
+                session.active_connection,
+                !session.active_connections.is_empty(),
+                session.last_disconnect.clone(),
+            )
+        });
+        if let Some((phase, connection_id, has_active_connections, last_disconnect)) = session_state
+            && let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>()
+        {
+            status.phase = phase.clone();
+            status.connection_id = connection_id;
+            status.last_disconnect = last_disconnect;
+            status.connected = has_active_connections;
+        }
+        if !matches!(previous_phase, SessionPhase::Active)
+            && matches!(phase, SessionPhase::Active)
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+        {
+            diagnostics.accepted_connections = diagnostics.accepted_connections.saturating_add(1);
+        }
+        if !matches!(previous_phase, SessionPhase::Rejected(_))
+            && matches!(phase, SessionPhase::Rejected(_))
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+        {
+            diagnostics.rejected_connections = diagnostics.rejected_connections.saturating_add(1);
+        }
+    }
+
+    Ok(())
+}
+
+fn apply_session_runtime_join_state(world: &mut ecs::World, join_state: &AuthoritativeJoinState) {
+    if let Ok(mut session) = world.resource_mut::<SessionRuntimeState>() {
+        session.apply_authoritative_join(join_state);
+    }
+}
+
+fn clear_session_runtime_state(world: &mut ecs::World) {
+    if let Ok(mut session) = world.resource_mut::<SessionRuntimeState>() {
+        session.clear();
+    }
+}
+
+fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let len = world.resource::<NetworkClientOutbox>()?.len();
+    if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
+        diagnostics.flushed_client_messages_last_frame = len;
+        if len > 0 {
+            diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
+        }
+    }
+    let messages = world.resource_mut::<NetworkClientOutbox>()?.drain();
+    if let Ok(mut queue) = world.resource_mut::<NetworkOutboundQueue>() {
+        queue.clear();
+        for message in &messages {
+            queue.push_client(message.clone());
+        }
+    }
+    if let Some(handle) = world.resource::<NetworkRuntimeHandle>().ok() {
+        for message in &messages {
+            let _ = handle.send(SessionRuntimeCommand::Client(message.clone()));
+        }
+    }
+    Ok(())
+}
+
+fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
+    let len = world.resource::<NetworkServerOutbox>()?.len();
+    if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
+        diagnostics.flushed_server_messages_last_frame = len;
+        if len > 0 {
+            diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
+        }
+    }
+    let messages = world.resource_mut::<NetworkServerOutbox>()?.drain();
+    if let Ok(mut queue) = world.resource_mut::<NetworkOutboundQueue>() {
+        queue.clear();
+        for message in &messages {
+            queue.push_server(message.clone());
+        }
+    }
+    if let Some(handle) = world.resource::<NetworkRuntimeHandle>().ok() {
+        for message in &messages {
+            let _ = handle.send(SessionRuntimeCommand::Server(message.clone()));
+        }
+    }
+    Ok(())
+}
+
