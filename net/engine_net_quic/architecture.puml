@@ -1,0 +1,120 @@
+@startuml
+title engine_net_quic architecture (current)
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+left to right direction
+
+package "engine" {
+  [Network Runtime Adapter] as engine_adapter
+}
+
+package "engine_net" {
+  [Protocol Messages] as net_protocol
+  [SessionRuntimeCommand] as net_cmd
+  [SessionRuntimeEvent] as net_evt
+  [Session State] as net_state
+  [Transport Traits] as net_transport_traits
+}
+
+package "engine_net_quic" {
+  package "config" {
+    [client] as cfg_client
+    [server] as cfg_server
+    [transport] as cfg_transport
+  }
+
+  package "transport" {
+    [endpoint_factory] as tr_endpoint
+    [trust] as tr_trust
+    [certificates] as tr_cert
+    [framing] as tr_framing
+    [lanes] as tr_lanes
+  }
+
+  package "runtime" {
+    [handles] as rt_handles
+    [connection] as rt_connection
+    [helpers] as rt_helpers
+    [command_bus] as rt_cmd_bus
+    [event_bus] as rt_evt_bus
+    [reconnect] as rt_reconnect
+    [routing] as rt_routing
+    [utils] as rt_utils
+  }
+
+  package "client" {
+    [bootstrap] as client_bootstrap
+    [policy] as client_policy
+    [runtime] as client_runtime
+  }
+
+  package "server" {
+    [admission] as server_admission
+    [policy] as server_policy
+    [accept] as server_accept
+    [peer] as server_peer
+    [runtime] as server_runtime
+  }
+
+  package "driver" {
+    [net_loop] as driver_net_loop
+  }
+}
+
+package "quinn" {
+  [Endpoint] as q_endpoint
+  [Connection] as q_connection
+  [Bi Streams] as q_streams
+  [Datagrams] as q_datagrams
+}
+
+engine_adapter --> rt_handles
+rt_handles --> net_cmd
+net_evt --> rt_handles
+
+client_runtime --> rt_connection
+client_runtime --> driver_net_loop
+client_runtime --> tr_trust
+client_runtime --> rt_reconnect
+client_bootstrap --> rt_connection
+client_policy --> tr_trust
+
+server_runtime --> server_accept
+server_runtime --> server_peer
+server_runtime --> rt_helpers
+server_runtime --> server_admission
+server_runtime --> server_policy
+
+rt_connection --> tr_endpoint
+rt_connection --> tr_framing
+rt_connection --> net_state
+
+server_accept --> tr_framing
+server_accept --> net_state
+server_peer --> net_protocol
+driver_net_loop --> net_protocol
+
+tr_endpoint --> q_endpoint
+tr_framing --> q_streams
+driver_net_loop --> q_datagrams
+server_peer --> q_datagrams
+
+tr_endpoint ..> net_transport_traits
+tr_cert --> tr_trust
+tr_lanes --> q_datagrams
+
+note right of tr_framing
+Handshake path:
+Hello / JoinRequest /
+JoinAccepted / JoinRejected
+on BI streams.
+end note
+
+note right of driver_net_loop
+Live session path:
+datagrams after
+join admission.
+end note
+
+@enduml

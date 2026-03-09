@@ -1,0 +1,97 @@
+@startuml
+title net workspace architecture (current)
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+left to right direction
+
+package "game / scene" {
+  [Concrete Replication Driver] as game_driver
+  [Gameplay Input Schema] as game_input
+  [Authoritative State] as game_state
+}
+
+package "engine" {
+  [Network Runtime Systems] as engine_runtime
+  [Replication Systems] as engine_replication
+  [Session Systems] as engine_session
+  [Replay Systems] as engine_replay
+}
+
+package "net" {
+  package "engine_sim" {
+    [profile] as sim_profile
+    [identity] as sim_identity
+    [rng] as sim_rng
+    [command] as sim_command
+    [codec] as sim_codec
+  }
+
+  package "engine_net" {
+    [protocol] as net_protocol
+    [session] as net_session
+    [replication] as net_replication
+    [runtime contracts] as net_runtime
+    [simulation] as net_simulation
+    [transport] as net_transport
+  }
+
+  package "engine_net_quic" {
+    [config] as quic_config
+    [transport] as quic_transport
+    [runtime] as quic_runtime
+    [client] as quic_client
+    [server] as quic_server
+    [driver net_loop] as quic_driver
+  }
+
+  package "engine_history" {
+    [model] as history_model
+    [policy] as history_policy
+    [archive] as history_archive
+    [recorder] as history_recorder
+    [controller] as history_controller
+    [validation] as history_validation
+  }
+}
+
+game_input --> game_driver
+game_state --> game_driver
+game_driver --> net_replication : implements ReplicationDriver
+
+engine_runtime --> net_runtime
+engine_replication --> net_replication
+engine_session --> net_protocol
+engine_session --> net_session
+engine_replay --> history_recorder
+engine_replay --> history_validation
+
+quic_client --> net_protocol
+quic_client --> net_session
+quic_server --> net_protocol
+quic_server --> net_session
+quic_runtime --> net_runtime
+quic_transport --> net_transport
+quic_driver --> quic_runtime
+
+net_protocol --> sim_identity
+net_simulation --> sim_identity
+net_replication --> sim_codec
+history_model --> sim_identity
+
+engine_runtime --> quic_runtime : runtime adapter
+engine_replay --> history_archive
+
+note right of quic_driver
+Live datagram loop
+for active QUIC
+connections.
+end note
+
+note right of net_runtime
+SessionRuntimeEvent /
+SessionRuntimeCommand
+bridge host adapters.
+end note
+
+@enduml

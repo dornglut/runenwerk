@@ -1,68 +1,19 @@
 # Documentation Index
 
-## Core
+## Core Architecture
 
-- `README.md` - workspace overview and current baseline.
-- `PROJECT_GUIDELINES.md` - top-level proposal and architecture guidelines.
-- `requests.md` - cross-cutting requests plus a project-wide index of ongoing plugin/feature requests.
+- Runtime architecture guidelines: [docs/guidelines/ARCHITECTURE.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/guidelines/ARCHITECTURE.md)
+- Domain ownership map: [docs/guidelines/DOMAIN_MAP.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/guidelines/DOMAIN_MAP.md)
+- Code patterns: [docs/guidelines/CODE_PATTERNS.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/guidelines/CODE_PATTERNS.md)
+- Module structure rules: [docs/guidelines/module_structure_guidelines.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/guidelines/module_structure_guidelines.md)
 
-## Crate/Area Docs
+## Planning
 
-- `engine/README.md`
-- `engine/requests.md`
-- `ecs/README.md`
-- `ecs_macros/README.md`
-- `engine_sim/README.md`
-- `engine_replay/README.md`
-- `engine_net/README.md`
-- `engine_net_quic/README.md`
-- `grotto_online/README.md`
-- `grotto_fleet_control/README.md`
-- `scheduler/README.md`
-- `scheduler/requests.md`
-- `grid/README.md`
-- `grid/requests.md`
-- `assets/README.md`
-- `assets/requests.md`
-- `docs/README.md`
-- `docs/requests.md`
+- Active roadmap: [docs/roadmaps/ROADMAP.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/roadmaps/ROADMAP.md)
 
-## Project Docs
+## Visuals
 
-- `docs/current-state.md` - current runtime, networking, replay, and delivery status.
-- `docs/engine-multiplayer-architecture.md` - engine/runtime, networking stack, and multiplayer ownership map with recommended reading order.
-- `docs/axiom-operator-console.md` - operator bridge, runtime control, fleet lifecycle, and log inspection ownership map.
-- `docs/kubernetes-local-operator-demo.md` - local kind/k3d full-stack Kubernetes runbook for operator start/stop/inspect flow.
-- `docs/game-design.md` - high-level game design direction.
-- `docs/authoring-layer.md` - authoring/runtime split and implementation direction for data-driven engine features.
-
-## Game Docs
-
-- `game/README.md`
-- `game/CAVERN_HUNT_GDD.md` - current primary game concept and first game design document.
-- `game/CAVERN_HUNT_MATERIALS.md` - material graph assets, PBR-lite integration, GI staging, runtime mode controls, and troubleshooting.
-- `game/CAVERN_HUNT_PLAYTEST.md` - local/dev playtest bootstrap and friend-test instructions.
-
-## Plugin Docs
-
-- `engine/src/plugins/debug_metrics/README.md`
-- `engine/src/plugins/debug_metrics/requests.md`
-- `engine/src/plugins/grid/README.md`
-- `engine/src/plugins/grid/requests.md`
-- `engine/src/plugins/input/README.md`
-- `engine/src/plugins/input/requests.md`
-- `engine/src/plugins/render/README.md`
-- `engine/src/plugins/render/requests.md`
-- `engine/src/plugins/render/ecs-first-proposal.md`
-- `engine/src/plugins/scene/README.md`
-- `engine/src/plugins/scene/requests.md`
-- `engine/src/plugins/scheduler_diagnostics/README.md`
-- `engine/src/plugins/scheduler_diagnostics/requests.md`
-- `engine/src/plugins/shared/README.md`
-- `engine/src/plugins/shared/requests.md`
-- `engine/src/plugins/time/README.md`
-- `engine/src/plugins/time/requests.md`
-- `engine/src/plugins/ui/README.md`
-- `engine/src/plugins/ui/requests.md`
-
-Each plugin/feature area should keep its own `README.md` and `requests.md` per `PROJECT_GUIDELINES.md`.
+- Workspace architecture: [docs/visuals/architecture.puml](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/visuals/architecture.puml)
+- Ownership map: [docs/visuals/ownership.puml](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/visuals/ownership.puml)
+- Net architecture (current): [net/architecture.puml](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/net/architecture.puml)
+- Net architecture (target): [net/architecture-target.puml](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/net/architecture-target.puml)

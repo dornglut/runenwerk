@@ -1,0 +1,58 @@
+@startuml
+title Ownership Split
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+rectangle "ecs" as ecs
+rectangle "scheduler" as scheduler
+rectangle "engine" as engine
+rectangle "engine_net" as engine_net
+rectangle "engine_net_quic" as quic
+rectangle "engine_replay" as replay
+rectangle "cavern_hunt" as game
+
+note bottom of ecs
+World / Entity / Query / Bundle
+end note
+
+note bottom of scheduler
+Schedules / labels / execution
+end note
+
+note bottom of engine
+App / runtime / plugins / bridge
+end note
+
+note bottom of engine_net
+SimulationTick / protocol /
+session / replication contracts
+end note
+
+note bottom of quic
+Concrete QUIC transport backend
+end note
+
+note bottom of replay
+Replay / checkpoint substrate
+end note
+
+note bottom of game
+Concrete game state, snapshots,
+patches, replication policy
+end note
+
+engine --> ecs
+engine --> scheduler
+engine --> engine_net
+engine --> replay
+
+quic --> engine_net
+
+game --> ecs
+game --> engine
+game --> engine_net
+game --> replay
+
+@enduml

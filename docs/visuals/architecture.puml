@@ -1,0 +1,126 @@
+@startuml
+title Grotto Quest - Multiplayer ECS Workspace Architecture
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+
+package "ecs" as ECS {
+  [World]
+  [Entity]
+  [Bundle]
+  [Query]
+  [Resources]
+}
+
+package "scheduler" as SCHED {
+  [Schedule]
+  [Labels]
+  [Execution Plan]
+}
+
+package "engine" as ENG {
+  [App / Runtime]
+  [Plugin System]
+  [Fixed Step]
+  [Runtime Resources]
+  [Net Runtime Bridge]
+  [Replay Plugin Integration]
+}
+
+package "engine_net" as ENET {
+  [Session Model]
+  [Protocol Types]
+  [Replication Contracts]
+  [SimulationTick]
+  [Transport Abstractions]
+}
+
+package "engine_net_quic" as QUIC {
+  [QUIC Client Runtime]
+  [QUIC Server Runtime]
+  [Reconnect / Loss / Jitter Handling]
+}
+
+package "engine_replay" as REPLAY {
+  [Replay / Checkpoint Substrate]
+}
+
+package "cavern_hunt" as GAME {
+  package "domain" {
+    [Gameplay State]
+    [World State]
+    [Snapshot DTOs]
+    [Replication Policy]
+  }
+
+  package "plugins" {
+    [Game Plugin]
+    [net_sync]
+    [Prediction / Apply / Emit]
+  }
+}
+
+package "grotto_client" as CLIENT {
+  [Client App Entry]
+}
+
+package "grotto_server" as SERVER {
+  [Dedicated Server Entry]
+}
+
+package "grotto_online" as ONLINE {
+  [Join / Handoff / Operator Glue]
+}
+
+package "grotto_fleet_control" as FLEET {
+  [Fleet / Kubernetes Control]
+}
+
+ECS --> SCHED : queried/executed by
+ENG --> ECS : uses
+ENG --> SCHED : uses
+
+ENET --> ECS : ECS-aware contracts\n(snapshot/replication over World)
+ENG --> ENET : runtime integration
+QUIC --> ENET : implements transport/session model
+ENG --> REPLAY : integrates replay runtime
+
+GAME --> ECS : gameplay data in World
+GAME --> ENET : implements protocol/contracts
+GAME --> ENG : registers plugins into runtime
+GAME --> REPLAY : uses checkpoints/snapshots
+
+CLIENT --> ENG : boots runtime
+CLIENT --> GAME : loads game plugin
+
+SERVER --> ENG : boots runtime
+SERVER --> GAME : loads authoritative game plugin
+SERVER --> QUIC : hosts transport backend
+
+ONLINE --> SERVER : handoff / session coordination
+FLEET --> SERVER : deploys / manages instances
+
+note right of ECS
+Owns only ECS primitives.
+No game-specific multiplayer logic.
+end note
+
+note right of ENET
+Best place for generic,
+game-agnostic but ECS-aware
+multiplayer contracts.
+end note
+
+note right of ENG
+Owns runtime/plugin wiring,
+not game replication schema.
+end note
+
+note right of GAME
+Owns concrete snapshots,
+patches, replication rules,
+and authoritative game logic.
+end note
+
+@enduml

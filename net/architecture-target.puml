@@ -1,0 +1,76 @@
+@startuml
+title net workspace architecture (target)
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+left to right direction
+
+package "game / domain" {
+  [Game Simulation Driver]
+  [Game Snapshot Codec]
+  [Game Input Schema]
+}
+
+package "engine" {
+  [Runtime Bridge]
+  [Session Runtime]
+  [Replication Runtime]
+  [Prediction Runtime]
+  [History Runtime]
+}
+
+package "net core" {
+  package "engine_sim" {
+    [Identity + Profile]
+    [Command + RNG]
+    [Codec Traits]
+  }
+
+  package "engine_net" {
+    [Protocol]
+    [Session Contracts]
+    [Replication Contracts]
+    [Runtime Contracts]
+    [Transport Contracts]
+  }
+
+  package "engine_history" {
+    [Recorder]
+    [Archive]
+    [Controller]
+    [Validation]
+  }
+}
+
+package "net transports" {
+  [engine_net_quic]
+  [future transport adapters]
+}
+
+[Game Input Schema] --> [Game Simulation Driver]
+[Game Snapshot Codec] --> [Game Simulation Driver]
+[Game Simulation Driver] --> [Replication Contracts]
+[Game Simulation Driver] --> [Codec Traits]
+
+[Session Runtime] --> [Session Contracts]
+[Replication Runtime] --> [Replication Contracts]
+[Prediction Runtime] --> [Replication Contracts]
+[Runtime Bridge] --> [Runtime Contracts]
+[History Runtime] --> [Recorder]
+[History Runtime] --> [Validation]
+
+[engine_net_quic] --> [Protocol]
+[engine_net_quic] --> [Session Contracts]
+[engine_net_quic] --> [Runtime Contracts]
+[future transport adapters] --> [Transport Contracts]
+
+[engine] --> [engine_net_quic]
+[engine] --> [engine_history]
+
+note right of [future transport adapters]
+Additional adapters should reuse
+engine_net runtime contracts
+without changing gameplay code.
+end note
+
+@enduml
