@@ -9,7 +9,7 @@ Provides action-mapped input state and frame pulse handling, decoupling gameplay
 - Plugin: `InputFinalizePlugin`
 - Typed schedule: `FrameEnd`
 - Typed set: `CoreSet::FrameEnd`
-- Primary state type: `InputState` in [domain.rs](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/src/plugins/input/domain.rs)
+- Primary state type: `InputState` in [domain/mod.rs](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/src/plugins/input/domain/mod.rs)
 
 OS input events are consumed through `InputState::handle_window_event` and `InputState::handle_device_event`.
 The runtime also feeds normalized platform events through the same `InputState` methods.

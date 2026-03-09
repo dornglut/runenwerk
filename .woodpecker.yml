@@ -1,0 +1,21 @@
+when:
+  - event: [push, pull_request]
+    path:
+      include:
+        - Cargo.toml
+        - Cargo.lock
+        - "**/Cargo.toml"
+        - "**/*.rs"
+        - .woodpecker.yml
+
+steps:
+  verify:
+    image: rust:1.88
+    environment:
+      CARGO_HOME: /woodpecker/.cargo
+      RUST_LOG: info
+    commands:
+      - apt-get update
+      - apt-get install -y pkg-config libssl-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+      - cargo --version
+      - cargo test --workspace

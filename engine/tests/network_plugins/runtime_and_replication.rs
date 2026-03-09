@@ -3,15 +3,15 @@
 fn network_runtime_handle_events_flow_into_engine_state() {
     let mut app = App::headless();
     app.add_plugin(NetworkClientPlugin);
-    let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (command_tx, _command_rx) = tokio::sync::mpsc::channel(16);
+    let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
     event_tx
-        .send(engine_net::SessionRuntimeEvent::Connected {
+        .try_send(engine_net::SessionRuntimeEvent::Connected {
             connection_id: Some(engine_net::ConnectionId(9)),
         })
         .unwrap();
     event_tx
-        .send(engine_net::SessionRuntimeEvent::ServerMessage(
+        .try_send(engine_net::SessionRuntimeEvent::ServerMessage(
             ServerMessage::JoinAccepted(engine_net::JoinAccepted {
                 connection_id: 9,
                 tick_rate_hz: 60,
@@ -20,7 +20,7 @@ fn network_runtime_handle_events_flow_into_engine_state() {
         ))
         .unwrap();
     event_tx
-        .send(engine_net::SessionRuntimeEvent::RttUpdated { millis: 14 })
+        .try_send(engine_net::SessionRuntimeEvent::RttUpdated { millis: 14 })
         .unwrap();
     app.world_mut()
         .insert_resource(NetworkRuntimeHandle::new(command_tx, event_rx));
@@ -34,7 +34,7 @@ fn network_runtime_handle_events_flow_into_engine_state() {
     assert_eq!(status.phase, SessionPhase::Active);
     assert_eq!(
         app.world()
-            .resource::<engine::RoundTripMetrics>()
+            .resource::<RoundTripMetrics>()
             .unwrap()
             .last_rtt_millis,
         Some(14)
@@ -45,10 +45,10 @@ fn network_runtime_handle_events_flow_into_engine_state() {
 fn reconnecting_event_updates_client_runtime_status() {
     let mut app = App::headless();
     app.add_plugin(NetworkClientPlugin);
-    let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (command_tx, _command_rx) = tokio::sync::mpsc::channel(16);
+    let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
     event_tx
-        .send(engine_net::SessionRuntimeEvent::Reconnecting { attempt: 2 })
+        .try_send(engine_net::SessionRuntimeEvent::Reconnecting { attempt: 2 })
         .unwrap();
     app.world_mut()
         .insert_resource(NetworkRuntimeHandle::new(command_tx, event_rx));
@@ -85,7 +85,7 @@ fn server_replication_emits_scene_snapshot_payloads() {
             _ => None,
         })
         .expect("server should emit an initial full snapshot");
-    let snapshot: engine::SceneSimulationSnapshotV1 =
+    let snapshot: TestSnapshot =
         postcard::from_bytes(&message.payload).expect("snapshot payload should decode");
     assert_eq!(message.cursor, SnapshotCursor(1));
     assert_eq!(snapshot.context.world_scene_label, "gameplay_stub");
@@ -171,7 +171,7 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
     assert_eq!(
         client
             .world()
-            .resource::<engine::SnapshotReplicationState>()
+            .resource::<SnapshotReplicationState>()
             .unwrap()
             .last_acknowledged_cursor,
         SnapshotCursor(1)

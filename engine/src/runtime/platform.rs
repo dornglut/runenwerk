@@ -1,7 +1,7 @@
-use crate::plugins::input::domain::InputState;
 use crate::runtime::window::WindowState;
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
+use crate::plugins::InputState;
 
 #[derive(Debug, Clone)]
 pub enum PlatformEvent {
@@ -88,10 +88,10 @@ pub fn apply_platform_event(
 #[cfg(test)]
 mod tests {
     use super::{PlatformEvent, apply_platform_event};
-    use crate::plugins::input::domain::InputState;
     use crate::runtime::window::WindowState;
     use winit::event::{ElementState, MouseButton};
     use winit::keyboard::KeyCode;
+    use crate::plugins::InputState;
 
     #[test]
     fn resize_and_scale_events_update_window_state() {

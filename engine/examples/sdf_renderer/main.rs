@@ -8,8 +8,7 @@ use engine::plugins::render::domain::{
 };
 use engine::plugins::ui::domain::UiWorldHudStats;
 use engine::plugins::{
-    DebugMetricsPlugin, GridPlugin, RenderPlugin, ScenePlugin, UiInputPlugin, UiRenderPlugin,
-    default_plugins,
+    DebugMetricsPlugin, GridPlugin, RenderPlugin, ScenePlugin, default_plugins,
 };
 use engine::prelude::{
     App, CoreSet, InputState, Plugin, Res, ResMut, SceneRuntimeState, Startup, SystemConfigExt,
@@ -23,12 +22,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 use wgpu::*;
 use winit::keyboard::KeyCode;
 
-include!("main_internal/entry_and_scene.rs");
+include!("internal/entry_and_scene.rs");
 
-include!("main_internal/config_and_graph.rs");
+include!("internal/config_and_graph.rs");
 
-include!("main_internal/gpu_and_executors.rs");
+include!("internal/gpu_and_executors.rs");
 
-include!("main_internal/runtime_helpers.rs");
+include!("internal/runtime_helpers.rs");
 
-include!("main_internal/tests.rs");
+include!("internal/tests.rs");

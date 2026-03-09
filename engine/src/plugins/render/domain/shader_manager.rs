@@ -6,10 +6,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-include!("shader_manager_internal/types.rs");
+include!("shader_manager/internal/types.rs");
 
-include!("shader_manager_internal/registry_impl.rs");
+include!("shader_manager/internal/registry_impl.rs");
 
-include!("shader_manager_internal/helpers.rs");
+include!("shader_manager/internal/helpers.rs");
 
-include!("shader_manager_internal/tests.rs");
+include!("shader_manager/internal/tests.rs");

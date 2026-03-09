@@ -9,14 +9,14 @@ use std::path::Path;
 use wgpu::util::DeviceExt;
 use wgpu::*;
 
-include!("text_internal/shaders_and_types.rs");
+include!("text/internal/shaders_and_types.rs");
 
-include!("text_internal/font_provider.rs");
+include!("text/internal/font_provider.rs");
 
-include!("text_internal/renderer.rs");
+include!("text/internal/renderer.rs");
 
-include!("text_internal/atlas_builder.rs");
+include!("text/internal/atlas_builder.rs");
 
-include!("text_internal/glyph_instances.rs");
+include!("text/internal/glyph_instances.rs");
 
-include!("text_internal/tests.rs");
+include!("text/internal/tests.rs");

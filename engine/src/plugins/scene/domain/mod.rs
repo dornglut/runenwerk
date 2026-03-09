@@ -8,9 +8,9 @@ use scheduler::scheduler_core::Scheduler;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
-mod config;
-mod lifecycle;
-mod registry;
+pub mod config;
+pub mod lifecycle;
+pub mod registry;
 
 pub use config::{
     GAMEPLAY_CONFIG_PATH, GameplayConfig, gameplay_config_modified, load_gameplay_config,

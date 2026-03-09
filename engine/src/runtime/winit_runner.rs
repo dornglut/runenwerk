@@ -1,5 +1,4 @@
 use crate::app::WindowedAppState;
-use crate::plugins::input::domain::InputState;
 use crate::plugins::render::domain::Gfx;
 use crate::plugins::time::domain::Time;
 use crate::runtime::fixed_time::{CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick};
@@ -14,8 +13,9 @@ use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
+use crate::plugins::InputState;
 
-pub fn run(state: WindowedAppState) -> Result<()> {
+pub(crate) fn run(state: WindowedAppState) -> Result<()> {
     ensure_build_ready(&state.build_errors)?;
 
     let event_loop = EventLoop::new()?;

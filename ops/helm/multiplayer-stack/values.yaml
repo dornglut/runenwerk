@@ -135,7 +135,6 @@ serverConfigRon: |-
       axiom_api_base_url: "http://{{ include "multiplayer-stack.coreApiServiceName" . }}:{{ .Values.coreApi.containerPort }}",
       dedicated_server_shared_secret: None,
       shader_watch: false,
-      net_sync_mode: V2,
       replication_budget: (
           enemy_ops_per_patch_level0: 128,
           enemy_ops_per_patch_level1: 72,
@@ -177,8 +176,6 @@ serverConfigRon: |-
       ),
       keyframe: (
           interval_ticks: 60,
-          emit_on_cursor_mismatch: true,
-          emit_on_reconnect: true,
       ),
       diagnostics: (
           enable_periodic_log: false,

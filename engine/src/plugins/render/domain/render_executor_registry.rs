@@ -13,7 +13,7 @@ pub trait RenderPassExecutor: Send + Sync {
     fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()>;
 }
 
-include!("render_executor_registry_internal/frame_data.rs");
-include!("render_executor_registry_internal/contexts_and_builtin.rs");
-include!("render_executor_registry_internal/registry.rs");
-include!("render_executor_registry_internal/tests.rs");
+include!("render_executor_registry/internal/frame_data.rs");
+include!("render_executor_registry/internal/contexts_and_builtin.rs");
+include!("render_executor_registry/internal/registry.rs");
+include!("render_executor_registry/internal/tests.rs");

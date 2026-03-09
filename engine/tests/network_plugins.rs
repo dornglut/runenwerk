@@ -1,16 +1,197 @@
-use engine::plugins::scene::SceneSimulationDeltaV1;
 use engine::plugins::{
-    NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox, NetworkClientPlugin,
-    NetworkDiagnostics, NetworkOutboundQueue, NetworkRuntimeHandle, NetworkServerInbox,
-    NetworkServerOutbox, NetworkServerPlugin, NetworkSessionStatus, PredictionDiagnostics,
-    PredictionPlugin, ReplicationDiagnostics, ReplicationPlugin, ScenePlugin, default_plugins,
+    NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
+    NetworkClientPlugin as NetworkClientPluginBase, NetworkDiagnostics,
+    NetworkOutboundQueue, NetworkReplicationRuntimePlugin, NetworkRuntimeHandle,
+    NetworkServerInbox, NetworkServerOutbox, NetworkServerPlugin as NetworkServerPluginBase,
+    NetworkSessionStatus, PredictionDiagnostics, PredictionPlugin as PredictionPluginBase,
+    ReplicationDiagnostics, ReplicationPlugin as ReplicationPluginBase, ScenePlugin,
+    default_plugins,
 };
 use engine::prelude::*;
 use engine_net::{
-    ClientCommandEnvelope, ClientMessage, ClientSessionState, ClientSessionTarget, Hello,
-    MoveCommand, PlayerCommandBuffer, ProtocolVersion, ServerMessage, ServerSessionConfig,
-    SessionPhase, SnapshotCursor, TransportKind, begin_client_session,
+    ClientMessage, ClientSessionState, ClientSessionTarget, Hello, ProtocolVersion, ServerMessage,
+    ServerSessionConfig, SessionPhase, SnapshotCursor, TransportKind, begin_client_session,
 };
+use engine_net::replication::ReplicationDriver;
+use serde::{Deserialize, Serialize};
+use std::io;
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+struct MoveCommand {
+    x: f32,
+    y: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct AbilityCommand {
+    slot: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+enum ClientCommandEnvelope {
+    Move(MoveCommand),
+    Ability(AbilityCommand),
+}
+
+impl Default for ClientCommandEnvelope {
+    fn default() -> Self {
+        Self::Move(MoveCommand { x: 0.0, y: 0.0 })
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct PlayerCommandBuffer {
+    commands: Vec<ClientCommandEnvelope>,
+}
+
+impl PlayerCommandBuffer {
+    fn push(&mut self, command: ClientCommandEnvelope) {
+        self.commands.push(command);
+    }
+
+    fn drain(&mut self) -> Vec<ClientCommandEnvelope> {
+        std::mem::take(&mut self.commands)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct TestSnapshot {
+    context: TestSnapshotContext,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct TestSnapshotContext {
+    world_scene_label: String,
+}
+
+impl Default for TestSnapshot {
+    fn default() -> Self {
+        Self {
+            context: TestSnapshotContext {
+                world_scene_label: "gameplay_stub".to_string(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct TestDelta {
+    changed: bool,
+}
+
+struct TestReplicationDriver;
+
+impl ReplicationDriver for TestReplicationDriver {
+    type Snapshot = TestSnapshot;
+    type Delta = TestDelta;
+    type Input = ClientCommandEnvelope;
+    type Error = io::Error;
+
+    fn capture_snapshot(_world: &World) -> Result<Option<Self::Snapshot>, Self::Error> {
+        Ok(Some(TestSnapshot::default()))
+    }
+
+    fn build_delta(previous: &Self::Snapshot, current: &Self::Snapshot) -> Self::Delta {
+        TestDelta {
+            changed: previous != current,
+        }
+    }
+
+    fn apply_delta_to_snapshot(base: &Self::Snapshot, delta: &Self::Delta) -> Self::Snapshot {
+        if delta.changed {
+            Self::Snapshot::default()
+        } else {
+            base.clone()
+        }
+    }
+
+    fn receive_remote_input(
+        _world: &mut World,
+        _tick: engine_sim::SimulationTick,
+        _input: Vec<Self::Input>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn apply_snapshot(
+        _world: &mut World,
+        _tick: engine_sim::SimulationTick,
+        _snapshot: Self::Snapshot,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+
+    fn apply_delta(
+        _world: &mut World,
+        _tick: engine_sim::SimulationTick,
+        _delta: Self::Delta,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+
+    fn take_local_input(world: &mut World) -> Result<Vec<Self::Input>, Self::Error> {
+        Ok(world
+            .resource_mut::<PlayerCommandBuffer>()
+            .map(|mut commands| commands.drain())
+            .unwrap_or_default())
+    }
+
+    fn apply_input(_world: &mut World, _input: &[Self::Input]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn map_codec_error(error: postcard::Error) -> Self::Error {
+        io::Error::new(io::ErrorKind::InvalidData, error.to_string())
+    }
+}
+
+struct ReplicationPlugin;
+
+impl Plugin for ReplicationPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<PlayerCommandBuffer>();
+        ReplicationPluginBase::<TestReplicationDriver>::default().build(app);
+    }
+}
+
+struct PredictionPlugin;
+
+impl Plugin for PredictionPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<PlayerCommandBuffer>();
+        PredictionPluginBase::<TestReplicationDriver>::default().build(app);
+    }
+}
+
+type PredictionState = engine::plugins::PredictionState<ClientCommandEnvelope>;
+type SnapshotReplicationState = engine::plugins::SnapshotReplicationState<TestSnapshot>;
+
+struct NetworkClientPlugin;
+
+impl Plugin for NetworkClientPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugin(NetworkClientPluginBase);
+        app.add_plugin(NetworkReplicationRuntimePlugin::<TestReplicationDriver>::default());
+        app.init_resource::<NetworkServerInbox>();
+        app.init_resource::<NetworkServerOutbox>();
+        app.init_resource::<ServerSessionConfig>();
+        app.init_resource::<engine_net::ServerSessionState>();
+    }
+}
+
+struct NetworkServerPlugin;
+
+impl Plugin for NetworkServerPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugin(NetworkServerPluginBase);
+        app.add_plugin(NetworkReplicationRuntimePlugin::<TestReplicationDriver>::default());
+        app.init_resource::<NetworkClientInbox>();
+    }
+}
 
 include!("network_plugins/basic_flow.rs");
 

@@ -19,7 +19,8 @@ The engine runtime path is the active and only supported path. Use:
 - `engine::App::headless()` for deterministic tests/tools
 - `engine::Plugin`
 - default plugin stack: `engine::plugins::default_plugins()`
-- networking plugins: `NetworkClientPlugin`, `NetworkServerPlugin`, `ReplicationPlugin`, `PredictionPlugin`
+- networking plugins: `NetworkClientPlugin`, `NetworkServerPlugin`
+- legacy/test harness networking plugins: `LegacyReplicationPlugin`, `LegacyPredictionPlugin` (compat aliases: `ReplicationPlugin`, `PredictionPlugin`)
 - schedule labels: `Startup`, `PreUpdate`, `FixedUpdate`, `Update`, `RenderPrepare`, `RenderSubmit`, `FrameEnd`
 - built-in runtime resources: `WindowState`, `Time`, `InputState`, `FixedTimeConfig`, `FixedTimeState`, `CatchupBudget`, `SimulationTick`
 - shared runtime state: `SceneRuntimeState`, `GameplayRuntimeConfig`, `UiOverlayState`, `SessionRuntimeState`
@@ -36,7 +37,8 @@ The engine already integrates:
 
 - `ReplayPlugin` for authoritative scene replay/checkpoint recording and seek/validation
 - `NetworkClientPlugin` / `NetworkServerPlugin` for session state and runtime task bridging
-- `ReplicationPlugin` / `PredictionPlugin` for the current dedicated-authority path
+- game-owned replication pipelines (for example `cavern_hunt::net_sync`) as the canonical production path
+- `LegacyReplicationPlugin` / `LegacyPredictionPlugin` only for compatibility tests and non-production harnesses
 
 The current production-leaning profile is `SimulationProfile::DedicatedAuthority`.
 

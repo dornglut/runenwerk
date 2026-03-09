@@ -3,7 +3,7 @@ pub mod domain;
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::runtime::{CoreSet, FrameEnd, ResMut, SystemConfigExt};
-use domain::InputState;
+pub use domain::*;
 
 pub struct InputFinalizePlugin;
 

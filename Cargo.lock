@@ -680,6 +680,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "crossbeam-channel",
  "ecs",
  "engine_net",
  "engine_replay",

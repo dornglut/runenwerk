@@ -1,18 +1,18 @@
 [workspace]
 resolver = "3"
 members = [
-  "ecs",
-  "ecs_macros",
-  "engine_sim",
-  "engine_replay",
-  "scheduler",
+  "foundation/ecs",
+  "foundation/ecs_macros",
+  "net/engine_net",
+  "net/engine_net_quic",
+  "net/engine_sim",
+  "net/engine_history",
+  "foundation/scheduler",
   "engine",
-  "grid",
-  "engine_net",
-  "engine_net_quic",
-  "cavern_hunt",
-  "grotto_online",
-  "grotto_fleet_control",
-  "grotto_server",
-  "grotto_client"
+  "foundation/grid",
+  "games/cavern_hunt",
+  "apps/grotto_online",
+  "apps/grotto_fleet_control",
+  "apps/grotto_server",
+  "apps/grotto_client"
 ]

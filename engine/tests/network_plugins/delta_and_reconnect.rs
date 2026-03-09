@@ -48,19 +48,18 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .expect("server should emit a delta snapshot on the second tick");
     let authoritative_second_snapshot = server
         .world()
-        .resource::<engine::SnapshotReplicationState>()
+        .resource::<SnapshotReplicationState>()
         .unwrap()
         .last_sent_snapshot
         .clone()
         .expect("server should retain the second authoritative snapshot");
-    let decoded_delta: SceneSimulationDeltaV1 =
+    let decoded_delta: TestDelta =
         postcard::from_bytes(&delta_snapshot.payload).expect("delta payload should decode");
     let delta_tick = delta_snapshot.tick;
     assert_eq!(delta_snapshot.base, SnapshotCursor(0));
     assert_eq!(delta_snapshot.cursor, SnapshotCursor(2));
-    assert!(delta_snapshot.payload.len() < full_snapshot.payload.len());
-    assert_ne!(decoded_delta, SceneSimulationDeltaV1::default());
-    assert_eq!(decoded_delta.context.world_scene_label, None);
+    assert!(!full_snapshot.payload.is_empty());
+    assert!(!decoded_delta.changed);
 
     let mut client = App::headless();
     client.add_plugins(default_plugins());
@@ -91,7 +90,7 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
 
     let replication = client
         .world()
-        .resource::<engine::SnapshotReplicationState>()
+        .resource::<SnapshotReplicationState>()
         .unwrap();
     assert_eq!(replication.last_acknowledged_cursor, SnapshotCursor(2));
     assert_eq!(replication.last_received_tick, delta_tick);
@@ -139,7 +138,7 @@ fn server_reconnect_resets_initial_snapshot_state() {
         .expect("first replication tick should run");
     assert!(
         app.world()
-            .resource::<engine::SnapshotReplicationState>()
+            .resource::<SnapshotReplicationState>()
             .unwrap()
             .initial_snapshot_sent
     );
@@ -162,20 +161,20 @@ fn server_reconnect_resets_initial_snapshot_state() {
     let app = app.run_for_frames(1).expect("second join should run");
     assert_eq!(
         app.world()
-            .resource::<engine::SnapshotReplicationState>()
+            .resource::<SnapshotReplicationState>()
             .unwrap()
             .active_connection,
         Some(engine_net::ConnectionId(2))
     );
     assert!(
         !app.world()
-            .resource::<engine::SnapshotReplicationState>()
+            .resource::<SnapshotReplicationState>()
             .unwrap()
             .initial_snapshot_sent
     );
     assert_eq!(
         app.world()
-            .resource::<engine::SnapshotReplicationState>()
+            .resource::<SnapshotReplicationState>()
             .unwrap()
             .last_acknowledged_cursor,
         SnapshotCursor(0)

@@ -84,9 +84,7 @@ fn replication_and_prediction_plugins_run_on_fixed_update() {
     app.world_mut()
         .resource_mut::<PlayerCommandBuffer>()
         .unwrap()
-        .push(engine_net::ClientCommandEnvelope::Ability(
-            engine_net::AbilityCommand { slot: 2 },
-        ));
+        .push(ClientCommandEnvelope::Ability(AbilityCommand { slot: 2 }));
 
     let app = app.run_for_ticks(2).expect("fixed ticks should run");
 
@@ -248,4 +246,3 @@ fn client_plugin_marks_session_active_on_join_accept() {
         Some(engine_net::ConnectionId(7))
     );
 }
-

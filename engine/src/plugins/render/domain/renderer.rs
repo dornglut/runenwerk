@@ -19,12 +19,12 @@ use std::time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu::*;
 
-include!("renderer_internal/core_types_and_executors.rs");
+include!("renderer/internal/core_types_and_executors.rs");
 
-include!("renderer_internal/graph_and_logging.rs");
+include!("renderer/internal/graph_and_logging.rs");
 
-include!("renderer_internal/setup_and_ui.rs");
+include!("renderer/internal/setup_and_ui.rs");
 
-include!("renderer_internal/render_flow.rs");
+include!("renderer/internal/render_flow.rs");
 
-include!("renderer_internal/tests.rs");
+include!("renderer/internal/tests.rs");

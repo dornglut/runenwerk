@@ -4,7 +4,7 @@ This workspace contains the current Grotto Quest runtime, networking, replay, an
 
 ## Current State
 
-As of 2026-03-05, the active runtime baseline is:
+As of 2026-03-08, the active runtime baseline is:
 
 - `ecs` as the only ECS crate used by the engine/runtime path
 - `engine::App` as the only engine runtime entry surface
@@ -49,6 +49,7 @@ The runtime migration is complete enough that the current path should be treated
 - Engine overview: [engine/README.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/README.md)
 - Documentation index: [docs/index.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/index.md)
 - Local Kubernetes operator runbook: [docs/kubernetes-local-operator-demo.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/kubernetes-local-operator-demo.md)
-- Cavern Hunt GDD: [game/CAVERN_HUNT_GDD.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_GDD.md)
-- Cavern Hunt playtest guide: [game/CAVERN_HUNT_PLAYTEST.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/game/CAVERN_HUNT_PLAYTEST.md)
+- Cavern Hunt GDD: [games/cavern_hunt/docs/CAVERN_HUNT_GDD.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/games/cavern_hunt/docs/CAVERN_HUNT_GDD.md)
+- Cavern Hunt materials: [games/cavern_hunt/docs/CAVERN_HUNT_MATERIALS.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/games/cavern_hunt/docs/CAVERN_HUNT_MATERIALS.md)
+- Cavern Hunt playtest guide: [games/cavern_hunt/docs/CAVERN_HUNT_PLAYTEST.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/games/cavern_hunt/docs/CAVERN_HUNT_PLAYTEST.md)
 - Operator/fleet architecture map: [docs/axiom-operator-console.md](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/docs/axiom-operator-console.md)
