@@ -22,12 +22,18 @@ use std::sync::{Arc, Mutex, OnceLock};
 use wgpu::*;
 use winit::keyboard::KeyCode;
 
-include!("internal/entry_and_scene.rs");
+mod config_and_graph;
+mod entry_and_scene;
+mod gpu_and_executors;
+mod runtime_helpers;
+#[cfg(test)]
+mod tests;
 
-include!("internal/config_and_graph.rs");
+pub(crate) use config_and_graph::*;
+pub(crate) use entry_and_scene::*;
+pub(crate) use gpu_and_executors::*;
+pub(crate) use runtime_helpers::*;
 
-include!("internal/gpu_and_executors.rs");
-
-include!("internal/runtime_helpers.rs");
-
-include!("internal/tests.rs");
+fn main() -> Result<()> {
+    entry_and_scene::run()
+}
