@@ -1,6 +1,6 @@
 use ecs::World;
 use engine_net::*;
-use engine_net::replication::ReplicationDriver;
+use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
 use crate::plugins::*;
 use crate::WorldMut;
@@ -114,7 +114,7 @@ where
 
 pub fn prediction_step_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
+  TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
   TDriver::Input: Clone + PartialEq,
 {
     if let Ok(mut diagnostics) = world.resource_mut::<PredictionDiagnostics>() {
@@ -247,7 +247,7 @@ pub fn apply_authoritative_snapshot<TDriver>(
     payload: &[u8],
 ) -> anyhow::Result<bool>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
+  TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
   TDriver::Snapshot: Clone + PartialEq,
   TDriver::Input: Clone + PartialEq,
 {
@@ -296,7 +296,7 @@ pub fn apply_authoritative_delta<TDriver>(
     payload: &[u8],
 ) -> anyhow::Result<bool>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
+  TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
   TDriver::Snapshot: Clone + PartialEq,
   TDriver::Input: Clone + PartialEq,
 {

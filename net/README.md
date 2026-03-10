@@ -13,6 +13,11 @@ Pinned direction and architecture goals are defined in [GOALS.md](GOALS.md).
   - Owns protocol, replication, session, transport-lane semantics, and runtime-facing client/server contracts.
   - README: [engine_net/README.md](engine_net/README.md)
 
+- `engine_net_macros/`
+  - Declarative replication macros for gameplay/component mapping.
+  - Owns `#[net_component(...)]` and `#[net_entity]` attribute generation for `engine_net` metadata traits.
+  - README: [engine_net_macros/README.md](engine_net_macros/README.md)
+
 - `engine_net_quic/`
   - Quinn-based QUIC runtime adapter for `engine_net`.
   - Owns QUIC transport/runtime wiring, connection lifecycle, routing, framing, trust, and admission over QUIC.
@@ -59,7 +64,7 @@ The `net/` subtree is organized around explicit subdomain modules.
 - `engine_net/src/protocol/`
   - Protocol envelopes, IDs, versioning, control/input/snapshot/ack types
 - `engine_net/src/replication/`
-  - Replication model, timeline, prediction vocabulary, interest concepts
+  - Replication model, profile vocabulary, timeline, prediction, interest, diagnostics
 - `engine_net/src/session/`
   - Admission, handoff, and session identity contracts
 - `engine_net/src/simulation/`
@@ -68,6 +73,12 @@ The `net/` subtree is organized around explicit subdomain modules.
   - Lane semantics and transport-facing contract vocabulary
 - `engine_net/src/runtime/`
   - Runtime-facing client/server contract surfaces and events
+
+### `engine_net_macros`
+
+- `engine_net_macros/src/lib.rs`
+  - Attribute macro generation for replication metadata
+  - Expands gameplay annotations into `engine_net::replication::NetComponentMetadata` and `NetEntity` implementations
 
 ### `engine_net_quic`
 
@@ -79,6 +90,7 @@ The `net/` subtree is organized around explicit subdomain modules.
   - Server accept/admission/peer/policy/runtime concerns
 - `engine_net_quic/src/runtime/`
   - Command/event buses, connection lifecycle, reconnect, routing, handles
+  - Transitional helper modules currently present: `helpers.rs`, `utils.rs`
 - `engine_net_quic/src/transport/`
   - QUIC framing, certificates, trust, lane mapping, endpoint creation
 - `engine_net_quic/src/driver/`
@@ -94,6 +106,8 @@ The `net/` subtree is organized around explicit subdomain modules.
 - `engine_history/src/recorder/`
 - `engine_history/src/controller/`
 - `engine_history/src/validation/`
+- `engine_history/src/model.rs`
+- `engine_history/src/policy.rs`
 
 ## Module Structure Rules
 
@@ -114,6 +128,11 @@ Avoid:
 - `include!` module composition
 - `_internal` module suffixes
 - catch-all files such as `utils.rs`, `helpers.rs`, or `misc.rs` when a more specific name is possible
+
+Note: `engine_net_quic/src/runtime/helpers.rs` and
+`engine_net_quic/src/runtime/utils.rs` currently exist as transitional
+modules and should be treated as refactor targets toward explicit
+ownership-oriented submodules.
 
 ## Typical Flow
 

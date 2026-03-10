@@ -4,10 +4,11 @@ use cavern_hunt::domain::{
     CavernRunState, EnemyKind, ExtractionZone, Health, InventoryRunState, LocalPlayerRef,
     PlayerActive, PlayerId, Transform2,
 };
-use cavern_hunt::{CavernHuntClientPlugin, CavernHuntPlugin, CavernHuntServerPlugin};
+use cavern_hunt::{
+    CavernHuntClientPlugin, CavernHuntPlugin, CavernHuntServerPlugin, CavernReplicationDriver,
+};
 use engine::plugins::{
-    NetworkClientPlugin, NetworkReplicationRuntimePlugin, NetworkRuntimeHandle,
-    NetworkServerPlugin, RenderPlugin, ScenePlugin, default_plugins,
+    NetPlugin, NetworkRuntimeHandle, RenderPlugin, ScenePlugin, default_plugins,
 };
 use engine::{App, AuthorityRole, SimulationProfile};
 use engine_net::{ClientSessionTarget, ProtocolVersion, SessionRuntimeCommand, TransportKind};

@@ -710,9 +710,19 @@ name = "engine_net"
 version = "0.1.0"
 dependencies = [
  "ecs",
+ "engine_net_macros",
  "engine_sim",
  "postcard",
  "serde",
+]
+
+[[package]]
+name = "engine_net_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

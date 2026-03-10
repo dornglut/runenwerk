@@ -22,7 +22,7 @@ It defines protocol messages, session state transitions, replication contracts, 
 - `src/session/`
   - `ids.rs`, `admission.rs`, `handoff.rs`
 - `src/replication/`
-  - `timeline.rs`, `model.rs`, `prediction.rs`, `interest.rs`
+  - `profile.rs`, `model.rs`, `timeline.rs`, `prediction.rs`, `interest.rs`, `diagnostics.rs`
 - `src/runtime/`
   - `events.rs`, `client.rs`, `server.rs`
 - `src/simulation/`
@@ -35,7 +35,9 @@ It defines protocol messages, session state transitions, replication contracts, 
 - Protocol: `ClientMessage`, `ServerMessage`, `MessageEnvelope`, `encode_message`, `decode_message`
 - Session: `ClientSessionState`, `ServerSessionState`, `SessionPhase`, `SessionRuntimeCommand`, `SessionRuntimeEvent`
 - Replication: `ReplicationDriver`, `Replicate`, `Replicated`, `SnapshotCursor`
+- Replication metadata: `NetComponentMetadata`, `ReplicationRegistry`, `NetEntityMap`
 - Transport: `Transport`, `TransportKind`, `ConnectionId`
+- Macros (re-exported): `#[net_component(...)]`, `#[net_entity]`
 
 ## Relationship to Other Crates
 

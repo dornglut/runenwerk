@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::mem;
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 use engine_net::*;
-use engine_net::replication::ReplicationDriver;
+use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_sim::SimulationTick;
 use crate::{App, CoreSet, FixedUpdate, FrameEnd, Plugin, PreUpdate, SessionRuntimeState, SystemConfigExt};
 use crate::plugins::*;
@@ -23,7 +23,7 @@ impl<TDriver> Default for NetworkReplicationRuntimePlugin<TDriver> {
 
 impl<TDriver> Plugin for NetworkReplicationRuntimePlugin<TDriver>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
+  TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
   TDriver::Snapshot: Clone + PartialEq,
   TDriver::Input: Clone + PartialEq,
 {
@@ -292,7 +292,7 @@ pub struct RoundTripMetrics {
     pub samples: u64,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SnapshotReplicationState<TSnapshot>
 where
   TSnapshot: Clone + PartialEq,
@@ -307,6 +307,24 @@ where
     pub last_received_snapshot: Option<TSnapshot>,
 }
 
+impl<TSnapshot> Default for SnapshotReplicationState<TSnapshot>
+where
+    TSnapshot: Clone + PartialEq,
+{
+    fn default() -> Self {
+        Self {
+            active_connection: None,
+            initial_snapshot_sent: false,
+            last_sent_cursor: SnapshotCursor::default(),
+            last_acknowledged_cursor: SnapshotCursor::default(),
+            last_received_tick: SimulationTick::default(),
+            applied_snapshots: 0,
+            last_sent_snapshot: None,
+            last_received_snapshot: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct PendingInputFrame<TInput>
 where
@@ -316,12 +334,23 @@ where
     pub commands: Vec<TInput>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PredictionState<TInput>
 where
   TInput: Clone + PartialEq,
 {
     pub pending_frames: Vec<PendingInputFrame<TInput>>,
+}
+
+impl<TInput> Default for PredictionState<TInput>
+where
+    TInput: Clone + PartialEq,
+{
+    fn default() -> Self {
+        Self {
+            pending_frames: Vec::new(),
+        }
+    }
 }
 
 impl<TInput> PredictionState<TInput>
@@ -441,7 +470,7 @@ impl Plugin for NetworkServerPlugin {
 impl<TDriver> Plugin for ReplicationPlugin<TDriver>
 where
   TDriver: ReplicationDriver + Send + Sync + 'static,
-  TDriver::Snapshot: Clone + PartialEq + Default,
+  TDriver::Snapshot: Clone + PartialEq,
 {
     fn build(&self, app: &mut App) {
         app.init_resource::<SnapshotCursor>();
@@ -456,8 +485,8 @@ where
 
 impl<TDriver> Plugin for PredictionPlugin<TDriver>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
-  TDriver::Input: Clone + PartialEq + Default,
+  TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
+  TDriver::Input: Clone + PartialEq,
 {
     fn build(&self, app: &mut App) {
         app.init_resource::<PredictionState<TDriver::Input>>();

@@ -5,9 +5,9 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::driver::net_loop::{LoopOutcome, run_live_connection_loop};
-use crate::runtime::helpers::{
-    parse_join_rejection_reason, send_runtime_event, wait_for_reconnect_backoff,
-};
+use crate::runtime::event_dispatch::send_runtime_event;
+use crate::runtime::join_rejection::parse_join_rejection_reason;
+use crate::runtime::reconnect_backoff::wait_for_reconnect_backoff;
 use crate::{
     QuicClientTargetProvider,
     QuicSessionCommand,

@@ -1,6 +1,6 @@
 pub mod frame;
 pub mod tick;
-use engine_sim::{AuthorityRole, SimulationTick};
+use engine_sim::{AuthorityRole, NetEntityId, SimulationTick};
 use serde::{Deserialize, Serialize};
 
 // src/simulation.rs
@@ -17,8 +17,7 @@ pub struct ClientClock {
     pub tick: SimulationTick,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-pub struct NetworkEntityId(pub u64);
+pub type NetworkEntityId = NetEntityId;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, ecs::Component)]
 pub struct Authoritative;

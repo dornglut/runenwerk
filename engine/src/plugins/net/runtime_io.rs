@@ -1,7 +1,7 @@
 use anyhow::Context;
 use tokio::sync::mpsc::error::TryRecvError;
 use ecs::World;
-use engine_net::replication::ReplicationDriver;
+use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig};
 use crate::plugins::*;
@@ -211,16 +211,24 @@ where
 
 pub fn client_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
+  TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
   TDriver::Snapshot: Clone + PartialEq,
   TDriver::Input: Clone + PartialEq,
 {
-    let len = world.resource::<NetworkClientInbox>()?.len();
+    let Some(len) = world.resource::<NetworkClientInbox>().ok().map(|inbox| inbox.len()) else {
+        return Ok(());
+    };
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.processed_server_messages_last_frame = len;
     }
 
-    let messages = world.resource_mut::<NetworkClientInbox>()?.drain();
+    let Some(messages) = world
+        .resource_mut::<NetworkClientInbox>()
+        .ok()
+        .map(|mut inbox| inbox.drain())
+    else {
+        return Ok(());
+    };
 
     for message in messages {
         let previous_phase = world
@@ -361,7 +369,7 @@ where
 
 pub fn server_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
+  TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
   TDriver::Snapshot: Clone + PartialEq,
 {
     let config = world
@@ -375,12 +383,20 @@ where
         session.config = config;
     }
 
-    let len = world.resource::<NetworkServerInbox>()?.len();
+    let Some(len) = world.resource::<NetworkServerInbox>().ok().map(|inbox| inbox.len()) else {
+        return Ok(());
+    };
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.processed_client_messages_last_frame = len;
     }
 
-    let messages = world.resource_mut::<NetworkServerInbox>()?.drain();
+    let Some(messages) = world
+        .resource_mut::<NetworkServerInbox>()
+        .ok()
+        .map(|mut inbox| inbox.drain())
+    else {
+        return Ok(());
+    };
 
     for message in messages {
         if let ClientMessage::Ack(ack) = &message
@@ -497,7 +513,9 @@ fn clear_session_runtime_state(world: &mut World) {
 }
 
 pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let len = world.resource::<NetworkClientOutbox>()?.len();
+    let Some(len) = world.resource::<NetworkClientOutbox>().ok().map(|outbox| outbox.len()) else {
+        return Ok(());
+    };
 
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.flushed_client_messages_last_frame = len;
@@ -506,7 +524,13 @@ pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
         }
     }
 
-    let messages = world.resource_mut::<NetworkClientOutbox>()?.drain();
+    let Some(messages) = world
+        .resource_mut::<NetworkClientOutbox>()
+        .ok()
+        .map(|mut outbox| outbox.drain())
+    else {
+        return Ok(());
+    };
 
     if let Ok(mut queue) = world.resource_mut::<NetworkOutboundQueue>() {
         queue.clear();
@@ -538,7 +562,9 @@ pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
 }
 
 pub fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let len = world.resource::<NetworkServerOutbox>()?.len();
+    let Some(len) = world.resource::<NetworkServerOutbox>().ok().map(|outbox| outbox.len()) else {
+        return Ok(());
+    };
 
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.flushed_server_messages_last_frame = len;
@@ -547,7 +573,13 @@ pub fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
         }
     }
 
-    let messages = world.resource_mut::<NetworkServerOutbox>()?.drain();
+    let Some(messages) = world
+        .resource_mut::<NetworkServerOutbox>()
+        .ok()
+        .map(|mut outbox| outbox.drain())
+    else {
+        return Ok(());
+    };
 
     if let Ok(mut queue) = world.resource_mut::<NetworkOutboundQueue>() {
         queue.clear();

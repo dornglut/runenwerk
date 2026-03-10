@@ -1,18 +1,15 @@
 use engine::plugins::{
-    NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
-    NetworkClientPlugin as NetworkClientPluginBase, NetworkDiagnostics,
-    NetworkOutboundQueue, NetworkReplicationRuntimePlugin, NetworkRuntimeHandle,
-    NetworkServerInbox, NetworkServerOutbox, NetworkServerPlugin as NetworkServerPluginBase,
-    NetworkSessionStatus, PredictionDiagnostics, PredictionPlugin as PredictionPluginBase,
-    ReplicationDiagnostics, ReplicationPlugin as ReplicationPluginBase, ScenePlugin,
-    default_plugins,
+    NetPlugin, NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
+    NetworkDiagnostics, NetworkOutboundQueue, NetworkRuntimeHandle, NetworkServerInbox,
+    NetworkServerOutbox, NetworkSessionStatus, PredictionDiagnostics, ReplicationDiagnostics,
+    ScenePlugin, default_plugins,
 };
 use engine::prelude::*;
 use engine_net::{
     ClientMessage, ClientSessionState, ClientSessionTarget, Hello, ProtocolVersion, ServerMessage,
     ServerSessionConfig, SessionPhase, SnapshotCursor, TransportKind, begin_client_session,
 };
-use engine_net::replication::ReplicationDriver;
+use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -109,14 +106,12 @@ impl ReplicationDriver for TestReplicationDriver {
         }
     }
 
-    fn receive_remote_input(
-        _world: &mut World,
-        _tick: engine_sim::SimulationTick,
-        _input: Vec<Self::Input>,
-    ) -> Result<(), Self::Error> {
-        Ok(())
+    fn map_codec_error(error: postcard::Error) -> Self::Error {
+        io::Error::new(io::ErrorKind::InvalidData, error.to_string())
     }
+}
 
+impl SnapshotApplyDriver for TestReplicationDriver {
     fn apply_snapshot(
         _world: &mut World,
         _tick: engine_sim::SimulationTick,
@@ -132,6 +127,16 @@ impl ReplicationDriver for TestReplicationDriver {
     ) -> Result<bool, Self::Error> {
         Ok(true)
     }
+}
+
+impl InputDriver for TestReplicationDriver {
+    fn receive_remote_input(
+        _world: &mut World,
+        _tick: engine_sim::SimulationTick,
+        _input: Vec<Self::Input>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     fn take_local_input(world: &mut World) -> Result<Vec<Self::Input>, Self::Error> {
         Ok(world
@@ -143,28 +148,6 @@ impl ReplicationDriver for TestReplicationDriver {
     fn apply_input(_world: &mut World, _input: &[Self::Input]) -> Result<(), Self::Error> {
         Ok(())
     }
-
-    fn map_codec_error(error: postcard::Error) -> Self::Error {
-        io::Error::new(io::ErrorKind::InvalidData, error.to_string())
-    }
-}
-
-struct ReplicationPlugin;
-
-impl Plugin for ReplicationPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<PlayerCommandBuffer>();
-        ReplicationPluginBase::<TestReplicationDriver>::default().build(app);
-    }
-}
-
-struct PredictionPlugin;
-
-impl Plugin for PredictionPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<PlayerCommandBuffer>();
-        PredictionPluginBase::<TestReplicationDriver>::default().build(app);
-    }
 }
 
 type PredictionState = engine::plugins::PredictionState<ClientCommandEnvelope>;
@@ -174,12 +157,8 @@ struct NetworkClientPlugin;
 
 impl Plugin for NetworkClientPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(NetworkClientPluginBase);
-        app.add_plugin(NetworkReplicationRuntimePlugin::<TestReplicationDriver>::default());
-        app.init_resource::<NetworkServerInbox>();
-        app.init_resource::<NetworkServerOutbox>();
-        app.init_resource::<ServerSessionConfig>();
-        app.init_resource::<engine_net::ServerSessionState>();
+        app.init_resource::<PlayerCommandBuffer>();
+        app.add_plugin(NetPlugin::<TestReplicationDriver>::client());
     }
 }
 
@@ -187,9 +166,8 @@ struct NetworkServerPlugin;
 
 impl Plugin for NetworkServerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(NetworkServerPluginBase);
-        app.add_plugin(NetworkReplicationRuntimePlugin::<TestReplicationDriver>::default());
-        app.init_resource::<NetworkClientInbox>();
+        app.init_resource::<PlayerCommandBuffer>();
+        app.add_plugin(NetPlugin::<TestReplicationDriver>::server());
     }
 }
 

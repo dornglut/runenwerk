@@ -3,7 +3,7 @@ use engine_net::{MessageEnvelope, ServerMessage, decode_message, encode_message}
 use quinn::Connection;
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::runtime::helpers::{send_peer_event, send_runtime_event};
+use crate::runtime::event_dispatch::{send_peer_event, send_runtime_event};
 use crate::server::runtime::ServerPeerEvent;
 use crate::QuicSessionEvent;
 

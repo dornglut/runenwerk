@@ -3,7 +3,8 @@ use engine_net::{JoinRejected, MessageEnvelope, ServerMessage, decode_message, e
 use quinn::{Connection, Endpoint};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::runtime::helpers::{parse_join_rejection_reason, send_runtime_event};
+use crate::runtime::event_dispatch::send_runtime_event;
+use crate::runtime::join_rejection::parse_join_rejection_reason;
 use crate::{QuicSessionCommand, QuicSessionEvent};
 
 // Owner: Grotto Engine Net - QUIC Runtime

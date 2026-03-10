@@ -73,7 +73,7 @@ fn reconnecting_event_updates_client_runtime_status() {
 fn server_replication_emits_scene_snapshot_payloads() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
-    app.add_plugins((ScenePlugin, NetworkServerPlugin, ReplicationPlugin));
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
 
     let app = app.run_for_ticks(1).expect("server tick should run");
     let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
@@ -95,12 +95,7 @@ fn server_replication_emits_scene_snapshot_payloads() {
 fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
-    server.add_plugins((
-        ScenePlugin,
-        NetworkServerPlugin,
-        ReplicationPlugin,
-        PredictionPlugin,
-    ));
+    server.add_plugins((ScenePlugin, NetworkServerPlugin));
     server
         .world_mut()
         .resource_mut::<PlayerCommandBuffer>()
@@ -124,12 +119,7 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
 
     let mut client = App::headless();
     client.add_plugins(default_plugins());
-    client.add_plugins((
-        ScenePlugin,
-        NetworkClientPlugin,
-        ReplicationPlugin,
-        PredictionPlugin,
-    ));
+    client.add_plugins((ScenePlugin, NetworkClientPlugin));
     client
         .world_mut()
         .resource_mut::<PlayerCommandBuffer>()

@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 
-use crate::runtime::helpers::send_runtime_event;
+use crate::runtime::event_dispatch::send_runtime_event;
 use crate::server::accept::accept_incoming_connection;
 use crate::server::peer::run_server_peer_task;
 use crate::{QuicServerJoinVerifier, QuicSessionCommand, QuicSessionEvent, QuicTransport};

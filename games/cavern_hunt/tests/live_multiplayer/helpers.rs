@@ -1,70 +1,4 @@
 // Owner: Cavern Hunt Live Multiplayer Tests - Shared Helpers
-#[derive(Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-struct LiveSnapshot;
-
-#[derive(Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-struct LiveDelta;
-
-#[derive(Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-struct LiveInput;
-
-struct LiveRuntimeDriver;
-
-impl engine_net::replication::ReplicationDriver for LiveRuntimeDriver {
-    type Snapshot = LiveSnapshot;
-    type Delta = LiveDelta;
-    type Input = LiveInput;
-    type Error = std::io::Error;
-
-    fn capture_snapshot(_world: &ecs::World) -> Result<Option<Self::Snapshot>, Self::Error> {
-        Ok(None)
-    }
-
-    fn build_delta(_previous: &Self::Snapshot, _current: &Self::Snapshot) -> Self::Delta {
-        LiveDelta
-    }
-
-    fn apply_delta_to_snapshot(_base: &Self::Snapshot, _delta: &Self::Delta) -> Self::Snapshot {
-        LiveSnapshot
-    }
-
-    fn receive_remote_input(
-        _world: &mut ecs::World,
-        _tick: engine_net::SimulationTick,
-        _input: Vec<Self::Input>,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn apply_snapshot(
-        _world: &mut ecs::World,
-        _tick: engine_net::SimulationTick,
-        _snapshot: Self::Snapshot,
-    ) -> Result<bool, Self::Error> {
-        Ok(false)
-    }
-
-    fn apply_delta(
-        _world: &mut ecs::World,
-        _tick: engine_net::SimulationTick,
-        _delta: Self::Delta,
-    ) -> Result<bool, Self::Error> {
-        Ok(false)
-    }
-
-    fn take_local_input(_world: &mut ecs::World) -> Result<Vec<Self::Input>, Self::Error> {
-        Ok(Vec::new())
-    }
-
-    fn apply_input(_world: &mut ecs::World, _input: &[Self::Input]) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn map_codec_error(error: postcard::Error) -> Self::Error {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, error.to_string())
-    }
-}
-
 fn build_server_app(
     handle: NetworkRuntimeHandle,
     session_config: engine_net::ServerSessionConfig,
@@ -77,15 +11,12 @@ fn build_server_app(
     app.add_plugins((
         ScenePlugin,
         RenderPlugin,
-        NetworkServerPlugin,
-        NetworkReplicationRuntimePlugin::<LiveRuntimeDriver>::default(),
+        NetPlugin::<CavernReplicationDriver>::server(),
         CavernHuntPlugin,
         CavernHuntServerPlugin,
     ));
     app.world_mut().insert_resource(session_config);
     app.world_mut().insert_resource(handle);
-    app.world_mut()
-        .insert_resource(engine::plugins::NetworkClientInbox::default());
     app
 }
 
@@ -98,20 +29,11 @@ fn build_client_app(handle: NetworkRuntimeHandle) -> App {
     app.add_plugins((
         ScenePlugin,
         RenderPlugin,
-        NetworkClientPlugin,
-        NetworkReplicationRuntimePlugin::<LiveRuntimeDriver>::default(),
+        NetPlugin::<CavernReplicationDriver>::client(),
         CavernHuntPlugin,
         CavernHuntClientPlugin,
     ));
     app.world_mut().insert_resource(handle);
-    app.world_mut()
-        .insert_resource(engine::plugins::NetworkServerInbox::default());
-    app.world_mut()
-        .insert_resource(engine::plugins::NetworkServerOutbox::default());
-    app.world_mut()
-        .insert_resource(engine_net::ServerSessionConfig::default());
-    app.world_mut()
-        .insert_resource(engine_net::ServerSessionState::default());
     app.world_mut()
         .insert_resource(CavernMetaPersistenceConfig { enabled: false });
     app

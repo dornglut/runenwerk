@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod config;
 pub mod diagnostics;
 pub mod events;
 pub mod plugin;
@@ -8,6 +9,7 @@ pub mod runtime_io;
 pub mod schedules;
 
 pub use commands::*;
+pub use config::*;
 pub use diagnostics::*;
 pub use events::*;
 pub use plugin::*;

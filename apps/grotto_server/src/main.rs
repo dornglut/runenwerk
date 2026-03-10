@@ -2,12 +2,12 @@ mod operator_control;
 
 use anyhow::Result;
 use cavern_hunt::{
-    CavernHuntPlugin, CavernHuntServerPlugin, NetConfigHotReloadState,
+    CavernHuntPlugin, CavernHuntServerPlugin, CavernReplicationDriver, NetConfigHotReloadState,
     ServerNetworkConfigAssetV1, load_server_network_config_from_path,
 };
 use engine::plugins::render::domain::ShaderRegistryResource;
 use engine::plugins::{
-    NetworkRuntimeHandle, NetworkServerPlugin, RenderPlugin, ScenePlugin, default_plugins,
+    NetPlugin, NetworkRuntimeHandle, RenderPlugin, ScenePlugin, default_plugins,
 };
 use engine::{App, AppRunner, AuthorityRole, SimulationProfile};
 use engine_net::{ProtocolVersion, ServerSessionConfig, Transport};
@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     app.add_plugins((
         ScenePlugin,
         RenderPlugin,
-        NetworkServerPlugin,
+        NetPlugin::<CavernReplicationDriver>::server(),
     ));
     app.add_plugins((CavernHuntPlugin, CavernHuntServerPlugin));
     app.world_mut().insert_resource(config.clone());

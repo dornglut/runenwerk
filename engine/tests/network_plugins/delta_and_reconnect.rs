@@ -3,12 +3,7 @@
 fn server_delta_snapshot_applies_cleanly_on_client() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
-    server.add_plugins((
-        ScenePlugin,
-        NetworkServerPlugin,
-        ReplicationPlugin,
-        PredictionPlugin,
-    ));
+    server.add_plugins((ScenePlugin, NetworkServerPlugin));
 
     let server = server
         .run_for_ticks(1)
@@ -63,12 +58,7 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
 
     let mut client = App::headless();
     client.add_plugins(default_plugins());
-    client.add_plugins((
-        ScenePlugin,
-        NetworkClientPlugin,
-        ReplicationPlugin,
-        PredictionPlugin,
-    ));
+    client.add_plugins((ScenePlugin, NetworkClientPlugin));
 
     client
         .world_mut()
@@ -110,7 +100,7 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
 fn server_reconnect_resets_initial_snapshot_state() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
-    app.add_plugins((ScenePlugin, NetworkServerPlugin, ReplicationPlugin));
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
     app.world_mut().insert_resource(ServerSessionConfig {
         server_id: "srv-local".to_string(),
         protocol: ProtocolVersion::new(1, 1, 1),
