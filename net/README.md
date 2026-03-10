@@ -1,0 +1,131 @@
+# net
+
+`net/` is the networking domain workspace subtree.
+
+It owns the transport-agnostic multiplayer contract crate, the QUIC runtime adapter crate, simulation-facing identity and deterministic vocabulary shared with networking, and replay/history primitives used for recovery, recording, and validation.
+
+Pinned direction and architecture goals are defined in [GOALS.md](GOALS.md).
+
+## Crates
+
+- `engine_net/`
+  - Transport-agnostic multiplayer contracts.
+  - Owns protocol, replication, session, transport-lane semantics, and runtime-facing client/server contracts.
+  - README: [engine_net/README.md](engine_net/README.md)
+
+- `engine_net_quic/`
+  - Quinn-based QUIC runtime adapter for `engine_net`.
+  - Owns QUIC transport/runtime wiring, connection lifecycle, routing, framing, trust, and admission over QUIC.
+  - README: [engine_net_quic/README.md](engine_net_quic/README.md)
+
+- `engine_sim/`
+  - Shared simulation identity and deterministic vocabulary.
+  - Owns codec/profile/rng helpers plus simulation-facing identity used by networking/history.
+  - README: [engine_sim/README.md](engine_sim/README.md)
+
+- `engine_history/` (crate name: `engine_replay`)
+  - Replay/history substrate.
+  - Owns archive, recorder, controller, and validation primitives for recovery and deterministic verification.
+  - README: [engine_history/README.md](engine_history/README.md)
+
+## Domain Boundaries
+
+- `engine_net`
+  - Defines shared contracts and model vocabulary.
+  - Does not perform concrete transport I/O.
+  - Is the single source of truth for transport-agnostic protocol/session/replication/runtime contracts.
+
+- `engine_net_quic`
+  - Implements concrete transport/runtime behavior over QUIC.
+  - Maps QUIC events and connection behavior to `engine_net` contracts.
+  - Must not own gameplay replication semantics.
+
+- `engine_sim`
+  - Supplies simulation-facing identity, deterministic vocabulary, and supporting helpers consumed by networking/history.
+  - Remains independent from concrete transport implementation.
+
+- `engine_history`
+  - Handles replay, archive, controller, and validation concerns independent of transport implementation.
+  - Supports recovery, deterministic verification, and divergence investigation.
+
+## Current Internal Shape
+
+The `net/` subtree is organized around explicit subdomain modules.
+
+### `engine_net`
+
+`engine_net` is structured as a contract-first crate:
+
+- `engine_net/src/protocol/`
+  - Protocol envelopes, IDs, versioning, control/input/snapshot/ack types
+- `engine_net/src/replication/`
+  - Replication model, timeline, prediction vocabulary, interest concepts
+- `engine_net/src/session/`
+  - Admission, handoff, and session identity contracts
+- `engine_net/src/simulation/`
+  - Frame/tick vocabulary that bridges simulation and networking
+- `engine_net/src/transport/`
+  - Lane semantics and transport-facing contract vocabulary
+- `engine_net/src/runtime/`
+  - Runtime-facing client/server contract surfaces and events
+
+### `engine_net_quic`
+
+`engine_net_quic` is structured as a runtime adapter crate:
+
+- `engine_net_quic/src/client/`
+  - Client bootstrap, policy, and runtime
+- `engine_net_quic/src/server/`
+  - Server accept/admission/peer/policy/runtime concerns
+- `engine_net_quic/src/runtime/`
+  - Command/event buses, connection lifecycle, reconnect, routing, handles
+- `engine_net_quic/src/transport/`
+  - QUIC framing, certificates, trust, lane mapping, endpoint creation
+- `engine_net_quic/src/driver/`
+  - Driver loop / runtime execution entrypoints
+- `engine_net_quic/src/config/`
+  - Client/server/transport configuration
+
+### `engine_history`
+
+`engine_history` is structured as a replay/history substrate:
+
+- `engine_history/src/archive/`
+- `engine_history/src/recorder/`
+- `engine_history/src/controller/`
+- `engine_history/src/validation/`
+
+## Module Structure Rules
+
+Within each `net/*` crate, organize code by subdomain responsibility using explicit module trees.
+
+Follow the repository-wide guidance in:
+
+- `docs/guidelines/module_structure_guidelines.md`
+
+Preferred approach:
+
+- use explicit subdomain folders with `mod.rs` boundaries when a subsystem grows
+- use names that describe ownership and responsibility
+- keep public surfaces intentional and narrow
+
+Avoid:
+
+- `include!` module composition
+- `_internal` module suffixes
+- catch-all files such as `utils.rs`, `helpers.rs`, or `misc.rs` when a more specific name is possible
+
+## Typical Flow
+
+1. Define protocol/session/replication/runtime contracts in `engine_net`.
+2. Implement concrete transport/runtime behavior in `engine_net_quic`.
+3. Use `engine_sim` identities/ticks/hashes/seed vocabulary for deterministic interoperability.
+4. Record, restore, and validate sessions with `engine_history`.
+5. Bridge the selected runtime into engine schedules through `engine/src/plugins/net/`.
+6. Keep gameplay replication mapping, correction, smoothing, and tuning in `games/*/src/net/`.
+
+## Architecture Docs
+
+- Current architecture sketch: [architecture.puml](architecture.puml)
+- Target architecture sketch: [architecture-target.puml](architecture-target.puml)
+- Goals and pinned direction: [GOALS.md](GOALS.md)
