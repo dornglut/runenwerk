@@ -15,16 +15,12 @@ use engine::prelude::{
 };
 use std::collections::BTreeSet;
 
-include!("internal/plugin_aim.rs");
+#[path = "runtime/mod.rs"]
+mod runtime;
 
-include!("internal/control_step.rs");
-
-include!("internal/movement_fire.rs");
-
-include!("internal/projectiles.rs");
+pub use runtime::CavernHuntCombatPlugin;
+pub(crate) use runtime::{constrained_move, replay_predicted_local_frame, spawn_projectile};
 
 fn combat_fixed_step_seconds(world: &World) -> f32 {
     fixed_step_seconds(world)
 }
-
-include!("internal/tests.rs");

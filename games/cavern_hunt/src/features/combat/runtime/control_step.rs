@@ -1,5 +1,7 @@
+use super::*;
+
 // Owner: Cavern Hunt Combat Plugin - Control and Fixed-Step Orchestration
-fn fixed_step_combat_system(mut world: WorldMut) -> Result<()> {
+pub(super) fn fixed_step_combat_system(mut world: WorldMut) -> Result<()> {
     let dt = combat_fixed_step_seconds(&world);
     if dt <= f32::EPSILON {
         return Ok(());
@@ -17,7 +19,7 @@ fn fixed_step_combat_system(mut world: WorldMut) -> Result<()> {
     }
 }
 
-fn run_authoritative_combat_step(world: &mut World, dt: f32) -> Result<()> {
+pub(super) fn run_authoritative_combat_step(world: &mut World, dt: f32) -> Result<()> {
     tick_cooldowns(world, dt);
     let authority = world
         .resource::<SimulationProfileConfig>()

@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt SDF Renderer - Render Executor Runtime
 fn ensure_gpu_pass(
     shared: &mut CavernGpuSharedState,
@@ -15,12 +17,12 @@ fn ensure_gpu_pass(
     }
 }
 
-struct CavernComputeExecutor {
+pub(crate) struct CavernComputeExecutor {
     shared: Arc<Mutex<CavernGpuSharedState>>,
 }
 
 impl CavernComputeExecutor {
-    fn new(shared: Arc<Mutex<CavernGpuSharedState>>) -> Self {
+    pub(crate) fn new(shared: Arc<Mutex<CavernGpuSharedState>>) -> Self {
         Self { shared }
     }
 }
@@ -221,12 +223,12 @@ impl RenderPassExecutor for CavernComputeExecutor {
     }
 }
 
-struct CavernComposeExecutor {
+pub(crate) struct CavernComposeExecutor {
     shared: Arc<Mutex<CavernGpuSharedState>>,
 }
 
 impl CavernComposeExecutor {
-    fn new(shared: Arc<Mutex<CavernGpuSharedState>>) -> Self {
+    pub(crate) fn new(shared: Arc<Mutex<CavernGpuSharedState>>) -> Self {
         Self { shared }
     }
 }

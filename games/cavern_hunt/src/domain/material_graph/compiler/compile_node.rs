@@ -1,5 +1,7 @@
+use super::*;
+
 // Owner: Cavern Hunt Domain - Material Graph
-fn compile_node(
+pub(super) fn compile_node(
     node: &MaterialNodeKindV1,
     node_id: &str,
     dst: u32,

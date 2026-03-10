@@ -1,5 +1,7 @@
+use super::*;
+
 // Owner: Cavern Hunt Gameplay Plugin - Setup and Active Slots
-fn client_setup_system(mut world: WorldMut) -> Result<()> {
+pub(super) fn client_setup_system(mut world: WorldMut) -> Result<()> {
     if let Err(err) = meta::load_meta_profile(&mut world) {
         tracing::warn!(
             ?err,
@@ -12,11 +14,11 @@ fn client_setup_system(mut world: WorldMut) -> Result<()> {
     Ok(())
 }
 
-fn server_setup_system(mut world: WorldMut) -> Result<()> {
+pub(super) fn server_setup_system(mut world: WorldMut) -> Result<()> {
     worldgen::initialize_run_world(&mut world, false)
 }
 
-fn sync_active_player_slots_system(mut world: WorldMut) -> Result<()> {
+pub(super) fn sync_active_player_slots_system(mut world: WorldMut) -> Result<()> {
     sync_active_player_slots(&mut world)
 }
 

@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt SDF Renderer - Render Backend and GPU Executors
 pub(crate) fn project_mouse_to_world(
     camera: &CavernCameraState,
@@ -20,7 +22,7 @@ pub(crate) fn project_mouse_to_world(
     ]
 }
 
-fn build_feature_graph_spec() -> Result<RenderFeatureGraphSpec> {
+pub(super) fn build_feature_graph_spec() -> Result<RenderFeatureGraphSpec> {
     let mut builder = RenderFeatureGraphSpec::builder(FEATURE_ID)
         .resource("cavern.params")
         .resource("cavern.primitives")
@@ -352,4 +354,7 @@ fn build_gpu_pass(
     }
 }
 
-include!("render_backend_executors.rs");
+#[path = "render_backend_executors.rs"]
+mod render_backend_executors;
+
+pub(super) use render_backend_executors::{CavernComposeExecutor, CavernComputeExecutor};

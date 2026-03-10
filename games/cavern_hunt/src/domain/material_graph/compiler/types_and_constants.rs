@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt Domain - Material Graph
 pub const MATERIAL_GRAPH_VERSION: u32 = 1;
 pub const MATERIAL_REGISTER_LIMIT: u32 = 64;

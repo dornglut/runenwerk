@@ -1,15 +1,22 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 set -euo pipefail
-# Some environments disallow lowering process priority for background jobs.
-# Keep local multiplayer launch portable by disabling zsh background niceness.
-setopt no_bg_nice
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+  # Some zsh environments disallow lowering process priority for background jobs.
+  setopt no_bg_nice
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if git -C "$SCRIPT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
+  ROOT_DIR="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
+else
+  ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+fi
 cd "$ROOT_DIR"
 
 CLIENT_COUNT="${1:-2}"
 if [[ "$CLIENT_COUNT" -lt 1 || "$CLIENT_COUNT" -gt 4 ]]; then
-  echo "Usage: scripts/run_cavern_party_local.sh [1-4]" >&2
+  echo "Usage: games/cavern_hunt/scripts/run_cavern_party_local.sh [1-4]" >&2
   exit 1
 fi
 if [[ "$CLIENT_COUNT" -ge 3 ]]; then
@@ -18,8 +25,11 @@ else
   NET_PROFILE_DEFAULT="two_local_balanced"
 fi
 NET_PROFILE="${CAVERN_NET_PROFILE:-$NET_PROFILE_DEFAULT}"
-CLIENT_CONFIG_PATH="${CAVERN_CLIENT_CONFIG_PATH:-game/assets/networking/client/${NET_PROFILE}.ron}"
-SERVER_CONFIG_PATH="${CAVERN_SERVER_CONFIG_PATH:-game/assets/networking/server/${NET_PROFILE}.ron}"
+CLIENT_CONFIG_PATH="${CAVERN_CLIENT_CONFIG_PATH:-games/cavern_hunt/assets/networking/client/${NET_PROFILE}.ron}"
+SERVER_CONFIG_PATH="${CAVERN_SERVER_CONFIG_PATH:-games/cavern_hunt/assets/networking/server/${NET_PROFILE}.ron}"
+SCRIPT_ROOT="games/cavern_hunt/scripts"
+LOG_DIR="${CAVERN_LOG_DIR:-${TMPDIR:-/tmp}}"
+mkdir -p "$LOG_DIR"
 
 SERVER_PID=""
 CERT_PATH_FROM_CONFIG="$(rg -o 'cert_output_path:\\s*\"[^\"]+\"' "$SERVER_CONFIG_PATH" 2>/dev/null | head -n1 | sed -E 's/cert_output_path:\\s*\"([^\"]+)\"/\\1/' || true)"
@@ -47,13 +57,13 @@ trap cleanup EXIT INT TERM
 rm -f "$CERT_PATH"
 CAVERN_USE_PREBUILT=1 \
   CAVERN_SERVER_CONFIG_PATH="${SERVER_CONFIG_PATH}" \
-  scripts/run_cavern_server.sh > /tmp/cavern_hunt_server.log 2>&1 &
+  "${SCRIPT_ROOT}/run_cavern_server.sh" > "${LOG_DIR}/cavern_hunt_server.log" 2>&1 &
 SERVER_PID="$!"
 
 for _ in $(seq 1 15); do
   if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
-    echo "Server process exited early; check /tmp/cavern_hunt_server.log" >&2
-    tail -n 40 /tmp/cavern_hunt_server.log >&2 || true
+    echo "Server process exited early; check ${LOG_DIR}/cavern_hunt_server.log" >&2
+    tail -n 40 "${LOG_DIR}/cavern_hunt_server.log" >&2 || true
     exit 1
   fi
   [[ -f "$CERT_PATH" ]] && break
@@ -61,19 +71,19 @@ for _ in $(seq 1 15); do
 done
 
 if [[ ! -f "$CERT_PATH" ]]; then
-  echo "Server certificate was not generated; check /tmp/cavern_hunt_server.log" >&2
-  tail -n 40 /tmp/cavern_hunt_server.log >&2 || true
+  echo "Server certificate was not generated; check ${LOG_DIR}/cavern_hunt_server.log" >&2
+  tail -n 40 "${LOG_DIR}/cavern_hunt_server.log" >&2 || true
   exit 1
 fi
 
 if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
-  echo "Server process is not running after startup; check /tmp/cavern_hunt_server.log" >&2
-  tail -n 40 /tmp/cavern_hunt_server.log >&2 || true
+  echo "Server process is not running after startup; check ${LOG_DIR}/cavern_hunt_server.log" >&2
+  tail -n 40 "${LOG_DIR}/cavern_hunt_server.log" >&2 || true
   exit 1
 fi
 
 echo "Server started (pid $SERVER_PID). Launching $CLIENT_COUNT client(s)."
-echo "Server log: /tmp/cavern_hunt_server.log"
+echo "Server log: ${LOG_DIR}/cavern_hunt_server.log"
 
 CLIENT_MATERIAL_PROFILE="${CAVERN_MATERIAL_PROFILE:-performance}"
 echo "Client material profile: ${CLIENT_MATERIAL_PROFILE}"
@@ -85,7 +95,7 @@ for index in $(seq 1 "$CLIENT_COUNT"); do
   CAVERN_USE_PREBUILT=1 \
     CAVERN_CLIENT_CONFIG_PATH="${CLIENT_CONFIG_PATH}" \
     CAVERN_MATERIAL_PROFILE="$CLIENT_MATERIAL_PROFILE" \
-    scripts/run_cavern_client.sh > "/tmp/cavern_hunt_client_${index}.log" 2>&1 &
+    "${SCRIPT_ROOT}/run_cavern_client.sh" > "${LOG_DIR}/cavern_hunt_client_${index}.log" 2>&1 &
   if [[ "$index" -lt "$CLIENT_COUNT" ]]; then
     sleep "$CLIENT_START_STAGGER_SECONDS"
   fi

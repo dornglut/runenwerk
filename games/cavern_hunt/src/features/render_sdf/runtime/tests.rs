@@ -1,7 +1,9 @@
+use super::*;
+
 // Owner: Cavern Hunt SDF Renderer - Tests
 #[cfg(test)]
 mod tests {
-    use super::{
+    use super::world_frame_and_geometry::{
         OP_ADD_SOLID, OP_BLOCKER, OP_SUBTRACT_VOID, SHAPE_CAPSULE, SHAPE_CYLINDER, SHAPE_ELLIPSOID,
         SHAPE_SPHERE, geometry_primitives_from_graph, geometry_primitives_from_topology,
     };
@@ -76,7 +78,7 @@ mod tests {
             !primitives.is_empty(),
             "topology conversion should produce primitives"
         );
-        assert_eq!(primitives[0].shape_kind, super::SHAPE_BOX);
+        assert_eq!(primitives[0].shape_kind, super::world_frame_and_geometry::SHAPE_BOX);
         assert_eq!(primitives[0].op_kind, OP_ADD_SOLID);
         let first_room = topology
             .rooms

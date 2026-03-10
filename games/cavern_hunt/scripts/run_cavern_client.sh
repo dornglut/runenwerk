@@ -1,11 +1,16 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if git -C "$SCRIPT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
+  ROOT_DIR="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
+else
+  ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+fi
 cd "$ROOT_DIR"
 
 NET_PROFILE="${CAVERN_NET_PROFILE:-local_dev}"
-CONFIG_PATH="${CAVERN_CLIENT_CONFIG_PATH:-game/assets/networking/client/${NET_PROFILE}.ron}"
+CONFIG_PATH="${CAVERN_CLIENT_CONFIG_PATH:-games/cavern_hunt/assets/networking/client/${NET_PROFILE}.ron}"
 if [[ ! -f "$CONFIG_PATH" ]]; then
   echo "Missing client config at $CONFIG_PATH" >&2
   echo "Set CAVERN_CLIENT_CONFIG_PATH or CAVERN_NET_PROFILE." >&2
@@ -28,7 +33,7 @@ fi
 
 if [[ ! -f "$CERT_PATH" ]]; then
   echo "Server certificate not found at $CERT_PATH" >&2
-  echo "Start the server first with scripts/run_cavern_server.sh" >&2
+  echo "Start the server first with games/cavern_hunt/scripts/run_cavern_server.sh" >&2
   exit 1
 fi
 

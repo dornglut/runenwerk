@@ -1,5 +1,7 @@
+use super::*;
+
 // Owner: Cavern Hunt Combat Plugin - Player Movement and Weapon Fire
-fn move_player_with_control(
+pub(super) fn move_player_with_control(
     world: &mut World,
     entity: Entity,
     control: CavernControlState,
@@ -90,7 +92,7 @@ fn move_player_with_control(
     Ok(())
 }
 
-fn fire_player_weapon_with_control(
+pub(super) fn fire_player_weapon_with_control(
     world: &mut World,
     entity: Entity,
     control: CavernControlState,
@@ -163,7 +165,7 @@ fn fire_player_weapon_with_control(
     Ok(())
 }
 
-fn resolve_local_player_entity(world: &World) -> Option<Entity> {
+pub(super) fn resolve_local_player_entity(world: &World) -> Option<Entity> {
     let local = world.resource::<LocalPlayerRef>().ok()?;
     if let Some(entity) = local.entity
         && world.get::<PlayerId>(entity).is_some()
@@ -191,7 +193,7 @@ fn resolve_local_player_entity(world: &World) -> Option<Entity> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum ProjectileStepMode {
+pub(super) enum ProjectileStepMode {
     Authoritative,
     PredictedLocal,
 }

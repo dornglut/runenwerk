@@ -1,5 +1,7 @@
+use super::*;
+
 // Owner: Cavern Hunt Combat Plugin - Projectiles and Spatial Helpers
-fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Result<()> {
+pub(super) fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Result<()> {
     let phase = world.resource::<CavernRunState>()?.phase;
     if matches!(phase, CavernRunPhase::Success | CavernRunPhase::Failure) {
         return Ok(());
@@ -260,7 +262,7 @@ pub(crate) fn spawn_projectile(
     ))
 }
 
-fn normalized_vector(x: f32, y: f32) -> (f32, f32) {
+pub(super) fn normalized_vector(x: f32, y: f32) -> (f32, f32) {
     let length = (x * x + y * y).sqrt();
     if length <= f32::EPSILON {
         (0.0, 0.0)
@@ -269,7 +271,7 @@ fn normalized_vector(x: f32, y: f32) -> (f32, f32) {
     }
 }
 
-fn camera_relative_movement(
+pub(super) fn camera_relative_movement(
     camera: &crate::CavernCameraState,
     input: &InputState,
 ) -> (f32, f32) {
@@ -283,7 +285,7 @@ fn camera_relative_movement(
     )
 }
 
-fn movement_footprint_radius(radius: f32) -> f32 {
+pub(super) fn movement_footprint_radius(radius: f32) -> f32 {
     (radius * 0.72).max(0.18)
 }
 

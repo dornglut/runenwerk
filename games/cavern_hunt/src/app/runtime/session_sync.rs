@@ -1,5 +1,7 @@
+use super::*;
+
 // Owner: Cavern Hunt Gameplay Plugin - Session Sync
-fn sync_session_runtime_config_system(
+pub(super) fn sync_session_runtime_config_system(
     session: Res<SessionRuntimeState>,
     mut config: ResMut<CavernRunConfig>,
 ) -> Result<()> {
@@ -7,7 +9,7 @@ fn sync_session_runtime_config_system(
     Ok(())
 }
 
-fn sync_session_spawn_policy_system(
+pub(super) fn sync_session_spawn_policy_system(
     session: Res<SessionRuntimeState>,
     config: Res<CavernRunConfig>,
     mut policy: ResMut<SessionSpawnPolicy>,
@@ -16,7 +18,10 @@ fn sync_session_spawn_policy_system(
     Ok(())
 }
 
-fn sync_session_runtime_config(session: &SessionRuntimeState, config: &mut CavernRunConfig) {
+pub(super) fn sync_session_runtime_config(
+    session: &SessionRuntimeState,
+    config: &mut CavernRunConfig,
+) {
     if session.max_players > 0 {
         // Local/dev dedicated-authority sessions can admit with a fallback join state
         // that carries `max_players = 1`. Do not collapse the game-configured run

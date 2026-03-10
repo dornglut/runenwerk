@@ -34,12 +34,8 @@ use engine::state::SessionRuntimeState;
 use engine_net::ServerSessionState;
 use std::collections::BTreeSet;
 
-include!("internal/plugin_wiring.rs");
+#[path = "runtime/mod.rs"]
+mod runtime;
 
-include!("internal/session_sync.rs");
-
-include!("internal/setup_and_slots.rs");
-
-include!("internal/presentation.rs");
-
-include!("internal/tests.rs");
+pub use runtime::{CavernHuntClientPlugin, CavernHuntPlugin, CavernHuntServerPlugin};
+pub(crate) use runtime::sync_active_player_slots;

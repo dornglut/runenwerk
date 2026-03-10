@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt Domain - Material Graph
 pub fn compile_material_graph(
     asset: &MaterialGraphAssetV1,

@@ -1,10 +1,12 @@
+use super::*;
+
 // Owner: Cavern Hunt Domain - Material Graph
 #[derive(Default)]
-struct MaterialDefaults {
+pub(super) struct MaterialDefaults {
     count: u32,
 }
 
-fn resolve_optional_slot(
+pub(super) fn resolve_optional_slot(
     candidate: Option<&str>,
     expected: MaterialPortTypeV1,
     slots: &BTreeMap<String, (u32, MaterialPortTypeV1)>,
@@ -45,7 +47,7 @@ fn resolve_optional_slot(
     Ok(dst)
 }
 
-fn resolve_slot(
+pub(super) fn resolve_slot(
     id: &str,
     expected: MaterialPortTypeV1,
     slots: &BTreeMap<String, (u32, MaterialPortTypeV1)>,
@@ -66,7 +68,7 @@ fn resolve_slot(
     Ok(slot)
 }
 
-fn resolve_input(
+pub(super) fn resolve_input(
     slots: &BTreeMap<String, (u32, MaterialPortTypeV1)>,
     input: &str,
     expected: MaterialPortTypeV1,
@@ -89,7 +91,7 @@ fn resolve_input(
     Ok(slot)
 }
 
-fn resolve_numeric_input(
+pub(super) fn resolve_numeric_input(
     slots: &BTreeMap<String, (u32, MaterialPortTypeV1)>,
     input: &str,
     node_id: &str,

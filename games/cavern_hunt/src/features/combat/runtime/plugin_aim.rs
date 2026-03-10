@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt Combat Plugin - Plugin Wiring and Local Aim
 pub struct CavernHuntCombatPlugin;
 

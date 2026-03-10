@@ -91,9 +91,9 @@ printf 'Runtime deployment: %s (replicas=0 until operator start command)\n' "$RU
 echo
 echo "Next steps:"
 echo "1) Bootstrap operator bridge tokens and runtime-node registration"
-echo "   scripts/k8s/bootstrap_operator_bridges.sh"
+echo "   games/cavern_hunt/scripts/k8s/bootstrap_operator_bridges.sh"
 echo "2) Run smoke test"
-echo "   scripts/k8s/smoke_operator_flow.sh"
+echo "   games/cavern_hunt/scripts/k8s/smoke_operator_flow.sh"
 echo "3) Open operator console via same-origin gateway"
 echo "   kubectl -n ${NAMESPACE} port-forward svc/${RELEASE_NAME}-caddy 8081:80"
 echo "   then open http://127.0.0.1:8081"

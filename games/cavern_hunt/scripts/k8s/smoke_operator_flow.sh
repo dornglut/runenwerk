@@ -73,7 +73,7 @@ fi
 list_json="$(api_request GET "/v2/admin/resources?kind=runtime_node&limit=100" "" "$operator_token")"
 runtime_resource_id="$(echo "$list_json" | jq -r --arg key "$RUNTIME_SERVER_ID" '.resources[]? | select(.resource_key == $key) | .id' | head -n1)"
 if [[ -z "$runtime_resource_id" ]]; then
-  echo "runtime node ${RUNTIME_SERVER_ID} not found; run scripts/k8s/bootstrap_operator_bridges.sh first" >&2
+  echo "runtime node ${RUNTIME_SERVER_ID} not found; run games/cavern_hunt/scripts/k8s/bootstrap_operator_bridges.sh first" >&2
   exit 1
 fi
 

@@ -37,7 +37,7 @@ Current profile IDs:
 Use this for the active material path:
 
 ```bash
-CAVERN_RENDER_MODE=material_graph CAVERN_MATERIAL_PROFILE=balanced scripts/run_cavern_client.sh
+CAVERN_RENDER_MODE=material_graph CAVERN_MATERIAL_PROFILE=balanced games/cavern_hunt/scripts/run_cavern_client.sh
 ```
 
 On successful load, logs should include:

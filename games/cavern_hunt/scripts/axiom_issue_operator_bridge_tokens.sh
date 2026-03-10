@@ -145,5 +145,5 @@ print_export GROTTO_FLEET_AXIOM_COMMAND_TOKEN "$fleet_token"
 print_export GROTTO_FLEET_AXIOM_SERVICE_ID "$FLEET_SERVICE_ID"
 echo
 echo "# Example usage"
-echo "scripts/run_cavern_server.sh"
+echo "games/cavern_hunt/scripts/run_cavern_server.sh"
 echo "cargo run -p grotto_fleet_control -- --config ops/fleet/kubernetes.ron"

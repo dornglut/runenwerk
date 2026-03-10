@@ -1,5 +1,7 @@
+use super::*;
+
 // Owner: Cavern Hunt Gameplay Plugin - Presentation State
-fn sync_run_presentation_state_system(mut world: WorldMut) -> Result<()> {
+pub(super) fn sync_run_presentation_state_system(mut world: WorldMut) -> Result<()> {
     sync_run_presentation_state(&mut world)
 }
 

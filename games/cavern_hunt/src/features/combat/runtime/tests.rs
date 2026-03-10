@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt Combat Plugin - Tests
 #[cfg(test)]
 mod tests {

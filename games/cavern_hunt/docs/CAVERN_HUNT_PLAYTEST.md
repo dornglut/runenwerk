@@ -25,7 +25,7 @@ The optional Axiom-backed path is still supported for advanced testing.
 ### 1. Start the dedicated server
 
 ```bash
-scripts/run_cavern_server.sh
+games/cavern_hunt/scripts/run_cavern_server.sh
 ```
 
 Expected behavior:
@@ -37,7 +37,7 @@ Expected behavior:
 ### 2. Start one client
 
 ```bash
-scripts/run_cavern_client.sh
+games/cavern_hunt/scripts/run_cavern_client.sh
 ```
 
 ### 3. Start multiple clients
@@ -45,7 +45,7 @@ scripts/run_cavern_client.sh
 Run the client script once per client, or use:
 
 ```bash
-scripts/run_cavern_party_local.sh
+games/cavern_hunt/scripts/run_cavern_party_local.sh
 ```
 
 That starts:
@@ -56,7 +56,15 @@ That starts:
 Use explicit 4-client mode when needed:
 
 ```bash
-scripts/run_cavern_party_local.sh 4
+games/cavern_hunt/scripts/run_cavern_party_local.sh 4
+```
+
+PowerShell equivalents:
+
+```powershell
+pwsh -File games/cavern_hunt/scripts/run_cavern_server.ps1
+pwsh -File games/cavern_hunt/scripts/run_cavern_client.ps1
+pwsh -File games/cavern_hunt/scripts/run_cavern_party_local.ps1 -ClientCount 4
 ```
 
 Client and server logs are written to:
@@ -73,8 +81,8 @@ Network and multiplayer settings now come from `.ron` assets loaded at process s
 
 Default paths:
 
-- client: `game/assets/networking/client/local_dev.ron`
-- server: `game/assets/networking/server/local_dev.ron`
+- client: `games/cavern_hunt/assets/networking/client/local_dev.ron`
+- server: `games/cavern_hunt/assets/networking/server/local_dev.ron`
 
 Built-in profiles:
 
@@ -84,18 +92,18 @@ Built-in profiles:
 
 Script profile selection:
 
-- `CAVERN_NET_PROFILE=two_local_balanced scripts/run_cavern_party_local.sh`
-- `CAVERN_NET_PROFILE=four_local_conservative scripts/run_cavern_party_local.sh 4`
+- `CAVERN_NET_PROFILE=two_local_balanced games/cavern_hunt/scripts/run_cavern_party_local.sh`
+- `CAVERN_NET_PROFILE=four_local_conservative games/cavern_hunt/scripts/run_cavern_party_local.sh 4`
 
 Explicit config override:
 
-- `CAVERN_CLIENT_CONFIG_PATH=... scripts/run_cavern_client.sh`
-- `CAVERN_SERVER_CONFIG_PATH=... scripts/run_cavern_server.sh`
+- `CAVERN_CLIENT_CONFIG_PATH=... games/cavern_hunt/scripts/run_cavern_client.sh`
+- `CAVERN_SERVER_CONFIG_PATH=... games/cavern_hunt/scripts/run_cavern_server.sh`
 
 Direct binary usage:
 
-- `target/debug/grotto_client --config game/assets/networking/client/local_dev.ron`
-- `target/debug/grotto_server --config game/assets/networking/server/local_dev.ron`
+- `target/debug/grotto_client --config games/cavern_hunt/assets/networking/client/local_dev.ron`
+- `target/debug/grotto_server --config games/cavern_hunt/assets/networking/server/local_dev.ron`
 
 Hot reload:
 
@@ -174,7 +182,7 @@ AXIOM_OPERATOR_PASSWORD=... scripts/axiom_issue_operator_bridge_tokens.sh
 Runtime bridge launch:
 
 ```bash
-scripts/run_cavern_server.sh
+games/cavern_hunt/scripts/run_cavern_server.sh
 ```
 
 Phase 2 lifecycle/log control process:
@@ -188,9 +196,9 @@ When operator/fleet bridge env vars are unset, local scripts and non-Axiom flow 
 From `grotto-quest` root:
 
 ```bash
-scripts/k8s/bootstrap_local_stack.sh
-scripts/k8s/bootstrap_operator_bridges.sh
-scripts/k8s/smoke_operator_flow.sh
+games/cavern_hunt/scripts/k8s/bootstrap_local_stack.sh
+games/cavern_hunt/scripts/k8s/bootstrap_operator_bridges.sh
+games/cavern_hunt/scripts/k8s/smoke_operator_flow.sh
 ```
 
 Then port-forward the in-cluster gateway and open operator console:

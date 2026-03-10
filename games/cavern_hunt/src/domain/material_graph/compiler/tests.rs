@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt Material Domain - Tests
 #[cfg(test)]
 mod tests {
