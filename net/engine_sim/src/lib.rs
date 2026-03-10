@@ -6,6 +6,8 @@ pub mod rng;
 
 pub use codec::{SimulationCodec, WorldSimulationCodec};
 pub use command::{CommandSource, SimulationCommandFrame};
-pub use identity::{ActorId, SimulationHash, SimulationSeed, SimulationSessionId, SimulationTick};
+pub use identity::{
+    ActorId, NetEntityId, SimulationHash, SimulationSeed, SimulationSessionId, SimulationTick,
+};
 pub use profile::{AuthorityRole, DeterminismLevel, SimulationProfile, SimulationProfileConfig};
 pub use rng::SimulationRng;

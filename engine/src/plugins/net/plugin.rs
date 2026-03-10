@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use engine_net::{AuthorityRole, SimulationProfile, SimulationProfileConfig};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 
 use crate::app::App;
@@ -7,8 +8,8 @@ use crate::plugin::Plugin;
 
 use super::config::{NetPluginConfig, NetRole};
 use super::resources::{
-    NetworkClientPlugin, NetworkReplicationRuntimePlugin, NetworkServerPlugin, PredictionPlugin,
-    ReplicationPlugin,
+    configure_client_role, configure_prediction, configure_replication, configure_runtime_bridge,
+    configure_server_role,
 };
 
 pub struct NetPlugin<TDriver> {
@@ -57,27 +58,32 @@ where
     fn build(&self, app: &mut App) {
         match self.role {
             NetRole::Client => {
-                app.add_plugin(NetworkClientPlugin);
+                configure_client_role(app);
+                set_simulation_authority(app, AuthorityRole::Client);
             }
             NetRole::Server => {
-                app.add_plugin(NetworkServerPlugin);
+                configure_server_role(app);
+                set_simulation_authority(app, AuthorityRole::Server);
             }
             NetRole::Host => {
                 // Host mode is strict role composition: client + server in one process.
-                app.add_plugin(NetworkServerPlugin);
-                app.add_plugin(NetworkClientPlugin);
+                configure_server_role(app);
+                configure_client_role(app);
+                set_simulation_authority(app, AuthorityRole::Peer);
             }
         }
 
-        app.add_plugin(NetworkReplicationRuntimePlugin::<TDriver>::default());
-        app.add_plugin(ReplicationPlugin::<TDriver>::default());
-        app.add_plugin(PredictionPlugin::<TDriver>::default());
+        configure_runtime_bridge::<TDriver>(app);
+        configure_replication::<TDriver>(app);
+        configure_prediction::<TDriver>(app);
     }
 }
 
-pub use super::resources::{
-    NetworkClientPlugin as LegacyNetworkClientPlugin,
-    NetworkReplicationRuntimePlugin as LegacyNetworkReplicationRuntimePlugin,
-    NetworkServerPlugin as LegacyNetworkServerPlugin, PredictionPlugin as LegacyPredictionPlugin,
-    ReplicationPlugin as LegacyReplicationPlugin,
-};
+fn set_simulation_authority(app: &mut App, authority: AuthorityRole) {
+    if let Ok(mut config) = app.world_mut().resource_mut::<SimulationProfileConfig>() {
+        config.authority = authority;
+        if matches!(config.profile, SimulationProfile::LocalSinglePlayer) {
+            config.profile = SimulationProfile::DedicatedAuthority;
+        }
+    }
+}

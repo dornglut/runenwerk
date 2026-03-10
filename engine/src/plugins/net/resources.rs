@@ -1,47 +1,12 @@
-use std::marker::PhantomData;
 use std::mem;
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 use engine_net::*;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_sim::SimulationTick;
-use crate::{App, CoreSet, FixedUpdate, FrameEnd, Plugin, PreUpdate, SessionRuntimeState, SystemConfigExt};
+use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SessionRuntimeState, SystemConfigExt};
 use crate::plugins::*;
 
 // engine/src/plugins/net/resources.rs
-
-pub struct NetworkReplicationRuntimePlugin<TDriver> {
-    _marker: PhantomData<TDriver>,
-}
-
-impl<TDriver> Default for NetworkReplicationRuntimePlugin<TDriver> {
-    fn default() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<TDriver> Plugin for NetworkReplicationRuntimePlugin<TDriver>
-where
-  TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
-  TDriver::Snapshot: Clone + PartialEq,
-  TDriver::Input: Clone + PartialEq,
-{
-    fn build(&self, app: &mut App) {
-        app.add_systems(
-            PreUpdate,
-            network_runtime_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
-        );
-        app.add_systems(
-            PreUpdate,
-            client_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
-        );
-        app.add_systems(
-            PreUpdate,
-            server_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
-        );
-    }
-}
 
 const NETWORK_MESSAGE_QUEUE_CAPACITY: usize = 4_096;
 
@@ -55,6 +20,84 @@ fn push_bounded<T>(queue: &mut Vec<T>, message: T, queue_name: &str) {
         );
     }
     queue.push(message);
+}
+
+pub(crate) fn configure_runtime_bridge<TDriver>(app: &mut App)
+where
+    TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq,
+    TDriver::Input: Clone + PartialEq,
+{
+    app.add_systems(
+        PreUpdate,
+        network_runtime_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
+    );
+    app.add_systems(
+        PreUpdate,
+        client_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
+    );
+    app.add_systems(
+        PreUpdate,
+        server_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
+    );
+}
+
+pub(crate) fn configure_client_role(app: &mut App) {
+    app.init_resource::<NetworkClientInbox>();
+    app.init_resource::<NetworkClientOutbox>();
+    app.init_resource::<NetworkInboundQueue>();
+    app.init_resource::<NetworkOutboundQueue>();
+    app.init_resource::<NetworkSessionStatus>();
+    app.init_resource::<NetworkAdmissionState>();
+    app.init_resource::<SessionRuntimeState>();
+    app.init_resource::<ConnectionHealth>();
+    app.init_resource::<RoundTripMetrics>();
+    app.init_resource::<ClientSessionState>();
+    app.init_resource::<NetworkDiagnostics>();
+    app.add_systems(FrameEnd, client_flush_system.in_set(CoreSet::FrameEnd));
+}
+
+pub(crate) fn configure_server_role(app: &mut App) {
+    app.init_resource::<NetworkServerInbox>();
+    app.init_resource::<NetworkServerOutbox>();
+    app.init_resource::<NetworkInboundQueue>();
+    app.init_resource::<NetworkOutboundQueue>();
+    app.init_resource::<NetworkSessionStatus>();
+    app.init_resource::<NetworkAdmissionState>();
+    app.init_resource::<SessionRuntimeState>();
+    app.init_resource::<ConnectionHealth>();
+    app.init_resource::<RoundTripMetrics>();
+    app.init_resource::<ServerSessionConfig>();
+    app.init_resource::<ServerSessionState>();
+    app.init_resource::<NetworkDiagnostics>();
+    app.add_systems(FrameEnd, server_flush_system.in_set(CoreSet::FrameEnd));
+}
+
+pub(crate) fn configure_replication<TDriver>(app: &mut App)
+where
+    TDriver: ReplicationDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq,
+{
+    app.init_resource::<SnapshotCursor>();
+    app.init_resource::<SnapshotReplicationState<TDriver::Snapshot>>();
+    app.init_resource::<ReplicationDiagnostics>();
+    app.add_systems(
+        FixedUpdate,
+        replication_step_system::<TDriver>.in_set(CoreSet::Replication),
+    );
+}
+
+pub(crate) fn configure_prediction<TDriver>(app: &mut App)
+where
+    TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
+    TDriver::Input: Clone + PartialEq,
+{
+    app.init_resource::<PredictionState<TDriver::Input>>();
+    app.init_resource::<PredictionDiagnostics>();
+    app.add_systems(
+        FixedUpdate,
+        prediction_step_system::<TDriver>.in_set(CoreSet::Simulation),
+    );
 }
 
 #[derive(Debug, Clone, Default)]
@@ -82,12 +125,23 @@ impl NetworkClientInbox {
 
 #[derive(Debug, Clone, Default)]
 pub struct NetworkServerInbox {
-    messages: Vec<ClientMessage>,
+    messages: Vec<InboundClientMessage>,
 }
 
 impl NetworkServerInbox {
     pub fn push(&mut self, message: ClientMessage) {
-        push_bounded(&mut self.messages, message, "NetworkServerInbox");
+        self.push_from(None, message);
+    }
+
+    pub fn push_from(&mut self, connection_id: Option<ConnectionId>, message: ClientMessage) {
+        push_bounded(
+            &mut self.messages,
+            InboundClientMessage {
+                connection_id,
+                message,
+            },
+            "NetworkServerInbox",
+        );
     }
 
     pub fn len(&self) -> usize {
@@ -98,7 +152,7 @@ impl NetworkServerInbox {
         self.messages.is_empty()
     }
 
-    pub fn drain(&mut self) -> Vec<ClientMessage> {
+    pub fn drain(&mut self) -> Vec<InboundClientMessage> {
         mem::take(&mut self.messages)
     }
 }
@@ -387,113 +441,4 @@ pub struct PredictionDiagnostics {
     pub fixed_steps_observed: u64,
     pub commands_applied: u64,
     pub corrections_applied: u64,
-}
-
-pub struct NetworkClientPlugin;
-pub struct NetworkServerPlugin;
-
-pub struct ReplicationPlugin<TDriver> {
-    _marker: PhantomData<TDriver>,
-}
-
-pub struct PredictionPlugin<TDriver> {
-    _marker: PhantomData<TDriver>,
-}
-
-impl<TDriver> Default for ReplicationPlugin<TDriver> {
-    fn default() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<TDriver> Default for PredictionPlugin<TDriver> {
-    fn default() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl Plugin for NetworkClientPlugin {
-    fn build(&self, app: &mut App) {
-        if let Ok(mut config) = app.world_mut().resource_mut::<SimulationProfileConfig>() {
-            config.authority = AuthorityRole::Client;
-            if matches!(config.profile, SimulationProfile::LocalSinglePlayer) {
-                config.profile = SimulationProfile::DedicatedAuthority;
-            }
-        }
-
-        app.init_resource::<NetworkClientInbox>();
-        app.init_resource::<NetworkClientOutbox>();
-        app.init_resource::<NetworkInboundQueue>();
-        app.init_resource::<NetworkOutboundQueue>();
-        app.init_resource::<NetworkSessionStatus>();
-        app.init_resource::<NetworkAdmissionState>();
-        app.init_resource::<SessionRuntimeState>();
-        app.init_resource::<ConnectionHealth>();
-        app.init_resource::<RoundTripMetrics>();
-        app.init_resource::<ClientSessionState>();
-        app.init_resource::<NetworkDiagnostics>();
-
-        app.add_systems(FrameEnd, client_flush_system.in_set(CoreSet::FrameEnd));
-    }
-}
-
-impl Plugin for NetworkServerPlugin {
-    fn build(&self, app: &mut App) {
-        if let Ok(mut config) = app.world_mut().resource_mut::<SimulationProfileConfig>() {
-            config.authority = AuthorityRole::Server;
-            if matches!(config.profile, SimulationProfile::LocalSinglePlayer) {
-                config.profile = SimulationProfile::DedicatedAuthority;
-            }
-        }
-
-        app.init_resource::<NetworkServerInbox>();
-        app.init_resource::<NetworkServerOutbox>();
-        app.init_resource::<NetworkInboundQueue>();
-        app.init_resource::<NetworkOutboundQueue>();
-        app.init_resource::<NetworkSessionStatus>();
-        app.init_resource::<NetworkAdmissionState>();
-        app.init_resource::<SessionRuntimeState>();
-        app.init_resource::<ConnectionHealth>();
-        app.init_resource::<RoundTripMetrics>();
-        app.init_resource::<ServerSessionConfig>();
-        app.init_resource::<ServerSessionState>();
-        app.init_resource::<NetworkDiagnostics>();
-
-        app.add_systems(FrameEnd, server_flush_system.in_set(CoreSet::FrameEnd));
-    }
-}
-
-impl<TDriver> Plugin for ReplicationPlugin<TDriver>
-where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
-  TDriver::Snapshot: Clone + PartialEq,
-{
-    fn build(&self, app: &mut App) {
-        app.init_resource::<SnapshotCursor>();
-        app.init_resource::<SnapshotReplicationState<TDriver::Snapshot>>();
-        app.init_resource::<ReplicationDiagnostics>();
-        app.add_systems(
-            FixedUpdate,
-            replication_step_system::<TDriver>.in_set(CoreSet::Replication),
-        );
-    }
-}
-
-impl<TDriver> Plugin for PredictionPlugin<TDriver>
-where
-  TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
-  TDriver::Input: Clone + PartialEq,
-{
-    fn build(&self, app: &mut App) {
-        app.init_resource::<PredictionState<TDriver::Input>>();
-        app.init_resource::<PredictionDiagnostics>();
-        app.add_systems(
-            FixedUpdate,
-            prediction_step_system::<TDriver>.in_set(CoreSet::Simulation),
-        );
-    }
 }

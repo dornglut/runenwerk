@@ -1,5 +1,6 @@
 use ecs::World;
 use engine_sim::SimulationTick;
+use crate::ConnectionId;
 
 pub trait ReplicationDriver {
     type Snapshot: serde::Serialize
@@ -62,6 +63,7 @@ pub trait SnapshotApplyDriver: ReplicationDriver {
 pub trait InputDriver: ReplicationDriver {
     fn receive_remote_input(
         world: &mut World,
+        connection_id: Option<ConnectionId>,
         tick: SimulationTick,
         input: Vec<Self::Input>,
     ) -> Result<(), Self::Error>;

@@ -1,3 +1,5 @@
+use super::*;
+
 // Owner: Cavern Hunt Gameplay Plugin - Plugin Wiring
 pub struct CavernHuntPlugin;
 pub struct CavernHuntClientPlugin;
@@ -52,7 +54,6 @@ impl Plugin for CavernHuntPlugin {
             ai::CavernHuntAiPlugin,
             hud::CavernHuntHudPlugin,
             loot::CavernHuntLootPlugin,
-            crate::net::CavernHuntNetSyncPlugin,
         ));
         app.add_systems(
             PreUpdate,

@@ -61,7 +61,7 @@ where
                     inbound.push_client(connection_id, message.clone());
                 }
                 if let Ok(mut inbox) = world.resource_mut::<NetworkServerInbox>() {
-                    inbox.push(message);
+                    inbox.push_from(connection_id, message);
                 }
             }
             SessionRuntimeEvent::ServerMessage(message) => {
@@ -398,7 +398,10 @@ where
         return Ok(());
     };
 
-    for message in messages {
+    for incoming in messages {
+        let connection_id = incoming.connection_id;
+        let message = incoming.message;
+
         if let ClientMessage::Ack(ack) = &message
           && let Ok(mut state) =
           world.resource_mut::<SnapshotReplicationState<TDriver::Snapshot>>()
@@ -411,7 +414,7 @@ where
             let decoded = TDriver::decode_input(&frame.payload)
               .map_err(|e| map_driver_error::<TDriver>(e, "decode remote input"))?;
 
-            TDriver::receive_remote_input(&mut world, frame.tick, decoded)
+            TDriver::receive_remote_input(&mut world, connection_id, frame.tick, decoded)
               .map_err(|e| map_driver_error::<TDriver>(e, "receive remote input"))?;
         }
 

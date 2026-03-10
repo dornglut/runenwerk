@@ -132,6 +132,7 @@ impl SnapshotApplyDriver for TestReplicationDriver {
 impl InputDriver for TestReplicationDriver {
     fn receive_remote_input(
         _world: &mut World,
+        _connection_id: Option<engine_net::ConnectionId>,
         _tick: engine_sim::SimulationTick,
         _input: Vec<Self::Input>,
     ) -> Result<(), Self::Error> {
@@ -168,6 +169,15 @@ impl Plugin for NetworkServerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
         app.add_plugin(NetPlugin::<TestReplicationDriver>::server());
+    }
+}
+
+struct NetworkHostPlugin;
+
+impl Plugin for NetworkHostPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<PlayerCommandBuffer>();
+        app.add_plugin(NetPlugin::<TestReplicationDriver>::host());
     }
 }
 

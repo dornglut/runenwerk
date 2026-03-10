@@ -246,3 +246,18 @@ fn client_plugin_marks_session_active_on_join_accept() {
         Some(engine_net::ConnectionId(7))
     );
 }
+
+#[test]
+fn host_plugin_composes_client_and_server_runtime_roles() {
+    let mut app = App::headless();
+    app.add_plugin(NetworkHostPlugin);
+
+    let profile = app.world().resource::<SimulationProfileConfig>().unwrap();
+    assert_eq!(profile.authority, AuthorityRole::Peer);
+    assert_eq!(profile.profile, SimulationProfile::DedicatedAuthority);
+
+    assert!(app.world().resource::<NetworkClientInbox>().is_ok());
+    assert!(app.world().resource::<NetworkClientOutbox>().is_ok());
+    assert!(app.world().resource::<NetworkServerInbox>().is_ok());
+    assert!(app.world().resource::<NetworkServerOutbox>().is_ok());
+}

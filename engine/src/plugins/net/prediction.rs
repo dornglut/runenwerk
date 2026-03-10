@@ -23,7 +23,7 @@ where
       .map(|config| config.authority)
       .unwrap_or(AuthorityRole::Local);
 
-    if !matches!(authority, AuthorityRole::Server) {
+    if !matches!(authority, AuthorityRole::Server | AuthorityRole::Peer) {
         let cursor = world
           .resource::<SnapshotCursor>()
           .map(|cursor| cursor.0)
@@ -141,7 +141,7 @@ where
           .saturating_add(commands.len() as u64);
     }
 
-    if matches!(authority, AuthorityRole::Client) {
+    if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer) {
         let payload = TDriver::encode_input(&commands)
           .map_err(|e| map_driver_error::<TDriver>(e, "encode input"))?;
 
