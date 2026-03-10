@@ -8,7 +8,6 @@ pub mod interpolation;
 pub mod policy;
 pub mod replication;
 pub mod replication_intent;
-mod tuning;
 
 pub use commands::*;
 pub use config::*;
