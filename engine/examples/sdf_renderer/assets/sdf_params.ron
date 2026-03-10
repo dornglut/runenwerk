@@ -1,9 +1,9 @@
 (
   world_scene_label: "gameplay_stub",
   overlay_scene_label: "console_ui",
-  world_bounds: [-18.0, -18.0, 18.0, 18.0],
+  world_bounds: (-18.0, -18.0, 18.0, 18.0),
   camera: (
-    target: [0.0, 0.8, 0.0],
+    target: (0.0, 0.8, 0.0),
     yaw: 0.4,
     pitch: 0.25,
     distance: 9.5,
@@ -25,4 +25,10 @@
   debug_view_mode: 0,
   world_paused: false,
   render_mesh_overlay: false,
+  display: (
+    fit_mode: stretch, // stretch | contain | cover | fixed_height | fixed_width
+    target_aspect: 1.7777778, // 16:9; set 0.0 to follow window aspect
+    render_scale: 1.5, // supersampling scale; higher is sharper but more expensive
+    bar_color: (0.02, 0.02, 0.03, 1.0),
+  ),
 )

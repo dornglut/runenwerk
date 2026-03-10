@@ -12,9 +12,9 @@ struct WorldParams {
     camera_target_time : vec4<f32>,
     camera_orbit : vec4<f32>,
     debug_view_mode : u32,
-    _pad4a : u32,
-    _pad4b : u32,
-    _pad4c : u32,
+    display_fit_mode : u32,
+    display_target_aspect : f32,
+    _pad4 : u32,
 };
 
 struct Agent {
@@ -175,7 +175,9 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         (frag.x / size.x) * 2.0 - 1.0,
         1.0 - (frag.y / size.y) * 2.0,
     );
-    let aspect = size.x / max(size.y, 1.0);
+    let window_aspect = size.x / max(size.y, 1.0);
+    let use_target_aspect = params.display_fit_mode != 0u && params.display_target_aspect > 0.0001;
+    let aspect = select(window_aspect, params.display_target_aspect, use_target_aspect);
 
     let yaw = params.camera_orbit.x;
     let pitch = params.camera_orbit.y;

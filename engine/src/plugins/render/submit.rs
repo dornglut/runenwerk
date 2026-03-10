@@ -77,6 +77,13 @@ pub(super) fn ui_render_submit_system(
         return Ok(());
     };
 
+    let (window_w, window_h) = manager.overlay_runtime.ui.screen_size;
+    let target_w = (window_w.max(1.0)).round() as u32;
+    let target_h = (window_h.max(1.0)).round() as u32;
+    if gfx.ctx.surface_config.width != target_w || gfx.ctx.surface_config.height != target_h {
+        gfx.resize(target_w, target_h);
+    }
+
     let render_frame_bindings = match world.resource::<RenderFrameResourceBindings>() {
         Ok(bindings) => bindings,
         Err(_) => {
@@ -217,8 +224,7 @@ pub(super) fn ui_render_submit_system(
             Ok(())
         }
         Err(SurfaceError::Lost | SurfaceError::Outdated) => {
-            let (w, h) = manager.overlay_runtime.ui.screen_size;
-            gfx.resize(w as u32, h as u32);
+            gfx.resize(target_w, target_h);
             Ok(())
         }
         Err(SurfaceError::Timeout) => Ok(()),

@@ -1,147 +1,53 @@
-// Owner: SDF Renderer Example - Config and Render Graph Wiring
-use super::*;
+// Owner: SDF Renderer Example - Render Graph Config
+use crate::*;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
-pub(super) struct SdfParamsConfig {
-    pub(super) world_scene_label: String,
-    pub(super) overlay_scene_label: String,
-    pub(super) world_bounds: [f32; 4],
-    pub(super) camera: SdfCameraConfig,
-    pub(super) controls: SdfControlsConfig,
-    pub(super) debug_view_mode: u32,
-    pub(super) world_paused: bool,
-    pub(super) render_mesh_overlay: bool,
+pub(crate) struct SdfComputePipelineConfig {
+    pub(crate) id: String,
+    pub(crate) shader: String,
 }
 
-impl Default for SdfParamsConfig {
+impl Default for SdfComputePipelineConfig {
     fn default() -> Self {
         Self {
-            world_scene_label: "gameplay_stub".to_string(),
-            overlay_scene_label: "console_ui".to_string(),
-            world_bounds: [-18.0, -18.0, 18.0, 18.0],
-            camera: SdfCameraConfig::default(),
-            controls: SdfControlsConfig::default(),
-            debug_view_mode: 0,
-            world_paused: false,
-            render_mesh_overlay: false,
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Deserialize)]
-#[serde(default)]
-pub(super) struct SdfCameraConfig {
-    pub(super) target: [f32; 3],
-    pub(super) yaw: f32,
-    pub(super) pitch: f32,
-    pub(super) distance: f32,
-    pub(super) pitch_min: f32,
-    pub(super) pitch_max: f32,
-    pub(super) distance_min: f32,
-    pub(super) distance_max: f32,
-    pub(super) fov_y_radians: f32,
-}
-
-impl Default for SdfCameraConfig {
-    fn default() -> Self {
-        Self {
-            target: [0.0, 0.8, 0.0],
-            yaw: 0.4,
-            pitch: 0.25,
-            distance: 9.5,
-            pitch_min: -1.2,
-            pitch_max: 1.2,
-            distance_min: 2.0,
-            distance_max: 30.0,
-            fov_y_radians: 58.0f32.to_radians(),
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Deserialize)]
-#[serde(default)]
-pub(super) struct SdfControlsConfig {
-    pub(super) base_move_speed: f32,
-    pub(super) speed_up_multiplier: f32,
-    pub(super) speed_down_multiplier: f32,
-    pub(super) mouse_rotate_sensitivity: f32,
-    pub(super) scroll_zoom_sensitivity: f32,
-    pub(super) camera_target_y_min: f32,
-    pub(super) camera_target_y_max: f32,
-}
-
-impl Default for SdfControlsConfig {
-    fn default() -> Self {
-        Self {
-            base_move_speed: 7.5,
-            speed_up_multiplier: 2.0,
-            speed_down_multiplier: 0.35,
-            mouse_rotate_sensitivity: 0.0045,
-            scroll_zoom_sensitivity: 0.55,
-            camera_target_y_min: -4.0,
-            camera_target_y_max: 8.0,
+            id: String::new(),
+            shader: String::new(),
         }
     }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
-pub(super) struct SdfInputBindingsConfig {
-    pub(super) bindings: Vec<SdfInputBindingConfig>,
+pub(crate) struct SdfRenderBuiltinPipelineConfig {
+    pub(crate) id: String,
+    pub(crate) builtin: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub(super) struct SdfInputBindingConfig {
-    pub(super) action: String,
-    pub(super) key: String,
-}
-
-impl Default for SdfInputBindingConfig {
+impl Default for SdfRenderBuiltinPipelineConfig {
     fn default() -> Self {
         Self {
-            action: String::new(),
-            key: String::new(),
+            id: String::new(),
+            builtin: String::new(),
         }
     }
 }
 
-impl Default for SdfInputBindingsConfig {
-    fn default() -> Self {
-        Self {
-            bindings: vec![
-                SdfInputBindingConfig {
-                    action: ACTION_UP.to_string(),
-                    key: "KeyR".to_string(),
-                },
-                SdfInputBindingConfig {
-                    action: ACTION_DOWN.to_string(),
-                    key: "KeyF".to_string(),
-                },
-                SdfInputBindingConfig {
-                    action: ACTION_DEBUG_NEXT.to_string(),
-                    key: "Tab".to_string(),
-                },
-                SdfInputBindingConfig {
-                    action: ACTION_DEBUG_PREV.to_string(),
-                    key: "Backquote".to_string(),
-                },
-                SdfInputBindingConfig {
-                    action: ACTION_SPEED_UP.to_string(),
-                    key: "KeyE".to_string(),
-                },
-                SdfInputBindingConfig {
-                    action: ACTION_SPEED_DOWN.to_string(),
-                    key: "KeyQ".to_string(),
-                },
-            ],
-        }
-    }
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub(crate) struct SdfRenderPassConfig {
+    pub(crate) id: String,
+    pub(crate) kind: SdfPassKindConfig,
+    pub(crate) pipeline: String,
+    pub(crate) executor: String,
+    pub(crate) reads: Vec<String>,
+    pub(crate) writes: Vec<String>,
+    pub(crate) depends_on: Vec<String>,
 }
 
 #[derive(Debug, Copy, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum SdfPassKindConfig {
+pub(crate) enum SdfPassKindConfig {
     Compute,
     Render,
 }
@@ -154,17 +60,17 @@ impl Default for SdfPassKindConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
-pub(super) struct SdfRenderGraphConfig {
-    pub(super) feature: String,
-    pub(super) resources: Vec<String>,
-    pub(super) compute_pipelines: Vec<SdfComputePipelineConfig>,
-    pub(super) render_builtin_pipelines: Vec<SdfRenderBuiltinPipelineConfig>,
-    pub(super) executor_bindings: Vec<SdfExecutorBindingConfig>,
-    pub(super) passes: Vec<SdfRenderPassConfig>,
+pub(crate) struct SdfRenderGraphConfig {
+    pub(crate) feature: String,
+    pub(crate) resources: Vec<String>,
+    pub(crate) compute_pipelines: Vec<SdfComputePipelineConfig>,
+    pub(crate) render_builtin_pipelines: Vec<SdfRenderBuiltinPipelineConfig>,
+    pub(crate) executor_bindings: Vec<SdfExecutorBindingConfig>,
+    pub(crate) passes: Vec<SdfRenderPassConfig>,
 }
 
 impl SdfRenderGraphConfig {
-    pub(super) fn to_spec(&self) -> Result<RenderFeatureGraphSpec> {
+    pub(crate) fn to_spec(&self) -> Result<RenderFeatureGraphSpec> {
         let mut builder = RenderFeatureGraphSpec::builder(self.feature.as_str());
 
         for resource in &self.resources {
@@ -203,40 +109,46 @@ impl SdfRenderGraphConfig {
         builder.build()
     }
 
-    pub(super) fn register_custom_executors(
+    pub(crate) fn register_custom_executors(
         &self,
         registry: &mut RenderPassExecutorRegistryResource,
     ) -> Result<usize> {
-        let shared_state = Arc::new(Mutex::new(SdfGpuSharedState::default()));
-        let mut applied = 0usize;
+        if self.executor_bindings.is_empty() {
+            return Ok(0);
+        }
+        let shared = Arc::new(Mutex::new(SdfGpuSharedState::default()));
+        let mut count = 0usize;
         for binding in &self.executor_bindings {
-            let executor_id = binding.id.trim();
-            if executor_id.is_empty() {
-                return Err(anyhow!("executor binding id must not be empty"));
+            let id = binding.id.trim();
+            let builtin_label = binding.builtin.trim();
+            if id.is_empty() || builtin_label.is_empty() {
+                return Err(anyhow!(
+                    "executor binding has empty id or builtin label (id='{}', builtin='{}')",
+                    binding.id,
+                    binding.builtin
+                ));
             }
-            let builtin = parse_builtin_executor(binding.builtin.as_str()).ok_or_else(|| {
-                anyhow!(
-                    "executor binding '{}' uses unknown builtin '{}'",
-                    executor_id,
-                    binding.builtin.trim()
-                )
-            })?;
-            let executor: Arc<dyn RenderPassExecutor> = match builtin {
-                BuiltinRenderPassExecutor::Compute => {
-                    Arc::new(SdfComputeExecutor::new(Arc::clone(&shared_state)))
+            let executor: Arc<dyn RenderPassExecutor> = match parse_builtin_executor(builtin_label) {
+                Some(BuiltinRenderPassExecutor::Compute) => {
+                    Arc::new(SdfComputeExecutor::new(shared.clone()))
                 }
-                BuiltinRenderPassExecutor::Compose => {
-                    Arc::new(SdfComposeExecutor::new(Arc::clone(&shared_state)))
+                Some(BuiltinRenderPassExecutor::Compose) => {
+                    Arc::new(SdfComposeExecutor::new(shared.clone()))
                 }
-                BuiltinRenderPassExecutor::UiComposite => Arc::new(SdfUiCompositeExecutor),
-                BuiltinRenderPassExecutor::MeshOverlay => {
-                    Arc::new(BuiltinDelegatingExecutor { builtin })
+                Some(BuiltinRenderPassExecutor::UiComposite) => Arc::new(SdfUiCompositeExecutor),
+                Some(other) => Arc::new(BuiltinDelegatingExecutor { builtin: other }),
+                None => {
+                    return Err(anyhow!(
+                        "executor binding '{}' references unsupported builtin '{}'",
+                        id,
+                        builtin_label
+                    ));
                 }
             };
-            registry.register_custom(executor_id.to_string(), executor);
-            applied = applied.saturating_add(1);
+            registry.register_custom(id, executor);
+            count = count.saturating_add(1);
         }
-        Ok(applied)
+        Ok(count)
     }
 }
 
@@ -287,7 +199,7 @@ impl Default for SdfRenderGraphConfig {
                     executor: "sdf.compute".to_string(),
                     reads: vec!["sdf.params".to_string(), "world.agents".to_string()],
                     writes: vec!["sdf.color".to_string()],
-                    depends_on: Vec::new(),
+                    depends_on: vec![],
                 },
                 SdfRenderPassConfig {
                     id: "sdf.compose".to_string(),
@@ -314,9 +226,9 @@ impl Default for SdfRenderGraphConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
-pub(super) struct SdfExecutorBindingConfig {
-    pub(super) id: String,
-    pub(super) builtin: String,
+pub(crate) struct SdfExecutorBindingConfig {
+    pub(crate) id: String,
+    pub(crate) builtin: String,
 }
 
 impl Default for SdfExecutorBindingConfig {
@@ -328,18 +240,17 @@ impl Default for SdfExecutorBindingConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct BuiltinDelegatingExecutor {
     builtin: BuiltinRenderPassExecutor,
 }
 
 impl RenderPassExecutor for BuiltinDelegatingExecutor {
-    fn prepare(&self, ctx: &mut RenderPassPrepareContext<'_>) -> Result<()> {
-        ctx.run_builtin(self.builtin)
-    }
-
     fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()> {
         ctx.run_builtin(self.builtin)
     }
 }
 
+pub(crate) fn parse_builtin_executor(raw: &str) -> Option<BuiltinRenderPassExecutor> {
+    BuiltinRenderPassExecutor::from_label(raw)
+}

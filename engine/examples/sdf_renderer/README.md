@@ -11,6 +11,7 @@ Compute-shader 3D SDF raymarching example for the engine.
   - `input_bindings.ron`
   - `render_graph.ron`
 - Config parse/load failures emit concise `tracing` diagnostics and automatically fall back to typed defaults.
+- `sdf_params.ron` is hot-reloaded at runtime when the file changes.
 
 Current graph shape (registered by example):
 
@@ -52,6 +53,21 @@ Current config split:
   - world and camera defaults
   - SDF controls/tuning
   - debug mode defaults
+  - display fit controls:
+    - `stretch`
+    - `contain` (letterbox/pillarbox)
+    - `cover` (crop)
+    - `fixed_height`
+    - `fixed_width`
+  - display quality controls:
+    - `render_scale` (supersampling scale; `1.0` = native surface resolution)
+
+Fit mode behavior:
+
+- `contain`: preserves aspect and adds bars when needed.
+- `cover`: preserves aspect and fills window by cropping.
+- `stretch`: fills window and allows distortion.
+- For sharper `cover` at small window sizes, increase `display.render_scale` (example: `1.5`).
 - `input_bindings.ron`
   - action -> key bindings for SDF example controls
 - `render_graph.ron`

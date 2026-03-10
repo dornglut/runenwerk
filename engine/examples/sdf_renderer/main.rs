@@ -18,22 +18,21 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 use wgpu::*;
 use winit::keyboard::KeyCode;
 
-mod config_and_graph;
-mod entry_and_scene;
-mod gpu_and_executors;
-mod runtime_helpers;
+mod config;
+mod rendering;
+mod runtime;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use config_and_graph::*;
-pub(crate) use entry_and_scene::*;
-pub(crate) use gpu_and_executors::*;
-pub(crate) use runtime_helpers::*;
+pub(crate) use config::*;
+pub(crate) use rendering::*;
+pub(crate) use runtime::*;
 
 fn main() -> Result<()> {
-    entry_and_scene::run()
+    runtime::run()
 }

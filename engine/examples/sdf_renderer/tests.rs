@@ -3,7 +3,7 @@ use super::*;
 
 #[cfg(test)]
 mod tests {
-    use super::{SdfRenderGraphConfig, parse_builtin_executor, parse_key_code};
+    use super::{SdfParamsConfig, SdfRenderGraphConfig, parse_builtin_executor, parse_key_code};
     use engine::plugins::render::domain::RenderPassExecutorRegistryResource;
     use winit::keyboard::KeyCode;
 
@@ -62,5 +62,32 @@ mod tests {
         assert!(registry.resolve_custom("ui_composite").is_some());
         assert_eq!(registry.resolve_builtin("sdf.compute"), None);
         assert_eq!(registry.resolve_builtin("sdf.compose"), None);
+    }
+
+    #[test]
+    fn params_config_parses_display_fit_mode() {
+        let parsed: SdfParamsConfig = ron::from_str(
+            r#"(
+                display: (
+                    fit_mode: contain,
+                    target_aspect: 1.7777778,
+                    render_scale: 1.5,
+                    bar_color: (0.0, 0.0, 0.0, 1.0),
+                ),
+            )"#,
+        )
+        .expect("display config should parse");
+        assert_eq!(parsed.display.fit_mode.as_shader_mode(), 1);
+        assert!((parsed.display.target_aspect - 1.7777778).abs() < 0.0001);
+        assert!((parsed.display.render_scale - 1.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn params_asset_file_parses_display_config() {
+        let parsed: SdfParamsConfig = ron::from_str(include_str!("assets/sdf_params.ron"))
+            .expect("sdf_params.ron should parse");
+        assert_eq!(parsed.display.fit_mode.as_shader_mode(), 0);
+        assert!(parsed.display.target_aspect > 0.0001);
+        assert!(parsed.display.render_scale > 1.0);
     }
 }

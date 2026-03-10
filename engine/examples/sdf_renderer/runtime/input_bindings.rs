@@ -1,73 +1,7 @@
-// Owner: SDF Renderer Example - Runtime Helpers and Parsers
-use super::*;
+// Owner: SDF Renderer Example - Input Binding Runtime Helpers
+use crate::*;
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub(super) struct SdfComputePipelineConfig {
-    pub(super) id: String,
-    pub(super) shader: String,
-}
-
-impl Default for SdfComputePipelineConfig {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            shader: String::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub(super) struct SdfRenderBuiltinPipelineConfig {
-    pub(super) id: String,
-    pub(super) builtin: String,
-}
-
-impl Default for SdfRenderBuiltinPipelineConfig {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            builtin: String::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(default)]
-pub(super) struct SdfRenderPassConfig {
-    pub(super) id: String,
-    pub(super) kind: SdfPassKindConfig,
-    pub(super) pipeline: String,
-    pub(super) executor: String,
-    pub(super) reads: Vec<String>,
-    pub(super) writes: Vec<String>,
-    pub(super) depends_on: Vec<String>,
-}
-
-pub(super) fn apply_sdf_params(state: &mut SdfWorldState, params: &SdfParamsConfig) {
-    let _ = (
-        params.world_scene_label.as_str(),
-        params.overlay_scene_label.as_str(),
-        params.render_mesh_overlay,
-    );
-    state.world_bounds = params.world_bounds;
-    state.camera_target = params.camera.target;
-    state.camera_yaw = params.camera.yaw;
-    state.camera_pitch = params.camera.pitch;
-    state.camera_distance = params.camera.distance;
-    state.camera_pitch_min = params.camera.pitch_min;
-    state.camera_pitch_max = params.camera.pitch_max;
-    state.camera_distance_min = params.camera.distance_min;
-    state.camera_distance_max = params.camera.distance_max;
-    state.camera_fov_y = params.camera.fov_y_radians;
-    state.world_paused = params.world_paused;
-    state.debug_view_mode = params.debug_view_mode;
-    state.elapsed_time_seconds = 0.0;
-    state.agents.clear();
-}
-
-pub(super) fn apply_input_bindings(input: &mut InputState, config: &SdfInputBindingsConfig) -> usize {
+pub(crate) fn apply_input_bindings(input: &mut InputState, config: &SdfInputBindingsConfig) -> usize {
     let mut applied = 0usize;
     for (index, binding) in config.bindings.iter().enumerate() {
         let action = binding.action.trim();
@@ -94,7 +28,7 @@ pub(super) fn apply_input_bindings(input: &mut InputState, config: &SdfInputBind
     applied
 }
 
-pub(super) fn parse_key_code(raw: &str) -> Option<KeyCode> {
+pub(crate) fn parse_key_code(raw: &str) -> Option<KeyCode> {
     let token = raw.trim();
     if token.is_empty() {
         return None;
@@ -216,60 +150,4 @@ fn parse_function_key(suffix: &str) -> Option<KeyCode> {
         "12" => Some(KeyCode::F12),
         _ => None,
     }
-}
-
-pub(super) fn parse_builtin_executor(raw: &str) -> Option<BuiltinRenderPassExecutor> {
-    BuiltinRenderPassExecutor::from_label(raw)
-}
-
-pub(super) fn load_config_with_default<T>(file_name: &str) -> T
-where
-    T: DeserializeOwned + Default,
-{
-    let config_path = find_config_path(file_name);
-    let raw = match fs::read_to_string(&config_path) {
-        Ok(raw) => raw,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            tracing::warn!(
-                config = file_name,
-                path = config_path.display().to_string(),
-                "sdf config file missing; using built-in defaults"
-            );
-            return T::default();
-        }
-        Err(err) => {
-            tracing::error!(
-                config = file_name,
-                path = config_path.display().to_string(),
-                ?err,
-                "sdf config file read failed; using built-in defaults"
-            );
-            return T::default();
-        }
-    };
-
-    match ron::from_str::<T>(&raw) {
-        Ok(parsed) => parsed,
-        Err(err) => {
-            tracing::error!(
-                config = file_name,
-                path = config_path.display().to_string(),
-                ?err,
-                "sdf config parse failed; using built-in defaults"
-            );
-            T::default()
-        }
-    }
-}
-
-pub(super) fn find_config_path(file_name: &str) -> PathBuf {
-    let primary = Path::new(SDF_ASSETS_DIR_PRIMARY).join(file_name);
-    if primary.exists() {
-        return primary;
-    }
-    let fallback = Path::new(SDF_ASSETS_DIR_FALLBACK).join(file_name);
-    if fallback.exists() {
-        return fallback;
-    }
-    primary
 }

@@ -1,29 +1,7 @@
-// Owner: SDF Renderer Example - Entry, Plugin, and Scene Update
-use super::*;
+// Owner: SDF Renderer Example - App Entry and Systems
+use crate::*;
 
-pub(super) const ACTION_UP: &str = "sdf.move_up";
-pub(super) const ACTION_DOWN: &str = "sdf.move_down";
-pub(super) const ACTION_DEBUG_NEXT: &str = "sdf.debug_next";
-pub(super) const ACTION_DEBUG_PREV: &str = "sdf.debug_prev";
-pub(super) const ACTION_SPEED_UP: &str = "sdf.speed_up";
-pub(super) const ACTION_SPEED_DOWN: &str = "sdf.speed_down";
-
-pub(super) const SDF_ASSETS_DIR_PRIMARY: &str = "engine/examples/sdf_renderer/assets";
-pub(super) const SDF_ASSETS_DIR_FALLBACK: &str = "examples/sdf_renderer/assets";
-
-const PARAMS_CONFIG_FILE: &str = "sdf_params.ron";
-const INPUT_BINDINGS_CONFIG_FILE: &str = "input_bindings.ron";
-const RENDER_GRAPH_CONFIG_FILE: &str = "render_graph.ron";
-pub(super) const SDF_COMPUTE_SHADER: &str =
-    include_str!("../../../assets/shaders/sdf_compute_3d_example.wgsl");
-pub(super) const SDF_COMPOSE_SHADER: &str =
-    include_str!("../../../assets/shaders/world_compose_fullscreen.wgsl");
-pub(super) const SDF_MAX_AGENTS: usize = 512;
-pub(super) const SDF_MAX_MODELS: usize = 1;
-
-static SDF_CONTROLS: OnceLock<SdfControlsConfig> = OnceLock::new();
-
-pub(super) fn run() -> Result<()> {
+pub(crate) fn run() -> Result<()> {
     let mut app = App::new();
     app.set_title("Grotto Quest - 3D SDF Compute Renderer");
     app.add_plugins(default_plugins());
@@ -37,57 +15,10 @@ pub(super) fn run() -> Result<()> {
 
 struct SdfRendererExamplePlugin;
 
-#[derive(Debug, Clone)]
-pub(super) struct SdfWorldAgent {
-    pub(super) x: f32,
-    pub(super) y: f32,
-    pub(super) radius: f32,
-    pub(super) health_ratio: f32,
-    pub(super) team: u32,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct SdfWorldState {
-    pub(super) world_bounds: [f32; 4],
-    pub(super) world_paused: bool,
-    pub(super) camera_yaw: f32,
-    pub(super) camera_pitch: f32,
-    pub(super) camera_distance: f32,
-    pub(super) camera_pitch_min: f32,
-    pub(super) camera_pitch_max: f32,
-    pub(super) camera_distance_min: f32,
-    pub(super) camera_distance_max: f32,
-    pub(super) camera_target: [f32; 3],
-    pub(super) camera_fov_y: f32,
-    pub(super) debug_view_mode: u32,
-    pub(super) elapsed_time_seconds: f32,
-    pub(super) agents: Vec<SdfWorldAgent>,
-}
-
-impl Default for SdfWorldState {
-    fn default() -> Self {
-        Self {
-            world_bounds: [-18.0, -18.0, 18.0, 18.0],
-            world_paused: false,
-            camera_yaw: std::f32::consts::PI,
-            camera_pitch: 0.58,
-            camera_distance: 14.0,
-            camera_pitch_min: -1.10,
-            camera_pitch_max: 1.10,
-            camera_distance_min: 2.0,
-            camera_distance_max: 80.0,
-            camera_target: [0.0, 1.8, 0.0],
-            camera_fov_y: 55.0f32.to_radians(),
-            debug_view_mode: 0,
-            elapsed_time_seconds: 0.0,
-            agents: Vec::new(),
-        }
-    }
-}
-
 impl Plugin for SdfRendererExamplePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SdfWorldState>();
+        app.init_resource::<SdfRuntimeConfigState>();
         app.init_resource::<UiWorldHudStats>();
         app.add_systems(Startup, sdf_renderer_example_setup_system);
         app.add_systems(
@@ -103,20 +34,21 @@ fn sdf_renderer_example_setup_system(
     mut render_executor_registry: ResMut<RenderPassExecutorRegistryResource>,
     mut input: ResMut<InputState>,
     mut state: ResMut<SdfWorldState>,
+    mut runtime_config: ResMut<SdfRuntimeConfigState>,
     mut hud: ResMut<UiWorldHudStats>,
 ) -> Result<()> {
     frame_bindings.register_resource::<SdfWorldState>();
     *hud = UiWorldHudStats::default();
     let params_config = load_config_with_default::<SdfParamsConfig>(PARAMS_CONFIG_FILE);
     apply_sdf_params(&mut state, &params_config);
-    let _ = SDF_CONTROLS.set(params_config.controls);
+    runtime_config.controls = params_config.controls;
+    runtime_config.params_config_path = find_config_path(PARAMS_CONFIG_FILE);
+    runtime_config.params_config_modified = file_modified(&runtime_config.params_config_path);
 
-    let input_bindings =
-        load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
+    let input_bindings = load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
     let applied_bindings = apply_input_bindings(&mut input, &input_bindings);
 
-    let render_graph_config =
-        load_config_with_default::<SdfRenderGraphConfig>(RENDER_GRAPH_CONFIG_FILE);
+    let render_graph_config = load_config_with_default::<SdfRenderGraphConfig>(RENDER_GRAPH_CONFIG_FILE);
     let (active_render_graph_config, spec) = match render_graph_config.to_spec() {
         Ok(spec) => (render_graph_config.clone(), spec),
         Err(err) => {
@@ -147,6 +79,11 @@ fn sdf_renderer_example_setup_system(
         };
 
     tracing::info!(
+        config_path = find_config_path(PARAMS_CONFIG_FILE).display().to_string(),
+        display_fit_mode = state.display_fit_mode,
+        display_target_aspect = state.display_target_aspect,
+        display_render_scale = state.display_render_scale,
+        display_bar_color = ?state.display_bar_color,
         bindings = applied_bindings,
         graph_passes = active_render_graph_config.passes.len(),
         graph_compute_pipelines = active_render_graph_config.compute_pipelines.len(),
@@ -163,10 +100,12 @@ fn sdf_renderer_example_update_system(
     time: Res<Time>,
     scene: Res<SceneRuntimeState>,
     mut state: ResMut<SdfWorldState>,
+    mut runtime_config: ResMut<SdfRuntimeConfigState>,
     mut hud: ResMut<UiWorldHudStats>,
 ) -> Result<()> {
+    maybe_reload_sdf_params(&mut state, &mut runtime_config);
     state.agents.clear();
-    let controls = SDF_CONTROLS.get().copied().unwrap_or_default();
+    let controls = runtime_config.controls;
 
     if input.toggle_pause_menu {
         state.world_paused = !state.world_paused;
@@ -232,15 +171,8 @@ fn sdf_renderer_example_update_system(
     } else {
         0.0
     });
-    let vertical_axis = (if input.action_down(ACTION_UP) {
-        1.0
-    } else {
-        0.0
-    }) - (if input.action_down(ACTION_DOWN) {
-        1.0
-    } else {
-        0.0
-    });
+    let vertical_axis = (if input.action_down(ACTION_UP) { 1.0 } else { 0.0 })
+        - (if input.action_down(ACTION_DOWN) { 1.0 } else { 0.0 });
 
     state.camera_target[0] += (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
     state.camera_target[2] += (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;
@@ -252,7 +184,11 @@ fn sdf_renderer_example_update_system(
         state.debug_view_mode = (state.debug_view_mode + 1) % 4;
     }
     if input.action_pressed(ACTION_DEBUG_PREV) {
-        state.debug_view_mode = (state.debug_view_mode + 3) % 4;
+        state.debug_view_mode = if state.debug_view_mode == 0 {
+            3
+        } else {
+            state.debug_view_mode.saturating_sub(1)
+        };
     }
 
     let player = state.agents.iter().find(|agent| agent.team == 0);

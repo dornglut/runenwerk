@@ -1,7 +1,7 @@
-// Owner: SDF Renderer Example - GPU Pass and Custom Executors
-use super::*;
+// Owner: SDF Renderer Example - GPU Pass Construction
+use crate::*;
 
-const SDF_CLEAR_COLOR: Color = Color {
+pub(crate) const SDF_CLEAR_COLOR: Color = Color {
     r: 0.02,
     g: 0.02,
     b: 0.03,
@@ -10,63 +10,75 @@ const SDF_CLEAR_COLOR: Color = Color {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct SdfWorldParamsRaw {
-    screen_size: [f32; 2],
-    _pad0: [f32; 2],
-    world_min: [f32; 2],
-    _pad1: [f32; 2],
-    world_max: [f32; 2],
-    _pad2: [f32; 2],
-    agent_count: u32,
-    model_count: u32,
-    paused: u32,
-    _pad3: u32,
-    camera_target_time: [f32; 4],
-    camera_orbit: [f32; 4],
-    debug_view_mode: u32,
-    _pad4: [u32; 3],
+pub(crate) struct SdfWorldParamsRaw {
+    pub(crate) screen_size: [f32; 2],
+    pub(crate) _pad0: [f32; 2],
+    pub(crate) world_min: [f32; 2],
+    pub(crate) _pad1: [f32; 2],
+    pub(crate) world_max: [f32; 2],
+    pub(crate) _pad2: [f32; 2],
+    pub(crate) agent_count: u32,
+    pub(crate) model_count: u32,
+    pub(crate) paused: u32,
+    pub(crate) _pad3: u32,
+    pub(crate) camera_target_time: [f32; 4],
+    pub(crate) camera_orbit: [f32; 4],
+    pub(crate) debug_view_mode: u32,
+    pub(crate) display_fit_mode: u32,
+    pub(crate) display_target_aspect: f32,
+    pub(crate) _pad4: u32,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct SdfWorldAgentRaw {
-    pos: [f32; 2],
-    radius: f32,
-    health: f32,
-    team: u32,
-    _pad0: [u32; 3],
+pub(crate) struct SdfWorldAgentRaw {
+    pub(crate) pos: [f32; 2],
+    pub(crate) radius: f32,
+    pub(crate) health: f32,
+    pub(crate) team: u32,
+    pub(crate) _pad0: [u32; 3],
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct SdfWorldModelRaw {
-    pos: [f32; 2],
-    radius: f32,
-    _pad0: f32,
-    color: [f32; 4],
+pub(crate) struct SdfWorldModelRaw {
+    pub(crate) pos: [f32; 2],
+    pub(crate) radius: f32,
+    pub(crate) _pad0: f32,
+    pub(crate) color: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub(crate) struct SdfComposeParamsRaw {
+    pub(crate) output_size: [f32; 2],
+    pub(crate) target_aspect: f32,
+    pub(crate) fit_mode: u32,
+    pub(crate) bar_color: [f32; 4],
 }
 
 #[derive(Default)]
-pub(super) struct SdfGpuSharedState {
-    pass: Option<SdfGpuPass>,
+pub(crate) struct SdfGpuSharedState {
+    pub(crate) pass: Option<SdfGpuPass>,
 }
 
-struct SdfGpuPass {
-    surface_format: TextureFormat,
-    size: (u32, u32),
-    params_buffer: Buffer,
-    agents_buffer: Buffer,
-    _models_buffer: Buffer,
-    compute_bind_group: BindGroup,
-    compose_bind_group: BindGroup,
-    compute_pipeline: ComputePipeline,
-    compose_pipeline: RenderPipeline,
-    _world_texture: Texture,
-    _world_texture_view: TextureView,
-    _world_sampler: Sampler,
+pub(crate) struct SdfGpuPass {
+    pub(crate) surface_format: TextureFormat,
+    pub(crate) size: (u32, u32),
+    pub(crate) params_buffer: Buffer,
+    pub(crate) agents_buffer: Buffer,
+    pub(crate) _models_buffer: Buffer,
+    pub(crate) compose_params_buffer: Buffer,
+    pub(crate) compute_bind_group: BindGroup,
+    pub(crate) compose_bind_group: BindGroup,
+    pub(crate) compute_pipeline: ComputePipeline,
+    pub(crate) compose_pipeline: RenderPipeline,
+    pub(crate) _world_texture: Texture,
+    pub(crate) _world_texture_view: TextureView,
+    pub(crate) _world_sampler: Sampler,
 }
 
-fn build_sdf_gpu_pass(
+pub(crate) fn build_sdf_gpu_pass(
     device: &Device,
     surface_format: TextureFormat,
     size: (u32, u32),
@@ -96,6 +108,12 @@ fn build_sdf_gpu_pass(
         label: Some("sdf_example_models_buffer"),
         size: (std::mem::size_of::<SdfWorldModelRaw>() * SDF_MAX_MODELS) as u64,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let compose_params_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("sdf_example_compose_params_buffer"),
+        size: std::mem::size_of::<SdfComposeParamsRaw>() as u64,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
@@ -225,6 +243,16 @@ fn build_sdf_gpu_pass(
                 ty: BindingType::Sampler(SamplerBindingType::Filtering),
                 count: None,
             },
+            BindGroupLayoutEntry {
+                binding: 2,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
     let compose_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -238,6 +266,10 @@ fn build_sdf_gpu_pass(
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::Sampler(&world_sampler),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: compose_params_buffer.as_entire_binding(),
             },
         ],
     });
@@ -286,6 +318,7 @@ fn build_sdf_gpu_pass(
         params_buffer,
         agents_buffer,
         _models_buffer: models_buffer,
+        compose_params_buffer,
         compute_bind_group,
         compose_bind_group,
         compute_pipeline,
@@ -296,13 +329,19 @@ fn build_sdf_gpu_pass(
     }
 }
 
-fn ensure_sdf_gpu_pass(
+pub(crate) fn ensure_sdf_gpu_pass(
     shared: &mut SdfGpuSharedState,
     device: &Device,
     surface_format: TextureFormat,
     surface_size: (u32, u32),
+    render_scale: f32,
 ) {
-    let size = (surface_size.0.max(1), surface_size.1.max(1));
+    let scale = render_scale.clamp(0.25, 4.0);
+    let size = (
+        ((surface_size.0.max(1) as f32) * scale).round() as u32,
+        ((surface_size.1.max(1) as f32) * scale).round() as u32,
+    );
+    let size = (size.0.max(1), size.1.max(1));
     let needs_rebuild = shared
         .pass
         .as_ref()
@@ -311,168 +350,3 @@ fn ensure_sdf_gpu_pass(
         shared.pass = Some(build_sdf_gpu_pass(device, surface_format, size));
     }
 }
-
-pub(super) struct SdfComputeExecutor {
-    shared: Arc<Mutex<SdfGpuSharedState>>,
-}
-
-impl SdfComputeExecutor {
-    pub(super) fn new(shared: Arc<Mutex<SdfGpuSharedState>>) -> Self {
-        Self { shared }
-    }
-}
-
-impl RenderPassExecutor for SdfComputeExecutor {
-    fn prepare(&self, ctx: &mut RenderPassPrepareContext<'_>) -> Result<()> {
-        let mut shared = self
-            .shared
-            .lock()
-            .map_err(|_| anyhow!("sdf compute shared gpu state lock poisoned"))?;
-        ensure_sdf_gpu_pass(
-            &mut shared,
-            ctx.device(),
-            ctx.surface_format(),
-            ctx.surface_size(),
-        );
-        let pass = shared
-            .pass
-            .as_ref()
-            .ok_or_else(|| anyhow!("sdf compute pass unavailable after setup"))?;
-
-        let world_frame = ctx
-            .frame_data::<SdfWorldState>()
-            .ok_or_else(|| anyhow!("missing SdfWorldState in render pass prepare context"))?;
-        let agent_count = world_frame.agents.len().min(SDF_MAX_AGENTS);
-        let model_count = 0usize;
-        let params = SdfWorldParamsRaw {
-            screen_size: [pass.size.0 as f32, pass.size.1 as f32],
-            _pad0: [0.0; 2],
-            world_min: [world_frame.world_bounds[0], world_frame.world_bounds[1]],
-            _pad1: [0.0; 2],
-            world_max: [world_frame.world_bounds[2], world_frame.world_bounds[3]],
-            _pad2: [0.0; 2],
-            agent_count: agent_count as u32,
-            model_count: model_count as u32,
-            paused: u32::from(world_frame.world_paused),
-            _pad3: 0,
-            camera_target_time: [
-                world_frame.camera_target[0],
-                world_frame.camera_target[1],
-                world_frame.camera_target[2],
-                world_frame.elapsed_time_seconds.max(0.0),
-            ],
-            camera_orbit: [
-                world_frame.camera_yaw,
-                world_frame.camera_pitch,
-                world_frame.camera_distance.max(0.1),
-                world_frame
-                    .camera_fov_y
-                    .clamp(0.1, std::f32::consts::PI - 0.1),
-            ],
-            debug_view_mode: world_frame.debug_view_mode,
-            _pad4: [0; 3],
-        };
-        ctx.queue()
-            .write_buffer(&pass.params_buffer, 0, bytemuck::bytes_of(&params));
-
-        let mut agents = Vec::with_capacity(agent_count);
-        for agent in world_frame.agents.iter().take(agent_count) {
-            agents.push(SdfWorldAgentRaw {
-                pos: [agent.x, agent.y],
-                radius: agent.radius.max(0.2),
-                health: agent.health_ratio.clamp(0.0, 1.0),
-                team: agent.team,
-                _pad0: [0; 3],
-            });
-        }
-        if !agents.is_empty() {
-            ctx.queue()
-                .write_buffer(&pass.agents_buffer, 0, bytemuck::cast_slice(&agents));
-        }
-
-        Ok(())
-    }
-
-    fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()> {
-        let mut shared = self
-            .shared
-            .lock()
-            .map_err(|_| anyhow!("sdf compute shared gpu state lock poisoned"))?;
-        ensure_sdf_gpu_pass(
-            &mut shared,
-            ctx.device(),
-            ctx.surface_format(),
-            ctx.surface_size(),
-        );
-        let pass = shared
-            .pass
-            .as_ref()
-            .ok_or_else(|| anyhow!("sdf compute pass unavailable during encode"))?;
-        let mut compute = ctx.encoder().begin_compute_pass(&ComputePassDescriptor {
-            label: Some("sdf_example.compute"),
-            timestamp_writes: None,
-        });
-        compute.set_pipeline(&pass.compute_pipeline);
-        compute.set_bind_group(0, &pass.compute_bind_group, &[]);
-        compute.dispatch_workgroups(pass.size.0.div_ceil(8), pass.size.1.div_ceil(8), 1);
-        Ok(())
-    }
-}
-
-pub(super) struct SdfComposeExecutor {
-    shared: Arc<Mutex<SdfGpuSharedState>>,
-}
-
-impl SdfComposeExecutor {
-    pub(super) fn new(shared: Arc<Mutex<SdfGpuSharedState>>) -> Self {
-        Self { shared }
-    }
-}
-
-impl RenderPassExecutor for SdfComposeExecutor {
-    fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()> {
-        let mut shared = self
-            .shared
-            .lock()
-            .map_err(|_| anyhow!("sdf compose shared gpu state lock poisoned"))?;
-        ensure_sdf_gpu_pass(
-            &mut shared,
-            ctx.device(),
-            ctx.surface_format(),
-            ctx.surface_size(),
-        );
-        let pass = shared
-            .pass
-            .as_ref()
-            .ok_or_else(|| anyhow!("sdf compose pass unavailable during encode"))?;
-        let frame_view = ctx.frame_view();
-        let mut compose = ctx.encoder().begin_render_pass(&RenderPassDescriptor {
-            label: Some("sdf_example.compose"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: frame_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(SDF_CLEAR_COLOR),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-        compose.set_pipeline(&pass.compose_pipeline);
-        compose.set_bind_group(0, &pass.compose_bind_group, &[]);
-        compose.draw(0..3, 0..1);
-        Ok(())
-    }
-}
-
-pub(super) struct SdfUiCompositeExecutor;
-
-impl RenderPassExecutor for SdfUiCompositeExecutor {
-    fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()> {
-        ctx.run_ui()
-    }
-}
-
