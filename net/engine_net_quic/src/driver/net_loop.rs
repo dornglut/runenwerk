@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
-use engine_net::{JoinRejected, MessageEnvelope, ServerMessage, decode_message, encode_message};
+use engine_net::{ConnectionId, JoinRejected, MessageEnvelope, ServerMessage, decode_message};
 use quinn::{Connection, Endpoint};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::runtime::event_dispatch::send_runtime_event;
 use crate::runtime::join_rejection::parse_join_rejection_reason;
+use crate::runtime::message_transport::{receive_stream_envelope, send_envelope};
 use crate::{QuicSessionCommand, QuicSessionEvent};
 
 // Owner: Grotto Engine Net - QUIC Runtime
@@ -19,7 +20,7 @@ pub(crate) async fn run_live_connection_loop(
     _endpoint: Option<Endpoint>,
     command_rx: &mut Receiver<QuicSessionCommand>,
     event_tx: Sender<QuicSessionEvent>,
-    source_connection_id: Option<engine_net::ConnectionId>,
+    source_connection_id: Option<ConnectionId>,
     pending_commands: &mut Vec<QuicSessionCommand>,
 ) -> Result<LoopOutcome> {
     for command in pending_commands.drain(..) {
@@ -46,33 +47,10 @@ pub(crate) async fn run_live_connection_loop(
                 match incoming {
                     Ok(bytes) => {
                         let envelope: MessageEnvelope = decode_message(&bytes)?;
-                        match envelope {
-                            MessageEnvelope::Client(message) => {
-                                send_runtime_event(&event_tx, QuicSessionEvent::ClientMessage {
-                                    connection_id: source_connection_id,
-                                    message,
-                                });
-                            }
-                            MessageEnvelope::Server(message) => {
-                                if let ServerMessage::JoinRejected(JoinRejected { reason }) = &message {
-                                    send_runtime_event(&event_tx, QuicSessionEvent::JoinRejected(reason.clone()));
-                                }
-                                if let ServerMessage::JoinAccepted(join) = &message {
-                                    send_runtime_event(&event_tx, QuicSessionEvent::JoinAccepted(join.clone()));
-                                }
-                                if let ServerMessage::Disconnect(reason) = &message {
-                                    send_runtime_event(&event_tx, QuicSessionEvent::ConnectionClosed {
-                                        connection_id: source_connection_id,
-                                        reason: Some(reason.clone()),
-                                    });
-                                    return Ok(LoopOutcome::ConnectionClosed);
-                                }
-                                send_runtime_event(&event_tx, QuicSessionEvent::ServerMessage(message));
-                            }
+                        if handle_incoming_envelope(&event_tx, source_connection_id, envelope) {
+                            return Ok(LoopOutcome::ConnectionClosed);
                         }
-                        send_runtime_event(&event_tx, QuicSessionEvent::RttUpdated {
-                            millis: connection.rtt().as_millis().min(u32::MAX as u128) as u32,
-                        });
+                        emit_rtt_update(&event_tx, &connection);
                     }
                     Err(error) => {
                         let message = error.to_string();
@@ -88,8 +66,77 @@ pub(crate) async fn run_live_connection_loop(
                     }
                 }
             }
+            incoming = receive_stream_envelope(&connection) => {
+                match incoming {
+                    Ok(Some(envelope)) => {
+                        if handle_incoming_envelope(&event_tx, source_connection_id, envelope) {
+                            return Ok(LoopOutcome::ConnectionClosed);
+                        }
+                        emit_rtt_update(&event_tx, &connection);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        let message = error.to_string();
+                        let reason = parse_join_rejection_reason(&message);
+                        send_runtime_event(&event_tx, QuicSessionEvent::Error { message });
+                        send_runtime_event(&event_tx, QuicSessionEvent::ConnectionClosed {
+                            connection_id: source_connection_id,
+                            reason,
+                        });
+                        return Ok(LoopOutcome::ConnectionClosed);
+                    }
+                }
+            }
         }
     }
+}
+
+fn handle_incoming_envelope(
+    event_tx: &Sender<QuicSessionEvent>,
+    source_connection_id: Option<ConnectionId>,
+    envelope: MessageEnvelope,
+) -> bool {
+    match envelope {
+        MessageEnvelope::Client(message) => {
+            send_runtime_event(
+                event_tx,
+                QuicSessionEvent::ClientMessage {
+                    connection_id: source_connection_id,
+                    message,
+                },
+            );
+            false
+        }
+        MessageEnvelope::Server(message) => {
+            if let ServerMessage::JoinRejected(JoinRejected { reason }) = &message {
+                send_runtime_event(event_tx, QuicSessionEvent::JoinRejected(reason.clone()));
+            }
+            if let ServerMessage::JoinAccepted(join) = &message {
+                send_runtime_event(event_tx, QuicSessionEvent::JoinAccepted(join.clone()));
+            }
+            if let ServerMessage::Disconnect(reason) = &message {
+                send_runtime_event(
+                    event_tx,
+                    QuicSessionEvent::ConnectionClosed {
+                        connection_id: source_connection_id,
+                        reason: Some(reason.clone()),
+                    },
+                );
+                return true;
+            }
+            send_runtime_event(event_tx, QuicSessionEvent::ServerMessage(message));
+            false
+        }
+    }
+}
+
+fn emit_rtt_update(event_tx: &Sender<QuicSessionEvent>, connection: &Connection) {
+    send_runtime_event(
+        event_tx,
+        QuicSessionEvent::RttUpdated {
+            millis: connection.rtt().as_millis().min(u32::MAX as u128) as u32,
+        },
+    );
 }
 
 async fn dispatch_runtime_command(
@@ -99,10 +146,9 @@ async fn dispatch_runtime_command(
 ) -> Result<bool> {
     match command {
         QuicSessionCommand::Client(message) => {
-            let bytes = encode_message(&MessageEnvelope::Client(message))?;
-            connection
-                .send_datagram(bytes.into())
-                .context("failed to send client datagram")?;
+            send_envelope(connection, &MessageEnvelope::Client(message))
+                .await
+                .context("failed to send client message")?;
             Ok(false)
         }
         _ => Ok(false),

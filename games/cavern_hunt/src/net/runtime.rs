@@ -111,6 +111,9 @@ fn server_emit_replication_system(mut world: WorldMut) -> Result<()> {
 }
 
 fn server_emit_replication(world: &mut World) -> Result<()> {
+    if split_driver_runtime_enabled(world) {
+        return Ok(());
+    }
     emit::server_emit_replication(world)
 }
 
@@ -119,6 +122,9 @@ fn client_apply_replication_events_system(mut world: WorldMut) -> Result<()> {
 }
 
 fn client_apply_replication_events_runtime(world: &mut World) -> Result<()> {
+    if split_driver_runtime_enabled(world) {
+        return Ok(());
+    }
     let authority = world
         .resource::<SimulationProfileConfig>()
         .map(|config| config.authority)
@@ -128,6 +134,12 @@ fn client_apply_replication_events_runtime(world: &mut World) -> Result<()> {
     }
     // Single runtime protocol path.
     client_apply_replication_events(world)
+}
+
+fn split_driver_runtime_enabled(world: &World) -> bool {
+    world
+        .resource::<engine::plugins::net::SnapshotReplicationState<CavernRunSnapshotV1>>()
+        .is_ok()
 }
 
 #[cfg(test)]

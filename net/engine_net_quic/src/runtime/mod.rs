@@ -7,3 +7,4 @@ pub mod reconnect;
 pub mod event_dispatch;
 pub mod join_rejection;
 pub mod reconnect_backoff;
+pub mod message_transport;

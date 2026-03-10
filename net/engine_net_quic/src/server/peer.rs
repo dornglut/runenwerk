@@ -1,9 +1,10 @@
-use anyhow::{Context, Result};
-use engine_net::{MessageEnvelope, ServerMessage, decode_message, encode_message};
+use anyhow::Result;
+use engine_net::{MessageEnvelope, ServerMessage, decode_message};
 use quinn::Connection;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::runtime::event_dispatch::{send_peer_event, send_runtime_event};
+use crate::runtime::message_transport::{receive_stream_envelope, send_envelope};
 use crate::server::runtime::ServerPeerEvent;
 use crate::QuicSessionEvent;
 
@@ -26,13 +27,11 @@ pub(crate) async fn run_server_peer_task(
                         } else {
                             None
                         };
-                        let send_result: Result<()> = (|| {
-                            let bytes = encode_message(&MessageEnvelope::Server(message))?;
-                            connection
-                                .send_datagram(bytes.into())
-                                .context("failed to send server datagram")?;
-                            Ok(())
-                        })();
+                        let send_result: Result<()> = send_envelope(
+                            &connection,
+                            &MessageEnvelope::Server(message),
+                        )
+                        .await;
                         if let Err(error) = send_result {
                             send_runtime_event(&event_tx, QuicSessionEvent::Error {
                                 message: error.to_string(),
@@ -83,9 +82,7 @@ pub(crate) async fn run_server_peer_task(
                                     connection_id: Some(connection_id),
                                     message,
                                 });
-                                send_runtime_event(&event_tx, QuicSessionEvent::RttUpdated {
-                                    millis: connection.rtt().as_millis().min(u32::MAX as u128) as u32,
-                                });
+                                emit_rtt_update(&event_tx, &connection);
                             }
                             Ok(MessageEnvelope::Server(_)) => {}
                             Err(error) => {
@@ -111,6 +108,42 @@ pub(crate) async fn run_server_peer_task(
                     }
                 }
             }
+            incoming = receive_stream_envelope(&connection) => {
+                match incoming {
+                    Ok(Some(MessageEnvelope::Client(message))) => {
+                        send_runtime_event(&event_tx, QuicSessionEvent::ClientMessage {
+                            connection_id: Some(connection_id),
+                            message,
+                        });
+                        emit_rtt_update(&event_tx, &connection);
+                    }
+                    Ok(Some(MessageEnvelope::Server(_))) => {}
+                    Ok(None) => {}
+                    Err(error) => {
+                        send_runtime_event(&event_tx, QuicSessionEvent::Error {
+                            message: error.to_string(),
+                        });
+                        send_runtime_event(&event_tx, QuicSessionEvent::ConnectionClosed {
+                            connection_id: Some(connection_id),
+                            reason: None,
+                        });
+                        send_peer_event(&peer_event_tx, ServerPeerEvent::Closed {
+                            connection_id,
+                            reason: None,
+                        });
+                        return;
+                    }
+                }
+            }
         }
     }
+}
+
+fn emit_rtt_update(event_tx: &Sender<QuicSessionEvent>, connection: &Connection) {
+    send_runtime_event(
+        event_tx,
+        QuicSessionEvent::RttUpdated {
+            millis: connection.rtt().as_millis().min(u32::MAX as u128) as u32,
+        },
+    );
 }

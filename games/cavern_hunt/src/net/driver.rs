@@ -5,7 +5,7 @@ use engine_net::replication::ReplicationDriver;
 
 use crate::{
     CavernCommandEnvelope, CavernRunDeltaV1, CavernRunSnapshotV1, apply_cavern_run_delta,
-    build_cavern_run_delta,
+    build_cavern_run_delta, capture_cavern_run_snapshot,
 };
 
 pub struct CavernReplicationDriver;
@@ -20,10 +20,10 @@ impl ReplicationDriver for CavernReplicationDriver {
     type Input = CavernCommandEnvelope;
     type Error = io::Error;
 
-    fn capture_snapshot(_world: &World) -> Result<Option<Self::Snapshot>, Self::Error> {
-        // Transitional compatibility: Cavern Hunt currently emits chunked run events through its
-        // gameplay runtime path to stay within transport datagram budgets.
-        Ok(None)
+    fn capture_snapshot(world: &World) -> Result<Option<Self::Snapshot>, Self::Error> {
+        let snapshot = capture_cavern_run_snapshot(world)
+            .map_err(|error| into_driver_error("capture cavern snapshot", error))?;
+        Ok(Some(snapshot))
     }
 
     fn build_delta(previous: &Self::Snapshot, current: &Self::Snapshot) -> Self::Delta {

@@ -15,8 +15,8 @@ pub use model::{
     Replicated, ReplicatedComponentDescriptor, ReplicationRegistry,
 };
 pub use prediction::{
-    InputDriver, LegacyReplicationDriver, PredictionState as ReplicationPredictionState,
-    ReconciliationResult, ReplicationDriver, SnapshotApplyDriver,
+    InputDriver, PredictionState as ReplicationPredictionState, ReconciliationResult,
+    ReplicationDriver, SnapshotApplyDriver,
 };
 pub use profile::{
     BandwidthPriority, PredictionMode, Reliability, ReplicationDirection, ReplicationProfile,
