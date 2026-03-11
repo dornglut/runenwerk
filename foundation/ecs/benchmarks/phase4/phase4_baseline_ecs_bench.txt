@@ -1,0 +1,41 @@
+w1_broad_transform_update/entities/10000
+                        time:   [14.266 ms 14.411 ms 14.990 ms]
+                        change: [+21.984% +25.390% +28.813%] (p = 0.08 > 0.05)
+                        No change in performance detected.
+w1_broad_transform_update/entities/50000
+                        time:   [109.38 ms 122.15 ms 125.34 ms]
+                        change: [+44.179% +58.536% +73.624%] (p = 0.09 > 0.05)
+                        No change in performance detected.
+w1_broad_transform_update/entities/200000
+                        time:   [529.67 ms 534.47 ms 553.66 ms]
+                        change: [+50.915% +58.062% +65.564%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+
+w2_gameplay_mixed/entities/5000
+                        time:   [4.0578 ms 4.0957 ms 4.2471 ms]
+                        change: [-10.509% -8.3585% -6.2053%] (p = 0.05 > 0.05)
+                        No change in performance detected.
+w2_gameplay_mixed/entities/20000
+                        time:   [22.121 ms 22.485 ms 22.576 ms]
+                        change: [+19.643% +21.539% +23.457%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+
+w3_structural_churn/spawn_insert_remove_despawn_commands
+                        time:   [901.73 µs 910.15 µs 943.82 µs]
+                        change: [-12.272% -9.4110% -6.4973%] (p = 0.05 < 0.05)
+                        Performance has improved.
+
+w4_event_heavy/event_reader_writer_interleaved_query
+                        time:   [809.94 µs 812.63 µs 823.42 µs]
+                        change: [+4.4752% +6.5988% +8.7736%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+
+w5_scheduler_stress/scheduler_plan_build_96_systems
+                        time:   [971.30 µs 985.13 µs 988.59 µs]
+                        change: [+30.199% +32.654% +35.158%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+w5_scheduler_stress/scheduler_stage_execution_96_systems
+                        time:   [212.74 µs 222.63 µs 225.10 µs]
+                        change: [-0.7494% +4.0240% +8.9772%] (p = 0.30 > 0.05)
+                        No change in performance detected.
+

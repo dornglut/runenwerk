@@ -1,0 +1,29 @@
+w1_broad_transform_update/entities/10000
+                        time:   [11.251 ms 11.446 ms 11.495 ms]
+                        change: [-19.421% -17.553% -15.639%] (p = 0.07 > 0.05)
+                        No change in performance detected.
+w1_broad_transform_update/entities/50000
+                        time:   [70.789 ms 71.408 ms 73.885 ms]
+                        change: [-20.891% -18.696% -16.475%] (p = 0.06 > 0.05)
+                        No change in performance detected.
+w1_broad_transform_update/entities/200000
+                        time:   [289.01 ms 292.62 ms 293.52 ms]
+                        change: [-25.998% -25.081% -24.155%] (p = 0.07 > 0.05)
+                        No change in performance detected.
+
+w2_gameplay_mixed/entities/5000
+                        time:   [307.20 ms 526.77 ms 581.66 ms]
+w2_gameplay_mixed/entities/20000
+                        time:   [1.7643 s 2.6705 s 2.8970 s]
+
+w3_structural_churn/spawn_insert_remove_despawn_commands
+                        time:   [1.3890 ms 1.3891 ms 1.3896 ms]
+
+w4_event_heavy/event_reader_writer_interleaved_query
+                        time:   [1.0363 ms 1.0458 ms 1.0836 ms]
+
+w5_scheduler_stress/scheduler_plan_build_96_systems
+                        time:   [1.0386 ms 1.0420 ms 1.0554 ms]
+w5_scheduler_stress/scheduler_stage_execution_96_systems
+                        time:   [217.39 µs 225.85 µs 227.96 µs]
+

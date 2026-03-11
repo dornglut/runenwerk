@@ -1,7 +1,6 @@
 # ECS Usage Guide
 
-This guide documents the currently supported runtime API in `foundation/ecs`.
-Examples are aligned with `foundation/ecs/tests/world.rs`.
+This guide documents the target `foundation/ecs` API.
 
 ## 1. Import the API
 
@@ -9,9 +8,9 @@ Examples are aligned with `foundation/ecs/tests/world.rs`.
 use ecs::prelude::*;
 ```
 
-The prelude re-exports `World`, query types, event/index APIs, error types, and derive macros.
+## 2. Define Components, Tags, Resources
 
-## 2. Define Components and Bundles
+All ECS-managed data derives `ecs::Component`.
 
 ```rust
 use ecs::prelude::*;
@@ -31,179 +30,242 @@ struct Velocity {
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
 struct Player;
 
-#[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
-struct Name(String);
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+struct DeltaTime(f32);
+```
 
-#[derive(Debug, PartialEq, ecs::Bundle)]
-struct CombatBundle {
-    health: Health,
-    name: Name,
-}
+- Components: per-entity data (`Position`, `Velocity`)
+- Tags: empty components (`Player`)
+- Resources: singleton components stored globally (`DeltaTime`)
+
+## 3. World Lifecycle
+
+```rust
+use ecs::prelude::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
-struct Health(i32);
-```
-
-Notes:
-
-- Single components can be inserted as bundles.
-- Tuple bundles are supported up to 6 components.
-- Custom bundle structs can derive `ecs::Bundle`.
-
-## 3. Create a World and Spawn Entities
-
-```rust
-use ecs::prelude::*;
+struct Position { x: f32, y: f32 }
 
 let mut world = World::new();
-
-let player = world.spawn((
-    Player,
-    Position { x: 1.0, y: 2.0 },
-    Velocity { x: 0.5, y: -1.0 },
-));
-
-assert!(world.contains(player));
+let entity = world.spawn(Position { x: 1.0, y: 2.0 });
+assert!(world.contains(entity));
+world.despawn(entity).unwrap();
 ```
 
-## 4. Entity-Scoped Reads and Writes
+## 4. Entity Access
 
 ```rust
 use ecs::prelude::*;
 
-let position = world.require::<Position>(player)?;
-assert_eq!(position.x, 1.0);
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+struct Position { x: f32, y: f32 }
 
-{
-    let mut entity = world.entity_mut(player)?;
-    entity.require_mut::<Position>()?.x += 10.0;
-}
+let mut world = World::new();
+let entity = world.spawn(Position { x: 1.0, y: 2.0 });
 
-assert_eq!(world.require::<Position>(player)?.x, 11.0);
+assert_eq!(world.require::<Position>(entity).unwrap().x, 1.0);
+world.require_mut::<Position>(entity).unwrap().x += 1.0;
+assert_eq!(world.require::<Position>(entity).unwrap().x, 2.0);
 ```
 
-Use:
+## 5. QueryState Runtime Queries
 
-- `world.get::<T>(entity)` for optional reads
-- `world.require::<T>(entity)` for fallible reads (`EntityError`)
-- `world.entity(entity)` / `world.entity_mut(entity)` for grouped entity operations
+`World` uses detached reusable query state for direct runtime querying:
 
-## 5. Borrowed Queries
-
-### Read-only query
+- preferred constructor: `world.query_state::<Q, F>()`
+- reusable alternative: `QueryState::<Q, F>::new(&world)`
 
 ```rust
 use ecs::prelude::*;
 
-let seen: Vec<_> = world
-    .query::<(Entity, &Position)>()
-    .with::<Player>()
-    .iter()
-    .map(|(entity, position)| (entity, position.x, position.y))
-    .collect();
-```
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+struct Position { x: f32, y: f32 }
 
-### Mutable query with filter
-
-```rust
-use ecs::prelude::*;
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+struct Velocity { x: f32, y: f32 }
 
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
 struct Disabled;
 
-let mut query = world
-    .query_mut::<(&mut Position, &Velocity)>()
+let mut world = World::new();
+world.spawn((Position { x: 0.0, y: 0.0 }, Velocity { x: 1.0, y: 2.0 }));
+world.spawn((Position { x: 9.0, y: 9.0 }, Velocity { x: 9.0, y: 9.0 }, Disabled));
+
+let query = world
+    .query_state::<(&mut Position, &Velocity), ()>()
     .without::<Disabled>();
-
-for (position, velocity) in query.iter_mut() {
+for (position, velocity) in query.iter(&mut world) {
     position.x += velocity.x;
     position.y += velocity.y;
 }
 ```
 
-### Single/get helpers
+`QueryState` uses one API shape:
+
+- `iter(...)`
+- `get(...)`
+- `single(...)`
+
+Mutability is driven by the query type `Q` (`&T` vs `&mut T`), not by separate query wrapper types.
+
+## 6. Query Patterns
+
+Supported forms include:
+
+- `Query<&T>`
+- `Query<&mut T>`
+- `Query<(Entity, &T)>`
+- `Query<(Entity, &mut T)>`
+- `Query<(&A, &B)>`
+- `Query<(&mut A, &B)>`
+- `Query<(&A, &mut B)>`
+- `Query<(&mut A, &mut B)>`
+- `Query<Option<&T>>`
+- `Query<Option<&mut T>>`
+- `Query<(&mut A, Option<&B>)>`
+- `Query<(&mut A, Option<&mut B>)>`
+- `Query<(&A, Option<&B>)>`
+- `Query<(&A, Option<&mut B>)>`
+- `Query<(Entity, Option<&T>)>`
+
+Recommended extended tuple forms are also implemented:
+
+- `Query<(&A, &B, &C)>`
+- `Query<(&mut A, &B, &C)>`
+- `Query<(&mut A, &mut B, &C)>`
+
+## 7. Query Filters
 
 ```rust
 use ecs::prelude::*;
 
-let maybe_pos = world.query::<&Position>().get(player);
-let only_player_pos = world.query::<&Position>().with::<Player>().single();
+fn players(_query: Query<&Position, With<Player>>) {}
+fn active_players(_query: Query<&Position, (With<Player>, Without<Disabled>)>) {}
+fn changed_players(_query: Query<&Position, (Changed<Position>, With<Player>)>) {}
+fn added_health(_query: Query<(Entity, &Health), Added<Health>>) {}
+# #[derive(ecs::Component)] struct Position;
+# #[derive(ecs::Component)] struct Player;
+# #[derive(ecs::Component)] struct Disabled;
+# #[derive(ecs::Component)] struct Health;
 ```
 
-`single()` / `single_mut()` return `QueryError::NoResults` or `QueryError::MultipleResults`.
+`Changed<T>` and `Added<T>` are stateful filters: each `QueryState` tracks its own last-seen tick.
+The first run includes already-added components. Subsequent runs include only new changes since
+the previous call.
 
-## 6. Detached QueryState
+## 8. Resources
 
-`QueryState<Q, F>` is reusable across frames and detached from a world borrow.
-
-```rust
-use ecs::prelude::*;
-
-let position_query = QueryState::<(Entity, &Position)>::new(&mut world).with::<Player>();
-
-for (entity, position) in position_query.iter_on(&world) {
-    let _ = (entity, position.x);
-}
-```
-
-Mutable detached query:
+Resources are components stored globally:
 
 ```rust
 use ecs::prelude::*;
 
-let mut movement_query = QueryState::<(&mut Position, &Velocity)>::new(&mut world);
-for (position, velocity) in movement_query.iter_mut_on(&mut world) {
-    position.x += velocity.x;
-    position.y += velocity.y;
-}
-```
-
-## 7. Resources
-
-```rust
-use ecs::prelude::*;
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, ecs::Component)]
 struct Frame(u64);
 
+let mut world = World::new();
 world.insert_resource(Frame(1));
 assert!(world.has_resource::<Frame>());
 
 {
-    let mut frame = world.resource_mut::<Frame>()?;
+    let mut frame = world.resource_mut::<Frame>().unwrap();
     frame.0 += 1;
 }
 
-assert_eq!(world.resource::<Frame>()?.0, 2);
+assert_eq!(world.resource::<Frame>().unwrap().0, 2);
 assert_eq!(world.remove_resource::<Frame>(), Some(Frame(2)));
 ```
 
-All resource failures use `ResourceError::Missing`.
-
-## 8. Deferred Structural Changes with Commands
+## 9. Commands
 
 ```rust
 use ecs::prelude::*;
 
-let existing = world.spawn(Position { x: 1.0, y: 1.0 });
-let doomed = world.spawn(Position { x: 99.0, y: 99.0 });
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+struct Position { x: f32, y: f32 }
+
+let mut world = World::new();
+let doomed = world.spawn(Position { x: 9.0, y: 9.0 });
 
 let mut commands = world.commands();
-commands.spawn((Position { x: 3.0, y: 4.0 }, Velocity { x: 0.0, y: 1.0 }));
-commands.insert(existing, Velocity { x: 5.0, y: 6.0 });
+commands.spawn(Position { x: 1.0, y: 2.0 });
 commands.despawn(doomed);
-commands.apply(&mut world)?;
+commands.apply(&mut world).unwrap();
 ```
 
-`Commands::apply` executes queued operations in order and returns `CommandError` if one fails.
+In runtime schedules, each system gets its own command queue. Queues are applied deterministically
+at the end of each scheduler stage.
 
-## 9. Secondary Component Indexes
+## 10. Runtime Scheduling
 
-Use indexes for key-based lookups on a component field.
+```rust
+use ecs::prelude::*;
+use scheduler::ScheduleLabel;
+
+#[derive(Copy, Clone)]
+struct Update;
+impl ScheduleLabel for Update {
+    fn name() -> &'static str { "Update" }
+}
+
+#[derive(Debug, PartialEq, Eq, ecs::Component)]
+struct Frame(u64);
+
+fn tick(mut frame: ResMut<Frame>) {
+    frame.0 += 1;
+}
+
+let mut world = World::new();
+world.insert_resource(Frame(0));
+
+let mut runtime = Runtime::new();
+runtime.add_systems::<Update, _, _>(&mut world, tick);
+runtime.run_schedule::<Update>(&mut world).unwrap();
+assert_eq!(world.resource::<Frame>().unwrap().0, 1);
+```
+
+## 11. Events
+
+Runtime world APIs:
+
+- `emit_event<T>(event)`
+- `read_events<T>()`
+- `drain_events<T>()`
+- `clear_events<T>()`
+- `event_count<T>()`
+- `event_channel_stats<T>()`
+
+Gameplay param APIs:
+
+- `EventReader<T>::iter()`
+- `EventWriter<T>::send(event)`
+
+## 12. Change Tracking
 
 ```rust
 use ecs::prelude::*;
 
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+struct Position { x: f32, y: f32 }
+
+let mut world = World::new();
+let tick = world.current_change_tick();
+let entity = world.spawn(Position { x: 0.0, y: 0.0 });
+world.require_mut::<Position>(entity).unwrap().x = 1.0;
+
+assert!(world.component_changed_since::<Position>(tick));
+assert!(!world.component_changes_since(tick).is_empty());
+```
+
+## 13. Secondary Indexes
+
+```rust
+use ecs::prelude::*;
+
+#[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
+struct Name(String);
+
+let mut world = World::new();
 world.ensure_component_index::<Name, String>(|name| name.0.clone());
 
 let hero = world.spawn(Name("hero".to_string()));
@@ -211,81 +273,45 @@ assert_eq!(
     world.find_entity_by_index::<Name, String>(&"hero".to_string()),
     Some(hero)
 );
+
+let shared: &World = &world;
+assert_eq!(
+    shared.find_entity_by_index::<Name, String>(&"hero".to_string()),
+    Some(hero)
+);
 ```
 
-Named indexes:
+## 14. Benchmarking and Telemetry (Phase 5B)
 
-```rust
-use ecs::prelude::*;
+`ecs` exposes feature-gated runtime telemetry for profiling and cost attribution.
 
-world.ensure_component_index_named::<Name, char>("initial", |name| {
-    name.0.chars().next().unwrap_or_default()
-});
+Run the benchmark/profiling suite:
 
-let h_entities = world.find_entities_by_index_named::<Name, char>("initial", &'h');
+```powershell
+cargo bench -p ecs --bench phase35 --features telemetry -- --quick
+cargo run -p ecs --example phase35_profile --features telemetry --release
+cargo bench -p engine --bench phase35_runtime -- --quick
+
+cargo bench -p ecs --bench phase4 --features telemetry -- --quick
+cargo run -p ecs --example phase4_profile --features telemetry --release
+cargo bench -p engine --bench phase4_runtime -- --quick
+
+cargo bench -p ecs --bench phase5b --features telemetry -- --quick
+cargo run -p ecs --example phase5b_profile --features telemetry --release
+cargo bench -p engine --bench phase5b_runtime -- --quick
 ```
 
-Lookup methods take `&mut World` because index rebuilds are lazy and performed on access.
+Telemetry APIs:
 
-## 10. Event Channels and Observers
+- `ecs::telemetry::reset()`
+- `ecs::telemetry::snapshot()`
 
-```rust
-use ecs::prelude::*;
+The profiler example prints query/filter/scheduler/runtime/flush counters and timing totals so
+hotspots can be attributed without changing runtime semantics.
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct TickEvent;
+Benchmark/profiling artifacts and decision reports are stored in:
 
-world.configure_event_channel::<TickEvent>(EventChannelConfig {
-    capacity: Some(1),
-    overflow: OverflowPolicy::DropOldest,
-    lifetime: EventLifetime::FrameTransient,
-    tracing: EventTracingPolicy::Disabled,
-});
-
-world.observe_events::<TickEvent>("tick_emit", ObserverTrigger::OnEmit);
-
-world.emit_event(TickEvent);
-world.emit_event(TickEvent); // one pending because capacity=1 + DropOldest
-
-assert_eq!(world.event_count::<TickEvent>(), 1);
-let drained = world.drain_events::<TickEvent>();
-assert_eq!(drained.len(), 1);
-
-let notifications = world.drain_event_observer_notifications();
-assert!(!notifications.is_empty());
-```
-
-For `EventLifetime::FrameTransient`, call `world.finish_event_frame()` each frame to clear pending events.
-
-## 11. Change Tracking
-
-```rust
-use ecs::prelude::*;
-
-let start_tick = world.current_change_tick();
-let entity = world.spawn(Position { x: 0.0, y: 0.0 });
-world.require_mut::<Position>(entity)?.x = 1.0;
-
-assert!(world.component_changed_since::<Position>(start_tick));
-
-let component_changes = world.component_changes_since(start_tick);
-assert!(!component_changes.is_empty());
-```
-
-Resource changes are available through:
-
-- `resource_changed_since::<R>(tick)`
-- `resource_changes_since(tick)`
-
-## 12. Current Runtime Constraints
-
-- Query data implementations are currently limited to:
-  - `&T`
-  - `&mut T`
-  - `(Entity, &T)`
-  - `(&A, &B)`
-  - `(&mut A, &B)`
-- Component tuple bundles are implemented up to arity 6.
-- `Resource` is a marker for `'static` types.
-- Event channels are type-based (`T: 'static`) and created lazily on first use.
-
+- `foundation/ecs/benchmarks/phase4/README.md`
+- `foundation/ecs/benchmarks/phase4/PHASE5_DECISION_REPORT.md`
+- `foundation/ecs/benchmarks/phase5b/README.md`
+- `foundation/ecs/benchmarks/phase5b/PHASE6_DECISION_REPORT.md`

@@ -35,6 +35,9 @@ engine_net = { path = "../net/engine_net" }
 engine_sim = { path = "../net/engine_sim" }
 crossbeam-channel = "0.5.15"
 
+[dev-dependencies]
+criterion = "0.5.1"
+
 [[example]]
 name = "scene_manager_ui"
 path = "examples/scene_manager_ui/main.rs"
@@ -50,3 +53,15 @@ path = "examples/runtime_minimal/main.rs"
 [[example]]
 name = "window_input_demo"
 path = "examples/window_input_demo/main.rs"
+
+[[bench]]
+name = "phase35_runtime"
+harness = false
+
+[[bench]]
+name = "phase4_runtime"
+harness = false
+
+[[bench]]
+name = "phase5b_runtime"
+harness = false
