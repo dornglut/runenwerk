@@ -1,39 +1,73 @@
 # ECS Crate
 
-`ecs` is the engine ECS foundation.
+`ecs` is the runtime ECS foundation in the `foundation` domain.
 
 ## Purpose
 
-- Provide the engine ECS API.
-- Hide storage internals behind typed world/entity/query surfaces.
-- Serve as the runtime ECS for engine and networking systems.
+- Provide a typed runtime API for entities, components, resources, and events.
+- Keep storage internals behind `World`, `EntityRef`/`EntityMut`, and query surfaces.
+- Support engine/runtime systems that need deterministic ECS behavior.
 
-## Usage
+## Quick Start
 
-- Crate: `ecs`
-- Primary surfaces:
-  - `World`
-  - `Entity`
-  - `EntityRef` / `EntityMut`
-  - `QueryState`
-  - `Commands`
+```rust
+use ecs::prelude::*;
+
+#[derive(Debug, Copy, Clone, ecs::Component)]
+struct Position {
+    x: f32,
+    y: f32,
+}
+
+#[derive(Debug, Copy, Clone, ecs::Component)]
+struct Velocity {
+    x: f32,
+    y: f32,
+}
+
+fn tick(world: &mut World) {
+    let mut query = world.query_mut::<(&mut Position, &Velocity)>();
+    for (position, velocity) in query.iter_mut() {
+        position.x += velocity.x;
+        position.y += velocity.y;
+    }
+}
+```
+
+## Public Runtime Surface
+
+- `World`: spawn/despawn, insert/remove components, resources, queries, events, indexes.
+- `Entity`: stable `(id, generation)` handle.
+- `EntityRef` / `EntityMut`: entity-scoped read/write helpers.
+- `QueryBorrow` / `QueryBorrowMut`: borrowed query wrappers from `world.query*()`.
+- `QueryState<Q, F>`: detached query state reusable across ticks.
+- `Commands`: deferred structural changes with explicit `apply`.
+- `QueryAccess`: read/write access metadata for scheduler/runtime planning.
+
+## Detailed Usage Documentation
+
+- Usage guide: [`foundation/ecs/USAGE_GUIDE.md`](./USAGE_GUIDE.md)
+
+## Current Query Support
+
+Implemented query data forms:
+
+- `&T`
+- `&mut T`
+- `(Entity, &T)`
+- `(&A, &B)`
+- `(&mut A, &B)`
+
+Filters are additive via `.with::<T>()` and `.without::<T>()` on both borrowed and detached queries.
 
 ## Ownership Boundaries
 
-- Owns runtime entity/component/resource/event state and typed access APIs.
-- Does not own engine scheduling, rendering, or authoring pipelines.
+- Owns runtime ECS state and typed access APIs.
+- Owns change tracking, event channels, and component secondary indexes.
+- Does not own scheduler orchestration, rendering, or authoring/editor pipelines.
 
 ## Extension Points
 
-- Add richer query/filter/fetch implementations.
-- Add typed scheduler-facing access metadata.
-- Add richer runtime-facing adapters where engine features need them.
-
-## Current Runtime Hooks
-
-`ecs` now exposes the core pieces needed by the engine runtime:
-
-- detached `QueryState<Q, F>` caches
-- borrowed `world.query()` / `world.query_mut()` wrappers
-- query access metadata via `QueryAccess`
-- deferred `Commands` with explicit `apply`
+- Add additional `QueryData` implementations and filter composition.
+- Extend `QueryAccess` metadata for scheduling and diagnostics.
+- Add runtime adapters at domain boundaries (engine/net) without leaking storage internals.
