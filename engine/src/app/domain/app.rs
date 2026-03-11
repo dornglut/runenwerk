@@ -8,18 +8,17 @@ use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
 use anyhow::Result;
-use ecs::{Resource, World};
+use ecs::{Component, Runtime, World};
 use engine_sim::*;
-use scheduler::{ExecutionScheduler, ScheduleLabel};
+use scheduler::ScheduleLabel;
 use winit::event_loop::ControlFlow;
 
-const DEFAULT_WINDOW_TITLE: &str = "Grotto Quest - Engine";
+const DEFAULT_WINDOW_TITLE: &str = "Runenwerk - Engine";
 
 pub struct App {
     pub(crate) world: World,
-    pub(crate) scheduler: ExecutionScheduler<World>,
+    pub(crate) scheduler: Runtime,
     pub(crate) runner: Box<dyn AppRunner>,
-    pub(crate) build_errors: Vec<anyhow::Error>,
     pub(crate) startup_ran: bool,
     pub(crate) mode: AppMode,
     pub(crate) title: String,
@@ -45,9 +44,8 @@ impl App {
         let title = DEFAULT_WINDOW_TITLE.to_string();
         let mut app = Self {
             world: World::new(),
-            scheduler: ExecutionScheduler::new(),
+            scheduler: Runtime::new(),
             runner: Box::new(FixedFramesRunner::new(1)),
-            build_errors: Vec::new(),
             startup_ran: false,
             mode,
             title: title.clone(),
@@ -83,13 +81,13 @@ impl App {
         L: ScheduleLabel,
         S: IntoSystemConfigs<Marker>,
     {
-        systems.register::<L>(&mut self.world, &mut self.scheduler, &mut self.build_errors);
+        self.scheduler.add_systems::<L, S, Marker>(&mut self.world, systems);
         self
     }
 
     pub fn init_resource<R>(&mut self) -> &mut Self
     where
-        R: Resource + Default,
+        R: Component + Default,
     {
         if self.world.resource::<R>().is_err() {
             self.world.insert_resource(R::default());
@@ -99,7 +97,7 @@ impl App {
 
     pub fn insert_resource<R>(&mut self, value: R) -> &mut Self
     where
-        R: Resource,
+        R: Component,
     {
         self.world.insert_resource(value);
         self
@@ -237,7 +235,6 @@ impl App {
         WindowedAppState {
             world: self.world,
             scheduler: self.scheduler,
-            build_errors: self.build_errors,
             startup_ran: self.startup_ran,
             title: self.title,
             control_flow: self.control_flow,

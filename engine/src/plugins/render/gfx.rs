@@ -12,7 +12,7 @@ use std::time::Instant;
 use wgpu::SurfaceError;
 use winit::window::Window;
 
-#[derive(Debug)]
+#[derive(Debug, ecs::Component)]
 pub struct Gfx {
     pub ctx: WgpuCtx<'static>,
     pub renderer: Renderer,

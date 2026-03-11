@@ -77,7 +77,7 @@ pub(crate) fn configure_server_role(app: &mut App) {
 pub(crate) fn configure_replication<TDriver>(app: &mut App)
 where
     TDriver: ReplicationDriver + Send + Sync + 'static,
-    TDriver::Snapshot: Clone + PartialEq,
+    TDriver::Snapshot: Clone + PartialEq + 'static,
 {
     app.init_resource::<SnapshotCursor>();
     app.init_resource::<ServerSnapshotReplicationState<TDriver::Snapshot>>();
@@ -94,7 +94,7 @@ where
 pub(crate) fn configure_prediction<TDriver>(app: &mut App)
 where
     TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
-    TDriver::Input: Clone + PartialEq,
+    TDriver::Input: Clone + PartialEq + 'static,
 {
     app.init_resource::<PredictionState<TDriver::Input>>();
     app.init_resource::<PredictionDiagnostics>();
@@ -106,7 +106,7 @@ where
     );
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct NetworkClientInbox {
     messages: Vec<ServerMessage>,
 }
@@ -129,7 +129,7 @@ impl NetworkClientInbox {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct NetworkServerInbox {
     messages: Vec<InboundClientMessage>,
 }
@@ -163,7 +163,7 @@ impl NetworkServerInbox {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct NetworkClientOutbox {
     messages: Vec<ClientMessage>,
 }
@@ -195,7 +195,7 @@ pub enum OutboundServerMessage {
     Broadcast(ServerMessage),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct NetworkServerOutbox {
     messages: Vec<OutboundServerMessage>,
 }
@@ -237,7 +237,7 @@ impl NetworkServerOutbox {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct NetworkInboundQueue {
     client_messages: Vec<InboundClientMessage>,
     server_messages: Vec<ServerMessage>,
@@ -283,7 +283,7 @@ impl NetworkInboundQueue {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct NetworkOutboundQueue {
     client_messages: Vec<ClientMessage>,
     server_messages: Vec<OutboundServerMessage>,
@@ -320,6 +320,7 @@ impl NetworkOutboundQueue {
     }
 }
 
+#[derive(ecs::Component)]
 pub struct NetworkRuntimeHandle {
     command_tx: Sender<SessionRuntimeCommand>,
     event_rx: Receiver<SessionRuntimeEvent>,
@@ -351,7 +352,7 @@ impl NetworkRuntimeHandle {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component)]
 pub struct NetworkSessionStatus {
     pub phase: SessionPhase,
     pub connection_id: Option<ConnectionId>,
@@ -361,12 +362,12 @@ pub struct NetworkSessionStatus {
     pub reconnect_attempt: Option<u32>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component)]
 pub struct NetworkAdmissionState {
     pub authoritative_join: Option<AuthoritativeJoinState>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component)]
 pub struct ConnectionHealth {
     pub connected: bool,
     pub close_events: u64,
@@ -374,7 +375,7 @@ pub struct ConnectionHealth {
     pub reconnect_events: u64,
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
 pub struct RoundTripMetrics {
     pub last_rtt_millis: Option<u32>,
     pub samples: u64,
@@ -401,10 +402,10 @@ impl Default for ConnectionBaselineCheckpoint {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Component)]
 pub struct ServerSnapshotReplicationState<TSnapshot>
 where
-    TSnapshot: Clone + PartialEq,
+    TSnapshot: Clone + PartialEq + 'static,
 {
     pub checkpoints: BTreeMap<ConnectionId, ConnectionBaselineCheckpoint>,
     pub snapshot_history: BTreeMap<SnapshotCursor, TSnapshot>,
@@ -414,7 +415,7 @@ where
 
 impl<TSnapshot> Default for ServerSnapshotReplicationState<TSnapshot>
 where
-    TSnapshot: Clone + PartialEq,
+    TSnapshot: Clone + PartialEq + 'static,
 {
     fn default() -> Self {
         Self {
@@ -426,10 +427,10 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Component)]
 pub struct ClientSnapshotReplicationState<TSnapshot>
 where
-    TSnapshot: Clone + PartialEq,
+    TSnapshot: Clone + PartialEq + 'static,
 {
     pub last_acknowledged_cursor: SnapshotCursor,
     pub last_received_tick: SimulationTick,
@@ -439,7 +440,7 @@ where
 
 impl<TSnapshot> Default for ClientSnapshotReplicationState<TSnapshot>
 where
-    TSnapshot: Clone + PartialEq,
+    TSnapshot: Clone + PartialEq + 'static,
 {
     fn default() -> Self {
         Self {
@@ -454,23 +455,23 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub struct PendingInputFrame<TInput>
 where
-    TInput: Clone + PartialEq,
+    TInput: Clone + PartialEq + 'static,
 {
     pub tick: SimulationTick,
     pub commands: Vec<TInput>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Component)]
 pub struct PredictionState<TInput>
 where
-    TInput: Clone + PartialEq,
+    TInput: Clone + PartialEq + 'static,
 {
     pub pending_frames: Vec<PendingInputFrame<TInput>>,
 }
 
 impl<TInput> Default for PredictionState<TInput>
 where
-    TInput: Clone + PartialEq,
+    TInput: Clone + PartialEq + 'static,
 {
     fn default() -> Self {
         Self {
@@ -481,14 +482,14 @@ where
 
 impl<TInput> PredictionState<TInput>
 where
-    TInput: Clone + PartialEq,
+    TInput: Clone + PartialEq + 'static,
 {
     pub fn pending_frames_len(&self) -> usize {
         self.pending_frames.len()
     }
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
 pub struct NetworkDiagnostics {
     pub processed_client_messages_last_frame: usize,
     pub processed_server_messages_last_frame: usize,
@@ -500,7 +501,7 @@ pub struct NetworkDiagnostics {
     pub reconnect_attempts: u64,
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
 pub struct ReplicationDiagnostics {
     pub fixed_steps_observed: u64,
     pub last_snapshot_cursor: u64,
@@ -508,7 +509,7 @@ pub struct ReplicationDiagnostics {
     pub applied_snapshots: u64,
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
 pub struct PredictionDiagnostics {
     pub fixed_steps_observed: u64,
     pub commands_applied: u64,

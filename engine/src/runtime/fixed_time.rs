@@ -1,6 +1,6 @@
 pub use engine_sim::SimulationTick;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
 pub struct FixedTimeConfig {
     pub step_seconds: f32,
 }
@@ -13,7 +13,7 @@ impl Default for FixedTimeConfig {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
 pub struct CatchupBudget {
     pub max_steps_per_frame: u32,
 }
@@ -26,7 +26,7 @@ impl Default for CatchupBudget {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, ecs::Component)]
 pub struct FixedTimeState {
     pub accumulator_seconds: f32,
     pub steps_ran_last_frame: u32,

@@ -15,7 +15,7 @@ struct Velocity {
     y: i32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Component)]
 struct FrameCounter(u32);
 
 struct MinimalPlugin;
@@ -33,11 +33,11 @@ fn setup(mut commands: Commands) {
 }
 
 fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<FrameCounter>) {
-    for (position, velocity) in query.iter_mut() {
+    for (position, velocity) in query.iter() {
         position.x += velocity.x;
         position.y += velocity.y;
     }
-    frames.0 += 1;
+    (*frames).0 += 1;
 }
 
 #[test]
@@ -48,11 +48,13 @@ fn app_runs_startup_once_and_updates_each_frame() {
 
     assert_eq!(app.world().resource::<FrameCounter>().unwrap().0, 3);
 
-    let positions: Vec<_> = app.world().query::<&Position>().iter().copied().collect();
+    let world = app.world();
+    let query = world.query_state::<&Position, ()>();
+    let positions: Vec<_> = query.iter(world).copied().collect();
     assert_eq!(positions, vec![Position { x: 6, y: 3 }]);
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Component)]
 struct StartupSnapshot {
     saw_headless_window: bool,
     saw_title: String,
@@ -73,8 +75,8 @@ fn capture_startup_resources(
     _input: Res<InputState>,
     mut snapshot: ResMut<StartupSnapshot>,
 ) {
-    snapshot.saw_headless_window = window.is_headless();
-    snapshot.saw_title = window.title.clone();
+    (*snapshot).saw_headless_window = window.is_headless();
+    (*snapshot).saw_title = window.title.clone();
 }
 
 #[test]
@@ -91,7 +93,7 @@ fn headless_run_exposes_builtin_runtime_resources_before_startup() {
     assert_eq!(snapshot.saw_title, "Headless Runtime");
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Component)]
 struct OrderLog(Vec<&'static str>);
 
 #[derive(Debug, Copy, Clone)]
@@ -120,15 +122,15 @@ impl Plugin for OrderingPlugin {
 }
 
 fn ordered_before(mut log: ResMut<OrderLog>) {
-    log.0.push("before");
+    (*log).0.push("before");
 }
 
 fn ordered_root(mut log: ResMut<OrderLog>) {
-    log.0.push("root");
+    (*log).0.push("root");
 }
 
 fn ordered_after(mut log: ResMut<OrderLog>) {
-    log.0.push("after");
+    (*log).0.push("after");
 }
 
 #[test]
@@ -146,7 +148,7 @@ fn tuple_system_registration_respects_set_ordering() {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component)]
 struct Player;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Component)]
 struct DemoFrames(u32);
 
 struct DemoLogicPlugin;
@@ -171,11 +173,11 @@ fn setup_demo_player(mut commands: Commands) {
 }
 
 fn inject_demo_input(mut input: ResMut<InputState>, mut frames: ResMut<DemoFrames>) {
-    if frames.0 == 0 {
+    if (*frames).0 == 0 {
         input.handle_keyboard_input(KeyCode::KeyD, ElementState::Pressed, None);
         input.handle_keyboard_input(KeyCode::Escape, ElementState::Pressed, None);
     }
-    frames.0 += 1;
+    (*frames).0 += 1;
 }
 
 fn update_demo_title(
@@ -184,7 +186,7 @@ fn update_demo_title(
     mut window: ResMut<WindowState>,
     mut query: Query<&mut Position>,
 ) {
-    let position = query.single_mut().expect("demo should have one position");
+    let position = query.single().expect("demo should have one position");
     if input.world_move_right {
         position.x += 1;
     }
@@ -206,11 +208,13 @@ fn demo_style_plugin_updates_title_and_close_state_headlessly() {
     assert!(window.title.contains("x=1"));
     assert!(window.title.contains("dt="));
 
-    let positions: Vec<_> = app.world().query::<&Position>().iter().copied().collect();
+    let world = app.world();
+    let query = world.query_state::<&Position, ()>();
+    let positions: Vec<_> = query.iter(world).copied().collect();
     assert_eq!(positions, vec![Position { x: 1, y: 0 }]);
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Component)]
 struct FixedScheduleLog(Vec<&'static str>);
 
 struct FixedTickPlugin;
@@ -232,19 +236,19 @@ impl Plugin for FixedTickPlugin {
 }
 
 fn log_pre_update(mut log: ResMut<FixedScheduleLog>) {
-    log.0.push("pre");
+    (*log).0.push("pre");
 }
 
 fn log_fixed_update(mut log: ResMut<FixedScheduleLog>) {
-    log.0.push("fixed");
+    (*log).0.push("fixed");
 }
 
 fn log_update(mut log: ResMut<FixedScheduleLog>) {
-    log.0.push("update");
+    (*log).0.push("update");
 }
 
 fn log_frame_end(mut log: ResMut<FixedScheduleLog>) {
-    log.0.push("frame_end");
+    (*log).0.push("frame_end");
 }
 
 #[test]
@@ -279,7 +283,7 @@ fn run_for_ticks_executes_fixed_update_deterministically() {
     assert_eq!(fixed_state.saturated_frames, 0);
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Component)]
 struct ScriptedDeltaState {
     next_frame: usize,
     fixed_updates: u32,
@@ -300,12 +304,12 @@ impl Plugin for ScriptedDeltaPlugin {
 }
 
 fn scripted_delta(mut time: ResMut<Time>, mut state: ResMut<ScriptedDeltaState>) {
-    time.delta_seconds = if state.next_frame == 0 { 0.0 } else { 0.35 };
-    state.next_frame += 1;
+    (*time).delta_seconds = if (*state).next_frame == 0 { 0.0 } else { 0.35 };
+    (*state).next_frame += 1;
 }
 
 fn count_fixed_update(mut state: ResMut<ScriptedDeltaState>) {
-    state.fixed_updates += 1;
+    (*state).fixed_updates += 1;
 }
 
 #[test]

@@ -33,7 +33,7 @@ impl Default for ClientCommandEnvelope {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Component)]
 struct PlayerCommandBuffer {
     commands: Vec<ClientCommandEnvelope>,
 }

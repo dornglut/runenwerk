@@ -37,10 +37,18 @@ fn sdf_renderer_example_setup_system(
     mut runtime_config: ResMut<SdfRuntimeConfigState>,
     mut hud: ResMut<UiWorldHudStats>,
 ) -> Result<()> {
+    let frame_bindings = &mut *frame_bindings;
+    let render_graph_registry = &mut *render_graph_registry;
+    let mut render_executor_registry = &mut *render_executor_registry;
+    let mut input = &mut *input;
+    let state = &mut *state;
+    let runtime_config = &mut *runtime_config;
+    let hud = &mut *hud;
+
     frame_bindings.register_resource::<SdfWorldState>();
     *hud = UiWorldHudStats::default();
     let params_config = load_config_with_default::<SdfParamsConfig>(PARAMS_CONFIG_FILE);
-    apply_sdf_params(&mut state, &params_config);
+    apply_sdf_params(state, &params_config);
     runtime_config.controls = params_config.controls;
     runtime_config.params_config_path = find_config_path(PARAMS_CONFIG_FILE);
     runtime_config.params_config_modified = file_modified(&runtime_config.params_config_path);
@@ -105,7 +113,11 @@ fn sdf_renderer_example_update_system(
     mut runtime_config: ResMut<SdfRuntimeConfigState>,
     mut hud: ResMut<UiWorldHudStats>,
 ) -> Result<()> {
-    maybe_reload_sdf_params(&mut state, &mut runtime_config);
+    let state = &mut *state;
+    let runtime_config = &mut *runtime_config;
+    let hud = &mut *hud;
+
+    maybe_reload_sdf_params(state, runtime_config);
     state.agents.clear();
     let controls = runtime_config.controls;
 

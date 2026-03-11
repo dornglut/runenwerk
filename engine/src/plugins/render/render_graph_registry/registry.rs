@@ -1,6 +1,7 @@
 use super::*;
 
 // Owner: Engine Render Graph Registry - Registry Resource
+#[derive(ecs::Component)]
 pub struct RenderGraphRegistryResource {
     owners: BTreeMap<String, OwnerRenderGraphRegistration>,
     revision: u64,

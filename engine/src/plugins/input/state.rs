@@ -6,7 +6,7 @@ use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, Win
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 // Owner: Engine Input Plugin - Input State and Event Processing
-#[derive(Debug)]
+#[derive(Debug, ecs::Component)]
 pub struct InputState {
     pub(crate) keys_down: HashSet<KeyCode>,
     bindings: InputBindings,

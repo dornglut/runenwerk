@@ -21,7 +21,7 @@ pub(crate) const SDF_COMPOSE_SHADER: &str =
 pub(crate) const SDF_MAX_AGENTS: usize = 512;
 pub(crate) const SDF_MAX_MODELS: usize = 1;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, engine::prelude::Component)]
 pub(crate) struct SdfRuntimeConfigState {
     pub(crate) controls: SdfControlsConfig,
     pub(crate) params_config_path: PathBuf,
@@ -48,7 +48,7 @@ pub(crate) struct SdfWorldAgent {
     pub(crate) team: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, engine::prelude::Component)]
 pub(crate) struct SdfWorldState {
     pub(crate) world_bounds: [f32; 4],
     pub(crate) world_paused: bool,

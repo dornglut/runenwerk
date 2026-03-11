@@ -35,7 +35,7 @@ fn update_demo(
     mut window: ResMut<WindowState>,
     mut query: Query<&mut Position>,
 ) {
-    let position = query.single_mut().expect("demo should have one player");
+    let position = query.single().expect("demo should have one player");
     if input.action_down(action::WORLD_MOVE_LEFT) {
         position.x -= 1;
     }

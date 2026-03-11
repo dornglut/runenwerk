@@ -32,6 +32,7 @@ pub struct RenderPassExecutorRegistryEvent {
     pub details: Option<String>,
 }
 
+#[derive(ecs::Component)]
 pub struct RenderPassExecutorRegistryResource {
     bindings: BTreeMap<String, ExecutorBindingKind>,
     events: Vec<RenderPassExecutorRegistryEvent>,

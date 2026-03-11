@@ -10,7 +10,7 @@ struct FrameResourceBinding {
     collect: FrameResourceCollector,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, ecs::Component)]
 pub struct RenderFrameResourceBindings {
     bindings: BTreeMap<TypeId, FrameResourceBinding>,
 }
@@ -18,7 +18,7 @@ pub struct RenderFrameResourceBindings {
 impl RenderFrameResourceBindings {
     pub fn register_resource<T>(&mut self)
     where
-        T: Send + Sync + 'static,
+        T: ecs::Component + Send + Sync,
     {
         let type_id = TypeId::of::<T>();
         self.bindings.insert(
@@ -32,7 +32,7 @@ impl RenderFrameResourceBindings {
 
     pub fn unregister_resource<T>(&mut self) -> bool
     where
-        T: Send + Sync + 'static,
+        T: ecs::Component + Send + Sync,
     {
         self.bindings.remove(&TypeId::of::<T>()).is_some()
     }
@@ -49,7 +49,7 @@ impl RenderFrameResourceBindings {
 
     pub fn contains_resource<T>(&self) -> bool
     where
-        T: Send + Sync + 'static,
+        T: ecs::Component + Send + Sync,
     {
         self.bindings.contains_key(&TypeId::of::<T>())
     }
@@ -72,7 +72,7 @@ impl RenderFrameResourceBindings {
 
 fn collect_resource<'a, T>(world: &'a ecs::World, frame_data: &mut RenderFrameDataRegistry<'a>)
 where
-    T: Send + Sync + 'static,
+    T: ecs::Component + Send + Sync,
 {
     if let Ok(resource) = world.resource::<T>() {
         frame_data.insert(resource);
@@ -84,10 +84,10 @@ mod tests {
     use super::RenderFrameResourceBindings;
     use crate::plugins::render::domain::RenderFrameDataRegistry;
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
     struct TestResourceA(pub u32);
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
     struct TestResourceB(pub &'static str);
 
     #[test]

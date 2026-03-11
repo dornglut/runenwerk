@@ -105,7 +105,7 @@ pub struct UiDrawList {
     pub commands: Vec<UiDrawCmd>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ecs::Component)]
 pub struct UiRenderShaderConfig {
     pub rect_shader_asset_id: String,
 }
@@ -118,7 +118,7 @@ impl Default for UiRenderShaderConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ecs::Component)]
 pub struct UiWorldHudStats {
     pub visible: bool,
     pub player_x: f32,

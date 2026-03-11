@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ecs::Component)]
 pub struct WindowState {
     pub title: String,
     pub size_px: (u32, u32),

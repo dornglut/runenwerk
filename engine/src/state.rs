@@ -1,5 +1,6 @@
 use crate::plugins::render::domain::GfxFrameTimings;
 use engine_net::AuthoritativeJoinState;
+use ecs::Component;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -76,7 +77,7 @@ pub struct RegisteredScene {
     pub template_path: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Component)]
 pub struct SceneCatalog {
     scenes: Vec<RegisteredScene>,
     by_id: HashMap<String, SceneHandle>,
@@ -140,7 +141,7 @@ pub enum StartupPhase {
     Ready,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Component)]
 pub struct StartupState {
     pub phase: StartupPhase,
     pub stable_frames: u32,
@@ -208,7 +209,7 @@ impl StartupState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Component)]
 pub struct DebugMetricsState {
     pub visible: bool,
     pub fps_ema: f32,
@@ -246,7 +247,7 @@ impl DebugMetricsState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Component)]
 pub struct GameplayRuntimeConfig {
     pub chunk_size: f32,
     pub chunk_load_radius: u32,
@@ -263,7 +264,7 @@ impl Default for GameplayRuntimeConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Component)]
 pub struct SessionRuntimeState {
     pub admitted: bool,
     pub lobby_id: Option<String>,
@@ -309,7 +310,7 @@ impl SessionRuntimeState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Component)]
 pub struct SceneRuntimeState {
     pub world_scene_label: String,
     pub overlay_scene_label: String,
@@ -357,7 +358,7 @@ pub struct OverlayDrawList {
     pub commands: Vec<OverlayDrawCmd>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Component)]
 pub struct UiOverlayState {
     pub screen_size: (f32, f32),
     pub scale: f32,

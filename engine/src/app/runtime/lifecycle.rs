@@ -5,7 +5,7 @@ use crate::runtime::schedules::{
     FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
 };
 use crate::runtime::window::WindowState;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 impl App {
     pub fn run(self) -> Result<()> {
@@ -32,7 +32,6 @@ impl App {
     }
 
     pub(crate) fn prepare_for_run(&mut self, headless: bool) -> Result<()> {
-        self.ensure_build_ready()?;
         if let Ok(mut window) = self.world.resource_mut::<WindowState>() {
             window.set_headless(headless);
             window.redraw_requested = false;
@@ -56,13 +55,5 @@ impl App {
             .run_schedule::<RenderSubmit>(&mut self.world)?;
         self.scheduler.run_schedule::<FrameEnd>(&mut self.world)?;
         Ok(())
-    }
-
-    pub(crate) fn ensure_build_ready(&self) -> Result<()> {
-        if self.build_errors.is_empty() {
-            return Ok(());
-        }
-        let messages: Vec<_> = self.build_errors.iter().map(ToString::to_string).collect();
-        Err(anyhow!("app setup failed:\n{}", messages.join("\n")))
     }
 }

@@ -8,7 +8,7 @@ use crate::runtime::schedules::{
     FixedUpdate, FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
 };
 use crate::runtime::window::WindowState;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
@@ -16,8 +16,6 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 pub(crate) fn run(state: WindowedAppState) -> Result<()> {
-    ensure_build_ready(&state.build_errors)?;
-
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(state.control_flow);
     let mut runner = WinitRunner {
@@ -373,12 +371,4 @@ impl ApplicationHandler for WinitRunner {
             event_loop.exit();
         }
     }
-}
-
-fn ensure_build_ready(build_errors: &[anyhow::Error]) -> Result<()> {
-    if build_errors.is_empty() {
-        return Ok(());
-    }
-    let messages: Vec<_> = build_errors.iter().map(ToString::to_string).collect();
-    Err(anyhow!("app setup failed:\n{}", messages.join("\n")))
 }

@@ -13,7 +13,7 @@ struct Velocity {
     y: i32,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Component)]
 struct FrameCounter(u32);
 
 struct RuntimeMinimalPlugin;
@@ -31,11 +31,11 @@ fn setup(mut commands: Commands) {
 }
 
 fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<FrameCounter>) {
-    for (position, velocity) in query.iter_mut() {
+    for (position, velocity) in query.iter() {
         position.x += velocity.x;
         position.y += velocity.y;
     }
-    frames.0 += 1;
+    (*frames).0 += 1;
 }
 
 fn main() -> Result<()> {
@@ -44,10 +44,10 @@ fn main() -> Result<()> {
     let app = app.run_for_frames(3)?;
 
     let frame_count = app.world().resource::<FrameCounter>()?.0;
-    let positions: Vec<_> = app
-        .world()
-        .query::<&Position>()
-        .iter()
+    let world = app.world();
+    let query = world.query_state::<&Position, ()>();
+    let positions: Vec<_> = query
+        .iter(world)
         .map(|position| (position.x, position.y))
         .collect();
 

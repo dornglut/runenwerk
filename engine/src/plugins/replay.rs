@@ -24,7 +24,7 @@ pub enum ReplayMode {
     Playback,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
 pub struct ReplaySessionInfo {
     pub session_id: SimulationSessionId,
     pub seed: SimulationSeed,
@@ -41,14 +41,14 @@ impl Default for ReplaySessionInfo {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct ReplayState {
     pub mode: ReplayMode,
     pub initial_checkpoint_captured: bool,
     pub last_loaded_tick: Option<SimulationTick>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ecs::Component)]
 pub struct ReplayRecorderResource {
     pub recorder: Option<ReplayRecorder<SceneSimulationSnapshotV1, SceneReplayCommandFrame>>,
     pub checkpoint_policy: CheckpointPolicy,
@@ -65,7 +65,7 @@ impl Default for ReplayRecorderResource {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ecs::Component)]
 pub struct ReplayControllerResource {
     pub controller: ReplayController<SceneSimulationSnapshotV1, SceneReplayCommandFrame>,
     pub last_validation: ReplayValidationReport,
