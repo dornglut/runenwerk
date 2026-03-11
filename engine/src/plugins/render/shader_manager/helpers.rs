@@ -109,5 +109,3 @@ pub(super) fn shader_event_state_label(kind: ShaderRegistryEventKind) -> &'stati
         ShaderRegistryEventKind::Failed => "failed",
     }
 }
-
-

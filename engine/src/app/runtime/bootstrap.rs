@@ -50,7 +50,8 @@ impl App {
             self.world.insert_resource(SimulationTick::default());
         }
         if !self.world.has_resource::<SimulationProfileConfig>() {
-            self.world.insert_resource(SimulationProfileConfig::default());
+            self.world
+                .insert_resource(SimulationProfileConfig::default());
         }
         if !self.world.has_resource::<SimulationSessionId>() {
             self.world.insert_resource(SimulationSessionId::default());

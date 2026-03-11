@@ -92,6 +92,12 @@ fn build_gpu_pass(
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let compose_params_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("cavern_hunt_compose_params_buffer"),
+        size: std::mem::size_of::<CavernComposeParamsRaw>() as u64,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     let material_program_headers_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("cavern_hunt_material_program_headers_buffer"),
         size: (std::mem::size_of::<CavernMaterialProgramHeaderRaw>() * MAX_MATERIAL_PROGRAMS)
@@ -280,6 +286,16 @@ fn build_gpu_pass(
                 ty: BindingType::Sampler(SamplerBindingType::Filtering),
                 count: None,
             },
+            BindGroupLayoutEntry {
+                binding: 2,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
     let compose_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -293,6 +309,10 @@ fn build_gpu_pass(
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::Sampler(&world_sampler),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: compose_params_buffer.as_entire_binding(),
             },
         ],
     });
@@ -341,6 +361,7 @@ fn build_gpu_pass(
         params_buffer,
         primitives_buffer,
         agents_buffer,
+        compose_params_buffer,
         material_program_headers_buffer,
         material_ops_buffer,
         material_constants_buffer,

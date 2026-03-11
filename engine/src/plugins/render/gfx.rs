@@ -1,4 +1,6 @@
-use super::render_executor_registry::{RenderFrameDataRegistry, RenderPassExecutorRegistryResource};
+use super::render_executor_registry::{
+    RenderFrameDataRegistry, RenderPassExecutorRegistryResource,
+};
 use super::render_graph_registry::RenderGraphRegistryResource;
 use super::renderer::{Renderer, RendererFrameTimings};
 use super::shader_manager::{ShaderHandle, ShaderRegistryResource};

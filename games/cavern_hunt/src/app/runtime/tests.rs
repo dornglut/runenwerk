@@ -4,6 +4,7 @@ use super::*;
 #[cfg(test)]
 mod tests {
     use super::sync_active_player_slots;
+    use crate::features::worldgen::plugin as worldgen;
     use crate::{
         CavernAimState, CavernCameraState, CavernLayout, CavernMetaPersistenceConfig,
         CavernMetaProfile, CavernMetaRewardState, CavernPlayerOwnershipState, CavernRunConfig,
@@ -11,7 +12,6 @@ mod tests {
         LootTableRegistry, PlayerActive, PlayerCompanion, PlayerId, PlayerRosterIdentity,
         SpawnDirector,
     };
-    use crate::features::worldgen::plugin as worldgen;
     use engine::plugins::ui::domain::UiWorldHudStats;
     use engine::prelude::{
         AuthorityRole, DeterminismLevel, SimulationProfile, SimulationProfileConfig, World,

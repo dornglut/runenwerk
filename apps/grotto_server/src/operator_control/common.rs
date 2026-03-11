@@ -1,5 +1,5 @@
 use anyhow::Result;
-use engine::plugins::NetworkRuntimeHandle;
+use engine::plugins::net::NetworkRuntimeHandle;
 use engine::prelude::{World, WorldMut};
 use engine_net::{ServerMessage, SessionRuntimeCommand};
 use grotto_online::{
@@ -102,7 +102,7 @@ pub(super) fn broadcast_shutdown_notice(world: &World) {
     let _ = send_runtime_command(world, SessionRuntimeCommand::SetDrainMode { enabled: true });
     let _ = send_runtime_command(
         world,
-        SessionRuntimeCommand::Server(ServerMessage::Disconnect(
+        SessionRuntimeCommand::ServerBroadcast(ServerMessage::Disconnect(
             engine_net::DisconnectReason::ServerShuttingDown,
         )),
     );

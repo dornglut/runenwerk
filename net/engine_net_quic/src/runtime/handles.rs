@@ -1,9 +1,6 @@
 use anyhow::Result;
 use engine_net::{
-    ClientSessionTarget,
-    ServerSessionConfig,
-    SessionRuntimeCommand,
-    SessionRuntimeEvent,
+    ClientSessionTarget, ServerSessionConfig, SessionRuntimeCommand, SessionRuntimeEvent,
 };
 use rustls::pki_types::CertificateDer;
 use std::net::SocketAddr;
@@ -11,12 +8,10 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 
 use crate::{
-    QuicClientTargetProvider,
-    QuicServerJoinVerifier,
-    QuicTransport,
-    QuicTrustPolicy,
-    client,
-    runtime::{command_bus::RUNTIME_COMMAND_CHANNEL_CAPACITY, event_bus::RUNTIME_EVENT_CHANNEL_CAPACITY},
+    QuicClientTargetProvider, QuicServerJoinVerifier, QuicTransport, QuicTrustPolicy, client,
+    runtime::{
+        command_bus::RUNTIME_COMMAND_CHANNEL_CAPACITY, event_bus::RUNTIME_EVENT_CHANNEL_CAPACITY,
+    },
     server,
 };
 

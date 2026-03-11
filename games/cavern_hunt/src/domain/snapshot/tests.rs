@@ -1,12 +1,17 @@
 // Owner: Cavern Hunt Snapshot Domain - Tests
 #[cfg(test)]
 mod tests {
-    use engine::plugins::{InputState, NetworkSessionStatus};
-    use crate::{apply_cavern_run_delta, build_cavern_run_delta, capture_cavern_run_snapshot, restore_cavern_run_snapshot, CavernAimState, CavernCameraState, CavernControlState, CavernMetaProfile, CavernRunConfig, LootTableRegistry, SpawnDirector};
-    use crate::gameplay::*;
-    use crate::gameplay::components::{Faction, Health, PlayerActive, Transform2};
     use crate::features::combat::plugin as combat;
     use crate::features::worldgen::plugin as worldgen;
+    use crate::gameplay::components::{Faction, Health, PlayerActive, Transform2};
+    use crate::gameplay::*;
+    use crate::{
+        CavernAimState, CavernCameraState, CavernControlState, CavernMetaProfile, CavernRunConfig,
+        LootTableRegistry, SpawnDirector, apply_cavern_run_delta, build_cavern_run_delta,
+        capture_cavern_run_snapshot, restore_cavern_run_snapshot,
+    };
+    use engine::plugins::InputState;
+    use engine::plugins::net::NetworkSessionStatus;
     use engine::prelude::*;
     use engine_net::ConnectionId;
 
@@ -109,10 +114,7 @@ mod tests {
     fn capture_and_restore_preserves_authoritative_input_tick_for_players() {
         let mut source = seeded_world();
         let local_entity = source.resource::<LocalPlayerRef>().unwrap().entity.unwrap();
-        let local_player_id = source
-            .get::<crate::PlayerId>(local_entity)
-            .unwrap()
-            .0;
+        let local_player_id = source.get::<crate::PlayerId>(local_entity).unwrap().0;
         source.insert_resource(CavernServerAppliedInputTickMap {
             by_player_id: std::iter::once((local_player_id, SimulationTick(77))).collect(),
         });
@@ -144,10 +146,7 @@ mod tests {
     fn capture_uses_control_source_tick_when_applied_tick_map_is_missing() {
         let mut source = seeded_world();
         let local_entity = source.resource::<LocalPlayerRef>().unwrap().entity.unwrap();
-        let local_player_id = source
-            .get::<crate::PlayerId>(local_entity)
-            .unwrap()
-            .0;
+        let local_player_id = source.get::<crate::PlayerId>(local_entity).unwrap().0;
         source.insert_resource(CavernServerControlMap {
             by_player_id: std::iter::once((
                 local_player_id,

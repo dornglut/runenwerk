@@ -7,9 +7,7 @@ use engine::plugins::render::domain::{
     RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
 use engine::plugins::ui::domain::UiWorldHudStats;
-use engine::plugins::{
-    DebugMetricsPlugin, GridPlugin, RenderPlugin, ScenePlugin, default_plugins,
-};
+use engine::plugins::{DebugMetricsPlugin, GridPlugin, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{
     App, CoreSet, InputState, Plugin, Res, ResMut, SceneRuntimeState, Startup, SystemConfigExt,
     Time, Update,

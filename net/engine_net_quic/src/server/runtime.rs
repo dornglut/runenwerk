@@ -1,15 +1,12 @@
 use anyhow::Result;
 use engine_net::{
-    DisconnectReason,
-    JoinAccepted,
-    ServerMessage,
-    ServerSessionConfig,
-    ServerSessionState,
+    DisconnectReason, JoinAccepted, ServerMessage, ServerSessionConfig, ServerSessionState,
     SessionPhase,
 };
 use quinn::Endpoint;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 
 use crate::runtime::event_dispatch::send_runtime_event;
@@ -33,7 +30,8 @@ pub async fn run_server_runtime_task(
 ) -> Result<()> {
     let mut session_state = ServerSessionState::default();
     engine_net::configure_server_session(&mut session_state, session_config);
-    let (peer_event_tx, mut peer_event_rx) = channel::<ServerPeerEvent>(SERVER_PEER_EVENT_CHANNEL_CAPACITY);
+    let (peer_event_tx, mut peer_event_rx) =
+        channel::<ServerPeerEvent>(SERVER_PEER_EVENT_CHANNEL_CAPACITY);
     let mut server_peers = BTreeMap::<engine_net::ConnectionId, Sender<ServerMessage>>::new();
     let mut drain_mode = false;
     let mut admission_limiter = AdmissionRateLimiter::new(
@@ -53,13 +51,31 @@ pub async fn run_server_runtime_task(
                         });
                         return Ok(());
                     }
-                    Some(QuicSessionCommand::Server(message)) => {
-                        let stale_connections = server_peers
-                            .iter()
-                            .filter_map(|(connection_id, sender)| {
-                                sender.try_send(message.clone()).err().map(|_| *connection_id)
-                            })
-                            .collect::<Vec<_>>();
+                    Some(QuicSessionCommand::ServerToConnection { connection_id, message }) => {
+                        if let Some(sender) = server_peers.get(&connection_id) {
+                            match sender.try_send(message) {
+                                Ok(()) => {}
+                                Err(TrySendError::Full(_)) => {
+                                    // Backpressure is transient; keep peer connected and retry next tick.
+                                }
+                                Err(TrySendError::Closed(_)) => {
+                                    server_peers.remove(&connection_id);
+                                    engine_net::remove_server_connection(&mut session_state, connection_id, None);
+                                }
+                            }
+                        }
+                    }
+                    Some(QuicSessionCommand::ServerBroadcast(message)) => {
+                        let mut stale_connections = Vec::new();
+                        for (connection_id, sender) in &server_peers {
+                            match sender.try_send(message.clone()) {
+                                Ok(()) => {}
+                                Err(TrySendError::Full(_)) => {
+                                    // Backpressure is transient; keep peer connected and retry next tick.
+                                }
+                                Err(TrySendError::Closed(_)) => stale_connections.push(*connection_id),
+                            }
+                        }
                         for connection_id in stale_connections {
                             server_peers.remove(&connection_id);
                             engine_net::remove_server_connection(&mut session_state, connection_id, None);

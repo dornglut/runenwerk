@@ -1,20 +1,11 @@
 use anyhow::{Context, Result};
 use engine_net::{
-    ClientMessage,
-    DisconnectReason,
-    JoinRejected,
-    MessageEnvelope,
-    ServerMessage,
-    ServerSessionState,
-    SessionPhase,
-    handle_client_message,
+    ClientMessage, DisconnectReason, JoinRejected, MessageEnvelope, ServerMessage,
+    ServerSessionState, SessionPhase, handle_client_message,
 };
 
 use crate::{
-    QuicJoinVerificationError,
-    QuicServerBootstrap,
-    QuicServerJoinVerifier,
-    read_message,
+    QuicJoinVerificationError, QuicServerBootstrap, QuicServerJoinVerifier, read_message,
     write_message,
 };
 
@@ -27,29 +18,31 @@ pub(crate) async fn accept_incoming_connection(
 ) -> Result<QuicServerBootstrap> {
     const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-    state.phase = SessionPhase::Idle;
-    state.active_connection = None;
+    state.phase = if state.active_connections.is_empty() {
+        SessionPhase::Idle
+    } else {
+        SessionPhase::Active
+    };
     state.last_join_request = None;
-    state.last_join_state = None;
     state.last_disconnect = None;
     let connection = incoming.await.context("server accept failed")?;
-    let (mut send, mut recv) = match tokio::time::timeout(HANDSHAKE_TIMEOUT, connection.accept_bi())
-        .await
-    {
-        Ok(Ok(streams)) => streams,
-        Ok(Err(_)) | Err(_) => {
-            let reason = DisconnectReason::TimedOut;
-            state.phase = SessionPhase::Rejected(reason.clone());
-            state.last_disconnect = Some(reason);
-            return Ok(QuicServerBootstrap {
-                connection,
-                state: state.clone(),
-            });
-        }
-    };
+    let (mut send, mut recv) =
+        match tokio::time::timeout(HANDSHAKE_TIMEOUT, connection.accept_bi()).await {
+            Ok(Ok(streams)) => streams,
+            Ok(Err(_)) | Err(_) => {
+                let reason = DisconnectReason::TimedOut;
+                state.phase = SessionPhase::Rejected(reason.clone());
+                state.last_disconnect = Some(reason);
+                return Ok(QuicServerBootstrap {
+                    connection,
+                    state: state.clone(),
+                });
+            }
+        };
 
     loop {
-        let next_message = match tokio::time::timeout(HANDSHAKE_TIMEOUT, read_message(&mut recv)).await
+        let next_message = match tokio::time::timeout(HANDSHAKE_TIMEOUT, read_message(&mut recv))
+            .await
         {
             Ok(Ok(message)) => message,
             Ok(Err(_)) | Err(_) => {

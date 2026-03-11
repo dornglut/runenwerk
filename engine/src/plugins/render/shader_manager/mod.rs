@@ -6,8 +6,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-
-
 mod helpers;
 mod registry_impl;
 mod types;
@@ -18,10 +16,10 @@ pub use types::*;
 #[cfg(test)]
 mod tests {
     use super::{ShaderRegistryEventKind, ShaderRegistryResource};
+    use crate::plugins::render::shader_manager::helpers::normalize_shader_id;
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use crate::plugins::render::shader_manager::helpers::normalize_shader_id;
 
     fn temp_dir(prefix: &str) -> String {
         let unique = SystemTime::now()
@@ -81,5 +79,3 @@ mod tests {
         assert_eq!(registry.shader_count(), 1);
     }
 }
-
-

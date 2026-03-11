@@ -1,28 +1,28 @@
 use anyhow::{Context, Result};
 use cavern_hunt::{
-    CavernHuntClientPlugin, CavernHuntPlugin, CavernReplicationDriver, NetConfigHotReloadState,
-    load_client_network_config_from_path,
+    CavernHuntClientPlugin, CavernHuntPlugin, CavernReplicationDriver, ClientNetworkConfigAssetV1,
+    NetConfigHotReloadState, load_client_network_config_from_path,
 };
+use engine::net::prelude::*;
+use engine::plugins::net::NetworkRuntimeHandle;
 use engine::plugins::render::domain::ShaderRegistryResource;
-use engine::plugins::{
-    NetPlugin, NetworkRuntimeHandle, RenderPlugin, ScenePlugin, default_plugins,
-};
+use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
 use engine::{App, AppRunner, AuthorityRole, SimulationProfile};
-use engine_net::{ProtocolVersion, Transport};
 use engine_net_quic::{
     QuicClientTargetProvider, QuicTransport, QuicTrustPolicy, certificate_fingerprint_sha256,
     default_client_bind_addr,
 };
 use grotto_online::{AxiomAuthState, AxiomHttpClient, AxiomJoinGrantProvider, JoinGrant};
 use rustls::pki_types::CertificateDer;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 
-const DEFAULT_CLIENT_CONFIG_PATH: &str = "game/assets/networking/client/local_dev.ron";
+const DEFAULT_CLIENT_CONFIG_PATH: &str = "games/cavern_hunt/assets/networking/client/local_dev.ron";
+const LEGACY_CLIENT_CONFIG_PATH: &str = "game/assets/networking/client/local_dev.ron";
 
 struct SignalRunner {
     running: Arc<AtomicBool>,
@@ -38,6 +38,21 @@ impl AppRunner for SignalRunner {
     }
 }
 
+struct ClientLaunchOptions {
+    config_path: PathBuf,
+}
+
+struct ClientRuntimeBootstrap {
+    handle: NetworkRuntimeHandle,
+    protocol: ProtocolVersion,
+    transport_kind: TransportKind,
+    using_axiom_handoff: bool,
+    target_endpoint: String,
+    server_name: String,
+    cert_path: PathBuf,
+    fingerprint: String,
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let launch = parse_client_launch_options()?;
@@ -49,6 +64,35 @@ async fn main() -> Result<()> {
     })?;
 
     let _tracing_guard = engine::utils::setup_tracing();
+
+    let runtime = build_client_runtime(&config).await?;
+    let mut app = build_client_app(&config, &launch.config_path);
+    attach_runtime_handle(&mut app, runtime.handle);
+    install_signal_runner(&mut app);
+
+    println!(
+        "grotto_client live profile={:?} authority={:?} protocol={:?} transport={:?} join_mode={} target={} server_name={} cert_path={} cert_fingerprint_sha256={} config={}",
+        SimulationProfile::DedicatedAuthority,
+        AuthorityRole::Client,
+        runtime.protocol,
+        runtime.transport_kind,
+        if runtime.using_axiom_handoff {
+            "axiom"
+        } else {
+            "local"
+        },
+        runtime.target_endpoint,
+        runtime.server_name,
+        runtime.cert_path.display(),
+        runtime.fingerprint,
+        launch.config_path.display(),
+    );
+
+    app.run()?;
+    Ok(())
+}
+
+fn build_client_app(config: &ClientNetworkConfigAssetV1, config_path: &Path) -> App {
     let mut app = App::new();
     app.set_title("Cavern Hunt Client");
     app.set_simulation_profile(SimulationProfile::DedicatedAuthority);
@@ -57,20 +101,25 @@ async fn main() -> Result<()> {
     app.add_plugins((
         ScenePlugin,
         RenderPlugin,
-        NetPlugin::<CavernReplicationDriver>::client(),
+        NetPlugin::<CavernReplicationDriver>::new(NetRole::Client),
     ));
     app.add_plugins((CavernHuntPlugin, CavernHuntClientPlugin));
     app.world_mut().insert_resource(config.clone());
     app.world_mut()
         .insert_resource(NetConfigHotReloadState::new(
-            launch.config_path.clone(),
+            config_path.to_path_buf(),
             config.hot_reload.enabled,
             config.hot_reload.poll_interval_seconds,
         ));
     if let Ok(mut shaders) = app.world_mut().resource_mut::<ShaderRegistryResource>() {
         shaders.set_watch_enabled(config.shader_watch);
     }
+    app
+}
 
+async fn build_client_runtime(
+    config: &ClientNetworkConfigAssetV1,
+) -> Result<ClientRuntimeBootstrap> {
     let protocol = ProtocolVersion::from(&config.protocol);
     let transport = QuicTransport::default();
     let server_id = config.server_id.clone();
@@ -133,6 +182,7 @@ async fn main() -> Result<()> {
         expected_fingerprint_sha256: target.server_cert_fingerprint_sha256.clone(),
         trusted_certificates: vec![trusted_certificate],
     };
+
     let runtime = if let Some(provider) = maybe_axiom_provider {
         transport.spawn_client_runtime_with_provider(
             default_client_bind_addr(),
@@ -150,9 +200,24 @@ async fn main() -> Result<()> {
         )?
     };
     let (command_tx, event_rx) = runtime.into_channels();
-    app.world_mut()
-        .insert_resource(NetworkRuntimeHandle::new(command_tx, event_rx));
 
+    Ok(ClientRuntimeBootstrap {
+        handle: NetworkRuntimeHandle::new(command_tx, event_rx),
+        protocol,
+        transport_kind: transport.kind(),
+        using_axiom_handoff,
+        target_endpoint,
+        server_name,
+        cert_path,
+        fingerprint,
+    })
+}
+
+fn attach_runtime_handle(app: &mut App, handle: NetworkRuntimeHandle) {
+    app.world_mut().insert_resource(handle);
+}
+
+fn install_signal_runner(app: &mut App) {
     let running = Arc::new(AtomicBool::new(true));
     let shutdown = running.clone();
     tokio::spawn(async move {
@@ -160,34 +225,10 @@ async fn main() -> Result<()> {
         shutdown.store(false, Ordering::SeqCst);
     });
     app.set_runner(SignalRunner { running });
-
-    println!(
-        "grotto_client live profile={:?} authority={:?} protocol={protocol:?} transport={:?} join_mode={} target={} server_name={} cert_path={} cert_fingerprint_sha256={} config={}",
-        SimulationProfile::DedicatedAuthority,
-        AuthorityRole::Client,
-        transport.kind(),
-        if using_axiom_handoff {
-            "axiom"
-        } else {
-            "local"
-        },
-        target_endpoint,
-        server_name,
-        cert_path.display(),
-        fingerprint,
-        launch.config_path.display(),
-    );
-
-    app.run()?;
-    Ok(())
-}
-
-struct ClientLaunchOptions {
-    config_path: PathBuf,
 }
 
 fn parse_client_launch_options() -> Result<ClientLaunchOptions> {
-    let mut config_path = PathBuf::from(DEFAULT_CLIENT_CONFIG_PATH);
+    let mut config_path = default_client_config_path();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -205,4 +246,16 @@ fn parse_client_launch_options() -> Result<ClientLaunchOptions> {
         }
     }
     Ok(ClientLaunchOptions { config_path })
+}
+
+fn default_client_config_path() -> PathBuf {
+    let modern = PathBuf::from(DEFAULT_CLIENT_CONFIG_PATH);
+    if modern.exists() {
+        return modern;
+    }
+    let legacy = PathBuf::from(LEGACY_CLIENT_CONFIG_PATH);
+    if legacy.exists() {
+        return legacy;
+    }
+    PathBuf::from(DEFAULT_CLIENT_CONFIG_PATH)
 }

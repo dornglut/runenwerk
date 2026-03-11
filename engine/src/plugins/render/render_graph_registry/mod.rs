@@ -2,8 +2,6 @@ use super::pipeline_key::PipelineKey;
 use anyhow::{Result, anyhow, bail};
 use std::collections::{BTreeMap, BTreeSet};
 
-
-
 mod builders;
 mod ids_and_registrations;
 mod registry;
@@ -148,5 +146,3 @@ mod tests {
         assert!(err.to_string().contains("feature graph id mismatch"));
     }
 }
-
-

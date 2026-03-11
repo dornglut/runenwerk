@@ -1,6 +1,6 @@
+use cavern_hunt::domain::CavernRunConfig;
 use cavern_hunt::{CavernSeed, domain::CavernLayout};
 use std::collections::{HashSet, VecDeque};
-use cavern_hunt::domain::CavernRunConfig;
 
 #[test]
 fn same_seed_generates_identical_layout() {

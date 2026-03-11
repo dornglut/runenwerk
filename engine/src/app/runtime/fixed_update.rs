@@ -30,9 +30,8 @@ impl App {
                 .world
                 .resource_mut::<FixedTimeState>()
                 .expect("FixedTimeState should be installed");
-            fixed_state.accumulator_seconds =
-                (fixed_state.accumulator_seconds + delta_seconds)
-                    .min(step_seconds * max_steps_per_frame as f32);
+            fixed_state.accumulator_seconds = (fixed_state.accumulator_seconds + delta_seconds)
+                .min(step_seconds * max_steps_per_frame as f32);
             fixed_state.steps_ran_last_frame = 0;
         }
 
@@ -57,7 +56,8 @@ impl App {
                     .expect("SimulationTick should be installed");
                 tick.0 = tick.0.saturating_add(1);
             }
-            self.scheduler.run_schedule::<FixedUpdate>(&mut self.world)?;
+            self.scheduler
+                .run_schedule::<FixedUpdate>(&mut self.world)?;
             steps = steps.saturating_add(1);
 
             let mut fixed_state = self

@@ -1,4 +1,5 @@
 pub mod app;
+pub mod net;
 pub mod plugin;
 pub mod plugins;
 pub mod prelude;

@@ -45,10 +45,12 @@ fn sdf_renderer_example_setup_system(
     runtime_config.params_config_path = find_config_path(PARAMS_CONFIG_FILE);
     runtime_config.params_config_modified = file_modified(&runtime_config.params_config_path);
 
-    let input_bindings = load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
+    let input_bindings =
+        load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
     let applied_bindings = apply_input_bindings(&mut input, &input_bindings);
 
-    let render_graph_config = load_config_with_default::<SdfRenderGraphConfig>(RENDER_GRAPH_CONFIG_FILE);
+    let render_graph_config =
+        load_config_with_default::<SdfRenderGraphConfig>(RENDER_GRAPH_CONFIG_FILE);
     let (active_render_graph_config, spec) = match render_graph_config.to_spec() {
         Ok(spec) => (render_graph_config.clone(), spec),
         Err(err) => {
@@ -171,8 +173,15 @@ fn sdf_renderer_example_update_system(
     } else {
         0.0
     });
-    let vertical_axis = (if input.action_down(ACTION_UP) { 1.0 } else { 0.0 })
-        - (if input.action_down(ACTION_DOWN) { 1.0 } else { 0.0 });
+    let vertical_axis = (if input.action_down(ACTION_UP) {
+        1.0
+    } else {
+        0.0
+    }) - (if input.action_down(ACTION_DOWN) {
+        1.0
+    } else {
+        0.0
+    });
 
     state.camera_target[0] += (forward[0] * forward_axis + right[0] * strafe_axis) * move_dt;
     state.camera_target[2] += (forward[1] * forward_axis + right[1] * strafe_axis) * move_dt;

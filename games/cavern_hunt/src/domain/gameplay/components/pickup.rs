@@ -1,13 +1,13 @@
-use serde::{Deserialize, Serialize};
-use engine::prelude::Component;
 use crate::{NetworkEntityId, PickupKind};
+use engine::prelude::Component;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
 pub struct LootDrop;
 
 #[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
 pub struct Pickup {
-	pub kind: PickupKind,
+    pub kind: PickupKind,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]

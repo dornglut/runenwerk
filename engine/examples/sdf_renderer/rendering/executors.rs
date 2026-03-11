@@ -165,13 +165,19 @@ impl RenderPassExecutor for SdfComposeExecutor {
             .ok_or_else(|| anyhow!("sdf compose pass unavailable during prepare"))?;
 
         let compose_params = SdfComposeParamsRaw {
-            output_size: [ctx.surface_size().0.max(1) as f32, ctx.surface_size().1.max(1) as f32],
+            output_size: [
+                ctx.surface_size().0.max(1) as f32,
+                ctx.surface_size().1.max(1) as f32,
+            ],
             target_aspect,
             fit_mode,
             bar_color,
         };
-        ctx.queue()
-            .write_buffer(&pass.compose_params_buffer, 0, bytemuck::bytes_of(&compose_params));
+        ctx.queue().write_buffer(
+            &pass.compose_params_buffer,
+            0,
+            bytemuck::bytes_of(&compose_params),
+        );
         Ok(())
     }
 

@@ -91,5 +91,3 @@ impl RenderGraphRegistryResource {
         self.revision = self.revision.saturating_add(1);
     }
 }
-
-

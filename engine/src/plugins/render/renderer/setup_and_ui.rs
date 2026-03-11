@@ -180,7 +180,12 @@ impl Renderer {
         Some((x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32))
     }
 
-    pub(super) fn ensure_text_renderer(&mut self, device: &Device, queue: &Queue, format: TextureFormat) {
+    pub(super) fn ensure_text_renderer(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        format: TextureFormat,
+    ) {
         if self.text_renderer.is_some() && self.text_renderer_format == Some(format) {
             return;
         }
@@ -304,4 +309,3 @@ impl Renderer {
         }
     }
 }
-

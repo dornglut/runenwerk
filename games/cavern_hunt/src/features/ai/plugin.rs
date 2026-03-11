@@ -1,11 +1,11 @@
+use crate::features::combat::plugin::{constrained_move, spawn_projectile};
+use crate::features::timing::fixed_step_seconds;
 use crate::{
     AggroState, CavernCollisionField, CavernGeometryGraph, CavernRunPhase, CavernRunState,
     ColliderRadius, EnemyCombatTuning, EnemyKind, Faction, Health, MeleeAttack, ProjectileAttack,
     RoomAnchor, RoomEncounterRegistry, RoomEncounterState, Transform2, Velocity2, WeaponState,
     is_active_player_entity,
 };
-use crate::features::combat::plugin::{constrained_move, spawn_projectile};
-use crate::features::timing::fixed_step_seconds;
 use anyhow::Result;
 use engine::prelude::{
     App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, World, WorldMut,

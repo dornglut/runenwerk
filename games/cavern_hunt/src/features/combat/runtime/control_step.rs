@@ -218,14 +218,8 @@ fn build_companion_control(world: &World, entity: Entity) -> CavernControlState 
                 match (companion_role, *kind) {
                     (_, EnemyKind::NestGuardian) => 0_u8,
                     (_, EnemyKind::Spitter) => 1,
-                    (
-                        Some(crate::CompanionBehaviorRole::Skirmisher),
-                        EnemyKind::Bruiser,
-                    ) => 2,
-                    (
-                        Some(crate::CompanionBehaviorRole::SupportShooter),
-                        EnemyKind::Bruiser,
-                    ) => 3,
+                    (Some(crate::CompanionBehaviorRole::Skirmisher), EnemyKind::Bruiser) => 2,
+                    (Some(crate::CompanionBehaviorRole::SupportShooter), EnemyKind::Bruiser) => 3,
                     (_, EnemyKind::Bruiser) => 2,
                     (_, EnemyKind::Swarmer) => 4,
                 }

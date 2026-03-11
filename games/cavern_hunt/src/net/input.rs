@@ -1,16 +1,14 @@
 use std::collections::BTreeSet;
 
 use ecs::World;
-use engine::prelude::{
-    AuthorityRole, NetworkSessionStatus, SimulationProfileConfig,
-};
+use engine::prelude::{AuthorityRole, NetworkSessionStatus, SimulationProfileConfig};
 use engine_net::replication::InputDriver;
 use engine_net::{ConnectionId, ServerSessionState, SimulationTick};
 
 use crate::{
-    AbilityCommand, AimCommand, CavernCommandEnvelope, CavernControlState, CavernPlayerOwnershipState,
-    CavernPredictedFrame, CavernPredictionState, CavernRunConfig, CavernServerControlMap,
-    InteractCommand, MoveCommand,
+    AbilityCommand, AimCommand, CavernCommandEnvelope, CavernControlState,
+    CavernPlayerOwnershipState, CavernPredictedFrame, CavernPredictionState, CavernRunConfig,
+    CavernServerControlMap, InteractCommand, MoveCommand,
 };
 
 use super::driver::CavernReplicationDriver;
@@ -20,7 +18,7 @@ const MAX_INPUT_TICK_LEAD: u64 = 8;
 impl InputDriver for CavernReplicationDriver {
     fn receive_remote_input(
         world: &mut World,
-        connection_id: Option<ConnectionId>,
+        connection_id: ConnectionId,
         tick: SimulationTick,
         input: Vec<Self::Input>,
     ) -> Result<(), Self::Error> {
@@ -32,15 +30,14 @@ impl InputDriver for CavernReplicationDriver {
             return Ok(());
         }
 
-        let Some(connection_id) = connection_id else {
-            return Ok(());
-        };
-
         let max_players = world
             .resource::<CavernRunConfig>()
             .map(|config| config.max_players.max(1))
             .unwrap_or(1);
-        let server_tick = world.resource::<SimulationTick>().copied().unwrap_or_default();
+        let server_tick = world
+            .resource::<SimulationTick>()
+            .copied()
+            .unwrap_or_default();
 
         let mut ownership = world
             .resource::<CavernPlayerOwnershipState>()
@@ -191,7 +188,9 @@ fn commands_from_control(control: CavernControlState) -> Vec<CavernCommandEnvelo
         commands.push(CavernCommandEnvelope::Ability(AbilityCommand { slot: 1 }));
     }
     if control.interact_pressed {
-        commands.push(CavernCommandEnvelope::Interact(InteractCommand { target: None }));
+        commands.push(CavernCommandEnvelope::Interact(InteractCommand {
+            target: None,
+        }));
     }
     commands
 }
@@ -275,6 +274,8 @@ fn resolve_owned_player_id(
     let player_id = (1..=u32::from(max_players))
         .find(|player_id| !assigned.contains(player_id))
         .or(Some(1))?;
-    ownership.by_connection_id.insert(connection_id.0, player_id);
+    ownership
+        .by_connection_id
+        .insert(connection_id.0, player_id);
     Some(player_id)
 }

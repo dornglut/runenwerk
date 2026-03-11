@@ -9,11 +9,7 @@ use crate::runtime::event_dispatch::send_runtime_event;
 use crate::runtime::join_rejection::parse_join_rejection_reason;
 use crate::runtime::reconnect_backoff::wait_for_reconnect_backoff;
 use crate::{
-    QuicClientTargetProvider,
-    QuicSessionCommand,
-    QuicSessionEvent,
-    QuicTransport,
-    QuicTrustPolicy,
+    QuicClientTargetProvider, QuicSessionCommand, QuicSessionEvent, QuicTransport, QuicTrustPolicy,
 };
 
 // Owner: Grotto Engine Net - QUIC Runtime
@@ -73,9 +69,13 @@ pub async fn run_client_runtime_task(
         }
         current_trust_policy.validate_expected_fingerprint()?;
         let trusted_certificates = current_trust_policy.trusted_certificates()?;
-        let server_addr: SocketAddr = current_target.server_endpoint.parse().with_context(|| {
-            format!("invalid server endpoint: {}", current_target.server_endpoint)
-        })?;
+        let server_addr: SocketAddr =
+            current_target.server_endpoint.parse().with_context(|| {
+                format!(
+                    "invalid server endpoint: {}",
+                    current_target.server_endpoint
+                )
+            })?;
 
         match transport
             .connect_and_handshake(
@@ -94,7 +94,10 @@ pub async fn run_client_runtime_task(
                         connection_id: bootstrap.state.connection_id,
                     },
                 );
-                send_runtime_event(&event_tx, QuicSessionEvent::Phase(bootstrap.state.phase.clone()));
+                send_runtime_event(
+                    &event_tx,
+                    QuicSessionEvent::Phase(bootstrap.state.phase.clone()),
+                );
                 send_runtime_event(
                     &event_tx,
                     QuicSessionEvent::JoinAccepted(bootstrap.accepted.clone()),

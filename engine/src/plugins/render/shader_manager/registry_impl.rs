@@ -1,8 +1,8 @@
-use super::*;
 use super::helpers::{
     derive_shader_id_for_root, derive_shader_id_from_path, discover_shader_files, normalize_roots,
     normalize_shader_id, shader_event_state_label,
 };
+use super::*;
 
 // Owner: Engine Render Shader Registry - Core Registry Implementation
 impl ShaderRegistryResource {
@@ -476,5 +476,3 @@ impl ShaderRegistryResource {
         self.assets.get_mut(handle.index())
     }
 }
-
-

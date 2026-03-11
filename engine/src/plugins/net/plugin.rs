@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
-use engine_net::{AuthorityRole, SimulationProfile, SimulationProfileConfig};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
+use engine_net::{AuthorityRole, SimulationProfile, SimulationProfileConfig};
 
 use crate::app::App;
 use crate::plugin::Plugin;
@@ -19,28 +19,24 @@ pub struct NetPlugin<TDriver> {
 }
 
 impl<TDriver> NetPlugin<TDriver> {
-    pub fn client() -> Self {
+    pub fn new(role: NetRole) -> Self {
         Self {
-            role: NetRole::Client,
+            role,
             config: NetPluginConfig::default(),
             _marker: PhantomData,
         }
+    }
+
+    pub fn client() -> Self {
+        Self::new(NetRole::Client)
     }
 
     pub fn server() -> Self {
-        Self {
-            role: NetRole::Server,
-            config: NetPluginConfig::default(),
-            _marker: PhantomData,
-        }
+        Self::new(NetRole::Server)
     }
 
     pub fn host() -> Self {
-        Self {
-            role: NetRole::Host,
-            config: NetPluginConfig::default(),
-            _marker: PhantomData,
-        }
+        Self::new(NetRole::Host)
     }
 
     pub fn with_config(mut self, config: NetPluginConfig) -> Self {

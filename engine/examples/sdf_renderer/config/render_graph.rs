@@ -128,7 +128,8 @@ impl SdfRenderGraphConfig {
                     binding.builtin
                 ));
             }
-            let executor: Arc<dyn RenderPassExecutor> = match parse_builtin_executor(builtin_label) {
+            let executor: Arc<dyn RenderPassExecutor> = match parse_builtin_executor(builtin_label)
+            {
                 Some(BuiltinRenderPassExecutor::Compute) => {
                     Arc::new(SdfComputeExecutor::new(shared.clone()))
                 }

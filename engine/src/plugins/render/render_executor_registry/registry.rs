@@ -221,5 +221,3 @@ impl RenderPassExecutorRegistryResource {
 fn normalize_executor_id(value: impl AsRef<str>) -> String {
     value.as_ref().trim().to_string()
 }
-
-

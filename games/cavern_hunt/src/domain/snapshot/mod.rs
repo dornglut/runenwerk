@@ -1,7 +1,7 @@
 pub mod capture_and_delta;
 pub mod restore;
-pub mod types_and_bundles;
 pub mod tests;
+pub mod types_and_bundles;
 
 pub use capture_and_delta::*;
 pub use restore::*;

@@ -4,6 +4,8 @@ use super::*;
 #[cfg(test)]
 mod tests {
     use super::{CAVERN_GAMEPLAY_HEIGHT, constrained_move, update_local_aim};
+    use crate::app::composition as game;
+    use crate::features::worldgen::plugin as worldgen;
     use crate::{
         CavernAimState, CavernCameraState, CavernCollisionField, CavernControlState,
         CavernGeometryGraph, CavernLayout, CavernMetaProfile, CavernPlayerOwnershipState,
@@ -11,8 +13,6 @@ mod tests {
         EnemyKind, LocalPlayerRef, LootTableRegistry, PlayerActive, PlayerCompanion, SpawnDirector,
         Transform2,
     };
-    use crate::app::composition as game;
-    use crate::features::worldgen::plugin as worldgen;
     use engine::prelude::{
         AuthorityRole, InputState, SimulationProfile, SimulationProfileConfig, Time, WindowState,
         World,

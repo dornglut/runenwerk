@@ -71,14 +71,16 @@ mod tests {
             crate::CavernSeed(1337),
             &crate::CavernRunConfig::default(),
         );
-        let topology =
-            crate::CavernTopology::from_layout(&layout, crate::CavernSeed(1337));
+        let topology = crate::CavernTopology::from_layout(&layout, crate::CavernSeed(1337));
         let primitives = geometry_primitives_from_topology(&topology);
         assert!(
             !primitives.is_empty(),
             "topology conversion should produce primitives"
         );
-        assert_eq!(primitives[0].shape_kind, super::world_frame_and_geometry::SHAPE_BOX);
+        assert_eq!(
+            primitives[0].shape_kind,
+            super::world_frame_and_geometry::SHAPE_BOX
+        );
         assert_eq!(primitives[0].op_kind, OP_ADD_SOLID);
         let first_room = topology
             .rooms

@@ -227,5 +227,3 @@ impl RenderFeatureGraphSpec {
         }
     }
 }
-
-

@@ -13,8 +13,6 @@ pub trait RenderPassExecutor: Send + Sync {
     fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()>;
 }
 
-
-
 mod contexts_and_builtin;
 mod frame_data;
 mod registry;
@@ -129,5 +127,3 @@ mod tests {
         }));
     }
 }
-
-

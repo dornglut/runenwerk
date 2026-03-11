@@ -173,7 +173,11 @@ pub fn push_despawn(payload: &mut SnapshotPayload, net_entity_id: NetEntityId) {
     payload.despawns.push(EntityDespawn { net_entity_id });
 }
 
-fn ensure_entity(world: &mut World, map: &mut MvpClientEntityMap, net_entity_id: NetEntityId) -> Entity {
+fn ensure_entity(
+    world: &mut World,
+    map: &mut MvpClientEntityMap,
+    net_entity_id: NetEntityId,
+) -> Entity {
     if let Some(entity) = map.by_net_entity.get(&net_entity_id).copied() {
         return entity;
     }

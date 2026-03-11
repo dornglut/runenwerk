@@ -234,6 +234,40 @@ impl CavernComposeExecutor {
 }
 
 impl RenderPassExecutor for CavernComposeExecutor {
+    fn prepare(&self, ctx: &mut RenderPassPrepareContext<'_>) -> Result<()> {
+        let mut shared = self
+            .shared
+            .lock()
+            .map_err(|_| anyhow!("cavern gpu shared state lock poisoned"))?;
+        ensure_gpu_pass(
+            &mut shared,
+            ctx.device(),
+            ctx.surface_format(),
+            ctx.surface_size(),
+        );
+        let pass = shared
+            .pass
+            .as_ref()
+            .ok_or_else(|| anyhow!("cavern gpu pass unavailable during compose prepare"))?;
+
+        // Cavern currently always composes using stretch mode; keep defaults explicit.
+        let compose_params = CavernComposeParamsRaw {
+            output_size: [
+                ctx.surface_size().0.max(1) as f32,
+                ctx.surface_size().1.max(1) as f32,
+            ],
+            target_aspect: 0.0,
+            fit_mode: 0,
+            bar_color: [CLEAR_COLOR.r as f32, CLEAR_COLOR.g as f32, CLEAR_COLOR.b as f32, 1.0],
+        };
+        ctx.queue().write_buffer(
+            &pass.compose_params_buffer,
+            0,
+            bytemuck::bytes_of(&compose_params),
+        );
+        Ok(())
+    }
+
     fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()> {
         let mut shared = self
             .shared
@@ -271,4 +305,3 @@ impl RenderPassExecutor for CavernComposeExecutor {
         Ok(())
     }
 }
-

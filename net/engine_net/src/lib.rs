@@ -1,5 +1,6 @@
 extern crate self as engine_net;
 
+pub mod prelude;
 pub mod protocol;
 pub mod replication;
 pub mod runtime;

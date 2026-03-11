@@ -1,5 +1,7 @@
-use crate::protocol::{ClientMessage, DisconnectReason, JoinAccepted, JoinRequest, ProtocolVersion, ServerMessage};
-use crate::transport::{ConnectionId};
+use crate::protocol::{
+    ClientMessage, DisconnectReason, JoinAccepted, JoinRequest, ProtocolVersion, ServerMessage,
+};
+use crate::transport::ConnectionId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -56,7 +58,11 @@ pub struct ServerSessionState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SessionRuntimeCommand {
     Client(ClientMessage),
-    Server(ServerMessage),
+    ServerToConnection {
+        connection_id: ConnectionId,
+        message: ServerMessage,
+    },
+    ServerBroadcast(ServerMessage),
     SetDrainMode {
         enabled: bool,
     },

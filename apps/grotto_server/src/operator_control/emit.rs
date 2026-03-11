@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cavern_hunt::ReplicationRuntimeMetrics;
-use engine::plugins::{
+use engine::plugins::net::{
     ConnectionHealth, NetworkDiagnostics, NetworkSessionStatus, RoundTripMetrics,
 };
 use engine::prelude::{SimulationTick, WorldMut};

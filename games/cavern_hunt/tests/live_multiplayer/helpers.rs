@@ -1,7 +1,7 @@
 // Owner: Cavern Hunt Live Multiplayer Tests - Shared Helpers
 fn build_server_app(
     handle: NetworkRuntimeHandle,
-    session_config: engine_net::ServerSessionConfig,
+    session_config: ServerSessionConfig,
 ) -> App {
     let mut app = App::headless();
     app.set_title("Cavern Hunt Live Server Test");
@@ -11,7 +11,7 @@ fn build_server_app(
     app.add_plugins((
         ScenePlugin,
         RenderPlugin,
-        NetPlugin::<CavernReplicationDriver>::server(),
+        NetPlugin::<CavernReplicationDriver>::new(NetRole::Server),
         CavernHuntPlugin,
         CavernHuntServerPlugin,
     ));
@@ -29,7 +29,7 @@ fn build_client_app(handle: NetworkRuntimeHandle) -> App {
     app.add_plugins((
         ScenePlugin,
         RenderPlugin,
-        NetPlugin::<CavernReplicationDriver>::client(),
+        NetPlugin::<CavernReplicationDriver>::new(NetRole::Client),
         CavernHuntPlugin,
         CavernHuntClientPlugin,
     ));

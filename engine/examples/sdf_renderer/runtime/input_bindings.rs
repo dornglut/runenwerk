@@ -1,7 +1,10 @@
 // Owner: SDF Renderer Example - Input Binding Runtime Helpers
 use crate::*;
 
-pub(crate) fn apply_input_bindings(input: &mut InputState, config: &SdfInputBindingsConfig) -> usize {
+pub(crate) fn apply_input_bindings(
+    input: &mut InputState,
+    config: &SdfInputBindingsConfig,
+) -> usize {
     let mut applied = 0usize;
     for (index, binding) in config.bindings.iter().enumerate() {
         let action = binding.action.trim();

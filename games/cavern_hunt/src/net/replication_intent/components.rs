@@ -1,6 +1,6 @@
 use crate::{CavernControlState, Health, Transform2, Velocity2};
+use engine::net::prelude::*;
 use engine::prelude::Component;
-use engine_net::{SimulationTick, net_component, net_entity};
 use serde::{Deserialize, Serialize};
 
 #[net_entity]

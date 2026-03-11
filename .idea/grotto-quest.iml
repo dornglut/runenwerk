@@ -23,6 +23,7 @@
       <sourceFolder url="file://$MODULE_DIR$/net/engine_net/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/net/engine_net_quic/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/net/engine_sim/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/net/engine_net_macros/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

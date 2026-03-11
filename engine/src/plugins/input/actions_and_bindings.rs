@@ -1,6 +1,6 @@
+use crate::plugins::ModifiersSnapshot;
 use std::collections::{HashMap, HashSet};
 use winit::keyboard::KeyCode;
-use crate::plugins::ModifiersSnapshot;
 
 // Owner: Engine Input Plugin - Action Bindings and Chords
 pub mod action {
@@ -166,7 +166,11 @@ impl InputBindings {
         self.by_action.keys().map(String::as_str)
     }
 
-    pub(crate) fn matching_actions_for_key(&self, key: KeyCode, modifiers: ModifiersSnapshot) -> Vec<String> {
+    pub(crate) fn matching_actions_for_key(
+        &self,
+        key: KeyCode,
+        modifiers: ModifiersSnapshot,
+    ) -> Vec<String> {
         let mut actions = Vec::new();
         for (action, chords) in &self.by_action {
             if chords

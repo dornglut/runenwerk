@@ -1,5 +1,5 @@
-use super::*;
 use super::helpers::build_shader_index;
+use super::*;
 
 // Owner: Engine Render Shader Registry - Types and Resources
 pub const DEFAULT_SHADER_ASSET_ROOT: &str = "assets/shaders";
@@ -109,5 +109,3 @@ impl Default for ShaderRegistryResource {
         Self::new()
     }
 }
-
-

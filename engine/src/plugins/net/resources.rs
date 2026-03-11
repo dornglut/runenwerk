@@ -1,10 +1,11 @@
+use super::*;
+use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SessionRuntimeState, SystemConfigExt};
+use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
+use engine_net::*;
+use engine_sim::SimulationTick;
+use std::collections::BTreeMap;
 use std::mem;
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
-use engine_net::*;
-use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
-use engine_sim::SimulationTick;
-use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SessionRuntimeState, SystemConfigExt};
-use crate::plugins::*;
 
 // engine/src/plugins/net/resources.rs
 
@@ -79,11 +80,14 @@ where
     TDriver::Snapshot: Clone + PartialEq,
 {
     app.init_resource::<SnapshotCursor>();
-    app.init_resource::<SnapshotReplicationState<TDriver::Snapshot>>();
+    app.init_resource::<ServerSnapshotReplicationState<TDriver::Snapshot>>();
+    app.init_resource::<ClientSnapshotReplicationState<TDriver::Snapshot>>();
     app.init_resource::<ReplicationDiagnostics>();
     app.add_systems(
         FixedUpdate,
-        replication_step_system::<TDriver>.in_set(CoreSet::Replication),
+        replication_step_system::<TDriver>
+            .in_set(CoreSet::Replication)
+            .after(CoreSet::Simulation),
     );
 }
 
@@ -96,7 +100,9 @@ where
     app.init_resource::<PredictionDiagnostics>();
     app.add_systems(
         FixedUpdate,
-        prediction_step_system::<TDriver>.in_set(CoreSet::Simulation),
+        prediction_step_system::<TDriver>
+            .in_set(CoreSet::Simulation)
+            .before(CoreSet::Replication),
     );
 }
 
@@ -180,14 +186,42 @@ impl NetworkClientOutbox {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum OutboundServerMessage {
+    ToConnection {
+        connection_id: ConnectionId,
+        message: ServerMessage,
+    },
+    Broadcast(ServerMessage),
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct NetworkServerOutbox {
-    messages: Vec<ServerMessage>,
+    messages: Vec<OutboundServerMessage>,
 }
 
 impl NetworkServerOutbox {
     pub fn push(&mut self, message: ServerMessage) {
-        push_bounded(&mut self.messages, message, "NetworkServerOutbox");
+        self.push_broadcast(message);
+    }
+
+    pub fn push_broadcast(&mut self, message: ServerMessage) {
+        push_bounded(
+            &mut self.messages,
+            OutboundServerMessage::Broadcast(message),
+            "NetworkServerOutbox",
+        );
+    }
+
+    pub fn push_to(&mut self, connection_id: ConnectionId, message: ServerMessage) {
+        push_bounded(
+            &mut self.messages,
+            OutboundServerMessage::ToConnection {
+                connection_id,
+                message,
+            },
+            "NetworkServerOutbox",
+        );
     }
 
     pub fn len(&self) -> usize {
@@ -198,7 +232,7 @@ impl NetworkServerOutbox {
         self.messages.is_empty()
     }
 
-    pub fn drain(&mut self) -> Vec<ServerMessage> {
+    pub fn drain(&mut self) -> Vec<OutboundServerMessage> {
         mem::take(&mut self.messages)
     }
 }
@@ -252,7 +286,7 @@ impl NetworkInboundQueue {
 #[derive(Debug, Clone, Default)]
 pub struct NetworkOutboundQueue {
     client_messages: Vec<ClientMessage>,
-    server_messages: Vec<ServerMessage>,
+    server_messages: Vec<OutboundServerMessage>,
 }
 
 impl NetworkOutboundQueue {
@@ -269,7 +303,7 @@ impl NetworkOutboundQueue {
         );
     }
 
-    pub fn push_server(&mut self, message: ServerMessage) {
+    pub fn push_server(&mut self, message: OutboundServerMessage) {
         push_bounded(
             &mut self.server_messages,
             message,
@@ -281,7 +315,7 @@ impl NetworkOutboundQueue {
         &self.client_messages
     }
 
-    pub fn server_messages(&self) -> &[ServerMessage] {
+    pub fn server_messages(&self) -> &[OutboundServerMessage] {
         &self.server_messages
     }
 }
@@ -304,8 +338,8 @@ impl NetworkRuntimeHandle {
 
     pub fn send(&self, command: SessionRuntimeCommand) -> Result<(), String> {
         self.command_tx
-          .try_send(command)
-          .map_err(|error| format!("network runtime send failed: {error}"))
+            .try_send(command)
+            .map_err(|error| format!("network runtime send failed: {error}"))
     }
 
     pub fn try_recv(&mut self) -> Result<Option<SessionRuntimeEvent>, TryRecvError> {
@@ -346,34 +380,72 @@ pub struct RoundTripMetrics {
     pub samples: u64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SnapshotReplicationState<TSnapshot>
-where
-  TSnapshot: Clone + PartialEq,
-{
-    pub active_connection: Option<ConnectionId>,
-    pub initial_snapshot_sent: bool,
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ConnectionBaselineCheckpoint {
+    pub last_ack_cursor: SnapshotCursor,
     pub last_sent_cursor: SnapshotCursor,
-    pub last_acknowledged_cursor: SnapshotCursor,
-    pub last_received_tick: SimulationTick,
-    pub applied_snapshots: u64,
-    pub last_sent_snapshot: Option<TSnapshot>,
-    pub last_received_snapshot: Option<TSnapshot>,
+    pub last_full_snapshot_cursor: SnapshotCursor,
+    pub last_full_snapshot_tick: SimulationTick,
+    pub needs_full_resync: bool,
 }
 
-impl<TSnapshot> Default for SnapshotReplicationState<TSnapshot>
+impl Default for ConnectionBaselineCheckpoint {
+    fn default() -> Self {
+        Self {
+            last_ack_cursor: SnapshotCursor::default(),
+            last_sent_cursor: SnapshotCursor::default(),
+            last_full_snapshot_cursor: SnapshotCursor::default(),
+            last_full_snapshot_tick: SimulationTick::default(),
+            needs_full_resync: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServerSnapshotReplicationState<TSnapshot>
+where
+    TSnapshot: Clone + PartialEq,
+{
+    pub checkpoints: BTreeMap<ConnectionId, ConnectionBaselineCheckpoint>,
+    pub snapshot_history: BTreeMap<SnapshotCursor, TSnapshot>,
+    pub latest_snapshot: Option<TSnapshot>,
+    pub latest_tick: SimulationTick,
+}
+
+impl<TSnapshot> Default for ServerSnapshotReplicationState<TSnapshot>
 where
     TSnapshot: Clone + PartialEq,
 {
     fn default() -> Self {
         Self {
-            active_connection: None,
-            initial_snapshot_sent: false,
-            last_sent_cursor: SnapshotCursor::default(),
+            checkpoints: BTreeMap::new(),
+            snapshot_history: BTreeMap::new(),
+            latest_snapshot: None,
+            latest_tick: SimulationTick::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientSnapshotReplicationState<TSnapshot>
+where
+    TSnapshot: Clone + PartialEq,
+{
+    pub last_acknowledged_cursor: SnapshotCursor,
+    pub last_received_tick: SimulationTick,
+    pub applied_snapshots: u64,
+    pub last_received_snapshot: Option<TSnapshot>,
+}
+
+impl<TSnapshot> Default for ClientSnapshotReplicationState<TSnapshot>
+where
+    TSnapshot: Clone + PartialEq,
+{
+    fn default() -> Self {
+        Self {
             last_acknowledged_cursor: SnapshotCursor::default(),
             last_received_tick: SimulationTick::default(),
             applied_snapshots: 0,
-            last_sent_snapshot: None,
             last_received_snapshot: None,
         }
     }
@@ -382,7 +454,7 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub struct PendingInputFrame<TInput>
 where
-  TInput: Clone + PartialEq,
+    TInput: Clone + PartialEq,
 {
     pub tick: SimulationTick,
     pub commands: Vec<TInput>,
@@ -391,7 +463,7 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub struct PredictionState<TInput>
 where
-  TInput: Clone + PartialEq,
+    TInput: Clone + PartialEq,
 {
     pub pending_frames: Vec<PendingInputFrame<TInput>>,
 }
@@ -409,7 +481,7 @@ where
 
 impl<TInput> PredictionState<TInput>
 where
-  TInput: Clone + PartialEq,
+    TInput: Clone + PartialEq,
 {
     pub fn pending_frames_len(&self) -> usize {
         self.pending_frames.len()

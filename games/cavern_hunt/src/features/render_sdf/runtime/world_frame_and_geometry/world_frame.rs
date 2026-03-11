@@ -1,7 +1,8 @@
-use super::*;
 use super::geometry_projection::{
-    geometry_primitives_from_graph, geometry_primitives_from_layout, geometry_primitives_from_topology,
+    geometry_primitives_from_graph, geometry_primitives_from_layout,
+    geometry_primitives_from_topology,
 };
+use super::*;
 
 // Owner: Cavern Hunt SDF Renderer - World Frame Assembly
 pub(crate) fn build_sdf_world_frame_system(
@@ -32,7 +33,10 @@ pub(crate) fn build_sdf_world_frame_system(
                 geometry_primitives_from_topology(&topology),
             )
         } else {
-            (layout.world_bounds, geometry_primitives_from_layout(&layout))
+            (
+                layout.world_bounds,
+                geometry_primitives_from_layout(&layout),
+            )
         };
 
     frame.world_bounds = world_bounds;

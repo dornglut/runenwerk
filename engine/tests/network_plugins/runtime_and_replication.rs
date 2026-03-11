@@ -74,14 +74,37 @@ fn server_replication_emits_scene_snapshot_payloads() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    app.world_mut()
+        .resource_mut::<NetworkServerInbox>()
+        .unwrap()
+        .push(ClientMessage::Hello(Hello {
+            protocol: ProtocolVersion::new(1, 1, 1),
+            transport: TransportKind::Quic,
+        }));
+    app.world_mut()
+        .resource_mut::<NetworkServerInbox>()
+        .unwrap()
+        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+            protocol: ProtocolVersion::new(1, 1, 1),
+            server_id: "srv-local".to_string(),
+            ticket: "ticket-1".to_string(),
+        }));
 
-    let app = app.run_for_ticks(1).expect("server tick should run");
+    let app = app
+        .run_for_frames(1)
+        .expect("server join frame should run")
+        .run_for_ticks(1)
+        .expect("server tick should run");
     let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
     let message = outbound
         .server_messages()
         .iter()
         .find_map(|message| match message {
-            ServerMessage::Snapshot(snapshot) => Some(snapshot),
+            OutboundServerMessage::ToConnection {
+                message: ServerMessage::Snapshot(snapshot),
+                ..
+            }
+            | OutboundServerMessage::Broadcast(ServerMessage::Snapshot(snapshot)) => Some(snapshot),
             _ => None,
         })
         .expect("server should emit an initial full snapshot");
@@ -98,6 +121,27 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
     server
         .world_mut()
+        .resource_mut::<NetworkServerInbox>()
+        .unwrap()
+        .push(ClientMessage::Hello(Hello {
+            protocol: ProtocolVersion::new(1, 1, 1),
+            transport: TransportKind::Quic,
+        }));
+    server
+        .world_mut()
+        .resource_mut::<NetworkServerInbox>()
+        .unwrap()
+        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+            protocol: ProtocolVersion::new(1, 1, 1),
+            server_id: "srv-local".to_string(),
+            ticket: "ticket-1".to_string(),
+        }));
+    let server = server
+        .run_for_frames(1)
+        .expect("server join frame should run");
+    let mut server = server;
+    server
+        .world_mut()
         .resource_mut::<PlayerCommandBuffer>()
         .unwrap()
         .push(ClientCommandEnvelope::Move(MoveCommand {
@@ -112,7 +156,13 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
         .server_messages()
         .iter()
         .find_map(|message| match message {
-            ServerMessage::Snapshot(snapshot) => Some(snapshot.clone()),
+            OutboundServerMessage::ToConnection {
+                message: ServerMessage::Snapshot(snapshot),
+                ..
+            }
+            | OutboundServerMessage::Broadcast(ServerMessage::Snapshot(snapshot)) => {
+                Some(snapshot.clone())
+            }
             _ => None,
         })
         .expect("server should emit a snapshot");
@@ -161,7 +211,7 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
     assert_eq!(
         client
             .world()
-            .resource::<SnapshotReplicationState>()
+            .resource::<ClientSnapshotState>()
             .unwrap()
             .last_acknowledged_cursor,
         SnapshotCursor(1)

@@ -1,6 +1,6 @@
+use crate::app::App;
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{FixedFramesRunner, FixedTicksRunner};
-use crate::app::App;
 use crate::runtime::schedules::{
     FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
 };
@@ -50,8 +50,10 @@ impl App {
         self.scheduler.run_schedule::<PreUpdate>(&mut self.world)?;
         self.run_fixed_update_schedule()?;
         self.scheduler.run_schedule::<Update>(&mut self.world)?;
-        self.scheduler.run_schedule::<RenderPrepare>(&mut self.world)?;
-        self.scheduler.run_schedule::<RenderSubmit>(&mut self.world)?;
+        self.scheduler
+            .run_schedule::<RenderPrepare>(&mut self.world)?;
+        self.scheduler
+            .run_schedule::<RenderSubmit>(&mut self.world)?;
         self.scheduler.run_schedule::<FrameEnd>(&mut self.world)?;
         Ok(())
     }

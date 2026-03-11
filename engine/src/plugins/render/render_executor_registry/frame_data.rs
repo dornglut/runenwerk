@@ -36,5 +36,4 @@ impl<'a> RenderFrameDataRegistry<'a> {
     }
 }
 
-
 // Owner: Grotto Quest Engine - Render Domain

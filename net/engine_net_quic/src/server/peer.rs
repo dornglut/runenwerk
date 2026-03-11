@@ -1,12 +1,12 @@
 use anyhow::Result;
-use engine_net::{MessageEnvelope, ServerMessage, decode_message};
+use engine_net::{DisconnectReason, MessageEnvelope, ServerMessage, decode_message};
 use quinn::Connection;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+use crate::QuicSessionEvent;
 use crate::runtime::event_dispatch::{send_peer_event, send_runtime_event};
 use crate::runtime::message_transport::{receive_stream_envelope, send_envelope};
 use crate::server::runtime::ServerPeerEvent;
-use crate::QuicSessionEvent;
 
 // Owner: Grotto Engine Net - QUIC Runtime
 pub(crate) async fn run_server_peer_task(
@@ -36,14 +36,12 @@ pub(crate) async fn run_server_peer_task(
                             send_runtime_event(&event_tx, QuicSessionEvent::Error {
                                 message: error.to_string(),
                             });
-                            send_runtime_event(&event_tx, QuicSessionEvent::ConnectionClosed {
-                                connection_id: Some(connection_id),
-                                reason: disconnect_reason.clone(),
-                            });
-                            send_peer_event(&peer_event_tx, ServerPeerEvent::Closed {
+                            emit_peer_closed(
+                                &event_tx,
+                                &peer_event_tx,
                                 connection_id,
-                                reason: disconnect_reason,
-                            });
+                                disconnect_reason,
+                            );
                             return;
                         }
                         if should_close {
@@ -52,23 +50,18 @@ pub(crate) async fn run_server_peer_task(
                                 .map(|reason| format!("{reason:?}"))
                                 .unwrap_or_else(|| "server disconnect".to_string());
                             connection.close(0u32.into(), close_reason.as_bytes());
-                            send_runtime_event(&event_tx, QuicSessionEvent::ConnectionClosed {
-                                connection_id: Some(connection_id),
-                                reason: disconnect_reason.clone(),
-                            });
-                            send_peer_event(&peer_event_tx, ServerPeerEvent::Closed {
+                            emit_peer_closed(
+                                &event_tx,
+                                &peer_event_tx,
                                 connection_id,
-                                reason: disconnect_reason,
-                            });
+                                disconnect_reason,
+                            );
                             return;
                         }
                     }
                     None => {
                         connection.close(0u32.into(), b"server peer dropped");
-                        send_peer_event(&peer_event_tx, ServerPeerEvent::Closed {
-                            connection_id,
-                            reason: None,
-                        });
+                        emit_peer_closed(&event_tx, &peer_event_tx, connection_id, None);
                         return;
                     }
                 }
@@ -93,17 +86,11 @@ pub(crate) async fn run_server_peer_task(
                         }
                     }
                     Err(error) => {
+                        let reason = map_runtime_disconnect_reason(&error.to_string());
                         send_runtime_event(&event_tx, QuicSessionEvent::Error {
                             message: error.to_string(),
                         });
-                        send_runtime_event(&event_tx, QuicSessionEvent::ConnectionClosed {
-                            connection_id: Some(connection_id),
-                            reason: None,
-                        });
-                        send_peer_event(&peer_event_tx, ServerPeerEvent::Closed {
-                            connection_id,
-                            reason: None,
-                        });
+                        emit_peer_closed(&event_tx, &peer_event_tx, connection_id, reason);
                         return;
                     }
                 }
@@ -120,17 +107,11 @@ pub(crate) async fn run_server_peer_task(
                     Ok(Some(MessageEnvelope::Server(_))) => {}
                     Ok(None) => {}
                     Err(error) => {
+                        let reason = map_runtime_disconnect_reason(&error.to_string());
                         send_runtime_event(&event_tx, QuicSessionEvent::Error {
                             message: error.to_string(),
                         });
-                        send_runtime_event(&event_tx, QuicSessionEvent::ConnectionClosed {
-                            connection_id: Some(connection_id),
-                            reason: None,
-                        });
-                        send_peer_event(&peer_event_tx, ServerPeerEvent::Closed {
-                            connection_id,
-                            reason: None,
-                        });
+                        emit_peer_closed(&event_tx, &peer_event_tx, connection_id, reason);
                         return;
                     }
                 }
@@ -146,4 +127,37 @@ fn emit_rtt_update(event_tx: &Sender<QuicSessionEvent>, connection: &Connection)
             millis: connection.rtt().as_millis().min(u32::MAX as u128) as u32,
         },
     );
+}
+
+fn emit_peer_closed(
+    event_tx: &Sender<QuicSessionEvent>,
+    peer_event_tx: &Sender<ServerPeerEvent>,
+    connection_id: engine_net::ConnectionId,
+    reason: Option<DisconnectReason>,
+) {
+    send_runtime_event(
+        event_tx,
+        QuicSessionEvent::ConnectionClosed {
+            connection_id: Some(connection_id),
+            reason: reason.clone(),
+        },
+    );
+    send_peer_event(
+        peer_event_tx,
+        ServerPeerEvent::Closed {
+            connection_id,
+            reason,
+        },
+    );
+}
+
+fn map_runtime_disconnect_reason(message: &str) -> Option<DisconnectReason> {
+    let message = message.to_ascii_lowercase();
+    if message.contains("timed out") || message.contains("timeout") {
+        Some(DisconnectReason::TimedOut)
+    } else if message.contains("server shutting down") {
+        Some(DisconnectReason::ServerShuttingDown)
+    } else {
+        None
+    }
 }

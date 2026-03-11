@@ -1,27 +1,14 @@
 use anyhow::{Context, Result, anyhow};
 use engine_net::{
-    ClientSessionTarget,
-    JoinRejected,
-    MessageEnvelope,
-    ServerMessage,
-    ServerSessionConfig,
-    ServerSessionState,
-    SessionPhase,
-    begin_client_session,
-    handle_client_message,
+    ClientSessionTarget, JoinRejected, MessageEnvelope, ServerMessage, ServerSessionConfig,
+    ServerSessionState, SessionPhase, begin_client_session, handle_client_message,
     observe_server_message,
 };
 use quinn::Endpoint;
 use rustls::pki_types::CertificateDer;
 use std::net::SocketAddr;
 
-use crate::{
-    QuicClientBootstrap,
-    QuicServerBootstrap,
-    QuicTransport,
-    read_message,
-    write_message,
-};
+use crate::{QuicClientBootstrap, QuicServerBootstrap, QuicTransport, read_message, write_message};
 
 impl QuicTransport {
     pub async fn connect_and_handshake(

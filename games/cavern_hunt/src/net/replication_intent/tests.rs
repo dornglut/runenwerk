@@ -8,7 +8,9 @@ use crate::{
     PlayerId, Transform2, Velocity2,
 };
 use engine::prelude::World;
-use engine_net::replication::{InterestPolicy, NetEntityMap, ReplicationProfilePreset, SnapshotTimeline};
+use engine_net::replication::{
+    InterestPolicy, NetEntityMap, ReplicationProfilePreset, SnapshotTimeline,
+};
 use engine_net::{ConnectionId, SimulationTick, decode_snapshot_payload};
 
 fn build_player_world() -> World {
@@ -33,7 +35,10 @@ fn registry_contains_expected_roadmap_component_intent() {
     let player_state = intent
         .descriptor("PlayerStateReplicated")
         .expect("PlayerStateReplicated should be registered");
-    assert_eq!(player_state.profile, ReplicationProfilePreset::PredictedMovement);
+    assert_eq!(
+        player_state.profile,
+        ReplicationProfilePreset::PredictedMovement
+    );
     assert_eq!(player_state.interest, InterestPolicy::Spatial);
     assert!(player_state.owner_prediction);
 
@@ -140,7 +145,8 @@ fn mvp_full_snapshot_roundtrip_applies_player_state_and_health() {
         &mut net_ids,
     )
     .expect("full snapshot should build");
-    let decoded_payload = decode_snapshot_payload(&snapshot.payload).expect("payload should decode");
+    let decoded_payload =
+        decode_snapshot_payload(&snapshot.payload).expect("payload should decode");
     assert!(
         decoded_payload
             .upserts

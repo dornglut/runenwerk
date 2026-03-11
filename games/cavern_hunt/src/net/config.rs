@@ -1,9 +1,12 @@
+use crate::{
+    InterpolationConfig, ReplicationBudgetConfig, ReplicationCadenceConfig,
+    ReplicationKeyframeConfig, ReplicationLoadShedConfig,
+};
 use anyhow::{Context, Result};
 use engine_net::ProtocolVersion;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use crate::{InterpolationConfig, ReplicationBudgetConfig, ReplicationCadenceConfig, ReplicationKeyframeConfig, ReplicationLoadShedConfig};
 
 // src/domain/net/config.rs
 
@@ -258,7 +261,7 @@ mod tests {
         let raw = r#"
 (
     version: 1,
-    profile_id: "legacy",
+    profile_id: "compat",
     protocol: (
         protocol_version: 1,
         game_content_version: 1,
@@ -327,7 +330,7 @@ mod tests {
 )
 "#;
         let parsed: ServerNetworkConfigAssetV1 =
-            ron::from_str(raw).expect("legacy server ron should parse");
+            ron::from_str(raw).expect("compat server ron should parse");
         assert!(!parsed.axiom_operator.enabled);
         assert_eq!(parsed.axiom_operator.snapshot_interval_ticks, 60);
         assert_eq!(parsed.axiom_operator.max_buffered_events, 256);

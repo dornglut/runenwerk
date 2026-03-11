@@ -2,6 +2,7 @@ pub mod debug_metrics;
 pub mod fixed_step;
 pub mod grid;
 pub mod input;
+pub mod net;
 pub mod render;
 pub mod replay;
 pub mod scene;
@@ -9,7 +10,6 @@ pub mod scheduler_diagnostics;
 pub(crate) mod shared;
 pub mod time;
 pub mod ui;
-pub mod net;
 
 pub use debug_metrics::*;
 pub use fixed_step::*;
@@ -21,7 +21,6 @@ pub use scene::*;
 pub use scheduler_diagnostics::*;
 pub use time::*;
 pub use ui::*;
-pub use net::*;
 
 use crate::plugin::Plugin;
 

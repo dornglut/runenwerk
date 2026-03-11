@@ -14,9 +14,5 @@ pub use types_and_constants::*;
 
 use compile_node::compile_node;
 use resolve_helpers::{
-    MaterialDefaults,
-    resolve_input,
-    resolve_numeric_input,
-    resolve_optional_slot,
-    resolve_slot,
+    MaterialDefaults, resolve_input, resolve_numeric_input, resolve_optional_slot, resolve_slot,
 };

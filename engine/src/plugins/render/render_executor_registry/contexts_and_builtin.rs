@@ -187,5 +187,4 @@ impl BuiltinRenderPassExecutor {
     }
 }
 
-
 // Owner: Grotto Quest Engine - Render Domain

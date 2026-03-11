@@ -7,11 +7,10 @@ use cavern_hunt::domain::{
 use cavern_hunt::{
     CavernHuntClientPlugin, CavernHuntPlugin, CavernHuntServerPlugin, CavernReplicationDriver,
 };
-use engine::plugins::{
-    NetPlugin, NetworkRuntimeHandle, RenderPlugin, ScenePlugin, default_plugins,
-};
+use engine::net::prelude::*;
+use engine::plugins::net::NetworkRuntimeHandle;
+use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
 use engine::{App, AuthorityRole, SimulationProfile};
-use engine_net::{ClientSessionTarget, ProtocolVersion, SessionRuntimeCommand, TransportKind};
 use engine_net_quic::{QuicTransport, QuicTrustPolicy, default_client_bind_addr};
 use rustls::pki_types::CertificateDer;
 use std::time::Duration;

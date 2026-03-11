@@ -337,5 +337,4 @@ impl Renderer {
             diagnostics,
         }
     }
-
 }

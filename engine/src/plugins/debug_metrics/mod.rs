@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::plugin::Plugin;
+use crate::plugins::InputState;
 use crate::plugins::time::domain::Time;
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup};
 use crate::state::{
@@ -7,7 +8,6 @@ use crate::state::{
     UiOverlayState,
 };
 use winit::keyboard::KeyCode;
-use crate::plugins::InputState;
 
 pub struct DebugMetricsPlugin;
 
@@ -127,10 +127,10 @@ fn debug_metrics_overlay_system(
 #[cfg(test)]
 mod tests {
     use super::DebugMetricsPlugin;
+    use crate::plugins::InputState;
     use crate::prelude::*;
     use winit::event::ElementState;
     use winit::keyboard::KeyCode;
-    use crate::plugins::InputState;
 
     fn inject_f10(mut input: ResMut<InputState>) {
         input.handle_keyboard_input(KeyCode::F10, ElementState::Pressed, None);

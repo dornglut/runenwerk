@@ -138,5 +138,7 @@ pub(crate) fn find_config_path(file_name: &str) -> PathBuf {
 }
 
 pub(crate) fn file_modified(path: &Path) -> Option<SystemTime> {
-    fs::metadata(path).ok().and_then(|meta| meta.modified().ok())
+    fs::metadata(path)
+        .ok()
+        .and_then(|meta| meta.modified().ok())
 }

@@ -3,7 +3,7 @@
 async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
     let transport = QuicTransport::default();
     let protocol = ProtocolVersion::new(1, 1, 1);
-    let session_config = engine_net::ServerSessionConfig {
+    let session_config = ServerSessionConfig {
         server_id: "srv-live-test".to_string(),
         protocol,
         tick_rate_hz: 60,
@@ -73,13 +73,13 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
     if connected_round.is_none() {
         let server_status = server
             .world()
-            .resource::<engine::plugins::NetworkSessionStatus>()?;
+            .resource::<engine::plugins::net::NetworkSessionStatus>()?;
         let client_a_status = client_a
             .world()
-            .resource::<engine::plugins::NetworkSessionStatus>()?;
+            .resource::<engine::plugins::net::NetworkSessionStatus>()?;
         let client_b_status = client_b
             .world()
-            .resource::<engine::plugins::NetworkSessionStatus>()?;
+            .resource::<engine::plugins::net::NetworkSessionStatus>()?;
         let server_ownership = server
             .world()
             .resource::<cavern_hunt::domain::CavernPlayerOwnershipState>()?;

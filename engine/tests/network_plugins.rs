@@ -1,15 +1,12 @@
-use engine::plugins::{
-    NetPlugin, NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
+use engine::net::prelude::*;
+use engine::plugins::net::{
+    ClientSnapshotReplicationState, NetworkAdmissionState, NetworkClientInbox, NetworkClientOutbox,
     NetworkDiagnostics, NetworkOutboundQueue, NetworkRuntimeHandle, NetworkServerInbox,
-    NetworkServerOutbox, NetworkSessionStatus, PredictionDiagnostics, ReplicationDiagnostics,
-    ScenePlugin, default_plugins,
+    NetworkServerOutbox, NetworkSessionStatus, OutboundServerMessage, PredictionDiagnostics,
+    PredictionState as NetPredictionState, ReplicationDiagnostics, ServerSnapshotReplicationState,
 };
+use engine::plugins::{ScenePlugin, default_plugins};
 use engine::prelude::*;
-use engine_net::{
-    ClientMessage, ClientSessionState, ClientSessionTarget, Hello, ProtocolVersion, ServerMessage,
-    ServerSessionConfig, SessionPhase, SnapshotCursor, TransportKind, begin_client_session,
-};
-use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -132,7 +129,7 @@ impl SnapshotApplyDriver for TestReplicationDriver {
 impl InputDriver for TestReplicationDriver {
     fn receive_remote_input(
         _world: &mut World,
-        _connection_id: Option<engine_net::ConnectionId>,
+        _connection_id: ConnectionId,
         _tick: engine_sim::SimulationTick,
         _input: Vec<Self::Input>,
     ) -> Result<(), Self::Error> {
@@ -151,15 +148,16 @@ impl InputDriver for TestReplicationDriver {
     }
 }
 
-type PredictionState = engine::plugins::PredictionState<ClientCommandEnvelope>;
-type SnapshotReplicationState = engine::plugins::SnapshotReplicationState<TestSnapshot>;
+type PredictionState = NetPredictionState<ClientCommandEnvelope>;
+type ClientSnapshotState = ClientSnapshotReplicationState<TestSnapshot>;
+type ServerSnapshotState = ServerSnapshotReplicationState<TestSnapshot>;
 
 struct NetworkClientPlugin;
 
 impl Plugin for NetworkClientPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
-        app.add_plugin(NetPlugin::<TestReplicationDriver>::client());
+        app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Client));
     }
 }
 
@@ -168,7 +166,7 @@ struct NetworkServerPlugin;
 impl Plugin for NetworkServerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
-        app.add_plugin(NetPlugin::<TestReplicationDriver>::server());
+        app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Server));
     }
 }
 
@@ -177,7 +175,7 @@ struct NetworkHostPlugin;
 impl Plugin for NetworkHostPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerCommandBuffer>();
-        app.add_plugin(NetPlugin::<TestReplicationDriver>::host());
+        app.add_plugin(NetPlugin::<TestReplicationDriver>::new(NetRole::Host));
     }
 }
 

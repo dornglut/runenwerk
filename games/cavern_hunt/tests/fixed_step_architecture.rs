@@ -4,7 +4,7 @@ use std::path::PathBuf;
 const FIXED_SIMULATION_FILES: &[&str] = &[
     "src/features/combat/plugin.rs",
     "src/features/ai/plugin.rs",
-    "src/features/loot/plugin.rs",
+    "src/features/loot/plugin/run_state.rs",
 ];
 
 const FORBIDDEN_FRAME_DELTA_PATTERNS: &[&str] = &[

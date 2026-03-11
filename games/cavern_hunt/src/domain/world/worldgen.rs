@@ -1,7 +1,7 @@
-use crate::resources::{CavernSeed};
+use crate::CavernRunConfig;
+use crate::resources::CavernSeed;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use crate::CavernRunConfig;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct RoomId(pub u16);

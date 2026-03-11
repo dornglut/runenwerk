@@ -3,7 +3,7 @@
 async fn four_live_clients_complete_run_and_reconnect_one_client() -> Result<()> {
     let transport = QuicTransport::default();
     let protocol = ProtocolVersion::new(1, 1, 1);
-    let session_config = engine_net::ServerSessionConfig {
+    let session_config = ServerSessionConfig {
         server_id: "srv-live-four".to_string(),
         protocol,
         tick_rate_hz: 60,

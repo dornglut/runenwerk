@@ -5,23 +5,23 @@ use cavern_hunt::{
     CavernHuntPlugin, CavernHuntServerPlugin, CavernReplicationDriver, NetConfigHotReloadState,
     ServerNetworkConfigAssetV1, load_server_network_config_from_path,
 };
+use engine::net::prelude::*;
+use engine::plugins::net::NetworkRuntimeHandle;
 use engine::plugins::render::domain::ShaderRegistryResource;
-use engine::plugins::{
-    NetPlugin, NetworkRuntimeHandle, RenderPlugin, ScenePlugin, default_plugins,
-};
+use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
 use engine::{App, AppRunner, AuthorityRole, SimulationProfile};
-use engine_net::{ProtocolVersion, ServerSessionConfig, Transport};
 use engine_net_quic::{QuicServerJoinVerifier, QuicTransport};
 use grotto_online::{AxiomHttpClient, AxiomJoinGrantVerifier};
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 
-const DEFAULT_SERVER_CONFIG_PATH: &str = "game/assets/networking/server/local_dev.ron";
+const DEFAULT_SERVER_CONFIG_PATH: &str = "games/cavern_hunt/assets/networking/server/local_dev.ron";
+const LEGACY_SERVER_CONFIG_PATH: &str = "game/assets/networking/server/local_dev.ron";
 
 struct SignalRunner {
     running: Arc<AtomicBool>,
@@ -37,6 +37,26 @@ impl AppRunner for SignalRunner {
     }
 }
 
+struct ServerLaunchOptions {
+    config_path: PathBuf,
+    operator_enabled_override: Option<bool>,
+    operator_ws_url_override: Option<String>,
+    operator_runtime_token_override: Option<String>,
+    operator_heartbeat_seconds_override: Option<u64>,
+    operator_snapshot_interval_ticks_override: Option<u64>,
+    operator_max_buffered_events_override: Option<usize>,
+}
+
+struct ServerRuntimeBootstrap {
+    handle: NetworkRuntimeHandle,
+    protocol: ProtocolVersion,
+    transport_kind: TransportKind,
+    local_addr: SocketAddr,
+    server_name: String,
+    cert_path: PathBuf,
+    fingerprint: String,
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let launch = parse_server_launch_options()?;
@@ -50,6 +70,36 @@ async fn main() -> Result<()> {
     apply_operator_runtime_overrides(&mut config, &launch)?;
 
     let _tracing_guard = engine::utils::setup_tracing();
+
+    let session_config = build_server_session_config(&config);
+    let runtime = build_server_runtime(&config, session_config.clone())?;
+    let mut app = build_server_app(&config, &launch.config_path, session_config);
+    attach_runtime_handle(&mut app, runtime.handle);
+    install_server_runner_and_operator(&mut app, &config)?;
+
+    println!(
+        "grotto_server live profile={:?} authority={:?} protocol={:?} transport={:?} endpoint={} server_name={} cert_path={} cert_fingerprint_sha256={} tick_rate_hz={} config={}",
+        SimulationProfile::DedicatedAuthority,
+        AuthorityRole::Server,
+        runtime.protocol,
+        runtime.transport_kind,
+        runtime.local_addr,
+        runtime.server_name,
+        runtime.cert_path.display(),
+        runtime.fingerprint,
+        config.tick_rate_hz,
+        launch.config_path.display(),
+    );
+
+    app.run()?;
+    Ok(())
+}
+
+fn build_server_app(
+    config: &ServerNetworkConfigAssetV1,
+    config_path: &Path,
+    session_config: ServerSessionConfig,
+) -> App {
     let mut app = App::headless();
     app.set_title("Cavern Hunt Dedicated Server");
     app.set_simulation_profile(SimulationProfile::DedicatedAuthority);
@@ -58,56 +108,31 @@ async fn main() -> Result<()> {
     app.add_plugins((
         ScenePlugin,
         RenderPlugin,
-        NetPlugin::<CavernReplicationDriver>::server(),
+        NetPlugin::<CavernReplicationDriver>::new(NetRole::Server),
     ));
     app.add_plugins((CavernHuntPlugin, CavernHuntServerPlugin));
     app.world_mut().insert_resource(config.clone());
     app.world_mut()
         .insert_resource(NetConfigHotReloadState::new(
-            launch.config_path.clone(),
+            config_path.to_path_buf(),
             config.hot_reload.enabled,
             config.hot_reload.poll_interval_seconds,
         ));
     if let Ok(mut shaders) = app.world_mut().resource_mut::<ShaderRegistryResource>() {
         shaders.set_watch_enabled(config.shader_watch);
     }
+    app.world_mut().insert_resource(session_config);
+    app
+}
 
+fn build_server_runtime(
+    config: &ServerNetworkConfigAssetV1,
+    session_config: ServerSessionConfig,
+) -> Result<ServerRuntimeBootstrap> {
     let bind_addr = config.bind_endpoint.parse::<SocketAddr>()?;
     let protocol = ProtocolVersion::from(&config.protocol);
-    let session_config = ServerSessionConfig {
-        server_id: config.server_id.clone(),
-        protocol,
-        tick_rate_hz: config.tick_rate_hz,
-    };
-    app.world_mut().insert_resource(session_config.clone());
     let transport = QuicTransport::default();
-    let verifier = if config.use_axiom_verifier {
-        let secret = config
-            .dedicated_server_shared_secret
-            .clone()
-            .filter(|value| !value.trim().is_empty());
-        if let Some(secret) = secret {
-            Some(Arc::new(AxiomJoinGrantVerifier::new(
-                AxiomHttpClient::new(config.axiom_api_base_url.clone())?,
-                secret,
-            )) as Arc<dyn QuicServerJoinVerifier>)
-        } else {
-            if config.profile_id.starts_with("local") {
-                eprintln!(
-                    "server config enables Axiom verifier but dedicated_server_shared_secret is missing in local profile {}; using local verifier",
-                    config.profile_id
-                );
-                None
-            } else {
-                anyhow::bail!(
-                    "server config enables Axiom verifier but dedicated_server_shared_secret is missing for non-local profile {}",
-                    config.profile_id
-                );
-            }
-        }
-    } else {
-        None
-    };
+    let verifier = build_server_join_verifier(config)?;
     let server_runtime = transport.spawn_server_runtime_with_verifier(
         bind_addr,
         &config.server_name,
@@ -122,47 +147,77 @@ async fn main() -> Result<()> {
     let fingerprint = server_runtime.certificate_fingerprint_sha256.clone();
     let server_name = server_runtime.server_name.clone();
     let (command_tx, event_rx) = server_runtime.into_channels();
-    app.world_mut()
-        .insert_resource(NetworkRuntimeHandle::new(command_tx, event_rx));
 
+    Ok(ServerRuntimeBootstrap {
+        handle: NetworkRuntimeHandle::new(command_tx, event_rx),
+        protocol,
+        transport_kind: transport.kind(),
+        local_addr,
+        server_name,
+        cert_path,
+        fingerprint,
+    })
+}
+
+fn build_server_session_config(config: &ServerNetworkConfigAssetV1) -> ServerSessionConfig {
+    ServerSessionConfig {
+        server_id: config.server_id.clone(),
+        protocol: ProtocolVersion::from(&config.protocol),
+        tick_rate_hz: config.tick_rate_hz,
+    }
+}
+
+fn build_server_join_verifier(
+    config: &ServerNetworkConfigAssetV1,
+) -> Result<Option<Arc<dyn QuicServerJoinVerifier>>> {
+    if config.use_axiom_verifier {
+        let secret = config
+            .dedicated_server_shared_secret
+            .clone()
+            .filter(|value| !value.trim().is_empty());
+        if let Some(secret) = secret {
+            Ok(Some(Arc::new(AxiomJoinGrantVerifier::new(
+                AxiomHttpClient::new(config.axiom_api_base_url.clone())?,
+                secret,
+            )) as Arc<dyn QuicServerJoinVerifier>))
+        } else if config.profile_id.starts_with("local") {
+            eprintln!(
+                "server config enables Axiom verifier but dedicated_server_shared_secret is missing in local profile {}; using local verifier",
+                config.profile_id
+            );
+            Ok(None)
+        } else {
+            anyhow::bail!(
+                "server config enables Axiom verifier but dedicated_server_shared_secret is missing for non-local profile {}",
+                config.profile_id
+            );
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+fn attach_runtime_handle(app: &mut App, handle: NetworkRuntimeHandle) {
+    app.world_mut().insert_resource(handle);
+}
+
+fn install_server_runner_and_operator(
+    app: &mut App,
+    config: &ServerNetworkConfigAssetV1,
+) -> Result<()> {
     let running = Arc::new(AtomicBool::new(true));
-    operator_control::try_install_operator_control(&mut app, running.clone(), &config)?;
+    operator_control::try_install_operator_control(app, running.clone(), config)?;
     let shutdown = running.clone();
     tokio::spawn(async move {
         let _ = tokio::signal::ctrl_c().await;
         shutdown.store(false, Ordering::SeqCst);
     });
     app.set_runner(SignalRunner { running });
-
-    println!(
-        "grotto_server live profile={:?} authority={:?} protocol={protocol:?} transport={:?} endpoint={} server_name={} cert_path={} cert_fingerprint_sha256={} tick_rate_hz={} config={}",
-        SimulationProfile::DedicatedAuthority,
-        AuthorityRole::Server,
-        transport.kind(),
-        local_addr,
-        server_name,
-        cert_path.display(),
-        fingerprint,
-        config.tick_rate_hz,
-        launch.config_path.display(),
-    );
-
-    app.run()?;
     Ok(())
 }
 
-struct ServerLaunchOptions {
-    config_path: PathBuf,
-    operator_enabled_override: Option<bool>,
-    operator_ws_url_override: Option<String>,
-    operator_runtime_token_override: Option<String>,
-    operator_heartbeat_seconds_override: Option<u64>,
-    operator_snapshot_interval_ticks_override: Option<u64>,
-    operator_max_buffered_events_override: Option<usize>,
-}
-
 fn parse_server_launch_options() -> Result<ServerLaunchOptions> {
-    let mut config_path = PathBuf::from(DEFAULT_SERVER_CONFIG_PATH);
+    let mut config_path = default_server_config_path();
     let mut operator_enabled_override = None;
     let mut operator_ws_url_override = None;
     let mut operator_runtime_token_override = None;
@@ -242,6 +297,18 @@ fn parse_server_launch_options() -> Result<ServerLaunchOptions> {
         operator_snapshot_interval_ticks_override,
         operator_max_buffered_events_override,
     })
+}
+
+fn default_server_config_path() -> PathBuf {
+    let modern = PathBuf::from(DEFAULT_SERVER_CONFIG_PATH);
+    if modern.exists() {
+        return modern;
+    }
+    let legacy = PathBuf::from(LEGACY_SERVER_CONFIG_PATH);
+    if legacy.exists() {
+        return legacy;
+    }
+    PathBuf::from(DEFAULT_SERVER_CONFIG_PATH)
 }
 
 fn write_dev_certificate(certificate: impl AsRef<[u8]>, path: PathBuf) -> Result<PathBuf> {

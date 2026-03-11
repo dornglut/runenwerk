@@ -65,7 +65,7 @@ fn archive_round_trips_with_compression() {
     };
 
     let bytes = archive.encode_compressed().expect("archive should encode");
-    let decoded = ReplayArchive::<Vec<u8>, u8>::decode_compressed(&bytes)
-        .expect("archive should decode");
+    let decoded =
+        ReplayArchive::<Vec<u8>, u8>::decode_compressed(&bytes).expect("archive should decode");
     assert_eq!(decoded, archive);
 }

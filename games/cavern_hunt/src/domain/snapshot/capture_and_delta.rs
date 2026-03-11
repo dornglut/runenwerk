@@ -1,6 +1,6 @@
-use ecs::{Entity, World};
 use crate::*;
 use anyhow::Result;
+use ecs::{Entity, World};
 use engine::prelude::SimulationTick;
 
 // Owner: Cavern Hunt Snapshot Domain - Capture and Delta Builders

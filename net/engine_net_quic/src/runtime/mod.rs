@@ -1,10 +1,10 @@
-pub mod handles;
-pub mod routing;
-pub mod event_bus;
 pub mod command_bus;
 pub mod connection;
-pub mod reconnect;
+pub mod event_bus;
 pub mod event_dispatch;
+pub mod handles;
 pub mod join_rejection;
-pub mod reconnect_backoff;
 pub mod message_transport;
+pub mod reconnect;
+pub mod reconnect_backoff;
+pub mod routing;

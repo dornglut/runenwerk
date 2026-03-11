@@ -2,8 +2,10 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::{
+        InputBindingChange, InputBindingChangeResult, InputState, KeyChord, action,
+    };
     use winit::keyboard::KeyCode;
-    use crate::plugins::{action, InputBindingChange, InputBindingChangeResult, InputState, KeyChord};
 
     #[test]
     fn default_bindings_split_enter_by_shift() {

@@ -122,9 +122,7 @@ fn sync_run_presentation_state(world: &mut World) -> Result<()> {
             elite_room: Some(layout.elite_room),
             extraction_room: Some(layout.extraction_room),
         },
-        crate::CavernRunPhase::Extraction
-            if run_state.extraction_started_at_tick.is_some() =>
-        {
+        crate::CavernRunPhase::Extraction if run_state.extraction_started_at_tick.is_some() => {
             CavernObjectiveState {
                 kind: CavernObjectiveKind::ExtractionCountdown,
                 title: "Reach extraction".to_string(),

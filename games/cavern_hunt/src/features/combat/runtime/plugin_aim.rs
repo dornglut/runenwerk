@@ -27,9 +27,7 @@ pub(crate) fn update_local_aim(world: &mut World) -> Result<()> {
     }
 
     let layout = world.resource::<CavernLayout>()?.clone();
-    let camera = world
-        .resource::<crate::CavernCameraState>()?
-        .clone();
+    let camera = world.resource::<crate::CavernCameraState>()?.clone();
     let window_size = {
         let window = world.resource::<WindowState>()?;
         window.clone()

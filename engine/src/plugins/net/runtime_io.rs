@@ -1,25 +1,25 @@
+use super::*;
+use crate::{SessionRuntimeState, WorldMut};
 use anyhow::Context;
-use tokio::sync::mpsc::error::TryRecvError;
 use ecs::World;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig};
-use crate::plugins::*;
-use crate::{SessionRuntimeState, WorldMut};
+use tokio::sync::mpsc::error::TryRecvError;
 
 // engine/src/plugins/net/runtime_io.rs
 
 pub fn map_driver_error<TDriver>(error: TDriver::Error, context: &'static str) -> anyhow::Error
 where
-  TDriver: ReplicationDriver,
+    TDriver: ReplicationDriver,
 {
     anyhow::Error::new(error).context(context)
 }
 
 pub fn network_runtime_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
-  TDriver: ReplicationDriver + Send + Sync + 'static,
-  TDriver::Snapshot: Clone + PartialEq,
+    TDriver: ReplicationDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq,
 {
     let Some(mut handle) = world.remove_resource::<NetworkRuntimeHandle>() else {
         if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
@@ -89,14 +89,14 @@ where
                 }
                 if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
                     diagnostics.reconnect_attempts =
-                      diagnostics.reconnect_attempts.saturating_add(1);
+                        diagnostics.reconnect_attempts.saturating_add(1);
                 }
             }
             SessionRuntimeEvent::JoinAccepted(join) => {
                 let authority = world
-                  .resource::<SimulationProfileConfig>()
-                  .map(|config| config.authority)
-                  .unwrap_or(AuthorityRole::Local);
+                    .resource::<SimulationProfileConfig>()
+                    .map(|config| config.authority)
+                    .unwrap_or(AuthorityRole::Local);
 
                 tracing::info!(
                     ?authority,
@@ -106,7 +106,7 @@ where
                 );
 
                 if matches!(authority, AuthorityRole::Server)
-                  && let Ok(mut session) = world.resource_mut::<ServerSessionState>()
+                    && let Ok(mut session) = world.resource_mut::<ServerSessionState>()
                 {
                     let connection = ConnectionId(join.connection_id);
                     session.phase = SessionPhase::Active;
@@ -116,14 +116,18 @@ where
                     session.last_join_state = Some(join.join_state.clone());
 
                     if let Ok(mut replication) =
-                      world.resource_mut::<SnapshotReplicationState<TDriver::Snapshot>>()
+                        world.resource_mut::<ServerSnapshotReplicationState<TDriver::Snapshot>>()
                     {
-                        reset_replication_for_connection(&mut replication, Some(connection));
+                        replication
+                            .checkpoints
+                            .entry(connection)
+                            .or_default()
+                            .needs_full_resync = true;
                     }
                 }
 
                 if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer)
-                  && let Ok(mut session) = world.resource_mut::<ClientSessionState>()
+                    && let Ok(mut session) = world.resource_mut::<ClientSessionState>()
                 {
                     observe_server_message(
                         &mut session,
@@ -141,7 +145,7 @@ where
 
                 if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
                     diagnostics.accepted_connections =
-                      diagnostics.accepted_connections.saturating_add(1);
+                        diagnostics.accepted_connections.saturating_add(1);
                 }
 
                 if let Ok(mut admission) = world.resource_mut::<NetworkAdmissionState>() {
@@ -154,9 +158,9 @@ where
                 tracing::warn!(?reason, "network join rejected");
 
                 let authority = world
-                  .resource::<SimulationProfileConfig>()
-                  .map(|config| config.authority)
-                  .unwrap_or(AuthorityRole::Local);
+                    .resource::<SimulationProfileConfig>()
+                    .map(|config| config.authority)
+                    .unwrap_or(AuthorityRole::Local);
 
                 if matches!(authority, AuthorityRole::Client | AuthorityRole::Peer) {
                     if let Ok(mut session) = world.resource_mut::<ClientSessionState>() {
@@ -178,7 +182,7 @@ where
 
                 if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
                     diagnostics.rejected_connections =
-                      diagnostics.rejected_connections.saturating_add(1);
+                        diagnostics.rejected_connections.saturating_add(1);
                 }
             }
             SessionRuntimeEvent::RttUpdated { millis } => {
@@ -211,11 +215,15 @@ where
 
 pub fn client_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
-  TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
-  TDriver::Snapshot: Clone + PartialEq,
-  TDriver::Input: Clone + PartialEq,
+    TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq,
+    TDriver::Input: Clone + PartialEq,
 {
-    let Some(len) = world.resource::<NetworkClientInbox>().ok().map(|inbox| inbox.len()) else {
+    let Some(len) = world
+        .resource::<NetworkClientInbox>()
+        .ok()
+        .map(|inbox| inbox.len())
+    else {
         return Ok(());
     };
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
@@ -232,9 +240,9 @@ where
 
     for message in messages {
         let previous_phase = world
-          .resource::<ClientSessionState>()
-          .map(|session| session.phase.clone())
-          .unwrap_or_default();
+            .resource::<ClientSessionState>()
+            .map(|session| session.phase.clone())
+            .unwrap_or_default();
 
         if let Ok(mut session) = world.resource_mut::<ClientSessionState>() {
             observe_server_message(&mut session, &message);
@@ -266,14 +274,14 @@ where
                     None,
                     &snapshot.payload,
                 )
-                  .with_context(|| {
-                      format!(
-                          "failed applying snapshot tick={} cursor={} payload_len={}",
-                          snapshot.tick.0,
-                          snapshot.cursor.0,
-                          snapshot.payload.len()
-                      )
-                  });
+                .with_context(|| {
+                    format!(
+                        "failed applying snapshot tick={} cursor={} payload_len={}",
+                        snapshot.tick.0,
+                        snapshot.cursor.0,
+                        snapshot.payload.len()
+                    )
+                });
 
                 match result {
                     Ok(corrected) => {
@@ -284,11 +292,11 @@ where
                             }));
                         }
                         if corrected
-                          && let Ok(mut diagnostics) =
-                          world.resource_mut::<PredictionDiagnostics>()
+                            && let Ok(mut diagnostics) =
+                                world.resource_mut::<PredictionDiagnostics>()
                         {
                             diagnostics.corrections_applied =
-                              diagnostics.corrections_applied.saturating_add(1);
+                                diagnostics.corrections_applied.saturating_add(1);
                         }
                     }
                     Err(error) => {
@@ -303,17 +311,18 @@ where
                 let result = apply_authoritative_delta::<TDriver>(
                     &mut world,
                     snapshot.tick,
+                    snapshot.base,
                     snapshot.cursor,
                     &snapshot.payload,
                 )
-                  .with_context(|| {
-                      format!(
-                          "failed applying delta snapshot tick={} cursor={} payload_len={}",
-                          snapshot.tick.0,
-                          snapshot.cursor.0,
-                          snapshot.payload.len()
-                      )
-                  });
+                .with_context(|| {
+                    format!(
+                        "failed applying delta snapshot tick={} cursor={} payload_len={}",
+                        snapshot.tick.0,
+                        snapshot.cursor.0,
+                        snapshot.payload.len()
+                    )
+                });
 
                 match result {
                     Ok(corrected) => {
@@ -324,11 +333,11 @@ where
                             }));
                         }
                         if corrected
-                          && let Ok(mut diagnostics) =
-                          world.resource_mut::<PredictionDiagnostics>()
+                            && let Ok(mut diagnostics) =
+                                world.resource_mut::<PredictionDiagnostics>()
                         {
                             diagnostics.corrections_applied =
-                              diagnostics.corrections_applied.saturating_add(1);
+                                diagnostics.corrections_applied.saturating_add(1);
                         }
                     }
                     Err(error) => {
@@ -343,24 +352,22 @@ where
         }
 
         let phase = world
-          .resource::<ClientSessionState>()
-          .map(|session| session.phase.clone())
-          .unwrap_or_default();
+            .resource::<ClientSessionState>()
+            .map(|session| session.phase.clone())
+            .unwrap_or_default();
 
         if !matches!(previous_phase, SessionPhase::Active)
-          && matches!(phase, SessionPhase::Active)
-          && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+            && matches!(phase, SessionPhase::Active)
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
         {
-            diagnostics.accepted_connections =
-              diagnostics.accepted_connections.saturating_add(1);
+            diagnostics.accepted_connections = diagnostics.accepted_connections.saturating_add(1);
         }
 
         if !matches!(previous_phase, SessionPhase::Rejected(_))
-          && matches!(phase, SessionPhase::Rejected(_))
-          && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+            && matches!(phase, SessionPhase::Rejected(_))
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
         {
-            diagnostics.rejected_connections =
-              diagnostics.rejected_connections.saturating_add(1);
+            diagnostics.rejected_connections = diagnostics.rejected_connections.saturating_add(1);
         }
     }
 
@@ -369,21 +376,25 @@ where
 
 pub fn server_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
-  TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
-  TDriver::Snapshot: Clone + PartialEq,
+    TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
+    TDriver::Snapshot: Clone + PartialEq,
 {
     let config = world
-      .resource::<ServerSessionConfig>()
-      .map(|resource| resource.clone())
-      .unwrap_or_default();
+        .resource::<ServerSessionConfig>()
+        .map(|resource| resource.clone())
+        .unwrap_or_default();
 
     if let Ok(mut session) = world.resource_mut::<ServerSessionState>()
-      && session.config != config
+        && session.config != config
     {
         session.config = config;
     }
 
-    let Some(len) = world.resource::<NetworkServerInbox>().ok().map(|inbox| inbox.len()) else {
+    let Some(len) = world
+        .resource::<NetworkServerInbox>()
+        .ok()
+        .map(|inbox| inbox.len())
+    else {
         return Ok(());
     };
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
@@ -403,25 +414,29 @@ where
         let message = incoming.message;
 
         if let ClientMessage::Ack(ack) = &message
-          && let Ok(mut state) =
-          world.resource_mut::<SnapshotReplicationState<TDriver::Snapshot>>()
+            && let Ok(mut state) =
+                world.resource_mut::<ServerSnapshotReplicationState<TDriver::Snapshot>>()
+            && let Some(connection_id) = connection_id
         {
-            state.last_acknowledged_cursor = ack.cursor;
-            state.last_received_tick = ack.last_received_tick;
+            let checkpoint = state.checkpoints.entry(connection_id).or_default();
+            checkpoint.last_ack_cursor = ack.cursor;
+            checkpoint.needs_full_resync = false;
         }
 
-        if let ClientMessage::InputFrame(frame) = &message {
+        if let ClientMessage::InputFrame(frame) = &message
+            && let Some(connection_id) = connection_id
+        {
             let decoded = TDriver::decode_input(&frame.payload)
-              .map_err(|e| map_driver_error::<TDriver>(e, "decode remote input"))?;
+                .map_err(|e| map_driver_error::<TDriver>(e, "decode remote input"))?;
 
             TDriver::receive_remote_input(&mut world, connection_id, frame.tick, decoded)
-              .map_err(|e| map_driver_error::<TDriver>(e, "receive remote input"))?;
+                .map_err(|e| map_driver_error::<TDriver>(e, "receive remote input"))?;
         }
 
-        let (previous_phase, previous_connection) = world
-          .resource::<ServerSessionState>()
-          .map(|session| (session.phase.clone(), session.active_connection))
-          .unwrap_or((SessionPhase::Idle, None));
+        let (previous_phase, previous_connection_count) = world
+            .resource::<ServerSessionState>()
+            .map(|session| (session.phase.clone(), session.active_connections.len()))
+            .unwrap_or((SessionPhase::Idle, 0));
 
         let responses = {
             let mut session = world.resource_mut::<ServerSessionState>()?;
@@ -430,32 +445,23 @@ where
 
         if let Ok(mut outbox) = world.resource_mut::<NetworkServerOutbox>() {
             for response in responses {
-                outbox.push(response);
+                if let Some(connection_id) = connection_id {
+                    outbox.push_to(connection_id, response);
+                } else {
+                    outbox.push_broadcast(response);
+                }
             }
         }
 
-        let phase = world
-          .resource::<ServerSessionState>()
-          .map(|session| session.phase.clone())
-          .unwrap_or_default();
-
-        let current_connection = world
-          .resource::<ServerSessionState>()
-          .ok()
-          .and_then(|session| session.active_connection);
-
-        if current_connection != previous_connection
-          && current_connection.is_some()
-          && let Ok(mut replication) =
-          world.resource_mut::<SnapshotReplicationState<TDriver::Snapshot>>()
-        {
-            reset_replication_for_connection(&mut replication, current_connection);
-        }
+        let (phase, connection_count) = world
+            .resource::<ServerSessionState>()
+            .map(|session| (session.phase.clone(), session.active_connections.len()))
+            .unwrap_or_default();
 
         let latest_join_state = world
-          .resource::<ServerSessionState>()
-          .ok()
-          .and_then(|session| session.last_join_state.clone());
+            .resource::<ServerSessionState>()
+            .ok()
+            .and_then(|session| session.last_join_state.clone());
 
         if let Ok(mut admission) = world.resource_mut::<NetworkAdmissionState>() {
             admission.authoritative_join = latest_join_state.clone();
@@ -475,7 +481,7 @@ where
         });
 
         if let Some((phase, connection_id, has_active_connections, last_disconnect)) = session_state
-          && let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>()
+            && let Ok(mut status) = world.resource_mut::<NetworkSessionStatus>()
         {
             status.phase = phase.clone();
             status.connection_id = connection_id;
@@ -483,20 +489,19 @@ where
             status.connected = has_active_connections;
         }
 
-        if !matches!(previous_phase, SessionPhase::Active)
-          && matches!(phase, SessionPhase::Active)
-          && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+        if connection_count > previous_connection_count
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
         {
-            diagnostics.accepted_connections =
-              diagnostics.accepted_connections.saturating_add(1);
+            diagnostics.accepted_connections = diagnostics
+                .accepted_connections
+                .saturating_add((connection_count - previous_connection_count) as u64);
         }
 
         if !matches!(previous_phase, SessionPhase::Rejected(_))
-          && matches!(phase, SessionPhase::Rejected(_))
-          && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
+            && matches!(phase, SessionPhase::Rejected(_))
+            && let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>()
         {
-            diagnostics.rejected_connections =
-              diagnostics.rejected_connections.saturating_add(1);
+            diagnostics.rejected_connections = diagnostics.rejected_connections.saturating_add(1);
         }
     }
 
@@ -516,7 +521,11 @@ fn clear_session_runtime_state(world: &mut World) {
 }
 
 pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let Some(len) = world.resource::<NetworkClientOutbox>().ok().map(|outbox| outbox.len()) else {
+    let Some(len) = world
+        .resource::<NetworkClientOutbox>()
+        .ok()
+        .map(|outbox| outbox.len())
+    else {
         return Ok(());
     };
 
@@ -546,8 +555,8 @@ pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
         let mut dropped = 0usize;
         for message in &messages {
             if handle
-              .send(SessionRuntimeCommand::Client(message.clone()))
-              .is_err()
+                .send(SessionRuntimeCommand::Client(message.clone()))
+                .is_err()
             {
                 dropped = dropped.saturating_add(1);
             }
@@ -565,7 +574,11 @@ pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
 }
 
 pub fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let Some(len) = world.resource::<NetworkServerOutbox>().ok().map(|outbox| outbox.len()) else {
+    let Some(len) = world
+        .resource::<NetworkServerOutbox>()
+        .ok()
+        .map(|outbox| outbox.len())
+    else {
         return Ok(());
     };
 
@@ -594,10 +607,19 @@ pub fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
     if let Some(handle) = world.resource::<NetworkRuntimeHandle>().ok() {
         let mut dropped = 0usize;
         for message in &messages {
-            if handle
-              .send(SessionRuntimeCommand::Server(message.clone()))
-              .is_err()
-            {
+            let command = match message {
+                OutboundServerMessage::ToConnection {
+                    connection_id,
+                    message,
+                } => SessionRuntimeCommand::ServerToConnection {
+                    connection_id: *connection_id,
+                    message: message.clone(),
+                },
+                OutboundServerMessage::Broadcast(message) => {
+                    SessionRuntimeCommand::ServerBroadcast(message.clone())
+                }
+            };
+            if handle.send(command).is_err() {
                 dropped = dropped.saturating_add(1);
             }
         }

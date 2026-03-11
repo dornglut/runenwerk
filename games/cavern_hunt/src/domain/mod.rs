@@ -1,23 +1,23 @@
 // src/domain/mod.rs
 
+pub mod gameplay;
 pub mod loot;
 pub mod material_graph;
 pub mod material_runtime;
-pub mod resources;
-pub mod gameplay;
-pub mod world;
 pub mod render_sdf;
+pub mod resources;
 pub mod snapshot;
+pub mod world;
 
 pub use gameplay::events::*;
+pub use gameplay::*;
 pub use loot::*;
 pub use material_graph::*;
 pub use material_runtime::*;
+pub use render_sdf::*;
 pub use resources::*;
 pub use snapshot::*;
 pub use world::*;
-pub use gameplay::*;
-pub use render_sdf::*;
 
 use engine::prelude::{Entity, World};
 

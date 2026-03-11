@@ -1,8 +1,6 @@
 use anyhow::Result;
 use engine::App;
-use engine::plugins::{
-    DebugMetricsPlugin, GridPlugin, RenderPlugin, ScenePlugin, default_plugins,
-};
+use engine::plugins::{DebugMetricsPlugin, GridPlugin, RenderPlugin, ScenePlugin, default_plugins};
 
 const MAIN_MENU_SCENE: &str = "engine/examples/scene_manager_ui/assets/scenes/main_menu.ron";
 const SETTINGS_MENU_SCENE: &str =

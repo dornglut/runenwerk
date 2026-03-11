@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use crate::*;
 use engine::prelude::Bundle;
 use engine::prelude::SimulationTick;
+use serde::{Deserialize, Serialize};
 
 // Owner: Cavern Hunt Snapshot Domain - Types and Spawn Bundles
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -174,7 +174,7 @@ pub struct CavernRunDeltaV1 {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CavernPatchPriorityV2 {
+pub enum CavernPatchPriority {
     Critical,
     High,
     Medium,
@@ -182,15 +182,15 @@ pub enum CavernPatchPriorityV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CavernPlayerPatchOpV2 {
+pub enum CavernPlayerPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernPlayerSnapshotV1,
     },
     Patch {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernPlayerSnapshotV1,
     },
     Despawn {
@@ -200,7 +200,7 @@ pub enum CavernPlayerPatchOpV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CavernRunStatePatchV2 {
+pub struct CavernRunStatePatch {
     pub phase: Option<CavernRunPhase>,
     pub elite_defeated: Option<bool>,
     pub extraction_active: Option<bool>,
@@ -212,32 +212,32 @@ pub struct CavernRunStatePatchV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CavernKeyframeEventV2 {
+pub struct CavernKeyframeEvent {
     pub cursor: ReplicationCursor,
     pub snapshot: CavernRunSnapshotV1,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CavernPatchEventV2 {
+pub struct CavernPatchEvent {
     pub cursor: ReplicationCursor,
-    pub run_state: Option<CavernRunStatePatchV2>,
-    pub player_ops: Vec<CavernPlayerPatchOpV2>,
-    pub enemy_ops: Vec<CavernEnemyPatchOpV2>,
-    pub projectile_ops: Vec<CavernProjectilePatchOpV2>,
-    pub pickup_ops: Vec<CavernPickupPatchOpV2>,
-    pub extraction_ops: Vec<CavernExtractionPatchOpV2>,
+    pub run_state: Option<CavernRunStatePatch>,
+    pub player_ops: Vec<CavernPlayerPatchOp>,
+    pub enemy_ops: Vec<CavernEnemyPatchOp>,
+    pub projectile_ops: Vec<CavernProjectilePatchOp>,
+    pub pickup_ops: Vec<CavernPickupPatchOp>,
+    pub extraction_ops: Vec<CavernExtractionPatchOp>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CavernEnemyPatchOpV2 {
+pub enum CavernEnemyPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernEnemySnapshotV1,
     },
     Patch {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernEnemySnapshotV1,
     },
     Despawn {
@@ -246,15 +246,15 @@ pub enum CavernEnemyPatchOpV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CavernProjectilePatchOpV2 {
+pub enum CavernProjectilePatchOp {
     Spawn {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernProjectileSnapshotV1,
     },
     Patch {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernProjectileSnapshotV1,
     },
     Despawn {
@@ -263,15 +263,15 @@ pub enum CavernProjectilePatchOpV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CavernPickupPatchOpV2 {
+pub enum CavernPickupPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernPickupSnapshotV1,
     },
     Patch {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernPickupSnapshotV1,
     },
     Despawn {
@@ -280,15 +280,15 @@ pub enum CavernPickupPatchOpV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CavernExtractionPatchOpV2 {
+pub enum CavernExtractionPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernExtractionSnapshotV1,
     },
     Patch {
         entity_id: NetworkEntityId,
-        priority: CavernPatchPriorityV2,
+        priority: CavernPatchPriority,
         state: CavernExtractionSnapshotV1,
     },
     Despawn {

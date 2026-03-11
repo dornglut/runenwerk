@@ -1,46 +1,52 @@
 # engine_net
 
-`engine_net` is the transport-agnostic multiplayer contract crate.
+`engine_net` is the transport-agnostic networking contract crate.
 
-It defines protocol messages, session state transitions, replication contracts, runtime events/commands, and simulation-facing network markers.
+## Canonical Import Surface
 
-## Responsibilities
+Use `engine_net::prelude::*` for macro + runtime contracts in one place.
 
-- Protocol messages and envelope encoding/decoding
-- Client/server session state model and admission flow contracts
-- Replication driver interfaces and snapshot cursors
-- Runtime command/event contracts for host adapters
-- Shared simulation/network identity types
-- Transport abstraction (`Transport`, `TransportKind`, `ConnectionId`)
+It re-exports:
 
-`engine_net` does not implement concrete transport I/O. That is handled by adapters such as `engine_net_quic`.
+- protocol message types
+- session/runtime commands and events
+- replication contracts (driver traits, model/interest/profile)
+- transport identities (`ConnectionId`, lanes, semantics)
+- simulation types/macros (`#[net_component]`, `#[net_entity]`)
 
-## Module Layout
+## Multi-Client Runtime Contracts
 
-- `src/protocol/`
-  - `version.rs`, `control.rs`, `snapshot.rs`, `input.rs`, `ack.rs`, `envelope.rs`
-- `src/session/`
-  - `ids.rs`, `admission.rs`, `handoff.rs`
-- `src/replication/`
-  - `profile.rs`, `model.rs`, `timeline.rs`, `prediction.rs`, `interest.rs`, `diagnostics.rs`
-- `src/runtime/`
-  - `events.rs`, `client.rs`, `server.rs`
-- `src/simulation/`
-  - `mod.rs`, `tick.rs`, `frame.rs`
-- `src/transport/`
-  - `mod.rs`, `lanes.rs`, `semantics.rs`
+`SessionRuntimeCommand` is explicit:
 
-## Key Public Contracts
+- `Client(ClientMessage)`
+- `ServerToConnection { connection_id, message }`
+- `ServerBroadcast(ServerMessage)`
+- `SetDrainMode`
+- `DisconnectConnection`
+- `Shutdown`
 
-- Protocol: `ClientMessage`, `ServerMessage`, `MessageEnvelope`, `encode_message`, `decode_message`
-- Session: `ClientSessionState`, `ServerSessionState`, `SessionPhase`, `SessionRuntimeCommand`, `SessionRuntimeEvent`
-- Replication: `ReplicationDriver`, `Replicate`, `Replicated`, `SnapshotCursor`
-- Replication metadata: `NetComponentMetadata`, `ReplicationRegistry`, `NetEntityMap`
-- Transport: `Transport`, `TransportKind`, `ConnectionId`
-- Macros (re-exported): `#[net_component(...)]`, `#[net_entity]`
+This replaces the old broadcast-only server command shape.
 
-## Relationship to Other Crates
+## Replication Contracts
 
-- `engine_sim`: shared simulation types re-exported by `engine_net`
-- `engine_net_quic`: concrete QUIC runtime adapter implementing transport/runtime behavior
-- `engine`: consumes session/runtime contracts and drives replication systems
+Driver traits are defined in `src/replication/driver.rs`:
+
+- `ReplicationDriver`
+- `SnapshotApplyDriver`
+- `InputDriver`
+
+`InputDriver::receive_remote_input` is sender-aware:
+
+```rust
+fn receive_remote_input(
+    world: &mut World,
+    connection_id: ConnectionId,
+    tick: SimulationTick,
+    input: Vec<Self::Input>,
+) -> Result<(), Self::Error>;
+```
+
+## Ownership
+
+`engine_net` defines contracts only. Concrete transport/runtime I/O lives
+in adapter crates such as `engine_net_quic`.

@@ -1,316 +1,92 @@
-# Runenwerk Multiplayer Rewrite Roadmap (Revised)
+# Hard-Cutover Net API + Multi-Client Runtime Roadmap
 
-## 1. Scope
-This roadmap revises migration sequencing for the pinned architecture without redesigning it.
+## Summary
+Deliver a full multi-client networking re-architecture with a hard cutover to a clean game-facing API (`engine::net::prelude::*`), while keeping compile-green checkpoints across phases.
 
-Pinned stack:
-`games/*/src/net` -> `engine/src/plugins/net` -> `net/engine_net` -> `net/engine_net_quic`
+Target outcome: per-connection replication correctness, targeted server delivery, sender-aware input handling, and one ergonomic import surface for game code.
 
-Pinned ownership:
-- `engine_sim`: simulation vocabulary, ticks, deterministic identity.
-- `engine_net`: transport-agnostic protocol/session/replication/prediction semantics.
-- `engine_net_quic`: QUIC runtime adapter only.
-- `engine_net_macros`: `#[net_component]`, `#[net_entity]` metadata generation only.
-- `engine/src/plugins/net`: thin ECS bridge only.
-- `games/*/src/net`: gameplay schema, driver/apply/input implementations, smoothing/correction tuning.
+## Implementation Changes
 
-## 2. Repository Scan Summary
-Workspace crates in scope:
-- `engine`
-- `net/engine_sim`
-- `net/engine_net`
-- `net/engine_net_macros`
-- `net/engine_net_quic`
-- `net/engine_history` (`engine_replay`)
-- `games/cavern_hunt`
-- `apps/grotto_client`
-- `apps/grotto_server`
-- `apps/grotto_online`
-- `apps/grotto_fleet_control`
+### Phase 1A: Runtime Contract Break in `engine_net` (multi-client semantics)
+- Update `SessionRuntimeCommand` in `net/engine_net/src/session/ids.rs` to replace broadcast-only server command with explicit targeted + broadcast variants.
+- Keep `SessionRuntimeEvent` connection-aware for all server-ingress relevant paths.
+- Add `net/engine_net/src/prelude.rs` and re-export it from `net/engine_net/src/lib.rs` so macro + runtime contracts have one canonical prelude.
 
-Current mismatches:
-- Engine plugin currently owns replication/prediction runtime logic.
-- `ReplicationDriver` is monolithic.
-- `games/cavern_hunt/src/net` still contains custom runtime replication path.
-- Apps still install `NetworkClientPlugin` / `NetworkServerPlugin`.
-- `engine_net_quic` still has transitional broad modules (`helpers.rs`, `utils.rs`).
+### Phase 1B: Driver Trait Extraction in `engine_net`
+- Move replication driver traits out of `net/engine_net/src/replication/prediction.rs` into a dedicated module (for example `net/engine_net/src/replication/driver.rs`).
+- Update `ReplicationDriver::receive_remote_input` to include `ConnectionId` so authoritative gameplay knows who sent inputs.
+- Re-export the driver trait surface from `net/engine_net/src/replication/mod.rs` so callsites use stable paths.
+- Update callsites in `net/engine_net/src/runtime/server.rs` to use per-connection ACK/baseline semantics consistently with targeted dispatch and sender-aware input handling.
 
-## 3. Gap to Target
-Required convergence:
-- Split monolithic driver into `ReplicationDriver`, `SnapshotApplyDriver`, `InputDriver`.
-- Move replication/prediction algorithm ownership to `engine_net`.
-- Replace public multi-plugin API with `NetPlugin<TDriver>::client/server/host`.
-- Keep host mode strict composition (`Client + Server`).
-- Migrate Cavern Hunt in three safe steps:
-1. Introduce new net structure.
-2. Switch runtime to new structure.
-3. Remove legacy runtime path.
-- Keep full snapshots as correctness baseline before relying on deltas.
+### Phase 2: Transport Adapter Alignment in `engine_net_quic`
+- Update `run_server_runtime_task` in `net/engine_net_quic/src/server/runtime.rs` to route targeted server messages to one connection and keep explicit broadcast behavior separate.
+- Update backpressure handling in `run_server_runtime_task` so `try_send` full is not treated as disconnect.
+- Update `accept_incoming_connection` in `net/engine_net_quic/src/server/accept.rs` to avoid resetting shared session state for unrelated active peers during new admissions.
+- Update event delivery helpers in `net/engine_net_quic/src/runtime/helpers.rs` (`send_runtime_event`, `send_peer_event`) to stop silent loss of critical state transitions.
+- Update peer loop handling in `net/engine_net_quic/src/server/peer.rs` to preserve accurate close reason propagation and connection lifecycle events.
 
-## 4. Migration Strategy
-Migration principles:
-- Strangler approach with temporary compatibility layers.
-- No big-bang API break.
-- App migration occurs before deleting old runtime paths.
-- Plugin thinness enforced throughout.
-- Transport adapter remains gameplay-agnostic.
-- Full snapshot correctness gate must pass before delta-default enablement.
+### Phase 3: Engine Net Plugin Multi-Client Refactor
+- Refactor role/queue state in `engine/src/plugins/net/resources.rs` by splitting server/client replication state and keying server replication by `ConnectionId`.
+- Add an explicit per-connection baseline checkpoint model in `engine/src/plugins/net/resources.rs` (or submodule) with at least:
+  - `last_ack_cursor`
+  - `last_sent_cursor`
+  - `last_full_snapshot_cursor`
+  - `last_full_snapshot_tick`
+  - `needs_full_resync`
+- Refactor runtime bridge in `engine/src/plugins/net/runtime_io.rs`:
+  - `network_runtime_receive_system` keeps connection identity through server ingress.
+  - `server_receive_system` applies ACK/input per connection and updates ECS-facing status without clobbering active peers.
+- Refactor replication/prediction logic in `engine/src/plugins/net/prediction.rs`:
+  - `replication_step_system` emits snapshots/deltas per connection baseline.
+  - `apply_authoritative_delta` validates base cursor and uses driver delta apply path.
+- Add explicit fixed-step ordering constraints in `engine/src/plugins/net/resources.rs` configure functions so behavior is not registration-order dependent.
+  per-connection checkpoint state is server-owned runtime state, not long-term plugin-owned semantic state
 
-Temporary compatibility layers:
-- Legacy-to-new driver adapter in `engine_net`.
-- Legacy plugin wrappers around `NetPlugin<TDriver>`.
-- Cavern legacy runtime path retained until app migration is complete.
+### Phase 4: Hard Cutover Ergonomics (`engine::net::prelude`)
+- Add `engine/src/net/mod.rs` and `engine/src/net/prelude.rs` as canonical game-facing API.
+- Update `engine/src/lib.rs` to export `pub mod net;`.
+- Update `engine/src/plugins/net/plugin.rs` to add `NetPlugin::<Driver>::new(NetRole)` while keeping role constructors as aliases.
+- Hard-cutover imports to `engine::net::prelude::*` across existing usage:
+  - `apps/grotto_client/src/main.rs`
+  - `apps/grotto_server/src/main.rs`
+  - `games/cavern_hunt/tests/live_multiplayer/helpers.rs`
+  - `games/cavern_hunt/src/net/replication_intent/components.rs`
+  - `engine/tests/network_plugins.rs`
+- Remove old public net import path expectations from broad plugin exports (module surface cleanup in `engine/src/plugins/mod.rs` and related re-exports) so new code path is unambiguous.
 
-## 5. Phased Implementation Plan
+### Phase 5: Game/Integration Migration and Documentation
+- Update cavern_hunt net-facing modules to consume new prelude and new runtime contracts (notably connection-aware input/replication points in its net domain modules).
+- Update docs to reflect final API and multi-client behavior:
+  - `engine/src/plugins/net/README.md`
+  - `engine/src/plugins/net/NETWORK_RUNTIME_FLOW.md`
+  - `net/engine_net/README.md`
+  - `net/engine_net/REPLICATION_PIPELINE.md`
+- update NET_PLUGIN.md 
+- update NETWORK_USAGE.md
 
-### Phase 0 - Baseline Lock and Safety Harness
-Goal:
-Freeze behavior and add migration safety checks before moving ownership boundaries.
+## Test Plan
+- Contract/unit level:
+  - `cargo test -p engine_net`
+  - `cargo test -p engine_net_quic`
+  - Add/adjust tests for per-connection ACK divergence, targeted send, and delta-base validation.
+- Engine integration:
+  - `cargo test -p engine --test network_plugins`
+  - Add scenarios for two clients with different baselines and rejection/reconnect while other clients stay active.
+- End-to-end acceptance gate:
+  - `cargo test -p cavern_hunt --test live_multiplayer`
+  - Both existing tests must pass:
+    - `two_live_clients_share_one_cavern_hunt_run`
+    - `four_live_clients_complete_run_and_reconnect_one_client`
+- Phase checkpoint rule:
+  - Each phase lands compile-green with all above suites green before moving to next phase.
 
-Changes:
-- Pin baseline tests for session/replication/plugin behavior.
-- Add explicit "full snapshot works" regression tests.
-- Record expected schedule ordering for net receive/fixed/flush phases.
+## Clarification: Hard Cutover + Compile-Green Per Phase
+- Hard cutover means no long-lived compatibility shim APIs are kept.
+- Compile-green per phase means each phase includes all required callsite migrations for that phase's API break before merge.
+- Temporary breakage is allowed only inside an in-progress branch, never at phase boundaries.
 
-Affected files/modules:
-- `engine/tests/network_plugins.rs`
-- `games/cavern_hunt/tests/live_multiplayer/helpers.rs`
-- `net/engine_net/REPLICATION_PIPELINE.md`
-- `engine/src/plugins/net/NETWORK_RUNTIME_FLOW.md`
-
-Completion criteria:
-- Baseline tests pass in CI and locally.
-- Snapshot-first invariants are documented and test-backed.
-
-### Phase 1 - Driver Contract Split (Compatibility First)
-Goal:
-Introduce target driver model without breaking existing runtime flow.
-
-Changes:
-- Add split traits: `ReplicationDriver`, `SnapshotApplyDriver`, `InputDriver`.
-- Keep temporary compatibility adapter from legacy monolithic trait to split traits.
-- Re-export split traits as canonical API, keep legacy trait deprecated but usable.
-
-Affected files/modules:
-- `net/engine_net/src/replication/*` (trait definitions and adapters)
-- `net/engine_net/src/lib.rs`
-- `net/engine_net/README.md`
-
-Completion criteria:
-- Existing call sites compile unchanged via adapter.
-- New split trait API compiles and is test-covered.
-
-### Phase 2 - Move Net Semantics to engine_net (Full Snapshot Path Only)
-Goal:
-Remove algorithm ownership from engine plugin; keep plugin as bridge.
-
-Changes:
-- Move replication/prediction algorithmic steps into `engine_net` runtime/replication modules.
-- Refactor engine plugin systems to call `engine_net` semantic APIs only.
-- Keep delta path non-default during migration; full snapshots remain authoritative baseline.
-
-Affected files/modules:
-- `net/engine_net/src/runtime/client.rs`
-- `net/engine_net/src/runtime/server.rs`
-- `net/engine_net/src/replication/*`
-- `engine/src/plugins/net/prediction.rs`
-- `engine/src/plugins/net/runtime_io.rs`
-
-Completion criteria:
-- Engine plugin contains orchestration/bridging only, not replication logic.
-- Server-client sync works with full snapshots only.
-
-### Phase 3 - Introduce NetPlugin<TDriver> (Keep Legacy Wrappers)
-Goal:
-Ship target plugin API while preserving runtime stability.
-
-Changes:
-- Add `NetRole` and `NetPlugin<TDriver>::client/server/host`.
-- Add role-aware startup wiring and runtime bridge modules.
-- Keep `NetworkClientPlugin`, `NetworkServerPlugin`, `ReplicationPlugin`, `PredictionPlugin` as wrappers delegating to `NetPlugin<TDriver>`.
-
-Affected files/modules:
-- `engine/src/plugins/net/mod.rs`
-- `engine/src/plugins/net/plugin.rs`
-- `engine/src/plugins/net/config.rs` (new)
-- `engine/src/plugins/net/startup.rs` (new)
-- `engine/src/plugins/net/runtime_bridge.rs` (new)
-- `engine/src/plugins/net/resources.rs`
-- `engine/src/plugins/net/schedules.rs`
-- `engine/src/plugins/net/diagnostics.rs`
-
-Completion criteria:
-- New plugin API is production-ready.
-- Legacy plugin API still functions through wrappers.
-- Host constructor composes client+server semantics only.
-
-### Phase 4 - QUIC Adapter Alignment and Boundary Hardening
-Goal:
-Align `engine_net_quic` to updated contracts while keeping transport-only ownership.
-
-Changes:
-- Update QUIC runtime handle integration to new contract surface.
-- Replace broad runtime utility buckets with explicit responsibility modules.
-- Keep lane/profile mapping delegated to `engine_net` semantics.
-
-Affected files/modules:
-- `net/engine_net_quic/src/runtime/handles.rs`
-- `net/engine_net_quic/src/runtime/routing.rs`
-- `net/engine_net_quic/src/client/runtime.rs`
-- `net/engine_net_quic/src/server/runtime.rs`
-- `net/engine_net_quic/src/runtime/helpers.rs` (split)
-- `net/engine_net_quic/src/runtime/utils.rs` (split)
-- `net/engine_net_quic/src/transport/lanes.rs`
-
-Completion criteria:
-- No gameplay policy logic in QUIC adapter.
-- Adapter passes existing runtime tests with new contracts.
-
-### Phase 5 - Cavern Hunt Migration Step 1: Introduce New Net Structure
-Goal:
-Create target game-net layout without switching runtime path yet.
-
-Changes:
-- Introduce `driver.rs`, `apply.rs`, `input.rs`, `components.rs`, `config.rs`, `smoothing.rs` as target shape.
-- Keep existing cavern runtime path active.
-- Bridge existing schema/components into new files progressively.
-
-Affected files/modules:
-- `games/cavern_hunt/src/net/mod.rs`
-- `games/cavern_hunt/src/net/driver.rs` (new)
-- `games/cavern_hunt/src/net/apply.rs`
-- `games/cavern_hunt/src/net/input.rs` (new)
-- `games/cavern_hunt/src/net/components.rs` (new)
-- `games/cavern_hunt/src/net/config.rs`
-- `games/cavern_hunt/src/net/smoothing.rs`
-- `games/cavern_hunt/src/net/replication_intent/components.rs` (migration source)
-
-Completion criteria:
-- New structure compiles and is testable.
-- Legacy cavern runtime path still drives production behavior.
-
-### Phase 6 - Cavern Hunt Migration Step 2: Switch Runtime to New Structure
-Goal:
-Make Cavern Hunt runtime use split drivers and `NetPlugin<TDriver>` path.
-
-Changes:
-- Wire `CavernReplicationDriver` + `SnapshotApplyDriver` + `InputDriver`.
-- Switch game plugin wiring to net plugin integration.
-- Keep legacy files present but unused for rollback safety during this phase.
-
-Affected files/modules:
-- `games/cavern_hunt/src/app/internal/plugin_wiring.rs`
-- `games/cavern_hunt/src/net/driver.rs`
-- `games/cavern_hunt/src/net/apply.rs`
-- `games/cavern_hunt/src/net/input.rs`
-- `games/cavern_hunt/src/net/runtime.rs` (decommissioned usage)
-- `engine/src/plugins/net/plugin.rs`
-
-Completion criteria:
-- Cavern multiplayer runs through new structure.
-- Full snapshot synchronization passes live tests.
-
-### Phase 7 - App and Integration Migration
-Goal:
-Move all app entrypoints and integration tests to new plugin API before deletions.
-
-Changes:
-- Migrate client app to `NetPlugin::<CavernReplicationDriver>::client()`.
-- Migrate server app to `NetPlugin::<CavernReplicationDriver>::server()`.
-- Update host/integration tests to `NetPlugin::<...>::host()` where needed.
-- Remove reliance on legacy plugin names in app wiring.
-
-Affected files/modules:
-- `apps/grotto_client/src/main.rs`
-- `apps/grotto_server/src/main.rs`
-- `engine/tests/network_plugins.rs`
-- `games/cavern_hunt/tests/live_multiplayer.rs`
-- `games/cavern_hunt/tests/live_multiplayer/helpers.rs`
-
-Completion criteria:
-- Production apps run on new API.
-- No mandatory runtime dependency on legacy plugin symbols.
-
-### Phase 8 - Delta Re-enable and Interest Validation Gate
-Goal:
-Re-enable delta as default only after full snapshot parity is proven.
-
-Changes:
-- Enable delta pipeline as default in `engine_net`.
-- Validate baseline fallback to full snapshot on mismatch.
-- Verify interest policy behavior in replication pipeline order.
-
-Affected files/modules:
-- `net/engine_net/src/replication/timeline.rs`
-- `net/engine_net/src/runtime/server.rs`
-- `net/engine_net/src/runtime/client.rs`
-- `net/engine_net/src/replication/interest.rs`
-- `net/engine_net/src/protocol/snapshot.rs`
-
-Completion criteria:
-- Delta tests pass.
-- Resync fallback tests pass.
-- Full snapshot fallback remains correct under packet loss/baseline loss.
-
-### Phase 9 - Cavern Legacy Removal and Final Cleanup
-Goal:
-Remove compatibility layers and obsolete runtime paths after migration is fully live.
-
-Changes:
-- Remove legacy plugin wrappers.
-- Remove legacy monolithic driver adapter.
-- Remove Cavern custom legacy runtime replication path.
-- Update docs to final architecture.
-
-Affected files/modules:
-- `engine/src/plugins/net/plugin.rs` (remove wrappers)
-- `net/engine_net/src/replication/*` (remove legacy adapter)
-- `games/cavern_hunt/src/net/runtime.rs` (remove)
-- `games/cavern_hunt/src/net/emit.rs` (remove or narrow to new role if still needed)
-- `games/cavern_hunt/src/net/capture.rs` (remove or narrow)
-- `engine/src/plugins/net/README.md`
-- `net/engine_net/README.md`
-- `net/engine_net_quic/README.md`
-- `docs/roadmaps/ROADMAP.md`
-
-Completion criteria:
-- Only target APIs remain.
-- No legacy runtime/plugin paths referenced by apps/tests.
-
-## 6. Verification Gates
-Run at every phase boundary:
-- `cargo test -p engine_net`
-- `cargo test -p engine_net_quic`
-- `cargo test -p engine --test network_plugins`
-- `cargo test -p cavern_hunt --tests`
-- `cargo test -p cavern_hunt --test live_multiplayer`
-- `cargo check -p grotto_client`
-- `cargo check -p grotto_server`
-
-Additional gates:
-- Gate A (after Phase 2): full snapshot-only mode passes all multiplayer tests.
-- Gate B (after Phase 6): Cavern Hunt runs fully on new driver/apply/input path.
-- Gate C (after Phase 7): apps run on `NetPlugin<TDriver>` without legacy plugin usage.
-- Gate D (after Phase 8): delta + resync fallback pass under simulated baseline loss.
-- Gate E (before Phase 9 merge): no regressions in session lifecycle, host composition, and diagnostics exposure.
-
-## 7. Risks and Mitigations
-- Risk: large refactor causes prolonged breakage.
-  - Mitigation: compatibility adapters and wrappers kept until apps are migrated.
-- Risk: plugin regains semantic ownership.
-  - Mitigation: phase gates require algorithm code to live in `engine_net`, plugin remains bridge-only.
-- Risk: QUIC adapter leaks gameplay behavior.
-  - Mitigation: enforce adapter-only scope and route semantics through `engine_net`.
-- Risk: Cavern migration blocks runtime progress.
-  - Mitigation: two-step game migration plus delayed deletion phase.
-- Risk: delta path regresses correctness.
-  - Mitigation: full snapshot parity gate before delta-default enablement.
-
-## 8. Definition of Done
-- `NetPlugin<TDriver>::client/server/host` is the only public net plugin model.
-- `engine_net` owns replication/prediction/session semantics.
-- `engine/src/plugins/net` is thin ECS bridge only.
-- `engine_net_quic` is transport/runtime adapter only.
-- Game networking follows split driver model and declarative metadata.
-- Cavern Hunt legacy runtime path is removed.
-- Full snapshot correctness and delta fallback behavior are both validated.
+## Assumptions and Defaults
+- This is a hard cutover: existing callsites are migrated, not left dual-path.
+- `NetPlugin::<Driver>::new(NetRole)` is added; role constructors remain as convenience aliases.
+- No new `games/minimal_game` crate is added in this stream; effort is focused on re-architecture + migration of existing code.
+- Multi-client correctness is defined as per-connection ACK/baseline/input identity and targeted server replication behavior.
