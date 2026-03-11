@@ -1,4 +1,12 @@
 // Owner: Grotto Quest ECS - Query Runtime
+use super::access_and_filters::{QueryAccess, QueryFilter, push_unique_type};
+use crate::component::Component;
+use crate::entity::Entity;
+use crate::errors::QueryError;
+use crate::world::World;
+use std::any::TypeId;
+use std::marker::PhantomData;
+
 pub trait QueryData {
     type Item<'w>;
 

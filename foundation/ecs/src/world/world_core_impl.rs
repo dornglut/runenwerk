@@ -1,4 +1,19 @@
 // Owner: ECS World - Core Entity/Resource Lifecycle
+use super::events_and_indexes::{
+    ComponentChangeKind, ComponentChangeRecord, DEFAULT_COMPONENT_INDEX_NAME, EntityDespawnedEvent,
+    EntitySpawnedEvent, ResourceChangeKind, ResourceChangeRecord,
+};
+use super::handles_and_commands::{Commands, EntityMut, EntityRef, Mut, ResMut};
+use super::world_struct::World;
+use crate::bundle::Bundle;
+use crate::component::Component;
+use crate::entity::{Entity, EntityAllocator};
+use crate::errors::{EntityError, ResourceError};
+use crate::query::{QueryBorrow, QueryBorrowMut, QueryData};
+use crate::resource::Resource;
+use std::any::{TypeId, type_name};
+use std::collections::{BTreeSet, HashMap};
+
 impl World {
     pub fn new() -> Self {
         Self {

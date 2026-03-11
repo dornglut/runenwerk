@@ -1,4 +1,8 @@
 // Owner: Grotto Quest ECS - Query Runtime
+use crate::component::Component;
+use crate::entity::Entity;
+use crate::world::TypedStore;
+
 pub(crate) trait StoreAccess<T: Component> {
     fn get(&self, entity: Entity) -> Option<&T>;
     fn get_mut(&mut self, entity: Entity) -> Option<&mut T>;

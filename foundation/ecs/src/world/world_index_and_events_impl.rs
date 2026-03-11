@@ -1,4 +1,14 @@
 // Owner: ECS World - Secondary Index and Event Channel APIs
+use super::events_and_indexes::{
+    ComponentIndexKey, ComponentSecondaryIndex, DEFAULT_COMPONENT_INDEX_NAME, EventChannelConfig,
+    EventChannelStats, EventChannelStorage, EventLifetime, EventObserver,
+    EventObserverNotification, ObserverTrigger, OverflowPolicy,
+};
+use super::world_struct::World;
+use crate::component::Component;
+use crate::entity::Entity;
+use std::any::TypeId;
+
 impl World {
     pub fn ensure_component_index_named<T: Component, K: Ord + Clone + 'static>(
         &mut self,
@@ -305,5 +315,4 @@ impl World {
             );
         }
     }
-
 }

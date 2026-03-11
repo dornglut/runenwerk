@@ -1,4 +1,14 @@
 // Owner: ECS World - Internal Mutation and Change Tracking
+use super::events_and_indexes::{
+    ComponentChangeKind, ComponentChangeRecord, ComponentMeta, EventObserverNotification,
+    ObserverTrigger, ResourceChangeKind, ResourceChangeRecord, TypedStore,
+};
+use super::world_struct::World;
+use crate::component::Component;
+use crate::entity::Entity;
+use crate::errors::EntityError;
+use std::any::{TypeId, type_name};
+
 impl World {
     #[doc(hidden)]
     pub fn __register_component<T: Component>(&mut self) {
@@ -101,7 +111,7 @@ impl World {
             });
     }
 
-    fn ensure_entity_exists(&self, entity: Entity) -> Result<(), EntityError> {
+    pub(super) fn ensure_entity_exists(&self, entity: Entity) -> Result<(), EntityError> {
         if self.contains(entity) {
             Ok(())
         } else {
@@ -115,9 +125,9 @@ impl World {
             .is_some_and(|store| store.contains(entity))
     }
 
-    fn contains_component<T: Component>(&self, entity: Entity) -> bool {
+    pub(super) fn contains_component<T: Component>(&self, entity: Entity) -> bool {
         self.store::<T>()
-            .is_some_and(|store| store.contains(entity))
+            .is_some_and(|store| store.values.contains_key(&entity))
     }
 
     fn mark_component_type_changed_by_id(&mut self, type_id: TypeId) {
@@ -127,7 +137,7 @@ impl World {
         self.mark_component_indexes_dirty(type_id);
     }
 
-    fn record_component_change(
+    pub(super) fn record_component_change(
         &mut self,
         entity: Entity,
         component_type: TypeId,
@@ -144,7 +154,7 @@ impl World {
         });
     }
 
-    fn record_resource_change(
+    pub(super) fn record_resource_change(
         &mut self,
         resource_type: TypeId,
         resource_name: &'static str,
@@ -161,7 +171,7 @@ impl World {
         });
     }
 
-    fn trigger_observers(
+    pub(super) fn trigger_observers(
         &mut self,
         event_type: TypeId,
         event_type_name: &'static str,
@@ -183,7 +193,7 @@ impl World {
         }
     }
 
-    fn mark_component_indexes_dirty(&mut self, component_type: TypeId) {
+    pub(super) fn mark_component_indexes_dirty(&mut self, component_type: TypeId) {
         for (index_key, index) in &mut self.component_indexes {
             if index_key.component_type == component_type {
                 index.mark_dirty();

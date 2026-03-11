@@ -1,4 +1,10 @@
 // Owner: ECS World - Event and Component Index Types
+use super::world_struct::World;
+use crate::component::Component;
+use crate::entity::Entity;
+use std::any::{Any, TypeId, type_name};
+use std::collections::BTreeMap;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OverflowPolicy {
     DropOldest,
@@ -103,20 +109,20 @@ pub struct ResourceChangeRecord {
 }
 
 #[derive(Debug)]
-struct ComponentMeta {
-    _id: u32,
-    name: &'static str,
+pub(super) struct ComponentMeta {
+    pub(super) _id: u32,
+    pub(super) name: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct EventObserver {
-    observer_id: String,
-    event_type: TypeId,
-    trigger: ObserverTrigger,
-    invocations: u64,
+pub(super) struct EventObserver {
+    pub(super) observer_id: String,
+    pub(super) event_type: TypeId,
+    pub(super) trigger: ObserverTrigger,
+    pub(super) invocations: u64,
 }
 
-trait ComponentStore {
+pub(super) trait ComponentStore {
     fn remove_entity(&mut self, entity: Entity) -> bool;
     fn contains(&self, entity: Entity) -> bool;
     fn as_any(&self) -> &dyn Any;
@@ -128,17 +134,17 @@ pub(crate) struct TypedStore<T: Component> {
 }
 
 impl<T: Component> TypedStore<T> {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             values: BTreeMap::new(),
         }
     }
 
-    fn insert(&mut self, entity: Entity, value: T) {
+    pub(super) fn insert(&mut self, entity: Entity, value: T) {
         self.values.insert(entity, value);
     }
 
-    fn remove(&mut self, entity: Entity) -> Option<T> {
+    pub(super) fn remove(&mut self, entity: Entity) -> Option<T> {
         self.values.remove(&entity)
     }
 }
@@ -161,19 +167,19 @@ impl<T: Component> ComponentStore for TypedStore<T> {
     }
 }
 
-struct EventChannelStorage {
-    event_type_name: &'static str,
+pub(super) struct EventChannelStorage {
+    pub(super) event_type_name: &'static str,
     events: Box<dyn Any>,
     len_fn: fn(&Box<dyn Any>) -> usize,
     clear_fn: fn(&mut Box<dyn Any>) -> usize,
-    config: EventChannelConfig,
-    emitted: u64,
-    drained: u64,
-    dropped: u64,
+    pub(super) config: EventChannelConfig,
+    pub(super) emitted: u64,
+    pub(super) drained: u64,
+    pub(super) dropped: u64,
 }
 
 impl EventChannelStorage {
-    fn new<T: 'static>() -> Self {
+    pub(super) fn new<T: 'static>() -> Self {
         fn len_for<T: 'static>(events: &Box<dyn Any>) -> usize {
             events
                 .downcast_ref::<Vec<T>>()
@@ -202,7 +208,7 @@ impl EventChannelStorage {
         }
     }
 
-    fn events_ref<T: 'static>(&self) -> &[T] {
+    pub(super) fn events_ref<T: 'static>(&self) -> &[T] {
         self.events
             .downcast_ref::<Vec<T>>()
             .map(Vec::as_slice)
@@ -215,7 +221,7 @@ impl EventChannelStorage {
             })
     }
 
-    fn events_mut<T: 'static>(&mut self) -> &mut Vec<T> {
+    pub(super) fn events_mut<T: 'static>(&mut self) -> &mut Vec<T> {
         self.events.downcast_mut::<Vec<T>>().unwrap_or_else(|| {
             panic!(
                 "event channel type mismatch: stored={} requested={}",
@@ -225,26 +231,26 @@ impl EventChannelStorage {
         })
     }
 
-    fn events_len_any(&self) -> usize {
+    pub(super) fn events_len_any(&self) -> usize {
         (self.len_fn)(&self.events)
     }
 
-    fn clear_any(&mut self) -> usize {
+    pub(super) fn clear_any(&mut self) -> usize {
         (self.clear_fn)(&mut self.events)
     }
 }
 
-const DEFAULT_COMPONENT_INDEX_NAME: &str = "__default";
+pub(super) const DEFAULT_COMPONENT_INDEX_NAME: &str = "__default";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ComponentIndexKey {
-    component_type: TypeId,
+pub(super) struct ComponentIndexKey {
+    pub(super) component_type: TypeId,
     key_type: TypeId,
     name: String,
 }
 
 impl ComponentIndexKey {
-    fn new(component_type: TypeId, key_type: TypeId, name: impl Into<String>) -> Self {
+    pub(super) fn new(component_type: TypeId, key_type: TypeId, name: impl Into<String>) -> Self {
         let mut name = name.into();
         name = name.trim().to_string();
         if name.is_empty() {
@@ -258,20 +264,20 @@ impl ComponentIndexKey {
     }
 }
 
-trait ComponentIndexStorage {
+pub(super) trait ComponentIndexStorage {
     fn mark_dirty(&mut self);
     fn rebuild(&mut self, world: &World);
     fn as_any(&self) -> &dyn Any;
 }
 
-struct ComponentSecondaryIndex<T: Component, K: Ord + Clone + 'static> {
+pub(super) struct ComponentSecondaryIndex<T: Component, K: Ord + Clone + 'static> {
     entries: BTreeMap<K, Vec<Entity>>,
     extractor: fn(&T) -> K,
     dirty: bool,
 }
 
 impl<T: Component, K: Ord + Clone + 'static> ComponentSecondaryIndex<T, K> {
-    fn new(extractor: fn(&T) -> K) -> Self {
+    pub(super) fn new(extractor: fn(&T) -> K) -> Self {
         Self {
             entries: BTreeMap::new(),
             extractor,
@@ -279,11 +285,11 @@ impl<T: Component, K: Ord + Clone + 'static> ComponentSecondaryIndex<T, K> {
         }
     }
 
-    fn entities_for(&self, key: &K) -> Vec<Entity> {
+    pub(super) fn entities_for(&self, key: &K) -> Vec<Entity> {
         self.entries.get(key).cloned().unwrap_or_default()
     }
 
-    fn first_entity_for(&self, key: &K) -> Option<Entity> {
+    pub(super) fn first_entity_for(&self, key: &K) -> Option<Entity> {
         self.entries
             .get(key)
             .and_then(|entities| entities.first())

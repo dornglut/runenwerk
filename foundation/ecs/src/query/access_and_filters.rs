@@ -1,4 +1,8 @@
 // Owner: Grotto Quest ECS - Query Runtime
+use crate::component::Component;
+use std::any::TypeId;
+use std::marker::PhantomData;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct QueryTypeAccess {
     type_id: TypeId,
@@ -52,14 +56,14 @@ impl QueryAccess {
         self.deferred_structural_mutation
     }
 
-    fn add_component_read<T: Component>(&mut self) {
+    pub(super) fn add_component_read<T: Component>(&mut self) {
         push_unique_access(
             &mut self.component_reads,
             QueryTypeAccess::of::<T>(T::component_name()),
         );
     }
 
-    fn add_component_write<T: Component>(&mut self) {
+    pub(super) fn add_component_write<T: Component>(&mut self) {
         push_unique_access(
             &mut self.component_writes,
             QueryTypeAccess::of::<T>(T::component_name()),
@@ -109,7 +113,7 @@ impl<T: Component> Without<T> {
     }
 }
 
-fn push_unique_type(target: &mut Vec<TypeId>, type_id: TypeId) {
+pub(super) fn push_unique_type(target: &mut Vec<TypeId>, type_id: TypeId) {
     if !target.contains(&type_id) {
         target.push(type_id);
     }

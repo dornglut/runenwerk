@@ -1,6 +1,13 @@
 // Owner: ECS World - Borrow Wrappers, Entity Views, and Commands
+use super::world_struct::World;
+use crate::bundle::Bundle;
+use crate::component::Component;
+use crate::entity::Entity;
+use crate::errors::{CommandError, EntityError};
+use std::ops::{Deref, DerefMut};
+
 pub struct Mut<'a, T> {
-    value: &'a mut T,
+    pub(super) value: &'a mut T,
 }
 
 impl<'a, T> Deref for Mut<'a, T> {
@@ -18,7 +25,7 @@ impl<'a, T> DerefMut for Mut<'a, T> {
 }
 
 pub struct Res<'a, T> {
-    value: &'a T,
+    pub(super) value: &'a T,
 }
 
 impl<'a, T> Deref for Res<'a, T> {
@@ -30,7 +37,7 @@ impl<'a, T> Deref for Res<'a, T> {
 }
 
 pub struct ResMut<'a, T> {
-    value: &'a mut T,
+    pub(super) value: &'a mut T,
 }
 
 impl<'a, T> Deref for ResMut<'a, T> {
@@ -48,8 +55,8 @@ impl<'a, T> DerefMut for ResMut<'a, T> {
 }
 
 pub struct EntityRef<'w> {
-    world: &'w World,
-    entity: Entity,
+    pub(super) world: &'w World,
+    pub(super) entity: Entity,
 }
 
 impl<'w> EntityRef<'w> {
@@ -71,8 +78,8 @@ impl<'w> EntityRef<'w> {
 }
 
 pub struct EntityMut<'w> {
-    world: &'w mut World,
-    entity: Entity,
+    pub(super) world: &'w mut World,
+    pub(super) entity: Entity,
 }
 
 impl<'w> EntityMut<'w> {
@@ -170,4 +177,3 @@ impl Commands {
         Ok(())
     }
 }
-
