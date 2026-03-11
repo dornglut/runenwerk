@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.100"
 cavern_hunt = { path = "../../games/cavern_hunt" }
 engine = { path = "../../engine" }
+ecs = { path = "../../foundation/ecs" }
 engine_net = { path = "../../net/engine_net" }
 engine_net_quic = { path = "../../net/engine_net_quic" }
 engine_sim = { path = "../../net/engine_sim" }

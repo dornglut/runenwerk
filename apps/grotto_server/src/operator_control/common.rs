@@ -4,12 +4,14 @@ use engine::prelude::{World, WorldMut};
 use engine_net::{ServerMessage, SessionRuntimeCommand};
 use grotto_online::{
     AxiomOperatorCommandResult, AxiomOperatorCommandStatus, AxiomOperatorEvent,
-    AxiomOperatorOutboundMessage, AxiomOperatorRuntimeHandle,
+    AxiomOperatorOutboundMessage,
 };
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::types::{OperatorOutboundQueue, OperatorRuntimeConfig, ServerRunSignal};
+use super::types::{
+    OperatorOutboundQueue, OperatorRuntimeBridgeHandle, OperatorRuntimeConfig, ServerRunSignal,
+};
 
 pub(super) fn queue_command_result(
     world: &mut World,
@@ -87,11 +89,11 @@ pub(super) fn flush_outbound_messages(world: &mut WorldMut) -> Result<()> {
         return Ok(());
     }
 
-    let Some(handle) = world.resource::<AxiomOperatorRuntimeHandle>().ok() else {
+    let Some(handle) = world.resource::<OperatorRuntimeBridgeHandle>().ok() else {
         return Ok(());
     };
     for message in messages {
-        if let Err(error) = handle.send_outbound(message) {
+        if let Err(error) = handle.handle.send_outbound(message) {
             eprintln!("failed sending operator outbound message: {error}");
         }
     }

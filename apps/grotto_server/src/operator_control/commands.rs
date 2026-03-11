@@ -11,14 +11,14 @@ use super::common::{
     send_runtime_command,
 };
 use super::types::{OperatorControlState, OperatorRuntimeConfig};
-use grotto_online::AxiomOperatorRuntimeHandle;
+use super::types::OperatorRuntimeBridgeHandle;
 
 pub(super) fn operator_receive_commands_system(mut world: WorldMut) -> Result<()> {
-    let Some(mut handle) = world.remove_resource::<AxiomOperatorRuntimeHandle>() else {
+    let Some(mut handle) = world.remove_resource::<OperatorRuntimeBridgeHandle>() else {
         return Ok(());
     };
     loop {
-        let command = match handle.try_recv_command() {
+        let command = match handle.handle.try_recv_command() {
             Ok(Some(command)) => command,
             Ok(None) | Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => break,

@@ -1,4 +1,5 @@
 use grotto_online::AxiomOperatorOutboundMessage;
+use grotto_online::AxiomOperatorRuntimeHandle;
 use std::collections::VecDeque;
 use std::sync::{Arc, atomic::AtomicBool};
 use std::time::Instant;
@@ -6,7 +7,7 @@ use std::time::Instant;
 use cavern_hunt::ServerNetworkConfigAssetV1;
 
 // Owner: Grotto Server - Operator Control Types
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, engine::prelude::Component)]
 pub(super) struct OperatorRuntimeConfig {
     pub(super) server_id: String,
 }
@@ -19,7 +20,7 @@ impl OperatorRuntimeConfig {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, engine::prelude::Component)]
 pub(super) struct OperatorOutboundQueue {
     messages: Vec<AxiomOperatorOutboundMessage>,
 }
@@ -34,7 +35,7 @@ impl OperatorOutboundQueue {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, engine::prelude::Component)]
 pub(super) struct OperatorControlState {
     pub(super) recent_command_ids: VecDeque<String>,
     pub(super) dedupe_capacity: usize,
@@ -45,7 +46,7 @@ pub(super) struct OperatorControlState {
     pub(super) snapshot_interval_ticks: u64,
 }
 
-#[derive(Default)]
+#[derive(Default, engine::prelude::Component)]
 pub(super) struct OperatorObservedState {
     pub(super) accepted_connections: u64,
     pub(super) rejected_connections: u64,
@@ -55,6 +56,12 @@ pub(super) struct OperatorObservedState {
     pub(super) last_error: Option<String>,
 }
 
+#[derive(engine::prelude::Component)]
 pub(super) struct ServerRunSignal {
     pub(super) running: Arc<AtomicBool>,
+}
+
+#[derive(engine::prelude::Component)]
+pub(super) struct OperatorRuntimeBridgeHandle {
+    pub(super) handle: AxiomOperatorRuntimeHandle,
 }

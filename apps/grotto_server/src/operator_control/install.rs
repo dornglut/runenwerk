@@ -10,8 +10,8 @@ use super::emit::{
     operator_flush_outbound_system, operator_shutdown_tick_system,
 };
 use super::types::{
-    OperatorControlState, OperatorObservedState, OperatorOutboundQueue, OperatorRuntimeConfig,
-    ServerRunSignal,
+    OperatorControlState, OperatorObservedState, OperatorOutboundQueue,
+    OperatorRuntimeBridgeHandle, OperatorRuntimeConfig, ServerRunSignal,
 };
 
 // Owner: Grotto Server - Operator Control Install
@@ -49,7 +49,8 @@ pub(super) fn try_install_operator_control(
         max_buffered_events: config.axiom_operator.max_buffered_events,
     })?;
 
-    app.world_mut().insert_resource(handle);
+    app.world_mut()
+        .insert_resource(OperatorRuntimeBridgeHandle { handle });
     app.world_mut()
         .insert_resource(OperatorRuntimeConfig::from_config(config));
     app.world_mut().insert_resource(OperatorControlState {
