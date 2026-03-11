@@ -49,7 +49,8 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
             .collect(),
     });
 
-    if world.query::<&Player>().iter().next().is_some() {
+    let player_query = world.query_state::<&Player, ()>();
+    if player_query.iter(world).next().is_some() {
         return Ok(());
     }
 

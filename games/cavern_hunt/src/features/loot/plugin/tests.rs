@@ -20,9 +20,9 @@ fn elite_death_activates_extraction() {
     world.insert_resource(SimulationRng::from_seed(SimulationSeed(7)));
     worldgen::initialize_run_world(&mut world, true).unwrap();
 
-    let elite = world
-        .query::<(Entity, &crate::EnemyKind)>()
-        .iter()
+    let enemy_query = world.query_state::<(Entity, &crate::EnemyKind), ()>();
+    let elite = enemy_query
+        .iter(&world)
         .find(|(_, kind)| **kind == crate::EnemyKind::NestGuardian)
         .map(|(entity, _)| entity)
         .unwrap();

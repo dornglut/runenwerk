@@ -48,10 +48,10 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
     let mut last_client_b_local = None;
     for round in 0..80_u32 {
         (server, client_a, client_b) = pump_round(server, client_a, client_b).await?;
-        let server_players = server
-            .world()
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+        let world = server.world();
+        let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        let server_players = player_query
+            .iter(world)
             .filter(|(entity, _)| server.world().get::<PlayerActive>(*entity).is_some())
             .map(|(_, player_id)| player_id.0)
             .collect::<Vec<_>>();
@@ -112,10 +112,10 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
         (server, client_a, client_b) = pump_round(server, client_a, client_b).await?;
     }
 
-    let active_players = server
-        .world()
-        .query::<(engine::prelude::Entity, &PlayerId)>()
-        .iter()
+    let world = server.world();
+    let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+    let active_players = player_query
+        .iter(world)
         .filter_map(|(entity, player_id)| {
             server.world().get::<PlayerActive>(entity).and_then(|_| {
                 server
@@ -151,8 +151,8 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
     {
         let extraction_pos = server
             .world()
-            .query::<(engine::prelude::Entity, &Transform2)>()
-            .iter()
+            .query_state::<(engine::prelude::Entity, &Transform2), ()>()
+            .iter(server.world())
             .find_map(|(entity, transform)| {
                 server
                     .world()
@@ -162,8 +162,8 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
             .expect("server should have an extraction zone");
         let player_entities = server
             .world()
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+            .query_state::<(engine::prelude::Entity, &PlayerId), ()>()
+            .iter(server.world())
             .filter_map(|(entity, player_id)| {
                 server
                     .world()
@@ -181,11 +181,14 @@ async fn two_live_clients_share_one_cavern_hunt_run() -> Result<()> {
                 transform.y = extraction_pos[1];
             }
         }
-        if let Some(elite) = server
-            .world()
-            .query::<(engine::prelude::Entity, &EnemyKind)>()
-            .iter()
-            .find_map(|(entity, kind)| (*kind == EnemyKind::NestGuardian).then_some(entity))
+        let elite = {
+            let world = server.world();
+            world
+                .query_state::<(engine::prelude::Entity, &EnemyKind), ()>()
+                .iter(world)
+                .find_map(|(entity, kind)| (*kind == EnemyKind::NestGuardian).then_some(entity))
+        };
+        if let Some(elite) = elite
             && let Some(mut health) = server.world_mut().get_mut::<Health>(elite)
         {
             health.current = 0.0;

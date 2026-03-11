@@ -1,3 +1,5 @@
+mod ecs_resource_components;
+
 pub mod app;
 pub mod domain;
 pub mod features;

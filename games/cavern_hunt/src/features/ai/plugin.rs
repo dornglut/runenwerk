@@ -52,11 +52,13 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
         return Ok(());
     }
 
-    let enemy_entities = world
-        .query::<(Entity, &EnemyKind)>()
-        .iter()
-        .map(|(entity, _)| entity)
-        .collect::<Vec<_>>();
+    let enemy_entities = {
+        let query = world.query_state::<(Entity, &EnemyKind), ()>();
+        query
+            .iter(&*world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>()
+    };
     let mut projectile_spawns = Vec::new();
     let mut damage_events = Vec::new();
 
@@ -217,9 +219,9 @@ struct PlayerTarget {
 }
 
 fn collect_living_players(world: &World) -> Vec<PlayerTarget> {
-    world
-        .query::<(Entity, &Transform2)>()
-        .iter()
+    let query = world.query_state::<(Entity, &Transform2), ()>();
+    query
+        .iter(world)
         .filter_map(|(entity, transform)| {
             if !is_active_player_entity(world, entity) {
                 return None;

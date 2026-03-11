@@ -54,7 +54,8 @@ pub(crate) fn build_sdf_world_frame_system(
         frame.gi_sample_budget = quality.gi.sample_budget.max(1);
     }
 
-    for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
+    let query = world.query_state::<(Entity, &Transform2), ()>();
+    for (entity, transform) in query.iter(&*world) {
         if is_active_player_entity(&world, entity) {
             let health = world
                 .get::<Health>(entity)

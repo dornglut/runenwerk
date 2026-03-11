@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::SimulationSeed;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component)]
 pub struct SimulationRng {
     state: u64,
     generated: u64,

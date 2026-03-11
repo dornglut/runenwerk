@@ -174,22 +174,18 @@ pub(super) fn resolve_local_player_entity(world: &World) -> Option<Entity> {
         return Some(entity);
     }
     if let Some(player_id) = local.player_id {
-        return world
-            .query::<(Entity, &PlayerId)>()
-            .iter()
-            .find_map(|(entity, id)| {
-                (id.0 == player_id && world.get::<PlayerActive>(entity).is_some()).then_some(entity)
-            });
+        let query = world.query_state::<(Entity, &PlayerId), ()>();
+        return query.iter(world).find_map(|(entity, id)| {
+            (id.0 == player_id && world.get::<PlayerActive>(entity).is_some()).then_some(entity)
+        });
     }
-    world
-        .query::<(Entity, &PlayerId)>()
-        .iter()
-        .find_map(|(entity, _)| {
-            world
-                .get::<PlayerActive>(entity)
-                .is_some()
-                .then_some(entity)
-        })
+    let query = world.query_state::<(Entity, &PlayerId), ()>();
+    query.iter(world).find_map(|(entity, _)| {
+        world
+            .get::<PlayerActive>(entity)
+            .is_some()
+            .then_some(entity)
+    })
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

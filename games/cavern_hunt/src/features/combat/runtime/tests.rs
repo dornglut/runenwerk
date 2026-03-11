@@ -114,9 +114,9 @@ mod tests {
         });
         worldgen::initialize_run_world(&mut world, false).unwrap();
         game::sync_active_player_slots(&mut world).unwrap();
-        let players = world
-            .query::<(engine::prelude::Entity, &crate::PlayerId)>()
-            .iter()
+        let player_query = world.query_state::<(engine::prelude::Entity, &crate::PlayerId), ()>();
+        let players = player_query
+            .iter(&world)
             .map(|(entity, player_id)| (entity, player_id.0))
             .collect::<Vec<_>>();
         let (_, target_id) = players[1];
@@ -184,14 +184,14 @@ mod tests {
         worldgen::initialize_run_world(&mut world, false).unwrap();
         game::sync_active_player_slots(&mut world).unwrap();
 
-        let companion = world
-            .query::<(engine::prelude::Entity, &crate::PlayerId)>()
-            .iter()
+        let player_query = world.query_state::<(engine::prelude::Entity, &crate::PlayerId), ()>();
+        let companion = player_query
+            .iter(&world)
             .find_map(|(entity, _)| world.get::<PlayerCompanion>(entity).map(|_| entity))
             .expect("expected ai-fill companion to spawn");
-        let enemy = world
-            .query::<(engine::prelude::Entity, &EnemyKind)>()
-            .iter()
+        let enemy_query = world.query_state::<(engine::prelude::Entity, &EnemyKind), ()>();
+        let enemy = enemy_query
+            .iter(&world)
             .find_map(|(entity, kind)| (*kind == EnemyKind::Swarmer).then_some(entity))
             .expect("expected swarmer enemy");
 
@@ -201,11 +201,12 @@ mod tests {
             transform.y = companion_pos.y;
         }
 
-        let projectile_count_before = world.query::<&crate::Projectile>().iter().count();
+        let projectile_query = world.query_state::<&crate::Projectile, ()>();
+        let projectile_count_before = projectile_query.iter(&world).count();
 
         super::run_authoritative_combat_step(&mut world, 1.0 / 60.0).unwrap();
 
-        let projectile_count_after = world.query::<&crate::Projectile>().iter().count();
+        let projectile_count_after = projectile_query.iter(&world).count();
         assert!(projectile_count_after > projectile_count_before);
     }
 }

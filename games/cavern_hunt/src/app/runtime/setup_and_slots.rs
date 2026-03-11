@@ -57,7 +57,8 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
             active_player_ids.insert(local_player.player_id.unwrap_or(1));
         }
         AuthorityRole::Client | AuthorityRole::Peer => {
-            for (_, player_id) in world.query::<(engine::prelude::Entity, &PlayerId)>().iter() {
+            let query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+            for (_, player_id) in query.iter(world) {
                 active_player_ids.insert(player_id.0);
             }
             if let Some(player_id) = local_player.player_id {
@@ -119,11 +120,13 @@ pub(crate) fn sync_active_player_slots(world: &mut World) -> Result<()> {
         }
     }
 
-    let mut player_entities = world
-        .query::<(engine::prelude::Entity, &PlayerId)>()
-        .iter()
-        .map(|(entity, player_id)| (entity, player_id.0))
-        .collect::<Vec<_>>();
+    let mut player_entities = {
+        let query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        query
+            .iter(world)
+            .map(|(entity, player_id)| (entity, player_id.0))
+            .collect::<Vec<_>>()
+    };
     let existing_ids = player_entities
         .iter()
         .map(|(_, player_id)| *player_id)

@@ -98,18 +98,16 @@ fn resolve_local_player_scrap_reward(world: &World) -> Option<u32> {
     let Some(player_id) = local_player.player_id else {
         return None;
     };
-    world
-        .query::<(engine::prelude::Entity, &PlayerId)>()
-        .iter()
-        .find_map(|(entity, current_player_id)| {
-            (current_player_id.0 == player_id)
-                .then(|| {
-                    world
-                        .get::<InventoryRunState>(entity)
-                        .map(|inventory| inventory.scrap)
-                })
-                .flatten()
-        })
+    let query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+    query.iter(world).find_map(|(entity, current_player_id)| {
+        (current_player_id.0 == player_id)
+            .then(|| {
+                world
+                    .get::<InventoryRunState>(entity)
+                    .map(|inventory| inventory.scrap)
+            })
+            .flatten()
+    })
 }
 
 #[cfg(test)]

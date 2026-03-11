@@ -4,11 +4,34 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(
-    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
+    ecs::Component,
 )]
 pub struct SimulationTick(pub u64);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    ecs::Component,
+)]
 pub struct SimulationSessionId(pub u64);
 
 impl Default for SimulationSessionId {
@@ -23,7 +46,19 @@ impl SimulationSessionId {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    ecs::Component,
+)]
 pub struct SimulationSeed(pub u64);
 
 impl Default for SimulationSeed {

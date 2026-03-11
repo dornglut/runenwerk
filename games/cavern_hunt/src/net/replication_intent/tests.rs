@@ -159,9 +159,9 @@ fn mvp_full_snapshot_roundtrip_applies_player_state_and_health() {
     apply_mvp_snapshot_payload(&mut client_world, &decoded_payload, &mut client_map)
         .expect("snapshot payload should apply");
 
-    let found_player_1 = client_world
-        .query::<(engine::prelude::Entity, &PlayerId)>()
-        .iter()
+    let player_query = client_world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+    let found_player_1 = player_query
+        .iter(&client_world)
         .find(|(_, player_id)| player_id.0 == 1)
         .map(|(entity, _)| {
             (

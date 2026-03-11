@@ -90,19 +90,14 @@ mod tests {
             determinism: DeterminismLevel::Validated,
         });
         worldgen::initialize_run_world(&mut world, false).unwrap();
-        assert_eq!(
-            world
-                .query::<(engine::prelude::Entity, &PlayerId)>()
-                .iter()
-                .count(),
-            0
-        );
+        let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        assert_eq!(player_query.iter(&world).count(), 0);
 
         sync_active_player_slots(&mut world).unwrap();
 
-        let active_ids = world
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+        let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        let active_ids = player_query
+            .iter(&world)
             .filter_map(|(entity, player_id)| {
                 world.get::<PlayerActive>(entity).is_some().then(|| {
                     (
@@ -165,9 +160,9 @@ mod tests {
 
         sync_active_player_slots(&mut world).unwrap();
 
-        let active_players = world
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+        let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        let active_players = player_query
+            .iter(&world)
             .filter_map(|(entity, player_id)| {
                 world
                     .get::<PlayerActive>(entity)
@@ -235,9 +230,9 @@ mod tests {
 
         sync_active_player_slots(&mut world).unwrap();
 
-        let mut active_ids = world
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+        let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        let mut active_ids = player_query
+            .iter(&world)
             .filter_map(|(entity, player_id)| {
                 world
                     .get::<PlayerActive>(entity)
@@ -316,9 +311,9 @@ mod tests {
         mapped_ids.sort_unstable();
         assert_eq!(mapped_ids, vec![1, 2, 3, 4]);
 
-        let active_players = world
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+        let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        let active_players = player_query
+            .iter(&world)
             .filter(|(entity, _)| world.get::<PlayerActive>(*entity).is_some())
             .count();
         assert_eq!(active_players, 4);

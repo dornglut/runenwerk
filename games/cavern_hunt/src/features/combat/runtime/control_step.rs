@@ -57,22 +57,20 @@ pub(crate) fn replay_predicted_local_frame(
 }
 
 fn tick_cooldowns(world: &mut World, dt: f32) {
-    let weapon_entities = world
-        .query::<(Entity, &WeaponState)>()
-        .iter()
-        .map(|(entity, _)| entity)
-        .collect::<Vec<_>>();
+    let weapon_entities = {
+        let query = world.query_state::<(Entity, &WeaponState), ()>();
+        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+    };
     for entity in weapon_entities {
         if let Some(mut weapon) = world.get_mut::<WeaponState>(entity) {
             weapon.cooldown_remaining = (weapon.cooldown_remaining - dt).max(0.0);
         }
     }
 
-    let dash_entities = world
-        .query::<(Entity, &DashState)>()
-        .iter()
-        .map(|(entity, _)| entity)
-        .collect::<Vec<_>>();
+    let dash_entities = {
+        let query = world.query_state::<(Entity, &DashState), ()>();
+        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+    };
     for entity in dash_entities {
         if let Some(mut dash) = world.get_mut::<DashState>(entity) {
             dash.cooldown_remaining = (dash.cooldown_remaining - dt).max(0.0);
@@ -80,11 +78,10 @@ fn tick_cooldowns(world: &mut World, dt: f32) {
         }
     }
 
-    let flashed_entities = world
-        .query::<(Entity, &HitFlashState)>()
-        .iter()
-        .map(|(entity, _)| entity)
-        .collect::<Vec<_>>();
+    let flashed_entities = {
+        let query = world.query_state::<(Entity, &HitFlashState), ()>();
+        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+    };
     for entity in flashed_entities {
         let mut clear = false;
         if let Some(mut flash) = world.get_mut::<HitFlashState>(entity) {
@@ -129,16 +126,18 @@ fn step_server_controlled_players(world: &mut World, dt: f32) -> Result<()> {
         .resource::<CavernServerAppliedInputTickMap>()
         .cloned()
         .unwrap_or_default();
-    let players = world
-        .query::<(Entity, &PlayerId)>()
-        .iter()
-        .filter_map(|(entity, player_id)| {
-            world
-                .get::<PlayerActive>(entity)
-                .is_some()
-                .then_some((entity, player_id.0))
-        })
-        .collect::<Vec<_>>();
+    let players = {
+        let query = world.query_state::<(Entity, &PlayerId), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, player_id)| {
+                world
+                    .get::<PlayerActive>(entity)
+                    .is_some()
+                    .then_some((entity, player_id.0))
+            })
+            .collect::<Vec<_>>()
+    };
     let mut active_player_ids = BTreeSet::new();
     for (entity, player_id) in players {
         active_player_ids.insert(player_id);
@@ -202,37 +201,39 @@ fn build_companion_control(world: &World, entity: Entity) -> CavernControlState 
         .get::<PlayerCompanion>(entity)
         .copied()
         .map(|companion| companion.behavior_role());
-    let nearest_enemy = world
-        .query::<(Entity, &Transform2)>()
-        .iter()
-        .filter_map(|(candidate, enemy_transform)| {
-            let kind = world.get::<EnemyKind>(candidate)?;
-            let enemy_health = world.get::<Health>(candidate).copied()?;
-            if enemy_health.current <= 0.0 {
-                return None;
-            }
-            let dx = enemy_transform.x - transform.x;
-            let dy = enemy_transform.y - transform.y;
-            let distance_sq = dx * dx + dy * dy;
-            let priority = if distance_sq <= 14.0_f32.powi(2) {
-                match (companion_role, *kind) {
-                    (_, EnemyKind::NestGuardian) => 0_u8,
-                    (_, EnemyKind::Spitter) => 1,
-                    (Some(crate::CompanionBehaviorRole::Skirmisher), EnemyKind::Bruiser) => 2,
-                    (Some(crate::CompanionBehaviorRole::SupportShooter), EnemyKind::Bruiser) => 3,
-                    (_, EnemyKind::Bruiser) => 2,
-                    (_, EnemyKind::Swarmer) => 4,
+    let nearest_enemy = {
+        let query = world.query_state::<(Entity, &Transform2), ()>();
+        query
+            .iter(world)
+            .filter_map(|(candidate, enemy_transform)| {
+                let kind = world.get::<EnemyKind>(candidate)?;
+                let enemy_health = world.get::<Health>(candidate).copied()?;
+                if enemy_health.current <= 0.0 {
+                    return None;
                 }
-            } else {
-                10
-            };
-            Some((
-                priority,
-                distance_sq,
-                [enemy_transform.x, enemy_transform.y],
-            ))
-        })
-        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)));
+                let dx = enemy_transform.x - transform.x;
+                let dy = enemy_transform.y - transform.y;
+                let distance_sq = dx * dx + dy * dy;
+                let priority = if distance_sq <= 14.0_f32.powi(2) {
+                    match (companion_role, *kind) {
+                        (_, EnemyKind::NestGuardian) => 0_u8,
+                        (_, EnemyKind::Spitter) => 1,
+                        (Some(crate::CompanionBehaviorRole::Skirmisher), EnemyKind::Bruiser) => 2,
+                        (Some(crate::CompanionBehaviorRole::SupportShooter), EnemyKind::Bruiser) => 3,
+                        (_, EnemyKind::Bruiser) => 2,
+                        (_, EnemyKind::Swarmer) => 4,
+                    }
+                } else {
+                    10
+                };
+                Some((
+                    priority,
+                    distance_sq,
+                    [enemy_transform.x, enemy_transform.y],
+                ))
+            })
+            .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)))
+    };
 
     let Some((_, distance_sq, enemy_pos)) = nearest_enemy else {
         return CavernControlState {

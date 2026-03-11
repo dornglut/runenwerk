@@ -48,37 +48,39 @@ pub(crate) fn update_cavern_hud(world: &mut World) -> Result<()> {
         })
         .unwrap_or((0.0, 0.0, 0.0, 0));
 
-    let teammates = world
-        .query::<(engine::prelude::Entity, &PlayerId)>()
-        .iter()
-        .filter_map(|(entity, player_id)| {
-            if world.get::<crate::PlayerActive>(entity).is_none() {
-                return None;
-            }
-            let health = world.get::<Health>(entity).copied()?;
-            let inventory =
-                world
-                    .get::<InventoryRunState>(entity)
-                    .cloned()
-                    .unwrap_or(InventoryRunState {
-                        scrap: 0,
-                        weapon_mods: Vec::new(),
-                        relics: Vec::new(),
-                    });
-            let label = world
-                .get::<crate::PlayerRosterIdentity>(entity)
-                .map(|identity| identity.player_code.clone())
-                .unwrap_or_else(|| format!("hunter_{}", player_id.0));
-            Some(PlayerStatusPanel {
-                player_id: player_id.0,
-                label,
-                alive: health.current > 0.0 && world.get::<PlayerSpectator>(entity).is_none(),
-                is_companion: world.get::<PlayerCompanion>(entity).is_some(),
-                scrap: inventory.scrap,
-                health_ratio: health.ratio(),
+    let teammates = {
+        let query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, player_id)| {
+                if world.get::<crate::PlayerActive>(entity).is_none() {
+                    return None;
+                }
+                let health = world.get::<Health>(entity).copied()?;
+                let inventory =
+                    world
+                        .get::<InventoryRunState>(entity)
+                        .cloned()
+                        .unwrap_or(InventoryRunState {
+                            scrap: 0,
+                            weapon_mods: Vec::new(),
+                            relics: Vec::new(),
+                        });
+                let label = world
+                    .get::<crate::PlayerRosterIdentity>(entity)
+                    .map(|identity| identity.player_code.clone())
+                    .unwrap_or_else(|| format!("hunter_{}", player_id.0));
+                Some(PlayerStatusPanel {
+                    player_id: player_id.0,
+                    label,
+                    alive: health.current > 0.0 && world.get::<PlayerSpectator>(entity).is_none(),
+                    is_companion: world.get::<PlayerCompanion>(entity).is_some(),
+                    scrap: inventory.scrap,
+                    health_ratio: health.ratio(),
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    };
 
     let extraction = world.resource::<crate::ExtractionState>()?.clone();
     let encounter_summary = summarize_encounters(world);
@@ -89,7 +91,10 @@ pub(crate) fn update_cavern_hud(world: &mut World) -> Result<()> {
         .and_then(|entity| world.get::<crate::Transform2>(entity).copied())
         .map(|transform| [transform.x, transform.y])
         .unwrap_or([0.0, 0.0]);
-    let enemies_alive = world.query::<&crate::EnemyKind>().iter().count();
+    let enemies_alive = {
+        let query = world.query_state::<&crate::EnemyKind, ()>();
+        query.iter(world).count()
+    };
 
     let mut hud_state = world.resource::<CavernHudState>()?.clone();
     hud_state.visible = true;

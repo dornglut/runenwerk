@@ -35,37 +35,41 @@ fn sync_run_presentation_state(world: &mut World) -> Result<()> {
             .collect();
     }
 
-    let living_player_positions = world
-        .query::<(engine::prelude::Entity, &crate::Transform2)>()
-        .iter()
-        .filter_map(|(entity, transform)| {
-            crate::is_active_player_entity(world, entity)
-                .then(|| world.get::<crate::Health>(entity).copied())
-                .flatten()
-                .filter(|health| health.current > 0.0)
-                .map(|_| [transform.x, transform.y])
-        })
-        .collect::<Vec<_>>();
+    let living_player_positions = {
+        let query = world.query_state::<(engine::prelude::Entity, &crate::Transform2), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, transform)| {
+                crate::is_active_player_entity(world, entity)
+                    .then(|| world.get::<crate::Health>(entity).copied())
+                    .flatten()
+                    .filter(|health| health.current > 0.0)
+                    .map(|_| [transform.x, transform.y])
+            })
+            .collect::<Vec<_>>()
+    };
     let occupied_rooms = living_player_positions
         .iter()
         .filter_map(|position| room_containing_point(&layout, *position))
         .collect::<BTreeSet<_>>();
-    let living_enemies_by_room = world
-        .query::<(engine::prelude::Entity, &crate::EnemyKind)>()
-        .iter()
-        .filter_map(|(entity, _)| {
-            let health = world.get::<crate::Health>(entity).copied()?;
-            if health.current <= 0.0 {
-                return None;
-            }
-            world
-                .get::<crate::RoomAnchor>(entity)
-                .map(|room| room.room_id)
-        })
-        .fold(BTreeSet::new(), |mut set, room_id| {
-            set.insert(room_id);
-            set
-        });
+    let living_enemies_by_room = {
+        let query = world.query_state::<(engine::prelude::Entity, &crate::EnemyKind), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, _)| {
+                let health = world.get::<crate::Health>(entity).copied()?;
+                if health.current <= 0.0 {
+                    return None;
+                }
+                world
+                    .get::<crate::RoomAnchor>(entity)
+                    .map(|room| room.room_id)
+            })
+            .fold(BTreeSet::new(), |mut set, room_id| {
+                set.insert(room_id);
+                set
+            })
+    };
 
     for (room_id, status) in &mut encounters.by_room_id {
         status.state =

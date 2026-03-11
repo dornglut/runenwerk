@@ -47,7 +47,8 @@ pub fn build_mvp_snapshot_payload(
     let owner_player_id = ownership.by_connection_id.get(&viewer.0).copied();
     let mut payload = SnapshotPayload::default();
 
-    for (entity, player_id) in world.query::<(Entity, &PlayerId)>().iter() {
+    let player_query = world.query_state::<(Entity, &PlayerId), ()>();
+    for (entity, player_id) in player_query.iter(world) {
         let Some(transform) = world.get::<Transform2>(entity).copied() else {
             continue;
         };

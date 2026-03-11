@@ -2,31 +2,35 @@ use super::spatial::distance_squared;
 use super::*;
 
 pub(super) fn resolve_run_state(world: &mut World) -> Result<()> {
-    let alive_players = world
-        .query::<(Entity, &Transform2)>()
-        .iter()
-        .filter_map(|(entity, transform)| {
-            if !is_active_player_entity(world, entity) {
-                return None;
-            }
-            let health = world.get::<Health>(entity).copied()?;
-            (health.current > 0.0).then_some((entity, [transform.x, transform.y]))
-        })
-        .collect::<Vec<_>>();
+    let alive_players = {
+        let query = world.query_state::<(Entity, &Transform2), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, transform)| {
+                if !is_active_player_entity(world, entity) {
+                    return None;
+                }
+                let health = world.get::<Health>(entity).copied()?;
+                (health.current > 0.0).then_some((entity, [transform.x, transform.y]))
+            })
+            .collect::<Vec<_>>()
+    };
     {
         let mut run_state = world.resource_mut::<CavernRunState>()?;
         run_state.party_alive_count = alive_players.len() as u8;
     }
-    let spectator_entities = world
-        .query::<(Entity, &Health)>()
-        .iter()
-        .filter_map(|(entity, health)| {
-            (world.get::<PlayerId>(entity).is_some()
-                && world.get::<crate::PlayerActive>(entity).is_some()
-                && health.current <= 0.0)
-                .then_some(entity)
-        })
-        .collect::<Vec<_>>();
+    let spectator_entities = {
+        let query = world.query_state::<(Entity, &Health), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, health)| {
+                (world.get::<PlayerId>(entity).is_some()
+                    && world.get::<crate::PlayerActive>(entity).is_some()
+                    && health.current <= 0.0)
+                    .then_some(entity)
+            })
+            .collect::<Vec<_>>()
+    };
     for entity in spectator_entities {
         let _ = world.insert(entity, PlayerSpectator);
     }
@@ -39,11 +43,13 @@ pub(super) fn resolve_run_state(world: &mut World) -> Result<()> {
         return Ok(());
     }
 
-    let active_player_count = world
-        .query::<(Entity, &Transform2)>()
-        .iter()
-        .filter(|(entity, _)| is_active_player_entity(world, *entity))
-        .count();
+    let active_player_count = {
+        let query = world.query_state::<(Entity, &Transform2), ()>();
+        query
+            .iter(world)
+            .filter(|(entity, _)| is_active_player_entity(world, *entity))
+            .count()
+    };
     if active_player_count == 0 {
         return Ok(());
     }
@@ -76,20 +82,22 @@ pub(super) fn resolve_run_state(world: &mut World) -> Result<()> {
         return Ok(());
     }
 
-    let extraction_zones = world
-        .query::<(Entity, &Transform2)>()
-        .iter()
-        .filter_map(|(entity, transform)| {
-            world.get::<ExtractionZone>(entity).map(|_| {
-                let radius = world
-                    .get::<ColliderRadius>(entity)
-                    .copied()
-                    .unwrap_or(ColliderRadius(1.25))
-                    .0;
-                ([transform.x, transform.y], radius)
+    let extraction_zones = {
+        let query = world.query_state::<(Entity, &Transform2), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, transform)| {
+                world.get::<ExtractionZone>(entity).map(|_| {
+                    let radius = world
+                        .get::<ColliderRadius>(entity)
+                        .copied()
+                        .unwrap_or(ColliderRadius(1.25))
+                        .0;
+                    ([transform.x, transform.y], radius)
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    };
     if extraction_zones.is_empty() {
         return Ok(());
     }

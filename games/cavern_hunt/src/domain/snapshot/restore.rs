@@ -322,18 +322,20 @@ pub fn restore_cavern_run_snapshot(
 }
 
 fn clear_cavern_run_entities(world: &mut World) {
-    let entities = world
-        .query::<(Entity, &Transform2)>()
-        .iter()
-        .filter_map(|(entity, _)| {
-            (world.get::<Player>(entity).is_some()
-                || world.get::<Enemy>(entity).is_some()
-                || world.get::<Projectile>(entity).is_some()
-                || world.get::<Pickup>(entity).is_some()
-                || world.get::<ExtractionZone>(entity).is_some())
-            .then_some(entity)
-        })
-        .collect::<Vec<_>>();
+    let entities = {
+        let query = world.query_state::<(Entity, &Transform2), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, _)| {
+                (world.get::<Player>(entity).is_some()
+                    || world.get::<Enemy>(entity).is_some()
+                    || world.get::<Projectile>(entity).is_some()
+                    || world.get::<Pickup>(entity).is_some()
+                    || world.get::<ExtractionZone>(entity).is_some())
+                .then_some(entity)
+            })
+            .collect::<Vec<_>>()
+    };
     for entity in entities {
         let _ = world.despawn(entity);
     }

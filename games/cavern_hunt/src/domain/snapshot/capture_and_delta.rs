@@ -53,7 +53,8 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
     let mut pickups = Vec::new();
     let mut extraction_zones = Vec::new();
 
-    for (entity, transform) in world.query::<(Entity, &Transform2)>().iter() {
+    let transform_query = world.query_state::<(Entity, &Transform2), ()>();
+    for (entity, transform) in transform_query.iter(world) {
         if is_active_player_entity(world, entity) {
             let velocity = world.get::<Velocity2>(entity).copied().unwrap_or_default();
             let health = world

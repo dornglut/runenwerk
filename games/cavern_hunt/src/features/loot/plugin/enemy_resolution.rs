@@ -1,14 +1,16 @@
 use super::*;
 
 pub(super) fn resolve_enemy_deaths(world: &mut World) -> Result<()> {
-    let enemy_entities = world
-        .query::<(Entity, &EnemyKind)>()
-        .iter()
-        .filter_map(|(entity, kind)| {
-            let health = world.get::<Health>(entity).copied()?;
-            (health.current <= 0.0).then_some((entity, *kind))
-        })
-        .collect::<Vec<_>>();
+    let enemy_entities = {
+        let query = world.query_state::<(Entity, &EnemyKind), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, kind)| {
+                let health = world.get::<Health>(entity).copied()?;
+                (health.current <= 0.0).then_some((entity, *kind))
+            })
+            .collect::<Vec<_>>()
+    };
     if enemy_entities.is_empty() {
         return Ok(());
     }

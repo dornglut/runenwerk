@@ -258,7 +258,12 @@ impl RenderPassExecutor for CavernComposeExecutor {
             ],
             target_aspect: 0.0,
             fit_mode: 0,
-            bar_color: [CLEAR_COLOR.r as f32, CLEAR_COLOR.g as f32, CLEAR_COLOR.b as f32, 1.0],
+            bar_color: [
+                CLEAR_COLOR.r as f32,
+                CLEAR_COLOR.g as f32,
+                CLEAR_COLOR.b as f32,
+                1.0,
+            ],
         };
         ctx.queue().write_buffer(
             &pass.compose_params_buffer,

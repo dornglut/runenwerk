@@ -2,34 +2,38 @@ use super::spatial::distance_squared;
 use super::*;
 
 pub(super) fn collect_pickups(world: &mut World) -> Result<()> {
-    let living_players = world
-        .query::<(Entity, &Transform2)>()
-        .iter()
-        .filter_map(|(entity, transform)| {
-            if !is_active_player_entity(world, entity) {
-                return None;
-            }
-            let health = world.get::<Health>(entity).copied()?;
-            if health.current <= 0.0 {
-                return None;
-            }
-            let radius = world
-                .get::<ColliderRadius>(entity)
-                .copied()
-                .unwrap_or(ColliderRadius(0.55))
-                .0;
-            Some((entity, [transform.x, transform.y], radius))
-        })
-        .collect::<Vec<_>>();
+    let living_players = {
+        let query = world.query_state::<(Entity, &Transform2), ()>();
+        query
+            .iter(world)
+            .filter_map(|(entity, transform)| {
+                if !is_active_player_entity(world, entity) {
+                    return None;
+                }
+                let health = world.get::<Health>(entity).copied()?;
+                if health.current <= 0.0 {
+                    return None;
+                }
+                let radius = world
+                    .get::<ColliderRadius>(entity)
+                    .copied()
+                    .unwrap_or(ColliderRadius(0.55))
+                    .0;
+                Some((entity, [transform.x, transform.y], radius))
+            })
+            .collect::<Vec<_>>()
+    };
     if living_players.is_empty() {
         return Ok(());
     }
 
-    let pickup_entities = world
-        .query::<(Entity, &Pickup)>()
-        .iter()
-        .map(|(entity, pickup)| (entity, pickup.kind))
-        .collect::<Vec<_>>();
+    let pickup_entities = {
+        let query = world.query_state::<(Entity, &Pickup), ()>();
+        query
+            .iter(world)
+            .map(|(entity, pickup)| (entity, pickup.kind))
+            .collect::<Vec<_>>()
+    };
     let mut picked = Vec::new();
     for (pickup_entity, pickup_kind) in pickup_entities {
         let Some(transform) = world.get::<Transform2>(pickup_entity).copied() else {

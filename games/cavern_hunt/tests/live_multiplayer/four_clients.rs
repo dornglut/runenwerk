@@ -42,10 +42,10 @@ async fn four_live_clients_complete_run_and_reconnect_one_client() -> Result<()>
     let mut owned_ids = Vec::new();
     for _ in 0..120 {
         (server, clients) = pump_round_many(server, clients).await?;
-        let server_players = server
-            .world()
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+        let world = server.world();
+        let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+        let server_players = player_query
+            .iter(world)
             .filter(|(entity, _)| server.world().get::<PlayerActive>(*entity).is_some())
             .map(|(_, player_id)| player_id.0)
             .collect::<Vec<_>>();
@@ -79,10 +79,10 @@ async fn four_live_clients_complete_run_and_reconnect_one_client() -> Result<()>
     for _ in 0..120 {
         (server, clients) = pump_round_many(server, clients).await?;
         let all_clients_see_four_players = clients.iter().all(|client| {
-            client
-                .world()
-                .query::<(engine::prelude::Entity, &PlayerId)>()
-                .iter()
+            let world = client.world();
+            let player_query = world.query_state::<(engine::prelude::Entity, &PlayerId), ()>();
+            player_query
+                .iter(world)
                 .filter(|(entity, _)| client.world().get::<PlayerActive>(*entity).is_some())
                 .count()
                 == 4
@@ -162,8 +162,8 @@ async fn four_live_clients_complete_run_and_reconnect_one_client() -> Result<()>
     {
         let extraction_pos = server
             .world()
-            .query::<(engine::prelude::Entity, &Transform2)>()
-            .iter()
+            .query_state::<(engine::prelude::Entity, &Transform2), ()>()
+            .iter(server.world())
             .find_map(|(entity, transform)| {
                 server
                     .world()
@@ -173,8 +173,8 @@ async fn four_live_clients_complete_run_and_reconnect_one_client() -> Result<()>
             .expect("server should have an extraction zone");
         let player_entities = server
             .world()
-            .query::<(engine::prelude::Entity, &PlayerId)>()
-            .iter()
+            .query_state::<(engine::prelude::Entity, &PlayerId), ()>()
+            .iter(server.world())
             .filter_map(|(entity, player_id)| {
                 server
                     .world()
@@ -192,11 +192,14 @@ async fn four_live_clients_complete_run_and_reconnect_one_client() -> Result<()>
                 transform.y = extraction_pos[1];
             }
         }
-        if let Some(elite) = server
-            .world()
-            .query::<(engine::prelude::Entity, &EnemyKind)>()
-            .iter()
-            .find_map(|(entity, kind)| (*kind == EnemyKind::NestGuardian).then_some(entity))
+        let elite = {
+            let world = server.world();
+            world
+                .query_state::<(engine::prelude::Entity, &EnemyKind), ()>()
+                .iter(world)
+                .find_map(|(entity, kind)| (*kind == EnemyKind::NestGuardian).then_some(entity))
+        };
+        if let Some(elite) = elite
             && let Some(mut health) = server.world_mut().get_mut::<Health>(elite)
         {
             health.current = 0.0;
