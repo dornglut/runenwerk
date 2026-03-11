@@ -3,6 +3,10 @@ name = "scheduler"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+telemetry = []
+
 [dependencies]
 tracing-subscriber = "0.3.22"
 anyhow = "1.0.102"

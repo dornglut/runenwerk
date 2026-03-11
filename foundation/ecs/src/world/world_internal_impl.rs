@@ -1,13 +1,16 @@
 // Owner: ECS World - Internal Mutation and Change Tracking
 use super::events_and_indexes::{
-    ComponentChangeKind, ComponentChangeRecord, ComponentMeta, EventObserverNotification,
-    ObserverTrigger, ResourceChangeKind, ResourceChangeRecord, TypedStore,
+    ComponentChangeKind, ComponentChangeRecord, ComponentMeta, ComponentStore,
+    EventObserverNotification, ObserverTrigger, ResourceChangeKind, ResourceChangeRecord,
+    TypedStore,
 };
 use super::world_struct::World;
 use crate::component::Component;
 use crate::entity::Entity;
 use crate::errors::EntityError;
+use crate::telemetry;
 use std::any::{TypeId, type_name};
+use std::time::Instant;
 
 impl World {
     #[doc(hidden)]
@@ -63,27 +66,264 @@ impl World {
         Ok(value)
     }
 
-    pub(crate) fn matching_entities(
+    pub(crate) fn matching_entities_into(
         &self,
-        query_types: &[TypeId],
-        required: &[TypeId],
+        required_present: &[TypeId],
         excluded: &[TypeId],
-    ) -> Vec<Entity> {
-        self.alive_entities
-            .iter()
-            .copied()
-            .filter(|entity| {
-                query_types
-                    .iter()
-                    .all(|type_id| self.has_component_by_type_id(*entity, *type_id))
-                    && required
-                        .iter()
-                        .all(|type_id| self.has_component_by_type_id(*entity, *type_id))
-                    && excluded
-                        .iter()
-                        .all(|type_id| !self.has_component_by_type_id(*entity, *type_id))
-            })
-            .collect()
+        out: &mut Vec<Entity>,
+    ) {
+        let start = Instant::now();
+        out.clear();
+        let mut smallest_store_type = None;
+        if required_present.is_empty() {
+            out.extend(self.alive_entities.iter().copied());
+        } else {
+            let mut smallest_store_size = usize::MAX;
+            for type_id in required_present {
+                let Some(store) = self.components.get(type_id) else {
+                    telemetry::record_query_matching(start.elapsed().as_nanos() as u64, 0, 0);
+                    return;
+                };
+                let size = store.entity_count();
+                if size < smallest_store_size {
+                    smallest_store_size = size;
+                    smallest_store_type = Some(*type_id);
+                }
+            }
+            if let Some(type_id) = smallest_store_type {
+                if let Some(store) = self.components.get(&type_id) {
+                    out.reserve(store.entity_count());
+                    store.collect_entities(out);
+                }
+            }
+        }
+
+        let candidate_count = out.len() as u64;
+        if candidate_count == 0 {
+            telemetry::record_query_matching(start.elapsed().as_nanos() as u64, 0, 0);
+            return;
+        }
+
+        // Fast path for broad single-component queries without exclusions.
+        if excluded.is_empty() && required_present.len() == 1 && smallest_store_type.is_some() {
+            telemetry::record_query_matching(
+                start.elapsed().as_nanos() as u64,
+                candidate_count,
+                out.len() as u64,
+            );
+            return;
+        }
+
+        let mut required_stores: Vec<&dyn ComponentStore> = Vec::new();
+        for type_id in required_present {
+            if Some(*type_id) == smallest_store_type {
+                continue;
+            }
+            let Some(store) = self.components.get(type_id) else {
+                out.clear();
+                telemetry::record_query_matching(
+                    start.elapsed().as_nanos() as u64,
+                    candidate_count,
+                    0,
+                );
+                return;
+            };
+            required_stores.push(store.as_ref());
+        }
+
+        let mut excluded_stores: Vec<&dyn ComponentStore> = Vec::new();
+        for type_id in excluded {
+            if let Some(store) = self.components.get(type_id) {
+                excluded_stores.push(store.as_ref());
+            }
+        }
+
+        if !required_stores.is_empty() || !excluded_stores.is_empty() {
+            if excluded_stores.is_empty() {
+                match required_stores.len() {
+                    0 => {}
+                    1 => {
+                        let required0 = required_stores[0];
+                        out.retain(|entity| required0.contains(*entity));
+                    }
+                    2 => {
+                        let required0 = required_stores[0];
+                        let required1 = required_stores[1];
+                        out.retain(|entity| {
+                            required0.contains(*entity) && required1.contains(*entity)
+                        });
+                    }
+                    _ => {
+                        out.retain(|entity| {
+                            required_stores.iter().all(|store| store.contains(*entity))
+                        });
+                    }
+                }
+            } else if required_stores.is_empty() {
+                match excluded_stores.len() {
+                    0 => {}
+                    1 => {
+                        let excluded0 = excluded_stores[0];
+                        out.retain(|entity| !excluded0.contains(*entity));
+                    }
+                    2 => {
+                        let excluded0 = excluded_stores[0];
+                        let excluded1 = excluded_stores[1];
+                        out.retain(|entity| {
+                            !excluded0.contains(*entity) && !excluded1.contains(*entity)
+                        });
+                    }
+                    _ => {
+                        out.retain(|entity| {
+                            excluded_stores.iter().all(|store| !store.contains(*entity))
+                        });
+                    }
+                }
+            } else if required_stores.len() == 1 && excluded_stores.len() == 1 {
+                let required0 = required_stores[0];
+                let excluded0 = excluded_stores[0];
+                out.retain(|entity| required0.contains(*entity) && !excluded0.contains(*entity));
+            } else {
+                out.retain(|entity| {
+                    required_stores.iter().all(|store| store.contains(*entity))
+                        && excluded_stores.iter().all(|store| !store.contains(*entity))
+                });
+            }
+        }
+
+        if required_present.is_empty() {
+            out.retain(|entity| self.contains(*entity));
+        }
+
+        telemetry::record_query_matching(
+            start.elapsed().as_nanos() as u64,
+            candidate_count,
+            out.len() as u64,
+        );
+    }
+
+    fn has_component_by_type_id(&self, entity: Entity, type_id: TypeId) -> bool {
+        self.components
+            .get(&type_id)
+            .is_some_and(|store| store.contains(entity))
+    }
+
+    pub(crate) fn entity_matches_component_constraints(
+        &self,
+        entity: Entity,
+        required_present: &[TypeId],
+        excluded: &[TypeId],
+    ) -> bool {
+        self.contains(entity)
+            && required_present
+                .iter()
+                .all(|type_id| self.has_component_by_type_id(entity, *type_id))
+            && excluded
+                .iter()
+                .all(|type_id| !self.has_component_by_type_id(entity, *type_id))
+    }
+
+    pub(super) fn contains_component<T: Component>(&self, entity: Entity) -> bool {
+        self.store::<T>()
+            .is_some_and(|store| store.values.contains_key(&entity))
+    }
+
+    pub(crate) fn component_changed_for_entity_since<T: Component>(
+        &self,
+        entity: Entity,
+        tick: u64,
+    ) -> bool {
+        let start = Instant::now();
+        let component_type = TypeId::of::<T>();
+        let changed = self
+            .component_entity_last_changed_ticks
+            .get(&component_type)
+            .and_then(|ticks| ticks.get(&entity))
+            .is_some_and(|last_tick| *last_tick > tick);
+        telemetry::record_changed_check(start.elapsed().as_nanos() as u64);
+        changed
+    }
+
+    pub(crate) fn component_added_for_entity_since<T: Component>(
+        &self,
+        entity: Entity,
+        tick: u64,
+    ) -> bool {
+        let start = Instant::now();
+        let component_type = TypeId::of::<T>();
+        let added = self
+            .component_entity_last_added_ticks
+            .get(&component_type)
+            .and_then(|ticks| ticks.get(&entity))
+            .is_some_and(|last_tick| *last_tick > tick);
+        telemetry::record_added_check(start.elapsed().as_nanos() as u64);
+        added
+    }
+
+    pub(crate) fn mark_component_modified_by_id(
+        &mut self,
+        entity: Entity,
+        component_type: TypeId,
+        component_name: &'static str,
+    ) {
+        self.record_component_change(
+            entity,
+            component_type,
+            component_name,
+            ComponentChangeKind::Modified,
+        );
+    }
+
+    fn mark_component_type_changed_by_id(&mut self, type_id: TypeId) {
+        self.change_tick = self.change_tick.saturating_add(1);
+        self.component_change_ticks
+            .insert(type_id, self.change_tick);
+        self.mark_component_indexes_dirty(type_id);
+    }
+
+    pub(super) fn record_component_change(
+        &mut self,
+        entity: Entity,
+        component_type: TypeId,
+        component_name: &'static str,
+        kind: ComponentChangeKind,
+    ) {
+        self.mark_component_type_changed_by_id(component_type);
+        match kind {
+            ComponentChangeKind::Added | ComponentChangeKind::Modified => {
+                self.component_entity_last_changed_ticks
+                    .entry(component_type)
+                    .or_default()
+                    .insert(entity, self.change_tick);
+                if matches!(kind, ComponentChangeKind::Added) {
+                    self.component_entity_last_added_ticks
+                        .entry(component_type)
+                        .or_default()
+                        .insert(entity, self.change_tick);
+                }
+            }
+            ComponentChangeKind::Removed => {
+                if let Some(changed_ticks) = self
+                    .component_entity_last_changed_ticks
+                    .get_mut(&component_type)
+                {
+                    changed_ticks.remove(&entity);
+                }
+                if let Some(added_ticks) = self
+                    .component_entity_last_added_ticks
+                    .get_mut(&component_type)
+                {
+                    added_ticks.remove(&entity);
+                }
+            }
+        }
+        self.component_change_log.push(ComponentChangeRecord {
+            tick: self.change_tick,
+            entity,
+            component_type,
+            component_name,
+            kind,
+        });
     }
 
     pub(crate) fn store<T: Component>(&self) -> Option<&TypedStore<T>> {
@@ -117,41 +357,6 @@ impl World {
         } else {
             Err(EntityError::NoSuchEntity { entity })
         }
-    }
-
-    fn has_component_by_type_id(&self, entity: Entity, type_id: TypeId) -> bool {
-        self.components
-            .get(&type_id)
-            .is_some_and(|store| store.contains(entity))
-    }
-
-    pub(super) fn contains_component<T: Component>(&self, entity: Entity) -> bool {
-        self.store::<T>()
-            .is_some_and(|store| store.values.contains_key(&entity))
-    }
-
-    fn mark_component_type_changed_by_id(&mut self, type_id: TypeId) {
-        self.change_tick = self.change_tick.saturating_add(1);
-        self.component_change_ticks
-            .insert(type_id, self.change_tick);
-        self.mark_component_indexes_dirty(type_id);
-    }
-
-    pub(super) fn record_component_change(
-        &mut self,
-        entity: Entity,
-        component_type: TypeId,
-        component_name: &'static str,
-        kind: ComponentChangeKind,
-    ) {
-        self.mark_component_type_changed_by_id(component_type);
-        self.component_change_log.push(ComponentChangeRecord {
-            tick: self.change_tick,
-            entity,
-            component_type,
-            component_name,
-            kind,
-        });
     }
 
     pub(super) fn record_resource_change(
@@ -194,7 +399,8 @@ impl World {
     }
 
     pub(super) fn mark_component_indexes_dirty(&mut self, component_type: TypeId) {
-        for (index_key, index) in &mut self.component_indexes {
+        let mut indexes = self.component_indexes.borrow_mut();
+        for (index_key, index) in indexes.iter_mut() {
             if index_key.component_type == component_type {
                 index.mark_dirty();
             }

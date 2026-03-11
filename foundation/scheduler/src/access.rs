@@ -114,6 +114,11 @@ impl SystemAccess {
         let mut conflicts = Vec::new();
 
         for key in self.writes.intersection(&other.writes) {
+            if key.domain() == AccessDomain::Structural {
+                // Deferred structural mutation is merged at stage end; multiple producers can
+                // coexist in a stage and are serialized by deterministic system order.
+                continue;
+            }
             conflicts.push(AccessConflict {
                 key: *key,
                 kind: ConflictKind::WriteWrite,

@@ -11,5 +11,5 @@ pub use events_and_indexes::{
     EventChannelConfig, EventChannelStats, EventLifetime, EventObserverNotification,
     EventTracingPolicy, ObserverTrigger, OverflowPolicy, ResourceChangeKind, ResourceChangeRecord,
 };
-pub use handles_and_commands::{Commands, EntityMut, EntityRef, Mut, Res, ResMut};
+pub use handles_and_commands::{Commands, EntityMut, EntityRef, Mut};
 pub use world_struct::World;

@@ -125,6 +125,8 @@ pub(super) struct EventObserver {
 pub(super) trait ComponentStore {
     fn remove_entity(&mut self, entity: Entity) -> bool;
     fn contains(&self, entity: Entity) -> bool;
+    fn entity_count(&self) -> usize;
+    fn collect_entities(&self, target: &mut Vec<Entity>);
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
@@ -156,6 +158,15 @@ impl<T: Component> ComponentStore for TypedStore<T> {
 
     fn contains(&self, entity: Entity) -> bool {
         self.values.contains_key(&entity)
+    }
+
+    fn entity_count(&self) -> usize {
+        self.values.len()
+    }
+
+    fn collect_entities(&self, target: &mut Vec<Entity>) {
+        target.clear();
+        target.extend(self.values.keys().copied());
     }
 
     fn as_any(&self) -> &dyn Any {

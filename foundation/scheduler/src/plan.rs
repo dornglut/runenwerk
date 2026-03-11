@@ -1,8 +1,10 @@
 use crate::access::AccessConflict;
 use crate::label::{ScheduleKey, ScheduleLabel, SystemSetKey};
 use crate::system::RegisteredSystem;
+use crate::telemetry;
 use anyhow::{Context, Result, anyhow};
 use std::collections::{BTreeSet, VecDeque};
+use std::time::Instant;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionConflict {
@@ -54,6 +56,10 @@ impl<C> ExecutionScheduler<C> {
 
     pub fn systems(&self) -> &[RegisteredSystem<C>] {
         &self.systems
+    }
+
+    pub fn systems_mut(&mut self) -> &mut [RegisteredSystem<C>] {
+        &mut self.systems
     }
 
     pub fn plans(&mut self) -> &[ExecutionPlan] {
@@ -114,6 +120,8 @@ impl<C> ExecutionScheduler<C> {
     }
 
     fn build_plan(&self, label: ScheduleKey) -> Result<ExecutionPlan> {
+        let build_start = Instant::now();
+        let mut conflict_check_count = 0_u64;
         let scheduled_indices: Vec<_> = self
             .systems
             .iter()
@@ -153,38 +161,80 @@ impl<C> ExecutionScheduler<C> {
             }
         }
 
-        let mut ordered_positions = Vec::with_capacity(scheduled_indices.len());
+        let mut ready_set = BTreeSet::new();
         while let Some(position) = ready.pop_front() {
-            ordered_positions.push(position);
-            for dependent in outgoing[position].iter().copied() {
-                incoming[dependent] = incoming[dependent].saturating_sub(1);
-                if incoming[dependent] == 0 {
-                    ready.push_back(dependent);
-                }
-            }
+            ready_set.insert(position);
         }
 
-        if ordered_positions.len() != scheduled_indices.len() {
+        let mut stages = Vec::new();
+        let mut stage_index = 0usize;
+        let mut scheduled_count = 0usize;
+
+        while !ready_set.is_empty() {
+            let mut stage_positions: Vec<usize> = Vec::new();
+
+            for position in ready_set.iter().copied() {
+                let candidate_index = scheduled_indices[position];
+                let candidate = &self.systems[candidate_index];
+                let compatible = stage_positions.iter().all(|existing_position| {
+                    let existing_index = scheduled_indices[*existing_position];
+                    let existing = &self.systems[existing_index];
+                    conflict_check_count = conflict_check_count.saturating_add(1);
+                    existing
+                        .access()
+                        .conflicts_with(candidate.access())
+                        .is_empty()
+                });
+                if compatible {
+                    stage_positions.push(position);
+                }
+            }
+
+            if stage_positions.is_empty() {
+                let fallback = *ready_set
+                    .iter()
+                    .next()
+                    .expect("ready set should contain at least one system");
+                stage_positions.push(fallback);
+            }
+
+            let mut stage_system_indices = Vec::with_capacity(stage_positions.len());
+            for position in &stage_positions {
+                ready_set.remove(position);
+                stage_system_indices.push(scheduled_indices[*position]);
+            }
+
+            scheduled_count = scheduled_count.saturating_add(stage_system_indices.len());
+
+            for position in stage_positions {
+                for dependent in outgoing[position].iter().copied() {
+                    incoming[dependent] = incoming[dependent].saturating_sub(1);
+                    if incoming[dependent] == 0 {
+                        ready_set.insert(dependent);
+                    }
+                }
+            }
+
+            stages.push(ExecutionStage {
+                index: stage_index,
+                system_indices: stage_system_indices,
+            });
+            stage_index = stage_index.saturating_add(1);
+        }
+
+        if scheduled_count != scheduled_indices.len() {
             return Err(anyhow!(
                 "schedule '{}' has cyclic system ordering constraints",
                 label.name()
             ));
         }
 
-        let stages = ordered_positions
-            .into_iter()
-            .enumerate()
-            .map(|(stage_index, position)| ExecutionStage {
-                index: stage_index,
-                system_indices: vec![scheduled_indices[position]],
-            })
-            .collect();
-
         let mut conflicts = Vec::new();
         for (left_pos, left_index) in scheduled_indices.iter().enumerate() {
             let left = &self.systems[*left_index];
             for right_index in scheduled_indices.iter().skip(left_pos + 1) {
                 let right = &self.systems[*right_index];
+                conflict_check_count = conflict_check_count.saturating_add(1);
                 for conflict in left.access().conflicts_with(right.access()) {
                     conflicts.push(ExecutionConflict {
                         first_system: left.name().to_string(),
@@ -195,11 +245,17 @@ impl<C> ExecutionScheduler<C> {
             }
         }
 
-        Ok(ExecutionPlan {
+        let plan = ExecutionPlan {
             label,
             stages,
             conflicts,
-        })
+        };
+        telemetry::record_plan_build(
+            build_start.elapsed().as_nanos() as u64,
+            conflict_check_count,
+            plan.stages.len() as u64,
+        );
+        Ok(plan)
     }
 }
 

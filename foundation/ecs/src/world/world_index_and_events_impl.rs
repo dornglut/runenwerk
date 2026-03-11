@@ -17,77 +17,77 @@ impl World {
     ) -> bool {
         self.__register_component::<T>();
         let key = ComponentIndexKey::new(TypeId::of::<T>(), TypeId::of::<K>(), name);
-        if self.component_indexes.contains_key(&key) {
+        let mut indexes = self.component_indexes.borrow_mut();
+        if indexes.contains_key(&key) {
             return false;
         }
-        self.component_indexes.insert(
+        indexes.insert(
             key,
             Box::new(ComponentSecondaryIndex::<T, K>::new(extractor)),
         );
+        drop(indexes);
         self.mark_component_indexes_dirty(TypeId::of::<T>());
         true
     }
 
     pub fn find_entity_by_index<T: Component, K: Ord + Clone + 'static>(
-        &mut self,
+        &self,
         key: &K,
     ) -> Option<Entity> {
         self.find_entity_by_index_named::<T, K>(DEFAULT_COMPONENT_INDEX_NAME, key)
     }
 
     pub fn find_entity_by_index_named<T: Component, K: Ord + Clone + 'static>(
-        &mut self,
+        &self,
         name: impl Into<String>,
         key: &K,
     ) -> Option<Entity> {
         let index_key = ComponentIndexKey::new(TypeId::of::<T>(), TypeId::of::<K>(), name);
-        let Some(mut index) = self.component_indexes.remove(&index_key) else {
+        let mut indexes = self.component_indexes.borrow_mut();
+        let Some(index) = indexes.get_mut(&index_key) else {
             return None;
         };
         index.rebuild(self);
-        let entity = index
+        index
             .as_any()
             .downcast_ref::<ComponentSecondaryIndex<T, K>>()
-            .and_then(|index| index.first_entity_for(key));
-        self.component_indexes.insert(index_key, index);
-        entity
+            .and_then(|index| index.first_entity_for(key))
     }
 
     pub fn find_entities_by_index<T: Component, K: Ord + Clone + 'static>(
-        &mut self,
+        &self,
         key: &K,
     ) -> Vec<Entity> {
         self.find_entities_by_index_named::<T, K>(DEFAULT_COMPONENT_INDEX_NAME, key)
     }
 
     pub fn find_entities_by_index_named<T: Component, K: Ord + Clone + 'static>(
-        &mut self,
+        &self,
         name: impl Into<String>,
         key: &K,
     ) -> Vec<Entity> {
         let index_key = ComponentIndexKey::new(TypeId::of::<T>(), TypeId::of::<K>(), name);
-        let Some(mut index) = self.component_indexes.remove(&index_key) else {
+        let mut indexes = self.component_indexes.borrow_mut();
+        let Some(index) = indexes.get_mut(&index_key) else {
             return Vec::new();
         };
         index.rebuild(self);
-        let entities = index
+        index
             .as_any()
             .downcast_ref::<ComponentSecondaryIndex<T, K>>()
             .map(|index| index.entities_for(key))
-            .unwrap_or_default();
-        self.component_indexes.insert(index_key, index);
-        entities
+            .unwrap_or_default()
     }
 
     pub fn find_component_by_index<T: Component, K: Ord + Clone + 'static>(
-        &mut self,
+        &self,
         key: &K,
     ) -> Option<&T> {
         self.find_component_by_index_named::<T, K>(DEFAULT_COMPONENT_INDEX_NAME, key)
     }
 
     pub fn find_component_by_index_named<T: Component, K: Ord + Clone + 'static>(
-        &mut self,
+        &self,
         name: impl Into<String>,
         key: &K,
     ) -> Option<&T> {

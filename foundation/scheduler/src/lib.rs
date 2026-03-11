@@ -7,6 +7,7 @@ pub mod nodes;
 pub mod plan;
 pub mod scheduler_core;
 pub mod system;
+pub mod telemetry;
 pub mod utils;
 
 pub use access::*;

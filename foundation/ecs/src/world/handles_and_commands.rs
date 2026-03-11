@@ -5,6 +5,7 @@ use crate::component::Component;
 use crate::entity::Entity;
 use crate::errors::{CommandError, EntityError};
 use std::ops::{Deref, DerefMut};
+use std::ptr::NonNull;
 
 pub struct Mut<'a, T> {
     pub(super) value: &'a mut T,
@@ -19,36 +20,6 @@ impl<'a, T> Deref for Mut<'a, T> {
 }
 
 impl<'a, T> DerefMut for Mut<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.value
-    }
-}
-
-pub struct Res<'a, T> {
-    pub(super) value: &'a T,
-}
-
-impl<'a, T> Deref for Res<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.value
-    }
-}
-
-pub struct ResMut<'a, T> {
-    pub(super) value: &'a mut T,
-}
-
-impl<'a, T> Deref for ResMut<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.value
-    }
-}
-
-impl<'a, T> DerefMut for ResMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.value
     }
@@ -134,44 +105,79 @@ where
 }
 
 pub struct Commands {
-    queue: Vec<Box<dyn WorldCommand>>,
+    queue: CommandQueueStorage,
+}
+
+type CommandQueue = Vec<Box<dyn WorldCommand>>;
+
+enum CommandQueueStorage {
+    Owned(CommandQueue),
+    Borrowed(NonNull<Commands>),
 }
 
 impl Commands {
     pub fn new() -> Self {
-        Self { queue: Vec::new() }
+        Self {
+            queue: CommandQueueStorage::Owned(Vec::new()),
+        }
+    }
+
+    pub(crate) fn from_external(owner: *mut Commands) -> Self {
+        Self {
+            queue: CommandQueueStorage::Borrowed(
+                NonNull::new(owner).expect("command owner pointer must not be null"),
+            ),
+        }
+    }
+
+    fn queue_mut(&mut self) -> &mut CommandQueue {
+        match &mut self.queue {
+            CommandQueueStorage::Owned(queue) => queue,
+            // Safety: borrowed command owners come from a live `Commands` owner.
+            CommandQueueStorage::Borrowed(owner) => unsafe { owner.as_mut().queue_mut() },
+        }
+    }
+
+    fn into_queue(self) -> CommandQueue {
+        match self.queue {
+            CommandQueueStorage::Owned(queue) => queue,
+            // Safety: borrowed command owners come from a live `Commands` owner.
+            CommandQueueStorage::Borrowed(mut owner) => unsafe {
+                std::mem::take(owner.as_mut().queue_mut())
+            },
+        }
     }
 
     pub fn spawn<B: Bundle + 'static>(&mut self, bundle: B) {
-        self.queue.push(Box::new(move |world: &mut World| {
+        self.queue_mut().push(Box::new(move |world: &mut World| {
             world.spawn(bundle);
             Ok(())
         }));
     }
 
     pub fn despawn(&mut self, entity: Entity) {
-        self.queue.push(Box::new(move |world: &mut World| {
+        self.queue_mut().push(Box::new(move |world: &mut World| {
             world.despawn(entity)?;
             Ok(())
         }));
     }
 
     pub fn insert<B: Bundle + 'static>(&mut self, entity: Entity, bundle: B) {
-        self.queue.push(Box::new(move |world: &mut World| {
+        self.queue_mut().push(Box::new(move |world: &mut World| {
             world.insert(entity, bundle)?;
             Ok(())
         }));
     }
 
     pub fn remove<B: Bundle + 'static>(&mut self, entity: Entity) {
-        self.queue.push(Box::new(move |world: &mut World| {
+        self.queue_mut().push(Box::new(move |world: &mut World| {
             let _: B = world.remove(entity)?;
             Ok(())
         }));
     }
 
     pub fn apply(self, world: &mut World) -> Result<(), CommandError> {
-        for command in self.queue {
+        for command in self.into_queue() {
             command.apply(world)?;
         }
         Ok(())

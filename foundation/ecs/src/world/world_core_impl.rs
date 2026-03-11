@@ -3,15 +3,15 @@ use super::events_and_indexes::{
     ComponentChangeKind, ComponentChangeRecord, DEFAULT_COMPONENT_INDEX_NAME, EntityDespawnedEvent,
     EntitySpawnedEvent, ResourceChangeKind, ResourceChangeRecord,
 };
-use super::handles_and_commands::{Commands, EntityMut, EntityRef, Mut, ResMut};
+use super::handles_and_commands::{Commands, EntityMut, EntityRef, Mut};
 use super::world_struct::World;
 use crate::bundle::Bundle;
 use crate::component::Component;
 use crate::entity::{Entity, EntityAllocator};
 use crate::errors::{EntityError, ResourceError};
-use crate::query::{QueryBorrow, QueryBorrowMut, QueryData};
-use crate::resource::Resource;
+use crate::query::{QueryFilter, QuerySpec, QueryState};
 use std::any::{TypeId, type_name};
+use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 
 impl World {
@@ -26,9 +26,11 @@ impl World {
             event_channels: HashMap::new(),
             event_observers: HashMap::new(),
             event_observer_notifications: Vec::new(),
-            component_indexes: HashMap::new(),
+            component_indexes: RefCell::new(HashMap::new()),
             change_tick: 0,
             component_change_ticks: HashMap::new(),
+            component_entity_last_changed_ticks: HashMap::new(),
+            component_entity_last_added_ticks: HashMap::new(),
             resource_change_ticks: HashMap::new(),
             component_change_log: Vec::new(),
             resource_change_log: Vec::new(),
@@ -147,15 +149,11 @@ impl World {
         })
     }
 
-    pub fn query<Q: QueryData>(&self) -> QueryBorrow<'_, Q> {
-        QueryBorrow::new(self)
+    pub fn query_state<Q: QuerySpec, F: QueryFilter>(&self) -> QueryState<Q, F> {
+        QueryState::new(self)
     }
 
-    pub fn query_mut<Q: QueryData>(&mut self) -> QueryBorrowMut<'_, Q> {
-        QueryBorrowMut::new(self)
-    }
-
-    pub fn insert_resource<R: Resource>(&mut self, resource: R) {
+    pub fn insert_resource<R: Component>(&mut self, resource: R) {
         let type_id = TypeId::of::<R>();
         let kind = if self.resources.contains_key(&type_id) {
             ResourceChangeKind::Modified
@@ -166,11 +164,11 @@ impl World {
         self.record_resource_change(type_id, type_name::<R>(), kind);
     }
 
-    pub fn has_resource<R: Resource>(&self) -> bool {
+    pub fn has_resource<R: Component>(&self) -> bool {
         self.resources.contains_key(&TypeId::of::<R>())
     }
 
-    pub fn resource<R: Resource>(&self) -> Result<&R, ResourceError> {
+    pub fn resource<R: Component>(&self) -> Result<&R, ResourceError> {
         self.resources
             .get(&TypeId::of::<R>())
             .and_then(|res| res.downcast_ref::<R>())
@@ -179,7 +177,7 @@ impl World {
             })
     }
 
-    pub fn resource_mut<R: Resource>(&mut self) -> Result<ResMut<'_, R>, ResourceError> {
+    pub fn resource_mut<R: Component>(&mut self) -> Result<&mut R, ResourceError> {
         let type_id = TypeId::of::<R>();
         if !self.resources.contains_key(&type_id) {
             return Err(ResourceError::Missing {
@@ -194,10 +192,10 @@ impl World {
             .ok_or(ResourceError::Missing {
                 resource: type_name::<R>(),
             })?;
-        Ok(ResMut { value })
+        Ok(value)
     }
 
-    pub fn remove_resource<R: Resource>(&mut self) -> Option<R> {
+    pub fn remove_resource<R: Component>(&mut self) -> Option<R> {
         let type_id = TypeId::of::<R>();
         let removed = self
             .resources
@@ -219,7 +217,7 @@ impl World {
             .is_some_and(|changed| *changed > tick)
     }
 
-    pub fn resource_changed_since<R: Resource>(&self, tick: u64) -> bool {
+    pub fn resource_changed_since<R: Component>(&self, tick: u64) -> bool {
         self.resource_change_ticks
             .get(&TypeId::of::<R>())
             .is_some_and(|changed| *changed > tick)
