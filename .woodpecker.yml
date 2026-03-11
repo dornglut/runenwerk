@@ -6,6 +6,9 @@ when:
         - Cargo.lock
         - "**/Cargo.toml"
         - "**/*.rs"
+        - foundation/ecs/README.md
+        - foundation/ecs/USAGE_GUIDE.md
+        - foundation/ecs/ARCHITECTURE.md
         - .woodpecker.yml
 
 steps:
@@ -19,3 +22,5 @@ steps:
       - apt-get install -y pkg-config libssl-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
       - cargo --version
       - cargo test --workspace
+      - cargo test -p ecs --test docs_examples
+      - cargo test -p ecs --doc

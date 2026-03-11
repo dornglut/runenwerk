@@ -1,502 +1,1133 @@
-# ECS Target API Roadmap
+Phase 6 Roadmap — Archetype Storage Redesign
+Status
 
-This roadmap defines the target API, migration phases, and acceptance criteria for `foundation/ecs`.
-It is intended as an implementation spec for Codex.
+Phase 5B is complete.
 
-## 1. Objectives
+Phase 6 is approved with the following direction:
 
-The target API must satisfy these rules:
+Proceed with archetype-backed storage redesign for dominant broad-query forms.
 
-- One derive for ECS-managed data: `#[derive(ecs::Component)]`
-- Tags are empty components
-- Resources are globally stored singleton components
-- One query type: `Query<Q, F = ()>`
-- One iteration method: `iter()`
-- System params are primary for gameplay code
-- `World` remains the low-level runtime API
-- Old borrow-wrapper query API is internal-only or removed
+This roadmap defines the execution plan, sequencing, validation gates, risks, and exit criteria for Phase 6.
 
-## 2. Canonical Gameplay Shape
+1. Executive Summary
 
-```rust
-use ecs::prelude::*;
+Phase 5B completed the high-value query-layer optimization work:
 
-#[derive(ecs::Component)]
-struct Position { x: f32, y: f32 }
+dominant-form fast paths
 
-#[derive(ecs::Component)]
-struct Velocity { x: f32, y: f32 }
+typed store lookup caching
 
-#[derive(ecs::Component)]
-struct Simulated;
+reduced hot-loop indirection
 
-#[derive(ecs::Component)]
-struct DeltaTime(pub f32);
+refreshed benchmark and profile artifact generation
 
-#[derive(ecs::Component)]
-struct Frame(pub u64);
+final recommendation to move below the query layer
 
-fn tick(
-    mut query: Query<(&mut Position, &Velocity), With<Simulated>>,
-    dt: Res<DeltaTime>,
-    mut frame: ResMut<Frame>,
-) {
-    for (pos, vel) in query.iter() {
-        pos.x += vel.x * dt.0;
-        pos.y += vel.y * dt.0;
-    }
+Those changes materially improved historical baseline performance, especially for dominant broad mutable paths and representative mixed-frame engine workloads. However, refreshed same-session measurements show that further gains from query-layer specialization alone are now mixed, smaller, and less stable at higher scales.
 
-    frame.0 += 1;
-}
-```
+The dominant remaining cost is no longer primarily query dispatch structure. It is now the cost of traversing the current storage model under broad iteration pressure.
 
-## 3. Public API Target
+Phase 6 therefore focuses on replacing the current broad traversal/storage cost model with an archetype-oriented dense iteration model.
 
-### 3.1 Gameplay-facing
+2. Phase 6 Objective
+   Primary objective
 
-- `Component`
-- `Bundle`
-- `Entity`
-- `Query<Q, F = ()>`
-- `Res<T>`
-- `ResMut<T>`
-- `With<T>`
-- `Without<T>`
-- `Commands`
-- `EventReader<T>`
-- `EventWriter<T>`
+Reduce the cost of dominant broad query execution by moving from current storage traversal toward:
 
-### 3.2 Runtime-facing
+archetype-based matching
 
-- `World`
-- `EntityRef`
-- `EntityMut`
-- `QueryState<Q, F = ()>`
-- `QueryAccess`
-- Event channel APIs
-- Change tracking APIs
-- Secondary index APIs
+dense column iteration
 
-### 3.3 Internal-only
+improved cache locality
 
-- `QueryBorrow`
-- `QueryBorrowMut`
-- Read/write fetch internals
-- Store access helpers
+lower cross-store fetch overhead
 
+reduced per-entity traversal overhead
 
-## 4. Design Decisions
+Secondary objective
 
-### 4.1 Resource model
+Preserve all existing ECS semantics while making storage/layout the new optimization surface.
 
-Resources are components stored globally.
+This includes preserving correctness for:
 
-Target world signatures:
+Changed<T>
 
-```rust
-pub fn insert_resource<R: Component>(&mut self, resource: R);
-pub fn has_resource<R: Component>(&self) -> bool;
-pub fn resource<R: Component>(&self) -> Result<&R, ResourceError>;
-pub fn resource_mut<R: Component>(&mut self) -> Result<ResMut<'_, R>, ResourceError>;
-pub fn remove_resource<R: Component>(&mut self) -> Option<R>;
-```
+Added<T>
 
-`Resource` as a public concept should be removed from docs and prelude.
+remove/reinsert flows
 
-### 4.2 Query model
+command flush timing
 
-Use one query type and one iteration method.
+scheduler conflict behavior
 
-- Keep: `Query<Q, F>::iter()`
-- Remove from public surface: `query_mut`, `iter_mut`, `single_mut`, `get_mut_on`
+query result correctness
 
-Mutability must come from `Q`, not from separate wrapper types.
+mutation visibility rules
 
-## 5. Query Support Matrix
+3. Why Phase 6 Is Necessary
 
-Required:
+Phase 5B established three important conclusions:
 
-- `Query<&T>`
-- `Query<&mut T>`
-- `Query<(Entity, &T)>`
-- `Query<(Entity, &mut T)>`
-- `Query<(&A, &B)>`
-- `Query<(&mut A, &B)>`
-- `Query<(&A, &mut B)>`
-- `Query<(&mut A, &mut B)>`
-- `Query<Option<&T>>`
-- `Query<Option<&mut T>>`
-- `Query<(&mut A, Option<&B>)>`
-- `Query<(Entity, Option<&T>)>`
+3.1 Query-layer optimization is no longer the main frontier
 
-Recommended next:
+The highest-value fetch-path improvements are already implemented for dominant forms:
 
-- `Query<(&A, &B, &C)>`
-- `Query<(&mut A, &B, &C)>`
-- `Query<(&mut A, &mut B, &C)>`
+&mut T
 
-## 6. Filter API
+(&mut A, &B)
 
-Required:
+(&mut A, &mut B)
 
-- `With<T>`
-- `Without<T>`
-- Tuple composition: `(With<A>, Without<B>)`
+Additional tuning in the same area is now likely to produce:
 
-Examples:
+smaller wins
 
-```rust
-Query<&Position, With<Player>>
-Query<&Position, Without<Disabled>>
-Query<&Position, (With<Player>, Without<Disabled>)>
-```
+less stable wins
 
-## 7. Runtime World API Target
+more complexity per unit of gain
 
-```rust
-impl World {
-    pub fn new() -> Self;
+3.2 Broad mutable iteration remains the primary high-scale pressure
 
-    pub fn spawn<B: Bundle>(&mut self, bundle: B) -> Entity;
-    pub fn despawn(&mut self, entity: Entity) -> Result<(), EntityError>;
-    pub fn contains(&self, entity: Entity) -> bool;
+The remaining top-end pressure shows up in:
 
-    pub fn insert<B: Bundle>(&mut self, entity: Entity, bundle: B) -> Result<(), EntityError>;
-    pub fn remove<B: Bundle>(&mut self, entity: Entity) -> Result<B, EntityError>;
+broad mutable loops
 
-    pub fn get<T: Component>(&self, entity: Entity) -> Option<&T>;
-    pub fn get_mut<T: Component>(&mut self, entity: Entity) -> Option<Mut<'_, T>>;
-    pub fn require<T: Component>(&self, entity: Entity) -> Result<&T, EntityError>;
-    pub fn require_mut<T: Component>(&mut self, entity: Entity) -> Result<Mut<'_, T>, EntityError>;
+broad mixed tuple loops
 
-    pub fn entity(&self, entity: Entity) -> Result<EntityRef<'_>, EntityError>;
-    pub fn entity_mut(&mut self, entity: Entity) -> Result<EntityMut<'_>, EntityError>;
+storage traversal cost
 
-    pub fn insert_resource<R: Component>(&mut self, resource: R);
-    pub fn has_resource<R: Component>(&self) -> bool;
-    pub fn resource<R: Component>(&self) -> Result<&R, ResourceError>;
-    pub fn resource_mut<R: Component>(&mut self) -> Result<ResMut<'_, R>, ResourceError>;
-    pub fn remove_resource<R: Component>(&mut self) -> Option<R>;
+cache behavior
 
-    pub fn commands(&self) -> Commands;
-}
-```
+data access locality
 
-## 8. Events, Commands, Change Tracking, Indexes
+3.3 Scheduler and flush remain secondary
 
-### 8.1 Events
+Phase 5B profiling and mixed-frame results continue to indicate that:
 
-Runtime:
+scheduler planning is not the principal limiter
 
-```rust
-pub fn configure_event_channel<T: 'static>(&mut self, config: EventChannelConfig);
-pub fn emit_event<T: 'static>(&mut self, event: T);
-pub fn read_events<T: 'static>(&self) -> &[T];
-pub fn drain_events<T: 'static>(&mut self) -> Vec<T>;
-pub fn clear_events<T: 'static>(&mut self) -> usize;
-pub fn event_count<T: 'static>(&self) -> usize;
-pub fn event_channel_stats<T: 'static>(&self) -> Option<EventChannelStats>;
-```
+flush cost is not the principal limiter
 
-Gameplay params:
+query/storage traversal still dominates representative workloads
 
-- `EventReader<T>`
-- `EventWriter<T>`
+This means Phase 6 should target storage/layout first, not scheduler throughput.
 
-### 8.2 Commands
+4. Phase 6 Scope
+   In scope
 
-Keep queue model:
+archetype identity and registry
 
-```rust
-impl Commands {
-    pub fn spawn<B: Bundle + 'static>(&mut self, bundle: B);
-    pub fn despawn(&mut self, entity: Entity);
-    pub fn insert<B: Bundle + 'static>(&mut self, entity: Entity, bundle: B);
-    pub fn remove<B: Bundle + 'static>(&mut self, entity: Entity);
-    pub fn apply(self, world: &mut World) -> Result<(), CommandError>;
-}
-```
+entity-to-location tracking
 
-Scheduler should flush at a deterministic boundary (preferred: end of stage).
+dense component column storage
 
-### 8.3 Change tracking
+structural migration between archetypes
 
-```rust
-pub fn current_change_tick(&self) -> u64;
-pub fn component_changed_since<T: Component>(&self, tick: u64) -> bool;
-pub fn resource_changed_since<R: Component>(&self, tick: u64) -> bool;
-pub fn component_changes_since(&self, tick: u64) -> Vec<ComponentChangeRecord>;
-pub fn resource_changes_since(&self, tick: u64) -> Vec<ResourceChangeRecord>;
-```
+archetype-based query matching for dominant forms
 
-### 8.4 Secondary indexes
+change/add tracking compatibility
 
-Keep existing runtime APIs intact for now.
-Long-term improvement: move read lookups from `&mut self` to `&self` where possible.
+benchmark and profiling validation
 
-## 9. Migration Phases
+compatibility with current public ECS semantics
 
-### Phase 0: Freeze target
+Out of scope for initial Phase 6
 
-- Stop expanding old public query wrappers
-- Treat this document as source of truth
+full ECS rewrite in one pass
 
-### Phase 1: Resource alignment
+immediate removal of all legacy storage paths
 
-Files:
+scheduler-first optimization work
 
-- `foundation/ecs/src/resource.rs`
-- `foundation/ecs/src/world/world_core_impl.rs`
-- `foundation/ecs/src/lib.rs`
-- `foundation/ecs/src/prelude.rs`
+aggressive parallel execution redesign
 
-Tasks:
+speculative storage compaction features not justified by profiling
 
-- Switch resource bounds from `R: Resource` to `R: Component`
-- Remove `Resource` from public prelude/docs
+highly advanced chunk packing before a simpler archetype path is validated
 
-### Phase 2: Unify query surface
+5. Architecture Goals
+   5.1 Storage goals
 
-Files:
+The storage layer should evolve toward:
 
-- `foundation/ecs/src/query/mod.rs`
-- `foundation/ecs/src/query/traits_and_state.rs`
-- `foundation/ecs/src/query/query_data_impls.rs`
-- `foundation/ecs/src/world/world_core_impl.rs`
+archetypes keyed by component-set identity
 
-Tasks:
+dense component columns within each archetype
 
-- Public `Query<Q, F = ()>`
-- Hide/remove `QueryBorrow`, `QueryBorrowMut`
-- Collapse mut/read naming split
+efficient row-based iteration
 
-### Phase 3: QueryState naming cleanup
+minimal pointer chasing inside hot loops
 
-Files:
+predictable memory access under broad scans
 
-- `foundation/ecs/src/query/traits_and_state.rs`
+5.2 Query goals
 
-Tasks:
+The query layer should evolve toward:
 
-- `iter_on` -> `iter`
-- `get_on` -> `get`
-- `single_on` -> `single`
-- Remove `iter_mut_on`/`get_mut_on`/`single_mut_on` public usage
+matching archetypes once per prepared query state
 
-### Phase 4: System parameter extraction
+binding typed column views once per archetype
 
-Files:
+scanning rows directly from dense storage
 
-- `foundation/ecs/src/system/mod.rs`
-- `foundation/ecs/src/system/params.rs`
-- `foundation/ecs/src/system/extract.rs`
-- Scheduler integration points
+minimizing per-entity branching and generic fetch overhead
 
-Tasks:
+5.3 Semantic goals
 
-- Add `SystemParam` extraction for `Query`, `Res`, `ResMut`
-- Expose access metadata for scheduling
+The redesign must preserve:
 
-### Phase 5: Commands and events as params
+correctness of Changed<T> and Added<T>
 
-Files:
+structural mutation semantics across flush boundaries
 
-- `foundation/ecs/src/system/params.rs`
-- `foundation/ecs/src/world/*` (event + command runtime)
-- Scheduler integration
+query correctness under reused QueryState
 
-Tasks:
+expected behavior after remove/reinsert flows
 
-- Inject `Commands` into systems
-- Add `EventReader<T>` and `EventWriter<T>`
+scheduler conflict correctness
 
-### Phase 6: Docs and exports
+5.4 Delivery goals
 
-Files:
+Phase 6 must remain incremental and benchmark-driven.
 
-- `foundation/ecs/src/lib.rs`
-- `foundation/ecs/src/prelude.rs`
-- `foundation/ecs/README.md`
-- `foundation/ecs/USAGE_GUIDE.md`
+That means:
 
-Tasks:
+introduce the new path in bounded slices
 
-- Export only target public API
-- Remove old wrapper API from docs
-- Ensure examples compile
+validate each slice with tests and artifacts
 
-### Phase 7: Final cleanup
+avoid “big bang” migration
 
-Tasks:
+remove complexity only after measured replacement success
 
-- Remove obsolete public APIs
-- Remove transition shims
-- Re-run acceptance checklist
+6. Dominant Workloads to Optimize First
 
-## 10. Access Metadata Requirements
+Phase 6 should target the workloads that Phase 5B proved matter most.
 
-Scheduler conflict analysis requires:
+Core query forms
 
-- Component reads
-- Component writes
-- Resource reads
-- Resource writes
-- Deferred structural mutation (commands)
+Query<&mut T>
 
-Expectations:
+Query<(&mut A, &B)>
 
-- `Query<(&mut Position, &Velocity)>` reports write/read correctly
-- `Res<T>` reports resource read
-- `ResMut<T>` reports resource write
-- `Commands` reports deferred structural mutation
-- Event params report consistent event-channel access semantics
+Query<(&mut A, &mut B)>
 
-## 11. Testing Plan
+Primary benchmark gates
 
-### 11.1 Query correctness
+W1 — broad transform-style update
 
-Add tests for:
+C3 — broad simple write query
 
-- `(&A, &mut B)`
-- `(&mut A, &mut B)`
-- `(Entity, &mut T)`
-- `Option<&T>`
-- `Option<&mut T>`
-- Optional tuple variants
+C4 — broad double-mutable query
 
-### 11.2 Runtime behavior
+W2 — representative gameplay mixed workload
 
-Keep/add tests for:
+engine mixed frame — headless runtime mixed-frame scenario
 
-- Entity lifecycle
-- Bundle insert/remove
-- Resource lifecycle
-- Commands apply/flush behavior
-- Event channel and observer behavior
-- Change tracking
-- Secondary indexes
+Secondary validation gates
 
-### 11.3 Access metadata
+C2 — broad read query parity
 
-Add tests verifying scheduler metadata for:
+W3 — structural churn cost control
 
-- Query read/write sets
-- `Res` vs `ResMut`
-- `Commands`
-- Event params
+W4 — event-heavy workload regression watch
 
-### 11.4 Documentation
+W5 — scheduler stress regression watch
 
-- Ensure README and usage-guide snippets compile in CI
+7. Deliverables
+   7.1 Design document
 
-## 12. Final Acceptance Checklist
+Create:
 
-API:
+foundation/ecs/docs/PHASE6A_ARCHETYPE_STORAGE_PLAN.md
 
-- Only `#[derive(ecs::Component)]` needed
-- `Query<Q, F = ()>` is primary query API
-- `Res<T>` and `ResMut<T>` are real system params
-- Commands and events are available as system params
-- `QueryBorrow`/`QueryBorrowMut` are not public
-- `World::query_mut` is removed
-- Public docs teach only the new model
+This document must define:
 
-Queries:
+archetype identity model
 
-- All required query patterns compile and pass tests
+entity location model
 
-Runtime:
+storage layout
 
-- World lifecycle, events, commands, change tracking, indexes remain functional
+migration model
 
-Docs:
+change/add tracking behavior
 
-- Gameplay docs are param-first
-- Runtime docs are advanced/low-level
-- Examples compile
+query matching plan
 
-## 13. Implementation Order
+compatibility strategy
 
-Implement in this order:
+risks and invariants
 
-1. Resource bounds (`Resource` -> `Component`)
-2. System param extraction skeleton
-3. Public `Query<Q, F>` surface
-4. Query naming unification
-5. `Res` and `ResMut` extraction
-6. Missing query data impls
-7. Commands/Event params
-8. Prelude/root export cleanup
-9. Docs alignment
-10. Remove obsolete public API
+7.2 Implementation slices
 
-## 14. Risks and Mitigations
+Create the new storage path in incremental slices, with each slice landing in reviewable units.
 
-- Query refactor complexity:
-  - Keep internals temporarily split, hide behind unified public API
-- Scheduler coupling:
-  - Land `Query`/`Res`/`ResMut` access metadata first
-- Aliasing hazards:
-  - Add focused tests for mutable tuple/optional forms
-- Doc drift:
-  - Compile docs in CI
+7.3 Benchmark artifact set
 
-## 15. Final Target Summary
+Create a Phase 6 artifact folder similar to Phase 5B:
 
-Gameplay code should center around:
+foundation/ecs/benchmarks/phase6/
 
-- `Query<Q, F = ()>`
-- `Res<T>`
-- `ResMut<T>`
-- `Commands`
-- `EventReader<T>`
-- `EventWriter<T>`
+Expected contents:
 
-Runtime code should continue to support:
+README.md
 
-- `World`
-- `EntityRef` and `EntityMut`
-- `QueryState`
-- Events
-- Commands
-- Change tracking
-- Secondary indexes
+PHASE6_PROGRESS_REPORT.md
 
-Do not preserve old public query wrappers for compatibility if they conflict with the target API.
+phase6_baseline_refresh_ecs_bench.txt
 
-## Addendum: Required Clarifications
+phase6_baseline_refresh_profile.txt
 
-### Query ownership model
+phase6_baseline_refresh_engine_bench.txt
 
-`Query<Q, F>` is a **system parameter** backed by cached internal query state.
-It is not the old borrowed wrapper API and must not expose separate read/mut variants.
+phase6_optimized_ecs_bench.txt
 
-### Event param semantics
+phase6_optimized_profile.txt
 
-- `EventWriter<T>::send(event)` appends an event of type `T` to the channel for `T`
-- `EventReader<T>::iter()` reads currently visible events without draining
-- Draining remains part of the `World` runtime API unless explicitly promoted later
+phase6_optimized_engine_bench.txt
 
-### Command flush semantics
+7.4 Regression tests
 
-Deferred `Commands` are flushed at the **end of the current scheduler stage**.
-This is required behavior.
+Add dedicated storage/query regression coverage for archetype migration and query execution.
 
-### World query policy
+Suggested new test files:
 
-`World` retains only the advanced reusable query API through `QueryState`.
-Do not keep `World::query_mut`.
+foundation/ecs/tests/storage_phase6.rs
 
-If a direct world query constructor remains, it must return `QueryState<Q, F>` and use unified naming.
+foundation/ecs/tests/query_phase6.rs
 
-### Compatibility policy
+8. Phase 6 Execution Plan
+   Phase 6A — Design and invariants
+   Goal
 
-Do not preserve obsolete public query wrappers for compatibility in the final API.
+Define the storage redesign precisely before implementation starts.
 
-Temporary transition shims are allowed during implementation, but the final public API must remove:
+Files to create or update
 
-- `QueryBorrow`
-- `QueryBorrowMut`
-- `World::query_mut`
-- `iter_mut`
-- `single_mut`
+foundation/ecs/docs/PHASE6A_ARCHETYPE_STORAGE_PLAN.md
+
+likely design-adjacent notes in:
+
+foundation/ecs/README.md
+
+foundation/ecs/USAGE_GUIDE.md
+
+Required decisions
+Archetype identity
+
+Define how an archetype is keyed.
+
+Recommended direction:
+
+canonical component-set key
+
+deterministic ordering
+
+stable hashing/equality behavior
+
+cheap comparison for cache lookup
+
+Entity location
+
+Define exact entity location tracking.
+
+Recommended model:
+
+Entity -> { archetype_id, row }
+
+This becomes mandatory for:
+
+direct row access
+
+migration correctness
+
+despawn cleanup
+
+stable query execution assumptions
+
+Column storage
+
+Define storage per archetype as dense columns.
+
+Recommended first pass:
+
+one dense vector per component type present in the archetype
+
+one dense entity vector
+
+aligned row index across all columns
+
+Change tracking
+
+Define row-level tracking behavior for:
+
+added generation/tick
+
+changed generation/tick
+
+This must be specified before migration code is written.
+
+Structural mutation
+
+Define how insert/remove moves entities between archetypes and how command flush applies those changes.
+
+Recommended rule:
+
+preserve stage-boundary flush semantics
+
+do not apply structural changes directly during active query iteration
+
+Exit criteria
+
+design doc complete
+
+invariants explicit
+
+migration semantics defined
+
+change/add semantics explicitly mapped
+
+open risks documented
+
+Phase 6B — Archetype skeleton and entity location system
+Goal
+
+Build the minimum archetype storage foundation without changing all query execution yet.
+
+Files likely to touch
+
+foundation/ecs/src/world/...
+
+foundation/ecs/src/storage/...
+
+foundation/ecs/src/entity/...
+
+Exact file placement depends on the current repository layout, but this phase should introduce or isolate:
+
+archetype definitions
+
+archetype registry
+
+entity location tracking
+
+column storage primitives
+
+Required implementation
+Archetype registry
+
+Introduce a registry that can:
+
+find or create archetypes by component-set key
+
+allocate archetype ids
+
+expose metadata needed for query planning
+
+Entity location map
+
+Introduce a location map that tracks the current row of every live entity.
+
+This must support:
+
+spawn placement
+
+migration updates
+
+despawn cleanup
+
+consistency assertions in tests
+
+Dense column primitives
+
+Introduce the core internal representation for a component column.
+
+Requirements:
+
+dense row-addressable storage
+
+row swap/remove support
+
+typed access compatible with future query binding
+
+associated change/add tracking metadata
+
+Exit criteria
+
+entities can be placed into archetypes
+
+entity locations remain correct after spawn/despawn
+
+row alignment invariants hold
+
+foundational tests pass
+
+Phase 6C — Structural migration path
+Goal
+
+Make archetype transitions correct for structural mutations.
+
+Files likely to touch
+
+foundation/ecs/src/world/...
+
+foundation/ecs/src/commands/...
+
+foundation/ecs/src/storage/...
+
+Required implementation
+Spawn path
+
+Spawn must place new entities into the correct archetype with valid initial tracking metadata.
+
+Insert component path
+
+Inserting a component must:
+
+compute destination archetype
+
+move entity data
+
+append the new component data
+
+update location mapping
+
+preserve required semantics for existing component tracking
+
+Remove component path
+
+Removing a component must:
+
+compute destination archetype
+
+move surviving component data
+
+drop the removed component correctly
+
+update location mapping
+
+preserve intended changed/added semantics
+
+Despawn path
+
+Despawn must:
+
+remove the row cleanly
+
+update swapped entity location if swap-remove is used
+
+clear entity location mapping
+
+release archetype row resources correctly
+
+Flush integration
+
+Commands must continue to apply structural changes at the correct lifecycle boundary.
+
+Tests to add
+
+Suggested file:
+
+foundation/ecs/tests/storage_phase6.rs
+
+Suggested test cases:
+
+entity location updates after insert migration
+
+entity location updates after remove migration
+
+despawn updates swapped row locations correctly
+
+remove then reinsert preserves intended tracking semantics
+
+flush applies structural migration at the same boundary as before
+
+Exit criteria
+
+structural mutation correctness established
+
+command flush timing preserved
+
+migration tests pass
+
+no regression in existing structural semantics
+
+Phase 6D — Archetype query matching for dominant forms
+Goal
+
+Move dominant broad query forms onto archetype-based execution.
+
+Files likely to touch
+
+foundation/ecs/src/query/traits_and_state.rs
+
+foundation/ecs/src/query/query_data_impls.rs
+
+new or updated storage/query bridge files under:
+
+foundation/ecs/src/query/...
+
+foundation/ecs/src/storage/...
+
+Required implementation
+Query preparation
+
+QueryState should prepare and cache:
+
+matching archetype ids
+
+per-archetype column binding data
+
+filter-relevant metadata
+
+mutability/access metadata
+
+Dominant forms to land first
+
+Query<&mut T>
+
+Query<(&mut A, &B)>
+
+Query<(&mut A, &mut B)>
+
+Query execution model
+
+Execution should become:
+
+select prepared matching archetype
+
+bind typed column views once
+
+iterate dense rows directly
+
+apply filters
+
+fetch tuple directly from row-aligned columns
+
+mark changed metadata for mutable outputs
+
+Important rule
+
+Do not attempt to migrate every query form at once. Dominant forms only.
+
+Tests to add
+
+Suggested file:
+
+foundation/ecs/tests/query_phase6.rs
+
+Suggested test cases:
+
+Query<&mut T> matches previous query semantics
+
+Query<(&mut A, &B)> fetch order and correctness are unchanged
+
+Query<(&mut A, &mut B)> marks changed correctly for both mutable outputs
+
+prepared query state invalidates or refreshes correctly after structural changes
+
+reused query state works across worlds without stale archetype bindings
+
+Exit criteria
+
+dominant broad forms run on archetype storage
+
+correctness matches prior semantics
+
+no stale cache binding behavior
+
+existing query regression coverage still passes
+
+Phase 6E — Filter and tracking integration
+Goal
+
+Bring filter support and tracking semantics to the new execution path.
+
+Files likely to touch
+
+foundation/ecs/src/query/...
+
+foundation/ecs/src/world/...
+
+foundation/ecs/src/storage/...
+
+Required support
+Filters
+
+Add support for:
+
+With<T>
+
+Without<T>
+
+Changed<T>
+
+Added<T>
+
+Prioritize the filter combinations used by W2 and current regression coverage.
+
+Tracking semantics
+
+Ensure the new storage path preserves:
+
+correct first-add behavior
+
+correct change visibility
+
+remove-then-reinsert behavior
+
+flush boundary expectations
+
+Cache invalidation rules
+
+Structural changes that affect archetype matching must invalidate or refresh relevant prepared state correctly.
+
+Tests to add
+
+Suggested cases:
+
+Changed<T> works after mutable iteration on archetype path
+
+Added<T> works after spawn and insert on archetype path
+
+remove then reinsert behaves identically to prior semantics
+
+With/Without matching is correct across migrated entities
+
+prepared state updates correctly when a matching archetype appears later
+
+Exit criteria
+
+W2-class semantics pass
+
+tracking remains correct
+
+filter correctness is established
+
+no mismatch between old and new paths on covered scenarios
+
+Phase 6F — Benchmarking, profiling, and decision gate
+Goal
+
+Measure whether storage redesign materially moved the ceiling.
+
+Runners to execute
+
+At minimum:
+
+cargo test -p ecs
+cargo bench -p ecs --bench phase5b --features telemetry -- --quick
+cargo run -p ecs --example phase5b_profile --features telemetry --release
+cargo bench -p engine --bench phase5b_runtime -- --quick
+
+Then add dedicated Phase 6 runners.
+
+Suggested additions:
+
+foundation/ecs/benches/phase6.rs
+
+foundation/ecs/examples/phase6_profile.rs
+
+engine/benches/phase6_runtime.rs
+
+Required measurement dimensions
+
+For each decision checkpoint, capture:
+
+ECS quick bench medians
+
+engine mixed-frame medians
+
+query matching attribution
+
+query iteration attribution
+
+changed/added attribution where relevant
+
+any structural churn regression signal
+
+Decision rule
+
+Phase 6 is successful only if the new storage path improves the dominant broad query workloads materially enough to justify the added complexity.
+
+Exit criteria
+
+large-scale broad mutable workloads improve materially
+
+engine mixed frame improves or stays neutral with better headroom
+
+query-path dominance declines in profiles
+
+no unacceptable W3/W4/W5 regressions
+
+correctness remains intact
+
+9. Benchmark Success Criteria
+   Strong success signals
+
+The redesign is working if these become true:
+
+W1 improves clearly at 50k and 200k
+
+C3 improves clearly at 50k and 200k
+
+C4 scales better than the current path
+
+W2 shows better broad-scan behavior
+
+engine mixed frame improves or remains neutral with lower query pressure
+
+Weak success signals
+
+These are not enough on their own:
+
+only 10k-class improvement
+
+only microbench gains with no engine/runtime benefit
+
+only profile attribution reduction with no wall-time gain
+
+gains that disappear under same-session refresh
+
+Failure signals
+
+Phase 6 should be reconsidered if these dominate:
+
+structural churn regresses heavily
+
+changed/added semantics become fragile
+
+engine mixed frame regresses materially
+
+query-path time falls but total wall time does not
+
+complexity increases without reliable high-scale improvement
+
+10. Risk Register
+    Risk 1 — semantic drift
+    Description
+
+Archetype migration can subtly break:
+
+Changed<T>
+
+Added<T>
+
+remove/reinsert behavior
+
+command flush semantics
+
+reused query state semantics
+
+Mitigation
+
+define tracking semantics before implementation
+
+add migration-specific tests before tuning
+
+keep old-vs-new semantic parity checks for dominant forms
+
+Risk 2 — structural mutation regression
+Description
+
+Archetype systems often make steady-state iteration faster while making insert/remove/despawn more expensive.
+
+Mitigation
+
+benchmark W3 continuously
+
+avoid tuning only for stable-scan workloads
+
+keep flush semantics stable to isolate cost changes
+
+Risk 3 — cache invalidation bugs
+Description
+
+Prepared query state may become stale after:
+
+structural mutation
+
+new archetype creation
+
+world changes
+
+removed matching archetypes
+
+Mitigation
+
+formalize invalidation/versioning strategy
+
+test “matching archetype appears later” cases
+
+test cross-world and reused-state rebinding explicitly
+
+Risk 4 — oversized first implementation
+Description
+
+Trying to migrate all query types and storage rules at once will slow delivery and obscure regressions.
+
+Mitigation
+
+move dominant forms first
+
+preserve fallback paths temporarily
+
+benchmark each landed slice before widening scope
+
+Risk 5 — premature chunk sophistication
+Description
+
+Adding advanced chunk management too early can add engineering cost before the basic archetype model is proven.
+
+Mitigation
+
+start with dense archetypes first
+
+add chunk segmentation only if profiling shows need
+
+keep first implementation legible and measurable
+
+11. Test Plan
+    Existing tests that must remain green
+
+Continue running:
+
+cargo test -p ecs
+
+Especially preserve coverage around:
+
+command flush timing
+
+scheduler conflict behavior
+
+changed/added semantics
+
+query correctness
+
+reused query state behavior
+
+New test files
+
+Create:
+
+foundation/ecs/tests/storage_phase6.rs
+
+foundation/ecs/tests/query_phase6.rs
+
+Required new test cases
+Storage migration tests
+
+In foundation/ecs/tests/storage_phase6.rs:
+
+entity location updates after insert migration
+
+entity location updates after remove migration
+
+despawn clears row and updates swap target location
+
+archetype transition preserves surviving component values
+
+command flush applies structural mutation only at the intended boundary
+
+Tracking tests
+
+In foundation/ecs/tests/storage_phase6.rs or query_phase6.rs:
+
+Added<T> after spawn on archetype path
+
+Added<T> after insert on archetype path
+
+Changed<T> after mutable query/write on archetype path
+
+remove then reinsert preserves intended semantics
+
+Query execution tests
+
+In foundation/ecs/tests/query_phase6.rs:
+
+Query<&mut T> parity with prior path
+
+Query<(&mut A, &B)> parity with prior path
+
+Query<(&mut A, &mut B)> parity with prior path
+
+With<T> and Without<T> matching across migrated entities
+
+prepared query state refresh after structural changes
+
+reused query state across world changes remains safe
+
+12. Recommended Internal Milestones
+    Milestone M1 — design locked
+
+Outputs:
+
+architecture design doc complete
+
+invariants signed off
+
+implementation slice plan fixed
+
+Milestone M2 — storage skeleton landed
+
+Outputs:
+
+archetype registry
+
+entity location map
+
+dense column primitives
+
+spawn/despawn foundation
+
+Milestone M3 — structural migration landed
+
+Outputs:
+
+insert/remove/despawn migration
+
+flush integration
+
+migration regression tests green
+
+Milestone M4 — dominant queries on archetypes
+
+Outputs:
+
+&mut T
+
+(&mut A, &B)
+
+(&mut A, &mut B) on new path
+
+query parity tests green
+
+Milestone M5 — filters and tracking landed
+
+Outputs:
+
+With
+
+Without
+
+Changed
+
+Added
+
+W2 semantics green
+
+Milestone M6 — benchmark decision checkpoint
+
+Outputs:
+
+Phase 6 artifacts generated
+
+profile attribution compared
+
+engine mixed frame compared
+
+continuation decision documented
+
+13. Documentation Updates Required
+
+Update the following as Phase 6 lands:
+
+foundation/ecs/README.md
+
+foundation/ecs/USAGE_GUIDE.md
+
+foundation/ecs/benchmarks/phase6/README.md
+
+The documentation should explicitly state:
+
+which query forms are on the archetype path
+
+which paths still use legacy storage
+
+any current limitations
+
+how to run Phase 6 benchmark and profile suites
+
+how semantic parity is validated
+
+14. Completion Criteria for Phase 6
+
+Phase 6 should only be considered complete when all of the following are true:
+
+archetype-backed storage exists for dominant broad-query forms
+
+structural migration is correct
+
+entity location tracking is correct
+
+Changed<T> and Added<T> semantics remain correct
+
+ECS regression tests pass
+
+dominant large-scale workloads improve materially
+
+engine mixed frame is improved or not materially regressed
+
+profiles show reduced query/storage traversal dominance
+
+implementation complexity remains maintainable for Phase 7 work
+
+15. Decision Policy After Phase 6
+
+At the end of Phase 6, choose the next phase based on measured outcomes:
+
+If Phase 6 materially improves dominant broad iteration
+
+Proceed with:
+
+expanding archetype coverage
+
+broader filter/query support
+
+storage compaction or chunk refinement if profiling supports it
+
+If Phase 6 improves microbenchmarks but not engine/runtime behavior
+
+Investigate:
+
+remaining scheduler/runtime costs
+
+command application overhead
+
+system mix effects
+
+false-positive wins limited to synthetic scans
+
+If Phase 6 causes unacceptable structural regressions
+
+Rebalance by:
+
+optimizing migration paths
+
+reducing archetype churn costs
+
+narrowing the archetype path to dominant stable workloads only
+
+16. Final Direction
+
+Phase 6 should be executed as a targeted storage/layout redesign, not as a full unbounded ECS rewrite.
+
+The correct implementation strategy is:
+
+preserve semantics first
+
+land the new model in narrow slices
+
+move dominant broad-query forms first
+
+benchmark each slice
+
+only widen scope after measured success
+
+That is the highest-confidence path to turning the Phase 5B conclusion into durable end-to-end performance gains.
+
+17. Suggested Roadmap Label
+
+Use:
+
+Phase 6A — Archetype-backed dense storage for dominant broad-query forms
