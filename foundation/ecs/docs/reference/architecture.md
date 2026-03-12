@@ -1,147 +1,126 @@
 # ECS Architecture
 
-This document covers `foundation/ecs` internals for runtime execution, scheduling, safety
-invariants, and deterministic behavior.
+This document is internal-facing and describes `foundation/ecs` runtime internals,
+unsafe invariants, and behavior contracts.
+
+For public API usage, see [usage-guide.md](./usage-guide.md).
+For advanced integration patterns, see [advanced-guide.md](./advanced-guide.md).
 
 ## 1. Runtime Execution Model
 
-`ecs::Runtime` executes function systems using system params:
+`Runtime` executes registered function systems using cached `SystemParam` state.
 
-- `Query<Q, F = ()>`
-- `Res<T>`
-- `ResMut<T>`
-- `Commands`
-- `EventReader<T>`
-- `EventWriter<T>`
+- param state is initialized at registration time
+- extraction happens each run via raw world pointers
+- each system run owns an ephemeral `Commands` queue
 
-Function system tuple arity is supported up to 8 parameters.
+Supported function system arity is implemented up to 8 parameters.
 
-Each registered system owns cached param state. State is initialized once at registration time and
-reused on each run.
+## 2. Scheduling and Access Model
 
-## 2. Access and Scheduling Model
+`QueryAccess` is transformed into scheduler `SystemAccess` keys:
 
-System param metadata is mapped into scheduler access keys:
+- component read/write keys
+- resource read/write keys
+- structural mutation key for deferred commands
+- event read/write keys (modeled as resource-like by event type)
 
-- component read/write
-- resource read/write
-- structural deferred mutation (`Commands`)
-- event read/write (modeled as resource-like by event type)
-
-The scheduler computes stage plans from:
+Planning combines:
 
 - explicit set dependencies (`in_set`, `before`, `after`)
-- strict access conflicts for component/resource/event domains (read/write and write/write)
-- explicit structural-mutation metadata for deferred command producers
+- access conflict analysis (read/write, write/write)
 
-Policy for structural mutation:
+Structural mutation policy:
 
-- multiple deferred structural mutation producers can coexist in one stage
-- deterministic command queue merge happens in system execution order
-- deferred structural mutations are visible only after the stage-end flush boundary
-- component/resource/event read/write conflicts still force stage separation
+- multiple deferred structural producers may exist in one stage
+- visibility of structural effects is delayed until stage flush
+- component/resource/event conflicts still enforce stage separation
 
-## 3. Deterministic Deferred Commands
+## 3. Deferred Command Contract
 
-Every system run gets a per-system `Commands` queue. Runtime execution order is deterministic:
+Deterministic ordering contract:
 
 1. systems execute in stage order
-2. within each stage, command queues are collected in system execution order
-3. queues are applied at stage end in that same order
+2. command queues are collected in system execution order
+3. queues are applied at stage end in that order
 
-This enforces the rule: systems inside the same stage do not observe each other's deferred
-structural changes before the stage flush boundary.
+This guarantees that within-stage observers cannot read queued structural changes before flush.
 
-## 4. Query Internals
+## 4. Query Engine Internals
 
 `QueryState<Q, F>` stores:
 
-- required-present component requirements (`Q` + `With<T>`)
-- excluded component filters (`Without<T>`)
+- required and excluded component constraints
 - access metadata
 - per-query `last_run_tick`
-- archetype-row scratch + entity-list scratch
-- optional fast-fetch cache (`QueryFastCache`)
+- archetype-row/entity scratch state and optional fast cache
 
-Execution paths:
+Execution path split:
 
-- Archetype-row path (dominant mutable shapes):
-  - `Query<&mut T>`
-  - `Query<(&mut A, &B)>`
-  - `Query<(&mut A, &mut B)>`
-  - query state asks the archetype registry for matching bindings and iterates rows directly.
-- Entity-list fallback path (all other supported shapes):
-  - query state asks the archetype registry for matching entities and then fetches via `QueryData`.
+- archetype-row path for dominant mutable shapes
+- entity-list fallback path for remaining supported shapes
 
-`Changed<T>` and `Added<T>` filters compare against the query state's last seen tick and compose
-with `With<T>` / `Without<T>` via tuple filters.
+`Changed<T>` and `Added<T>` evaluate archetype row ticks against query-local last-seen tick.
 
-Change-aware filter path:
+## 5. Change Boundary
 
-- `Changed<T>` checks `changed_tick` from archetype row metadata.
-- `Added<T>` checks `added_tick` from archetype row metadata.
-- Query/filter semantics do not depend on global change logs.
+Two separate mechanisms intentionally coexist:
 
-`QueryData` remains an internal query implementation trait and is not re-exported from the public
-query module.
-
-## 5. Reporting and Introspection Boundary
-
-Type-level change reporting is intentionally separate from query/filter semantics:
-
-- Query/filter semantics:
-  - archetype row metadata (`added_tick`, `changed_tick`)
+- query/filter semantics:
+  - archetype row `added_tick`/`changed_tick`
   - APIs: `Changed<T>`, `Added<T>`
-- Reporting/introspection history:
-  - `component_change_ticks`, `resource_change_ticks`
-  - `component_change_log`, `resource_change_log`
+- reporting/history:
+  - world-level change logs and tick maps
   - APIs: `component_changed_since`, `resource_changed_since`,
     `component_changes_since`, `resource_changes_since`
 
-## 6. Event Model
+## 6. Event Subsystem Internals
 
-Phase-2 event semantics:
+Event channels are keyed by event `TypeId` and carry per-channel configuration, counters,
+and pending event storage.
 
-- `EventWriter<T>::send(event)` appends to the world channel
-- `EventReader<T>::iter()` reads currently visible events without draining
-- draining remains an explicit world API (`World::drain_events<T>()`)
+Core mechanics:
 
-## 7. Secondary Index Model
+- emit path applies capacity/overflow policy
+- drain path updates channel counters
+- frame-finalization path handles `FrameTransient` lifetime cleanup
+- observer triggers are emitted on configured boundaries
 
-Secondary indexes are lazily rebuilt and marked dirty on component changes.
+## 7. Secondary Index Internals
 
-Read helpers (`find_entity_by_index*`, `find_entities_by_index*`, `find_component_by_index*`) are
-`&self` APIs. Internal mutation for lazy rebuild is hidden behind interior mutability.
+Secondary indexes:
 
-## 8. Unsafe Invariants
+- are registered by `(component type, key type, name)`
+- are lazily rebuilt when marked dirty by component churn
+- expose `&self` read APIs while mutating index caches via interior mutability
 
-Unsafe sites are concentrated in query and system param extraction paths:
+## 8. Unsafe Boundaries and Required Invariants
 
-- `query/query_data_impls.rs`: typed fetches from erased component stores
-- `query/traits_and_state.rs`: world-pointer based query iteration
-- `system/runtime.rs`: cached-state lifetime bridge for `SystemParam`
-- `system/params.rs`: world pointer extraction for runtime params
-- `world/handles_and_commands.rs`: borrowed command queue forwarding
+Concentrated unsafe sites:
+
+- `query/query_data_impls.rs`
+- `query/traits_and_state.rs`
+- `system/runtime.rs`
+- `system/params.rs`
+- `world/handles_and_commands.rs`
 
 Required invariants:
 
-- `SystemParam::State` is lifetime-independent for all extraction lifetimes
-- world pointers passed into extraction are valid for the full extraction call
-- mutable query forms never alias the same component type mutably
-- borrowed command owners always point to a live owning `Commands` value
+- `SystemParam::State` is lifetime-independent
+- world pointers used during extraction remain valid for call duration
+- mutable query shapes do not alias mutably for same component type
+- borrowed command queue forwarding always targets a live owner
 
-Unsafe blocks in these files include inline invariant comments and are covered by focused runtime
-and query tests.
+Unsafe blocks in these files require local invariant comments and focused tests.
 
-## 9. Phase 6 Telemetry
+## 9. Telemetry Architecture (Phase 6)
 
-Feature-gated telemetry (`--features telemetry`) provides hot-path cost attribution:
+Feature-gated telemetry (`--features telemetry`) records hot-path cost attribution for:
 
-- query matching/iteration/get/single timing
-- changed/added filter check timing
-- runtime plan lookup, per-stage execution, and stage-end flush timing
-- scheduler plan build timing, conflict check counts, and stage counts
-- event reader/writer call and volume counters
+- query matching/iteration/get/single
+- changed/added filter checks
+- runtime plan lookup, stage execution, stage-end flush
+- scheduler planning/conflict checks and stage counts
+- event read/write call and volume counters
 
-This enables separating query cost, filter cost, scheduler planning cost, and flush cost for
-before/after comparisons without changing runtime semantics.
+Telemetry is observational and must not alter runtime semantics.

@@ -2,36 +2,33 @@
 
 `ecs` is the ECS runtime foundation in the `foundation` domain.
 
-This README is intentionally concise and points to the canonical docs tree.
+## Quick Overview
 
-## Start Here
+- `World`: entities, components, resources, events, indexes
+- `QueryState<Q, F>`: reusable runtime querying
+- `Runtime`: function-system scheduling and execution
+- Core params: `Query`, `Res`, `ResMut`, `Commands`, `EventReader`, `EventWriter`
 
-- Docs entrypoint: [`foundation/ecs/docs/index.md`](./docs/index.md)
-- Reference docs:
-  - [`foundation/ecs/docs/reference/usage-guide.md`](./docs/reference/usage-guide.md)
-  - [`foundation/ecs/docs/reference/architecture.md`](./docs/reference/architecture.md)
-- Roadmaps:
-  - [`foundation/ecs/docs/roadmaps/phase6a-archetype-storage-plan.md`](./docs/roadmaps/phase6a-archetype-storage-plan.md)
-  - [`foundation/ecs/docs/roadmaps/phase6-archetype-full-switch-plan.md`](./docs/roadmaps/phase6-archetype-full-switch-plan.md)
-  - [`foundation/ecs/docs/roadmaps/phase6-closeout-roadmap.md`](./docs/roadmaps/phase6-closeout-roadmap.md)
-- Phase 6 benchmark docs:
-  - [`foundation/ecs/docs/benchmarks/phase6/benchmark-suite.md`](./docs/benchmarks/phase6/benchmark-suite.md)
-  - [`foundation/ecs/docs/benchmarks/phase6/progress-report.md`](./docs/benchmarks/phase6/progress-report.md)
-  - [`foundation/ecs/docs/benchmarks/phase6/final-decision-report.md`](./docs/benchmarks/phase6/final-decision-report.md)
+## Minimal Getting Started
 
-## Runtime Surface (At a Glance)
+```rust
+use ecs::prelude::*;
 
-- `World`: entity lifecycle, resources, events, indexes, command queue creation
-- `QueryState<Q, F = ()>`: reusable detached query state from `World::query_state`
-- `Runtime`: schedule registration and execution
-- System params: `Query`, `Res`, `ResMut`, `Commands`, `EventReader`, `EventWriter`
-- Query filters: `With<T>`, `Without<T>`, `Changed<T>`, `Added<T>`
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+struct Position {
+    x: f32,
+    y: f32,
+}
 
-## Validation Commands
-
-```powershell
-cargo test -p ecs
+let mut world = World::new();
+let entity = world.spawn(Position { x: 1.0, y: 2.0 });
+world.require_mut::<Position>(entity).unwrap().x += 1.0;
+assert_eq!(world.require::<Position>(entity).unwrap().x, 2.0);
 ```
 
-Phase 6 closeout benchmark/profile commands are documented in:
-[`foundation/ecs/docs/benchmarks/phase6/benchmark-suite.md`](./docs/benchmarks/phase6/benchmark-suite.md)
+## Documentation
+
+- Docs hub: [`docs/index.md`](./docs/index.md)
+- Usage guide: [`docs/reference/usage-guide.md`](./docs/reference/usage-guide.md)
+- Advanced guide: [`docs/reference/advanced-guide.md`](./docs/reference/advanced-guide.md)
+- Architecture (internals): [`docs/reference/architecture.md`](./docs/reference/architecture.md)
