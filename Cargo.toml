@@ -4,6 +4,7 @@ members = [
   "foundation/ecs",
   "foundation/ecs_macros",
   "foundation/geometry",
+  "foundation/sdf",
   "net/engine_net",
   "net/engine_net_macros",
   "net/engine_net_quic",

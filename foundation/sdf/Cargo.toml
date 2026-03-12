@@ -1,0 +1,8 @@
+[package]
+name = "sdf"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam = "0.31.0"
+geometry = { path = "../geometry" }

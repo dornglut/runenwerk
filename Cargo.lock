@@ -3298,6 +3298,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdf"
+version = "0.1.0"
+dependencies = [
+ "geometry",
+ "glam 0.31.1",
+]
+
+[[package]]
 name = "secrecy"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
