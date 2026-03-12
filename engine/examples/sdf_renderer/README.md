@@ -82,12 +82,12 @@ Authoring API direction:
 `sdf.params` clarification:
 
 - `sdf.params` is a logical render resource id in the render graph.
-- Data is authored in [sdf_params.ron](/Users/joshua/Projekte/grotto-quest/engine/examples/sdf_renderer/assets/sdf_params.ron) and falls back to typed Rust defaults in [main.rs](/Users/joshua/Projekte/grotto-quest/engine/examples/sdf_renderer/main.rs).
+- Data is authored in [sdf_params.ron](./assets/sdf_params.ron) and falls back to typed Rust defaults in [main.rs](./main.rs).
 - Runtime parses/validates into a typed struct and writes frame data consumed by `sdf.compute`.
 
 ## Authoring Pipeline Direction
 
-This example should also follow the shared authoring pipeline in [docs/authoring-layer.md](/Users/joshua/Projekte/grotto-quest/docs/authoring-layer.md).
+This example should also follow the shared authoring pipeline in [docs/authoring-layer.md](../../../docs/authoring-layer.md).
 
 Target split:
 

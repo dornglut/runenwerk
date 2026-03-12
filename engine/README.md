@@ -1,64 +1,94 @@
 # Engine Crate
 
-## Purpose
+Runtime composition crate for Runenwerk. It owns app boot/run flow, schedule execution,
+plugin wiring, and integrated engine-facing systems (scene, render, input, replay, net bridge).
 
-Hosts the runtime, plugin composition, replay integration, and core engine-facing feature implementations.
+## Where To Start
 
-## Usage
+1. Read crate API surfaces:
+   - `src/lib.rs`
+   - `src/prelude.rs`
+2. Run the smallest example:
+   - `cargo run -p engine --example runtime_minimal`
+3. Open the plugin index:
+   - `src/plugins/README.md`
+4. Pick an example closest to your change:
+   - `examples/README.md`
 
-- Crate: `engine`
-- Primary entry surface: `engine::App`, `engine::Plugin`, and `engine::prelude`.
-- Feature plugins live under `engine/src/plugins/*`.
+## Domain Map
 
-### Runtime
+- App
+  - `src/app/`
+  - Composition root (`App`), plugin registration, run mode selection.
+- Runtime
+  - `src/runtime/` and `src/app/runtime/`
+  - Schedules, system params, fixed-step loop, platform/window adaptation.
+- Plugins
+  - `src/plugins/`
+  - Engine features and cross-feature composition points.
+- Render
+  - `src/plugins/render/`
+  - Render graph, executor registry, shader registry, frame submit path.
+- Scene
+  - `src/plugins/scene/`
+  - Scene lifecycle, world/overlay state publication, snapshot/replay data boundaries.
+- Net
+  - `src/net/` and `src/plugins/net/`
+  - Public net prelude + ECS/runtime bridge to `engine_net`.
+- UI
+  - `src/plugins/ui/`
+  - UI data model, template runtime, text rendering support types.
+- Examples and tests
+  - `examples/`
+  - `tests/`
 
-The engine runtime path is the active and only supported path. Use:
+## App And Runtime Mental Model
 
-- `engine::App`
-- `engine::App::new()` for the windowed runtime
-- `engine::App::headless()` for deterministic tests/tools
-- `engine::Plugin`
-- default plugin stack: `engine::plugins::default_plugins()`
-- networking plugins: `NetworkClientPlugin`, `NetworkServerPlugin`
-- legacy/test harness networking plugins: `LegacyReplicationPlugin`, `LegacyPredictionPlugin` (compat aliases: `ReplicationPlugin`, `PredictionPlugin`)
-- schedule labels: `Startup`, `PreUpdate`, `FixedUpdate`, `Update`, `RenderPrepare`, `RenderSubmit`, `FrameEnd`
-- built-in runtime resources: `WindowState`, `Time`, `InputState`, `FixedTimeConfig`, `FixedTimeState`, `CatchupBudget`, `SimulationTick`
-- shared runtime state: `SceneRuntimeState`, `GameplayRuntimeConfig`, `UiOverlayState`, `SessionRuntimeState`
-- ordering helpers: `in_set`, `before`, `after`
-- system params: `Query`, `Res`, `ResMut`, `Commands`
+- `App` is the user-facing composition API:
+  - `App::new()` for windowed mode
+  - `App::headless()` for deterministic test/tooling runs
+- `App` owns `World`, scheduler runtime, and active runner.
+- Plugin build methods mutate app composition only (resources/systems/config).
+- Runtime frame flow is schedule-driven:
+  - `Startup` once
+  - per-frame: `PreUpdate -> FixedUpdate -> Update -> RenderPrepare -> RenderSubmit -> FrameEnd`
+- Windowed and headless modes share the same schedule model, with different platform runners.
 
-See [`engine/examples/runtime_minimal/main.rs`](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/examples/runtime_minimal/main.rs) for the smallest headless end-to-end example.
-See [`engine/examples/window_input_demo/main.rs`](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/examples/window_input_demo/main.rs) for the primary windowed runtime demo.
-See [`engine/examples/scene_manager_ui/main.rs`](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/examples/scene_manager_ui/main.rs) and [`engine/examples/sdf_renderer/main.rs`](/Users/joshua/Projekte/multiplayer_workspace/grotto-quest/engine/examples/sdf_renderer/main.rs) for the fuller feature path.
+## Plugin Entry Points
 
-### Current Networking and Replay Integration
+- Plugin trait: `src/plugin.rs`
+- Plugin index and docs map: `src/plugins/README.md`
+- Default stack: `engine::plugins::default_plugins()`
+  - `TimePlugin`
+  - `FixedStepPlugin`
+  - `ReplayPlugin`
+  - `InputFinalizePlugin`
 
-The engine already integrates:
+## Public API Ergonomics
 
-- `ReplayPlugin` for authoritative scene replay/checkpoint recording and seek/validation
-- `NetworkClientPlugin` / `NetworkServerPlugin` for session state and runtime task bridging
-- game-owned replication pipelines (for example `cavern_hunt::net_sync`) as the canonical production path
-- `LegacyReplicationPlugin` / `LegacyPredictionPlugin` only for compatibility tests and non-production harnesses
+- Most users should start with:
+  - `engine::App`
+  - `engine::Plugin`
+  - `engine::prelude::*`
+- Net-specific integration:
+  - `engine::net::prelude::*`
+- Schedule and system ordering helpers are re-exported through the prelude/runtime surface.
 
-The current production-leaning profile is `SimulationProfile::DedicatedAuthority`.
+## Example Map
 
-Implemented on that path now:
+See `examples/README.md` for the full map.
 
-- live QUIC runtime task bridging
-- reconnect support
-- authoritative scene snapshot replication
-- real scene delta snapshots
-- client-side authoritative apply plus first-pass prediction correction
-- admitted session state publication through `SessionRuntimeState`
+- `runtime_minimal`: smallest headless runtime flow.
+- `window_input_demo`: windowed input loop + default plugins.
+- `scene_manager_ui`: template-driven scene/UI flow.
+- `sdf_renderer`: feature-owned render graph and executors.
+
+## Test Map
+
+See `tests/README.md` for integration suite coverage.
 
 ## Ownership Boundaries
 
-- Owns engine runtime loop, plugin wiring, replay/runtime integration, and integrated feature implementations.
-- Consumes ECS/scheduler crates for data model and execution ordering.
-- Does not own ECS core internals or scheduler core internals.
-
-## Extension Points
-
-- Add plugins under `engine/src/plugins/*`.
-- Register plugins through app/runtime composition paths.
-- Extend plugin-local `README.md` and `requests.md` for feature evolution.
+- Owns runtime loop, plugin composition, replay/runtime integration, and engine-level feature wiring.
+- Consumes `ecs`, `scheduler`, `engine_replay`, `engine_net`, and `engine_sim`.
+- Does not own internals of foundation or net crates.

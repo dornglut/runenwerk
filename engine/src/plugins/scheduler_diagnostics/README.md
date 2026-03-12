@@ -8,8 +8,6 @@ Emits periodic scheduler/runtime diagnostics logs.
 
 - Plugin: `SchedulerDiagnosticsPlugin`
 - Typed schedule: `RenderSubmit`
-- Legacy scheduler node: `scheduler_diagnostics`
-- Runs after: render submit on both runtimes
 
 By default logs every `120` frames.
 

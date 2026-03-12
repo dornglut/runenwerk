@@ -140,7 +140,7 @@ pub fn consume_scene_template_events_system(mut world: WorldMut) -> anyhow::Resu
 
 ## Authoring Pipeline Direction
 
-This example should follow the shared engine authoring pipeline described in [docs/authoring-layer.md](/Users/joshua/Projekte/grotto-quest/docs/authoring-layer.md).
+This example should follow the shared engine authoring pipeline described in [docs/authoring-layer.md](../../../docs/authoring-layer.md).
 
 Target split:
 

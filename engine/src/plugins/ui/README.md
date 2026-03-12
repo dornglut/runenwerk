@@ -2,45 +2,36 @@
 
 ## Purpose
 
-`ui` owns overlay UI state, UI batch extraction, and text rendering domain types.
+`ui` owns overlay UI domain types, template/runtime helpers, and text rendering support types.
 
-Render core should treat UI as a feature plugin consumer, not as hardcoded render behavior.
+Render core should treat UI as feature data, not hardcoded render behavior.
 
 ## Usage
 
-- Plugins:
-  - `UiInputPlugin`
-  - `UiRenderPlugin`
-- Core UI pipeline nodes:
-  - `overlay_ui_hot_reload`
-  - `overlay_ui_input`
-  - `overlay_ui_editor`
-  - `overlay_ui_layout`
-  - `overlay_ui_build_batches`
-  - `overlay_ui_render_extract`
+- Primary surface: `engine::plugins::ui::domain::*`
+- Current integration path:
+  - `ScenePlugin` owns overlay UI runtime/update flow.
+  - `RenderPlugin` consumes published UI draw data during render submission.
 
 ## Ownership Boundaries
 
-- Owns UI interaction/input-to-UI mapping, layout, batch extraction, and text domain logic.
-- Owns UI-specific render shader selection configuration (`UiRenderShaderConfig`).
-- Does not own render graph orchestration/execution or global shader registry behavior.
+- Owns UI domain types, template I/O, text atlas/renderer support, and draw list data structures.
+- Owns UI-specific shader selection configuration (`UiRenderShaderConfig`) as data.
+- Does not own render graph orchestration/execution or scene lifecycle scheduling.
 
 ## Extension Points
 
-- Extend UI batch command generation and extraction systems.
-- Extend UI editor/template integration behavior.
-- Override `UiRenderShaderConfig` to bind alternative UI shader assets.
+- Extend template/runtime behavior under `engine/src/plugins/ui/domain/template.rs`.
+- Extend text rendering support under `engine/src/plugins/ui/domain/text.rs`.
+- Extend UI domain data consumed by scene/render systems.
 
 ## Additional Details
 
 ## ECS Resources
 
 - `UiRenderShaderConfig`
-  - Resource stored in `overlay_runtime.world`.
   - Controls which shader asset id is used for UI rectangle pass rendering.
   - Default id: `ui_rect`.
-
-`UiRenderPlugin::setup` ensures this resource exists so feature/plugin code can override it before frame submit.
 
 ## Shader Hot Reload Behavior
 

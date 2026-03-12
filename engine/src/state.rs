@@ -1,6 +1,6 @@
 use crate::plugins::render::domain::GfxFrameTimings;
-use engine_net::AuthoritativeJoinState;
 use ecs::Component;
+use engine_net::AuthoritativeJoinState;
 use std::collections::HashMap;
 use std::path::Path;
 

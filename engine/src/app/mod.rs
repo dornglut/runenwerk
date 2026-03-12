@@ -1,3 +1,8 @@
+//! App domain.
+//!
+//! `App` is the runtime composition root used by engine users.
+//! It owns plugin registration, resources, and run-mode selection.
+
 mod domain;
 mod platform;
 mod runtime;

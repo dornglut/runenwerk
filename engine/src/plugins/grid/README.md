@@ -7,11 +7,10 @@ Prepares world/grid render parameters from gameplay configuration.
 ## Usage
 
 - Plugin: `GridPlugin`
-- Scheduler node: `grid_prepare`
-- Runs after: `world_scene_update`
-- Must complete before: `frame_render_prepare`
+- Typed schedule: `Update`
+- Typed set: `CoreSet::Scene`
 
-The plugin writes grid/chunk parameters into ECS render resources each frame.
+The plugin writes grid/chunk parameters from gameplay state into `GridRuntimeConfig` each frame.
 
 ## Ownership Boundaries
 

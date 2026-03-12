@@ -1,3 +1,7 @@
+//! Engine plugin registry and default plugin stack helpers.
+//!
+//! See `engine/src/plugins/README.md` for plugin docs/navigation.
+
 pub mod debug_metrics;
 pub mod fixed_step;
 pub mod grid;

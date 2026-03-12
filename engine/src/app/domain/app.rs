@@ -81,7 +81,8 @@ impl App {
         L: ScheduleLabel,
         S: IntoSystemConfigs<Marker>,
     {
-        self.scheduler.add_systems::<L, S, Marker>(&mut self.world, systems);
+        self.scheduler
+            .add_systems::<L, S, Marker>(&mut self.world, systems);
         self
     }
 

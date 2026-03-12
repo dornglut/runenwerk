@@ -9,7 +9,7 @@ Provides action-mapped input state and frame pulse handling, decoupling gameplay
 - Plugin: `InputFinalizePlugin`
 - Typed schedule: `FrameEnd`
 - Typed set: `CoreSet::FrameEnd`
-- Primary state type: `InputState` in [domain.rs](/Users/joshi/Projekte/Runenwerk/engine/src/plugins/input/domain.rs)
+- Primary state type: `InputState` in `engine/src/plugins/input/domain.rs`
 
 OS input events are consumed through `InputState::handle_window_event` and `InputState::handle_device_event`.
 The runtime also feeds normalized platform events through the same `InputState` methods.

@@ -1,3 +1,13 @@
+//! Public crate surface for runtime/app/plugin composition.
+//!
+//! Most downstream code should start with:
+//! - [`crate::App`]
+//! - [`crate::Plugin`]
+//! - [`crate::prelude`]
+//!
+//! Net-specific entry surface:
+//! - [`crate::net::prelude`]
+
 pub mod app;
 pub mod net;
 pub mod plugin;
