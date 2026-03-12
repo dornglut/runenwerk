@@ -237,7 +237,9 @@ fn row_metadata_stays_consistent_across_multi_component_remove_reinsert_cycles()
     let mut previous_b_added = None;
 
     for cycle in 0..3 {
-        world.insert(entity, (B(100 + cycle), C(200 + cycle))).unwrap();
+        world
+            .insert(entity, (B(100 + cycle), C(200 + cycle)))
+            .unwrap();
         let (b_added, b_changed) = world
             .__entity_component_ticks::<B>(entity)
             .expect("B ticks should exist after insert");

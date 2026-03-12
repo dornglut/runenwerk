@@ -163,7 +163,10 @@ impl<T> DenseColumn<T> {
         true
     }
 
-    pub(crate) fn swap_remove_boxed(&mut self, row: usize) -> Option<DenseColumnSwapRemoveBoxed<T>> {
+    pub(crate) fn swap_remove_boxed(
+        &mut self,
+        row: usize,
+    ) -> Option<DenseColumnSwapRemoveBoxed<T>> {
         if row >= self.values.len() || row >= self.metadata.len() {
             return None;
         }

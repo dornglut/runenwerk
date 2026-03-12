@@ -140,7 +140,10 @@ fn reused_query_state_observes_new_matching_archetypes_and_fallback_forms() {
     let fallback = world
         .query_state::<(Entity, &A), ()>()
         .without::<Disabled>();
-    let visible: Vec<_> = fallback.iter(&world).map(|(entity, a)| (entity, a.0)).collect();
+    let visible: Vec<_> = fallback
+        .iter(&world)
+        .map(|(entity, a)| (entity, a.0))
+        .collect();
     assert_eq!(visible, vec![(evolving, 9)]);
     assert!(visible.iter().all(|(entity, _)| *entity != hidden));
 }
@@ -181,7 +184,9 @@ fn single_mut_query_with_without_filter_keeps_fallback_semantics() {
     let active = world.spawn(A(5));
     let hidden = world.spawn((A(6), Disabled));
 
-    let query = world.query_state::<(Entity, &mut A), ()>().without::<Disabled>();
+    let query = world
+        .query_state::<(Entity, &mut A), ()>()
+        .without::<Disabled>();
     let seen: Vec<_> = query
         .iter(&mut world)
         .map(|(entity, value)| {
@@ -647,7 +652,10 @@ fn optional_forms_remain_correct_after_migration_churn() {
     let query_b = world.query_state::<(Entity, Option<&B>), ()>();
     let query_c = world.query_state::<(Entity, Option<&C>), ()>();
 
-    let mut baseline_a: Vec<_> = query_a.iter(&world).map(|(entity, a)| (entity, a.0)).collect();
+    let mut baseline_a: Vec<_> = query_a
+        .iter(&world)
+        .map(|(entity, a)| (entity, a.0))
+        .collect();
     baseline_a.sort_unstable_by_key(|(entity, _)| *entity);
     let mut baseline_b: Vec<_> = query_b
         .iter(&world)
@@ -660,10 +668,7 @@ fn optional_forms_remain_correct_after_migration_churn() {
         .collect();
     baseline_c.sort_unstable_by_key(|(entity, _)| *entity);
 
-    assert_eq!(
-        baseline_a,
-        vec![(first, 1), (second, 2), (third, 3),]
-    );
+    assert_eq!(baseline_a, vec![(first, 1), (second, 2), (third, 3),]);
     assert_eq!(
         baseline_b,
         vec![(first, Some(10)), (second, None), (third, None),]
@@ -679,7 +684,10 @@ fn optional_forms_remain_correct_after_migration_churn() {
     let _: C = world.remove(third).unwrap();
     world.insert(third, B(30)).unwrap();
 
-    let mut after_a: Vec<_> = query_a.iter(&world).map(|(entity, a)| (entity, a.0)).collect();
+    let mut after_a: Vec<_> = query_a
+        .iter(&world)
+        .map(|(entity, a)| (entity, a.0))
+        .collect();
     after_a.sort_unstable_by_key(|(entity, _)| *entity);
     let mut after_b: Vec<_> = query_b
         .iter(&world)
@@ -692,21 +700,14 @@ fn optional_forms_remain_correct_after_migration_churn() {
         .collect();
     after_c.sort_unstable_by_key(|(entity, _)| *entity);
 
-    assert_eq!(
-        after_a,
-        vec![(first, 1), (second, 2), (third, 3),]
-    );
+    assert_eq!(after_a, vec![(first, 1), (second, 2), (third, 3),]);
     assert_eq!(
         after_b,
         vec![(first, None), (second, Some(20)), (third, Some(30)),]
     );
     assert_eq!(
         after_c,
-        vec![
-            (first, Some(100)),
-            (second, Some(200)),
-            (third, None),
-        ]
+        vec![(first, Some(100)), (second, Some(200)), (third, None),]
     );
 }
 

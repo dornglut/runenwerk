@@ -35,11 +35,19 @@ impl World {
         self.record_component_change(entity, component_type, T::component_name(), kind);
         let tick = self.change_tick;
         let inserted = if matches!(kind, ComponentChangeKind::Added) {
-            self.archetype_registry
-                .add_component::<T>(entity, component, tick, &mut self.entity_locations)
+            self.archetype_registry.add_component::<T>(
+                entity,
+                component,
+                tick,
+                &mut self.entity_locations,
+            )
         } else {
-            self.archetype_registry
-                .update_component::<T>(entity, component, tick, &self.entity_locations)
+            self.archetype_registry.update_component::<T>(
+                entity,
+                component,
+                tick,
+                &self.entity_locations,
+            )
         };
         assert!(
             inserted,
@@ -78,11 +86,7 @@ impl World {
             .archetype_registry
             .collect_matching_entities(required_present, excluded, out);
         let count = out.len() as u64;
-        telemetry::record_query_matching(
-            start.elapsed().as_nanos() as u64,
-            count,
-            count,
-        );
+        telemetry::record_query_matching(start.elapsed().as_nanos() as u64, count, count);
     }
 
     pub(crate) fn matching_archetype_bindings_into(

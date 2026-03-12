@@ -1,8 +1,8 @@
 use ecs::prelude::*;
 use ecs::{
-    ComponentChangeKind, EventChannelConfig, EventLifetime, EventTracingPolicy, ObserverTrigger,
-    OverflowPolicy, QueryTypeAccess, ResourceChangeKind, SystemParam, EntityDespawnedEvent,
-    EntitySpawnedEvent,
+    ComponentChangeKind, EntityDespawnedEvent, EntitySpawnedEvent, EventChannelConfig,
+    EventLifetime, EventTracingPolicy, ObserverTrigger, OverflowPolicy, QueryTypeAccess,
+    ResourceChangeKind, SystemParam,
 };
 use scheduler::ScheduleLabel;
 use scheduler::label::SystemSet;
@@ -868,7 +868,10 @@ fn command_queued_spawn_is_visible_next_stage_and_not_readded_next_frame() {
         gate.0 = true;
     }
 
-    fn observe_added(mut query: Query<&Health, Added<Health>>, mut seen: ResMut<AddedHealthCounts>) {
+    fn observe_added(
+        mut query: Query<&Health, Added<Health>>,
+        mut seen: ResMut<AddedHealthCounts>,
+    ) {
         seen.0.push(query.iter().count());
     }
 

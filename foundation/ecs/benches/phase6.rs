@@ -497,4 +497,3 @@ fn phase6_benches(c: &mut Criterion) {
 
 criterion_group!(phase6, phase6_benches);
 criterion_main!(phase6);
-

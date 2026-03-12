@@ -110,11 +110,7 @@ impl World {
         if !self.contains(entity) {
             return None;
         }
-        self.mark_component_modified_by_id(
-            entity,
-            TypeId::of::<T>(),
-            T::component_name(),
-        );
+        self.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
         let value = self.archetype_component_mut_untracked::<T>(entity)?;
         Some(Mut { value })
     }
@@ -222,7 +218,8 @@ impl World {
     #[doc(hidden)]
     pub fn __entity_archetype_component_count(&self, entity: Entity) -> Option<usize> {
         let location = self.entity_locations.get(entity)?;
-        self.archetype_registry.component_count(location.archetype_id)
+        self.archetype_registry
+            .component_count(location.archetype_id)
     }
 
     #[doc(hidden)]

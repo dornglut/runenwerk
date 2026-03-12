@@ -1,7 +1,7 @@
 use ecs::prelude::*;
 use ecs::{
-    EventChannelConfig, EventLifetime, EventTracingPolicy, OverflowPolicy, QueryAccess, SystemParam,
-    SystemParamError,
+    EventChannelConfig, EventLifetime, EventTracingPolicy, OverflowPolicy, QueryAccess,
+    SystemParam, SystemParamError,
 };
 use scheduler::ScheduleLabel;
 use scheduler::access::ConflictKind;
@@ -339,7 +339,10 @@ fn flush_stage_structural_migration_is_visible_in_followup_stage() {
         step.0 = step.0.saturating_add(1);
     }
 
-    fn observe_marker_extra(mut history: ResMut<CountHistory>, mut query: Query<(&Marker, &Extra)>) {
+    fn observe_marker_extra(
+        mut history: ResMut<CountHistory>,
+        mut query: Query<(&Marker, &Extra)>,
+    ) {
         history.0.push(query.iter().count());
     }
 
@@ -428,7 +431,9 @@ fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
     ) {
         step.0 = step.0.saturating_add(1);
         for offset in 0..4 {
-            writer.send(DamageEvent(step.0.saturating_mul(10).saturating_add(offset)));
+            writer.send(DamageEvent(
+                step.0.saturating_mul(10).saturating_add(offset),
+            ));
         }
         if step.0 % 2 == 1 {
             commands.remove::<Toggle>(target.0);
@@ -474,13 +479,23 @@ fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
         world.finish_event_frame();
     }
 
-    assert_eq!(world.resource::<EventHistory>().unwrap().0, vec![4, 4, 4, 4]);
-    assert_eq!(world.resource::<PresenceHistory>().unwrap().0, vec![0, 1, 0, 1]);
+    assert_eq!(
+        world.resource::<EventHistory>().unwrap().0,
+        vec![4, 4, 4, 4]
+    );
+    assert_eq!(
+        world.resource::<PresenceHistory>().unwrap().0,
+        vec![0, 1, 0, 1]
+    );
 }
 
 #[test]
 fn deferred_commands_keep_secondary_indexes_correct_after_apply() {
-    fn queue_index_updates(mut step: ResMut<Step>, target: Res<TargetEntity>, mut commands: Commands) {
+    fn queue_index_updates(
+        mut step: ResMut<Step>,
+        target: Res<TargetEntity>,
+        mut commands: Commands,
+    ) {
         match step.0 {
             0 => commands.insert(target.0, IndexedName("renamed".to_string())),
             1 => commands.remove::<IndexedName>(target.0),

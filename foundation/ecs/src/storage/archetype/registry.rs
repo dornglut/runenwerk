@@ -221,7 +221,10 @@ impl ArchetypeRegistry {
         if !archetype.key.contains(type_id) {
             return None;
         }
-        let ptr = archetype.columns.get_mut(&type_id)?.get_mut_ptr(location.row)?;
+        let ptr = archetype
+            .columns
+            .get_mut(&type_id)?
+            .get_mut_ptr(location.row)?;
         Some(ptr.cast::<T>())
     }
 
@@ -395,7 +398,11 @@ impl ArchetypeRegistry {
         location
     }
 
-    pub(crate) fn remove_entity(&mut self, entity: Entity, locations: &mut EntityLocationMap) -> bool {
+    pub(crate) fn remove_entity(
+        &mut self,
+        entity: Entity,
+        locations: &mut EntityLocationMap,
+    ) -> bool {
         let Some(current) = locations.get(entity) else {
             return false;
         };
@@ -574,7 +581,9 @@ mod tests {
         assert_eq!(second_location.row, 1);
 
         registry.set_entity_components(first, &[t1, t2], &mut locations);
-        let moved_second = locations.get(second).expect("swapped entity should remain mapped");
+        let moved_second = locations
+            .get(second)
+            .expect("swapped entity should remain mapped");
         assert_eq!(moved_second.row, 0);
     }
 

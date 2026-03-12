@@ -113,9 +113,7 @@ impl<T: Component> QueryData for &mut T {
         rows: &mut Vec<QueryArchetypeRow>,
         cache: &mut QueryFastCache,
     ) -> bool {
-        if !required_types_match(required_present, &[TypeId::of::<T>()])
-            || !excluded.is_empty()
-        {
+        if !required_types_match(required_present, &[TypeId::of::<T>()]) || !excluded.is_empty() {
             return false;
         }
 
@@ -314,8 +312,7 @@ impl<A: Component, B: Component> QueryData for (&mut A, &B) {
 
         let world_mut = unsafe { &mut *world };
         let b = world_mut.archetype_component::<B>(entity)? as *const B;
-        let a = world_mut
-            .archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
 
         // Safety: mutable/read query access requires distinct component types.
         Some(unsafe { (&mut *a, &*b) })
@@ -362,8 +359,7 @@ impl<A: Component, B: Component> QueryData for (&A, &mut B) {
 
         let world_mut = unsafe { &mut *world };
         let a = world_mut.archetype_component::<A>(entity)? as *const A;
-        let b = world_mut
-            .archetype_component_mut_untracked::<B>(entity)? as *mut B;
+        let b = world_mut.archetype_component_mut_untracked::<B>(entity)? as *mut B;
 
         // Safety: read/mutable query access requires distinct component types.
         Some(unsafe { (&*a, &mut *b) })
@@ -458,10 +454,8 @@ impl<A: Component, B: Component> QueryData for (&mut A, &mut B) {
         );
 
         let world_mut = unsafe { &mut *world };
-        let a = world_mut
-            .archetype_component_mut_untracked::<A>(entity)? as *mut A;
-        let b = world_mut
-            .archetype_component_mut_untracked::<B>(entity)? as *mut B;
+        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let b = world_mut.archetype_component_mut_untracked::<B>(entity)? as *mut B;
 
         // Safety: double mutable query access requires distinct component types.
         Some(unsafe { (&mut *a, &mut *b) })
@@ -561,8 +555,7 @@ impl<A: Component, B: Component> QueryData for (&mut A, Option<&B>) {
         let b = world_mut
             .archetype_component::<B>(entity)
             .map(|value| value as *const B);
-        let a = world_mut
-            .archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
 
         // Safety: mutable/optional query access requires distinct component types.
         Some(unsafe { (&mut *a, b.map(|ptr| &*ptr)) })
@@ -674,8 +667,7 @@ impl<A: Component, B: Component> QueryData for (&mut A, Option<&mut B>) {
         let b = world_mut
             .archetype_component_mut_untracked::<B>(entity)
             .map(|value| value as *mut B);
-        let a = world_mut
-            .archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
 
         // Safety: mutable/optional mutable query access requires distinct component types.
         Some(unsafe { (&mut *a, b.map(|ptr| &mut *ptr)) })
@@ -768,8 +760,7 @@ impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &B, &C) {
         let world_mut = unsafe { &mut *world };
         let b = world_mut.archetype_component::<B>(entity)? as *const B;
         let c = world_mut.archetype_component::<C>(entity)? as *const C;
-        let a = world_mut
-            .archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
 
         // Safety: mutable/read tuple query access requires distinct component types.
         Some(unsafe { (&mut *a, &*b, &*c) })
@@ -820,10 +811,8 @@ impl<A: Component, B: Component, C: Component> QueryData for (&mut A, &mut B, &C
 
         let world_mut = unsafe { &mut *world };
         let c = world_mut.archetype_component::<C>(entity)? as *const C;
-        let a = world_mut
-            .archetype_component_mut_untracked::<A>(entity)? as *mut A;
-        let b = world_mut
-            .archetype_component_mut_untracked::<B>(entity)? as *mut B;
+        let a = world_mut.archetype_component_mut_untracked::<A>(entity)? as *mut A;
+        let b = world_mut.archetype_component_mut_untracked::<B>(entity)? as *mut B;
 
         // Safety: mutable/read tuple query access requires distinct component types.
         Some(unsafe { (&mut *a, &mut *b, &*c) })

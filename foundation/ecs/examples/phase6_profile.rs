@@ -160,7 +160,10 @@ fn print_workload_report(
 
     println!(
         "query: matching_calls={} iter_calls={} get_calls={} single_calls={}",
-        delta.query_matching_calls, delta.query_iter_calls, delta.query_get_calls, delta.query_single_calls
+        delta.query_matching_calls,
+        delta.query_iter_calls,
+        delta.query_get_calls,
+        delta.query_single_calls
     );
     println!(
         "runtime: plan_calls={} stage_calls={} flush_calls={} flush_queues={}",
@@ -215,7 +218,10 @@ fn w2_scan_changed(
     (*stats).0 = (*stats).0.wrapping_add(seen);
 }
 
-fn w2_scan_added(mut query: Query<(Entity, &Health), Added<Health>>, mut stats: ResMut<MixedStats>) {
+fn w2_scan_added(
+    mut query: Query<(Entity, &Health), Added<Health>>,
+    mut stats: ResMut<MixedStats>,
+) {
     let mut seen = 0_u64;
     for _ in query.iter() {
         seen = seen.saturating_add(1);
@@ -532,7 +538,9 @@ fn main() {
         let setup_elapsed = setup_start.elapsed();
 
         // Warmup iteration (untimed).
-        runtime.run_schedule::<W2>(&mut world).expect("w2 warmup run");
+        runtime
+            .run_schedule::<W2>(&mut world)
+            .expect("w2 warmup run");
 
         let before = telemetry::snapshot();
         let run_start = Instant::now();
@@ -574,7 +582,9 @@ fn main() {
         let setup_elapsed = setup_start.elapsed();
 
         // Warmup iteration (untimed).
-        runtime.run_schedule::<W3>(&mut world).expect("w3 warmup run");
+        runtime
+            .run_schedule::<W3>(&mut world)
+            .expect("w3 warmup run");
 
         let before = telemetry::snapshot();
         let run_start = Instant::now();
@@ -616,7 +626,9 @@ fn main() {
         let setup_elapsed = setup_start.elapsed();
 
         // Warmup iteration (untimed).
-        runtime.run_schedule::<W4>(&mut world).expect("w4 warmup run");
+        runtime
+            .run_schedule::<W4>(&mut world)
+            .expect("w4 warmup run");
         // Clearing the event channel between runs is intentional here: this workload models
         // per-frame transient event consumption where backlog carryover would skew read/write cost.
         world.clear_events::<BenchEvent>();
@@ -672,7 +684,9 @@ fn main() {
         let setup_elapsed = setup_start.elapsed();
 
         // Warmup iteration (untimed).
-        runtime.run_schedule::<W5>(&mut world).expect("w5 warmup run");
+        runtime
+            .run_schedule::<W5>(&mut world)
+            .expect("w5 warmup run");
 
         let before = telemetry::snapshot();
         let run_start = Instant::now();
