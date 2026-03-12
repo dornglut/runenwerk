@@ -223,11 +223,3 @@ impl RenderPassExecutor for SdfComposeExecutor {
         Ok(())
     }
 }
-
-pub(crate) struct SdfUiCompositeExecutor;
-
-impl RenderPassExecutor for SdfUiCompositeExecutor {
-    fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()> {
-        ctx.run_ui()
-    }
-}

@@ -1,15 +1,12 @@
-use super::frame_graph::{FrameGraph, PassHandle, PassKind};
-use super::pipeline_key::PipelineKey;
-use super::render_executor_registry::{
-    BuiltinRenderPassExecutor, RenderFrameDataRegistry, RenderPassEncodeContext,
+use crate::plugins::render::frame_graph::{
+    BuiltinRenderPassExecutor, FrameGraph, PassHandle, PassKind, RegisteredPassKind,
+    RegisteredPipelineRef, RenderGraphRegistryResource, RenderPassEncodeContext,
     RenderPassExecutorRegistryResource, RenderPassPrepareContext,
 };
-use super::render_graph_registry::{
-    RegisteredPassKind, RegisteredPipelineRef, RenderGraphRegistryResource,
-};
-use super::shader_manager::{ShaderHandle, ShaderRegistryResource};
-use crate::plugins::ui::domain::{FileFontProvider, TextRenderer};
-use crate::plugins::ui::domain::{UiDrawCmd, UiDrawList};
+use crate::plugins::render::pipelines::PipelineKey;
+use crate::plugins::render::resources::RenderFrameDataRegistry;
+use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
+use crate::plugins::ui::domain::{FileFontProvider, TextRenderer, UiDrawCmd, UiDrawList};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use std::collections::{BTreeMap, BTreeSet};
@@ -341,9 +338,14 @@ pub struct Renderer {
     last_execution_order_error_hash: Option<u64>,
 }
 
-mod graph_and_logging;
+mod extract;
+mod graph_execution;
+mod prepare;
 mod render_flow;
-mod setup_and_ui;
+mod setup;
+
+pub mod frame_bindings;
+pub mod submit;
 
 // Owner: Engine Renderer - Tests
 #[cfg(test)]

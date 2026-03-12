@@ -47,6 +47,10 @@ name = "sdf_renderer"
 path = "examples/sdf_renderer/main.rs"
 
 [[example]]
+name = "game_of_life_sdf"
+path = "examples/game_of_life_sdf/main.rs"
+
+[[example]]
 name = "runtime_minimal"
 path = "examples/runtime_minimal/main.rs"
 

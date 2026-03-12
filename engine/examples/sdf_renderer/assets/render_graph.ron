@@ -32,10 +32,6 @@
       id: "sdf.compose",
       builtin: "builtin_compose",
     ),
-    (
-      id: "ui_composite",
-      builtin: "builtin_ui_composite",
-    ),
   ],
   passes: [
     (
@@ -60,7 +56,7 @@
       id: "ui_composite",
       kind: render,
       pipeline: "ui.compose",
-      executor: "ui_composite",
+      executor: "builtin_ui_composite",
       reads: ["ui.draw_list"],
       writes: ["surface.color"],
       depends_on: ["sdf.compose"],

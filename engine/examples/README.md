@@ -12,6 +12,8 @@ Use this map to pick an entry point quickly.
   - `scene_manager_ui`
 - Explore feature-owned render graph/executor wiring:
   - `sdf_renderer`
+- Explore GPU cellular automata with SDF compose:
+  - `game_of_life_sdf`
 
 ## Examples
 
@@ -33,6 +35,11 @@ Use this map to pick an entry point quickly.
   - Focus: custom render feature graph, custom pass executors, config hot reload.
   - Assets/config: `engine/examples/sdf_renderer/assets/`
   - Run: `cargo run -p engine --example sdf_renderer`
+- `game_of_life_sdf`
+  - Entry: `engine/examples/game_of_life_sdf/main.rs`
+  - Focus: feature-owned compute + compose executors for Conway's Game of Life SDF rendering.
+  - Shader: `assets/shaders/game_of_life_sdf.wgsl`
+  - Run: `cargo run -p engine --example game_of_life_sdf`
 
 ## Related
 

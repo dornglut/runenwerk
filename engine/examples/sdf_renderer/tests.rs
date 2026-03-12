@@ -50,18 +50,18 @@ mod tests {
     }
 
     #[test]
-    fn default_render_graph_config_registers_custom_executors() {
+    fn default_render_graph_config_registers_feature_executors() {
         let config = SdfRenderGraphConfig::default();
         let mut registry = RenderPassExecutorRegistryResource::default();
         let count = config
-            .register_custom_executors(&mut registry)
+            .register_executor_bindings(&mut registry)
             .expect("default executor bindings should apply");
-        assert_eq!(count, 3);
+        assert_eq!(count, 2);
         assert!(registry.resolve_custom("sdf.compute").is_some());
         assert!(registry.resolve_custom("sdf.compose").is_some());
-        assert!(registry.resolve_custom("ui_composite").is_some());
         assert_eq!(registry.resolve_builtin("sdf.compute"), None);
         assert_eq!(registry.resolve_builtin("sdf.compose"), None);
+        assert_eq!(registry.resolve_builtin("builtin_ui_composite"), None);
     }
 
     #[test]

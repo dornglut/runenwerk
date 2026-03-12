@@ -109,7 +109,7 @@ impl SdfRenderGraphConfig {
         builder.build()
     }
 
-    pub(crate) fn register_custom_executors(
+    pub(crate) fn register_executor_bindings(
         &self,
         registry: &mut RenderPassExecutorRegistryResource,
     ) -> Result<usize> {
@@ -128,16 +128,16 @@ impl SdfRenderGraphConfig {
                     binding.builtin
                 ));
             }
-            let executor: Arc<dyn RenderPassExecutor> = match parse_builtin_executor(builtin_label)
-            {
+            match parse_builtin_executor(builtin_label) {
                 Some(BuiltinRenderPassExecutor::Compute) => {
-                    Arc::new(SdfComputeExecutor::new(shared.clone()))
+                    registry.register_custom(id, Arc::new(SdfComputeExecutor::new(shared.clone())));
                 }
                 Some(BuiltinRenderPassExecutor::Compose) => {
-                    Arc::new(SdfComposeExecutor::new(shared.clone()))
+                    registry.register_custom(id, Arc::new(SdfComposeExecutor::new(shared.clone())));
                 }
-                Some(BuiltinRenderPassExecutor::UiComposite) => Arc::new(SdfUiCompositeExecutor),
-                Some(other) => Arc::new(BuiltinDelegatingExecutor { builtin: other }),
+                Some(other) => {
+                    registry.register_builtin(id, other);
+                }
                 None => {
                     return Err(anyhow!(
                         "executor binding '{}' references unsupported builtin '{}'",
@@ -145,8 +145,7 @@ impl SdfRenderGraphConfig {
                         builtin_label
                     ));
                 }
-            };
-            registry.register_custom(id, executor);
+            }
             count = count.saturating_add(1);
         }
         Ok(count)
@@ -187,10 +186,6 @@ impl Default for SdfRenderGraphConfig {
                     id: "sdf.compose".to_string(),
                     builtin: "builtin_compose".to_string(),
                 },
-                SdfExecutorBindingConfig {
-                    id: "ui_composite".to_string(),
-                    builtin: "builtin_ui_composite".to_string(),
-                },
             ],
             passes: vec![
                 SdfRenderPassConfig {
@@ -215,7 +210,7 @@ impl Default for SdfRenderGraphConfig {
                     id: "ui_composite".to_string(),
                     kind: SdfPassKindConfig::Render,
                     pipeline: "ui.compose".to_string(),
-                    executor: "ui_composite".to_string(),
+                    executor: "builtin_ui_composite".to_string(),
                     reads: vec!["ui.draw_list".to_string()],
                     writes: vec!["surface.color".to_string()],
                     depends_on: vec!["sdf.compose".to_string()],
@@ -238,17 +233,6 @@ impl Default for SdfExecutorBindingConfig {
             id: String::new(),
             builtin: String::new(),
         }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-struct BuiltinDelegatingExecutor {
-    builtin: BuiltinRenderPassExecutor,
-}
-
-impl RenderPassExecutor for BuiltinDelegatingExecutor {
-    fn encode(&self, ctx: &mut RenderPassEncodeContext<'_>) -> Result<()> {
-        ctx.run_builtin(self.builtin)
     }
 }
 

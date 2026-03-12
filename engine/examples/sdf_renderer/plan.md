@@ -30,8 +30,8 @@ Implemented now:
    - `sdf.compute`
    - `sdf.compose`
    - `ui_composite`
-5. Runtime executor registry now uses `executor_bindings` to register custom executors.
-6. `sdf.compute`, `sdf.compose`, and `ui_composite` run through custom executor paths in the example.
+5. Runtime executor registry now uses `executor_bindings` to register feature executor bindings.
+6. `sdf.compute` and `sdf.compose` run through custom executor paths; `ui_composite` uses `builtin_ui_composite`.
 
 Still pending for this plan:
 
@@ -61,7 +61,7 @@ Current bridge usage in code:
 let cfg = load_config_with_default::<SdfRenderGraphConfig>("render_graph.ron");
 let spec = cfg.to_spec()?;
 data.render_graph_registry.register_feature_graph(spec);
-cfg.register_custom_executors(&mut data.render_executor_registry)?;
+cfg.register_executor_bindings(&mut data.render_executor_registry)?;
 ```
 
 Intended usage later (no built-in delegation):
@@ -73,8 +73,10 @@ data.render_executor_registry
     .register_custom("sdf.compute", Arc::new(SdfComputeExecutor::new()));
 data.render_executor_registry
     .register_custom("sdf.compose", Arc::new(SdfComposeExecutor::new()));
-data.render_executor_registry
-    .register_custom("ui_composite", Arc::new(SdfUiCompositeExecutor));
+data.render_executor_registry.register_builtin(
+    "builtin_ui_composite",
+    BuiltinRenderPassExecutor::UiComposite,
+);
 ```
 
 ## Proposed Config Schemas
@@ -158,7 +160,6 @@ data.render_executor_registry
   executor_bindings: [
     (id: "sdf.compute", builtin: "builtin_compute"),
     (id: "sdf.compose", builtin: "builtin_compose"),
-    (id: "ui_composite", builtin: "builtin_ui_composite"),
   ],
   passes: [
     (
@@ -183,7 +184,7 @@ data.render_executor_registry
       id: "ui_composite",
       kind: render,
       pipeline: "ui.compose",
-      executor: "ui_composite",
+      executor: "builtin_ui_composite",
       reads: ["ui.draw_list"],
       writes: ["surface.color"],
       depends_on: ["sdf.compose"],

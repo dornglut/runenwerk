@@ -1,16 +1,13 @@
-mod frame_graph;
-mod gfx;
-mod pipeline_key;
-mod render_executor_registry;
-mod render_frame_bindings;
-mod render_graph_registry;
-mod renderer;
-mod shader_manager;
-mod wgpu_ctx;
-
+pub mod backend;
+pub mod debug;
 pub mod domain;
+pub mod frame_graph;
+pub mod pipelines;
+pub mod renderer;
+pub mod resources;
+pub mod sdf;
+pub mod shader;
 
 mod plugin;
-mod submit;
 
 pub use plugin::RenderPlugin;

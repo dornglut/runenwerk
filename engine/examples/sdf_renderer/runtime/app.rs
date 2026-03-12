@@ -74,19 +74,20 @@ fn sdf_renderer_example_setup_system(
     };
     render_graph_registry.register_feature_graph(spec);
 
-    let bound_executors =
-        match active_render_graph_config.register_custom_executors(&mut render_executor_registry) {
-            Ok(count) => count,
-            Err(err) => {
-                tracing::error!(
-                    config = RENDER_GRAPH_CONFIG_FILE,
-                    ?err,
-                    "invalid sdf executor bindings; using built-in defaults"
-                );
-                let fallback = SdfRenderGraphConfig::default();
-                fallback.register_custom_executors(&mut render_executor_registry)?
-            }
-        };
+    let bound_executors = match active_render_graph_config
+        .register_executor_bindings(&mut render_executor_registry)
+    {
+        Ok(count) => count,
+        Err(err) => {
+            tracing::error!(
+                config = RENDER_GRAPH_CONFIG_FILE,
+                ?err,
+                "invalid sdf executor bindings; using built-in defaults"
+            );
+            let fallback = SdfRenderGraphConfig::default();
+            fallback.register_executor_bindings(&mut render_executor_registry)?
+        }
+    };
 
     tracing::info!(
         config_path = find_config_path(PARAMS_CONFIG_FILE).display().to_string(),

@@ -25,7 +25,7 @@ Current graph shape (registered by example):
    - writes: `surface.color`
    - depends on: `sdf.compute`
 3. `ui_composite` (render)
-   - executor: `ui_composite`
+   - executor: `builtin_ui_composite`
    - reads: `ui.draw_list`
    - writes: `surface.color`
    - depends on: `sdf.compose`
@@ -33,11 +33,11 @@ Current graph shape (registered by example):
 Compatibility note:
 
 - Executor ids are feature-owned in `render_graph.ron`.
-- `executor_bindings` are used to register `register_custom` executors.
+- `executor_bindings` are used to register example-owned executor overrides.
 - `sdf.compute` and `sdf.compose` now use feature-owned executor implementations in this example.
-- `ui_composite` also runs through a custom executor path in the example.
+- `ui_composite` uses the render plugin builtin executor id `builtin_ui_composite`.
 - Use `builtin_compute`, `builtin_compose`, and `builtin_ui_composite` labels in config.
-- This keeps SDF pass ownership in the example while preserving parity.
+- This keeps SDF pass ownership in the example while avoiding duplicate UI executor work.
 
 ## Target State (Planned)
 

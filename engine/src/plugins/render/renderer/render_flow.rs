@@ -1,66 +1,7 @@
 use super::*;
 
 impl Renderer {
-    // Owner: Engine Renderer - Render Packet Prepare and Execute
-    pub(super) fn build_frame_graph(
-        &self,
-        render_graph_registry: &RenderGraphRegistryResource,
-    ) -> FrameGraphBuildOutput {
-        let descriptors = self.resolved_registered_descriptors(render_graph_registry);
-        let mut output = self.build_frame_graph_from_descriptors(&descriptors);
-        if output.handles.is_empty() {
-            output.diagnostics.no_registered_passes = true;
-        }
-        output
-    }
-
-    pub(crate) fn prepare_packet(
-        &mut self,
-        device: &Device,
-        queue: &Queue,
-        _frame_data: &RenderFrameDataRegistry<'_>,
-        draw_list: &UiDrawList,
-        shader_registry: &mut ShaderRegistryResource,
-        ui_rect_shader_handle: Option<ShaderHandle>,
-        surface_format: TextureFormat,
-        surface_width: f32,
-        surface_height: f32,
-    ) -> RendererPreparedPacket {
-        let mut prepare_timings = RendererFrameTimings::default();
-        let ui_rect_shader = ui_rect_shader_handle
-            .map(|handle| shader_registry.source_or_handle(handle, DEFAULT_UI_RECT_SHADER))
-            .unwrap_or(DEFAULT_UI_RECT_SHADER)
-            .to_string();
-        let ui_rect_revision = ui_rect_shader_handle
-            .map(|handle| shader_registry.revision_for_handle(handle))
-            .unwrap_or(0);
-
-        self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
-        self.ensure_text_renderer(device, queue, surface_format);
-        let surface_size = (
-            surface_width.max(1.0).round() as u32,
-            surface_height.max(1.0).round() as u32,
-        );
-        let world_scene_label = "unbound_world_scene".to_string();
-        let overlay_scene_label = "unbound_overlay_scene".to_string();
-        let prepare_ui_start = Instant::now();
-        let prepared_ui = {
-            let _span = tracing::info_span!("renderer.prepare_ui_draws").entered();
-            self.prepare_ui_draws(device, queue, draw_list, surface_width, surface_height)
-        };
-        prepare_timings.prepare_ui_ms = prepare_ui_start.elapsed().as_secs_f32() * 1000.0;
-        prepare_timings.prepare_mesh_ms = 0.0;
-        prepare_timings.mesh_hot_path = MeshPrepareHotPath::default();
-
-        RendererPreparedPacket {
-            surface_format,
-            surface_size,
-            world_scene_label,
-            overlay_scene_label,
-            prepared_ui,
-            prepare_timings,
-        }
-    }
+    // Owner: Engine Renderer - Render Packet Execute and Submit
 
     pub(crate) fn render_packet(
         &mut self,
