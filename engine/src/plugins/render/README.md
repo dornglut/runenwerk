@@ -25,3 +25,11 @@ Render plugin entry surface for the active engine runtime path.
 
 - This file exists to keep plugin docs shape consistent with other plugins.
 - Longer design notes live under `engine/src/plugins/render/docs/`.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/render/usage-guide.md](../../../docs/reference/plugins/render/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/render/advanced-guide.md](../../../docs/reference/plugins/render/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/render/architecture.md](../../../docs/reference/plugins/render/architecture.md)
+
+

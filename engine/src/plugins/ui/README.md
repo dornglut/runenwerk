@@ -40,3 +40,11 @@ Render core should treat UI as feature data, not hardcoded render behavior.
 - UI plugin only declares which asset id it wants via `UiRenderShaderConfig`; it does not hardcode file-path registration in render core.
 
 This keeps UI shader selection data-driven and ECS-owned while preserving global shader hot reload behavior.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/ui/usage-guide.md](../../../docs/reference/plugins/ui/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/ui/advanced-guide.md](../../../docs/reference/plugins/ui/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/ui/architecture.md](../../../docs/reference/plugins/ui/architecture.md)
+
+

@@ -22,3 +22,11 @@ The plugin appends UI draw commands to the overlay UI draw list each frame when 
 
 - Add additional diagnostic lines/sections in `debug_metrics_overlay_system`.
 - Rebind the toggle action through input binding changes.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/debug-metrics/usage-guide.md](../../../docs/reference/plugins/debug-metrics/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/debug-metrics/advanced-guide.md](../../../docs/reference/plugins/debug-metrics/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/debug-metrics/architecture.md](../../../docs/reference/plugins/debug-metrics/architecture.md)
+
+

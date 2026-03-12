@@ -23,3 +23,11 @@ The runtime diagnostics currently log `Time` and `WindowState`. Scene-specific d
 
 - Add additional structured fields to diagnostics logs.
 - Make logging interval configurable via resource/config.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/scheduler-diagnostics/usage-guide.md](../../../docs/reference/plugins/scheduler-diagnostics/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/scheduler-diagnostics/advanced-guide.md](../../../docs/reference/plugins/scheduler-diagnostics/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/scheduler-diagnostics/architecture.md](../../../docs/reference/plugins/scheduler-diagnostics/architecture.md)
+
+

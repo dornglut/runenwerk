@@ -37,5 +37,7 @@ Use this map to pick an entry point quickly.
 ## Related
 
 - Crate navigation: `engine/README.md`
+- Crate docs hub: `engine/docs/index.md`
+- Usage guide: `engine/docs/reference/usage-guide.md`
 - Plugin map: `engine/src/plugins/README.md`
 - Integration tests: `engine/tests/README.md`

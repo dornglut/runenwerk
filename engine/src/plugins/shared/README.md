@@ -19,3 +19,11 @@ Current exported module:
 
 - Add helper modules that are consumed by multiple plugins.
 - Keep utility APIs stable and data-oriented for reuse.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/shared/usage-guide.md](../../../docs/reference/plugins/shared/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/shared/advanced-guide.md](../../../docs/reference/plugins/shared/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/shared/architecture.md](../../../docs/reference/plugins/shared/architecture.md)
+
+

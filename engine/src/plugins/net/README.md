@@ -59,3 +59,11 @@ Server outbox delivery is explicit:
 - [NET_PLUGIN.md](NET_PLUGIN.md)
 - [NETWORKING_USAGE_GUIDE.md](NETWORKING_USAGE_GUIDE.md)
 - [engine_net REPLICATION_PIPELINE](../../../../net/engine_net/REPLICATION_PIPELINE.md)
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/net/usage-guide.md](../../../docs/reference/plugins/net/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/net/advanced-guide.md](../../../docs/reference/plugins/net/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/net/architecture.md](../../../docs/reference/plugins/net/architecture.md)
+
+

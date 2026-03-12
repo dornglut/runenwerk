@@ -26,3 +26,9 @@ Integration coverage is organized by behavior area.
   - `cargo test -p engine --tests`
 - Guardrail test only:
   - `cargo test -p engine --test runtime_surface_guard`
+
+## Related
+
+- Crate docs hub: `engine/docs/index.md`
+- Usage guide: `engine/docs/reference/usage-guide.md`
+- Architecture guide: `engine/docs/reference/architecture.md`

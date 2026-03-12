@@ -135,3 +135,11 @@ let applied = input.apply_binding_changes(changes);
   - `InputState::clear_frame`
 
 `clear_frame` clears per-frame pulses and keeps held actions in sync with current key state.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/input/usage-guide.md](../../../docs/reference/plugins/input/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/input/advanced-guide.md](../../../docs/reference/plugins/input/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/input/architecture.md](../../../docs/reference/plugins/input/architecture.md)
+
+

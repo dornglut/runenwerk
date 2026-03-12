@@ -42,3 +42,11 @@ It also defines the current authoritative scene replay/snapshot DTOs:
 - Extend the authoritative snapshot boundary as real gameplay state grows.
 - Add scene authoring schemas/compilers under scene-owned authoring modules.
 - Integrate richer session-driven scene/run setup from `SessionRuntimeState`.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/scene/usage-guide.md](../../../docs/reference/plugins/scene/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/scene/advanced-guide.md](../../../docs/reference/plugins/scene/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/scene/architecture.md](../../../docs/reference/plugins/scene/architecture.md)
+
+

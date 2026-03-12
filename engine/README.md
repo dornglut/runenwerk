@@ -8,12 +8,27 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
 1. Read crate API surfaces:
    - `src/lib.rs`
    - `src/prelude.rs`
-2. Run the smallest example:
+2. Open crate docs hub:
+   - `docs/index.md`
+3. Run the smallest example:
    - `cargo run -p engine --example runtime_minimal`
-3. Open the plugin index:
+4. Open the plugin index:
    - `src/plugins/README.md`
-4. Pick an example closest to your change:
+5. Pick an example closest to your change:
    - `examples/README.md`
+
+## Reference Docs
+
+- Docs hub:
+  - `docs/index.md`
+- Usage guide:
+  - `docs/reference/usage-guide.md`
+- Advanced guide:
+  - `docs/reference/advanced-guide.md`
+- Architecture guide:
+  - `docs/reference/architecture.md`
+- Plugin guides:
+  - `docs/reference/plugins/index.md`
 
 ## Domain Map
 

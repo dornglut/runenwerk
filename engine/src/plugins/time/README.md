@@ -21,3 +21,11 @@ The plugin advances `Time` once per frame on the runtime.
 
 - Add fixed-step utilities/resources tied to frame tick lifecycle.
 - Add additional timing diagnostics/state as needed.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/time/usage-guide.md](../../../docs/reference/plugins/time/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/time/advanced-guide.md](../../../docs/reference/plugins/time/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/time/architecture.md](../../../docs/reference/plugins/time/architecture.md)
+
+

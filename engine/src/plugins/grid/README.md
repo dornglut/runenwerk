@@ -22,3 +22,11 @@ The plugin writes grid/chunk parameters from gameplay state into `GridRuntimeCon
 
 - Add additional grid/world streaming parameters in `grid_prepare_system`.
 - Extend gameplay config mapping as new grid controls are introduced.
+
+## Guides
+
+- Usage: [../../../docs/reference/plugins/grid/usage-guide.md](../../../docs/reference/plugins/grid/usage-guide.md)
+- Advanced: [../../../docs/reference/plugins/grid/advanced-guide.md](../../../docs/reference/plugins/grid/advanced-guide.md)
+- Architecture: [../../../docs/reference/plugins/grid/architecture.md](../../../docs/reference/plugins/grid/architecture.md)
+
+
