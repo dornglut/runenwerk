@@ -25,6 +25,12 @@ Canonical guide map for engine plugin modules.
   - [Advanced](net/advanced-guide.md)
   - [Architecture](net/architecture.md)
 - Render
+  - [Docs Index](render/index.md)
+  - [Render Flow Usage](render/render-flow-usage-guide.md)
+  - [GPU Params](render/gpu-params-guide.md)
+  - [Flow Contributions](render/render-flow-contributions.md)
+  - [Data-Driven Fragments](render/data-driven-fragments.md)
+  - [Target Architecture](render/render-target-architecture.md)
   - [Usage](render/usage-guide.md)
   - [Advanced](render/advanced-guide.md)
   - [Architecture](render/architecture.md)

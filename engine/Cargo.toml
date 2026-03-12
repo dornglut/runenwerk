@@ -30,6 +30,7 @@ tokio = { version = "1.48.0", features = ["sync"] }
 ecs = { path = "../foundation/ecs" }
 scheduler = { path = "../foundation/scheduler" }
 grid = { path = "../foundation/grid" }
+engine_render_macros = { path = "../engine_render_macros" }
 engine_replay = { path = "../net/engine_history" }
 engine_net = { path = "../net/engine_net" }
 engine_sim = { path = "../net/engine_sim" }
@@ -37,6 +38,7 @@ crossbeam-channel = "0.5.15"
 
 [dev-dependencies]
 criterion = "0.5.1"
+trybuild = "1.0.114"
 
 [[example]]
 name = "scene_manager_ui"
@@ -58,6 +60,22 @@ path = "examples/runtime_minimal/main.rs"
 name = "window_input_demo"
 path = "examples/window_input_demo/main.rs"
 
+[[example]]
+name = "render_flow_fullscreen_minimal"
+path = "examples/render_flow_fullscreen_minimal/main.rs"
+
+[[example]]
+name = "render_flow_postprocess_compositor"
+path = "examples/render_flow_postprocess_compositor/main.rs"
+
+[[example]]
+name = "render_flow_contributions"
+path = "examples/render_flow_contributions/main.rs"
+
+[[example]]
+name = "render_flow_debug_inspect"
+path = "examples/render_flow_debug_inspect/main.rs"
+
 [[bench]]
 name = "phase35_runtime"
 harness = false
@@ -72,4 +90,8 @@ harness = false
 
 [[bench]]
 name = "phase6_runtime"
+harness = false
+
+[[bench]]
+name = "render_flow_planning"
 harness = false

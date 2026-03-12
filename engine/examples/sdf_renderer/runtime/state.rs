@@ -13,7 +13,6 @@ pub(crate) const SDF_ASSETS_DIR_FALLBACK: &str = "examples/sdf_renderer/assets";
 
 pub(crate) const PARAMS_CONFIG_FILE: &str = "sdf_params.ron";
 pub(crate) const INPUT_BINDINGS_CONFIG_FILE: &str = "input_bindings.ron";
-pub(crate) const RENDER_GRAPH_CONFIG_FILE: &str = "render_graph.ron";
 pub(crate) const SDF_COMPUTE_SHADER: &str =
     include_str!("../../../../assets/shaders/sdf_compute_3d_example.wgsl");
 pub(crate) const SDF_COMPOSE_SHADER: &str =
@@ -68,6 +67,74 @@ pub(crate) struct SdfWorldState {
     pub(crate) display_bar_color: [f32; 4],
     pub(crate) elapsed_time_seconds: f32,
     pub(crate) agents: Vec<SdfWorldAgent>,
+}
+
+impl SdfWorldState {
+    pub(crate) fn compute_params(&self) -> crate::rendering::SdfWorldParams {
+        self.compute_params_with_surface((1, 1))
+    }
+
+    pub(crate) fn compute_params_with_surface(
+        &self,
+        surface: (u32, u32),
+    ) -> crate::rendering::SdfWorldParams {
+        let render_scale = self.display_render_scale.clamp(0.25, 4.0);
+        let scaled_width = ((surface.0.max(1) as f32) * render_scale).round() as u32;
+        let scaled_height = ((surface.1.max(1) as f32) * render_scale).round() as u32;
+        let screen_size = [scaled_width.max(1) as f32, scaled_height.max(1) as f32];
+
+        crate::rendering::SdfWorldParams {
+            screen_size,
+            _pad0: [0.0; 2],
+            world_min: [self.world_bounds[0], self.world_bounds[1]],
+            _pad1: [0.0; 2],
+            world_max: [self.world_bounds[2], self.world_bounds[3]],
+            _pad2: [0.0; 2],
+            agent_count: self.agents.len().min(SDF_MAX_AGENTS) as u32,
+            model_count: 0,
+            paused: self.world_paused,
+            _pad3: 0,
+            camera_target_time: [
+                self.camera_target[0],
+                self.camera_target[1],
+                self.camera_target[2],
+                self.elapsed_time_seconds.max(0.0),
+            ],
+            camera_orbit: [
+                self.camera_yaw,
+                self.camera_pitch,
+                self.camera_distance.max(0.1),
+                self.camera_fov_y.clamp(0.1, std::f32::consts::PI - 0.1),
+            ],
+            debug_view_mode: self.debug_view_mode,
+            display_fit_mode: self.display_fit_mode,
+            display_target_aspect: self.display_target_aspect,
+            _pad4: 0,
+        }
+    }
+
+    pub(crate) fn compose_params(&self, surface: (u32, u32)) -> crate::rendering::SdfComposeParams {
+        crate::rendering::SdfComposeParams {
+            output_size: [surface.0.max(1) as f32, surface.1.max(1) as f32],
+            target_aspect: self.display_target_aspect,
+            fit_mode: self.display_fit_mode,
+            bar_color: self.display_bar_color,
+        }
+    }
+
+    pub(crate) fn agent_params(&self) -> Vec<crate::rendering::SdfWorldAgent> {
+        self.agents
+            .iter()
+            .take(SDF_MAX_AGENTS)
+            .map(|agent| crate::rendering::SdfWorldAgent {
+                pos: [agent.x, agent.y],
+                radius: agent.radius.max(0.2),
+                health: agent.health_ratio.clamp(0.0, 1.0),
+                team: agent.team,
+                _pad0: [0; 3],
+            })
+            .collect()
+    }
 }
 
 impl Default for SdfWorldState {

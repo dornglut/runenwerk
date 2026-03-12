@@ -1,18 +1,26 @@
 # Render Plugin Architecture
 
-## Ownership Boundary
+## Primary Architecture Docs
 
-- Owns: Render runtime resource and schedule wiring.
-- Does not own: Scene lifecycle ownership.
+- Target architecture:
+  - `engine/src/plugins/render/docs/target-architecture.md`
+- Implementation roadmap:
+  - `engine/src/plugins/render/docs/target-architecture-roadmap.md`
 
-## Module Layout
+## Current Public Surface
 
-- Primary module: engine/src/plugins/render/plugin.rs
-- Entry surface: RenderPlugin
-- Runtime schedule touchpoints: RenderPrepare, RenderSubmit
+- `RenderFlow`
+- `RenderFlowContribution`
+- `GpuUniform`, `GpuStorage`, `ToGpuValue`, `GpuParams`
+- ECS-first uniform projection (`ecs_resource`, `uniform_state`, `uniform_state_with_surface`)
+- pass/resource-oriented flow authoring with namespaced IDs
 
-## Runtime Coupling
+## Runtime Boundary
 
-- Depends on engine runtime schedules and resources through typed system params.
-- Should keep cross-plugin coupling data-oriented (resource/event/state boundaries).
-- Architecture changes should stay narrow and avoid broad app or plugin redesign.
+- Owns: render runtime resources, graph/flow integration, and render prepare/submit scheduling.
+- Non-ownership: app input mapping ownership and scene lifecycle ownership.
+
+## Inspection Boundary
+
+- inspection APIs live under `engine::plugins::render::inspect`
+- these tools expose graph/resource/texture/timing diagnostics without leaking low-level backend internals into normal flow authoring

@@ -23,6 +23,8 @@ Navigation hub for crate-level engine documentation.
   - integration test map
 - [`../src/plugins/README.md`](../src/plugins/README.md)
   - plugin registry map and feature entry points
+- [`benchmarks/render-flow-planning.md`](benchmarks/render-flow-planning.md)
+  - render flow planning/validation benchmark guide
 
 ## Plugin-Specific Docs
 

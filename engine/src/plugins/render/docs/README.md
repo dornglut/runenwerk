@@ -3,7 +3,6 @@
 Use `index.md` as the navigation entry for current render plugin docs.
 
 - Index: [./index.md](./index.md)
-- Architecture: [./architecture.md](target-architecture.md)
-- Frame graph: [./frame-graph.md](./frame-graph.md)
-- SDF rendering: [./sdf-rendering.md](./sdf-rendering.md)
-- Debug views: [./debug-views.md](./debug-views.md)
+- Target architecture: [./target-architecture.md](./target-architecture.md)
+- Target roadmap: [./target-architecture-roadmap.md](./target-architecture-roadmap.md)
+- Reference docs index: [../../../../docs/reference/plugins/render/index.md](../../../../docs/reference/plugins/render/index.md)

@@ -1,47 +1,35 @@
 // Owner: Game of Life SDF Example - Render Graph Contract
-use anyhow::Result;
-use engine::plugins::render::domain::RenderFeatureGraphSpec;
+use crate::runtime::GameOfLifeSdfState;
+use engine::plugins::render::RenderFlow;
 
-pub(crate) const FEATURE_ID: &str = "game_of_life_sdf_example";
 pub(crate) const COMPUTE_EXECUTOR_ID: &str = "gol.compute";
 pub(crate) const COMPOSE_EXECUTOR_ID: &str = "gol.compose";
-const COMPUTE_PIPELINE_ID: &str = "gol.compute.simulation";
-const COMPOSE_PIPELINE_ID: &str = "gol.compose.sdf";
 const SHADER_PATH: &str = "assets/shaders/game_of_life_sdf.wgsl";
 
-pub(crate) fn build_feature_graph_spec() -> Result<RenderFeatureGraphSpec> {
-    let mut builder = RenderFeatureGraphSpec::builder(FEATURE_ID)
-        .resource("gol.params")
-        .resource("gol.cells")
-        .resource("surface.color")
-        .resource("ui.draw_list")
-        .pipeline_compute(COMPUTE_PIPELINE_ID, SHADER_PATH)
-        .pipeline_render_builtin(COMPOSE_PIPELINE_ID, "compose.fullscreen")
-        .pipeline_render_builtin("ui.compose", "ui.composite");
-
-    builder = builder
+pub(crate) fn build_render_flow() -> RenderFlow {
+    RenderFlow::new("game_of_life_sdf_example")
+        .ecs_resource::<GameOfLifeSdfState>()
+        .uniform_buffer::<crate::rendering::GameOfLifeComputeParams>("gol.params")
+        .uniform_buffer::<crate::rendering::GameOfLifeComposeParams>("gol.compose.params")
+        .storage_texture("gol.cells")
+        .import_texture("surface.color")
+        .import_texture("ui.draw_list")
         .compute_pass("gol.compute")
-        .pipeline(COMPUTE_PIPELINE_ID)
-        .executor(COMPUTE_EXECUTOR_ID)
-        .reads(["gol.params"])
-        .writes(["gol.cells"])
-        .finish();
-    builder = builder
-        .render_pass("gol.compose")
-        .pipeline(COMPOSE_PIPELINE_ID)
-        .executor(COMPOSE_EXECUTOR_ID)
-        .reads(["gol.cells"])
-        .writes(["surface.color"])
-        .depends_on(["gol.compute"])
-        .finish();
-    builder = builder
-        .render_pass("ui_composite")
-        .pipeline("ui.compose")
-        .executor_builtin_ui_composite()
-        .reads(["ui.draw_list"])
-        .writes(["surface.color"])
-        .depends_on(["gol.compose"])
-        .finish();
-
-    builder.build()
+        .shader(SHADER_PATH)
+        .uniform_state(GameOfLifeSdfState::compute_params)
+        .reads("gol.params")
+        .writes("gol.cells")
+        .finish()
+        .fullscreen_pass("gol.compose")
+        .shader(SHADER_PATH)
+        .uniform_state_with_surface(GameOfLifeSdfState::compose_params)
+        .reads("gol.cells")
+        .writes("surface.color")
+        .depends_on("gol.compute")
+        .finish()
+        .builtin_ui_composite_pass("ui.composite")
+        .reads("ui.draw_list")
+        .writes("surface.color")
+        .depends_on("gol.compose")
+        .finish()
 }

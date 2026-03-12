@@ -1,5 +1,6 @@
 // Owner: SDF Renderer Example - GPU Pass Construction
 use crate::*;
+use engine::plugins::render::GpuParams;
 
 pub(crate) const SDF_CLEAR_COLOR: Color = Color {
     r: 0.02,
@@ -7,55 +8,6 @@ pub(crate) const SDF_CLEAR_COLOR: Color = Color {
     b: 0.03,
     a: 1.0,
 };
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct SdfWorldParamsRaw {
-    pub(crate) screen_size: [f32; 2],
-    pub(crate) _pad0: [f32; 2],
-    pub(crate) world_min: [f32; 2],
-    pub(crate) _pad1: [f32; 2],
-    pub(crate) world_max: [f32; 2],
-    pub(crate) _pad2: [f32; 2],
-    pub(crate) agent_count: u32,
-    pub(crate) model_count: u32,
-    pub(crate) paused: u32,
-    pub(crate) _pad3: u32,
-    pub(crate) camera_target_time: [f32; 4],
-    pub(crate) camera_orbit: [f32; 4],
-    pub(crate) debug_view_mode: u32,
-    pub(crate) display_fit_mode: u32,
-    pub(crate) display_target_aspect: f32,
-    pub(crate) _pad4: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct SdfWorldAgentRaw {
-    pub(crate) pos: [f32; 2],
-    pub(crate) radius: f32,
-    pub(crate) health: f32,
-    pub(crate) team: u32,
-    pub(crate) _pad0: [u32; 3],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct SdfWorldModelRaw {
-    pub(crate) pos: [f32; 2],
-    pub(crate) radius: f32,
-    pub(crate) _pad0: f32,
-    pub(crate) color: [f32; 4],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct SdfComposeParamsRaw {
-    pub(crate) output_size: [f32; 2],
-    pub(crate) target_aspect: f32,
-    pub(crate) fit_mode: u32,
-    pub(crate) bar_color: [f32; 4],
-}
 
 #[derive(Default)]
 pub(crate) struct SdfGpuSharedState {
@@ -94,25 +46,28 @@ pub(crate) fn build_sdf_gpu_pass(
 
     let params_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("sdf_example_params_buffer"),
-        size: std::mem::size_of::<SdfWorldParamsRaw>() as u64,
+        size: std::mem::size_of::<<crate::rendering::SdfWorldParams as GpuParams>::Raw>() as u64,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let agents_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("sdf_example_agents_buffer"),
-        size: (std::mem::size_of::<SdfWorldAgentRaw>() * SDF_MAX_AGENTS) as u64,
+        size: (std::mem::size_of::<<crate::rendering::SdfWorldAgent as GpuParams>::Raw>()
+            * SDF_MAX_AGENTS) as u64,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let models_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("sdf_example_models_buffer"),
-        size: (std::mem::size_of::<SdfWorldModelRaw>() * SDF_MAX_MODELS) as u64,
+        size: (std::mem::size_of::<<crate::rendering::SdfWorldModel as GpuParams>::Raw>()
+            * SDF_MAX_MODELS) as u64,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let compose_params_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("sdf_example_compose_params_buffer"),
-        size: std::mem::size_of::<SdfComposeParamsRaw>() as u64,
+        size: std::mem::size_of::<<crate::rendering::SdfComposeParams as GpuParams>::Raw>()
+            as u64,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });

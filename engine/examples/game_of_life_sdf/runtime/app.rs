@@ -1,15 +1,13 @@
 // Owner: Game of Life SDF Example - App Setup and Runtime Systems
 use crate::rendering::{
     COMPOSE_EXECUTOR_ID, COMPUTE_EXECUTOR_ID, GameOfLifeComposeExecutor, GameOfLifeComputeExecutor,
-    GameOfLifeGpuSharedState, build_feature_graph_spec,
+    GameOfLifeGpuSharedState, build_render_flow,
 };
 use crate::runtime::{
     ACTION_SINGLE_STEP, ACTION_SPEED_DOWN, ACTION_SPEED_UP, ACTION_TOGGLE_PAUSE, GameOfLifeSdfState,
 };
 use anyhow::Result;
-use engine::plugins::render::domain::{
-    RenderFrameResourceBindings, RenderGraphRegistryResource, RenderPassExecutorRegistryResource,
-};
+use engine::plugins::render::domain::{RenderFrameResourceBindings, RenderPassExecutorRegistryResource};
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{
     App, CoreSet, InputState, Plugin, Res, ResMut, Startup, SystemConfigExt, Time, Update,
@@ -24,6 +22,13 @@ pub(crate) fn run() -> Result<()> {
     app.add_plugins(default_plugins());
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
+    app.add_input_bindings([
+        (ACTION_TOGGLE_PAUSE, KeyCode::Space),
+        (ACTION_SINGLE_STEP, KeyCode::Enter),
+        (ACTION_SPEED_UP, KeyCode::PageUp),
+        (ACTION_SPEED_DOWN, KeyCode::PageDown),
+    ]);
+    app.add_render_flow(build_render_flow());
     app.add_plugin(GameOfLifeSdfExamplePlugin);
     app.run()
 }
@@ -45,15 +50,11 @@ impl Plugin for GameOfLifeSdfExamplePlugin {
 
 fn game_of_life_setup_system(
     mut frame_bindings: ResMut<RenderFrameResourceBindings>,
-    mut render_graph_registry: ResMut<RenderGraphRegistryResource>,
     mut render_executor_registry: ResMut<RenderPassExecutorRegistryResource>,
-    mut input: ResMut<InputState>,
-) -> Result<()> {
+) {
     if !frame_bindings.contains_resource::<GameOfLifeSdfState>() {
         frame_bindings.register_resource::<GameOfLifeSdfState>();
     }
-
-    render_graph_registry.register_feature_graph(build_feature_graph_spec()?);
 
     let shared = Arc::new(Mutex::new(GameOfLifeGpuSharedState::default()));
     render_executor_registry.register_custom(
@@ -65,17 +66,11 @@ fn game_of_life_setup_system(
         Arc::new(GameOfLifeComposeExecutor::new(shared)),
     );
 
-    input.map_key(ACTION_TOGGLE_PAUSE.to_string(), KeyCode::Space);
-    input.map_key(ACTION_SINGLE_STEP.to_string(), KeyCode::Enter);
-    input.map_key(ACTION_SPEED_UP.to_string(), KeyCode::PageUp);
-    input.map_key(ACTION_SPEED_DOWN.to_string(), KeyCode::PageDown);
-
     tracing::info!(
         feature = "game_of_life_sdf_example",
         controls = "Space pause | Enter step | PageUp/PageDown speed",
         "game of life sdf render setup complete"
     );
-    Ok(())
 }
 
 fn game_of_life_update_system(

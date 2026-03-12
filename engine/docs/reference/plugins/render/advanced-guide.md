@@ -1,19 +1,35 @@
 # Render Plugin Advanced Guide
 
-## Extension Pattern
+## Advanced Surfaces
 
-- Extend behavior in the owning module: engine/src/plugins/render/plugin.rs.
-- Keep composition changes in plugin build surfaces and avoid moving ownership across domains.
-- Keep schedule assumptions aligned with: RenderPrepare, RenderSubmit.
+- `RenderFlowContribution` multi-plugin composition
+- data-driven fragment compilation (`RenderFlowFragmentSpec`)
+- fragment hot reload tracking (`RenderFlowFragmentHotReloadState`)
+- transient/persistent/imported resource lifetime modeling
+- copy/present/graphics pass kinds
+- inspection surfaces under `engine::plugins::render::inspect`
 
-## Integration Notes
+## Validation and Safety
 
-- Reuse existing helpers and resources before introducing new abstractions.
-- Prefer typed schedule ordering (CoreSet and schedule markers) when adding systems.
-- Preserve semantic contracts documented in local README and crate architecture docs.
+Use `RenderFlow::validate()` before flow registration to catch:
 
-## Validation Focus
+- pass/resource ID collisions
+- pass-shape errors (`copy_pass`, `present_pass`)
+- incompatible resource usage
+- dependency cycles and unknown references
 
-- Verify startup and resource installation behavior in headless tests.
-- Verify schedule ordering when adding or reordering systems.
-- Verify cross-plugin integration behavior through existing engine integration tests.
+## Internal/Advanced Plumbing
+
+- executor and graph registry plumbing remains internal/advanced infrastructure
+- the preferred user surface is `RenderFlow` + ECS projection + contributions
+
+## Inspection
+
+Use:
+
+- `dump_flow_graph(...)`
+- `inspect_resources(...)`
+- `inspect_texture_resources(...)`
+- `summarize_pass_timings(...)`
+
+for debugging mixed plugin-owned flows.

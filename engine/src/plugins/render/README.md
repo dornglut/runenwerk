@@ -5,7 +5,8 @@ Render runtime orchestration for the engine runtime path.
 ## Start Here
 
 - Plugin entry: `engine/src/plugins/render/plugin.rs`
-- Public domain surface: `engine/src/plugins/render/domain/mod.rs`
+- Public flow API: `engine/src/plugins/render/api/flow.rs`
+- Public contribution API: `engine/src/plugins/render/composition/contribution.rs`
 - Architecture docs index: `engine/src/plugins/render/docs/index.md`
 
 ## Subdomain Ownership
@@ -22,6 +23,10 @@ Render runtime orchestration for the engine runtime path.
   - Pipeline keys, cache policy, specialization contracts.
 - `resources/`
   - Render frame bindings and explicit texture/buffer/transient ownership.
+- `resource/`
+  - Render resource descriptors, imports, lifetime classes, and transient alias planning helpers.
+- `composition/`
+  - `RenderFlowContribution`, namespace validation, flow merge integration, and asset-fragment hot-reload foundations.
 - `sdf/`
   - SDF render integration path (extract/bindings/fields/raymarch/materials/debug views).
 - `debug/`
@@ -29,10 +34,9 @@ Render runtime orchestration for the engine runtime path.
 
 ## Guides
 
-- Happy-path usage guide (local): [./docs/usage-guide.md](./docs/usage-guide.md)
-- Happy-path usage guide (reference): [../../../docs/reference/plugins/render/usage-guide.md](../../../docs/reference/plugins/render/usage-guide.md)
-- Docs index: [./docs/index.md](./docs/index.md)
-- Architecture: [./docs/architecture.md](docs/target-architecture.md)
-- Frame graph: [./docs/frame-graph.md](./docs/frame-graph.md)
-- SDF rendering: [./docs/sdf-rendering.md](./docs/sdf-rendering.md)
-- Debug views: [./docs/debug-views.md](./docs/debug-views.md)
+- Render docs index (reference): [../../../docs/reference/plugins/render/index.md](../../../docs/reference/plugins/render/index.md)
+- Render flow usage: [../../../docs/reference/plugins/render/render-flow-usage-guide.md](../../../docs/reference/plugins/render/render-flow-usage-guide.md)
+- GPU params: [../../../docs/reference/plugins/render/gpu-params-guide.md](../../../docs/reference/plugins/render/gpu-params-guide.md)
+- Flow contributions: [../../../docs/reference/plugins/render/render-flow-contributions.md](../../../docs/reference/plugins/render/render-flow-contributions.md)
+- Target architecture: [./docs/target-architecture.md](./docs/target-architecture.md)
+- Target roadmap: [./docs/target-architecture-roadmap.md](./docs/target-architecture-roadmap.md)

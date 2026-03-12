@@ -9,35 +9,31 @@ Compute-shader 3D SDF raymarching example for the engine.
 - Setup is loaded from `.ron` configs under `engine/examples/sdf_renderer/assets/`:
   - `sdf_params.ron`
   - `input_bindings.ron`
-  - `render_graph.ron`
+- Render flow is authored with `RenderFlow` in `engine/examples/sdf_renderer/rendering/graph.rs`.
+- GPU params use `GpuUniform`/`GpuStorage` derives in `engine/examples/sdf_renderer/rendering/params.rs`.
+- ECS state projection lives on `SdfWorldState` methods in `engine/examples/sdf_renderer/runtime/state.rs`.
 - Config parse/load failures emit concise `tracing` diagnostics and automatically fall back to typed defaults.
 - `sdf_params.ron` is hot-reloaded at runtime when the file changes.
 
-Current graph shape (registered by example):
+Current flow shape:
 
 1. `sdf.compute` (compute)
-   - executor: `sdf.compute`
    - reads: `sdf.params`, `world.agents`
    - writes: `sdf.color`
 2. `sdf.compose` (render)
-   - executor: `sdf.compose`
    - reads: `sdf.color`
    - writes: `surface.color`
    - depends on: `sdf.compute`
-3. `ui_composite` (render)
-   - executor: `builtin_ui_composite`
+3. `ui.composite` (builtin ui composite)
    - reads: `ui.draw_list`
    - writes: `surface.color`
    - depends on: `sdf.compose`
 
 Compatibility note:
 
-- Executor ids are feature-owned in `render_graph.ron`.
-- `executor_bindings` are used to register example-owned executor overrides.
-- `sdf.compute` and `sdf.compose` now use feature-owned executor implementations in this example.
-- `ui_composite` uses the render plugin builtin executor id `builtin_ui_composite`.
-- Use `builtin_compute`, `builtin_compose`, and `builtin_ui_composite` labels in config.
-- This keeps SDF pass ownership in the example while avoiding duplicate UI executor work.
+- `sdf.compute` and `sdf.compose` are feature-owned executor ids registered by the example plugin.
+- `ui.composite` uses the render plugin builtin UI executor path.
+- Input bindings are installed through the app/input API (`App::add_input_bindings`), not from render flow authoring.
 
 ## Target State (Planned)
 
@@ -70,15 +66,6 @@ Fit mode behavior:
 - For sharper `cover` at small window sizes, increase `display.render_scale` (example: `1.5`).
 - `input_bindings.ron`
   - action -> key bindings for SDF example controls
-- `render_graph.ron`
-  - feature-owned pass/pipeline/executor/resource declarations
-
-Authoring API direction:
-
-- Primary: typed builder API (`RenderFeatureGraphSpec::builder(...)`).
-- Secondary: `render_graph.ron` import that converts into the same runtime model.
-- Load/validate/compile/apply should move into the shared engine authoring pipeline over time.
-
 `sdf.params` clarification:
 
 - `sdf.params` is a logical render resource id in the render graph.
@@ -94,15 +81,14 @@ Target split:
 - authored assets:
   - `sdf_params.ron`
   - `input_bindings.ron`
-  - `render_graph.ron`
 - compiled artifacts:
   - validated params/config structs
   - compiled input bindings
-  - validated render graph spec
+  - validated render flow
 - live runtime state:
   - render resources
   - input registry/resource state
-  - render graph and executor registrations
+  - render flow and executor registrations
 
 Reload rules for this example:
 

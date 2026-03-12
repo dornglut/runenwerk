@@ -31,6 +31,7 @@
       <sourceFolder url="file://$MODULE_DIR$/foundation/geometry/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/foundation/sdf/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/foundation/sdf/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/engine_render_macros/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

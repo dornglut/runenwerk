@@ -8,6 +8,8 @@
 //! Net-specific entry surface:
 //! - [`crate::net::prelude`]
 
+extern crate self as engine;
+
 pub mod app;
 pub mod net;
 pub mod plugin;

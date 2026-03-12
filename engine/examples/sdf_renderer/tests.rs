@@ -3,8 +3,11 @@ use super::*;
 
 #[cfg(test)]
 mod tests {
-    use super::{SdfParamsConfig, SdfRenderGraphConfig, parse_builtin_executor, parse_key_code};
-    use engine::plugins::render::domain::RenderPassExecutorRegistryResource;
+    use super::{
+        SdfInputBindingsConfig, SdfParamsConfig, SdfWorldState, app_input_bindings, build_render_flow,
+        parse_key_code,
+    };
+    use engine::plugins::render::GpuParams;
     use winit::keyboard::KeyCode;
 
     #[test]
@@ -20,48 +23,36 @@ mod tests {
     }
 
     #[test]
-    fn default_render_graph_config_converts_to_spec() {
-        let spec = SdfRenderGraphConfig::default()
-            .to_spec()
-            .expect("default render graph config should convert to a typed spec");
-        assert_eq!(spec.feature.as_str(), "sdf_renderer_example");
-        assert_eq!(spec.passes.len(), 3);
+    fn app_layer_input_bindings_are_mapped_from_config() {
+        let bindings = app_input_bindings(&SdfInputBindingsConfig::default());
+        assert!(!bindings.is_empty());
+        assert!(bindings.iter().any(|(action, key)| {
+            *action == crate::runtime::ACTION_UP && *key == KeyCode::KeyR
+        }));
     }
 
     #[test]
-    fn builtin_executor_parser_accepts_builtin_labels() {
+    fn default_render_flow_validates_and_contains_expected_pass_order() {
+        let flow = build_render_flow();
+        let report = flow
+            .validate()
+            .expect("sdf renderer flow should validate");
+
         assert_eq!(
-            parse_builtin_executor("builtin_compute"),
-            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::Compute)
+            report.pass_order,
+            vec!["sdf.compute", "sdf.compose", "ui.composite"]
         );
-        assert_eq!(
-            parse_builtin_executor("builtin_compose"),
-            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::Compose)
-        );
-        assert_eq!(
-            parse_builtin_executor("builtin_mesh_overlay"),
-            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::MeshOverlay)
-        );
-        assert_eq!(
-            parse_builtin_executor("builtin_ui_composite"),
-            Some(engine::plugins::render::domain::BuiltinRenderPassExecutor::UiComposite)
-        );
-        assert_eq!(parse_builtin_executor("unknown"), None);
     }
 
     #[test]
-    fn default_render_graph_config_registers_feature_executors() {
-        let config = SdfRenderGraphConfig::default();
-        let mut registry = RenderPassExecutorRegistryResource::default();
-        let count = config
-            .register_executor_bindings(&mut registry)
-            .expect("default executor bindings should apply");
-        assert_eq!(count, 2);
-        assert!(registry.resolve_custom("sdf.compute").is_some());
-        assert!(registry.resolve_custom("sdf.compose").is_some());
-        assert_eq!(registry.resolve_builtin("sdf.compute"), None);
-        assert_eq!(registry.resolve_builtin("sdf.compose"), None);
-        assert_eq!(registry.resolve_builtin("builtin_ui_composite"), None);
+    fn state_projection_methods_produce_gpu_params() {
+        let state = SdfWorldState::default();
+        let compute = state.compute_params_with_surface((1280, 720)).to_gpu();
+        let compose = state.compose_params((1280, 720)).to_gpu();
+
+        assert!(compute.screen_size[0] > 0.0);
+        assert!(compute.screen_size[1] > 0.0);
+        assert_eq!(compose.output_size, [1280.0, 720.0]);
     }
 
     #[test]

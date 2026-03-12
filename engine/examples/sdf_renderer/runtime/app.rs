@@ -2,6 +2,10 @@
 use crate::*;
 
 pub(crate) fn run() -> Result<()> {
+    let input_config = load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
+    let input_bindings = app_input_bindings(&input_config);
+    let binding_count = input_bindings.len();
+
     let mut app = App::new();
     app.set_title("Grotto Quest - 3D SDF Compute Renderer");
     app.add_plugins(default_plugins());
@@ -9,7 +13,15 @@ pub(crate) fn run() -> Result<()> {
     app.add_plugin(GridPlugin);
     app.add_plugin(DebugMetricsPlugin);
     app.add_plugin(RenderPlugin);
+    app.add_input_bindings(input_bindings);
+    app.add_render_flow(build_render_flow());
     app.add_plugin(SdfRendererExamplePlugin);
+
+    tracing::info!(
+        bindings = binding_count,
+        "sdf renderer input bindings loaded into app input layer"
+    );
+
     app.run()
 }
 
@@ -30,17 +42,13 @@ impl Plugin for SdfRendererExamplePlugin {
 
 fn sdf_renderer_example_setup_system(
     mut frame_bindings: ResMut<RenderFrameResourceBindings>,
-    mut render_graph_registry: ResMut<RenderGraphRegistryResource>,
     mut render_executor_registry: ResMut<RenderPassExecutorRegistryResource>,
-    mut input: ResMut<InputState>,
     mut state: ResMut<SdfWorldState>,
     mut runtime_config: ResMut<SdfRuntimeConfigState>,
     mut hud: ResMut<UiWorldHudStats>,
 ) -> Result<()> {
     let frame_bindings = &mut *frame_bindings;
-    let render_graph_registry = &mut *render_graph_registry;
     let mut render_executor_registry = &mut *render_executor_registry;
-    let mut input = &mut *input;
     let state = &mut *state;
     let runtime_config = &mut *runtime_config;
     let hud = &mut *hud;
@@ -53,41 +61,15 @@ fn sdf_renderer_example_setup_system(
     runtime_config.params_config_path = find_config_path(PARAMS_CONFIG_FILE);
     runtime_config.params_config_modified = file_modified(&runtime_config.params_config_path);
 
-    let input_bindings =
-        load_config_with_default::<SdfInputBindingsConfig>(INPUT_BINDINGS_CONFIG_FILE);
-    let applied_bindings = apply_input_bindings(&mut input, &input_bindings);
-
-    let render_graph_config =
-        load_config_with_default::<SdfRenderGraphConfig>(RENDER_GRAPH_CONFIG_FILE);
-    let (active_render_graph_config, spec) = match render_graph_config.to_spec() {
-        Ok(spec) => (render_graph_config.clone(), spec),
-        Err(err) => {
-            tracing::error!(
-                config = RENDER_GRAPH_CONFIG_FILE,
-                ?err,
-                "invalid sdf render graph config; using built-in defaults"
-            );
-            let fallback = SdfRenderGraphConfig::default();
-            let spec = fallback.to_spec()?;
-            (fallback, spec)
-        }
-    };
-    render_graph_registry.register_feature_graph(spec);
-
-    let bound_executors = match active_render_graph_config
-        .register_executor_bindings(&mut render_executor_registry)
-    {
-        Ok(count) => count,
-        Err(err) => {
-            tracing::error!(
-                config = RENDER_GRAPH_CONFIG_FILE,
-                ?err,
-                "invalid sdf executor bindings; using built-in defaults"
-            );
-            let fallback = SdfRenderGraphConfig::default();
-            fallback.register_executor_bindings(&mut render_executor_registry)?
-        }
-    };
+    let shared = Arc::new(Mutex::new(SdfGpuSharedState::default()));
+    render_executor_registry.register_custom(
+        COMPUTE_EXECUTOR_ID,
+        Arc::new(SdfComputeExecutor::new(Arc::clone(&shared))),
+    );
+    render_executor_registry.register_custom(
+        COMPOSE_EXECUTOR_ID,
+        Arc::new(SdfComposeExecutor::new(shared)),
+    );
 
     tracing::info!(
         config_path = find_config_path(PARAMS_CONFIG_FILE).display().to_string(),
@@ -95,11 +77,9 @@ fn sdf_renderer_example_setup_system(
         display_target_aspect = state.display_target_aspect,
         display_render_scale = state.display_render_scale,
         display_bar_color = ?state.display_bar_color,
-        bindings = applied_bindings,
-        graph_passes = active_render_graph_config.passes.len(),
-        graph_compute_pipelines = active_render_graph_config.compute_pipelines.len(),
-        graph_render_pipelines = active_render_graph_config.render_builtin_pipelines.len(),
-        executor_bindings = bound_executors,
+        flow = "sdf_renderer_example",
+        compute_pass = COMPUTE_EXECUTOR_ID,
+        compose_pass = COMPOSE_EXECUTOR_ID,
         "sdf renderer setup applied"
     );
 

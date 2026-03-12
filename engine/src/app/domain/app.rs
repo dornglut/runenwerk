@@ -1,5 +1,7 @@
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
+use crate::plugins::input::InputState;
+use crate::plugins::render::{RenderFlow, RenderFlowContribution, RenderFlowRegistryResource};
 use crate::app::domain::state::WindowedAppState;
 use crate::plugins::{
     SceneReplayArchive, load_replay, seek_loaded_replay, start_recording, stop_recording,
@@ -12,6 +14,7 @@ use ecs::{Component, Runtime, World};
 use engine_sim::*;
 use scheduler::ScheduleLabel;
 use winit::event_loop::ControlFlow;
+use winit::keyboard::KeyCode;
 
 const DEFAULT_WINDOW_TITLE: &str = "Runenwerk - Engine";
 
@@ -116,6 +119,43 @@ impl App {
         self.title = title.into();
         if let Ok(mut window) = self.world.resource_mut::<WindowState>() {
             window.set_title(self.title.clone());
+        }
+        self
+    }
+
+    pub fn add_input_bindings<I>(&mut self, bindings: I) -> &mut Self
+    where
+        I: IntoIterator<Item = (&'static str, KeyCode)>,
+    {
+        self.init_resource::<InputState>();
+        if let Ok(input) = self.world.resource_mut::<InputState>() {
+            let input = &mut *input;
+            for (action, key) in bindings {
+                input.map_key(action.to_string(), key);
+            }
+        }
+        self
+    }
+
+    pub fn add_render_flow(&mut self, flow: RenderFlow) -> &mut Self {
+        if self.world.resource::<RenderFlowRegistryResource>().is_err() {
+            self.world.insert_resource(RenderFlowRegistryResource::default());
+        }
+        if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
+            registry.upsert_flow(flow);
+        }
+        self
+    }
+
+    pub fn add_render_flow_contribution(
+        &mut self,
+        contribution: RenderFlowContribution,
+    ) -> &mut Self {
+        if self.world.resource::<RenderFlowRegistryResource>().is_err() {
+            self.world.insert_resource(RenderFlowRegistryResource::default());
+        }
+        if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
+            registry.upsert_contribution(contribution);
         }
         self
     }

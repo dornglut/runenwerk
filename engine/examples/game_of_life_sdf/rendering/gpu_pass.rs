@@ -1,6 +1,7 @@
 // Owner: Game of Life SDF Example - GPU Pass Construction
+use crate::rendering::{GameOfLifeComposeParams, GameOfLifeComputeParams};
 use crate::runtime::GameOfLifeSdfState;
-use bytemuck::{Pod, Zeroable};
+use engine::plugins::render::GpuParams;
 use wgpu::util::DeviceExt;
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -24,29 +25,6 @@ pub(crate) const DEFAULT_CLEAR_COLOR: Color = Color {
     b: 0.042,
     a: 1.0,
 };
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct GameOfLifeComputeParamsRaw {
-    pub(crate) grid_size: [u32; 2],
-    pub(crate) step: u32,
-    pub(crate) _pad0: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct GameOfLifeComposeParamsRaw {
-    pub(crate) output_size: [f32; 2],
-    pub(crate) grid_size: [f32; 2],
-    pub(crate) cell_radius: f32,
-    pub(crate) edge_softness: f32,
-    pub(crate) grid_line_width: f32,
-    pub(crate) glow_strength: f32,
-    pub(crate) alive_color: [f32; 4],
-    pub(crate) dead_color: [f32; 4],
-    pub(crate) grid_color: [f32; 4],
-    pub(crate) background_color: [f32; 4],
-}
 
 #[derive(Default)]
 pub(crate) struct GameOfLifeGpuSharedState {
@@ -113,13 +91,13 @@ fn build_game_of_life_gpu_pass(
 
     let params_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("gol_params_buffer"),
-        size: std::mem::size_of::<GameOfLifeComputeParamsRaw>() as u64,
+        size: std::mem::size_of::<<GameOfLifeComputeParams as GpuParams>::Raw>() as u64,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let compose_params_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("gol_compose_params_buffer"),
-        size: std::mem::size_of::<GameOfLifeComposeParamsRaw>() as u64,
+        size: std::mem::size_of::<<GameOfLifeComposeParams as GpuParams>::Raw>() as u64,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });

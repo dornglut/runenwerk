@@ -1,13 +1,13 @@
 // Owner: Game of Life SDF Example - Custom Render Pass Executors
 use crate::rendering::{
-    DEFAULT_CLEAR_COLOR, GameOfLifeComposeParamsRaw, GameOfLifeComputeParamsRaw,
-    GameOfLifeGpuSharedState, WORKGROUP_SIZE, ensure_game_of_life_gpu_pass,
+    DEFAULT_CLEAR_COLOR, GameOfLifeGpuSharedState, WORKGROUP_SIZE, ensure_game_of_life_gpu_pass,
 };
 use crate::runtime::GameOfLifeSdfState;
 use anyhow::{Result, anyhow};
 use engine::plugins::render::domain::{
     RenderPassEncodeContext, RenderPassExecutor, RenderPassPrepareContext,
 };
+use engine::plugins::render::GpuParams;
 use std::sync::{Arc, Mutex};
 use wgpu::{
     Color, ComputePassDescriptor, LoadOp, Operations, RenderPassColorAttachment,
@@ -46,11 +46,7 @@ impl RenderPassExecutor for GameOfLifeComputeExecutor {
             .as_ref()
             .ok_or_else(|| anyhow!("game of life gpu pass unavailable during compute prepare"))?;
 
-        let params = GameOfLifeComputeParamsRaw {
-            grid_size: [pass.grid_size.0, pass.grid_size.1],
-            step: u32::from(state.step_simulation),
-            _pad0: 0,
-        };
+        let params = state.compute_params().to_gpu();
         ctx.queue()
             .write_buffer(&pass.params_buffer, 0, bytemuck::bytes_of(&params));
         Ok(())
@@ -132,18 +128,7 @@ impl RenderPassExecutor for GameOfLifeComposeExecutor {
             .as_ref()
             .ok_or_else(|| anyhow!("game of life gpu pass unavailable during compose prepare"))?;
 
-        let compose_params = GameOfLifeComposeParamsRaw {
-            output_size: [pass.surface_size.0 as f32, pass.surface_size.1 as f32],
-            grid_size: [pass.grid_size.0 as f32, pass.grid_size.1 as f32],
-            cell_radius: state.cell_radius.clamp(0.05, 0.49),
-            edge_softness: state.edge_softness.clamp(0.001, 0.25),
-            grid_line_width: state.grid_line_width.clamp(0.0, 0.2),
-            glow_strength: state.glow_strength.clamp(0.0, 2.0),
-            alive_color: state.alive_color,
-            dead_color: state.dead_color,
-            grid_color: state.grid_color,
-            background_color: state.background_color,
-        };
+        let compose_params = state.compose_params(pass.surface_size).to_gpu();
         ctx.queue().write_buffer(
             &pass.compose_params_buffer,
             0,

@@ -4,7 +4,7 @@
 
 This roadmap covers the target architecture defined in:
 
-- `engine/docs/reference/render-target-architecture.md`
+- `engine/src/plugins/render/docs/target-architecture.md`
 
 It turns that target into an implementation sequence that minimizes churn while preserving a clean long-term shape.
 
@@ -47,9 +47,10 @@ Documentation.
 
 ### Target files
 
-- `engine/docs/reference/render-target-architecture.md`
-- `engine/docs/reference/render-flow-target-api.md`
-- `engine/docs/reference/gpu-params-target.md`
+- `engine/src/plugins/render/docs/target-architecture.md`
+- `engine/docs/reference/plugins/render/render-target-architecture.md`
+- `engine/docs/reference/plugins/render/render-flow-usage-guide.md`
+- `engine/docs/reference/plugins/render/gpu-params-guide.md`
 - `engine/src/plugins/render/README.md`
 
 ### Implement
@@ -735,10 +736,10 @@ Docs and developer experience.
 
 ### Target docs
 
-- `engine/docs/reference/render-target-architecture.md`
-- `engine/docs/reference/render-flow-usage-guide.md`
-- `engine/docs/reference/gpu-params-guide.md`
-- `engine/docs/reference/render-flow-contributions.md`
+- `engine/docs/reference/plugins/render/render-target-architecture.md`
+- `engine/docs/reference/plugins/render/render-flow-usage-guide.md`
+- `engine/docs/reference/plugins/render/gpu-params-guide.md`
+- `engine/docs/reference/plugins/render/render-flow-contributions.md`
 - `engine/src/plugins/render/README.md`
 
 ### Example set

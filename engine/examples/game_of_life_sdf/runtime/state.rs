@@ -30,6 +30,32 @@ impl GameOfLifeSdfState {
     pub(crate) fn step_interval_seconds(&self) -> f32 {
         1.0 / self.steps_per_second.max(1.0)
     }
+
+    pub(crate) fn compute_params(&self) -> crate::rendering::GameOfLifeComputeParams {
+        crate::rendering::GameOfLifeComputeParams {
+            grid_size: self.grid_size,
+            step: self.step_simulation,
+            _pad0: 0,
+        }
+    }
+
+    pub(crate) fn compose_params(
+        &self,
+        surface: (u32, u32),
+    ) -> crate::rendering::GameOfLifeComposeParams {
+        crate::rendering::GameOfLifeComposeParams {
+            output_size: [surface.0 as f32, surface.1 as f32],
+            grid_size: [self.grid_size[0] as f32, self.grid_size[1] as f32],
+            cell_radius: self.cell_radius.clamp(0.05, 0.49),
+            edge_softness: self.edge_softness.clamp(0.001, 0.25),
+            grid_line_width: self.grid_line_width.clamp(0.0, 0.2),
+            glow_strength: self.glow_strength.clamp(0.0, 2.0),
+            alive_color: self.alive_color,
+            dead_color: self.dead_color,
+            grid_color: self.grid_color,
+            background_color: self.background_color,
+        }
+    }
 }
 
 impl Default for GameOfLifeSdfState {

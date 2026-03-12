@@ -1,3 +1,6 @@
+use super::composition::{
+    RenderFlowFragmentHotReloadState, RenderFlowRegistryResource, sync_render_flow_registry_system,
+};
 use super::debug::{
     RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
     RenderTextureInspectorState,
@@ -24,6 +27,8 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderFrameResourceBindings>();
         app.init_resource::<ShaderRegistryResource>();
         app.init_resource::<RenderGraphRegistryResource>();
+        app.init_resource::<RenderFlowRegistryResource>();
+        app.init_resource::<RenderFlowFragmentHotReloadState>();
         app.init_resource::<RenderPassExecutorRegistryResource>();
         app.init_resource::<PipelineCacheResource>();
         app.init_resource::<TextureResourceRegistry>();
@@ -37,6 +42,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<StartupState>();
         app.init_resource::<DebugMetricsState>();
         register_builtin_executor_ids(app);
+        app.add_systems(RenderPrepare, sync_render_flow_registry_system);
         app.add_systems(RenderPrepare, frame_render_prepare_system);
         app.add_systems(RenderSubmit, ui_render_submit_system);
     }

@@ -1,0 +1,292 @@
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied
+ --> tests/ui/render_gpu_params_unsupported.rs:6:10
+  |
+6 | #[derive(GpuUniform)]
+  |          ^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+  = note: this error originates in the derive macro `GpuUniform` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied in `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:6:10
+  |
+6 | #[derive(GpuUniform)]
+  |          ^^^^^^^^^^ unsatisfied trait bound
+  |
+help: within `InvalidParamsGpuRaw`, the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+note: required because it appears within the type `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^
+  = note: required for `InvalidParamsGpuRaw` to implement `Clone`
+note: required by a bound in `TrivialClone`
+ --> $RUST/core/src/clone.rs
+  |
+  | pub const unsafe trait TrivialClone: [const] Clone {}
+  |                                      ^^^^^^^^^^^^^ required by this bound in `TrivialClone`
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied in `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:6:10
+  |
+6 | #[derive(GpuUniform)]
+  |          ^^^^^^^^^^ unsatisfied trait bound
+  |
+help: within `InvalidParamsGpuRaw`, the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+note: required because it appears within the type `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^
+note: required by a bound in `Clone`
+ --> $RUST/core/src/clone.rs
+  |
+  | pub const trait Clone: Sized {
+  |                        ^^^^^ required by this bound in `Clone`
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied in `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:6:10
+  |
+6 | #[derive(GpuUniform)]
+  |          ^^^^^^^^^^ unsatisfied trait bound
+  |
+help: within `InvalidParamsGpuRaw`, the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+note: required because it appears within the type `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^
+  = note: required for `InvalidParamsGpuRaw` to implement `Clone`
+note: required by a bound in `std::marker::Copy`
+ --> $RUST/core/src/marker.rs
+  |
+  | pub trait Copy: Clone {
+  |                 ^^^^^ required by this bound in `Copy`
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied in `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: within `InvalidParamsGpuRaw`, the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+note: required because it appears within the type `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^
+  = note: required for `InvalidParamsGpuRaw` to implement `Clone`
+  = note: required for `InvalidParamsGpuRaw` to implement `std::marker::Copy`
+note: required by a bound in `Pod`
+ --> $CARGO/bytemuck-$VERSION/src/pod.rs
+  |
+  | pub unsafe trait Pod: Zeroable + Copy + 'static {}
+  |                                  ^^^^ required by this bound in `Pod`
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied in `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: within `InvalidParamsGpuRaw`, the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+note: required because it appears within the type `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^
+note: required by a bound in `Zeroable`
+ --> $CARGO/bytemuck-$VERSION/src/zeroable.rs
+  |
+  | pub unsafe trait Zeroable: Sized {
+  |                            ^^^^^ required by this bound in `Zeroable`
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied
+ --> tests/ui/render_gpu_params_unsupported.rs:6:10
+  |
+6 | #[derive(GpuUniform)]
+  |          ^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+  = help: see issue #48214
+  = note: this error originates in the derive macro `GpuUniform` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied in `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:6:10
+  |
+6 | #[derive(GpuUniform)]
+  |          ^^^^^^^^^^ unsatisfied trait bound
+  |
+help: within `InvalidParamsGpuRaw`, the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+note: required because it appears within the type `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^
+  = note: the return type of a function must have a statically known size
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied
+ --> tests/ui/render_gpu_params_unsupported.rs:8:12
+  |
+8 |     value: Unsupported,
+  |            ^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+
+error[E0277]: the trait bound `Unsupported: ToGpuValue` is not satisfied in `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: within `InvalidParamsGpuRaw`, the trait `ToGpuValue` is not implemented for `Unsupported`
+ --> tests/ui/render_gpu_params_unsupported.rs:4:1
+  |
+4 | struct Unsupported;
+  | ^^^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `ToGpuValue`:
+            [T; N]
+            bool
+            f32
+            glam::f32::sse2::mat4::Mat4
+            glam::f32::sse2::vec4::Vec4
+            glam::f32::vec2::Vec2
+            glam::f32::vec3::Vec3
+            i32
+            u32
+note: required because it appears within the type `InvalidParamsGpuRaw`
+ --> tests/ui/render_gpu_params_unsupported.rs:7:8
+  |
+7 | struct InvalidParams {
+  |        ^^^^^^^^^^^^^
+note: required by an implicit `Sized` bound in `std::mem::size_of`
+ --> $RUST/core/src/mem/mod.rs
+  |
+  | pub const fn size_of<T>() -> usize {
+  |                      ^ required by the implicit `Sized` requirement on this type parameter in `size_of`

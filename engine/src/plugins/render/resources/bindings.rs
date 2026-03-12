@@ -34,6 +34,10 @@ impl<'a> RenderFrameDataRegistry<'a> {
             .get(&TypeId::of::<T>())
             .and_then(|value| value.downcast_ref::<T>())
     }
+
+    pub fn get_by_type_id(&self, type_id: TypeId) -> Option<&'a dyn Any> {
+        self.by_type.get(&type_id).copied()
+    }
 }
 
 type FrameResourceCollector = for<'a> fn(&'a ecs::World, &mut RenderFrameDataRegistry<'a>);
