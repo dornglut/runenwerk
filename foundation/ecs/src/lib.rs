@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
-#![doc = include_str!("../USAGE_GUIDE.md")]
-#![doc = include_str!("../ARCHITECTURE.md")]
+#![doc = include_str!("../docs/reference/usage-guide.md")]
+#![doc = include_str!("../docs/reference/architecture.md")]
 
 extern crate self as ecs;
 
@@ -8,6 +8,7 @@ mod bundle;
 mod component;
 mod entity;
 mod errors;
+mod storage;
 pub mod prelude;
 pub mod query;
 pub mod system;

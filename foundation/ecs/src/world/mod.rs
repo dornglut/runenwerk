@@ -5,7 +5,6 @@ mod world_index_and_events_impl;
 mod world_internal_impl;
 mod world_struct;
 
-pub(crate) use events_and_indexes::TypedStore;
 pub use events_and_indexes::{
     ComponentChangeKind, ComponentChangeRecord, EntityDespawnedEvent, EntitySpawnedEvent,
     EventChannelConfig, EventChannelStats, EventLifetime, EventObserverNotification,

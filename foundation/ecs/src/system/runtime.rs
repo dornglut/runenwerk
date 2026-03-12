@@ -468,6 +468,8 @@ impl Runtime {
                 system.run(world)?;
             }
             telemetry::record_runtime_stage(stage_start.elapsed().as_nanos() as u64);
+            // Deferred commands are a stage boundary contract: structural effects become visible
+            // only after all systems in the current stage have completed.
             self.flush_stage_commands(world)?;
         }
 

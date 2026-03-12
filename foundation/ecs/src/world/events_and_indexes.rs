@@ -122,62 +122,6 @@ pub(super) struct EventObserver {
     pub(super) invocations: u64,
 }
 
-pub(super) trait ComponentStore {
-    fn remove_entity(&mut self, entity: Entity) -> bool;
-    fn contains(&self, entity: Entity) -> bool;
-    fn entity_count(&self) -> usize;
-    fn collect_entities(&self, target: &mut Vec<Entity>);
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-pub(crate) struct TypedStore<T: Component> {
-    pub(crate) values: BTreeMap<Entity, T>,
-}
-
-impl<T: Component> TypedStore<T> {
-    pub(super) fn new() -> Self {
-        Self {
-            values: BTreeMap::new(),
-        }
-    }
-
-    pub(super) fn insert(&mut self, entity: Entity, value: T) {
-        self.values.insert(entity, value);
-    }
-
-    pub(super) fn remove(&mut self, entity: Entity) -> Option<T> {
-        self.values.remove(&entity)
-    }
-}
-
-impl<T: Component> ComponentStore for TypedStore<T> {
-    fn remove_entity(&mut self, entity: Entity) -> bool {
-        self.values.remove(&entity).is_some()
-    }
-
-    fn contains(&self, entity: Entity) -> bool {
-        self.values.contains_key(&entity)
-    }
-
-    fn entity_count(&self) -> usize {
-        self.values.len()
-    }
-
-    fn collect_entities(&self, target: &mut Vec<Entity>) {
-        target.clear();
-        target.extend(self.values.keys().copied());
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
 pub(super) struct EventChannelStorage {
     pub(super) event_type_name: &'static str,
     events: Box<dyn Any>,
@@ -321,13 +265,14 @@ impl<T: Component, K: Ord + Clone + 'static> ComponentIndexStorage
         }
 
         self.entries.clear();
-        let Some(store) = world.store::<T>() else {
-            self.dirty = false;
-            return;
-        };
-        for (entity, component) in &store.values {
+        let mut entities = Vec::new();
+        world.matching_entities_into(&[TypeId::of::<T>()], &[], &mut entities);
+        for entity in entities {
+            let Some(component) = world.get::<T>(entity) else {
+                continue;
+            };
             let key = (self.extractor)(component);
-            self.entries.entry(key).or_default().push(*entity);
+            self.entries.entry(key).or_default().push(entity);
         }
         self.dirty = false;
     }

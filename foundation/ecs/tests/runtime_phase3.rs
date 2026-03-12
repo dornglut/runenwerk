@@ -1,5 +1,8 @@
 use ecs::prelude::*;
-use ecs::{QueryAccess, SystemParam, SystemParamError};
+use ecs::{
+    EventChannelConfig, EventLifetime, EventTracingPolicy, OverflowPolicy, QueryAccess, SystemParam,
+    SystemParamError,
+};
 use scheduler::ScheduleLabel;
 use scheduler::access::ConflictKind;
 use scheduler::label::SystemSet;
@@ -37,10 +40,49 @@ impl SystemSet for PostGameplaySet {
 struct Marker(u32);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+struct Extra(i32);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+struct Toggle;
+
+#[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
+struct IndexedName(String);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
 struct SeenCount(u32);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct DamageEvent(u32);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+struct TargetEntity(Entity);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+struct Step(u32);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+struct SpawnGate(bool);
+
+#[derive(Debug, PartialEq, Eq, ecs::Component)]
+struct CountHistory(Vec<usize>);
+
+#[derive(Debug, PartialEq, Eq, ecs::Component)]
+struct AddedChangedHistory(Vec<(usize, usize)>);
+
+#[derive(Debug, PartialEq, Eq, ecs::Component)]
+struct EventHistory(Vec<usize>);
+
+#[derive(Debug, PartialEq, Eq, ecs::Component)]
+struct PresenceHistory(Vec<usize>);
+
+#[derive(Copy, Clone)]
+struct LateObserveSet;
+
+impl SystemSet for LateObserveSet {
+    fn name() -> &'static str {
+        "LateObserveSet"
+    }
+}
 
 fn run_order_log() -> &'static Mutex<Vec<&'static str>> {
     static LOG: OnceLock<Mutex<Vec<&'static str>>> = OnceLock::new();
@@ -283,4 +325,208 @@ fn cached_system_param_state_reuse_is_stable_over_many_runs() {
         5
     );
     assert_eq!(world.resource::<SeenCount>().unwrap().0, 15);
+}
+
+#[test]
+fn flush_stage_structural_migration_is_visible_in_followup_stage() {
+    fn queue_migration(mut step: ResMut<Step>, target: Res<TargetEntity>, mut commands: Commands) {
+        match step.0 {
+            0 => commands.insert(target.0, Extra(7)),
+            1 => commands.remove::<Extra>(target.0),
+            2 => commands.insert(target.0, Extra(11)),
+            _ => {}
+        }
+        step.0 = step.0.saturating_add(1);
+    }
+
+    fn observe_marker_extra(mut history: ResMut<CountHistory>, mut query: Query<(&Marker, &Extra)>) {
+        history.0.push(query.iter().count());
+    }
+
+    let mut world = World::new();
+    let target = world.spawn(Marker(1));
+    world.insert_resource(TargetEntity(target));
+    world.insert_resource(Step(0));
+    world.insert_resource(CountHistory(Vec::new()));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_migration.in_set(GameplaySet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_marker_extra
+            .in_set(PostGameplaySet)
+            .after(GameplaySet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<CountHistory>().unwrap().0, vec![1, 0, 1]);
+    assert_eq!(world.require::<Extra>(target).unwrap().0, 11);
+}
+
+#[test]
+fn system_order_controls_added_and_changed_visibility() {
+    fn queue_spawn_once(mut gate: ResMut<SpawnGate>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.spawn(Marker(5));
+        gate.0 = true;
+    }
+
+    fn mutate_markers(mut query: Query<&mut Marker>) {
+        for marker in query.iter() {
+            marker.0 = marker.0.saturating_add(1);
+        }
+    }
+
+    fn observe_added_changed(
+        mut added: Query<&Marker, Added<Marker>>,
+        mut changed: Query<&Marker, Changed<Marker>>,
+        mut history: ResMut<AddedChangedHistory>,
+    ) {
+        history
+            .0
+            .push((added.iter().count(), changed.iter().count()));
+    }
+
+    let mut world = World::new();
+    world.insert_resource(SpawnGate(false));
+    world.insert_resource(AddedChangedHistory(Vec::new()));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_spawn_once.in_set(GameplaySet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        mutate_markers.in_set(PostGameplaySet).after(GameplaySet),
+    );
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_added_changed
+            .in_set(LateObserveSet)
+            .after(PostGameplaySet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(
+        world.resource::<AddedChangedHistory>().unwrap().0,
+        vec![(1, 1), (0, 1)]
+    );
+}
+
+#[test]
+fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
+    fn churn_and_emit(
+        mut step: ResMut<Step>,
+        target: Res<TargetEntity>,
+        mut commands: Commands,
+        mut writer: EventWriter<DamageEvent>,
+    ) {
+        step.0 = step.0.saturating_add(1);
+        for offset in 0..4 {
+            writer.send(DamageEvent(step.0.saturating_mul(10).saturating_add(offset)));
+        }
+        if step.0 % 2 == 1 {
+            commands.remove::<Toggle>(target.0);
+        } else {
+            commands.insert(target.0, Toggle);
+        }
+    }
+
+    fn observe_events_and_presence(
+        reader: EventReader<DamageEvent>,
+        mut query: Query<&Toggle>,
+        mut events: ResMut<EventHistory>,
+        mut presence: ResMut<PresenceHistory>,
+    ) {
+        events.0.push(reader.iter().count());
+        presence.0.push(query.iter().count());
+    }
+
+    let mut world = World::new();
+    world.configure_event_channel::<DamageEvent>(EventChannelConfig {
+        capacity: None,
+        overflow: OverflowPolicy::DropOldest,
+        lifetime: EventLifetime::FrameTransient,
+        tracing: EventTracingPolicy::Disabled,
+    });
+    let target = world.spawn((Marker(0), Toggle));
+    world.insert_resource(TargetEntity(target));
+    world.insert_resource(Step(0));
+    world.insert_resource(EventHistory(Vec::new()));
+    world.insert_resource(PresenceHistory(Vec::new()));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, churn_and_emit.in_set(GameplaySet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_events_and_presence
+            .in_set(PostGameplaySet)
+            .after(GameplaySet),
+    );
+
+    for _ in 0..4 {
+        runtime.run_schedule::<Update>(&mut world).unwrap();
+        world.finish_event_frame();
+    }
+
+    assert_eq!(world.resource::<EventHistory>().unwrap().0, vec![4, 4, 4, 4]);
+    assert_eq!(world.resource::<PresenceHistory>().unwrap().0, vec![0, 1, 0, 1]);
+}
+
+#[test]
+fn deferred_commands_keep_secondary_indexes_correct_after_apply() {
+    fn queue_index_updates(mut step: ResMut<Step>, target: Res<TargetEntity>, mut commands: Commands) {
+        match step.0 {
+            0 => commands.insert(target.0, IndexedName("renamed".to_string())),
+            1 => commands.remove::<IndexedName>(target.0),
+            2 => commands.insert(target.0, IndexedName("restored".to_string())),
+            _ => {}
+        }
+        step.0 = step.0.saturating_add(1);
+    }
+
+    let mut world = World::new();
+    world.ensure_component_index::<IndexedName, String>(|name| name.0.clone());
+    let target = world.spawn(IndexedName("initial".to_string()));
+    let other = world.spawn(IndexedName("other".to_string()));
+    world.insert_resource(TargetEntity(target));
+    world.insert_resource(Step(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_index_updates);
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    assert_eq!(
+        world.find_entity_by_index::<IndexedName, String>(&"renamed".to_string()),
+        Some(target)
+    );
+    assert_eq!(
+        world.find_entity_by_index::<IndexedName, String>(&"initial".to_string()),
+        None
+    );
+    assert_eq!(
+        world.find_entity_by_index::<IndexedName, String>(&"other".to_string()),
+        Some(other)
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    assert_eq!(
+        world.find_entity_by_index::<IndexedName, String>(&"renamed".to_string()),
+        None
+    );
+    assert_eq!(
+        world.find_entity_by_index::<IndexedName, String>(&"other".to_string()),
+        Some(other)
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    assert_eq!(
+        world.find_entity_by_index::<IndexedName, String>(&"restored".to_string()),
+        Some(target)
+    );
 }

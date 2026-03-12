@@ -65,3 +65,7 @@ harness = false
 [[bench]]
 name = "phase5b_runtime"
 harness = false
+
+[[bench]]
+name = "phase6_runtime"
+harness = false

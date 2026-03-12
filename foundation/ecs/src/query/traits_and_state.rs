@@ -3,6 +3,7 @@ use super::access_and_filters::{QueryAccess, QueryFilter, push_unique_type};
 use crate::component::Component;
 use crate::entity::Entity;
 use crate::errors::QueryError;
+use crate::storage::ArchetypeExecutionBinding;
 use crate::telemetry;
 use crate::world::World;
 use std::any::TypeId;
@@ -21,6 +22,7 @@ pub trait QueryData {
 
     fn mark_changed(_world: *mut World, _entity: Entity) {}
 
+    /// Enables cached mark/fetch hooks that avoid per-entity setup work inside the iterator loop.
     fn supports_fast_path() -> bool {
         false
     }
@@ -31,6 +33,21 @@ pub trait QueryData {
 
     fn mark_changed_fast(world: *mut World, entity: Entity, _cache: &mut QueryFastCache) {
         Self::mark_changed(world, entity);
+    }
+
+    /// Enables archetype-row execution instead of the entity-list fallback path.
+    fn supports_archetype_execution() -> bool {
+        false
+    }
+
+    fn collect_archetype_rows(
+        _world: *mut World,
+        _required_present: &[TypeId],
+        _excluded: &[TypeId],
+        _rows: &mut Vec<QueryArchetypeRow>,
+        _cache: &mut QueryFastCache,
+    ) -> bool {
+        false
     }
 
     /// Safety: the caller must uphold the access guarantees described by `Self::append_access`.
@@ -71,6 +88,18 @@ pub trait QuerySpec {
 
     #[doc(hidden)]
     fn mark_changed_fast(world: *mut World, entity: Entity, cache: &mut QueryFastCache);
+
+    #[doc(hidden)]
+    fn supports_archetype_execution() -> bool;
+
+    #[doc(hidden)]
+    fn collect_archetype_rows(
+        world: *mut World,
+        required_present: &[TypeId],
+        excluded: &[TypeId],
+        rows: &mut Vec<QueryArchetypeRow>,
+        cache: &mut QueryFastCache,
+    ) -> bool;
 
     /// # Safety
     /// The caller must uphold the access guarantees described by `Self::append_access`.
@@ -123,6 +152,20 @@ where
         T::mark_changed_fast(world, entity, cache);
     }
 
+    fn supports_archetype_execution() -> bool {
+        T::supports_archetype_execution()
+    }
+
+    fn collect_archetype_rows(
+        world: *mut World,
+        required_present: &[TypeId],
+        excluded: &[TypeId],
+        rows: &mut Vec<QueryArchetypeRow>,
+        cache: &mut QueryFastCache,
+    ) -> bool {
+        T::collect_archetype_rows(world, required_present, excluded, rows, cache)
+    }
+
     unsafe fn fetch<'w>(world: *mut World, entity: Entity) -> Option<Self::Item<'w>> {
         unsafe { T::fetch(world, entity) }
     }
@@ -157,11 +200,19 @@ impl<'w> QueryWorldRef<'w> for &'w mut World {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct QueryArchetypeRow {
+    pub entity: Entity,
+    pub archetype_index: usize,
+    pub row: usize,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct QueryFastCache {
-    pub world_ptr: *const World,
-    pub store0: *mut (),
-    pub store1: *mut (),
+    // Tracks cache ownership across reused `QueryState` runs and cross-world rebinding.
+    pub(crate) world_ptr: *const World,
+    // Reused archetype bindings for archetype-row execution forms.
+    pub(crate) archetype_bindings: Vec<ArchetypeExecutionBinding>,
 }
 
 pub struct QueryState<Q, F = ()> {
@@ -170,7 +221,9 @@ pub struct QueryState<Q, F = ()> {
     access: QueryAccess,
     last_run_tick: Cell<u64>,
     scratch_pool: Rc<RefCell<Vec<Vec<Entity>>>>,
-    fast_path_enabled: bool,
+    archetype_row_scratch_pool: Rc<RefCell<Vec<Vec<QueryArchetypeRow>>>>,
+    fast_fetch_enabled: bool,
+    archetype_execution_enabled: bool,
     fast_cache: RefCell<QueryFastCache>,
     _marker: PhantomData<(Q, F)>,
 }
@@ -201,22 +254,50 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
         let start = Instant::now();
         let world_ptr = world.into_world_ptr();
         let world_ref = unsafe { &*world_ptr };
+        let since_tick = self.last_run_tick.get();
+        let (use_fast_fetch, mut fast_cache) = self.prepare_fast_fetch(world_ptr);
+
+        if self.archetype_execution_enabled {
+            let mut rows = self.acquire_archetype_row_vec();
+            if Q::collect_archetype_rows(
+                world_ptr,
+                &self.required_present,
+                &self.excluded,
+                &mut rows,
+                &mut fast_cache,
+            ) {
+                if F::needs_tick_filter() {
+                    rows.retain(|row| F::matches_entity(world_ref, row.entity, since_tick));
+                }
+                self.last_run_tick.set(world_ref.current_change_tick());
+                telemetry::record_query_iter(start.elapsed().as_nanos() as u64);
+                return QueryIter::<Q> {
+                    world: world_ptr,
+                    entities: None,
+                    archetype_rows: Some(rows),
+                    scratch_pool: Rc::clone(&self.scratch_pool),
+                    archetype_row_scratch_pool: Rc::clone(&self.archetype_row_scratch_pool),
+                    use_fast_fetch,
+                    fast_cache,
+                    index: 0,
+                    _marker: PhantomData,
+                };
+            }
+            self.release_archetype_row_vec(rows);
+        }
+
         let mut entities = self.acquire_scratch_vec();
+        // Fallback path for query forms that do not support archetype-row execution.
         self.matching_entities_into(world_ref, &mut entities);
-        let (use_fast_path, fast_cache) = if self.fast_path_enabled {
-            let mut cache = self.fast_cache.borrow_mut();
-            let prepared = Q::prepare_fast_cache(world_ptr, &mut cache);
-            (prepared, *cache)
-        } else {
-            (false, QueryFastCache::default())
-        };
         self.last_run_tick.set(world_ref.current_change_tick());
         telemetry::record_query_iter(start.elapsed().as_nanos() as u64);
         QueryIter::<Q> {
             world: world_ptr,
             entities: Some(entities),
+            archetype_rows: None,
             scratch_pool: Rc::clone(&self.scratch_pool),
-            use_fast_path,
+            archetype_row_scratch_pool: Rc::clone(&self.archetype_row_scratch_pool),
+            use_fast_fetch,
             fast_cache,
             index: 0,
             _marker: PhantomData,
@@ -286,10 +367,22 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
             access,
             last_run_tick: Cell::new(0),
             scratch_pool: Rc::new(RefCell::new(Vec::new())),
-            fast_path_enabled: Q::supports_fast_path(),
+            archetype_row_scratch_pool: Rc::new(RefCell::new(Vec::new())),
+            fast_fetch_enabled: Q::supports_fast_path(),
+            archetype_execution_enabled: Q::supports_archetype_execution(),
             fast_cache: RefCell::new(QueryFastCache::default()),
             _marker: PhantomData,
         }
+    }
+
+    fn prepare_fast_fetch(&self, world_ptr: *mut World) -> (bool, QueryFastCache) {
+        if !self.fast_fetch_enabled {
+            return (false, QueryFastCache::default());
+        }
+
+        let mut cache = self.fast_cache.borrow_mut();
+        let prepared = Q::prepare_fast_cache(world_ptr, &mut cache);
+        (prepared, cache.clone())
     }
 
     fn matching_entities_into(&self, world: &World, out: &mut Vec<Entity>) {
@@ -315,6 +408,21 @@ impl<Q: QuerySpec, F: QueryFilter> QueryState<Q, F> {
         let mut pool = self.scratch_pool.borrow_mut();
         if pool.len() < 4 {
             pool.push(entities);
+        }
+    }
+
+    fn acquire_archetype_row_vec(&self) -> Vec<QueryArchetypeRow> {
+        self.archetype_row_scratch_pool
+            .borrow_mut()
+            .pop()
+            .unwrap_or_default()
+    }
+
+    fn release_archetype_row_vec(&self, mut rows: Vec<QueryArchetypeRow>) {
+        rows.clear();
+        let mut pool = self.archetype_row_scratch_pool.borrow_mut();
+        if pool.len() < 4 {
+            pool.push(rows);
         }
     }
 }
@@ -367,46 +475,59 @@ impl<Q: QuerySpec, F: QueryFilter> Query<Q, F> {
 struct QueryIter<'w, Q: QuerySpec> {
     world: *mut World,
     entities: Option<Vec<Entity>>,
+    archetype_rows: Option<Vec<QueryArchetypeRow>>,
     scratch_pool: Rc<RefCell<Vec<Vec<Entity>>>>,
-    use_fast_path: bool,
+    archetype_row_scratch_pool: Rc<RefCell<Vec<Vec<QueryArchetypeRow>>>>,
+    use_fast_fetch: bool,
     fast_cache: QueryFastCache,
     index: usize,
     _marker: PhantomData<Q::WorldRef<'w>>,
+}
+
+impl<'w, Q: QuerySpec> QueryIter<'w, Q> {
+    fn mark_and_fetch(&mut self, entity: Entity) -> Option<Q::Item<'w>> {
+        if self.use_fast_fetch {
+            Q::mark_changed_fast(self.world, entity, &mut self.fast_cache);
+            // Safety: `QueryIter` holds the world borrow contract through `Q::WorldRef<'w>`.
+            return unsafe { Q::fetch_fast(self.world, entity, &mut self.fast_cache) };
+        }
+
+        Q::mark_changed(self.world, entity);
+        // Safety: `QueryIter` holds the world borrow contract through `Q::WorldRef<'w>`.
+        unsafe { Q::fetch(self.world, entity) }
+    }
 }
 
 impl<'w, Q: QuerySpec> Iterator for QueryIter<'w, Q> {
     type Item = Q::Item<'w>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Some(entities) = self.entities.as_ref() else {
-            return None;
-        };
-        let entities_ptr = entities.as_ptr();
-        let entities_len = entities.len();
+        if let Some(rows) = self.archetype_rows.as_ref() {
+            let rows_ptr = rows.as_ptr();
+            let rows_len = rows.len();
 
-        if self.use_fast_path {
-            while self.index < entities_len {
-                // Safety: `self.index < entities_len` and `entities_ptr` points to `entities`.
-                let entity = unsafe { *entities_ptr.add(self.index) };
+            while self.index < rows_len {
+                // Safety: `self.index < rows_len` and `rows_ptr` points to `rows`.
+                let row = unsafe { *rows_ptr.add(self.index) };
                 self.index += 1;
-                Q::mark_changed_fast(self.world, entity, &mut self.fast_cache);
-                // Safety: `QueryIter` holds the world borrow contract through `Q::WorldRef<'w>`.
-                if let Some(item) =
-                    unsafe { Q::fetch_fast(self.world, entity, &mut self.fast_cache) }
-                {
+                if let Some(item) = self.mark_and_fetch(row.entity) {
                     return Some(item);
                 }
             }
             return None;
         }
 
+        let Some(entities) = self.entities.as_ref() else {
+            return None;
+        };
+        let entities_ptr = entities.as_ptr();
+        let entities_len = entities.len();
+
         while self.index < entities_len {
             // Safety: `self.index < entities_len` and `entities_ptr` points to `entities`.
             let entity = unsafe { *entities_ptr.add(self.index) };
             self.index += 1;
-            Q::mark_changed(self.world, entity);
-            // Safety: `QueryIter` holds the world borrow contract through `Q::WorldRef<'w>`.
-            if let Some(item) = unsafe { Q::fetch(self.world, entity) } {
+            if let Some(item) = self.mark_and_fetch(entity) {
                 return Some(item);
             }
         }
@@ -416,13 +537,20 @@ impl<'w, Q: QuerySpec> Iterator for QueryIter<'w, Q> {
 
 impl<'w, Q: QuerySpec> Drop for QueryIter<'w, Q> {
     fn drop(&mut self) {
-        let Some(mut entities) = self.entities.take() else {
-            return;
-        };
-        entities.clear();
-        let mut pool = self.scratch_pool.borrow_mut();
-        if pool.len() < 4 {
-            pool.push(entities);
+        if let Some(mut entities) = self.entities.take() {
+            entities.clear();
+            let mut pool = self.scratch_pool.borrow_mut();
+            if pool.len() < 4 {
+                pool.push(entities);
+            }
+        }
+
+        if let Some(mut rows) = self.archetype_rows.take() {
+            rows.clear();
+            let mut pool = self.archetype_row_scratch_pool.borrow_mut();
+            if pool.len() < 4 {
+                pool.push(rows);
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ use crate::component::Component;
 use crate::entity::{Entity, EntityAllocator};
 use crate::errors::{EntityError, ResourceError};
 use crate::query::{QueryFilter, QuerySpec, QueryState};
+use crate::storage::ArchetypeRegistry;
 use std::any::{TypeId, type_name};
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
@@ -21,16 +22,15 @@ impl World {
             alive_entities: BTreeSet::new(),
             component_registry: HashMap::new(),
             next_component_id: 0,
-            components: HashMap::new(),
             resources: HashMap::new(),
             event_channels: HashMap::new(),
             event_observers: HashMap::new(),
             event_observer_notifications: Vec::new(),
             component_indexes: RefCell::new(HashMap::new()),
+            archetype_registry: ArchetypeRegistry::new(),
+            entity_locations: Default::default(),
             change_tick: 0,
             component_change_ticks: HashMap::new(),
-            component_entity_last_changed_ticks: HashMap::new(),
-            component_entity_last_added_ticks: HashMap::new(),
             resource_change_ticks: HashMap::new(),
             component_change_log: Vec::new(),
             resource_change_log: Vec::new(),
@@ -49,6 +49,7 @@ impl World {
         B::register(self);
         let entity = self.allocator.allocate();
         self.alive_entities.insert(entity);
+        self.place_entity_in_empty_archetype(entity);
         bundle
             .insert(self, entity)
             .expect("bundle insert should succeed for new entity");
@@ -58,13 +59,17 @@ impl World {
 
     pub fn despawn(&mut self, entity: Entity) -> Result<(), EntityError> {
         self.ensure_entity_exists(entity)?;
+        let removed_types = self
+            .entity_locations
+            .get(entity)
+            .and_then(|location| {
+                self.archetype_registry
+                    .component_types(location.archetype_id)
+                    .map(|types| types.to_vec())
+            })
+            .unwrap_or_default();
+        self.remove_entity_from_archetype_tracking(entity);
         self.alive_entities.remove(&entity);
-        let mut removed_types = Vec::new();
-        for (type_id, store) in &mut self.components {
-            if store.remove_entity(entity) {
-                removed_types.push(*type_id);
-            }
-        }
         self.allocator.free(entity);
         for type_id in removed_types {
             let component_name = self
@@ -98,23 +103,19 @@ impl World {
         if !self.contains(entity) {
             return None;
         }
-        self.store::<T>()
-            .and_then(|store| store.values.get(&entity))
+        self.archetype_component::<T>(entity)
     }
 
     pub fn get_mut<T: Component>(&mut self, entity: Entity) -> Option<Mut<'_, T>> {
         if !self.contains(entity) {
             return None;
         }
-        self.record_component_change(
+        self.mark_component_modified_by_id(
             entity,
             TypeId::of::<T>(),
             T::component_name(),
-            ComponentChangeKind::Modified,
         );
-        let value = self
-            .store_mut::<T>()
-            .and_then(|store| store.values.get_mut(&entity))?;
+        let value = self.archetype_component_mut_untracked::<T>(entity)?;
         Some(Mut { value })
     }
 
@@ -211,18 +212,42 @@ impl World {
         self.change_tick
     }
 
+    #[doc(hidden)]
+    pub fn __entity_archetype_location(&self, entity: Entity) -> Option<(usize, usize)> {
+        self.entity_locations
+            .get(entity)
+            .map(|location| (location.archetype_id.index(), location.row))
+    }
+
+    #[doc(hidden)]
+    pub fn __entity_archetype_component_count(&self, entity: Entity) -> Option<usize> {
+        let location = self.entity_locations.get(entity)?;
+        self.archetype_registry.component_count(location.archetype_id)
+    }
+
+    #[doc(hidden)]
+    pub fn __entity_component_ticks<T: Component>(&self, entity: Entity) -> Option<(u64, u64)> {
+        self.archetype_component_metadata::<T>(entity)
+    }
+
+    /// Type-level reporting helper.
+    /// This is intentionally separate from `Changed<T>` query semantics, which are driven by
+    /// archetype row metadata (`changed_tick`) during query/filter evaluation.
     pub fn component_changed_since<T: Component>(&self, tick: u64) -> bool {
         self.component_change_ticks
             .get(&TypeId::of::<T>())
             .is_some_and(|changed| *changed > tick)
     }
 
+    /// Type-level reporting helper for resources.
     pub fn resource_changed_since<R: Component>(&self, tick: u64) -> bool {
         self.resource_change_ticks
             .get(&TypeId::of::<R>())
             .is_some_and(|changed| *changed > tick)
     }
 
+    /// Change-history reporting API.
+    /// This log is for introspection/reporting and is not used by query/filter change matching.
     pub fn component_changes_since(&self, tick: u64) -> Vec<ComponentChangeRecord> {
         self.component_change_log
             .iter()
@@ -231,6 +256,7 @@ impl World {
             .collect()
     }
 
+    /// Resource change-history reporting API.
     pub fn resource_changes_since(&self, tick: u64) -> Vec<ResourceChangeRecord> {
         self.resource_change_log
             .iter()

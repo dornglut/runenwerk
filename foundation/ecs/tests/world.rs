@@ -1,8 +1,11 @@
 use ecs::prelude::*;
 use ecs::{
     ComponentChangeKind, EventChannelConfig, EventLifetime, EventTracingPolicy, ObserverTrigger,
-    OverflowPolicy, QueryTypeAccess, ResourceChangeKind, SystemParam,
+    OverflowPolicy, QueryTypeAccess, ResourceChangeKind, SystemParam, EntityDespawnedEvent,
+    EntitySpawnedEvent,
 };
+use scheduler::ScheduleLabel;
+use scheduler::label::SystemSet;
 use std::any::TypeId;
 
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
@@ -52,6 +55,39 @@ struct B(i32);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
 struct C(i32);
+
+#[derive(Copy, Clone)]
+struct WorldUpdate;
+
+impl ScheduleLabel for WorldUpdate {
+    fn name() -> &'static str {
+        "WorldUpdate"
+    }
+}
+
+#[derive(Copy, Clone)]
+struct SpawnStage;
+
+impl SystemSet for SpawnStage {
+    fn name() -> &'static str {
+        "SpawnStage"
+    }
+}
+
+#[derive(Copy, Clone)]
+struct ObserveStage;
+
+impl SystemSet for ObserveStage {
+    fn name() -> &'static str {
+        "ObserveStage"
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+struct SpawnGate(bool);
+
+#[derive(Debug, PartialEq, Eq, ecs::Component)]
+struct AddedHealthCounts(Vec<usize>);
 
 #[test]
 fn spawn_query_and_entity_access_work() {
@@ -683,6 +719,174 @@ fn changed_and_added_filters_handle_remove_then_reinsert() {
             .collect::<Vec<_>>(),
         vec![entity]
     );
+}
+
+#[test]
+fn get_mut_and_require_mut_update_changed_tracking_semantics() {
+    let mut world = World::new();
+    let entity = world.spawn(Health(10));
+    let changed = world.query_state::<(Entity, &Health), Changed<Health>>();
+
+    assert_eq!(
+        changed
+            .iter(&world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>(),
+        vec![entity]
+    );
+    assert!(changed.iter(&world).next().is_none());
+
+    let (_, changed_before_get_mut) = world
+        .__entity_component_ticks::<Health>(entity)
+        .expect("health ticks should exist");
+    world
+        .get_mut::<Health>(entity)
+        .expect("component should be available")
+        .0 += 1;
+    let (_, changed_after_get_mut) = world
+        .__entity_component_ticks::<Health>(entity)
+        .expect("health ticks should exist");
+    assert!(changed_after_get_mut > changed_before_get_mut);
+    assert_eq!(
+        changed
+            .iter(&world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>(),
+        vec![entity]
+    );
+    assert!(changed.iter(&world).next().is_none());
+
+    let (_, changed_before_require_mut) = world
+        .__entity_component_ticks::<Health>(entity)
+        .expect("health ticks should exist");
+    world
+        .require_mut::<Health>(entity)
+        .expect("component should be available")
+        .0 += 1;
+    let (_, changed_after_require_mut) = world
+        .__entity_component_ticks::<Health>(entity)
+        .expect("health ticks should exist");
+    assert!(changed_after_require_mut > changed_before_require_mut);
+    assert_eq!(
+        changed
+            .iter(&world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>(),
+        vec![entity]
+    );
+}
+
+#[test]
+fn insert_remove_and_despawn_keep_change_logs_and_lifecycle_events_in_sync() {
+    let mut world = World::new();
+    let start = world.current_change_tick();
+    let entity = world.spawn(Player);
+
+    let spawned = world.drain_events::<EntitySpawnedEvent>();
+    assert_eq!(spawned.len(), 1);
+    assert_eq!(spawned[0].entity, entity);
+
+    world.insert(entity, Health(10)).unwrap();
+    let _: Health = world.remove(entity).unwrap();
+    world.insert(entity, Health(20)).unwrap();
+    world.despawn(entity).unwrap();
+
+    let despawned = world.drain_events::<EntityDespawnedEvent>();
+    assert_eq!(despawned.len(), 1);
+    assert_eq!(despawned[0].entity, entity);
+
+    let health_change_kinds: Vec<_> = world
+        .component_changes_since(start)
+        .into_iter()
+        .filter(|change| change.entity == entity && change.component_name.ends_with("Health"))
+        .map(|change| change.kind)
+        .collect();
+    assert_eq!(
+        health_change_kinds,
+        vec![
+            ComponentChangeKind::Added,
+            ComponentChangeKind::Removed,
+            ComponentChangeKind::Added,
+            ComponentChangeKind::Removed,
+        ]
+    );
+}
+
+#[test]
+fn component_index_rebuild_remains_correct_under_churn() {
+    let mut world = World::new();
+    world.ensure_component_index::<Name, String>(|name| name.0.clone());
+
+    let first = world.spawn(Name("alpha".to_string()));
+    let second = world.spawn(Name("beta".to_string()));
+    assert_eq!(
+        world.find_entity_by_index::<Name, String>(&"alpha".to_string()),
+        Some(first)
+    );
+    assert_eq!(
+        world.find_entity_by_index::<Name, String>(&"beta".to_string()),
+        Some(second)
+    );
+
+    let _: Name = world.remove(first).unwrap();
+    assert_eq!(
+        world.find_entity_by_index::<Name, String>(&"alpha".to_string()),
+        None
+    );
+
+    world.insert(first, Name("gamma".to_string())).unwrap();
+    let third = world.spawn(Name("alpha".to_string()));
+    world.despawn(second).unwrap();
+
+    assert_eq!(
+        world.find_entity_by_index::<Name, String>(&"beta".to_string()),
+        None
+    );
+    assert_eq!(
+        world.find_entity_by_index::<Name, String>(&"gamma".to_string()),
+        Some(first)
+    );
+    assert_eq!(
+        world.find_entity_by_index::<Name, String>(&"alpha".to_string()),
+        Some(third)
+    );
+
+    world.require_mut::<Name>(first).unwrap().0 = "alpha".to_string();
+    let alpha = world.find_entities_by_index::<Name, String>(&"alpha".to_string());
+    assert_eq!(alpha.len(), 2);
+    assert!(alpha.contains(&first));
+    assert!(alpha.contains(&third));
+}
+
+#[test]
+fn command_queued_spawn_is_visible_next_stage_and_not_readded_next_frame() {
+    fn queue_spawn_once(mut gate: ResMut<SpawnGate>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.spawn(Health(1));
+        gate.0 = true;
+    }
+
+    fn observe_added(mut query: Query<&Health, Added<Health>>, mut seen: ResMut<AddedHealthCounts>) {
+        seen.0.push(query.iter().count());
+    }
+
+    let mut world = World::new();
+    world.insert_resource(SpawnGate(false));
+    world.insert_resource(AddedHealthCounts(Vec::new()));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<WorldUpdate, _, _>(&mut world, queue_spawn_once.in_set(SpawnStage));
+    runtime.add_systems::<WorldUpdate, _, _>(
+        &mut world,
+        observe_added.in_set(ObserveStage).after(SpawnStage),
+    );
+
+    runtime.run_schedule::<WorldUpdate>(&mut world).unwrap();
+    runtime.run_schedule::<WorldUpdate>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<AddedHealthCounts>().unwrap().0, vec![1, 0]);
 }
 
 #[test]

@@ -1,7 +1,6 @@
 // Owner: Grotto Quest ECS - Query Runtime
 mod access_and_filters;
 mod query_data_impls;
-mod store_access;
 mod traits_and_state;
 
 pub use access_and_filters::{

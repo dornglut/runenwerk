@@ -28,3 +28,7 @@ harness = false
 name = "phase5b"
 harness = false
 
+[[bench]]
+name = "phase6"
+harness = false
+

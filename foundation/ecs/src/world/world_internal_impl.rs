@@ -1,13 +1,13 @@
 // Owner: ECS World - Internal Mutation and Change Tracking
 use super::events_and_indexes::{
-    ComponentChangeKind, ComponentChangeRecord, ComponentMeta, ComponentStore,
-    EventObserverNotification, ObserverTrigger, ResourceChangeKind, ResourceChangeRecord,
-    TypedStore,
+    ComponentChangeKind, ComponentChangeRecord, ComponentMeta, EventObserverNotification,
+    ObserverTrigger, ResourceChangeKind, ResourceChangeRecord,
 };
 use super::world_struct::World;
 use crate::component::Component;
 use crate::entity::Entity;
 use crate::errors::EntityError;
+use crate::storage::ArchetypeExecutionBinding;
 use crate::telemetry;
 use std::any::{TypeId, type_name};
 use std::time::Instant;
@@ -26,24 +26,25 @@ impl World {
     ) -> Result<(), EntityError> {
         self.ensure_entity_exists(entity)?;
         self.ensure_component_registered::<T>();
-        let kind = if self
-            .store::<T>()
-            .is_some_and(|store| store.values.contains_key(&entity))
-        {
+        let kind = if self.contains_component::<T>(entity) {
             ComponentChangeKind::Modified
         } else {
             ComponentChangeKind::Added
         };
-        let store = self
-            .components
-            .entry(TypeId::of::<T>())
-            .or_insert_with(|| Box::new(TypedStore::<T>::new()));
-        let store = store
-            .as_any_mut()
-            .downcast_mut::<TypedStore<T>>()
-            .expect("typed store mismatch");
-        store.insert(entity, component);
-        self.record_component_change(entity, TypeId::of::<T>(), T::component_name(), kind);
+        let component_type = TypeId::of::<T>();
+        self.record_component_change(entity, component_type, T::component_name(), kind);
+        let tick = self.change_tick;
+        let inserted = if matches!(kind, ComponentChangeKind::Added) {
+            self.archetype_registry
+                .add_component::<T>(entity, component, tick, &mut self.entity_locations)
+        } else {
+            self.archetype_registry
+                .update_component::<T>(entity, component, tick, &self.entity_locations)
+        };
+        assert!(
+            inserted,
+            "archetype component insert/update must succeed for live entity"
+        );
         Ok(())
     }
 
@@ -51,8 +52,8 @@ impl World {
     pub fn __remove_component<T: Component>(&mut self, entity: Entity) -> Result<T, EntityError> {
         self.ensure_entity_exists(entity)?;
         let value = self
-            .store_mut::<T>()
-            .and_then(|store| store.remove(entity))
+            .archetype_registry
+            .remove_component::<T>(entity, &mut self.entity_locations)
             .ok_or(EntityError::MissingComponent {
                 entity,
                 component: type_name::<T>(),
@@ -73,139 +74,49 @@ impl World {
         out: &mut Vec<Entity>,
     ) {
         let start = Instant::now();
-        out.clear();
-        let mut smallest_store_type = None;
-        if required_present.is_empty() {
-            out.extend(self.alive_entities.iter().copied());
-        } else {
-            let mut smallest_store_size = usize::MAX;
-            for type_id in required_present {
-                let Some(store) = self.components.get(type_id) else {
-                    telemetry::record_query_matching(start.elapsed().as_nanos() as u64, 0, 0);
-                    return;
-                };
-                let size = store.entity_count();
-                if size < smallest_store_size {
-                    smallest_store_size = size;
-                    smallest_store_type = Some(*type_id);
-                }
-            }
-            if let Some(type_id) = smallest_store_type {
-                if let Some(store) = self.components.get(&type_id) {
-                    out.reserve(store.entity_count());
-                    store.collect_entities(out);
-                }
-            }
-        }
-
-        let candidate_count = out.len() as u64;
-        if candidate_count == 0 {
-            telemetry::record_query_matching(start.elapsed().as_nanos() as u64, 0, 0);
-            return;
-        }
-
-        // Fast path for broad single-component queries without exclusions.
-        if excluded.is_empty() && required_present.len() == 1 && smallest_store_type.is_some() {
-            telemetry::record_query_matching(
-                start.elapsed().as_nanos() as u64,
-                candidate_count,
-                out.len() as u64,
-            );
-            return;
-        }
-
-        let mut required_stores: Vec<&dyn ComponentStore> = Vec::new();
-        for type_id in required_present {
-            if Some(*type_id) == smallest_store_type {
-                continue;
-            }
-            let Some(store) = self.components.get(type_id) else {
-                out.clear();
-                telemetry::record_query_matching(
-                    start.elapsed().as_nanos() as u64,
-                    candidate_count,
-                    0,
-                );
-                return;
-            };
-            required_stores.push(store.as_ref());
-        }
-
-        let mut excluded_stores: Vec<&dyn ComponentStore> = Vec::new();
-        for type_id in excluded {
-            if let Some(store) = self.components.get(type_id) {
-                excluded_stores.push(store.as_ref());
-            }
-        }
-
-        if !required_stores.is_empty() || !excluded_stores.is_empty() {
-            if excluded_stores.is_empty() {
-                match required_stores.len() {
-                    0 => {}
-                    1 => {
-                        let required0 = required_stores[0];
-                        out.retain(|entity| required0.contains(*entity));
-                    }
-                    2 => {
-                        let required0 = required_stores[0];
-                        let required1 = required_stores[1];
-                        out.retain(|entity| {
-                            required0.contains(*entity) && required1.contains(*entity)
-                        });
-                    }
-                    _ => {
-                        out.retain(|entity| {
-                            required_stores.iter().all(|store| store.contains(*entity))
-                        });
-                    }
-                }
-            } else if required_stores.is_empty() {
-                match excluded_stores.len() {
-                    0 => {}
-                    1 => {
-                        let excluded0 = excluded_stores[0];
-                        out.retain(|entity| !excluded0.contains(*entity));
-                    }
-                    2 => {
-                        let excluded0 = excluded_stores[0];
-                        let excluded1 = excluded_stores[1];
-                        out.retain(|entity| {
-                            !excluded0.contains(*entity) && !excluded1.contains(*entity)
-                        });
-                    }
-                    _ => {
-                        out.retain(|entity| {
-                            excluded_stores.iter().all(|store| !store.contains(*entity))
-                        });
-                    }
-                }
-            } else if required_stores.len() == 1 && excluded_stores.len() == 1 {
-                let required0 = required_stores[0];
-                let excluded0 = excluded_stores[0];
-                out.retain(|entity| required0.contains(*entity) && !excluded0.contains(*entity));
-            } else {
-                out.retain(|entity| {
-                    required_stores.iter().all(|store| store.contains(*entity))
-                        && excluded_stores.iter().all(|store| !store.contains(*entity))
-                });
-            }
-        }
-
-        if required_present.is_empty() {
-            out.retain(|entity| self.contains(*entity));
-        }
-
+        let _ = self
+            .archetype_registry
+            .collect_matching_entities(required_present, excluded, out);
+        let count = out.len() as u64;
         telemetry::record_query_matching(
             start.elapsed().as_nanos() as u64,
-            candidate_count,
-            out.len() as u64,
+            count,
+            count,
         );
     }
 
+    pub(crate) fn matching_archetype_bindings_into(
+        &self,
+        required_present: &[TypeId],
+        excluded: &[TypeId],
+        out: &mut Vec<ArchetypeExecutionBinding>,
+    ) -> bool {
+        self.archetype_registry
+            .collect_matching_bindings(required_present, excluded, out)
+    }
+
+    pub(crate) fn archetype_entity_at(&self, archetype_index: usize, row: usize) -> Option<Entity> {
+        self.archetype_registry.entity_at(archetype_index, row)
+    }
+
+    pub(super) fn place_entity_in_empty_archetype(&mut self, entity: Entity) {
+        self.archetype_registry
+            .set_entity_components(entity, &[], &mut self.entity_locations);
+    }
+
+    pub(super) fn remove_entity_from_archetype_tracking(&mut self, entity: Entity) {
+        let _ = self
+            .archetype_registry
+            .remove_entity(entity, &mut self.entity_locations);
+    }
+
     fn has_component_by_type_id(&self, entity: Entity, type_id: TypeId) -> bool {
-        self.components
-            .get(&type_id)
-            .is_some_and(|store| store.contains(entity))
+        let Some(location) = self.entity_locations.get(entity) else {
+            return false;
+        };
+        self.archetype_registry
+            .component_types(location.archetype_id)
+            .is_some_and(|component_types| component_types.binary_search(&type_id).is_ok())
     }
 
     pub(crate) fn entity_matches_component_constraints(
@@ -224,8 +135,7 @@ impl World {
     }
 
     pub(super) fn contains_component<T: Component>(&self, entity: Entity) -> bool {
-        self.store::<T>()
-            .is_some_and(|store| store.values.contains_key(&entity))
+        self.has_component_by_type_id(entity, TypeId::of::<T>())
     }
 
     pub(crate) fn component_changed_for_entity_since<T: Component>(
@@ -234,12 +144,9 @@ impl World {
         tick: u64,
     ) -> bool {
         let start = Instant::now();
-        let component_type = TypeId::of::<T>();
         let changed = self
-            .component_entity_last_changed_ticks
-            .get(&component_type)
-            .and_then(|ticks| ticks.get(&entity))
-            .is_some_and(|last_tick| *last_tick > tick);
+            .archetype_component_metadata::<T>(entity)
+            .is_some_and(|(_added_tick, changed_tick)| changed_tick > tick);
         telemetry::record_changed_check(start.elapsed().as_nanos() as u64);
         changed
     }
@@ -250,12 +157,9 @@ impl World {
         tick: u64,
     ) -> bool {
         let start = Instant::now();
-        let component_type = TypeId::of::<T>();
         let added = self
-            .component_entity_last_added_ticks
-            .get(&component_type)
-            .and_then(|ticks| ticks.get(&entity))
-            .is_some_and(|last_tick| *last_tick > tick);
+            .archetype_component_metadata::<T>(entity)
+            .is_some_and(|(added_tick, _changed_tick)| added_tick > tick);
         telemetry::record_added_check(start.elapsed().as_nanos() as u64);
         added
     }
@@ -271,6 +175,12 @@ impl World {
             component_type,
             component_name,
             ComponentChangeKind::Modified,
+        );
+        let _ = self.archetype_registry.mark_component_changed_by_id(
+            entity,
+            component_type,
+            self.change_tick,
+            &self.entity_locations,
         );
     }
 
@@ -289,34 +199,6 @@ impl World {
         kind: ComponentChangeKind,
     ) {
         self.mark_component_type_changed_by_id(component_type);
-        match kind {
-            ComponentChangeKind::Added | ComponentChangeKind::Modified => {
-                self.component_entity_last_changed_ticks
-                    .entry(component_type)
-                    .or_default()
-                    .insert(entity, self.change_tick);
-                if matches!(kind, ComponentChangeKind::Added) {
-                    self.component_entity_last_added_ticks
-                        .entry(component_type)
-                        .or_default()
-                        .insert(entity, self.change_tick);
-                }
-            }
-            ComponentChangeKind::Removed => {
-                if let Some(changed_ticks) = self
-                    .component_entity_last_changed_ticks
-                    .get_mut(&component_type)
-                {
-                    changed_ticks.remove(&entity);
-                }
-                if let Some(added_ticks) = self
-                    .component_entity_last_added_ticks
-                    .get_mut(&component_type)
-                {
-                    added_ticks.remove(&entity);
-                }
-            }
-        }
         self.component_change_log.push(ComponentChangeRecord {
             tick: self.change_tick,
             entity,
@@ -326,19 +208,37 @@ impl World {
         });
     }
 
-    pub(crate) fn store<T: Component>(&self) -> Option<&TypedStore<T>> {
-        self.components
-            .get(&TypeId::of::<T>())
-            .and_then(|store| store.as_any().downcast_ref::<TypedStore<T>>())
+    pub(crate) fn archetype_component<T: Component>(&self, entity: Entity) -> Option<&T> {
+        let ptr = self
+            .archetype_registry
+            .component_ptr::<T>(entity, &self.entity_locations)?;
+        // Safety: pointers are produced by archetype-owned typed columns and remain valid.
+        Some(unsafe { &*ptr })
     }
 
-    pub(crate) fn store_mut<T: Component>(&mut self) -> Option<&mut TypedStore<T>> {
-        self.components
-            .get_mut(&TypeId::of::<T>())
-            .and_then(|store| store.as_any_mut().downcast_mut::<TypedStore<T>>())
+    pub(crate) fn archetype_component_mut_untracked<T: Component>(
+        &mut self,
+        entity: Entity,
+    ) -> Option<&mut T> {
+        let ptr = self
+            .archetype_registry
+            .component_mut_ptr::<T>(entity, &self.entity_locations)?;
+        // Safety: pointers are produced by archetype-owned typed columns and remain valid.
+        Some(unsafe { &mut *ptr })
+    }
+
+    pub(crate) fn archetype_component_metadata<T: Component>(
+        &self,
+        entity: Entity,
+    ) -> Option<(u64, u64)> {
+        let metadata = self
+            .archetype_registry
+            .component_metadata::<T>(entity, &self.entity_locations)?;
+        Some((metadata.added_tick, metadata.changed_tick))
     }
 
     fn ensure_component_registered<T: Component>(&mut self) {
+        self.archetype_registry.register_component_type::<T>();
         self.component_registry
             .entry(TypeId::of::<T>())
             .or_insert_with(|| {
