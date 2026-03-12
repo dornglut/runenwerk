@@ -329,6 +329,173 @@ fn fixed_step_schedule_supports_zero_and_batched_ticks_per_frame() {
     assert_eq!(fixed_state.saturated_frames, 0);
 }
 
+#[derive(Debug, Default, Component)]
+struct TickVisibilityLog(Vec<u64>);
+
+struct TickVisibilityPlugin;
+
+impl Plugin for TickVisibilityPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<TickVisibilityLog>();
+        app.insert_resource(FixedTimeConfig {
+            step_seconds: 1.0 / 60.0,
+        });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 4,
+        });
+        app.add_systems(PreUpdate, force_large_delta);
+        app.add_systems(FixedUpdate, observe_tick_during_fixed_update);
+    }
+}
+
+fn force_large_delta(mut time: ResMut<Time>) {
+    (*time).delta_seconds = 0.05;
+}
+
+fn observe_tick_during_fixed_update(tick: Res<SimulationTick>, mut log: ResMut<TickVisibilityLog>) {
+    (*log).0.push(tick.0);
+}
+
+#[test]
+fn fixed_step_advances_tick_before_each_fixed_update_step() {
+    let mut app = App::headless();
+    app.add_plugin(TickVisibilityPlugin);
+    let app = app.run_for_frames(1).expect("fixed-step frame should run");
+
+    assert_eq!(app.world().resource::<SimulationTick>().unwrap().0, 3);
+    assert_eq!(
+        app.world().resource::<TickVisibilityLog>().unwrap().0,
+        vec![1, 2, 3]
+    );
+    assert_eq!(
+        app.world()
+            .resource::<FixedTimeState>()
+            .unwrap()
+            .steps_ran_last_frame,
+        3
+    );
+}
+
+#[derive(Debug, Default, Component)]
+struct SaturationFixedStepCounter(u32);
+
+struct SaturationPlugin;
+
+impl Plugin for SaturationPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<SaturationFixedStepCounter>();
+        app.insert_resource(FixedTimeConfig {
+            step_seconds: 1.0 / 60.0,
+        });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 1,
+        });
+        app.add_systems(PreUpdate, force_saturating_delta);
+        app.add_systems(FixedUpdate, count_saturation_fixed_step);
+    }
+}
+
+fn force_saturating_delta(mut time: ResMut<Time>) {
+    (*time).delta_seconds = 0.25;
+}
+
+fn count_saturation_fixed_step(mut count: ResMut<SaturationFixedStepCounter>) {
+    (*count).0 += 1;
+}
+
+#[test]
+fn fixed_step_saturation_tracks_dropped_backlog_when_budget_is_exhausted() {
+    let mut app = App::headless();
+    app.add_plugin(SaturationPlugin);
+    let app = app.run_for_frames(1).expect("saturation frame should run");
+
+    assert_eq!(app.world().resource::<SimulationTick>().unwrap().0, 1);
+    assert_eq!(
+        app.world()
+            .resource::<SaturationFixedStepCounter>()
+            .unwrap()
+            .0,
+        1
+    );
+
+    let fixed_state = app.world().resource::<FixedTimeState>().unwrap();
+    assert_eq!(fixed_state.steps_ran_last_frame, 1);
+    assert_eq!(fixed_state.saturated_frames, 1);
+    assert_eq!(fixed_state.accumulator_seconds, 0.0);
+}
+
+#[derive(Debug, Default, Component)]
+struct RuntimeLifecycleLog(Vec<&'static str>);
+
+struct RuntimeLifecyclePlugin;
+
+impl Plugin for RuntimeLifecyclePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<RuntimeLifecycleLog>();
+        app.insert_resource(FixedTimeConfig {
+            step_seconds: 1.0 / 60.0,
+        });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 1,
+        });
+        app.add_systems(Startup, lifecycle_log_startup);
+        app.add_systems(PreUpdate, lifecycle_log_pre_update);
+        app.add_systems(FixedUpdate, lifecycle_log_fixed_update);
+        app.add_systems(Update, lifecycle_log_update);
+        app.add_systems(RenderPrepare, lifecycle_log_render_prepare);
+        app.add_systems(RenderSubmit, lifecycle_log_render_submit);
+        app.add_systems(FrameEnd, lifecycle_log_frame_end);
+    }
+}
+
+fn lifecycle_log_startup(mut log: ResMut<RuntimeLifecycleLog>) {
+    (*log).0.push("startup");
+}
+
+fn lifecycle_log_pre_update(mut log: ResMut<RuntimeLifecycleLog>) {
+    (*log).0.push("pre_update");
+}
+
+fn lifecycle_log_fixed_update(mut log: ResMut<RuntimeLifecycleLog>) {
+    (*log).0.push("fixed_update");
+}
+
+fn lifecycle_log_update(mut log: ResMut<RuntimeLifecycleLog>) {
+    (*log).0.push("update");
+}
+
+fn lifecycle_log_render_prepare(mut log: ResMut<RuntimeLifecycleLog>) {
+    (*log).0.push("render_prepare");
+}
+
+fn lifecycle_log_render_submit(mut log: ResMut<RuntimeLifecycleLog>) {
+    (*log).0.push("render_submit");
+}
+
+fn lifecycle_log_frame_end(mut log: ResMut<RuntimeLifecycleLog>) {
+    (*log).0.push("frame_end");
+}
+
+#[test]
+fn runtime_lifecycle_runs_startup_then_canonical_frame_order() {
+    let mut app = App::headless();
+    app.add_plugin(RuntimeLifecyclePlugin);
+    let app = app.run_for_frames(1).expect("lifecycle frame should run");
+
+    assert_eq!(
+        app.world().resource::<RuntimeLifecycleLog>().unwrap().0,
+        vec![
+            "startup",
+            "pre_update",
+            "fixed_update",
+            "update",
+            "render_prepare",
+            "render_submit",
+            "frame_end",
+        ]
+    );
+}
+
 #[test]
 fn app_tracks_scene_registrations_without_legacy_runtime() {
     let mut app = App::headless();

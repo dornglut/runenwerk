@@ -1,12 +1,10 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
 use crate::plugins::render::domain::Gfx;
-use crate::plugins::time::domain::Time;
-use crate::runtime::fixed_time::{CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick};
-use crate::runtime::platform::{PlatformEvent, apply_platform_event};
-use crate::runtime::schedules::{
-    FixedUpdate, FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
+use crate::runtime::frame_lifecycle::{
+    prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
 };
+use crate::runtime::platform::{PlatformEvent, apply_platform_event};
 use crate::runtime::window::WindowState;
 use anyhow::{Context, Result};
 use std::sync::Arc;
@@ -78,34 +76,18 @@ impl WinitRunner {
     }
 
     fn run_startup_if_needed(&mut self) -> Result<()> {
-        if self.state.startup_ran {
-            return Ok(());
-        }
-        self.state
-            .scheduler
-            .run_schedule::<Startup>(&mut self.state.world)?;
-        self.state.startup_ran = true;
-        Ok(())
+        // Windowed flow uses the same startup contract as headless.
+        prepare_world_for_run(&mut self.state.world, &self.state.title, false);
+        run_startup_if_needed(
+            &mut self.state.world,
+            &mut self.state.scheduler,
+            &mut self.state.startup_ran,
+        )
     }
 
     fn run_frame(&mut self) -> Result<()> {
-        self.state
-            .scheduler
-            .run_schedule::<PreUpdate>(&mut self.state.world)?;
-        self.run_fixed_update_schedule()?;
-        self.state
-            .scheduler
-            .run_schedule::<Update>(&mut self.state.world)?;
-        self.state
-            .scheduler
-            .run_schedule::<RenderPrepare>(&mut self.state.world)?;
-        self.state
-            .scheduler
-            .run_schedule::<RenderSubmit>(&mut self.state.world)?;
-        self.state
-            .scheduler
-            .run_schedule::<FrameEnd>(&mut self.state.world)?;
-        Ok(())
+        // Windowed flow uses the same per-frame schedule order as headless.
+        run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)
     }
 
     fn apply_window_effects(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
@@ -133,100 +115,6 @@ impl WinitRunner {
             window_state.redraw_requested = false;
         } else {
             window.request_redraw();
-        }
-
-        Ok(())
-    }
-
-    fn run_fixed_update_schedule(&mut self) -> Result<()> {
-        let step_seconds = self
-            .state
-            .world
-            .resource::<FixedTimeConfig>()
-            .map(|config| config.step_seconds)
-            .unwrap_or(1.0 / 60.0)
-            .clamp(1.0 / 240.0, 1.0 / 15.0);
-        let delta_seconds = self
-            .state
-            .world
-            .resource::<Time>()
-            .map(|time| time.delta_seconds)
-            .unwrap_or(step_seconds)
-            .clamp(0.0, 0.25);
-        let max_steps_per_frame = self
-            .state
-            .world
-            .resource::<CatchupBudget>()
-            .map(|budget| budget.max_steps_per_frame)
-            .unwrap_or(4)
-            .clamp(1, 16);
-
-        {
-            let mut fixed_state = self
-                .state
-                .world
-                .resource_mut::<FixedTimeState>()
-                .expect("FixedTimeState should be installed");
-            fixed_state.accumulator_seconds = (fixed_state.accumulator_seconds + delta_seconds)
-                .min(step_seconds * max_steps_per_frame as f32);
-            fixed_state.steps_ran_last_frame = 0;
-        }
-
-        let mut steps = 0u32;
-        loop {
-            let should_step = {
-                let fixed_state = self
-                    .state
-                    .world
-                    .resource::<FixedTimeState>()
-                    .expect("FixedTimeState should be installed");
-                fixed_state.accumulator_seconds + f32::EPSILON >= step_seconds
-                    && steps < max_steps_per_frame
-            };
-            if !should_step {
-                break;
-            }
-
-            self.state
-                .scheduler
-                .run_schedule::<FixedUpdate>(&mut self.state.world)?;
-            steps = steps.saturating_add(1);
-
-            let mut fixed_state = self
-                .state
-                .world
-                .resource_mut::<FixedTimeState>()
-                .expect("FixedTimeState should be installed");
-            fixed_state.accumulator_seconds -= step_seconds;
-            fixed_state.steps_ran_last_frame = steps;
-        }
-
-        let saturated = {
-            let fixed_state = self
-                .state
-                .world
-                .resource::<FixedTimeState>()
-                .expect("FixedTimeState should be installed");
-            fixed_state.accumulator_seconds + f32::EPSILON >= step_seconds
-        };
-        if saturated {
-            let mut fixed_state = self
-                .state
-                .world
-                .resource_mut::<FixedTimeState>()
-                .expect("FixedTimeState should be installed");
-            fixed_state.accumulator_seconds = 0.0;
-            fixed_state.saturated_frames = fixed_state.saturated_frames.saturating_add(1);
-            tracing::warn!("fixed-step loop saturated, dropping accumulated time");
-        }
-
-        if steps > 0 {
-            let mut tick = self
-                .state
-                .world
-                .resource_mut::<SimulationTick>()
-                .expect("SimulationTick should be installed");
-            tick.0 = tick.0.saturating_add(steps as u64);
         }
 
         Ok(())
@@ -370,5 +258,104 @@ impl ApplicationHandler for WinitRunner {
             tracing::error!(error = %format!("{err:#}"), "runtime device event failed");
             event_loop.exit();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::App;
+    use crate::runtime::fixed_time::{
+        CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick,
+    };
+    use crate::runtime::schedules::{FixedUpdate, PreUpdate};
+    use crate::runtime::{Res, ResMut};
+
+    #[derive(Debug, Default, ecs::Component)]
+    struct FixedTickLog(Vec<u64>);
+
+    fn configure_probe(app: &mut App) {
+        app.init_resource::<FixedTickLog>();
+        app.insert_resource(FixedTimeConfig {
+            step_seconds: 1.0 / 60.0,
+        });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 4,
+        });
+        app.add_systems(PreUpdate, set_frame_delta);
+        app.add_systems(FixedUpdate, log_tick);
+    }
+
+    fn set_frame_delta(mut time: ResMut<crate::plugins::time::domain::Time>) {
+        (*time).delta_seconds = 0.05;
+    }
+
+    fn log_tick(tick: Res<SimulationTick>, mut log: ResMut<FixedTickLog>) {
+        (*log).0.push(tick.0);
+    }
+
+    #[test]
+    fn headless_and_windowed_paths_share_fixed_step_semantics() {
+        let mut headless = App::headless();
+        configure_probe(&mut headless);
+        headless
+            .prepare_for_run(true)
+            .expect("headless startup should run");
+        headless.run_frame().expect("headless frame should run");
+
+        let headless_log = headless
+            .world()
+            .resource::<FixedTickLog>()
+            .expect("headless log resource should exist")
+            .0
+            .clone();
+        let headless_tick = headless
+            .world()
+            .resource::<SimulationTick>()
+            .expect("headless tick should exist")
+            .0;
+        let headless_fixed = *headless
+            .world()
+            .resource::<FixedTimeState>()
+            .expect("headless fixed state should exist");
+
+        let mut windowed = App::new();
+        configure_probe(&mut windowed);
+        let mut runner = WinitRunner {
+            state: windowed.into_windowed_state(),
+            window: None,
+        };
+        runner
+            .run_startup_if_needed()
+            .expect("windowed startup should run");
+        runner.run_frame().expect("windowed frame should run");
+
+        let windowed_log = runner
+            .state
+            .world
+            .resource::<FixedTickLog>()
+            .expect("windowed log resource should exist")
+            .0
+            .clone();
+        let windowed_tick = runner
+            .state
+            .world
+            .resource::<SimulationTick>()
+            .expect("windowed tick should exist")
+            .0;
+        let windowed_fixed = *runner
+            .state
+            .world
+            .resource::<FixedTimeState>()
+            .expect("windowed fixed state should exist");
+
+        assert_eq!(headless_log, vec![1, 2, 3]);
+        assert_eq!(windowed_log, vec![1, 2, 3]);
+        assert_eq!(headless_log, windowed_log);
+        assert_eq!(headless_tick, windowed_tick);
+        assert_eq!(headless_fixed.steps_ran_last_frame, 3);
+        assert_eq!(windowed_fixed.steps_ran_last_frame, 3);
+        assert_eq!(headless_fixed.saturated_frames, 0);
+        assert_eq!(windowed_fixed.saturated_frames, 0);
     }
 }

@@ -1,5 +1,9 @@
 pub use engine_sim::SimulationTick;
 
+/// Fixed-step configuration and per-frame state resources.
+///
+/// Execution semantics are implemented in `runtime::fixed_step_executor`.
+
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
 pub struct FixedTimeConfig {
     pub step_seconds: f32,

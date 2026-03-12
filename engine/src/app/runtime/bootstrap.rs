@@ -5,6 +5,12 @@ use crate::prelude::Time;
 use crate::*;
 
 impl App {
+    /// Installs builtin runtime resources required by startup and frame execution.
+    ///
+    /// Lifecycle contract:
+    /// - This runs during `App` construction before any plugin `Startup` systems can run.
+    /// - Runners only mutate these resources during run preparation and per-frame execution.
+    /// - Plugins may override defaults by inserting resources after app construction.
     pub(crate) fn install_builtin_resources(&mut self) {
         if self.world.resource::<Time>().is_err() {
             self.world.insert_resource(Time::new());

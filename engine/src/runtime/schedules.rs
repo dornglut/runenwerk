@@ -1,6 +1,11 @@
 use crate::runtime::system::IntoSystemSetKey;
 use scheduler::label::{ScheduleLabel, SystemSetKey};
 
+/// Core runtime schedules.
+///
+/// Frame contract (see `runtime::frame_lifecycle::run_frame`):
+/// `PreUpdate` -> `FixedUpdate` (0..N) -> `Update` -> `RenderPrepare` -> `RenderSubmit` -> `FrameEnd`.
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Startup;
 
