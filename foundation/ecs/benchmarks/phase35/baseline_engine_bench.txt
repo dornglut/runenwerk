@@ -1,5 +1,0 @@
-engine_runtime_phase35/headless_mixed_frame/5000
-                        time:   [1.5356 ms 1.6047 ms 1.6219 ms]
-engine_runtime_phase35/headless_mixed_frame/20000
-                        time:   [6.8697 ms 6.9558 ms 6.9774 ms]
-

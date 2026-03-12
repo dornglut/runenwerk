@@ -1,5 +1,0 @@
-engine_runtime_phase4/headless_mixed_frame/5000
-                        time:   [2.2624 ms 2.2823 ms 2.2873 ms]
-engine_runtime_phase4/headless_mixed_frame/20000
-                        time:   [7.2577 ms 7.3178 ms 7.5580 ms]
-

@@ -1,0 +1,120 @@
+   Compiling ecs v0.1.0 (C:\Users\joshi\Projekte\Runenwerk\foundation\ecs)
+    Finished `bench` profile [optimized] target(s) in 2.34s
+     Running benches\phase6.rs (target\release\deps\phase6-f33988a260f01906.exe)
+Gnuplot not found, using plotters backend
+Benchmarking w1_broad_transform_update/entities/10000
+Benchmarking w1_broad_transform_update/entities/10000: Analyzing
+w1_broad_transform_update/entities/10000
+                        time:   [6.5893 ms 6.6239 ms 6.7621 ms]
+                        change: [-9.9879% -7.7819% -5.5257%] (p = 0.07 > 0.05)
+                        No change in performance detected.
+Benchmarking w1_broad_transform_update/entities/50000
+Benchmarking w1_broad_transform_update/entities/50000: Analyzing
+w1_broad_transform_update/entities/50000
+                        time:   [44.531 ms 45.100 ms 45.243 ms]
+                        change: [+8.8132% +12.161% +15.663%] (p = 0.09 > 0.05)
+                        No change in performance detected.
+Benchmarking w1_broad_transform_update/entities/200000
+Benchmarking w1_broad_transform_update/entities/200000: Analyzing
+w1_broad_transform_update/entities/200000
+                        time:   [199.21 ms 200.99 ms 208.13 ms]
+                        change: [-2.4889% +1.5856% +5.8175%] (p = 0.65 > 0.05)
+                        No change in performance detected.
+
+Benchmarking c2_broad_read_only/entities/10000
+Benchmarking c2_broad_read_only/entities/10000: Analyzing
+c2_broad_read_only/entities/10000
+                        time:   [1.6460 ms 1.6782 ms 1.6863 ms]
+                        change: [-9.3194% -6.5354% -3.6479%] (p = 0.05 > 0.05)
+                        No change in performance detected.
+Benchmarking c2_broad_read_only/entities/50000
+Benchmarking c2_broad_read_only/entities/50000: Analyzing
+c2_broad_read_only/entities/50000
+                        time:   [9.7771 ms 9.8596 ms 9.8802 ms]
+                        change: [-19.418% -18.536% -17.644%] (p = 0.07 > 0.05)
+                        No change in performance detected.
+Benchmarking c2_broad_read_only/entities/200000
+Benchmarking c2_broad_read_only/entities/200000: Analyzing
+c2_broad_read_only/entities/200000
+                        time:   [104.58 ms 104.96 ms 106.50 ms]
+                        change: [+10.235% +13.323% +16.528%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+
+Benchmarking c3_broad_write_only/entities/10000
+Benchmarking c3_broad_write_only/entities/10000: Analyzing
+c3_broad_write_only/entities/10000
+                        time:   [4.9232 ms 4.9299 ms 4.9564 ms]
+                        change: [-4.9552% -3.3479% -1.6967%] (p = 0.08 > 0.05)
+                        No change in performance detected.
+Benchmarking c3_broad_write_only/entities/50000
+Benchmarking c3_broad_write_only/entities/50000: Analyzing
+c3_broad_write_only/entities/50000
+                        time:   [28.968 ms 28.994 ms 29.099 ms]
+                        change: [-18.877% -16.763% -14.547%] (p = 0.05 > 0.05)
+                        No change in performance detected.
+Benchmarking c3_broad_write_only/entities/200000
+Benchmarking c3_broad_write_only/entities/200000: Analyzing
+c3_broad_write_only/entities/200000
+                        time:   [172.74 ms 173.06 ms 174.33 ms]
+                        change: [-3.0369% -1.3398% +0.4014%] (p = 0.50 > 0.05)
+                        No change in performance detected.
+
+Benchmarking c4_broad_double_mut/entities/10000
+Benchmarking c4_broad_double_mut/entities/10000: Analyzing
+c4_broad_double_mut/entities/10000
+                        time:   [9.4340 ms 9.4910 ms 9.7192 ms]
+                        change: [-11.932% -8.5795% -5.0716%] (p = 0.05 > 0.05)
+                        No change in performance detected.
+Benchmarking c4_broad_double_mut/entities/50000
+Benchmarking c4_broad_double_mut/entities/50000: Analyzing
+c4_broad_double_mut/entities/50000
+                        time:   [56.272 ms 56.627 ms 56.715 ms]
+                        change: [-5.5455% -5.1496% -4.7534%] (p = 0.05 > 0.05)
+                        No change in performance detected.
+Benchmarking c4_broad_double_mut/entities/200000
+Benchmarking c4_broad_double_mut/entities/200000: Analyzing
+c4_broad_double_mut/entities/200000
+                        time:   [282.80 ms 290.51 ms 292.44 ms]
+                        change: [-0.6319% +1.1884% +3.0133%] (p = 0.70 > 0.05)
+                        No change in performance detected.
+
+Benchmarking w2_gameplay_mixed/entities/5000
+Benchmarking w2_gameplay_mixed/entities/5000: Analyzing
+w2_gameplay_mixed/entities/5000
+                        time:   [2.5847 ms 2.6341 ms 2.6465 ms]
+                        change: [-0.6477% +2.2475% +5.2427%] (p = 0.33 > 0.05)
+                        No change in performance detected.
+Benchmarking w2_gameplay_mixed/entities/20000
+Benchmarking w2_gameplay_mixed/entities/20000: Analyzing
+w2_gameplay_mixed/entities/20000
+                        time:   [12.579 ms 12.721 ms 12.757 ms]
+                        change: [+13.756% +15.020% +16.294%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+
+Benchmarking w3_structural_churn/spawn_insert_remove_despawn_commands
+Benchmarking w3_structural_churn/spawn_insert_remove_despawn_commands: Analyzing
+w3_structural_churn/spawn_insert_remove_despawn_commands
+                        time:   [577.68 µs 593.66 µs 597.65 µs]
+                        change: [+5.6002% +8.5989% +11.664%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+
+Benchmarking w4_event_heavy/event_reader_writer_interleaved_query
+Benchmarking w4_event_heavy/event_reader_writer_interleaved_query: Analyzing
+w4_event_heavy/event_reader_writer_interleaved_query
+                        time:   [536.01 µs 537.30 µs 542.47 µs]
+                        change: [+23.368% +25.206% +27.076%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+
+Benchmarking w5_scheduler_stress/scheduler_plan_build_96_systems
+Benchmarking w5_scheduler_stress/scheduler_plan_build_96_systems: Analyzing
+w5_scheduler_stress/scheduler_plan_build_96_systems
+                        time:   [704.88 µs 706.29 µs 711.95 µs]
+                        change: [-13.649% -12.022% -10.350%] (p = 0.07 > 0.05)
+                        No change in performance detected.
+Benchmarking w5_scheduler_stress/scheduler_stage_execution_96_systems
+Benchmarking w5_scheduler_stress/scheduler_stage_execution_96_systems: Analyzing
+w5_scheduler_stress/scheduler_stage_execution_96_systems
+                        time:   [161.25 µs 162.14 µs 165.71 µs]
+                        change: [+4.9720% +7.3177% +9.7032%] (p = 0.10 > 0.05)
+                        No change in performance detected.
+

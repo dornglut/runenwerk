@@ -1,9 +1,0 @@
-engine_runtime_phase35/headless_mixed_frame/5000
-                        time:   [1.6545 ms 1.7155 ms 1.7307 ms]
-                        change: [-11.378% -7.3403% -3.1213%] (p = 0.08 > 0.05)
-                        No change in performance detected.
-engine_runtime_phase35/headless_mixed_frame/20000
-                        time:   [6.8200 ms 6.8758 ms 7.0992 ms]
-                        change: [-35.252% -32.315% -29.232%] (p = 0.06 > 0.05)
-                        No change in performance detected.
-

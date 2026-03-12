@@ -1,9 +1,0 @@
-engine_runtime_phase5b/headless_mixed_frame/5000
-                        time:   [883.01 µs 892.24 µs 929.18 µs]
-                        change: [+0.3052% +5.1612% +10.233%] (p = 0.13 > 0.05)
-                        No change in performance detected.
-engine_runtime_phase5b/headless_mixed_frame/20000
-                        time:   [3.5818 ms 3.6222 ms 3.7839 ms]
-                        change: [-18.704% -16.316% -13.924%] (p = 0.05 > 0.05)
-                        No change in performance detected.
-
