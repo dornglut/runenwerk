@@ -77,17 +77,17 @@ fn sync_merges_registered_contributions_into_compiled_flow() {
 }
 
 #[test]
-fn backend_support_checks_fail_loudly_for_unimplemented_builtin_passes() {
+fn backend_support_checks_accept_builtin_passes() {
     let flow = RenderFlow::new("bridge.main")
         .import_texture("surface.color")
         .color_target("bridge.post")
-        .fullscreen_pass("bridge.compose")
+        .graphics_pass("bridge.draw")
         .writes("bridge.post")
         .finish()
         .copy_pass("bridge.copy_to_surface")
         .reads("bridge.post")
         .writes("surface.color")
-        .depends_on("bridge.compose")
+        .depends_on("bridge.draw")
         .finish()
         .present_pass("bridge.present")
         .reads("surface.color")
@@ -95,37 +95,31 @@ fn backend_support_checks_fail_loudly_for_unimplemented_builtin_passes() {
         .finish();
 
     let compiled = compile_flow_plan(&flow).expect("flow should compile into a pass plan");
+    let mut saw_graphics = false;
     let mut saw_copy = false;
     let mut saw_present = false;
     for pass in &compiled.pass_order {
         match pass {
-            CompiledPassDescriptor::Fullscreen(_) => {
+            CompiledPassDescriptor::Graphics(_) => {
+                saw_graphics = true;
                 ensure_compiled_pass_is_supported(pass)
-                    .expect("fullscreen pass should be supported by builtin backend execution");
+                    .expect("graphics pass should be supported by builtin backend execution");
             }
             CompiledPassDescriptor::Copy(_) => {
                 saw_copy = true;
-                let err = ensure_compiled_pass_is_supported(pass)
-                    .expect_err("copy pass must fail loudly until backend copy execution exists");
-                assert!(
-                    err.to_string().contains("copy pass"),
-                    "unexpected copy support error: {err}"
-                );
+                ensure_compiled_pass_is_supported(pass)
+                    .expect("copy pass should be supported by builtin backend execution");
             }
             CompiledPassDescriptor::Present(_) => {
                 saw_present = true;
-                let err = ensure_compiled_pass_is_supported(pass).expect_err(
-                    "present pass must fail loudly until backend present execution exists",
-                );
-                assert!(
-                    err.to_string().contains("present pass"),
-                    "unexpected present support error: {err}"
-                );
+                ensure_compiled_pass_is_supported(pass)
+                    .expect("present pass should be supported by builtin backend execution");
             }
             _ => {}
         }
     }
 
+    assert!(saw_graphics, "compiled plan should include a graphics pass");
     assert!(saw_copy, "compiled plan should include a copy pass");
     assert!(saw_present, "compiled plan should include a present pass");
 }

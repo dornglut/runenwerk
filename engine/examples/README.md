@@ -12,6 +12,10 @@ Use this map to pick an entry point quickly.
   - `scene_manager_ui`
 - Explore a richer public `RenderFlow` authoring sample:
   - `game_of_life_sdf`
+- Explore a boids-oriented compute + graphics + copy + present flow declaration:
+  - `boids_render_flow`
+- Explore an SDF/raymarch-oriented compute + fullscreen + copy + present flow declaration:
+  - `sdf_render_flow`
 - Learn minimal fullscreen render-flow authoring:
   - `render_flow_fullscreen_minimal`
 - Explore a postprocess compositor render flow:
@@ -38,9 +42,17 @@ Use this map to pick an entry point quickly.
   - Run: `cargo run -p engine --example scene_manager_ui`
 - `game_of_life_sdf`
   - Entry: `engine/examples/game_of_life_sdf/main.rs`
-  - Focus: windowed `RenderFlow` execution on the builtin compiled compute/fullscreen/UI path without custom executors.
+  - Focus: windowed `RenderFlow` execution on the builtin compiled path (compute/fullscreen/graphics/copy/present/UI) without custom executors.
   - Shader: `assets/shaders/game_of_life_sdf.wgsl`
   - Run: `cargo run -p engine --example game_of_life_sdf`
+- `boids_render_flow`
+  - Entry: `engine/examples/boids_render_flow/main.rs`
+  - Focus: boids-shaped compute + graphics + copy + present flow declaration on the builtin compiled path.
+  - Run: `cargo run -p engine --example boids_render_flow`
+- `sdf_render_flow`
+  - Entry: `engine/examples/sdf_render_flow/main.rs`
+  - Focus: SDF/raymarch-shaped compute + fullscreen + copy + present flow declaration on the builtin compiled path.
+  - Run: `cargo run -p engine --example sdf_render_flow`
 - `render_flow_fullscreen_minimal`
   - Entry: `engine/examples/render_flow_fullscreen_minimal/main.rs`
   - Focus: minimal namespaced fullscreen flow (`RenderFlow` + `fullscreen_pass`).

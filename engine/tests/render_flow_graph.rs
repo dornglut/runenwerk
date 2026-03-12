@@ -118,6 +118,51 @@ fn present_pass_requires_single_read() {
 }
 
 #[test]
+fn present_pass_count_validation_rejects_multiple_present_nodes() {
+    let flow = RenderFlow::new("present.flow")
+        .import_texture("surface.color")
+        .color_target("post.output")
+        .present_pass("post.present_a")
+        .reads("post.output")
+        .finish()
+        .present_pass("post.present_b")
+        .reads("surface.color")
+        .depends_on("post.present_a")
+        .finish();
+
+    let err = flow
+        .validate()
+        .expect_err("multiple present passes must fail validation");
+    assert!(
+        err.to_string().contains("exactly zero or one present pass"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn present_pass_must_be_terminal() {
+    let flow = RenderFlow::new("present.flow")
+        .import_texture("surface.color")
+        .color_target("post.output")
+        .present_pass("post.present")
+        .reads("post.output")
+        .finish()
+        .fullscreen_pass("post.after_present")
+        .reads("post.output")
+        .writes("surface.color")
+        .depends_on("post.present")
+        .finish();
+
+    let err = flow
+        .validate()
+        .expect_err("present pass must be terminal in execution order");
+    assert!(
+        err.to_string().contains("must be terminal"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn graphics_buffer_role_validation_rejects_texture_as_vertex_buffer() {
     let flow = RenderFlow::new("graphics.flow")
         .color_target("surface.color")

@@ -249,6 +249,13 @@ impl GraphicsPassBuilder {
         self
     }
 
+    pub fn write_texture(mut self, id: &'static str) -> Self {
+        let id = RenderResourceId::new(id);
+        self.pass.write_textures.push(id.clone());
+        self.pass.writes.push(id);
+        self
+    }
+
     pub fn depth_target(mut self, id: &'static str) -> Self {
         self.pass.depth_target = Some(RenderResourceId::new(id));
         self
@@ -263,6 +270,14 @@ impl GraphicsPassBuilder {
             .uniform_bindings
             .push(PassParamBinding::uniform_state(build));
         self
+    }
+
+    pub fn storage_state<S, P>(self, build: fn(&S) -> P) -> Self
+    where
+        S: ecs::Component + Send + Sync + 'static,
+        P: crate::plugins::render::GpuParams + Send + Sync + 'static,
+    {
+        self.uniform_state(build)
     }
 
     pub fn uniform_state_with_surface<S, P>(mut self, build: fn(&S, (u32, u32)) -> P) -> Self

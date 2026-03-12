@@ -3,7 +3,7 @@
 Public `RenderFlow` API example that shows:
 
 - namespaced `compute_pass` + `fullscreen_pass` + `builtin_ui_composite_pass` chaining
-- builtin compiled execution only (no custom executors, no low-level registry mutation)
+- builtin compiled execution only (no custom executors, no low-level registry mutation); graphics/copy/present are also builtin-supported in the same runtime path
 - windowed app wiring with `App::add_render_flow`
 - a procedural Game of Life-style fullscreen shader (`assets/shaders/game_of_life_sdf.wgsl`)
 - ECS-first render params (`ecs_resource`, `uniform_buffer`, `uniform_state`, `uniform_state_with_surface`)

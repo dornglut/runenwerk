@@ -21,6 +21,7 @@ fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
                 std::any::TypeId::of::<ResourceTestParams>()
             );
             assert!(value.params_type_name.contains("ResourceTestParams"));
+            assert!(value.size_bytes > 0);
             let raw = ResourceTestParams { value: 9 }.to_gpu();
             assert_eq!(raw.value, 9);
         }

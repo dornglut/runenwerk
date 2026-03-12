@@ -123,7 +123,45 @@ pub fn validate_flow_graph(
         }
     }
 
+    let present_pass_ids = graph
+        .passes
+        .passes
+        .iter()
+        .filter(|pass| matches!(pass.kind, RenderPassKind::Present))
+        .map(|pass| pass.id.as_str().to_string())
+        .collect::<Vec<_>>();
+    if present_pass_ids.len() > 1 {
+        issues.push(format!(
+            "flow declares {} present passes ({}); exactly zero or one present pass is allowed",
+            present_pass_ids.len(),
+            present_pass_ids.join(", ")
+        ));
+    }
+
     let pass_order = topological_sort(&graph.passes.passes, &mut issues);
+    if present_pass_ids.len() == 1 {
+        let present_id = &present_pass_ids[0];
+        let dependent_passes = graph
+            .passes
+            .passes
+            .iter()
+            .filter(|pass| pass.depends_on.iter().any(|dep| dep.as_str() == present_id))
+            .map(|pass| pass.id.as_str().to_string())
+            .collect::<Vec<_>>();
+        if !dependent_passes.is_empty() {
+            issues.push(format!(
+                "present pass '{}' must be terminal but is a dependency for ({})",
+                present_id,
+                dependent_passes.join(", ")
+            ));
+        }
+        if pass_order.last().is_some_and(|id| id != present_id) {
+            issues.push(format!(
+                "present pass '{}' must be the final execution node; add explicit depends_on edges so it orders last",
+                present_id
+            ));
+        }
+    }
 
     if issues.is_empty() {
         Ok(FlowValidationReport { pass_order })

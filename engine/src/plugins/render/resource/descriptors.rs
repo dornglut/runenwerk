@@ -9,6 +9,7 @@ pub struct UniformBufferDescriptor {
     pub id: RenderResourceId,
     pub params_type_id: TypeId,
     pub params_type_name: &'static str,
+    pub size_bytes: u64,
     pub lifetime: ResourceLifetime,
 }
 
@@ -17,6 +18,7 @@ pub struct StorageBufferDescriptor {
     pub id: RenderResourceId,
     pub params_type_id: TypeId,
     pub params_type_name: &'static str,
+    pub size_bytes: u64,
     pub lifetime: ResourceLifetime,
 }
 
@@ -91,6 +93,7 @@ impl RenderResourceDescriptor {
             id: id.into(),
             params_type_id: TypeId::of::<T>(),
             params_type_name: type_name::<T>(),
+            size_bytes: std::mem::size_of::<T::Raw>().max(1) as u64,
             lifetime,
         })
     }
@@ -113,6 +116,7 @@ impl RenderResourceDescriptor {
             id: id.into(),
             params_type_id: TypeId::of::<T>(),
             params_type_name: type_name::<T>(),
+            size_bytes: std::mem::size_of::<T::Raw>().max(1) as u64,
             lifetime,
         })
     }

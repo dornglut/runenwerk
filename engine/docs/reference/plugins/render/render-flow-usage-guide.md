@@ -10,8 +10,9 @@
 
 Current runtime support in the hard-cutover path:
 
-- builtin compiled execution: `compute_pass`, `fullscreen_pass`, `builtin_ui_composite_pass`
-- declared but not implemented in runtime execution: `graphics_pass`, `copy_pass`, `present_pass` (these fail loudly if executed)
+- builtin compiled execution: `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`
+- `copy_pass` executes texture->texture and buffer->buffer copies for flow-owned resources
+- unsupported builtin subfeatures still fail loudly (for example graphics vertex/index/instance/indirect bindings and non-surface imported resources)
 
 ## Minimal Flow
 
@@ -56,4 +57,6 @@ Use `uniform_state_with_surface` when params depend on surface size.
 
 - `engine/examples/render_flow_fullscreen_minimal/main.rs`
 - `engine/examples/render_flow_postprocess_compositor/main.rs`
+- `engine/examples/boids_render_flow/main.rs`
+- `engine/examples/sdf_render_flow/main.rs`
 - `engine/examples/game_of_life_sdf/main.rs`

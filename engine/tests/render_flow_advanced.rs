@@ -1,5 +1,10 @@
 use engine::plugins::render::RenderFlow;
 
+#[derive(Debug, Clone, Copy, engine::plugins::render::GpuStorage)]
+struct CopyBuffer {
+    value: u32,
+}
+
 #[test]
 fn storage_texture_write_read_chain_validates() {
     let flow = RenderFlow::new("sim.flow")
@@ -16,6 +21,20 @@ fn storage_texture_write_read_chain_validates() {
 
     let report = flow.validate().expect("flow should validate");
     assert_eq!(report.pass_order, vec!["sim.update", "sim.compose"]);
+}
+
+#[test]
+fn buffer_copy_pass_validates() {
+    let flow = RenderFlow::new("buffer.copy.flow")
+        .storage_buffer::<CopyBuffer>("copy.src")
+        .storage_buffer::<CopyBuffer>("copy.dst")
+        .copy_pass("copy.buffer")
+        .reads("copy.src")
+        .writes("copy.dst")
+        .finish();
+
+    flow.validate()
+        .expect("buffer-to-buffer copy declaration should validate");
 }
 
 #[test]

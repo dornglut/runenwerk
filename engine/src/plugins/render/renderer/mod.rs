@@ -105,6 +105,29 @@ fn fs_main() -> @location(0) vec4<f32> {
 }
 "#;
 
+pub const DEFAULT_GRAPHICS_SHADER: &str = r#"
+struct VsOut {
+    @builtin(position) clip_position : vec4<f32>,
+};
+
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VsOut {
+    let pos = array<vec2<f32>, 3>(
+        vec2<f32>(-0.6, -0.4),
+        vec2<f32>(0.0, 0.6),
+        vec2<f32>(0.6, -0.4),
+    );
+    var out: VsOut;
+    out.clip_position = vec4<f32>(pos[vertex_index], 0.0, 1.0);
+    return out;
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.9, 0.55, 0.22, 1.0);
+}
+"#;
+
 pub const DEFAULT_COMPUTE_SHADER: &str = r#"
 @compute @workgroup_size(1, 1, 1)
 fn cs_main() {}
@@ -246,6 +269,7 @@ impl Gfx {
         timings.renderer = self.renderer.render(
             &self.ctx.device,
             &self.ctx.queue,
+            &frame.texture,
             &view,
             frame_data,
             draw_list,
@@ -265,7 +289,6 @@ impl Gfx {
 }
 
 mod extract;
-mod graph_execution;
 mod prepare;
 mod render_flow;
 mod setup;

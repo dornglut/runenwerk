@@ -26,15 +26,12 @@ Already complete:
 - canonical render architecture is in place
 - `RenderFlow` / `RenderFlowContribution` are the normal authoring path
 - compiled planning exists
-- builtin execution exists for the currently supported pass kinds
+- builtin execution exists for `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, and `builtin_ui_composite_pass`
 - hard cutover removed duplicate legacy ownership trees
 - examples and tests validate the new architecture
 
 Still missing or incomplete:
 
-- `graphics_pass` builtin execution
-- `copy_pass` builtin execution
-- `present_pass` builtin execution
 - full binding model for graphics/resource-heavy workflows
 - serious feature proofs on top of the new architecture
 - stronger persistent/history resource workflows
@@ -90,6 +87,8 @@ This order minimizes churn and proves real capability as early as possible.
 ---
 
 # Phase R1 — Builtin `graphics_pass`
+
+Status: Complete (March 12, 2026). Builtin runtime graphics pass execution is wired through compiled flow execution, with loud-failure guards for unsupported advanced graphics bindings.
 
 ## Goal
 
@@ -183,6 +182,8 @@ You can write a declarative `graphics_pass(...)` and get visible geometry with b
 
 # Phase R2 — Builtin `copy_pass`
 
+Status: Complete (March 12, 2026). Builtin runtime copy pass execution is wired through compiled flow execution for supported texture-like copies, with loud failures for unsupported combinations.
+
 ## Goal
 
 Implement first-class copy execution.
@@ -252,6 +253,8 @@ A declarative `copy_pass(...)` executes through builtin backend execution.
 
 # Phase R3 — Builtin `present_pass`
 
+Status: Complete (March 12, 2026). Builtin runtime present pass execution is wired through compiled flow execution with explicit terminal present-pass validation semantics.
+
 ## Goal
 
 Implement explicit final present support.
@@ -313,6 +316,8 @@ The frame can end in a first-class declarative `present_pass(...)`.
 ---
 
 # Phase R4 — Binding Model Expansion
+
+Status: In progress. Landed so far: explicit buffer size metadata on uniform/storage descriptors, first-class buffer-to-buffer `copy_pass` execution, and graphics-pass builder parity (`write_texture`, `storage_state`).
 
 ## Goal
 
@@ -450,6 +455,8 @@ The public API feels deliberate and low-friction.
 
 # Phase R6 — Boids Feature Proof
 
+Status: In progress. Added `engine/examples/boids_render_flow/main.rs` as a canonical builtin compiled boids-shaped flow declaration (compute + graphics + copy + present, no custom executors).
+
 ## Goal
 
 Prove the architecture with a serious compute + draw workload.
@@ -511,6 +518,8 @@ Boids works entirely on the builtin compiled flow system.
 ---
 
 # Phase R7 — Rebuild SDF Renderer on the New Path
+
+Status: In progress. Added `engine/examples/sdf_render_flow/main.rs` as a canonical builtin compiled SDF-shaped flow declaration (compute + fullscreen + copy + present, no custom executors).
 
 ## Goal
 
@@ -755,11 +764,11 @@ Fragments and hot reload feel like first-class extensions of the architecture.
 # Recommended Concrete Order of Attack
 
 ## Immediate next steps
-1. **R1 — Builtin `graphics_pass`**
-2. **R2 — Builtin `copy_pass`**
-3. **R3 — Builtin `present_pass`**
+1. **R4 — Binding model expansion**
+2. **R6 — Boids feature proof**
+3. **R7 — Rebuild SDF renderer on new path**
 
-These are the most important missing builtin execution pieces.
+Builtin pass completion is done; these are the highest-value remaining execution and feature-proof phases.
 
 ## Then
 4. **R4 — Binding model expansion**

@@ -282,6 +282,14 @@ impl ContributionGraphicsPassBuilder {
         self
     }
 
+    pub fn storage_state<S, P>(self, build: fn(&S) -> P) -> Self
+    where
+        S: ecs::Component + Send + Sync + 'static,
+        P: GpuParams + Send + Sync + 'static,
+    {
+        self.uniform_state(build)
+    }
+
     pub fn uniform_state_with_surface<S, P>(mut self, build: fn(&S, (u32, u32)) -> P) -> Self
     where
         S: ecs::Component + Send + Sync + 'static,
