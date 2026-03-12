@@ -222,6 +222,105 @@ pub fn snapshot() -> EcsTelemetrySnapshot {
     imp::snapshot()
 }
 
+pub fn snapshot_delta(
+    before: &EcsTelemetrySnapshot,
+    after: &EcsTelemetrySnapshot,
+) -> EcsTelemetrySnapshot {
+    EcsTelemetrySnapshot {
+        query_matching_calls: after
+            .query_matching_calls
+            .saturating_sub(before.query_matching_calls),
+        query_matching_nanos: after
+            .query_matching_nanos
+            .saturating_sub(before.query_matching_nanos),
+        query_matching_candidates: after
+            .query_matching_candidates
+            .saturating_sub(before.query_matching_candidates),
+        query_matching_matches: after
+            .query_matching_matches
+            .saturating_sub(before.query_matching_matches),
+        query_iter_calls: after
+            .query_iter_calls
+            .saturating_sub(before.query_iter_calls),
+        query_iter_nanos: after
+            .query_iter_nanos
+            .saturating_sub(before.query_iter_nanos),
+        query_get_calls: after.query_get_calls.saturating_sub(before.query_get_calls),
+        query_get_nanos: after.query_get_nanos.saturating_sub(before.query_get_nanos),
+        query_single_calls: after
+            .query_single_calls
+            .saturating_sub(before.query_single_calls),
+        query_single_nanos: after
+            .query_single_nanos
+            .saturating_sub(before.query_single_nanos),
+        changed_check_calls: after
+            .changed_check_calls
+            .saturating_sub(before.changed_check_calls),
+        changed_check_nanos: after
+            .changed_check_nanos
+            .saturating_sub(before.changed_check_nanos),
+        added_check_calls: after
+            .added_check_calls
+            .saturating_sub(before.added_check_calls),
+        added_check_nanos: after
+            .added_check_nanos
+            .saturating_sub(before.added_check_nanos),
+        runtime_plan_calls: after
+            .runtime_plan_calls
+            .saturating_sub(before.runtime_plan_calls),
+        runtime_plan_nanos: after
+            .runtime_plan_nanos
+            .saturating_sub(before.runtime_plan_nanos),
+        runtime_stage_calls: after
+            .runtime_stage_calls
+            .saturating_sub(before.runtime_stage_calls),
+        runtime_stage_nanos: after
+            .runtime_stage_nanos
+            .saturating_sub(before.runtime_stage_nanos),
+        runtime_flush_calls: after
+            .runtime_flush_calls
+            .saturating_sub(before.runtime_flush_calls),
+        runtime_flush_nanos: after
+            .runtime_flush_nanos
+            .saturating_sub(before.runtime_flush_nanos),
+        runtime_flush_command_queues: after
+            .runtime_flush_command_queues
+            .saturating_sub(before.runtime_flush_command_queues),
+        event_reader_calls: after
+            .event_reader_calls
+            .saturating_sub(before.event_reader_calls),
+        event_reader_nanos: after
+            .event_reader_nanos
+            .saturating_sub(before.event_reader_nanos),
+        events_read: after.events_read.saturating_sub(before.events_read),
+        event_writer_calls: after
+            .event_writer_calls
+            .saturating_sub(before.event_writer_calls),
+        event_writer_nanos: after
+            .event_writer_nanos
+            .saturating_sub(before.event_writer_nanos),
+        events_written: after.events_written.saturating_sub(before.events_written),
+        scheduler: scheduler::telemetry::SchedulerTelemetrySnapshot {
+            plan_build_calls: after
+                .scheduler
+                .plan_build_calls
+                .saturating_sub(before.scheduler.plan_build_calls),
+            plan_build_nanos: after
+                .scheduler
+                .plan_build_nanos
+                .saturating_sub(before.scheduler.plan_build_nanos),
+            plan_conflict_checks: after
+                .scheduler
+                .plan_conflict_checks
+                .saturating_sub(before.scheduler.plan_conflict_checks),
+            plan_stage_count: after
+                .scheduler
+                .plan_stage_count
+                .saturating_sub(before.scheduler.plan_stage_count),
+        },
+    }
+}
+
 pub(crate) fn record_query_matching(duration_nanos: u64, candidates: u64, matches: u64) {
     imp::record_query_matching(duration_nanos, candidates, matches);
 }

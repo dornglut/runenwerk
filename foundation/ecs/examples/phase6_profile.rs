@@ -1,7 +1,7 @@
 use ecs::prelude::*;
 use ecs::telemetry::{self, EcsTelemetrySnapshot};
 use scheduler::{ScheduleLabel, SystemSet};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Copy, Clone, ecs::Component)]
 struct Position {
@@ -103,6 +103,94 @@ impl SystemSet for SetC {
     }
 }
 
+#[derive(Copy, Clone)]
+struct WorkloadMeta {
+    entity_count: usize,
+    repetition_count: u32,
+    schedule_run_count: u32,
+}
+
+fn nanos_to_ms(nanos: u64) -> f64 {
+    nanos as f64 / 1_000_000.0
+}
+
+fn print_workload_report(
+    name: &str,
+    setup_elapsed: Duration,
+    run_elapsed: Duration,
+    meta: WorkloadMeta,
+    delta: &EcsTelemetrySnapshot,
+) {
+    let query_total_ms = nanos_to_ms(
+        delta
+            .query_matching_nanos
+            .saturating_add(delta.query_iter_nanos)
+            .saturating_add(delta.query_get_nanos)
+            .saturating_add(delta.query_single_nanos),
+    );
+    let filter_total_ms = nanos_to_ms(
+        delta
+            .changed_check_nanos
+            .saturating_add(delta.added_check_nanos),
+    );
+    let runtime_total_ms = nanos_to_ms(
+        delta
+            .runtime_plan_nanos
+            .saturating_add(delta.runtime_stage_nanos)
+            .saturating_add(delta.runtime_flush_nanos),
+    );
+    let event_total_ms = nanos_to_ms(
+        delta
+            .event_reader_nanos
+            .saturating_add(delta.event_writer_nanos),
+    );
+
+    println!("\n=== {} ===", name);
+    println!("setup_time_ms: {:.3}", setup_elapsed.as_secs_f64() * 1000.0);
+    println!("run_time_ms: {:.3}", run_elapsed.as_secs_f64() * 1000.0);
+    println!(
+        "metadata: entities={} repetitions={} schedule_runs={}",
+        meta.entity_count, meta.repetition_count, meta.schedule_run_count
+    );
+
+    println!(
+        "derived_ms: query_total={:.3} filter_total={:.3} runtime_total={:.3} event_total={:.3}",
+        query_total_ms, filter_total_ms, runtime_total_ms, event_total_ms
+    );
+
+    println!(
+        "query: matching_calls={} iter_calls={} get_calls={} single_calls={}",
+        delta.query_matching_calls, delta.query_iter_calls, delta.query_get_calls, delta.query_single_calls
+    );
+    println!(
+        "runtime: plan_calls={} stage_calls={} flush_calls={} flush_queues={}",
+        delta.runtime_plan_calls,
+        delta.runtime_stage_calls,
+        delta.runtime_flush_calls,
+        delta.runtime_flush_command_queues
+    );
+    println!(
+        "events: reader_calls={} writer_calls={} read={} written={}",
+        delta.event_reader_calls, delta.event_writer_calls, delta.events_read, delta.events_written
+    );
+
+    println!("scheduler_summary:");
+    println!(
+        "  plan_build_calls={} plan_build_ms={:.3} conflict_checks={} stage_count={}",
+        delta.scheduler.plan_build_calls,
+        nanos_to_ms(delta.scheduler.plan_build_nanos),
+        delta.scheduler.plan_conflict_checks,
+        delta.scheduler.plan_stage_count
+    );
+
+    if delta.query_get_calls == 0 {
+        println!("note: query_get_nanos is zero because Query::get was not exercised.");
+    }
+    if delta.query_single_calls == 0 {
+        println!("note: query_single_nanos is zero because Query::single was not exercised.");
+    }
+}
+
 fn w2_move(mut query: Query<(&mut Position, &Velocity), (With<Simulated>, Without<Disabled>)>) {
     for (position, velocity) in query.iter() {
         position.x += velocity.x;
@@ -127,10 +215,7 @@ fn w2_scan_changed(
     (*stats).0 = (*stats).0.wrapping_add(seen);
 }
 
-fn w2_scan_added(
-    mut query: Query<(Entity, &Health), Added<Health>>,
-    mut stats: ResMut<MixedStats>,
-) {
+fn w2_scan_added(mut query: Query<(Entity, &Health), Added<Health>>, mut stats: ResMut<MixedStats>) {
     let mut seen = 0_u64;
     for _ in query.iter() {
         seen = seen.saturating_add(1);
@@ -209,117 +294,11 @@ fn w5_read_mix_alt(r1: Res<R1>, r3: Res<R3>, mut sink: ResMut<Sink>) {
     (*sink).0 = (*sink).0.wrapping_add((*r1).0).wrapping_add((*r3).0);
 }
 
-fn snapshot_delta(
-    before: &EcsTelemetrySnapshot,
-    after: &EcsTelemetrySnapshot,
-) -> EcsTelemetrySnapshot {
-    EcsTelemetrySnapshot {
-        query_matching_calls: after
-            .query_matching_calls
-            .saturating_sub(before.query_matching_calls),
-        query_matching_nanos: after
-            .query_matching_nanos
-            .saturating_sub(before.query_matching_nanos),
-        query_matching_candidates: after
-            .query_matching_candidates
-            .saturating_sub(before.query_matching_candidates),
-        query_matching_matches: after
-            .query_matching_matches
-            .saturating_sub(before.query_matching_matches),
-        query_iter_calls: after
-            .query_iter_calls
-            .saturating_sub(before.query_iter_calls),
-        query_iter_nanos: after
-            .query_iter_nanos
-            .saturating_sub(before.query_iter_nanos),
-        query_get_calls: after.query_get_calls.saturating_sub(before.query_get_calls),
-        query_get_nanos: after.query_get_nanos.saturating_sub(before.query_get_nanos),
-        query_single_calls: after
-            .query_single_calls
-            .saturating_sub(before.query_single_calls),
-        query_single_nanos: after
-            .query_single_nanos
-            .saturating_sub(before.query_single_nanos),
-        changed_check_calls: after
-            .changed_check_calls
-            .saturating_sub(before.changed_check_calls),
-        changed_check_nanos: after
-            .changed_check_nanos
-            .saturating_sub(before.changed_check_nanos),
-        added_check_calls: after
-            .added_check_calls
-            .saturating_sub(before.added_check_calls),
-        added_check_nanos: after
-            .added_check_nanos
-            .saturating_sub(before.added_check_nanos),
-        runtime_plan_calls: after
-            .runtime_plan_calls
-            .saturating_sub(before.runtime_plan_calls),
-        runtime_plan_nanos: after
-            .runtime_plan_nanos
-            .saturating_sub(before.runtime_plan_nanos),
-        runtime_stage_calls: after
-            .runtime_stage_calls
-            .saturating_sub(before.runtime_stage_calls),
-        runtime_stage_nanos: after
-            .runtime_stage_nanos
-            .saturating_sub(before.runtime_stage_nanos),
-        runtime_flush_calls: after
-            .runtime_flush_calls
-            .saturating_sub(before.runtime_flush_calls),
-        runtime_flush_nanos: after
-            .runtime_flush_nanos
-            .saturating_sub(before.runtime_flush_nanos),
-        runtime_flush_command_queues: after
-            .runtime_flush_command_queues
-            .saturating_sub(before.runtime_flush_command_queues),
-        event_reader_calls: after
-            .event_reader_calls
-            .saturating_sub(before.event_reader_calls),
-        event_reader_nanos: after
-            .event_reader_nanos
-            .saturating_sub(before.event_reader_nanos),
-        events_read: after.events_read.saturating_sub(before.events_read),
-        event_writer_calls: after
-            .event_writer_calls
-            .saturating_sub(before.event_writer_calls),
-        event_writer_nanos: after
-            .event_writer_nanos
-            .saturating_sub(before.event_writer_nanos),
-        events_written: after.events_written.saturating_sub(before.events_written),
-        scheduler: scheduler::telemetry::SchedulerTelemetrySnapshot {
-            plan_build_calls: after
-                .scheduler
-                .plan_build_calls
-                .saturating_sub(before.scheduler.plan_build_calls),
-            plan_build_nanos: after
-                .scheduler
-                .plan_build_nanos
-                .saturating_sub(before.scheduler.plan_build_nanos),
-            plan_conflict_checks: after
-                .scheduler
-                .plan_conflict_checks
-                .saturating_sub(before.scheduler.plan_conflict_checks),
-            plan_stage_count: after
-                .scheduler
-                .plan_stage_count
-                .saturating_sub(before.scheduler.plan_stage_count),
-        },
-    }
-}
-
-fn print_workload_report(name: &str, elapsed: std::time::Duration, delta: &EcsTelemetrySnapshot) {
-    println!("\n=== {} ===", name);
-    println!("wall_time_ms: {:.3}", elapsed.as_secs_f64() * 1000.0);
-    println!("telemetry: {:#?}", delta);
-}
-
 fn main() {
     telemetry::reset();
 
-    let before_w1 = telemetry::snapshot();
-    let start_w1 = Instant::now();
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         for i in 0..50_000 {
             world.spawn((
@@ -331,23 +310,40 @@ fn main() {
             ));
         }
         let query = world.query_state::<(&mut Position, &Velocity), ()>();
+        let setup_elapsed = setup_start.elapsed();
+
+        // Warmup iteration (untimed).
+        for (position, velocity) in query.iter(&mut world) {
+            position.x += velocity.x;
+            position.y += velocity.y;
+        }
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         for _ in 0..8 {
             for (position, velocity) in query.iter(&mut world) {
                 position.x += velocity.x;
                 position.y += velocity.y;
             }
         }
-    }
-    let after_w1 = telemetry::snapshot();
-    print_workload_report(
-        "W1 broad transform update",
-        start_w1.elapsed(),
-        &snapshot_delta(&before_w1, &after_w1),
-    );
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
 
-    let before_c2 = telemetry::snapshot();
-    let start_c2 = Instant::now();
+        print_workload_report(
+            "W1 broad transform update (50k x 8)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 50_000,
+                repetition_count: 8,
+                schedule_run_count: 0,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
+    }
+
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         for i in 0..50_000 {
             world.spawn((
@@ -359,6 +355,17 @@ fn main() {
             ));
         }
         let query = world.query_state::<&Position, ()>();
+        let setup_elapsed = setup_start.elapsed();
+
+        // Warmup iteration (untimed).
+        let mut warmup_checksum = 0.0_f32;
+        for position in query.iter(&world) {
+            warmup_checksum += position.x + position.y;
+        }
+        std::hint::black_box(warmup_checksum);
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         let mut checksum = 0.0_f32;
         for _ in 0..8 {
             for position in query.iter(&world) {
@@ -366,17 +373,24 @@ fn main() {
             }
         }
         std::hint::black_box(checksum);
-    }
-    let after_c2 = telemetry::snapshot();
-    print_workload_report(
-        "C2 broad no-filter read query",
-        start_c2.elapsed(),
-        &snapshot_delta(&before_c2, &after_c2),
-    );
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
 
-    let before_c3 = telemetry::snapshot();
-    let start_c3 = Instant::now();
+        print_workload_report(
+            "C2 broad no-filter read query (50k x 8)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 50_000,
+                repetition_count: 8,
+                schedule_run_count: 0,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
+    }
+
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         for i in 0..50_000 {
             world.spawn((
@@ -388,6 +402,19 @@ fn main() {
             ));
         }
         let query = world.query_state::<&mut Velocity, ()>();
+        let setup_elapsed = setup_start.elapsed();
+
+        // Warmup iteration (untimed).
+        let mut warmup_checksum = 0.0_f32;
+        for velocity in query.iter(&mut world) {
+            velocity.x += 0.01;
+            velocity.y -= 0.01;
+            warmup_checksum += velocity.x + velocity.y;
+        }
+        std::hint::black_box(warmup_checksum);
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         let mut checksum = 0.0_f32;
         for _ in 0..8 {
             for velocity in query.iter(&mut world) {
@@ -397,17 +424,24 @@ fn main() {
             }
         }
         std::hint::black_box(checksum);
-    }
-    let after_c3 = telemetry::snapshot();
-    print_workload_report(
-        "C3 broad simple write query",
-        start_c3.elapsed(),
-        &snapshot_delta(&before_c3, &after_c3),
-    );
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
 
-    let before_c4 = telemetry::snapshot();
-    let start_c4 = Instant::now();
+        print_workload_report(
+            "C3 broad simple write query (50k x 8)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 50_000,
+                repetition_count: 8,
+                schedule_run_count: 0,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
+    }
+
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         for i in 0..50_000 {
             world.spawn((
@@ -419,6 +453,21 @@ fn main() {
             ));
         }
         let query = world.query_state::<(&mut Position, &mut Velocity), ()>();
+        let setup_elapsed = setup_start.elapsed();
+
+        // Warmup iteration (untimed).
+        let mut warmup_checksum = 0.0_f32;
+        for (position, velocity) in query.iter(&mut world) {
+            velocity.x += 0.01;
+            velocity.y -= 0.01;
+            position.x += velocity.x;
+            position.y += velocity.y;
+            warmup_checksum += position.x + position.y + velocity.x + velocity.y;
+        }
+        std::hint::black_box(warmup_checksum);
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         let mut checksum = 0.0_f32;
         for _ in 0..8 {
             for (position, velocity) in query.iter(&mut world) {
@@ -430,17 +479,24 @@ fn main() {
             }
         }
         std::hint::black_box(checksum);
-    }
-    let after_c4 = telemetry::snapshot();
-    print_workload_report(
-        "C4 broad double mutable query",
-        start_c4.elapsed(),
-        &snapshot_delta(&before_c4, &after_c4),
-    );
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
 
-    let before_w2 = telemetry::snapshot();
-    let start_w2 = Instant::now();
+        print_workload_report(
+            "C4 broad double mutable query (50k x 8)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 50_000,
+                repetition_count: 8,
+                schedule_run_count: 0,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
+    }
+
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         world.insert_resource(MixedStats::default());
         for i in 0..20_000 {
@@ -472,20 +528,35 @@ fn main() {
             &mut world,
             (w2_move, w2_mutate_health, w2_scan_changed, w2_scan_added),
         );
+        let _ = runtime.plan_for::<W2>().expect("w2 plan should exist");
+        let setup_elapsed = setup_start.elapsed();
+
+        // Warmup iteration (untimed).
+        runtime.run_schedule::<W2>(&mut world).expect("w2 warmup run");
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         for _ in 0..20 {
             runtime.run_schedule::<W2>(&mut world).expect("w2 run");
         }
-    }
-    let after_w2 = telemetry::snapshot();
-    print_workload_report(
-        "W2 gameplay mixed",
-        start_w2.elapsed(),
-        &snapshot_delta(&before_w2, &after_w2),
-    );
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
 
-    let before_w3 = telemetry::snapshot();
-    let start_w3 = Instant::now();
+        print_workload_report(
+            "W2 mixed/composite gameplay schedule (20k x 20 runs)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 20_000,
+                repetition_count: 20,
+                schedule_run_count: 20,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
+    }
+
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         for i in 0..20_000 {
             world.spawn((
@@ -499,20 +570,35 @@ fn main() {
         }
         let mut runtime = Runtime::new();
         runtime.add_systems::<W3, _, _>(&mut world, (w3_spawn, w3_despawn));
+        let _ = runtime.plan_for::<W3>().expect("w3 plan should exist");
+        let setup_elapsed = setup_start.elapsed();
+
+        // Warmup iteration (untimed).
+        runtime.run_schedule::<W3>(&mut world).expect("w3 warmup run");
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         for _ in 0..20 {
             runtime.run_schedule::<W3>(&mut world).expect("w3 run");
         }
-    }
-    let after_w3 = telemetry::snapshot();
-    print_workload_report(
-        "W3 structural churn",
-        start_w3.elapsed(),
-        &snapshot_delta(&before_w3, &after_w3),
-    );
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
 
-    let before_w4 = telemetry::snapshot();
-    let start_w4 = Instant::now();
+        print_workload_report(
+            "W3 structural churn schedule (20k base, 128 churn x 20 runs)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 20_000,
+                repetition_count: 20,
+                schedule_run_count: 20,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
+    }
+
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         world.insert_resource(EventStats::default());
         for i in 0..10_000 {
@@ -526,21 +612,40 @@ fn main() {
         }
         let mut runtime = Runtime::new();
         runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_events));
+        let _ = runtime.plan_for::<W4>().expect("w4 plan should exist");
+        let setup_elapsed = setup_start.elapsed();
+
+        // Warmup iteration (untimed).
+        runtime.run_schedule::<W4>(&mut world).expect("w4 warmup run");
+        // Clearing the event channel between runs is intentional here: this workload models
+        // per-frame transient event consumption where backlog carryover would skew read/write cost.
+        world.clear_events::<BenchEvent>();
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         for _ in 0..20 {
             runtime.run_schedule::<W4>(&mut world).expect("w4 run");
+            // This workload intentionally uses explicit clear-based event lifecycle cleanup.
             world.clear_events::<BenchEvent>();
         }
-    }
-    let after_w4 = telemetry::snapshot();
-    print_workload_report(
-        "W4 event heavy",
-        start_w4.elapsed(),
-        &snapshot_delta(&before_w4, &after_w4),
-    );
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
 
-    let before_w5 = telemetry::snapshot();
-    let start_w5 = Instant::now();
+        print_workload_report(
+            "W4 event-heavy schedule (10k entities, 256 events x 20 runs)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 10_000,
+                repetition_count: 20,
+                schedule_run_count: 20,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
+    }
+
     {
+        let setup_start = Instant::now();
         let mut world = World::new();
         world.insert_resource(R0::default());
         world.insert_resource(R1::default());
@@ -562,19 +667,34 @@ fn main() {
                 ),
             );
         }
+        // Build the execution plan before timed runs so setup/planning cost is separated.
+        let _ = runtime.plan_for::<W5>().expect("w5 plan should exist");
+        let setup_elapsed = setup_start.elapsed();
 
+        // Warmup iteration (untimed).
+        runtime.run_schedule::<W5>(&mut world).expect("w5 warmup run");
+
+        let before = telemetry::snapshot();
+        let run_start = Instant::now();
         for _ in 0..40 {
             runtime.run_schedule::<W5>(&mut world).expect("w5 run");
         }
+        let run_elapsed = run_start.elapsed();
+        let after = telemetry::snapshot();
+
+        print_workload_report(
+            "W5 scheduler stress schedule (16 registrations x 40 runs)",
+            setup_elapsed,
+            run_elapsed,
+            WorkloadMeta {
+                entity_count: 0,
+                repetition_count: 40,
+                schedule_run_count: 40,
+            },
+            &telemetry::snapshot_delta(&before, &after),
+        );
     }
-    let after_w5 = telemetry::snapshot();
-    print_workload_report(
-        "W5 scheduler stress",
-        start_w5.elapsed(),
-        &snapshot_delta(&before_w5, &after_w5),
-    );
 
     println!("\n=== cumulative snapshot ===");
     println!("{:#?}", telemetry::snapshot());
 }
-
