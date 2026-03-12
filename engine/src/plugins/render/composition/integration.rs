@@ -1,6 +1,8 @@
 use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::composition::RenderFlowContribution;
-use crate::plugins::render::graph::{CompiledRenderFlowPlan, compile_flow_plan, merge_flow_with_contributions};
+use crate::plugins::render::graph::{
+    CompiledRenderFlowPlan, compile_flow_plan, merge_flow_with_contributions,
+};
 use crate::runtime::ResMut;
 use std::collections::BTreeMap;
 
@@ -107,6 +109,8 @@ impl RenderFlowRegistryResource {
     }
 }
 
-pub(crate) fn sync_render_flow_registry_system(mut flow_registry: ResMut<RenderFlowRegistryResource>) {
+pub(crate) fn sync_render_flow_registry_system(
+    mut flow_registry: ResMut<RenderFlowRegistryResource>,
+) {
     flow_registry.sync_compiled_flows();
 }

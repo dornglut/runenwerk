@@ -76,7 +76,9 @@ impl BackendResourceAllocatorResource {
     }
 
     pub fn remove_buffer(&mut self, id: &str) -> bool {
-        self.buffers.remove(&BufferResourceId(id.to_string())).is_some()
+        self.buffers
+            .remove(&BufferResourceId(id.to_string()))
+            .is_some()
     }
 
     pub fn texture_entries(&self) -> Vec<TextureResourceEntry> {

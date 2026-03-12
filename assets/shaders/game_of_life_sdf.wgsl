@@ -1,97 +1,49 @@
-struct SimParams {
-    grid_size : vec2<u32>,
-    step : u32,
-    _pad0 : u32,
-};
+const GRID_SIZE : vec2<i32> = vec2<i32>(160, 90);
 
-struct ComposeParams {
-    output_size : vec2<f32>,
-    grid_size : vec2<f32>,
-    cell_radius : f32,
-    edge_softness : f32,
-    grid_line_width : f32,
-    glow_strength : f32,
-    alive_color : vec4<f32>,
-    dead_color : vec4<f32>,
-    grid_color : vec4<f32>,
-    background_color : vec4<f32>,
-};
-
-@group(0) @binding(0)
-var<uniform> sim : SimParams;
-@group(0) @binding(1)
-var<storage, read> cells_in : array<u32>;
-@group(0) @binding(2)
-var<storage, read_write> cells_out : array<u32>;
-@group(0) @binding(3)
-var cells_texture : texture_storage_2d<rgba8unorm, write>;
-
-@group(0) @binding(4)
-var cells_sampled_texture : texture_2d<f32>;
-@group(0) @binding(5)
-var cells_sampler : sampler;
-@group(0) @binding(6)
-var<uniform> compose : ComposeParams;
-
-fn wrap_coord(value: i32, limit: i32) -> u32 {
-    return u32((value + limit) % limit);
+fn wrap_coord(value: i32, limit: i32) -> i32 {
+    let m = value % limit;
+    return select(m + limit, m, m >= 0);
 }
 
-fn cell_index(x: u32, y: u32, width: u32) -> u32 {
-    return y * width + x;
+fn hash_cell(cell: vec2<i32>) -> f32 {
+    var x = u32(cell.x) * 1664525u + u32(cell.y) * 1013904223u + 747796405u;
+    x = (x ^ (x >> 16u)) * 2246822519u;
+    x = (x ^ (x >> 13u)) * 3266489917u;
+    x = x ^ (x >> 16u);
+    return f32(x & 0x00ffffffu) / 16777215.0;
 }
 
-fn cell_value(x: i32, y: i32) -> u32 {
-    let width = max(sim.grid_size.x, 1u);
-    let height = max(sim.grid_size.y, 1u);
-    let wrapped_x = wrap_coord(x, i32(width));
-    let wrapped_y = wrap_coord(y, i32(height));
-    return cells_in[cell_index(wrapped_x, wrapped_y, width)] & 1u;
+fn seeded_alive(cell: vec2<i32>) -> u32 {
+    return select(0u, 1u, hash_cell(cell) > 0.62);
 }
 
-@compute @workgroup_size(8, 8, 1)
-fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let width = sim.grid_size.x;
-    let height = sim.grid_size.y;
-    if (gid.x >= width || gid.y >= height) {
-        return;
-    }
-
-    let x = i32(gid.x);
-    let y = i32(gid.y);
-    let alive = cell_value(x, y);
-
+fn next_alive(cell: vec2<i32>) -> u32 {
+    let center = seeded_alive(cell);
     var neighbors : u32 = 0u;
+
     for (var dy : i32 = -1; dy <= 1; dy = dy + 1) {
         for (var dx : i32 = -1; dx <= 1; dx = dx + 1) {
             if (dx == 0 && dy == 0) {
                 continue;
             }
-            neighbors = neighbors + cell_value(x + dx, y + dy);
+
+            let nx = wrap_coord(cell.x + dx, GRID_SIZE.x);
+            let ny = wrap_coord(cell.y + dy, GRID_SIZE.y);
+            neighbors = neighbors + seeded_alive(vec2<i32>(nx, ny));
         }
     }
 
-    var next = alive;
-    if (sim.step == 1u) {
-        if (alive == 1u && (neighbors == 2u || neighbors == 3u)) {
-            next = 1u;
-        } else if (alive == 0u && neighbors == 3u) {
-            next = 1u;
-        } else {
-            next = 0u;
-        }
+    if (center == 1u && (neighbors == 2u || neighbors == 3u)) {
+        return 1u;
     }
-
-    let idx = cell_index(gid.x, gid.y, width);
-    cells_out[idx] = next;
-
-    let value = f32(next);
-    textureStore(
-        cells_texture,
-        vec2<i32>(i32(gid.x), i32(gid.y)),
-        vec4<f32>(value, value, value, 1.0)
-    );
+    if (center == 0u && neighbors == 3u) {
+        return 1u;
+    }
+    return 0u;
 }
+
+@compute @workgroup_size(8, 8, 1)
+fn cs_main() {}
 
 struct VsOut {
     @builtin(position) clip_position : vec4<f32>,
@@ -114,29 +66,31 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32) -> VsOut {
 
 @fragment
 fn fs_main(input : VsOut) -> @location(0) vec4<f32> {
-    let grid = max(compose.grid_size, vec2<f32>(1.0, 1.0));
-    let cell_space = input.uv * grid;
-    let cell_id = floor(cell_space);
-    let local = fract(cell_space) - vec2<f32>(0.5, 0.5);
+    let grid_size_f = vec2<f32>(f32(GRID_SIZE.x), f32(GRID_SIZE.y));
+    let grid_uv = input.uv * grid_size_f;
+    let cell = vec2<i32>(i32(floor(grid_uv.x)), i32(floor(grid_uv.y)));
+    let local = fract(grid_uv) - vec2<f32>(0.5, 0.5);
 
-    let sample_uv = (cell_id + vec2<f32>(0.5, 0.5)) / grid;
-    let alive = textureSampleLevel(cells_sampled_texture, cells_sampler, sample_uv, 0.0).r;
+    let alive = f32(next_alive(cell));
 
-    let radius = clamp(compose.cell_radius, 0.05, 0.49);
-    let edge = max(compose.edge_softness, 0.0001);
+    let radius = 0.34;
+    let edge_softness = 0.03;
     let cell_sdf = length(local) - radius;
-    let alive_mask = 1.0 - smoothstep(0.0, edge, cell_sdf);
-    let glow_mask = 1.0 - smoothstep(0.0, edge * 3.0, cell_sdf);
+    let alive_mask = 1.0 - smoothstep(0.0, edge_softness, cell_sdf);
+    let glow_mask = 1.0 - smoothstep(0.0, edge_softness * 3.5, cell_sdf);
 
-    let line_distance = min(abs(local.x), abs(local.y));
-    let line_width = clamp(compose.grid_line_width, 0.0, 0.2);
-    let grid_mask = 1.0 - smoothstep(line_width, line_width + edge, line_distance);
+    let alive_color = vec3<f32>(0.24, 0.92, 0.64);
+    let dead_color = vec3<f32>(0.10, 0.15, 0.13);
+    let background = vec3<f32>(0.03, 0.045, 0.042);
+    let grid_color = vec3<f32>(0.17, 0.25, 0.23);
 
-    var color = compose.background_color.rgb;
-    color = mix(color, compose.dead_color.rgb, (1.0 - alive) * 0.5);
-    color = mix(color, compose.alive_color.rgb, alive * alive_mask);
-    color = color + compose.alive_color.rgb * alive * glow_mask * compose.glow_strength;
-    color = mix(color, compose.grid_color.rgb, grid_mask * compose.grid_color.a);
+    let edge_distance = max(abs(local.x), abs(local.y));
+    let grid_mask = smoothstep(0.47, 0.50, edge_distance);
+
+    var color = mix(background, dead_color, 0.55);
+    color = mix(color, alive_color, alive * alive_mask);
+    color = color + alive_color * alive * glow_mask * 0.28;
+    color = mix(color, grid_color, grid_mask * 0.38);
 
     return vec4<f32>(color, 1.0);
 }

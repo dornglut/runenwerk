@@ -1,8 +1,8 @@
 use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
+use crate::app::domain::state::WindowedAppState;
 use crate::plugins::input::InputState;
 use crate::plugins::render::{RenderFlow, RenderFlowContribution, RenderFlowRegistryResource};
-use crate::app::domain::state::WindowedAppState;
 use crate::plugins::{
     SceneReplayArchive, load_replay, seek_loaded_replay, start_recording, stop_recording,
 };
@@ -139,7 +139,8 @@ impl App {
 
     pub fn add_render_flow(&mut self, flow: RenderFlow) -> &mut Self {
         if self.world.resource::<RenderFlowRegistryResource>().is_err() {
-            self.world.insert_resource(RenderFlowRegistryResource::default());
+            self.world
+                .insert_resource(RenderFlowRegistryResource::default());
         }
         if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
             registry.upsert_flow(flow);
@@ -152,7 +153,8 @@ impl App {
         contribution: RenderFlowContribution,
     ) -> &mut Self {
         if self.world.resource::<RenderFlowRegistryResource>().is_err() {
-            self.world.insert_resource(RenderFlowRegistryResource::default());
+            self.world
+                .insert_resource(RenderFlowRegistryResource::default());
         }
         if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
             registry.upsert_contribution(contribution);

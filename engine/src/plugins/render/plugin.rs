@@ -1,7 +1,7 @@
+use super::backend::{BackendPipelineCacheResource, BackendResourceAllocatorResource};
 use super::composition::{
     RenderFlowFragmentHotReloadState, RenderFlowRegistryResource, sync_render_flow_registry_system,
 };
-use super::backend::{BackendPipelineCacheResource, BackendResourceAllocatorResource};
 use super::inspect::{
     RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
     RenderTextureInspectorState,

@@ -92,10 +92,18 @@ fn expand_gpu_params(input: TokenStream, layout: LayoutKind) -> TokenStream {
     })
 }
 
-fn append_bounds(generics: Generics, mut bounds: Vec<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
+fn append_bounds(
+    generics: Generics,
+    mut bounds: Vec<proc_macro2::TokenStream>,
+) -> proc_macro2::TokenStream {
     let mut where_parts = Vec::new();
     if let Some(where_clause) = generics.where_clause {
-        where_parts.extend(where_clause.predicates.into_iter().map(|predicate| quote! { #predicate }));
+        where_parts.extend(
+            where_clause
+                .predicates
+                .into_iter()
+                .map(|predicate| quote! { #predicate }),
+        );
     }
     where_parts.append(&mut bounds);
 

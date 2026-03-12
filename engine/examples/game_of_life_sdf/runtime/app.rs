@@ -1,10 +1,10 @@
 // Owner: Game of Life SDF Example - Public RenderFlow API Demo
-use crate::rendering::build_render_flow;
-use crate::runtime::GameOfLifeSdfState;
-use anyhow::Result;
+use crate::rendering::{GameOfLifeRenderState, SHADER_ID, build_render_flow};
+use anyhow::{Result, anyhow};
+use engine::plugins::render::{RenderFrameResourceBindings, ShaderRegistryResource};
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
-use engine::prelude::{App, Plugin, ResMut, Startup};
-use engine::plugins::render::RenderFrameResourceBindings;
+use engine::prelude::App;
+use std::path::PathBuf;
 
 pub(crate) fn run() -> Result<()> {
     let flow = build_render_flow();
@@ -16,21 +16,40 @@ pub(crate) fn run() -> Result<()> {
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     app.add_render_flow(flow);
-    app.add_plugin(GameOfLifeSdfExamplePlugin);
+    install_game_of_life_runtime_state(&mut app)?;
+    register_example_shader(&mut app)?;
     app.run()
 }
 
-struct GameOfLifeSdfExamplePlugin;
-
-impl Plugin for GameOfLifeSdfExamplePlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<GameOfLifeSdfState>();
-        app.add_systems(Startup, game_of_life_setup_system);
-    }
+fn install_game_of_life_runtime_state(app: &mut App) -> Result<()> {
+    app.insert_resource(GameOfLifeRenderState::default());
+    let frame_bindings =
+        app.world_mut()
+            .resource_mut::<RenderFrameResourceBindings>()
+            .map_err(|_| {
+                anyhow!(
+                    "RenderFrameResourceBindings missing; RenderPlugin must be installed before runtime state registration"
+                )
+            })?;
+    frame_bindings.register_resource::<GameOfLifeRenderState>();
+    Ok(())
 }
 
-fn game_of_life_setup_system(mut frame_bindings: ResMut<RenderFrameResourceBindings>) {
-    if !frame_bindings.contains_resource::<GameOfLifeSdfState>() {
-        frame_bindings.register_resource::<GameOfLifeSdfState>();
-    }
+fn register_example_shader(app: &mut App) -> Result<()> {
+    let shader_path = shader_asset_path();
+    let shader_registry = app
+        .world_mut()
+        .resource_mut::<ShaderRegistryResource>()
+        .map_err(|_| {
+            anyhow!("ShaderRegistryResource missing; RenderPlugin must be installed before shader registration")
+        })?;
+    shader_registry.register_shader(SHADER_ID, shader_path);
+    Ok(())
+}
+
+fn shader_asset_path() -> String {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../assets/shaders/game_of_life_sdf.wgsl")
+        .to_string_lossy()
+        .to_string()
 }

@@ -43,7 +43,10 @@ fn array_conversion_is_supported() {
 
 #[test]
 fn gpu_storage_derive_produces_gpu_params_impl() {
-    let raw = StorageExample { indices: [1, 2, 3, 4] }.to_gpu();
+    let raw = StorageExample {
+        indices: [1, 2, 3, 4],
+    }
+    .to_gpu();
     assert_eq!(raw.indices, [1, 2, 3, 4]);
 }
 

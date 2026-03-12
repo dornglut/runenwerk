@@ -1,6 +1,6 @@
+use crate::plugins::render::RenderFlowValidationError;
 use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::graph::{RenderPassKind, RenderPassNode, ResourceGraph};
-use crate::plugins::render::RenderFlowValidationError;
 
 #[derive(Debug, Clone)]
 pub struct CompiledRenderFlowPlan {
@@ -98,14 +98,15 @@ pub fn compile_flow_plan(
     let mut pass_order = Vec::<CompiledPassDescriptor>::with_capacity(report.pass_order.len());
 
     for (order_index, pass_id) in report.pass_order.iter().enumerate() {
-        let pass = pass_lookup.get(pass_id).cloned().ok_or_else(|| {
-            RenderFlowValidationError {
+        let pass = pass_lookup
+            .get(pass_id)
+            .cloned()
+            .ok_or_else(|| RenderFlowValidationError {
                 issues: vec![format!(
                     "internal planning error: validated pass '{}' missing from flow graph",
                     pass_id
                 )],
-            }
-        })?;
+            })?;
 
         let compiled = match pass.kind {
             RenderPassKind::Compute => CompiledPassDescriptor::Compute(CompiledComputePass {

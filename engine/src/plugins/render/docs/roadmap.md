@@ -1,1075 +1,879 @@
-# Render Hard Cutover Roadmap
+# Render Remaining Features Roadmap
 
-Hard cutover plan for replacing the hybrid render architecture with the new canonical render architecture.
+Concrete implementation roadmap for the remaining render features after the hard cutover.
 
-This document assumes:
+This document assumes the hard cutover is complete:
 
-- no slow migration
-- no long-term legacy compatibility layer
-- no parallel old/new render stacks
-- no normal-path dependency on custom executors
-- no no-op builtin compute/compose behavior
-- no duplicate ownership boundaries
+- normal render path uses compiled builtin execution
+- legacy render architecture trees are removed
+- builtin pass kinds fail loudly if unimplemented
+- examples no longer require custom executors for normal flows
 
-The goal is a clean switch to the new architecture with a single public authoring model, a single graph model, a single resource model, and a single backend execution path.
+This roadmap is focused on the next major stage:
 
----
-
-## Cutover Goal
-
-After this cutover, the render plugin must have:
-
-- one canonical public API
-- one canonical graph/planning model
-- one canonical declarative resource model
-- one canonical backend execution path
-- one canonical inspection/debugging surface
-
-Normal flows must render through builtin compiled execution, not example-owned custom executor registration.
+- complete builtin pass coverage
+- prove the architecture with real feature workloads
+- improve ergonomics
+- strengthen persistent/history resource support
+- mature fragments and inspection tooling
 
 ---
 
-## Canonical Target Structure
-
-## File
-`engine/src/plugins/render/`
-
-```text
-render/
-├── mod.rs
-├── plugin.rs
-├── README.md
-│
-├── api/
-│   ├── mod.rs
-│   ├── flow.rs
-│   ├── ids.rs
-│   ├── passes.rs
-│   ├── resources.rs
-│   └── bindings.rs
-│
-├── backend/
-│   ├── mod.rs
-│   ├── device.rs
-│   ├── formats.rs
-│   ├── surface.rs
-│   ├── wgpu_ctx.rs
-│   ├── pipeline_cache.rs
-│   ├── resource_allocator.rs
-│   └── execution.rs
-│
-├── composition/
-│   ├── mod.rs
-│   ├── contribution.rs
-│   ├── fragments.rs
-│   ├── hot_reload.rs
-│   ├── integration.rs
-│   └── namespaces.rs
-│
-├── graph/
-│   ├── mod.rs
-│   ├── flow_graph.rs
-│   ├── merge.rs
-│   ├── pass_graph.rs
-│   ├── planning.rs
-│   ├── resource_graph.rs
-│   └── validation.rs
-│
-├── inspect/
-│   ├── mod.rs
-│   ├── graph_dump.rs
-│   ├── resource_inspector.rs
-│   ├── texture_view.rs
-│   └── timings.rs
-│
-├── params/
-│   ├── mod.rs
-│   ├── gpu_params.rs
-│   └── gpu_value.rs
-│
-├── pipelines/
-│   ├── mod.rs
-│   ├── cache.rs
-│   ├── keys.rs
-│   └── specialization.rs
-│
-├── renderer/
-│   ├── mod.rs
-│   ├── extract.rs
-│   ├── frame_bindings.rs
-│   ├── graph_execution.rs
-│   ├── prepare.rs
-│   └── submit.rs
-│
-├── resource/
-│   ├── mod.rs
-│   ├── descriptors.rs
-│   ├── import.rs
-│   ├── lifetime.rs
-│   ├── transient.rs
-│   └── usages.rs
-│
-└── shader/
-    ├── mod.rs
-    ├── helpers.rs
-    ├── hot_reload.rs
-    ├── registry.rs
-    └── types.rs
-```
+## Status Baseline
 
-## Modules to Remove
+Already complete:
 
-These paths must not survive as first-class architecture after the cutover.
+- canonical render architecture is in place
+- `RenderFlow` / `RenderFlowContribution` are the normal authoring path
+- compiled planning exists
+- builtin execution exists for the currently supported pass kinds
+- hard cutover removed duplicate legacy ownership trees
+- examples and tests validate the new architecture
 
-### Remove entirely
+Still missing or incomplete:
 
-engine/src/plugins/render/frame_graph/
+- `graphics_pass` builtin execution
+- `copy_pass` builtin execution
+- `present_pass` builtin execution
+- full binding model for graphics/resource-heavy workflows
+- serious feature proofs on top of the new architecture
+- stronger persistent/history resource workflows
+- fragment/data-driven maturation
+- better inspection/tooling polish
+- final public API ergonomics polish
 
-engine/src/plugins/render/resources/
+---
 
-engine/src/plugins/render/domain/
+## End Goal
 
-engine/src/plugins/render/debug/
+After this roadmap, the render system should cleanly support:
 
-### Move out of core render plugin
+- compute pipelines
+- fullscreen compositors
+- raster/mesh graphics pipelines
+- hybrid compute + graphics flows
+- boids and particle simulation/rendering
+- SDF/raymarch flows
+- geometry generation and GPU-driven drawing
+- history/persistent resources
+- multi-plugin flow composition
+- fragment/data-driven flow authoring
+- hot reload
+- inspection/debug tooling
 
-engine/src/plugins/render/sdf/
+---
 
-Best destination:
+# Roadmap Overview
 
-feature-owned plugin module
+## Recommended implementation order
 
-or example-owned render support module
+### Wave 1 — Core missing builtin execution
+1. `graphics_pass`
+2. `copy_pass`
+3. `present_pass`
 
-not core render architecture
+### Wave 2 — Real workflow support
+4. binding model expansion
+5. boids feature proof
+6. SDF renderer rebuilt on the new path
 
-## Canonical Ownership After Cutover
+### Wave 3 — Usability and persistence
+7. gold-path ergonomics polish
+8. persistent/history resource support
+9. inspection/tooling expansion
 
-### `api/`
+### Wave 4 — Data-driven maturity
+10. fragment/data-driven maturation
 
-Owns:
+This order minimizes churn and proves real capability as early as possible.
 
-public flow builders
+---
 
-pass builders
+# Phase R1 — Builtin `graphics_pass`
 
-public resource declarations
+## Goal
 
-public IDs
+Implement first-class builtin raster/graphics execution.
 
-public binding helpers
+## Why this matters
 
-### `graph/`
+This is the biggest missing builtin pass kind.
 
-Owns:
+Without it, the architecture still cannot fully support:
 
-validated flow graph
+- mesh rendering
+- terrain/world rendering
+- instanced boids draw
+- hybrid mesh + SDF pipelines
+- debug line/shape draw flows
+- future character rendering paths that are not fullscreen-only
 
-pass graph
+## Domains
 
-resource graph
+- API
+- graph
+- backend
+- renderer
+- resource
 
-planning
+## Target files
 
-merge
+- `engine/src/plugins/render/api/passes.rs`
+- `engine/src/plugins/render/graph/planning.rs`
+- `engine/src/plugins/render/backend/execution.rs`
+- `engine/src/plugins/render/backend/pipeline_cache.rs`
+- `engine/src/plugins/render/backend/resource_allocator.rs`
+- `engine/src/plugins/render/renderer/graph_execution.rs`
+- `engine/src/plugins/render/resource/usages.rs`
 
-dependency ordering
+## Required implementation
 
-### `resource/`
+### 1. Public API support
+Ensure `graphics_pass(...)` is fully supported by the public authoring model.
 
-Owns:
+### 2. Compiled pass model
+Add or complete a compiled descriptor for graphics passes, such as:
 
-declarative resource descriptors
+- `CompiledGraphicsPass`
 
-declarative usages
+It must include:
+- pass ID
+- shader/pipeline identity
+- target color attachments
+- optional depth target
+- required buffer bindings
+- required sampled/storage resources
+- load/store metadata
+- dependency metadata
 
-import model
+### 3. Pipeline support
+Add builtin pipeline support for graphics passes through backend pipeline cache.
 
-lifetime model
+### 4. Buffer binding support
+Add support for:
+- vertex buffers
+- index buffers
+- instance buffers
+- optional indirect draw later
 
-transient model
+### 5. Depth support
+Support depth target binding and validation.
 
-### `params/`
+### 6. Loud failure
+If unsupported graphics features are requested, fail loudly.
+Do not silently skip.
 
-Owns:
+## Verification
 
-ToGpuValue
+### Tests
+- graphics pass planning test
+- graphics pass validation test
+- graphics pass execution smoke test
+- compute -> graphics resource handoff test
+- depth target attachment test
 
-GpuParams
+### Example proof
+A visible graphics example must render without custom executors.
 
-derive-facing conversion contracts
+## Exit criteria
 
-### `backend/`
+You can write a declarative `graphics_pass(...)` and get visible geometry with builtin execution only.
 
-Owns:
+---
 
-actual GPU resource realization
+# Phase R2 — Builtin `copy_pass`
 
-imported resource realization
+## Goal
 
-transient resource realization
+Implement first-class copy execution.
 
-pipeline cache
+## Why this matters
 
-compiled pass execution
+This is needed for:
 
-### `renderer/`
+- ping-pong workflows
+- history preservation
+- explicit copy-style graph flows
+- texture/buffer copy utilities
+- later temporal effects and cache maintenance
 
-Owns:
+## Domains
 
-orchestration between ECS/frame lifecycle and backend execution
+- API
+- graph
+- backend
+- resource
 
-### `composition/`
+## Target files
 
-Owns:
+- `engine/src/plugins/render/api/passes.rs`
+- `engine/src/plugins/render/graph/planning.rs`
+- `engine/src/plugins/render/backend/execution.rs`
+- `engine/src/plugins/render/resource/usages.rs`
+- `engine/src/plugins/render/resource/descriptors.rs`
 
-RenderFlowContribution
+## Required implementation
 
-contribution integration
+### 1. Public API support
+Support `copy_pass(...)`.
 
-namespaces
+### 2. Compiled pass model
+Add compiled copy pass descriptor, such as:
 
-data-driven fragments
+- `CompiledCopyPass`
 
-hot reload
+### 3. Resource validation
+Validate legal copy source/destination combinations:
+- texture -> texture
+- buffer -> buffer
+- possibly staged restrictions initially
 
-### `inspect/`
+### 4. Backend execution
+Perform actual copy command encoding.
 
-Owns:
+### 5. Loud failure
+Unsupported copy combinations must fail loudly.
 
-graph inspection
+## Verification
 
-resource inspection
+### Tests
+- texture copy test
+- buffer copy test
+- copy validation error test
 
-texture inspection
+### Example proof
+A compositor or history example must use `copy_pass(...)`.
 
-timing inspection
+## Exit criteria
 
-## Hard Cutover Rules
+A declarative `copy_pass(...)` executes through builtin backend execution.
 
-### Rule 1
+---
 
-No no-op builtin rendering paths.
+# Phase R3 — Builtin `present_pass`
 
-### Rule 2
+## Goal
 
-No normal render flow path may depend on executor registry.
+Implement explicit final present support.
 
-### Rule 3
+## Why this matters
 
-No duplicated ownership boundaries remain after the delete pass.
+This makes the frame model cleaner and is important for:
 
-### Rule 4
+- explicit surface handoff
+- future editor viewports
+- future multi-view/multi-surface flows
+- explicit end-of-frame semantics
 
-Examples must prove the public API is real.
+## Domains
 
-### Rule 5
+- API
+- graph
+- backend
+- surface
 
-If a builtin pass kind is declared and not implemented, fail loudly.
+## Target files
 
-### Rule 6
+- `engine/src/plugins/render/api/passes.rs`
+- `engine/src/plugins/render/graph/planning.rs`
+- `engine/src/plugins/render/backend/execution.rs`
+- `engine/src/plugins/render/backend/surface.rs`
 
-The canonical architecture is:
+## Required implementation
 
-api/
+### 1. Public API support
+Support `present_pass(...)`.
 
-graph/
+### 2. Compiled pass model
+Add compiled present pass descriptor, such as:
 
-resource/
+- `CompiledPresentPass`
 
-params/
+### 3. Validation
+Validate legal present target usage.
+Prefer a clear rule for how many present passes are allowed per flow.
 
-backend/
+### 4. Backend execution
+Perform explicit final surface presentation handoff.
 
-renderer/
+## Verification
 
-composition/
+### Tests
+- present pass planning test
+- present pass validation test
+- one-flow present success test
 
-inspect/
+### Example proof
+At least one compositor example uses explicit `present_pass(...)`.
 
-pipelines/
+## Exit criteria
 
-shader/
+The frame can end in a first-class declarative `present_pass(...)`.
 
-No other top-level render architecture domains should compete with these.
+---
 
-## Functional Acceptance Criteria
+# Phase R4 — Binding Model Expansion
 
-The cutover is successful only if all of the following are true.
+## Goal
 
-### Rendering
+Expand the binding model so the architecture cleanly supports real GPU workloads beyond uniform upload.
 
-compute_pass(...) executes through builtin backend execution
+## Why this matters
 
-fullscreen_pass(...) executes through builtin backend execution
+This is required for:
 
-graphics_pass(...) executes through builtin backend execution once implemented
+- boids instance buffers
+- geometry generation
+- raster pipelines
+- indirect drawing
+- sampled/storage texture workflows
+- field-based simulation and compose passes
 
-copy_pass(...) executes through builtin backend execution once implemented
+## Domains
 
-present_pass(...) executes through builtin backend execution once implemented
+- API
+- resource
+- backend
+- renderer
 
-builtin_ui_composite_pass(...) overlays correctly
+## Target files
 
-### Authoring
+- `engine/src/plugins/render/api/bindings.rs`
+- `engine/src/plugins/render/api/passes.rs`
+- `engine/src/plugins/render/resource/descriptors.rs`
+- `engine/src/plugins/render/resource/usages.rs`
+- `engine/src/plugins/render/backend/resource_allocator.rs`
+- `engine/src/plugins/render/backend/execution.rs`
 
-examples use RenderFlow
+## Required implementation
 
-multi-plugin examples use RenderFlowContribution
+### Buffers
+Support or complete:
+- `.vertex_buffer(...)`
+- `.index_buffer(...)`
+- `.instance_buffer(...)`
+- `.indirect_buffer(...)`
 
-examples do not register custom executors for normal paths
+### Textures
+Support or complete:
+- `.sample_texture(...)`
+- `.storage_texture(...)`
 
-examples do not mutate low-level registries directly in the normal path
+### State projection
+Support or complete:
+- `.storage_state(...)`
 
-### Planning
+### Validation
+Validate resource role compatibility:
+- sampled texture in legal sampled contexts
+- storage texture in legal storage contexts
+- vertex/index/instance/indirect usage correctness
 
-graph planning produces typed compiled pass descriptors
+## Verification
 
-graph planning does not rely on pass-id-as-executor-id assumptions
+### Tests
+- vertex buffer binding test
+- instance buffer binding test
+- sampled texture binding test
+- storage texture binding test
+- indirect buffer validation test
 
-### Resources
+## Exit criteria
 
-declarative resources live under resource/
+The API can express both compute-heavy and graphics-heavy real workflows cleanly.
 
-runtime realization lives under backend/resource_allocator.rs
+---
 
-### Structure
+# Phase R5 — Gold-Path Ergonomics Polish
 
-no duplicate graph/resource/debug/domain ownership trees remain
+## Goal
 
-## End-State Public API Direction
+Make the architecture feel good to use, not just correct.
 
-The hard cutover exists to support this public model.
+## Why this matters
 
-### Target authoring example
-```rust
-app.add_input_bindings([
-    (ACTION_TOGGLE_PAUSE, KeyCode::Space),
-    (ACTION_SINGLE_STEP, KeyCode::Enter),
-    (ACTION_SPEED_UP, KeyCode::PageUp),
-    (ACTION_SPEED_DOWN, KeyCode::PageDown),
-]);
+The hard cutover made the system real.
+This phase makes it pleasant.
 
-app.add_render_flow(
-    RenderFlow::new("game_of_life_sdf")
-        .ecs_resource::<GameOfLifeSdfState>()
-        .uniform_buffer::<GameOfLifeComputeParams>("gol.params")
-        .uniform_buffer::<GameOfLifeComposeParams>("gol.compose_params")
-        .storage_buffer::<GameOfLifeCell>("gol.cells")
-        .sampled_texture("surface.color")
-        .sampled_texture("ui.draw_list")
-        .compute_pass("gol.compute")
-            .shader("assets/shaders/game_of_life_sdf.wgsl")
-            .uniform_state(GameOfLifeSdfState::compute_params)
-            .writes("gol.cells")
-            .workgroup_size(8, 8, 1)
-            .finish()
-        .fullscreen_pass("gol.compose")
-            .shader("assets/shaders/game_of_life_sdf.wgsl")
-            .uniform_state_with_surface(GameOfLifeSdfState::compose_params)
-            .reads("gol.cells")
-            .writes("surface.color")
-            .clear_color([0.03, 0.045, 0.042, 1.0])
-            .depends_on("gol.compute")
-            .finish()
-        .builtin_ui_composite_pass("ui.composite")
-            .reads("ui.draw_list")
-            .writes("surface.color")
-            .depends_on("gol.compose")
-            .finish(),
-);
-```
+## Domains
 
-## Hard Cutover Roadmap
+- API
+- docs
+- examples
 
-### Phase H0 — Freeze the new architecture as canonical
-Goal
+## Target files
 
-Declare the target architecture as the only valid architecture before code deletion begins.
+- `engine/src/plugins/render/api/flow.rs`
+- `engine/src/plugins/render/api/passes.rs`
+- `engine/src/plugins/render/api/resources.rs`
+- `engine/src/plugins/render/api/bindings.rs`
+- `engine/src/plugins/render/README.md`
+- `engine/docs/reference/plugins/render/render-flow-usage-guide.md`
 
-Files
+## Required implementation
 
-engine/src/plugins/render/README.md
+### 1. Naming audit
+Review:
+- `ecs_resource::<T>()`
+- `uniform_state(...)`
+- `uniform_state_with_surface(...)`
+- resource declaration names
+- pass builder naming consistency
 
-engine/src/plugins/render/docs/README.md
+### 2. Boilerplate audit
+Remove unnecessary repetition in examples and common usage paths.
 
-engine/src/plugins/render/docs/index.md
+### 3. Error message polish
+Improve diagnostics for:
+- missing resources
+- missing ECS state
+- unsupported pass features
+- invalid bindings
+- invalid dependencies
 
-engine/src/plugins/render/docs/roadmap.md
+### 4. Gold-path examples
+Make three canonical examples excellent:
+- minimal fullscreen flow
+- Game of Life
+- contribution/compositor flow
 
-engine/docs/reference/plugins/render/render-target-architecture.md
+## Verification
 
-Actions
+### Criteria
+A new user should be able to understand and copy the gold-path examples without reading internals.
 
-state explicitly that the canonical render architecture is the target tree in this doc
+## Exit criteria
 
-state explicitly that frame_graph/, resources/, domain/, and debug/ are scheduled for removal
+The public API feels deliberate and low-friction.
 
-state that normal flows must not require custom executors
+---
 
-state that no-op builtin execution is forbidden
+# Phase R6 — Boids Feature Proof
 
-state that input bindings belong to input/app API, not render flow
+## Goal
 
-Exit criteria
+Prove the architecture with a serious compute + draw workload.
 
-There is no ambiguity about which architecture is canonical.
+## Why this matters
 
-### Phase H1 — Add the missing backend core
-Goal
+Boids is the best realistic next proof because it uses:
 
-Create the missing backend modules that make the new architecture executable.
+- ECS-driven simulation settings
+- compute simulation
+- storage buffers
+- graphics or fullscreen rendering
+- explicit pass dependencies
 
-Add files
+## Domains
 
-engine/src/plugins/render/backend/pipeline_cache.rs
+- example / feature proof
+- API
+- backend
+- renderer
 
-engine/src/plugins/render/backend/resource_allocator.rs
+## Target files
 
-engine/src/plugins/render/backend/execution.rs
+Suggested example tree:
 
-File
+- `engine/examples/boids_render_flow/main.rs`
+- `engine/examples/boids_render_flow/README.md`
+- `engine/examples/boids_render_flow/assets/boids_sim.wgsl`
+- `engine/examples/boids_render_flow/assets/boids_draw.wgsl`
+- additional example modules as needed
 
-engine/src/plugins/render/backend/pipeline_cache.rs
+## Implementation options
 
-Owns
+### Preferred version
+Compute + instanced graphics draw.
 
-builtin compute pipeline cache
+Why:
+- validates `graphics_pass`
+- validates storage/instance buffer handling
+- proves a very important real workflow
 
-builtin fullscreen pipeline cache
+### Alternative version
+Compute field + fullscreen compose.
 
-builtin graphics pipeline cache
+This is still useful, but less important if `graphics_pass` is the current main gap.
 
-bridge/wrapper around existing pipeline cache if necessary
+## Verification
 
-File
+### Example behavior
+- visible boids motion
+- no custom executors
+- no manual registry wiring
+- ECS settings drive simulation/render params
 
-engine/src/plugins/render/backend/resource_allocator.rs
+## Exit criteria
 
-Owns
+Boids works entirely on the builtin compiled flow system.
 
-descriptor -> GPU resource realization
+---
 
-imported resource realization
+# Phase R7 — Rebuild SDF Renderer on the New Path
 
-persistent flow-owned resource realization
+## Goal
 
-transient resource realization
+Rebuild a serious SDF/raymarch example on the new architecture.
 
-runtime resource binding realization
+## Why this matters
 
-File
+You explicitly want this engine to be strong for:
 
-engine/src/plugins/render/backend/execution.rs
+- SDF rendering
+- raymarching
+- procedural rendering
+- hybrid future with `foundation/sdf`, `foundation/spatial`, and `foundation/geometry`
 
-Owns
+## Domains
 
-compiled compute pass execution
+- example or feature-owned render support
+- API
+- backend
+- renderer
 
-compiled fullscreen pass execution
+## Target files
 
-compiled graphics pass execution later
+Suggested example tree:
 
-compiled copy/present execution later
+- `engine/examples/sdf_render_flow/main.rs`
+- `engine/examples/sdf_render_flow/README.md`
+- `engine/examples/sdf_render_flow/assets/...`
+- runtime/rendering modules as needed
 
-builtin UI composite execution
+## Required implementation
 
-Exit criteria
+- use `RenderFlow`
+- use builtin `compute_pass(...)` and/or `fullscreen_pass(...)`
+- no custom executors
+- UI composite optional but recommended
+- debug texture/resource views optional but useful
 
-The backend has clear homes for allocation, pipelines, and execution.
+## Verification
 
-### Phase H2 — Replace executor-label planning with compiled pass planning
-Goal
+### Example behavior
+- visible SDF render output
+- no legacy render architecture usage
+- no custom executor path
 
-Planning must compile to typed executable pass descriptors, not executor label assumptions.
+## Exit criteria
 
-Files
+A serious SDF example proves the architecture supports your preferred rendering style cleanly.
 
-engine/src/plugins/render/graph/planning.rs
+---
 
-engine/src/plugins/render/graph/pass_graph.rs
+# Phase R8 — Persistent and History Resource Support
 
-engine/src/plugins/render/graph/flow_graph.rs
+## Goal
 
-Remove
+Strengthen support for persistent temporal resources and cache-oriented workflows.
 
-pass-id-as-executor-id assumptions
+## Why this matters
 
-non-UI pass kinds mapped to executor labels
+Needed for:
 
-any reliance on external executor registration for builtin pass kinds
+- history buffers
+- temporal AA later
+- clipmaps
+- persistent simulation buffers
+- cached large-world rendering resources
+- future open-world compatible workflows
 
-Add
+## Domains
 
-Typed compiled pass descriptors such as:
+- resource
+- graph
+- backend
 
-CompiledComputePass
+## Target files
 
-CompiledFullscreenPass
+- `engine/src/plugins/render/resource/lifetime.rs`
+- `engine/src/plugins/render/resource/transient.rs`
+- `engine/src/plugins/render/backend/resource_allocator.rs`
+- `engine/src/plugins/render/graph/planning.rs`
+- `engine/src/plugins/render/resource/descriptors.rs`
 
-CompiledGraphicsPass
+## Required implementation
 
-CompiledCopyPass
+### 1. Persistent vs transient clarity
+Strengthen the distinction between:
+- persistent flow-owned resources
+- transient per-frame resources
 
-CompiledPresentPass
+### 2. History workflows
+Support or document patterns for:
+- previous-frame textures
+- persistent buffers
+- temporal resource dependencies
 
-CompiledUiCompositePass
+### 3. Validation
+Validate correct usage of persistent/history resources.
 
-Compiled pass descriptors must include
+### 4. Example proof
+Use history resources in at least one compositor or debug workflow.
 
-pass ID
+## Verification
 
-pass kind
+### Tests
+- persistent resource survival test
+- history resource planning test
+- transient lifetime separation test
 
-shader/pipeline identity
+## Exit criteria
 
-resolved resource bindings
+The architecture cleanly supports frame-to-frame GPU resource persistence.
 
-resolved read/write targets
+---
 
-clear/load/store metadata where relevant
+# Phase R9 — Inspection and Debug Tooling Expansion
 
-workgroup size or draw mode
+## Goal
 
-validated dependency order position
+Make complex flows debuggable and inspectable enough for serious development.
 
-Exit criteria
+## Why this matters
 
-Planning produces typed executable pass descriptors consumable directly by backend execution.
+Now that the architecture can express more complex workflows, debugging must keep up.
 
-### Phase H3 — Wire renderer to builtin compiled execution
-Goal
+## Domains
 
-The renderer must execute compiled passes through backend execution.
+- inspect
+- graph
+- resource
 
-Files
+## Target files
 
-engine/src/plugins/render/renderer/graph_execution.rs
+- `engine/src/plugins/render/inspect/graph_dump.rs`
+- `engine/src/plugins/render/inspect/resource_inspector.rs`
+- `engine/src/plugins/render/inspect/texture_view.rs`
+- `engine/src/plugins/render/inspect/timings.rs`
 
-engine/src/plugins/render/renderer/mod.rs
+## Required implementation
 
-engine/src/plugins/render/renderer/prepare.rs
+### 1. Better graph dump
+Show:
+- passes
+- resources
+- dependencies
+- execution order
+- pass kinds
 
-engine/src/plugins/render/renderer/submit.rs
+### 2. Better resource inspection
+Show:
+- declared resource types
+- imported/persistent/transient categories
+- usage roles
+- realization metadata where appropriate
 
-engine/src/plugins/render/backend/execution.rs
+### 3. Better texture view tooling
+Support viewing:
+- color targets
+- storage textures
+- history textures
+- debug outputs
 
-Actions
+### 4. Better timings
+Support:
+- per-pass timing
+- total frame timing
+- optional debug UI/overlay later
 
-route compiled passes to backend execution
+## Verification
 
-resolve uniform_state(...) and uniform_state_with_surface(...) through ECS resource lookup and param projection
+### Example proof
+The debug/inspect example should become genuinely useful for real debugging.
 
-upload generated GPU params through allocator/binding bridge
+## Exit criteria
 
-execute compute passes through builtin backend execution
+Complex mixed flows are inspectable without digging through internal implementation code.
 
-execute fullscreen passes through builtin backend execution
+---
 
-execute builtin UI composite through builtin backend execution
+# Phase R10 — Fragment and Data-Driven Maturation
 
-Exit criteria
+## Goal
 
-Public-API-only flows produce visible pixels without custom executors.
+Make fragments and hot reload feel native to the architecture rather than bridged.
 
-### Phase H4 — Delete no-op builtin execution
-Goal
+## Why this matters
 
-Remove silent-success behavior.
+You already laid the groundwork.
+This phase removes the remaining awkwardness.
 
-Files
+## Domains
 
-engine/src/plugins/render/renderer/mod.rs
+- composition
+- API IDs
+- graph
+- inspect
 
-any files defining no-op builtin compute/compose behavior
+## Target files
 
-Remove
+- `engine/src/plugins/render/composition/fragments.rs`
+- `engine/src/plugins/render/composition/hot_reload.rs`
+- `engine/src/plugins/render/api/ids.rs`
+- `engine/src/plugins/render/graph/merge.rs`
 
-BuiltinComputeNoopPassExecutor
+## Required implementation
 
-BuiltinComposeNoopPassExecutor
+### 1. Better ID model
+Reduce reliance on internal string-interning bridges where possible.
 
-any equivalent silent “do nothing” builtin execution path
+Long-term target:
+- stronger owned/typed IDs internally
+- less friction for data-driven authored fragments
 
-any “skip if unresolved” behavior for builtin pass kinds
+### 2. Better fragment validation
+Improve diagnostics for:
+- invalid fragment references
+- missing resources
+- namespace collisions
+- incompatible fragment composition
 
-Replace with
+### 3. Better hot reload loop
+Improve:
+- revision tracking
+- reload diagnostics
+- failure recovery
 
-actual builtin execution
+### 4. Example proof
+At least one fragment-driven flow or contribution example should demonstrate the model clearly.
 
-or hard error if a builtin pass kind is declared but not implemented
+## Verification
 
-Exit criteria
+### Tests
+- fragment parse/validate test
+- fragment merge collision test
+- hot reload revision/error state test
 
-No validated builtin flow can silently render black because execution is a no-op.
+## Exit criteria
 
-### Phase H5 — Remove executor-registry dependency from the normal flow path
-Goal
+Fragments and hot reload feel like first-class extensions of the architecture.
 
-Normal flow execution must not depend on custom executor registry bindings.
+---
 
-Files
+# Recommended Concrete Order of Attack
 
-engine/src/plugins/render/renderer/graph_execution.rs
+## Immediate next steps
+1. **R1 — Builtin `graphics_pass`**
+2. **R2 — Builtin `copy_pass`**
+3. **R3 — Builtin `present_pass`**
 
-engine/src/plugins/render/composition/integration.rs
+These are the most important missing builtin execution pieces.
 
-any executor-registry bridge modules still influencing the normal path
+## Then
+4. **R4 — Binding model expansion**
+5. **R6 — Boids feature proof**
+6. **R7 — Rebuild SDF renderer on new path**
 
-Actions
+These prove real capability.
 
-ensure standard pass kinds execute through compiled builtin execution only
+## Then
+7. **R5 — Gold-path ergonomics polish**
+8. **R8 — Persistent/history resources**
+9. **R9 — Inspection/tooling expansion**
+10. **R10 — Fragment/data-driven maturation**
 
-keep custom executors only as advanced internal/escape-hatch path
+These make the system robust and pleasant long-term.
 
-make sure examples do not depend on executor registration
+---
 
-Exit criteria
+# Concrete Milestone Definition
 
-Normal RenderFlow / RenderFlowContribution usage renders without executor registry involvement.
+## Milestone M1 — Builtin Pass Completion
+Complete when:
+- `graphics_pass` works
+- `copy_pass` works
+- `present_pass` works
 
-### Phase H6 — Collapse duplicate module trees
-Goal
+## Milestone M2 — Real Feature Proof
+Complete when:
+- one boids example works
+- one serious SDF example works
+- both use builtin compiled execution only
 
-Remove parallel ownership boundaries completely.
+## Milestone M3 — Production-Ready Usability
+Complete when:
+- persistent/history resources are solid
+- inspect tooling is genuinely useful
+- public API has undergone ergonomics polish
 
-H6.1 Remove frame_graph/
-Path
+## Milestone M4 — Data-Driven Maturity
+Complete when:
+- fragments and hot reload feel first-class
+- typed/owned ID handling is less bridged and more native
 
-engine/src/plugins/render/frame_graph/
+---
 
-Actions
+# Verification Plan
 
-move any still-valid declarative graph concepts into graph/
+## Required tests after each major phase
 
-move any execution-ready per-pass concepts into backend/ or renderer/
+### Core architecture tests
+- `cargo test -p engine --test render_flow_graph`
+- `cargo test -p engine --test render_flow_bindings`
+- `cargo test -p engine --test render_flow_bridge`
+- `cargo test -p engine --test render_flow_contributions`
+- `cargo test -p engine --test render_resource_model`
+- `cargo test -p engine --test render_resource_lifetime`
+- `cargo test -p engine --test render_inspect`
+- `cargo test -p engine --test render_flow_fragments`
 
-delete frame_graph/
+### Examples
+- `cargo test -p engine --example render_flow_fullscreen_minimal`
+- `cargo test -p engine --example render_flow_postprocess_compositor`
+- `cargo test -p engine --example render_flow_contributions`
+- `cargo test -p engine --example render_flow_debug_inspect`
+- `cargo test -p engine --example game_of_life_sdf`
 
-Exit criteria
+### New examples as phases land
+- boids example
+- SDF flow example
 
-graph/ is the only graph architecture owner.
+---
 
-H6.2 Remove resources/
-Path
+# Risks
 
-engine/src/plugins/render/resources/
+## Main risks to watch
 
-Actions
+### 1. `graphics_pass` becomes too special-case
+Keep it generic enough for:
+- mesh rendering
+- instancing
+- hybrid future workloads
 
-move declarative resource concepts into resource/
+### 2. Binding model grows inconsistently
+Prefer one coherent model for:
+- buffers
+- textures
+- state projection
+- pass bindings
 
-move runtime allocation/binding concepts into backend/resource_allocator.rs or renderer/
+### 3. Feature proofs expose API friction too late
+Build boids and SDF proofs early enough to inform API polish.
 
-delete resources/
+### 4. Persistent resource model stays vague
+History/persistent/transient distinctions must become concrete before large-world and temporal systems.
 
-Exit criteria
+### 5. Fragments remain second-class
+The current fragment bridge is acceptable, but long-term awkwardness should be reduced.
 
-resource/ is the only declarative resource owner and backend/resource_allocator.rs is the runtime realization owner.
+---
 
-H6.3 Remove domain/
-Path
+# Final Recommendation
 
-engine/src/plugins/render/domain/
+Use this roadmap as the implementation plan for the remaining render features.
 
-Actions
+## Best next step
+Implement:
 
-Redistribute remaining files:
+1. `graphics_pass`
+2. `copy_pass`
+3. `present_pass`
 
-pass-like declarative types -> graph/ or api/
+Then immediately prove the architecture with:
 
-pipeline-related types -> pipelines/
+4. boids
+5. SDF renderer on the new path
 
-timing-related types -> inspect/
-
-frame/view runtime helpers -> renderer/
-
-broad re-export façade -> delete
-
-Then delete domain/.
-
-Exit criteria
-
-There is no generic catch-all domain/ bucket left in render.
-
-H6.4 Merge debug/ into inspect/
-Path
-
-engine/src/plugins/render/debug/
-
-Actions
-
-Move:
-
-debug/graph_dump.rs -> inspect/graph_dump.rs
-
-debug/texture_inspector.rs -> inspect/texture_view.rs or inspect/resource_inspector.rs
-
-debug/timings.rs -> inspect/timings.rs
-
-overlay-specific inspect/debug support -> inspect/
-
-Then delete debug/.
-
-Exit criteria
-
-There is one canonical inspect/debug surface: inspect/.
-
-H6.5 Move sdf/ out of core render plugin
-Path
-
-engine/src/plugins/render/sdf/
-
-Actions
-
-Move to:
-
-a feature/plugin-owned module
-
-or example-owned support module
-
-Do not keep SDF as a core render architecture domain.
-
-Exit criteria
-
-Core render architecture is renderer-agnostic and SDF support is feature-owned.
-
-### Phase H7 — Normalize mod.rs and top-level exports
-Goal
-
-Top-level module exports must reflect only the new architecture.
-
-Files
-
-engine/src/plugins/render/mod.rs
-
-engine/src/plugins/render/plugin.rs
-
-Export only
-
-api
-
-backend
-
-composition
-
-graph
-
-inspect
-
-params
-
-pipelines
-
-renderer
-
-resource
-
-shader
-
-Do not export
-
-removed legacy modules
-
-compatibility aliases for removed trees
-
-broad façade re-exports that hide ownership boundaries
-
-Exit criteria
-
-The top-level module surface matches the canonical architecture only.
-
-### Phase H8 — Update all examples to the gold path
-Goal
-
-Examples must prove the new architecture is real.
-
-Target examples
-
-engine/examples/render_flow_fullscreen_minimal/
-
-engine/examples/render_flow_postprocess_compositor/
-
-engine/examples/render_flow_contributions/
-
-engine/examples/render_flow_debug_inspect/
-
-engine/examples/game_of_life_sdf/
-
-legacy `engine/examples/sdf_renderer/` is removed from the canonical example set
-
-Rules
-
-no custom executor registration in normal examples
-
-no raw registry mutation in normal examples
-
-no legacy frame-graph APIs
-
-use app.add_input_bindings(...) for key mappings
-
-use RenderFlow / RenderFlowContribution only
-
-Exit criteria
-
-All canonical examples render through the new builtin execution path.
-
-### Phase H9 — Update tests to only validate the new architecture
-Goal
-
-Tests must reinforce the cutover.
-
-Target tests
-
-engine/tests/render_gpu_params.rs
-
-engine/tests/render_resource_model.rs
-
-engine/tests/render_flow_graph.rs
-
-engine/tests/render_flow_bindings.rs
-
-engine/tests/render_flow_graphics.rs
-
-engine/tests/render_flow_bridge.rs
-
-engine/tests/render_flow_contributions.rs
-
-engine/tests/render_resource_lifetime.rs
-
-engine/tests/render_flow_advanced.rs
-
-engine/tests/render_inspect.rs
-
-engine/tests/render_flow_fragments.rs
-
-Remove or rewrite
-
-Any tests that validate:
-
-executor-label planning assumptions
-
-old frame-graph behavior
-
-legacy resource tree assumptions
-
-no-op builtin behavior
-
-Exit criteria
-
-CI validates only the new architecture.
-
-### Phase H10 — Final delete pass
-Goal
-
-Physically remove all dead architecture after the new path is green.
-
-Delete paths
-
-engine/src/plugins/render/frame_graph/
-
-engine/src/plugins/render/resources/
-
-engine/src/plugins/render/domain/
-
-engine/src/plugins/render/debug/
-
-engine/src/plugins/render/sdf/ from core render plugin
-
-Also remove
-
-dead imports
-
-dead re-exports
-
-stale docs
-
-stale example references
-
-stale comments referencing the removed architecture
-
-Exit criteria
-
-The old architecture is gone, not merely ignored.
-
-## File-by-File Add / Move / Delete Summary
-Add
-
-engine/src/plugins/render/backend/pipeline_cache.rs
-
-engine/src/plugins/render/backend/resource_allocator.rs
-
-engine/src/plugins/render/backend/execution.rs
-
-Keep
-
-engine/src/plugins/render/api/*
-
-engine/src/plugins/render/backend/device.rs
-
-engine/src/plugins/render/backend/formats.rs
-
-engine/src/plugins/render/backend/surface.rs
-
-engine/src/plugins/render/backend/wgpu_ctx.rs
-
-engine/src/plugins/render/composition/*
-
-engine/src/plugins/render/graph/*
-
-engine/src/plugins/render/inspect/*
-
-engine/src/plugins/render/params/*
-
-engine/src/plugins/render/pipelines/*
-
-engine/src/plugins/render/renderer/extract.rs
-
-engine/src/plugins/render/renderer/frame_bindings.rs
-
-engine/src/plugins/render/renderer/graph_execution.rs
-
-engine/src/plugins/render/renderer/prepare.rs
-
-engine/src/plugins/render/renderer/submit.rs
-
-engine/src/plugins/render/resource/*
-
-engine/src/plugins/render/shader/*
-
-Reevaluate / merge
-
-engine/src/plugins/render/renderer/render_flow.rs
-
-engine/src/plugins/render/renderer/setup.rs
-
-These should remain only if they still have a clear orchestration role after backend execution is introduced. Otherwise merge into:
-
-renderer/graph_execution.rs
-
-renderer/prepare.rs
-
-plugin.rs
-
-backend/execution.rs
-
-Delete
-
-engine/src/plugins/render/frame_graph/*
-
-engine/src/plugins/render/resources/*
-
-engine/src/plugins/render/domain/*
-
-engine/src/plugins/render/debug/*
-
-Move out of core render plugin
-
-engine/src/plugins/render/sdf/*
-
-## Verification Plan
-Minimum required checks after cutover
-
-cargo test -p engine --test render_flow_graph
-
-cargo test -p engine --test render_flow_bindings
-
-cargo test -p engine --test render_flow_bridge
-
-cargo test -p engine --test render_flow_contributions
-
-cargo test -p engine --test render_resource_model
-
-cargo test -p engine --test render_resource_lifetime
-
-cargo test -p engine --test render_inspect
-
-cargo test -p engine --example render_flow_fullscreen_minimal
-
-cargo test -p engine --example render_flow_postprocess_compositor
-
-cargo test -p engine --example render_flow_contributions
-
-cargo test -p engine --example game_of_life_sdf
-
-Hard acceptance checks
-
-At least these examples must produce visible rendering without custom executors:
-
-render_flow_fullscreen_minimal
-
-render_flow_postprocess_compositor
-
-game_of_life_sdf
-
-## Major Checkpoints
-Checkpoint H-A
-
-After Phase H3:
-
-does a public-API-only flow render visible pixels?
-
-Checkpoint H-B
-
-After Phase H5:
-
-does any normal flow still depend on executor registry?
-
-Checkpoint H-C
-
-After Phase H6:
-
-are there any duplicate ownership boundaries left?
-
-Checkpoint H-D
-
-After Phase H8:
-
-do examples prove the public API is real without legacy plumbing?
-
-Checkpoint H-E
-
-After Phase H10:
-
-is the old architecture physically gone?
-
-## Risks
-Biggest risks
-
-leaving frame_graph/ partially alive
-
-keeping runtime resource logic split between resource/ and resources/
-
-keeping no-op builtin execution around as silent fallback
-
-allowing normal examples to keep custom executor plumbing
-
-leaving domain/ as a catch-all bucket
-
-Risk handling
-
-The hard cutover intentionally chooses deletion over compatibility to reduce these risks.
-
-## Final Recommendation
-
-Follow this roadmap as a hard cut, not a migration.
-
-Specifically:
-
-add the missing backend core first
-
-replace executor-label planning with compiled pass planning
-
-wire builtin execution
-
-remove no-op builtin paths
-
-remove executor-registry dependency from the normal path
-
-collapse duplicate trees aggressively
-
-update examples and tests
-
-delete the legacy render architecture completely
-
-This is the cleanest way to make the new render architecture real.
+That is the highest-value continuation of the current architecture.

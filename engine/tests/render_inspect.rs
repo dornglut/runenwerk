@@ -34,14 +34,18 @@ fn resource_and_texture_inspection_reports_lifetimes() {
     assert!(resources.iter().any(|entry| {
         entry.id == "surface.color" && entry.lifetime == ResourceLifetime::Imported
     }));
-    assert!(resources.iter().any(|entry| {
-        entry.id == "taa.history" && entry.kind == "history_texture"
-    }));
+    assert!(
+        resources
+            .iter()
+            .any(|entry| { entry.id == "taa.history" && entry.kind == "history_texture" })
+    );
 
     let textures = inspect_texture_resources(&flow);
-    assert!(textures.iter().any(|entry| {
-        entry.id == "post.temp" && entry.lifetime == ResourceLifetime::Transient
-    }));
+    assert!(
+        textures.iter().any(|entry| {
+            entry.id == "post.temp" && entry.lifetime == ResourceLifetime::Transient
+        })
+    );
 }
 
 #[test]

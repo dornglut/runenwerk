@@ -92,16 +92,14 @@ impl Renderer {
             CompiledPassDescriptor::Compute(value) => {
                 self.encode_compute_pass(device, encoder, packet, &value.node, shader_registry)
             }
-            CompiledPassDescriptor::Fullscreen(value) => {
-                self.encode_fullscreen_pass(
-                    device,
-                    encoder,
-                    frame_view,
-                    packet,
-                    &value.node,
-                    shader_registry,
-                )
-            }
+            CompiledPassDescriptor::Fullscreen(value) => self.encode_fullscreen_pass(
+                device,
+                encoder,
+                frame_view,
+                packet,
+                &value.node,
+                shader_registry,
+            ),
             CompiledPassDescriptor::Copy(value) => self.encode_copy_pass(&value.node),
             CompiledPassDescriptor::Present(value) => self.encode_present_pass(&value.node),
             CompiledPassDescriptor::BuiltinUiComposite(_) => {
@@ -123,18 +121,15 @@ impl Renderer {
         node: &crate::plugins::render::RenderPassNode,
         shader_registry: &ShaderRegistryResource,
     ) -> Result<()> {
-        if !node.uniform_bindings.is_empty()
-            || !node.sampled_textures.is_empty()
+        if !node.sampled_textures.is_empty()
             || !node.write_textures.is_empty()
-            || !node.reads.is_empty()
-            || !node.writes.is_empty()
             || !node.vertex_buffers.is_empty()
             || !node.index_buffers.is_empty()
             || !node.instance_buffers.is_empty()
             || !node.indirect_buffers.is_empty()
         {
             bail!(
-                "compute pass '{}' requires runtime resource bindings not yet supported by core backend execution",
+                "compute pass '{}' declares sampled/write texture or graphics buffer bindings that are not yet supported by core backend execution",
                 node.id.as_str()
             );
         }
@@ -187,16 +182,9 @@ impl Renderer {
     ) -> Result<()> {
         self.ensure_surface_color_write(node.id.as_str(), &node.writes)?;
 
-        if !node.uniform_bindings.is_empty()
-            || !node.sampled_textures.is_empty()
-            || !node.write_textures.is_empty()
-            || node
-                .reads
-                .iter()
-                .any(|id| id.as_str() != "surface.color" && id.as_str() != "ui.draw_list")
-        {
+        if !node.sampled_textures.is_empty() || !node.write_textures.is_empty() {
             bail!(
-                "fullscreen pass '{}' requires runtime texture/uniform bindings not yet supported by core backend execution",
+                "fullscreen pass '{}' declares sampled/write texture bindings that are not yet supported by core backend execution",
                 node.id.as_str()
             );
         }
@@ -266,10 +254,7 @@ impl Renderer {
         Ok(())
     }
 
-    fn encode_copy_pass(
-        &self,
-        node: &crate::plugins::render::RenderPassNode,
-    ) -> Result<()> {
+    fn encode_copy_pass(&self, node: &crate::plugins::render::RenderPassNode) -> Result<()> {
         bail!(
             "copy pass '{}' is declared but runtime copy execution is not implemented",
             node.id.as_str()

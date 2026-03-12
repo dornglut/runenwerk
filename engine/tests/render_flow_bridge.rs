@@ -114,8 +114,9 @@ fn backend_support_checks_fail_loudly_for_unimplemented_builtin_passes() {
             }
             CompiledPassDescriptor::Present(_) => {
                 saw_present = true;
-                let err = ensure_compiled_pass_is_supported(pass)
-                    .expect_err("present pass must fail loudly until backend present execution exists");
+                let err = ensure_compiled_pass_is_supported(pass).expect_err(
+                    "present pass must fail loudly until backend present execution exists",
+                );
                 assert!(
                     err.to_string().contains("present pass"),
                     "unexpected present support error: {err}"

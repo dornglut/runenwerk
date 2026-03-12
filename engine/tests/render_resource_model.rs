@@ -1,6 +1,6 @@
 use engine::plugins::render::api::{RenderPassId, RenderResourceId, validate_namespaced_id};
 use engine::plugins::render::resource::{RenderResourceDescriptor, detect_duplicate_resource_ids};
-use engine::plugins::render::{GpuUniform, GpuParams};
+use engine::plugins::render::{GpuParams, GpuUniform};
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
 struct ResourceTestParams {
@@ -16,7 +16,10 @@ fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
     match descriptor {
         RenderResourceDescriptor::UniformBuffer(value) => {
             assert_eq!(value.id.as_str(), "test.params");
-            assert_eq!(value.params_type_id, std::any::TypeId::of::<ResourceTestParams>());
+            assert_eq!(
+                value.params_type_id,
+                std::any::TypeId::of::<ResourceTestParams>()
+            );
             assert!(value.params_type_name.contains("ResourceTestParams"));
             let raw = ResourceTestParams { value: 9 }.to_gpu();
             assert_eq!(raw.value, 9);
@@ -28,9 +31,14 @@ fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
 #[test]
 fn namespaced_id_validation_accepts_dot_separated_identifiers() {
     assert!(validate_namespaced_id("resource", "post.bloom.extract").is_ok());
-    assert!(RenderPassId::new("ui.composite").validate_namespaced().is_ok());
+    assert!(
+        RenderPassId::new("ui.composite")
+            .validate_namespaced()
+            .is_ok()
+    );
 
-    let err = validate_namespaced_id("resource", "invalid").expect_err("must reject missing namespace");
+    let err =
+        validate_namespaced_id("resource", "invalid").expect_err("must reject missing namespace");
     assert!(err.to_string().contains("expected dot-separated namespace"));
 }
 

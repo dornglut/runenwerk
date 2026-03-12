@@ -1,17 +1,17 @@
 use crate::plugins::render::composition::RenderFlowRegistryResource;
 use crate::plugins::render::inspect::RenderDebugTimingsState;
+use crate::plugins::render::renderer::Gfx;
 use crate::plugins::render::renderer::frame_bindings::{
     RenderFrameDataRegistry, RenderFrameResourceBindings,
 };
-use crate::plugins::render::renderer::Gfx;
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use crate::plugins::scene::SceneResource;
 use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::UiRenderShaderConfig;
 use crate::runtime::{Res, ResMut, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
-use scheduler::set_slow_node_logging_enabled;
 use anyhow::anyhow;
+use scheduler::set_slow_node_logging_enabled;
 use wgpu::SurfaceError;
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;

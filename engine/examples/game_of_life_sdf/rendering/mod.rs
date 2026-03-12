@@ -1,7 +1,7 @@
 // Owner: Game of Life SDF Example - Rendering Module Boundary
 
 mod graph;
-mod params;
+mod state;
 
 pub(crate) use graph::*;
-pub(crate) use params::*;
+pub(crate) use state::*;
