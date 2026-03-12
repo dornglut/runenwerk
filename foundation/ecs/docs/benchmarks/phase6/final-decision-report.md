@@ -37,26 +37,26 @@ Compared Phase 6 results against:
 
 Question: did archetype ownership/fetch materially reduce dominant query costs?
 
-- For archetype-native dominant mutable tuple (`C4`), large-size cost improved vs historical Phase 5B (`C4@200k: 348.37 ms -> 290.51 ms`, `-16.61%`).
-- Same-session comparisons are mixed; several broad-loop forms are better than refresh at 10k/50k while others regress at 200k.
-- Telemetry cumulative `query_matching_nanos` and `query_iter_nanos` are materially lower than historical Phase 5B (`-77.18%` and `-44.08%` respectively), and slightly lower than same-session Phase 5B refresh (`-1.22%` and `-2.16%`).
+- For archetype-native dominant mutable tuple (`C4`), large-size cost remains improved vs historical Phase 5B (`C4@200k: 348.37 ms -> 292.14 ms`, `-16.14%`).
+- Same-session comparisons are mixed; several broad-loop forms are better than refresh at some sizes while others regress.
+- Cumulative telemetry remains query- and stage-dominated, with runtime plan/flush remaining secondary in absolute totals.
 
 Question: did `Changed` / `Added` checks remain acceptable?
 
-- `changed_check_nanos` and `added_check_nanos` remained in the same order of magnitude as refreshed baseline.
-- W2 wall time remained near refreshed baseline (`313.328 ms -> 310.587 ms`, `-0.87%`).
+- `changed_check_nanos` and `added_check_nanos` remain in expected order of magnitude.
+- `W2@20k` median remains above same-session refresh (`12.417 ms` vs `10.987 ms`, `+13.02%`), and this tradeoff is documented.
 
 ### 3.2 Runtime path
 
 Question: did the engine mixed frame improve or remain acceptable?
 
-- Versus historical Phase 5B: both sizes improved (`5k: -14.89%`, `20k: -3.85%`).
-- Versus same-session refresh: near parity (`5k: +2.12%`, `20k: +0.24%`).
+- Versus historical Phase 5B: both sizes improved (`5k: -15.16%`, `20k: -12.01%`).
+- Versus same-session refresh: near parity at 5k (`+1.80%`) and improved at 20k (`-8.27%`).
 
 Question: did scheduler/flush become more visible after storage/query improvements?
 
 - Runtime plan/flush remain secondary relative to stage/query totals in mixed workloads.
-- Cumulative `runtime_plan_nanos`/`runtime_flush_nanos` are higher than same-session refresh, but still much smaller than `runtime_stage_nanos` in absolute terms.
+- Cumulative `runtime_plan_nanos`/`runtime_flush_nanos` are substantially smaller than `runtime_stage_nanos` in absolute terms.
 
 ### 3.3 Structural path
 
@@ -74,21 +74,22 @@ Question: are swap-remove and migration costs acceptable?
 
 From `phase6_profile.txt` cumulative snapshot:
 
-- `query_matching_nanos`: 26,556,300
-- `query_iter_nanos`: 109,008,700
+- `query_matching_nanos`: 27,022,800
+- `query_iter_nanos`: 115,336,400
 - `query_get_nanos`: 0
 - `query_single_nanos`: 0
-- `changed_check_nanos`: 26,700,800
-- `added_check_nanos`: 27,022,800
-- `runtime_plan_nanos`: 10,488,000
-- `runtime_stage_nanos`: 259,089,100
-- `runtime_flush_nanos`: 7,375,600
+- `changed_check_nanos`: 29,779,800
+- `added_check_nanos`: 27,808,000
+- `runtime_plan_nanos`: 8,435,300
+- `runtime_stage_nanos`: 262,304,400
+- `runtime_flush_nanos`: 6,480,000
 - `event_reader_nanos`: 1,100
-- `event_writer_nanos`: 210,500
+- `event_writer_nanos`: 224,300
 
 Notes:
 
 - `query_get_nanos` and `query_single_nanos` are zero because the benchmark/profile workloads are iter-path focused and do not call `get`/`single`.
+- The profile output explicitly reports this zero-value reason per workload block.
 
 ## 5. Final Closeout Statement
 

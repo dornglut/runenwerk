@@ -1,3 +1,7 @@
+   Compiling ecs v0.1.0 (C:\Users\joshi\Projekte\Runenwerk\foundation\ecs)
+   Compiling engine_sim v0.1.0 (C:\Users\joshi\Projekte\Runenwerk\net\engine_sim)
+   Compiling engine_net v0.1.0 (C:\Users\joshi\Projekte\Runenwerk\net\engine_net)
+   Compiling engine_replay v0.1.0 (C:\Users\joshi\Projekte\Runenwerk\net\engine_history)
 warning: unused import: `validation::*`
   --> net\engine_history\src\lib.rs:16:9
    |
@@ -7,6 +11,7 @@ warning: unused import: `validation::*`
    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 warning: `engine_replay` (lib) generated 1 warning (run `cargo fix --lib -p engine_replay` to apply 1 suggestion)
+   Compiling engine v0.1.0 (C:\Users\joshi\Projekte\Runenwerk\engine)
 warning: unused import: `diagnostics::*`
   --> engine\src\plugins\net\mod.rs:13:9
    |
@@ -930,16 +935,19 @@ help: use `let _ = ...` to ignore the expression or result
    |
 
 warning: `engine` (lib) generated 114 warnings (run `cargo fix --lib -p engine` to apply 106 suggestions)
-   Compiling engine v0.1.0 (C:\Users\joshi\Projekte\Runenwerk\engine)
-    Finished `bench` profile [optimized] target(s) in 2.19s
+    Finished `bench` profile [optimized] target(s) in 13.25s
      Running benches\phase6_runtime.rs (target\release\deps\phase6_runtime-dfa0619cdc30cc11.exe)
 Gnuplot not found, using plotters backend
 Benchmarking engine_runtime_phase6/headless_mixed_frame/5000
 Benchmarking engine_runtime_phase6/headless_mixed_frame/5000: Analyzing
 engine_runtime_phase6/headless_mixed_frame/5000
-                        time:   [753.58 µs 759.43 µs 782.84 µs]
+                        time:   [751.21 µs 756.98 µs 780.06 µs]
+                        change: [-4.0407% -0.3350% +3.5145%] (p = 0.70 > 0.05)
+                        No change in performance detected.
 Benchmarking engine_runtime_phase6/headless_mixed_frame/20000
 Benchmarking engine_runtime_phase6/headless_mixed_frame/20000: Analyzing
 engine_runtime_phase6/headless_mixed_frame/20000
-                        time:   [3.3661 ms 3.4826 ms 3.5117 ms]
+                        time:   [3.1828 ms 3.1871 ms 3.2042 ms]
+                        change: [-9.3645% -7.1345% -4.8081%] (p = 0.05 < 0.05)
+                        Performance has improved.
 

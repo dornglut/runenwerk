@@ -1,6 +1,6 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use engine::prelude::*;
 use ecs::{With, Without};
+use engine::prelude::*;
 use std::hint::black_box;
 
 #[derive(Debug, Copy, Clone, PartialEq, Component)]

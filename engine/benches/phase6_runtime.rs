@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use ecs::{With, Without};
 use engine::prelude::*;
 use std::hint::black_box;
@@ -117,4 +117,3 @@ fn workload_engine_runtime(c: &mut Criterion) {
 
 criterion_group!(phase6_runtime, workload_engine_runtime);
 criterion_main!(phase6_runtime);
-
