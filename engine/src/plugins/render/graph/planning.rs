@@ -1,65 +1,148 @@
 use crate::plugins::render::api::RenderFlow;
-use crate::plugins::render::frame_graph::{
-    OwnerRenderGraphRegistration, RegisteredPassDescriptor, RegisteredPassKind,
-    RegisteredPipelineDescriptor, RegisteredPipelineRef,
-};
-use crate::plugins::render::pipelines::PipelineKey;
-use crate::plugins::render::{RenderFlowValidationError, RenderPassKind};
+use crate::plugins::render::graph::{RenderPassKind, RenderPassNode, ResourceGraph};
+use crate::plugins::render::RenderFlowValidationError;
 
-pub fn compile_flow_to_owner_registration(
-    flow: &RenderFlow,
-    owner: impl Into<String>,
-) -> Result<OwnerRenderGraphRegistration, RenderFlowValidationError> {
-    flow.validate()?;
+#[derive(Debug, Clone)]
+pub struct CompiledRenderFlowPlan {
+    pub flow_id: String,
+    pub resources: ResourceGraph,
+    pub pass_order: Vec<CompiledPassDescriptor>,
+}
 
-    let mut registration = OwnerRenderGraphRegistration::new(owner);
-    let mut pipelines = Vec::<RegisteredPipelineDescriptor>::new();
-    let mut passes = Vec::<RegisteredPassDescriptor>::new();
+#[derive(Debug, Clone)]
+pub enum CompiledPassDescriptor {
+    Compute(CompiledComputePass),
+    Fullscreen(CompiledFullscreenPass),
+    Graphics(CompiledGraphicsPass),
+    Copy(CompiledCopyPass),
+    Present(CompiledPresentPass),
+    BuiltinUiComposite(CompiledUiCompositePass),
+}
 
-    for pass in &flow.graph().passes.passes {
-        let pipeline = pass.shader.as_ref().map(|shader| {
-            let pipeline_id = format!("{}.pipeline", pass.id.as_str());
-            pipelines.push(RegisteredPipelineDescriptor::new(
-                pipeline_id.clone(),
-                PipelineKey::from(shader.clone()),
-            ));
-            RegisteredPipelineRef::Named(pipeline_id)
-        });
-
-        let kind = match pass.kind {
-            RenderPassKind::Compute => RegisteredPassKind::Compute,
-            _ => RegisteredPassKind::Render,
-        };
-
-        let executor = match pass.kind {
-            RenderPassKind::BuiltinUiComposite => "builtin_ui_composite".to_string(),
-            _ => pass.id.as_str().to_string(),
-        };
-
-        passes.push(RegisteredPassDescriptor {
-            id: pass.id.as_str().to_string(),
-            kind,
-            reads: pass
-                .reads
-                .iter()
-                .map(|id| id.as_str().to_string())
-                .collect(),
-            writes: pass
-                .writes
-                .iter()
-                .map(|id| id.as_str().to_string())
-                .collect(),
-            depends_on: pass
-                .depends_on
-                .iter()
-                .map(|id| id.as_str().to_string())
-                .collect(),
-            pipeline,
-            executor: Some(executor),
-        });
+impl CompiledPassDescriptor {
+    pub fn pass_id(&self) -> &str {
+        self.node().id.as_str()
     }
 
-    registration.pipelines = pipelines;
-    registration.passes = passes;
-    Ok(registration)
+    pub fn node(&self) -> &RenderPassNode {
+        match self {
+            Self::Compute(value) => &value.node,
+            Self::Fullscreen(value) => &value.node,
+            Self::Graphics(value) => &value.node,
+            Self::Copy(value) => &value.node,
+            Self::Present(value) => &value.node,
+            Self::BuiltinUiComposite(value) => &value.node,
+        }
+    }
+
+    pub fn order_index(&self) -> usize {
+        match self {
+            Self::Compute(value) => value.order_index,
+            Self::Fullscreen(value) => value.order_index,
+            Self::Graphics(value) => value.order_index,
+            Self::Copy(value) => value.order_index,
+            Self::Present(value) => value.order_index,
+            Self::BuiltinUiComposite(value) => value.order_index,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledComputePass {
+    pub order_index: usize,
+    pub node: RenderPassNode,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledFullscreenPass {
+    pub order_index: usize,
+    pub node: RenderPassNode,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledGraphicsPass {
+    pub order_index: usize,
+    pub node: RenderPassNode,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledCopyPass {
+    pub order_index: usize,
+    pub node: RenderPassNode,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledPresentPass {
+    pub order_index: usize,
+    pub node: RenderPassNode,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledUiCompositePass {
+    pub order_index: usize,
+    pub node: RenderPassNode,
+}
+
+pub fn compile_flow_plan(
+    flow: &RenderFlow,
+) -> Result<CompiledRenderFlowPlan, RenderFlowValidationError> {
+    let report = flow.validate()?;
+    let pass_lookup = flow
+        .graph()
+        .passes
+        .passes
+        .iter()
+        .map(|pass| (pass.id.as_str().to_string(), pass.clone()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    let mut pass_order = Vec::<CompiledPassDescriptor>::with_capacity(report.pass_order.len());
+
+    for (order_index, pass_id) in report.pass_order.iter().enumerate() {
+        let pass = pass_lookup.get(pass_id).cloned().ok_or_else(|| {
+            RenderFlowValidationError {
+                issues: vec![format!(
+                    "internal planning error: validated pass '{}' missing from flow graph",
+                    pass_id
+                )],
+            }
+        })?;
+
+        let compiled = match pass.kind {
+            RenderPassKind::Compute => CompiledPassDescriptor::Compute(CompiledComputePass {
+                order_index,
+                node: pass,
+            }),
+            RenderPassKind::Fullscreen => {
+                CompiledPassDescriptor::Fullscreen(CompiledFullscreenPass {
+                    order_index,
+                    node: pass,
+                })
+            }
+            RenderPassKind::Graphics => CompiledPassDescriptor::Graphics(CompiledGraphicsPass {
+                order_index,
+                node: pass,
+            }),
+            RenderPassKind::Copy => CompiledPassDescriptor::Copy(CompiledCopyPass {
+                order_index,
+                node: pass,
+            }),
+            RenderPassKind::Present => CompiledPassDescriptor::Present(CompiledPresentPass {
+                order_index,
+                node: pass,
+            }),
+            RenderPassKind::BuiltinUiComposite => {
+                CompiledPassDescriptor::BuiltinUiComposite(CompiledUiCompositePass {
+                    order_index,
+                    node: pass,
+                })
+            }
+        };
+        pass_order.push(compiled);
+    }
+
+    Ok(CompiledRenderFlowPlan {
+        flow_id: flow.id().as_str().to_string(),
+        resources: flow.graph().resources.clone(),
+        pass_order,
+    })
 }

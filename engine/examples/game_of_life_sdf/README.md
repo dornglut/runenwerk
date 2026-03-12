@@ -1,27 +1,12 @@
 # Game of Life SDF Example
 
-Feature-owned render example that uses the engine `RenderPlugin` with:
+Public `RenderFlow` API example that shows:
 
-- a custom compute executor to advance Conway's Game of Life on GPU
-- a custom compose executor to render cells via signed-distance-field shading
-
-## Entry
-
-- `engine/examples/game_of_life_sdf/main.rs`
-
-## Shader
-
-- `assets/shaders/game_of_life_sdf.wgsl`
+- namespaced compute/fullscreen/UI pass chaining on the builtin compiled path
+- windowed app wiring without custom example-owned executors
 
 ## Run
 
 ```bash
 cargo run -p engine --example game_of_life_sdf
 ```
-
-## Controls
-
-- `Space`: pause / resume simulation
-- `Enter`: single-step one generation
-- `PageUp`: increase simulation rate
-- `PageDown`: decrease simulation rate

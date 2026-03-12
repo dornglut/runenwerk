@@ -9,9 +9,6 @@ impl Renderer {
             rect_pass_shader_revision: 0,
             text_renderer: None,
             text_renderer_format: None,
-            last_frame_graph_diagnostics_hash: None,
-            last_missing_executors_hash: None,
-            last_execution_order_error_hash: None,
         }
     }
 

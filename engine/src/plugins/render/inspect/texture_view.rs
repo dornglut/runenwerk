@@ -1,5 +1,11 @@
 use crate::plugins::render::{RenderFlow, RenderResourceDescriptor, ResourceLifetime};
 
+#[derive(Debug, Clone, Default, ecs::Component)]
+pub struct RenderTextureInspectorState {
+    pub selected_texture: Option<String>,
+    pub hovered_texture: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextureResourceView {
     pub id: String,

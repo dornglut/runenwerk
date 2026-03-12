@@ -45,10 +45,6 @@ name = "scene_manager_ui"
 path = "examples/scene_manager_ui/main.rs"
 
 [[example]]
-name = "sdf_renderer"
-path = "examples/sdf_renderer/main.rs"
-
-[[example]]
 name = "game_of_life_sdf"
 path = "examples/game_of_life_sdf/main.rs"
 

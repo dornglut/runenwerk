@@ -1,5 +1,5 @@
 use crate::plugins::render::graph::{RenderPassNode, ResourceGraph};
-use crate::plugins::render::resources::RenderFrameDataRegistry;
+use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{GpuParams, RenderResourceId};
 use std::any::{Any, TypeId, type_name};
 use std::collections::BTreeMap;

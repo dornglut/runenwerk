@@ -1,5 +1,4 @@
-use engine::plugins::render::resources::RenderFrameDataRegistry;
-use engine::plugins::render::{GpuUniform, RenderFlow};
+use engine::plugins::render::{GpuUniform, RenderFlow, RenderFrameDataRegistry};
 
 #[derive(Debug, Clone, ecs::Component)]
 struct BindingState {

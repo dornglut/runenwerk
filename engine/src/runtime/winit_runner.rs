@@ -1,6 +1,6 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
-use crate::plugins::render::domain::Gfx;
+use crate::plugins::render::renderer::Gfx;
 use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
 };

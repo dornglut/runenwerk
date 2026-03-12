@@ -1,5 +1,11 @@
 use crate::plugins::render::{RenderFlow, RenderFlowValidationError};
 
+#[derive(Debug, Clone, Default, ecs::Component)]
+pub struct RenderDebugGraphDumpState {
+    pub revision: u64,
+    pub lines: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderFlowGraphDump {
     pub flow_id: String,

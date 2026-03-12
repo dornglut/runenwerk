@@ -1,19 +1,16 @@
 use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::composition::RenderFlowContribution;
-use crate::plugins::render::domain::RenderGraphRegistryResource;
-use crate::plugins::render::graph::{
-    compile_flow_to_owner_registration, merge_flow_with_contributions,
-};
+use crate::plugins::render::graph::{CompiledRenderFlowPlan, compile_flow_plan, merge_flow_with_contributions};
 use crate::runtime::ResMut;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default, ecs::Component)]
 pub struct RenderFlowRegistryResource {
     flows: BTreeMap<String, RenderFlow>,
     contributions: BTreeMap<String, RenderFlowContribution>,
+    compiled_flows: Vec<CompiledRenderFlowPlan>,
     revision: u64,
-    applied_revision: u64,
-    synced_owner_ids: BTreeSet<String>,
+    applied_compiled_revision: u64,
 }
 
 impl RenderFlowRegistryResource {
@@ -66,18 +63,19 @@ impl RenderFlowRegistryResource {
         self.contributions.len()
     }
 
-    pub fn sync_into_graph_registry(&mut self, graph_registry: &mut RenderGraphRegistryResource) {
-        if self.applied_revision == self.revision {
+    pub fn compiled_flows(&self) -> &[CompiledRenderFlowPlan] {
+        &self.compiled_flows
+    }
+
+    pub fn sync_compiled_flows(&mut self) {
+        if self.applied_compiled_revision == self.revision {
             return;
         }
 
-        let mut next_owner_ids = BTreeSet::<String>::new();
         let contributions = self.contributions.values().cloned().collect::<Vec<_>>();
+        let mut next_compiled = Vec::<CompiledRenderFlowPlan>::new();
 
         for flow in self.flows.values() {
-            let owner_id = format!("flow::{}", flow.id().as_str());
-            next_owner_ids.insert(owner_id.clone());
-
             let composed_flow = match merge_flow_with_contributions(flow, &contributions) {
                 Ok(value) => value,
                 Err(err) => {
@@ -90,28 +88,18 @@ impl RenderFlowRegistryResource {
                 }
             };
 
-            match compile_flow_to_owner_registration(&composed_flow, owner_id.clone()) {
-                Ok(registration) => graph_registry.upsert_owner(registration),
-                Err(err) => {
-                    tracing::warn!(
-                        flow_id = flow.id().as_str(),
-                        error = %err,
-                        "skipping invalid render flow during graph sync"
-                    );
-                }
+            match compile_flow_plan(&composed_flow) {
+                Ok(compiled) => next_compiled.push(compiled),
+                Err(err) => tracing::warn!(
+                    flow_id = flow.id().as_str(),
+                    error = %err,
+                    "skipping invalid render flow during compiled planning"
+                ),
             }
         }
 
-        for owner in self
-            .synced_owner_ids
-            .iter()
-            .filter(|owner| !next_owner_ids.contains(*owner))
-        {
-            graph_registry.clear_owner(owner.as_str());
-        }
-
-        self.synced_owner_ids = next_owner_ids;
-        self.applied_revision = self.revision;
+        self.compiled_flows = next_compiled;
+        self.applied_compiled_revision = self.revision;
     }
 
     fn bump_revision(&mut self) {
@@ -119,9 +107,6 @@ impl RenderFlowRegistryResource {
     }
 }
 
-pub(crate) fn sync_render_flow_registry_system(
-    mut flow_registry: ResMut<RenderFlowRegistryResource>,
-    mut graph_registry: ResMut<RenderGraphRegistryResource>,
-) {
-    flow_registry.sync_into_graph_registry(&mut graph_registry);
+pub(crate) fn sync_render_flow_registry_system(mut flow_registry: ResMut<RenderFlowRegistryResource>) {
+    flow_registry.sync_compiled_flows();
 }

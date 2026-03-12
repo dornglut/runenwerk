@@ -1,5 +1,11 @@
 use crate::plugins::render::{RenderFlow, ResourceLifetime};
 
+#[derive(Debug, Clone, Default, ecs::Component)]
+pub struct RenderDebugOverlayState {
+    pub enabled: bool,
+    pub lines: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceInspectionEntry {
     pub id: String,

@@ -1,4 +1,4 @@
-use crate::plugins::render::domain::GfxFrameTimings;
+use crate::plugins::render::renderer::GfxFrameTimings;
 use ecs::Component;
 use engine_net::AuthoritativeJoinState;
 use std::collections::HashMap;

@@ -1,22 +1,15 @@
-use crate::plugins::render::frame_graph::{
-    BuiltinRenderPassExecutor, FrameGraph, PassHandle, PassKind, RegisteredPassKind,
-    RegisteredPipelineRef, RenderGraphRegistryResource, RenderPassEncodeContext,
-    RenderPassExecutorRegistryResource, RenderPassPrepareContext,
-};
-use crate::plugins::render::pipelines::PipelineKey;
-use crate::plugins::render::resources::RenderFrameDataRegistry;
+use crate::plugins::render::backend::WgpuCtx;
+use crate::plugins::render::graph::CompiledRenderFlowPlan;
+use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use crate::plugins::ui::domain::{FileFontProvider, TextRenderer, UiDrawCmd, UiDrawList};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use std::collections::{BTreeMap, BTreeSet};
-use std::hash::{Hash, Hasher};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu::*;
-
-// Owner: Engine Renderer - Core Types and Builtin Executors
+use winit::window::Window;
 
 pub const DEFAULT_UI_RECT_SHADER: &str = r#"
 struct VsIn {
@@ -89,45 +82,33 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
 }
 "#;
 
-#[derive(Debug, Clone)]
-struct ResolvedFramePassDescriptor {
-    name: String,
-    kind: PassKind,
-    pipeline: PipelineKey,
-    reads: Vec<String>,
-    writes: Vec<String>,
-    depends_on: Vec<String>,
-    executor: String,
+pub const DEFAULT_FULLSCREEN_SHADER: &str = r#"
+struct VsOut {
+    @builtin(position) clip_position : vec4<f32>,
+};
+
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VsOut {
+    let pos = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -3.0),
+        vec2<f32>(-1.0, 1.0),
+        vec2<f32>(3.0, 1.0),
+    );
+    var out: VsOut;
+    out.clip_position = vec4<f32>(pos[vertex_index], 0.0, 1.0);
+    return out;
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
-struct FrameGraphCompileDiagnostics {
-    empty_pass_name_count: usize,
-    duplicate_pass_names: Vec<String>,
-    missing_dependencies: Vec<(String, String)>,
-    no_registered_passes: bool,
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.12, 0.14, 0.18, 1.0);
 }
+"#;
 
-impl FrameGraphCompileDiagnostics {
-    fn has_issues(&self) -> bool {
-        self.issue_count() > 0
-    }
-
-    fn issue_count(&self) -> usize {
-        self.empty_pass_name_count
-            + self.duplicate_pass_names.len()
-            + self.missing_dependencies.len()
-            + usize::from(self.no_registered_passes)
-    }
-}
-
-#[derive(Debug, Clone)]
-struct FrameGraphBuildOutput {
-    graph: FrameGraph,
-    handles: Vec<PassHandle>,
-    pass_executor_bindings: BTreeMap<String, String>,
-    diagnostics: FrameGraphCompileDiagnostics,
-}
+pub const DEFAULT_COMPUTE_SHADER: &str = r#"
+@compute @workgroup_size(1, 1, 1)
+fn cs_main() {}
+"#;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RendererFrameTimings {
@@ -214,118 +195,6 @@ pub(crate) struct RendererPreparedPacket {
     prepare_timings: RendererFrameTimings,
 }
 
-trait FramePassExecutor {
-    fn prepare(
-        &self,
-        _renderer: &mut Renderer,
-        _device: &Device,
-        _queue: &Queue,
-        _packet: &RendererPreparedPacket,
-        _timings: &mut RendererFrameTimings,
-    ) {
-    }
-
-    fn encode(
-        &self,
-        renderer: &mut Renderer,
-        device: &Device,
-        encoder: &mut CommandEncoder,
-        frame_view: &TextureView,
-        packet: &RendererPreparedPacket,
-        pipeline: PipelineKey,
-    );
-}
-
-#[derive(Debug, Default)]
-struct BuiltinComputeNoopPassExecutor;
-
-impl FramePassExecutor for BuiltinComputeNoopPassExecutor {
-    fn encode(
-        &self,
-        _renderer: &mut Renderer,
-        _device: &Device,
-        _encoder: &mut CommandEncoder,
-        _frame_view: &TextureView,
-        _packet: &RendererPreparedPacket,
-        _pipeline: PipelineKey,
-    ) {
-        static WARNED: AtomicBool = AtomicBool::new(false);
-        if !WARNED.swap(true, Ordering::Relaxed) {
-            tracing::warn!(
-                "builtin_compute is not implemented in core render plugin; register a custom executor instead"
-            );
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct BuiltinComposeNoopPassExecutor;
-
-impl FramePassExecutor for BuiltinComposeNoopPassExecutor {
-    fn encode(
-        &self,
-        _renderer: &mut Renderer,
-        _device: &Device,
-        _encoder: &mut CommandEncoder,
-        _frame_view: &TextureView,
-        _packet: &RendererPreparedPacket,
-        _pipeline: PipelineKey,
-    ) {
-        static WARNED: AtomicBool = AtomicBool::new(false);
-        if !WARNED.swap(true, Ordering::Relaxed) {
-            tracing::warn!(
-                "builtin_compose is not implemented in core render plugin; register a custom executor instead"
-            );
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct MeshOverlayNoopPassExecutor;
-
-impl FramePassExecutor for MeshOverlayNoopPassExecutor {
-    fn encode(
-        &self,
-        _renderer: &mut Renderer,
-        _device: &Device,
-        _encoder: &mut CommandEncoder,
-        _frame_view: &TextureView,
-        _packet: &RendererPreparedPacket,
-        _pipeline: PipelineKey,
-    ) {
-        static WARNED: AtomicBool = AtomicBool::new(false);
-        if !WARNED.swap(true, Ordering::Relaxed) {
-            tracing::warn!(
-                "builtin_mesh_overlay is not implemented in core render plugin; register a custom executor instead"
-            );
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct UiCompositePassExecutor;
-
-impl FramePassExecutor for UiCompositePassExecutor {
-    fn encode(
-        &self,
-        renderer: &mut Renderer,
-        _device: &Device,
-        encoder: &mut CommandEncoder,
-        frame_view: &TextureView,
-        packet: &RendererPreparedPacket,
-        _pipeline: PipelineKey,
-    ) {
-        renderer.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
-    }
-}
-
-const BUILTIN_COMPUTE_NOOP_PASS_EXECUTOR: BuiltinComputeNoopPassExecutor =
-    BuiltinComputeNoopPassExecutor;
-const BUILTIN_COMPOSE_NOOP_PASS_EXECUTOR: BuiltinComposeNoopPassExecutor =
-    BuiltinComposeNoopPassExecutor;
-const MESH_OVERLAY_NOOP_PASS_EXECUTOR: MeshOverlayNoopPassExecutor = MeshOverlayNoopPassExecutor;
-const UI_COMPOSITE_PASS_EXECUTOR: UiCompositePassExecutor = UiCompositePassExecutor;
-
 #[derive(Debug)]
 pub struct Renderer {
     rect_pass: Option<RectPass>,
@@ -333,9 +202,66 @@ pub struct Renderer {
     rect_pass_shader_revision: u64,
     text_renderer: Option<TextRenderer>,
     text_renderer_format: Option<TextureFormat>,
-    last_frame_graph_diagnostics_hash: Option<u64>,
-    last_missing_executors_hash: Option<u64>,
-    last_execution_order_error_hash: Option<u64>,
+}
+
+#[derive(Debug, ecs::Component)]
+pub struct Gfx {
+    pub ctx: WgpuCtx<'static>,
+    pub renderer: Renderer,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GfxFrameTimings {
+    pub acquire_ms: f32,
+    pub renderer: RendererFrameTimings,
+    pub present_ms: f32,
+}
+
+impl Gfx {
+    pub fn new(window: Arc<Window>) -> Result<Self> {
+        let ctx = WgpuCtx::new(window)?;
+        Ok(Self {
+            ctx,
+            renderer: Renderer::new(),
+        })
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.ctx.resize(width, height);
+    }
+
+    pub fn render(
+        &mut self,
+        frame_data: &RenderFrameDataRegistry<'_>,
+        draw_list: &UiDrawList,
+        shader_registry: &mut ShaderRegistryResource,
+        compiled_flows: &[CompiledRenderFlowPlan],
+        ui_rect_shader: Option<ShaderHandle>,
+    ) -> Result<GfxFrameTimings> {
+        let mut timings = GfxFrameTimings::default();
+        let acquire_start = Instant::now();
+        let frame = self.ctx.get_current_texture()?;
+        timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
+        let view = frame.texture.create_view(&Default::default());
+        timings.renderer = self.renderer.render(
+            &self.ctx.device,
+            &self.ctx.queue,
+            &view,
+            frame_data,
+            draw_list,
+            shader_registry,
+            compiled_flows,
+            ui_rect_shader,
+            self.ctx.surface_config.format,
+            self.ctx.surface_config.width as f32,
+            self.ctx.surface_config.height as f32,
+        )?;
+
+        let present_start = Instant::now();
+        frame.present();
+        timings.present_ms = present_start.elapsed().as_secs_f32() * 1000.0;
+        Ok(timings)
+    }
 }
 
 mod extract;
@@ -347,12 +273,9 @@ mod setup;
 pub mod frame_bindings;
 pub mod submit;
 
-// Owner: Engine Renderer - Tests
 #[cfg(test)]
 mod tests {
-    use super::{
-        PassKind, PipelineKey, RenderGraphRegistryResource, Renderer, ResolvedFramePassDescriptor,
-    };
+    use super::Renderer;
 
     #[test]
     fn clip_to_scissor_clamps_and_rejects_empty() {
@@ -362,68 +285,5 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
-    }
-
-    #[test]
-    fn build_frame_graph_from_descriptors_collects_diagnostics() {
-        let renderer = Renderer::new();
-        let descriptors = vec![
-            ResolvedFramePassDescriptor {
-                name: "".to_string(),
-                kind: PassKind::Render,
-                pipeline: PipelineKey::from("world_compose_fullscreen"),
-                reads: Vec::new(),
-                writes: Vec::new(),
-                depends_on: Vec::new(),
-                executor: "ui_composite".to_string(),
-            },
-            ResolvedFramePassDescriptor {
-                name: "builtin_compute".to_string(),
-                kind: PassKind::Compute,
-                pipeline: PipelineKey::from("world_compute_basic"),
-                reads: vec!["world_params".to_string()],
-                writes: vec!["world_color".to_string()],
-                depends_on: Vec::new(),
-                executor: "builtin_compute".to_string(),
-            },
-            ResolvedFramePassDescriptor {
-                name: "builtin_compute".to_string(),
-                kind: PassKind::Compute,
-                pipeline: PipelineKey::from("world_compute_high_contrast"),
-                reads: vec!["world_params".to_string()],
-                writes: vec!["world_color".to_string()],
-                depends_on: Vec::new(),
-                executor: "builtin_compute".to_string(),
-            },
-            ResolvedFramePassDescriptor {
-                name: "builtin_compose".to_string(),
-                kind: PassKind::Render,
-                pipeline: PipelineKey::from("world_compose_fullscreen"),
-                reads: vec!["world_color".to_string()],
-                writes: vec!["surface_color".to_string()],
-                depends_on: vec!["missing_pass".to_string()],
-                executor: "builtin_compose".to_string(),
-            },
-        ];
-
-        let output = renderer.build_frame_graph_from_descriptors(&descriptors);
-        assert_eq!(output.handles.len(), 2);
-        assert_eq!(output.diagnostics.empty_pass_name_count, 1);
-        assert_eq!(
-            output.diagnostics.duplicate_pass_names,
-            vec!["builtin_compute".to_string()]
-        );
-        assert_eq!(
-            output.diagnostics.missing_dependencies,
-            vec![("builtin_compose".to_string(), "missing_pass".to_string())]
-        );
-    }
-
-    #[test]
-    fn build_frame_graph_reports_when_no_feature_graph_is_registered() {
-        let renderer = Renderer::new();
-        let output = renderer.build_frame_graph(&RenderGraphRegistryResource::default());
-        assert!(output.handles.is_empty());
-        assert!(output.diagnostics.no_registered_passes);
     }
 }

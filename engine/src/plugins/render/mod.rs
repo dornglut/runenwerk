@@ -1,17 +1,12 @@
 pub mod api;
 pub mod backend;
 pub mod composition;
-pub mod debug;
-pub mod domain;
-pub mod frame_graph;
 pub mod graph;
 pub mod inspect;
 pub mod params;
 pub mod pipelines;
 pub mod renderer;
 pub mod resource;
-pub mod resources;
-pub mod sdf;
 pub mod shader;
 
 mod plugin;
@@ -32,12 +27,17 @@ pub use composition::{
 };
 pub use engine_render_macros::{GpuStorage, GpuUniform};
 pub use graph::{
+    CompiledComputePass, CompiledCopyPass, CompiledFullscreenPass, CompiledGraphicsPass,
+    CompiledPassDescriptor, CompiledPresentPass, CompiledRenderFlowPlan, CompiledUiCompositePass,
     FlowValidationReport, RenderFlowGraph, RenderFlowValidationError, RenderPassKind,
-    RenderPassNode, validate_flow_graph,
+    RenderPassNode, compile_flow_plan, merge_flow_with_contributions, validate_flow_graph,
 };
 pub use params::{GpuBoolU32, GpuParams, GpuStorage, GpuUniform, ToGpuValue};
 pub use plugin::RenderPlugin;
+pub use renderer::frame_bindings::{RenderFrameDataRegistry, RenderFrameResourceBindings};
+pub use renderer::{Gfx, GfxFrameTimings, Renderer, RendererFrameTimings};
 pub use resource::{
     RenderResourceDescriptor, ResourceLifetime, TransientAliasAssignment, TransientAliasCandidate,
     TransientAliasSlot, TransientResourceWindow,
 };
+pub use shader::{ShaderHandle, ShaderRegistryResource};

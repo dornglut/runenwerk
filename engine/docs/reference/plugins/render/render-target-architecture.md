@@ -1,27 +1,32 @@
-# Render Target Architecture
+# Render Architecture Cutover
 
-This reference captures the current target direction for render authoring in this repository.
+This reference is a short map to the canonical render architecture definition.
 
-## Public Direction
+## Source of Truth
 
-- `RenderFlow`
-- `RenderFlowContribution`
-- `GpuUniform`
-- `GpuStorage`
-- `ToGpuValue`
-- `GpuParams`
-- ECS-first state projection (`ecs_resource`, `uniform_state`, `uniform_state_with_surface`)
-- pass/resource-oriented render authoring with namespaced IDs
+- Hard-cut roadmap:
+  - `engine/src/plugins/render/docs/roadmap.md`
 
-## Ownership Rules
+## Canonical Module Surface
 
-- Input bindings stay in the app/input layer (`App::add_input_bindings`), not in render-flow authoring.
-- Low-level graph executor/registry plumbing is internal/advanced and not the primary user API.
-- Macro scope stays narrow to GPU layout/conversion (`GpuUniform`, `GpuStorage`), not broad state DSL extraction.
+The core render plugin architecture is:
 
-## Canonical Specs
+- `api/`
+- `backend/`
+- `composition/`
+- `graph/`
+- `inspect/`
+- `params/`
+- `pipelines/`
+- `renderer/`
+- `resource/`
+- `shader/`
 
-- Target architecture spec:
-  - `engine/src/plugins/render/docs/target-architecture.md`
-- Implementation roadmap:
-  - `engine/src/plugins/render/docs/target-architecture-roadmap.md`
+Legacy architecture trees (`frame_graph/`, `resources/`, `domain/`, `debug/`) are removed from core render.
+
+## Authoring Direction
+
+- Normal authoring path: `RenderFlow` and `RenderFlowContribution`.
+- Normal runtime path: builtin compiled execution (not custom executor registration).
+- Missing builtin pass implementations must fail loudly.
+- Input bindings stay in app/input APIs (`App::add_input_bindings`), not in render flow declarations.

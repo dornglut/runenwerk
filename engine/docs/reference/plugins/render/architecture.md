@@ -2,10 +2,10 @@
 
 ## Primary Architecture Docs
 
-- Target architecture:
-  - `engine/src/plugins/render/docs/target-architecture.md`
-- Implementation roadmap:
-  - `engine/src/plugins/render/docs/target-architecture-roadmap.md`
+- Hard cutover roadmap (canonical source of truth):
+  - `engine/src/plugins/render/docs/roadmap.md`
+- Reference summary of the cutover direction:
+  - `engine/docs/reference/plugins/render/render-target-architecture.md`
 
 ## Current Public Surface
 

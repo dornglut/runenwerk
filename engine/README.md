@@ -96,7 +96,7 @@ See `examples/README.md` for the full map.
 - `runtime_minimal`: smallest headless runtime flow.
 - `window_input_demo`: windowed input loop + default plugins.
 - `scene_manager_ui`: template-driven scene/UI flow.
-- `sdf_renderer`: feature-owned render graph and executors.
+- `game_of_life_sdf`: windowed public `RenderFlow` example on builtin compiled execution.
 
 ## Test Map
 

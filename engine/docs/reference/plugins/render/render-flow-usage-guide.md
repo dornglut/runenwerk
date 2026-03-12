@@ -8,6 +8,11 @@
 4. Add passes (`compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`).
 5. Register the flow with `App::add_render_flow`.
 
+Current runtime support in the hard-cutover path:
+
+- builtin compiled execution: `compute_pass`, `fullscreen_pass`, `builtin_ui_composite_pass`
+- declared but not implemented in runtime execution: `graphics_pass`, `copy_pass`, `present_pass` (these fail loudly if executed)
+
 ## Minimal Flow
 
 ```rust
@@ -52,4 +57,3 @@ Use `uniform_state_with_surface` when params depend on surface size.
 - `engine/examples/render_flow_fullscreen_minimal/main.rs`
 - `engine/examples/render_flow_postprocess_compositor/main.rs`
 - `engine/examples/game_of_life_sdf/main.rs`
-- `engine/examples/sdf_renderer/main.rs`

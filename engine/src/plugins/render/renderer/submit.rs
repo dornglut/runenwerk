@@ -1,14 +1,17 @@
-use crate::plugins::render::debug::RenderDebugTimingsState;
-use crate::plugins::render::domain::{
-    Gfx, RenderFrameDataRegistry, RenderFrameResourceBindings, RenderGraphRegistryResource,
-    RenderPassExecutorRegistryResource, ShaderHandle, ShaderRegistryResource,
+use crate::plugins::render::composition::RenderFlowRegistryResource;
+use crate::plugins::render::inspect::RenderDebugTimingsState;
+use crate::plugins::render::renderer::frame_bindings::{
+    RenderFrameDataRegistry, RenderFrameResourceBindings,
 };
+use crate::plugins::render::renderer::Gfx;
+use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use crate::plugins::scene::SceneResource;
 use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::UiRenderShaderConfig;
 use crate::runtime::{Res, ResMut, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
 use scheduler::set_slow_node_logging_enabled;
+use anyhow::anyhow;
 use wgpu::SurfaceError;
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
@@ -98,7 +101,7 @@ pub(crate) fn ui_render_submit_system(
     render_frame_bindings.collect_frame_data(&world, &mut frame_data);
 
     let render_result = {
-        let render_graph_registry = match world.resource::<RenderGraphRegistryResource>() {
+        let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
             Ok(registry) => registry,
             Err(_) => {
                 world.insert_resource(shader_registry);
@@ -106,15 +109,7 @@ pub(crate) fn ui_render_submit_system(
                 return Ok(());
             }
         };
-        let render_executor_registry = match world.resource::<RenderPassExecutorRegistryResource>()
-        {
-            Ok(registry) => registry,
-            Err(_) => {
-                world.insert_resource(shader_registry);
-                world.insert_resource(gfx);
-                return Ok(());
-            }
-        };
+        let compiled_flows = flow_registry.compiled_flows();
         let ui_rect_shader: Option<ShaderHandle> =
             ui_rect_shader_id.and_then(|id| shader_registry.handle(id));
 
@@ -122,8 +117,7 @@ pub(crate) fn ui_render_submit_system(
             &frame_data,
             &manager.overlay_runtime.ui.draw_list,
             &mut shader_registry,
-            &render_graph_registry,
-            &render_executor_registry,
+            compiled_flows,
             ui_rect_shader,
         )
     };
@@ -227,13 +221,21 @@ pub(crate) fn ui_render_submit_system(
             }
             Ok(())
         }
-        Err(SurfaceError::Lost | SurfaceError::Outdated) => {
-            gfx.resize(target_w, target_h);
-            Ok(())
+        Err(err) => {
+            if let Some(surface_error) = err.downcast_ref::<SurfaceError>() {
+                match surface_error {
+                    SurfaceError::Lost | SurfaceError::Outdated => {
+                        gfx.resize(target_w, target_h);
+                        Ok(())
+                    }
+                    SurfaceError::Timeout => Ok(()),
+                    SurfaceError::OutOfMemory => anyhow::bail!("surface out of memory"),
+                    SurfaceError::Other => Ok(()),
+                }
+            } else {
+                Err(anyhow!("render backend execution failed: {err:#}"))
+            }
         }
-        Err(SurfaceError::Timeout) => Ok(()),
-        Err(SurfaceError::OutOfMemory) => anyhow::bail!("surface out of memory"),
-        Err(SurfaceError::Other) => Ok(()),
     };
 
     world.insert_resource(shader_registry);

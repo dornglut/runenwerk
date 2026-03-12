@@ -10,9 +10,7 @@ Use this map to pick an entry point quickly.
   - `window_input_demo`
 - Explore scene/UI orchestration:
   - `scene_manager_ui`
-- Explore feature-owned render graph/executor wiring:
-  - `sdf_renderer`
-- Explore GPU cellular automata with SDF compose:
+- Explore a richer public `RenderFlow` authoring sample:
   - `game_of_life_sdf`
 - Learn minimal fullscreen render-flow authoring:
   - `render_flow_fullscreen_minimal`
@@ -38,14 +36,9 @@ Use this map to pick an entry point quickly.
   - Focus: scene registration, UI template assets, scene transitions.
   - Assets: `engine/examples/scene_manager_ui/assets/`
   - Run: `cargo run -p engine --example scene_manager_ui`
-- `sdf_renderer`
-  - Entry: `engine/examples/sdf_renderer/main.rs`
-  - Focus: `RenderFlow`-authored compute/fullscreen/UI chain with custom pass executors and config hot reload.
-  - Assets/config: `engine/examples/sdf_renderer/assets/`
-  - Run: `cargo run -p engine --example sdf_renderer`
 - `game_of_life_sdf`
   - Entry: `engine/examples/game_of_life_sdf/main.rs`
-  - Focus: `RenderFlow` + `GpuUniform` ECS-first params with feature-owned compute/compose executors.
+  - Focus: windowed `RenderFlow` execution on the builtin compiled compute/fullscreen/UI path without custom executors.
   - Shader: `assets/shaders/game_of_life_sdf.wgsl`
   - Run: `cargo run -p engine --example game_of_life_sdf`
 - `render_flow_fullscreen_minimal`

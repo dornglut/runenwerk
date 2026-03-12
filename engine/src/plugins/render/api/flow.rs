@@ -4,7 +4,7 @@ use crate::plugins::render::api::{
     project_uniform_bindings_for_pass,
 };
 use crate::plugins::render::resource::ResourceLifetime;
-use crate::plugins::render::resources::RenderFrameDataRegistry;
+use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
     FlowValidationReport, GpuParams, RenderFlowGraph, RenderFlowId, RenderFlowValidationError,
     RenderPassNode, RenderResourceDescriptor, validate_flow_graph,

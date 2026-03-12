@@ -12,25 +12,25 @@ Render runtime orchestration for the engine runtime path.
 ## Subdomain Ownership
 
 - `backend/`
-  - Backend device/surface/format policy and `WgpuCtx`.
-- `frame_graph/`
-  - Graph ids/spec/builders/registry/runtime graph resources/executor interfaces/validation.
+  - Backend device/surface/format policy, pipeline cache, resource allocator, and compiled pass execution.
+- `graph/`
+  - Canonical flow graph, pass graph, resource graph, planning, merge, and validation.
 - `renderer/`
-  - Per-frame lifecycle (`extract`, `prepare`, `graph_execution`, `render_flow`, `submit`).
+  - Per-frame orchestration (`extract`, `frame_bindings`, `graph_execution`, `prepare`, `submit`).
 - `shader/`
   - Shader registry/types/helpers/hot-reload entry.
 - `pipelines/`
   - Pipeline keys, cache policy, specialization contracts.
-- `resources/`
-  - Render frame bindings and explicit texture/buffer/transient ownership.
 - `resource/`
   - Render resource descriptors, imports, lifetime classes, and transient alias planning helpers.
 - `composition/`
   - `RenderFlowContribution`, namespace validation, flow merge integration, and asset-fragment hot-reload foundations.
-- `sdf/`
-  - SDF render integration path (extract/bindings/fields/raymarch/materials/debug views).
-- `debug/`
-  - Render inspection surfaces (overlays, texture inspector, timings, graph dumps).
+- `inspect/`
+  - Render inspection surfaces (graph dump, resource/texture inspection, timing summaries).
+- `api/`
+  - Public authoring surface for `RenderFlow`, pass builders, IDs, and param projection bindings.
+- `params/`
+  - GPU parameter conversion traits and types (`GpuParams`, `GpuUniform`, `GpuStorage`, `ToGpuValue`).
 
 ## Guides
 
@@ -38,5 +38,4 @@ Render runtime orchestration for the engine runtime path.
 - Render flow usage: [../../../docs/reference/plugins/render/render-flow-usage-guide.md](../../../docs/reference/plugins/render/render-flow-usage-guide.md)
 - GPU params: [../../../docs/reference/plugins/render/gpu-params-guide.md](../../../docs/reference/plugins/render/gpu-params-guide.md)
 - Flow contributions: [../../../docs/reference/plugins/render/render-flow-contributions.md](../../../docs/reference/plugins/render/render-flow-contributions.md)
-- Target architecture: [./docs/target-architecture.md](./docs/target-architecture.md)
-- Target roadmap: [./docs/target-architecture-roadmap.md](./docs/target-architecture-roadmap.md)
+- Roadmap (source of truth): [./docs/roadmap.md](./docs/roadmap.md)
