@@ -20,17 +20,7 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 pub struct SimulationTick(pub u64);
 
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    ecs::Component,
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Component,
 )]
 pub struct SimulationSessionId(pub u64);
 
@@ -47,17 +37,7 @@ impl SimulationSessionId {
 }
 
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    ecs::Component,
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Component,
 )]
 pub struct SimulationSeed(pub u64);
 

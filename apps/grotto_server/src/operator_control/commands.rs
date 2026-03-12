@@ -10,8 +10,8 @@ use super::common::{
     broadcast_shutdown_notice, execute_shutdown_now, queue_command_result, queue_event,
     send_runtime_command,
 };
-use super::types::{OperatorControlState, OperatorRuntimeConfig};
 use super::types::OperatorRuntimeBridgeHandle;
+use super::types::{OperatorControlState, OperatorRuntimeConfig};
 
 pub(super) fn operator_receive_commands_system(mut world: WorldMut) -> Result<()> {
     let Some(mut handle) = world.remove_resource::<OperatorRuntimeBridgeHandle>() else {

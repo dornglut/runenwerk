@@ -10,11 +10,17 @@ pub(super) fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepM
     let graph = world.resource::<CavernGeometryGraph>()?.clone();
     let projectile_entities = {
         let query = world.query_state::<(Entity, &Projectile), ()>();
-        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+        query
+            .iter(world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>()
     };
     let target_entities = {
         let query = world.query_state::<(Entity, &Health), ()>();
-        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+        query
+            .iter(world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>()
     };
     let mut despawns = Vec::new();
 

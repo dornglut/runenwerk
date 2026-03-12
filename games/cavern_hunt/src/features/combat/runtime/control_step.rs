@@ -59,7 +59,10 @@ pub(crate) fn replay_predicted_local_frame(
 fn tick_cooldowns(world: &mut World, dt: f32) {
     let weapon_entities = {
         let query = world.query_state::<(Entity, &WeaponState), ()>();
-        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+        query
+            .iter(world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>()
     };
     for entity in weapon_entities {
         if let Some(mut weapon) = world.get_mut::<WeaponState>(entity) {
@@ -69,7 +72,10 @@ fn tick_cooldowns(world: &mut World, dt: f32) {
 
     let dash_entities = {
         let query = world.query_state::<(Entity, &DashState), ()>();
-        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+        query
+            .iter(world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>()
     };
     for entity in dash_entities {
         if let Some(mut dash) = world.get_mut::<DashState>(entity) {
@@ -80,7 +86,10 @@ fn tick_cooldowns(world: &mut World, dt: f32) {
 
     let flashed_entities = {
         let query = world.query_state::<(Entity, &HitFlashState), ()>();
-        query.iter(world).map(|(entity, _)| entity).collect::<Vec<_>>()
+        query
+            .iter(world)
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>()
     };
     for entity in flashed_entities {
         let mut clear = false;
@@ -219,7 +228,10 @@ fn build_companion_control(world: &World, entity: Entity) -> CavernControlState 
                         (_, EnemyKind::NestGuardian) => 0_u8,
                         (_, EnemyKind::Spitter) => 1,
                         (Some(crate::CompanionBehaviorRole::Skirmisher), EnemyKind::Bruiser) => 2,
-                        (Some(crate::CompanionBehaviorRole::SupportShooter), EnemyKind::Bruiser) => 3,
+                        (
+                            Some(crate::CompanionBehaviorRole::SupportShooter),
+                            EnemyKind::Bruiser,
+                        ) => 3,
                         (_, EnemyKind::Bruiser) => 2,
                         (_, EnemyKind::Swarmer) => 4,
                     }
