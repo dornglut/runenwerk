@@ -24,7 +24,7 @@ This roadmap is focused on the next major stage:
 Already complete:
 
 - canonical render architecture is in place
-- `RenderFlow` / `RenderFlowContribution` are the normal authoring path
+- `RenderFlow` v2 is the normal authoring path
 - compiled planning exists
 - builtin execution exists for `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, and `builtin_ui_composite_pass`
 - hard cutover removed duplicate legacy ownership trees
