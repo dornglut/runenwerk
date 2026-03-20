@@ -2,34 +2,32 @@
 
 ## Advanced Surfaces
 
-- `RenderFlowContribution` multi-plugin composition
-- data-driven fragment compilation (`RenderFlowFragmentSpec`)
-- fragment hot reload tracking (`RenderFlowFragmentHotReloadState`)
+- typed explicit resource handles (`storage_array` + `bind_storage`)
+- ergonomic ping-pong binding (`double_buffer_storage_array` + `bind_ping_pong_storage`)
+- state-projected uniforms and dispatch
 - transient/persistent/imported resource lifetime modeling
-- copy/present/graphics pass kinds
 - inspection surfaces under `engine::plugins::render::inspect`
 
 ## Validation and Safety
 
-Use `RenderFlow::validate()` before flow registration to catch:
+Use:
 
-- pass/resource ID collisions
-- pass-shape errors (`copy_pass`, `present_pass`)
-- incompatible resource usage
-- dependency cycles and unknown references
+- `RenderFlow::validate()` for chainable validation
+- `RenderFlow::validation_report()` for inspectable contract checks
 
-## Internal/Advanced Plumbing
+Validation catches:
 
-- executor and graph registry plumbing remains internal/advanced infrastructure
-- the preferred user surface is `RenderFlow` + ECS projection + contributions
+- duplicate and unknown IDs
+- pass-shape errors
+- dependency cycles
+- invalid resource usage for pass bindings
 
-## Inspection
+## Contract Inspection
 
 Use:
 
-- `dump_flow_graph(...)`
-- `inspect_resources(...)`
-- `inspect_texture_resources(...)`
-- `summarize_pass_timings(...)`
+- `flow.graph()` for pass/resource declarations
+- `flow.project_uniforms(...)` for frame-level uniform projection checks
+- `dump_flow_graph(...)`, `inspect_resources(...)`, `inspect_texture_resources(...)`, and `summarize_pass_timings(...)` for runtime diagnostics
 
-for debugging mixed plugin-owned flows.
+These APIs keep the graph explicit and testable while keeping common-path declaration compact.

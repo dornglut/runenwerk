@@ -10,18 +10,12 @@ Use this map to pick an entry point quickly.
   - `window_input_demo`
 - Explore scene/UI orchestration:
   - `scene_manager_ui`
-- Explore a richer public `RenderFlow` authoring sample:
+- Explore the canonical RenderFlow v2 sample:
   - `game_of_life_sdf`
-- Explore a boids-oriented compute + graphics + copy + present flow declaration:
-  - `boids_render_flow`
-- Explore an SDF/raymarch-oriented compute + fullscreen + copy + present flow declaration:
-  - `sdf_render_flow`
-- Learn minimal fullscreen render-flow authoring:
+- Learn the smallest fullscreen render-flow declaration:
   - `render_flow_fullscreen_minimal`
-- Explore a postprocess compositor render flow:
+- Explore compute + compose flow authoring:
   - `render_flow_postprocess_compositor`
-- Explore merged plugin-style flow contributions:
-  - `render_flow_contributions`
 - Explore flow inspection and debug surfaces:
   - `render_flow_debug_inspect`
 
@@ -42,32 +36,22 @@ Use this map to pick an entry point quickly.
   - Run: `cargo run -p engine --example scene_manager_ui`
 - `game_of_life_sdf`
   - Entry: `engine/examples/game_of_life_sdf/main.rs`
-  - Focus: windowed `RenderFlow` execution on the builtin compiled path (compute/fullscreen/graphics/copy/present/UI) without custom executors.
-  - Shader: `assets/shaders/game_of_life_sdf.wgsl`
+  - Focus: semantic state + ping-pong simulation on the RenderFlow v2 path.
+  - Shaders:
+    - `assets/shaders/game_of_life_compute.wgsl`
+    - `assets/shaders/game_of_life_compose.wgsl`
   - Run: `cargo run -p engine --example game_of_life_sdf`
-- `boids_render_flow`
-  - Entry: `engine/examples/boids_render_flow/main.rs`
-  - Focus: boids-shaped compute + graphics + copy + present flow declaration on the builtin compiled path.
-  - Run: `cargo run -p engine --example boids_render_flow`
-- `sdf_render_flow`
-  - Entry: `engine/examples/sdf_render_flow/main.rs`
-  - Focus: SDF/raymarch-shaped compute + fullscreen + copy + present flow declaration on the builtin compiled path.
-  - Run: `cargo run -p engine --example sdf_render_flow`
 - `render_flow_fullscreen_minimal`
   - Entry: `engine/examples/render_flow_fullscreen_minimal/main.rs`
-  - Focus: minimal namespaced fullscreen flow (`RenderFlow` + `fullscreen_pass`).
+  - Focus: minimal `with_surface_color` + `fullscreen_pass` + `write_surface_color` chain.
   - Run: `cargo run -p engine --example render_flow_fullscreen_minimal`
 - `render_flow_postprocess_compositor`
   - Entry: `engine/examples/render_flow_postprocess_compositor/main.rs`
-  - Focus: multi-pass postprocess chain with `copy_pass` + `present_pass`.
+  - Focus: compute + fullscreen pass chaining with double-buffer storage.
   - Run: `cargo run -p engine --example render_flow_postprocess_compositor`
-- `render_flow_contributions`
-  - Entry: `engine/examples/render_flow_contributions/main.rs`
-  - Focus: mixed boids/post/ui `RenderFlowContribution` merge into a base flow.
-  - Run: `cargo run -p engine --example render_flow_contributions`
 - `render_flow_debug_inspect`
   - Entry: `engine/examples/render_flow_debug_inspect/main.rs`
-  - Focus: graph/resource/texture inspection and per-pass timing summary API.
+  - Focus: graph/resource inspection and per-pass timing summaries.
   - Run: `cargo run -p engine --example render_flow_debug_inspect`
 
 ## Related

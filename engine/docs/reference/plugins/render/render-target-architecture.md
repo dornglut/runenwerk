@@ -1,11 +1,6 @@
 # Render Architecture Cutover
 
-This reference is a short map to the canonical render architecture definition.
-
-## Source of Truth
-
-- Hard-cut roadmap:
-  - `engine/src/plugins/render/docs/roadmap.md`
+This reference is a short map to the current RenderFlow v2 architecture.
 
 ## Canonical Module Surface
 
@@ -26,7 +21,13 @@ Legacy architecture trees (`frame_graph/`, `resources/`, `domain/`, `debug/`) ar
 
 ## Authoring Direction
 
-- Normal authoring path: `RenderFlow` and `RenderFlowContribution`.
-- Normal runtime path: builtin compiled execution (not custom executor registration).
-- Missing builtin pass implementations must fail loudly.
-- Input bindings stay in app/input APIs (`App::add_input_bindings`), not in render flow declarations.
+- normal authoring path: `RenderFlow` v2
+- common path: `with_state` + `double_buffer_storage_array` + pass builders
+- graph remains explicit and inspectable through `validation_report`, `graph`, and `project_uniforms`
+- advanced path remains explicit with typed handle bindings (`storage_array`, `bind_storage`, explicit uniform handles)
+
+## Explicitly Removed
+
+- flow contribution merge APIs
+- data-driven fragment composition APIs
+- string-only low-level pass read/write binding path in normal usage

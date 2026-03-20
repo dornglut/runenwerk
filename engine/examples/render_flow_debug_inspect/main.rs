@@ -3,7 +3,7 @@ use engine::plugins::render::inspect::{
     PassTimingSample, dump_flow_graph, inspect_resources, inspect_texture_resources,
     summarize_pass_timings,
 };
-use engine::plugins::render::{GpuStorage, RenderFlow};
+use engine::plugins::render::RenderFlow;
 
 const FLOW_ID: &str = "inspect.flow";
 

@@ -4,7 +4,6 @@ This page covers plugin/runtime wiring. For `RenderFlow` authoring, use:
 
 - `engine/docs/reference/plugins/render/render-flow-usage-guide.md`
 - `engine/docs/reference/plugins/render/gpu-params-guide.md`
-- `engine/docs/reference/plugins/render/render-flow-contributions.md`
 
 ## Purpose
 
@@ -24,9 +23,9 @@ app.add_plugin(RenderPlugin);
 
 `RenderPlugin` initializes render runtime resources and systems, including:
 
-- graph/flow registries
+- flow registry
 - pass executor registry
 - pipeline/resource registries
 - render prepare/submit systems
 
-Feature modules should register feature-owned graph/executor data only; they should not duplicate plugin bootstrap wiring.
+Feature modules should register feature-owned flow declarations and state resources; they should not duplicate plugin bootstrap wiring.
