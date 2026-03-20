@@ -2,8 +2,10 @@ use crate::plugins::render::api::{
     BUILTIN_UI_DRAW_LIST_RESOURCE_ID, ComputeDispatchBinding, ComputeDispatchDescriptor,
     PassParamBinding, RenderFlow, SURFACE_COLOR_RESOURCE_ID, StorageArrayHandle, UniformHandle,
 };
-use crate::plugins::render::{GpuParams, RenderPassKind, RenderPassNode, RenderResourceId, ShaderHandle};
 use crate::plugins::render::graph::RenderShaderReference;
+use crate::plugins::render::{
+    GpuParams, RenderPassKind, RenderPassNode, RenderResourceId, ShaderHandle,
+};
 
 #[derive(Debug)]
 pub struct ComputePassBuilder {
@@ -29,10 +31,11 @@ impl ComputePassBuilder {
         self
     }
 
-    pub fn uniform_from_state<S, U>(mut self, projection: fn(&S) -> U) -> Self
+    pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
         self.pass
@@ -44,14 +47,15 @@ impl ComputePassBuilder {
         self
     }
 
-    pub fn uniform_from_state_to<S, U>(
+    pub fn uniform_from_state_to<S, U, F>(
         mut self,
         handle: UniformHandle<U>,
-        projection: fn(&S) -> U,
+        projection: F,
     ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         self.pass
             .uniform_bindings
@@ -144,10 +148,11 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn uniform_from_state<S, U>(mut self, projection: fn(&S) -> U) -> Self
+    pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
         self.pass
@@ -159,13 +164,14 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn uniform_from_state_with_surface<S, U>(
+    pub fn uniform_from_state_with_surface<S, U, F>(
         mut self,
-        projection: fn(&S, (u32, u32)) -> U,
+        projection: F,
     ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
         let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
         self.pass
@@ -177,14 +183,15 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn uniform_from_state_to<S, U>(
+    pub fn uniform_from_state_to<S, U, F>(
         mut self,
         handle: UniformHandle<U>,
-        projection: fn(&S) -> U,
+        projection: F,
     ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         self.pass
             .uniform_bindings
@@ -195,14 +202,15 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn uniform_from_state_with_surface_to<S, U>(
+    pub fn uniform_from_state_with_surface_to<S, U, F>(
         mut self,
         handle: UniformHandle<U>,
-        projection: fn(&S, (u32, u32)) -> U,
+        projection: F,
     ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
         self.pass
             .uniform_bindings

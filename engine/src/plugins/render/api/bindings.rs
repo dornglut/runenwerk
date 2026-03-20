@@ -3,6 +3,7 @@ use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{GpuParams, RenderResourceId};
 use std::any::{Any, TypeId, type_name};
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -95,28 +96,36 @@ impl std::fmt::Debug for PassParamBinding {
 }
 
 impl PassParamBinding {
-    pub fn uniform_state<S, P>(uniform_id: RenderResourceId, build: fn(&S) -> P) -> Self
+    pub fn uniform_state<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         P: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> P + Send + Sync + 'static,
     {
         Self {
             uniform_id,
-            projection: Arc::new(UniformStateProjection { build }),
+            projection: Arc::new(UniformStateProjection {
+                build,
+                _marker: PhantomData,
+            }),
         }
     }
 
-    pub fn uniform_state_with_surface<S, P>(
+    pub fn uniform_state_with_surface<S, P, F>(
         uniform_id: RenderResourceId,
-        build: fn(&S, (u32, u32)) -> P,
+        build: F,
     ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         P: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
     {
         Self {
             uniform_id,
-            projection: Arc::new(UniformStateWithSurfaceProjection { build }),
+            projection: Arc::new(UniformStateWithSurfaceProjection {
+                build,
+                _marker: PhantomData,
+            }),
         }
     }
 
@@ -149,18 +158,21 @@ impl PassParamBinding {
     }
 }
 
-struct UniformStateProjection<S, P>
+struct UniformStateProjection<S, P, F>
 where
     S: ecs::Resource + 'static,
     P: GpuParams + 'static,
+    F: Fn(&S) -> P + Send + Sync + 'static,
 {
-    build: fn(&S) -> P,
+    build: F,
+    _marker: PhantomData<fn(&S) -> P>,
 }
 
-impl<S, P> ParamProjection for UniformStateProjection<S, P>
+impl<S, P, F> ParamProjection for UniformStateProjection<S, P, F>
 where
     S: ecs::Resource + Send + Sync + 'static,
     P: GpuParams + Send + Sync + 'static,
+    F: Fn(&S) -> P + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
         TypeId::of::<S>()
@@ -190,18 +202,21 @@ where
     }
 }
 
-struct UniformStateWithSurfaceProjection<S, P>
+struct UniformStateWithSurfaceProjection<S, P, F>
 where
     S: ecs::Resource + 'static,
     P: GpuParams + 'static,
+    F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
 {
-    build: fn(&S, (u32, u32)) -> P,
+    build: F,
+    _marker: PhantomData<fn(&S) -> P>,
 }
 
-impl<S, P> ParamProjection for UniformStateWithSurfaceProjection<S, P>
+impl<S, P, F> ParamProjection for UniformStateWithSurfaceProjection<S, P, F>
 where
     S: ecs::Resource + Send + Sync + 'static,
     P: GpuParams + Send + Sync + 'static,
+    F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
         TypeId::of::<S>()

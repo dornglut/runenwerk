@@ -54,7 +54,7 @@ let flow = RenderFlow::new("main.flow")
     .with_state::<State>()
     .with_surface_color()
     .fullscreen_pass("main.compose")
-    .uniform_from_state_with_surface::<State, ComposeParams>(State::compose_params)
+    .uniform_from_state_with_surface(State::compose_params)
     .write_surface_color()
     .finish()
     .validate()?;
