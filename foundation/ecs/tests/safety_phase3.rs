@@ -1,10 +1,10 @@
 use ecs::prelude::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct A(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct B(i32);
 
 #[test]

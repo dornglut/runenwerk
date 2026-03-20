@@ -17,7 +17,7 @@ pub const CAVERN_GI_MODE_OFF: u32 = 0;
 pub const CAVERN_GI_MODE_AO_BENT: u32 = 1;
 pub const CAVERN_GI_MODE_PROBE: u32 = 2;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernRenderMode {
     Legacy,
     MaterialGraph,
@@ -32,7 +32,7 @@ impl CavernRenderMode {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernGiMode {
     Off,
     AoBentNormal,
@@ -49,7 +49,7 @@ impl CavernGiMode {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernGiQuality {
     Low,
     Medium,
@@ -74,7 +74,7 @@ impl CavernGiQuality {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernGiConfig {
     pub mode: CavernGiMode,
     pub quality: CavernGiQuality,
@@ -92,7 +92,7 @@ impl Default for CavernGiConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct CavernMaterialQualityConfig {
     pub profile_id: String,
     pub render_mode: CavernRenderMode,
@@ -113,7 +113,7 @@ impl Default for CavernMaterialQualityConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct MaterialProfileAssetV1 {
     pub version: u32,
     pub id: String,
@@ -123,13 +123,13 @@ pub struct MaterialProfileAssetV1 {
     pub class_graphs: BTreeMap<u32, String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct MaterialAssetFileEntry {
     pub path: PathBuf,
     pub modified: Option<SystemTime>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernMaterialRegistry {
     pub graph_files: BTreeMap<String, MaterialAssetFileEntry>,
     pub profile_files: BTreeMap<String, MaterialAssetFileEntry>,
@@ -137,7 +137,7 @@ pub struct CavernMaterialRegistry {
     pub profiles: BTreeMap<String, MaterialProfileAssetV1>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
 pub struct MaterialProgramHeaderV1 {
     pub class_id: u32,
     pub op_offset: u32,
@@ -152,14 +152,14 @@ pub struct MaterialProgramHeaderV1 {
     pub emissive_slot: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct MaterialGpuPayloadV1 {
     pub headers: Vec<MaterialProgramHeaderV1>,
     pub ops: Vec<crate::MaterialOpCodeV1>,
     pub constants: Vec<[f32; 4]>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernMaterialRuntimeState {
     pub compiled_graphs: BTreeMap<String, MaterialProgramV1>,
     pub active_profile_id: Option<String>,
@@ -229,7 +229,7 @@ impl CavernMaterialRuntimeState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct GiProbeCell {
     pub sh_coefficients: [[f32; 3]; 9],
     pub visibility: f32,
@@ -246,7 +246,7 @@ impl Default for GiProbeCell {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct GiProbeGrid {
     pub dimensions: [u32; 3],
     pub origin: [f32; 3],
@@ -269,7 +269,7 @@ impl Default for GiProbeGrid {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct GiProbeUpdateQueue {
     pub pending_indices: Vec<u32>,
 }

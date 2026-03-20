@@ -18,7 +18,7 @@ pub use crate::plugins::time::domain::Time;
 pub use crate::plugins::{default_plugins, default_plugins_with_diagnostics};
 pub use crate::runtime::*;
 pub use crate::state::*;
-pub use ecs::{Bundle, Component, Entity, World};
+pub use ecs::{Bundle, Component, Entity, Resource, World};
 pub use engine_replay::*;
 pub use engine_sim::*;
 pub use scheduler::label::SystemSet;

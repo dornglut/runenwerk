@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 // src/domain/resources.rs
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernSeed(pub u64);
 
 impl Default for CavernSeed {

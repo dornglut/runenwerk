@@ -7,7 +7,7 @@ pub struct PipelineCacheStats {
     pub misses: u64,
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct PipelineCacheResource {
     known: BTreeMap<PipelineKey, u64>,
     stats: PipelineCacheStats,

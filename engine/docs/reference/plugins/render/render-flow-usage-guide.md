@@ -11,8 +11,12 @@
 Current runtime support in the hard-cutover path:
 
 - builtin compiled execution: `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`
+- runtime bind groups for declared sampled/storage textures, uniform buffers, and storage buffers
+- projected `.uniform_state(...)` / `.uniform_state_with_surface(...)` uploads are applied before pass encoding
+- persistent resources stay alive across frames unless declared transient/imported
+- compute passes must declare explicit dispatch via `.dispatch_workgroups(...)` or `.dispatch_state(...)`
 - `copy_pass` executes texture->texture and buffer->buffer copies for flow-owned resources
-- unsupported builtin subfeatures still fail loudly (for example graphics vertex/index/instance/indirect bindings and non-surface imported resources)
+- unsupported imported-resource runtime paths still fail loudly (non-`surface.color` imports)
 
 ## Minimal Flow
 
@@ -35,8 +39,8 @@ let flow = RenderFlow::new("sim.flow")
     .ecs_resource::<GameState>()
     .uniform_buffer::<ComputeParams>("sim.params")
     .compute_pass("sim.compute")
+    .dispatch_workgroups(1, 1, 1)
     .uniform_state(GameState::compute_params)
-    .reads("sim.params")
     .finish();
 ```
 

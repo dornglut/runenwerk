@@ -1,6 +1,6 @@
 use super::extract::{SystemParam, SystemParamError};
 use crate::World;
-use crate::component::Component;
+use crate::component::Resource;
 use crate::query::{Query, QueryAccess, QueryFilter, QuerySpec, QueryState};
 use crate::telemetry;
 use crate::world::Commands;
@@ -9,12 +9,12 @@ use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use std::time::Instant;
 
-pub struct Res<T: Component> {
+pub struct Res<T: Resource> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: Component> Res<T> {
+impl<T: Resource> Res<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -23,7 +23,7 @@ impl<T: Component> Res<T> {
     }
 }
 
-impl<T: Component> Deref for Res<T> {
+impl<T: Resource> Deref for Res<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -37,12 +37,12 @@ impl<T: Component> Deref for Res<T> {
     }
 }
 
-pub struct ResMut<T: Component> {
+pub struct ResMut<T: Resource> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: Component> ResMut<T> {
+impl<T: Resource> ResMut<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -51,7 +51,7 @@ impl<T: Component> ResMut<T> {
     }
 }
 
-impl<T: Component> Deref for ResMut<T> {
+impl<T: Resource> Deref for ResMut<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -65,7 +65,7 @@ impl<T: Component> Deref for ResMut<T> {
     }
 }
 
-impl<T: Component> DerefMut for ResMut<T> {
+impl<T: Resource> DerefMut for ResMut<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // Safety: extraction guarantees a live world pointer during system execution.
         unsafe {
@@ -144,7 +144,7 @@ where
     }
 }
 
-impl<'w, T: Component> SystemParam<'w> for Res<T> {
+impl<'w, T: Resource> SystemParam<'w> for Res<T> {
     type State = ();
 
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -167,7 +167,7 @@ impl<'w, T: Component> SystemParam<'w> for Res<T> {
     }
 }
 
-impl<'w, T: Component> SystemParam<'w> for ResMut<T> {
+impl<'w, T: Resource> SystemParam<'w> for ResMut<T> {
     type State = ();
 
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError> {

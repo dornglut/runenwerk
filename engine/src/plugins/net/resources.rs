@@ -106,7 +106,7 @@ where
     );
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetworkClientInbox {
     messages: Vec<ServerMessage>,
 }
@@ -129,7 +129,7 @@ impl NetworkClientInbox {
     }
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetworkServerInbox {
     messages: Vec<InboundClientMessage>,
 }
@@ -163,7 +163,7 @@ impl NetworkServerInbox {
     }
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetworkClientOutbox {
     messages: Vec<ClientMessage>,
 }
@@ -195,7 +195,7 @@ pub enum OutboundServerMessage {
     Broadcast(ServerMessage),
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetworkServerOutbox {
     messages: Vec<OutboundServerMessage>,
 }
@@ -237,7 +237,7 @@ impl NetworkServerOutbox {
     }
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetworkInboundQueue {
     client_messages: Vec<InboundClientMessage>,
     server_messages: Vec<ServerMessage>,
@@ -283,7 +283,7 @@ impl NetworkInboundQueue {
     }
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetworkOutboundQueue {
     client_messages: Vec<ClientMessage>,
     server_messages: Vec<OutboundServerMessage>,
@@ -320,7 +320,7 @@ impl NetworkOutboundQueue {
     }
 }
 
-#[derive(ecs::Component)]
+#[derive(ecs::Component, ecs::Resource)]
 pub struct NetworkRuntimeHandle {
     command_tx: Sender<SessionRuntimeCommand>,
     event_rx: Receiver<SessionRuntimeEvent>,
@@ -352,7 +352,7 @@ impl NetworkRuntimeHandle {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct NetworkSessionStatus {
     pub phase: SessionPhase,
     pub connection_id: Option<ConnectionId>,
@@ -362,12 +362,12 @@ pub struct NetworkSessionStatus {
     pub reconnect_attempt: Option<u32>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct NetworkAdmissionState {
     pub authoritative_join: Option<AuthoritativeJoinState>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct ConnectionHealth {
     pub connected: bool,
     pub close_events: u64,
@@ -375,7 +375,7 @@ pub struct ConnectionHealth {
     pub reconnect_events: u64,
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct RoundTripMetrics {
     pub last_rtt_millis: Option<u32>,
     pub samples: u64,
@@ -402,7 +402,7 @@ impl Default for ConnectionBaselineCheckpoint {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, ecs::Component, ecs::Resource)]
 pub struct ServerSnapshotReplicationState<TSnapshot>
 where
     TSnapshot: Clone + PartialEq + 'static,
@@ -427,7 +427,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, ecs::Component, ecs::Resource)]
 pub struct ClientSnapshotReplicationState<TSnapshot>
 where
     TSnapshot: Clone + PartialEq + 'static,
@@ -461,7 +461,7 @@ where
     pub commands: Vec<TInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, ecs::Component, ecs::Resource)]
 pub struct PredictionState<TInput>
 where
     TInput: Clone + PartialEq + 'static,
@@ -489,7 +489,7 @@ where
     }
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct NetworkDiagnostics {
     pub processed_client_messages_last_frame: usize,
     pub processed_server_messages_last_frame: usize,
@@ -501,7 +501,7 @@ pub struct NetworkDiagnostics {
     pub reconnect_attempts: u64,
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct ReplicationDiagnostics {
     pub fixed_steps_observed: u64,
     pub last_snapshot_cursor: u64,
@@ -509,7 +509,7 @@ pub struct ReplicationDiagnostics {
     pub applied_snapshots: u64,
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct PredictionDiagnostics {
     pub fixed_steps_observed: u64,
     pub commands_applied: u64,

@@ -24,7 +24,7 @@ pub struct TransientResourceClaim {
     pub owner_pass: String,
 }
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct BackendResourceAllocatorResource {
     textures: BTreeMap<TextureResourceId, TextureResourceEntry>,
     buffers: BTreeMap<BufferResourceId, BufferResourceEntry>,

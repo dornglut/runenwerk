@@ -16,8 +16,8 @@ pub mod telemetry;
 mod world;
 
 pub use bundle::Bundle;
-pub use component::Component;
-pub use ecs_macros::{Bundle, Component};
+pub use component::{Component, Resource};
+pub use ecs_macros::{Bundle, Component, Resource};
 pub use entity::{Entity, EntityAllocator};
 pub use errors::{CommandError, EntityError, QueryError, ResourceError};
 pub use query::{Added, Changed, Query, QueryAccess, QueryState, QueryTypeAccess, With, Without};

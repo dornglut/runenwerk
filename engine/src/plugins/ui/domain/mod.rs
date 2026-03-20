@@ -10,13 +10,13 @@ use std::time::SystemTime;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 pub struct UiNode {
     pub visible: bool,
     pub z: i32,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 pub struct UiTransform {
     pub x: f32,
     pub y: f32,
@@ -24,7 +24,7 @@ pub struct UiTransform {
     pub h: f32,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 pub struct UiStyle {
     pub bg_color: [f32; 4],
     pub border_color: [f32; 4],
@@ -32,26 +32,26 @@ pub struct UiStyle {
     pub radius: f32,
 }
 
-#[derive(Debug, Clone, ecs::Component)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct UiText {
     pub content: String,
     pub color: [f32; 4],
     pub size: f32,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 pub struct UiInputField {
     pub cursor: usize,
     pub focused: bool,
     pub submit_requested: bool,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 pub struct UiButton {
     pub enabled: bool,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 pub struct UiInteraction {
     pub hovered: bool,
     pub pressed: bool,
@@ -59,7 +59,7 @@ pub struct UiInteraction {
     pub focused: bool,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 pub struct UiDirty {
     pub layout: bool,
     pub style: bool,
@@ -105,7 +105,7 @@ pub struct UiDrawList {
     pub commands: Vec<UiDrawCmd>,
 }
 
-#[derive(Debug, Clone, ecs::Component)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct UiRenderShaderConfig {
     pub rect_shader_asset_id: String,
 }
@@ -118,7 +118,7 @@ impl Default for UiRenderShaderConfig {
     }
 }
 
-#[derive(Debug, Clone, ecs::Component)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct UiWorldHudStats {
     pub visible: bool,
     pub player_x: f32,

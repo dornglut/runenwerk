@@ -1,5 +1,5 @@
-use crate::plugins::render::api::PassParamBinding;
-use crate::plugins::render::{RenderPassId, RenderResourceId};
+use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
+use crate::plugins::render::{RenderPassId, RenderResourceId, ShaderHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderPassKind {
@@ -11,16 +11,23 @@ pub enum RenderPassKind {
     Present,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderShaderReference {
+    AssetPath(String),
+    RegistryHandle(ShaderHandle),
+}
+
 #[derive(Debug, Clone)]
 pub struct RenderPassNode {
     pub id: RenderPassId,
     pub kind: RenderPassKind,
-    pub shader: Option<String>,
+    pub shader: Option<RenderShaderReference>,
     pub reads: Vec<RenderResourceId>,
     pub writes: Vec<RenderResourceId>,
     pub depends_on: Vec<RenderPassId>,
     pub workgroup_size: Option<[u32; 3]>,
     pub clear_color: Option<[f32; 4]>,
+    pub compute_dispatch: Option<ComputeDispatchDescriptor>,
     pub sampled_textures: Vec<RenderResourceId>,
     pub write_textures: Vec<RenderResourceId>,
     pub vertex_buffers: Vec<RenderResourceId>,
@@ -42,6 +49,7 @@ impl RenderPassNode {
             depends_on: Vec::new(),
             workgroup_size: None,
             clear_color: None,
+            compute_dispatch: None,
             sampled_textures: Vec::new(),
             write_textures: Vec::new(),
             vertex_buffers: Vec::new(),

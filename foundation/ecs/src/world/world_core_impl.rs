@@ -6,12 +6,12 @@ use super::events_and_indexes::{
 use super::handles_and_commands::{Commands, EntityMut, EntityRef, Mut};
 use super::world_struct::World;
 use crate::bundle::Bundle;
-use crate::component::Component;
+use crate::component::{Component, Resource};
 use crate::entity::{Entity, EntityAllocator};
 use crate::errors::{EntityError, ResourceError};
 use crate::query::{QueryFilter, QuerySpec, QueryState};
 use crate::storage::ArchetypeRegistry;
-use std::any::{TypeId, type_name};
+use std::any::{Any, TypeId, type_name};
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 
@@ -150,7 +150,7 @@ impl World {
         QueryState::new(self)
     }
 
-    pub fn insert_resource<R: Component>(&mut self, resource: R) {
+    pub fn insert_resource<R: Resource>(&mut self, resource: R) {
         let type_id = TypeId::of::<R>();
         let kind = if self.resources.contains_key(&type_id) {
             ResourceChangeKind::Modified
@@ -161,11 +161,11 @@ impl World {
         self.record_resource_change(type_id, type_name::<R>(), kind);
     }
 
-    pub fn has_resource<R: Component>(&self) -> bool {
+    pub fn has_resource<R: Resource>(&self) -> bool {
         self.resources.contains_key(&TypeId::of::<R>())
     }
 
-    pub fn resource<R: Component>(&self) -> Result<&R, ResourceError> {
+    pub fn resource<R: Resource>(&self) -> Result<&R, ResourceError> {
         self.resources
             .get(&TypeId::of::<R>())
             .and_then(|res| res.downcast_ref::<R>())
@@ -174,7 +174,11 @@ impl World {
             })
     }
 
-    pub fn resource_mut<R: Component>(&mut self) -> Result<&mut R, ResourceError> {
+    pub fn resource_by_type_id(&self, type_id: TypeId) -> Option<&dyn Any> {
+        self.resources.get(&type_id).map(|resource| resource.as_ref())
+    }
+
+    pub fn resource_mut<R: Resource>(&mut self) -> Result<&mut R, ResourceError> {
         let type_id = TypeId::of::<R>();
         if !self.resources.contains_key(&type_id) {
             return Err(ResourceError::Missing {
@@ -192,7 +196,7 @@ impl World {
         Ok(value)
     }
 
-    pub fn remove_resource<R: Component>(&mut self) -> Option<R> {
+    pub fn remove_resource<R: Resource>(&mut self) -> Option<R> {
         let type_id = TypeId::of::<R>();
         let removed = self
             .resources
@@ -237,7 +241,7 @@ impl World {
     }
 
     /// Type-level reporting helper for resources.
-    pub fn resource_changed_since<R: Component>(&self, tick: u64) -> bool {
+    pub fn resource_changed_since<R: Resource>(&self, tick: u64) -> bool {
         self.resource_change_ticks
             .get(&TypeId::of::<R>())
             .is_some_and(|changed| *changed > tick)

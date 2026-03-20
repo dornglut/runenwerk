@@ -9,7 +9,20 @@ impl Renderer {
             rect_pass_shader_revision: 0,
             text_renderer: None,
             text_renderer_format: None,
+            flow_runtime_cache: std::collections::BTreeMap::new(),
+            last_pass_timings: Vec::new(),
+            last_runtime_resources: Vec::new(),
         }
+    }
+
+    pub fn last_pass_timings(&self) -> &[crate::plugins::render::inspect::PassTimingSample] {
+        &self.last_pass_timings
+    }
+
+    pub fn last_runtime_resources(
+        &self,
+    ) -> &[crate::plugins::render::inspect::RuntimeResourceInspectionEntry] {
+        &self.last_runtime_resources
     }
 
     pub(super) fn ensure_rect_pass(

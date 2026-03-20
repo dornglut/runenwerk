@@ -3,7 +3,7 @@ use crate::RoomId;
 use engine::SimulationTick;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernRunPhase {
     Exploring,
     EliteAvailable,
@@ -12,7 +12,7 @@ pub enum CavernRunPhase {
     Failure,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernRunState {
     pub run_id: u64,
     pub seed: CavernSeed,
@@ -39,7 +39,7 @@ impl Default for CavernRunState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernObjectiveKind {
     Explore,
     HuntElite,
@@ -49,7 +49,7 @@ pub enum CavernObjectiveKind {
     Failure,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernObjectiveState {
     pub kind: CavernObjectiveKind,
     pub title: String,
@@ -70,7 +70,7 @@ impl Default for CavernObjectiveState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ExtractionState {
     pub active: bool,
     pub room_id: Option<RoomId>,

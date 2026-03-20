@@ -13,7 +13,7 @@ use ecs::prelude::*;
 
 ## 2. Define Components, Tags, Resources
 
-All ECS-managed data derives `ecs::Component`.
+Per-entity data derives `ecs::Component`; world-singleton data derives `ecs::Resource`.
 
 ```rust
 use ecs::prelude::*;
@@ -33,7 +33,7 @@ struct Velocity {
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
 struct Player;
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Resource)]
 struct Frame(u64);
 ```
 
@@ -202,7 +202,7 @@ fn added_health(_query: Query<(Entity, &Health), Added<Health>>) {}
 ```rust
 use ecs::prelude::*;
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Resource)]
 struct Frame(u64);
 
 let mut world = World::new();
@@ -254,7 +254,7 @@ impl ScheduleLabel for Update {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Resource)]
 struct Frame(u64);
 
 fn tick(mut frame: ResMut<Frame>) {
@@ -344,7 +344,7 @@ Common error types:
 ```rust
 use ecs::prelude::*;
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Resource)]
 struct Frame(u64);
 
 let world = World::new();

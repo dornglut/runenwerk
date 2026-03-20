@@ -5,7 +5,7 @@ use cavern_hunt::{
 };
 use engine::net::prelude::*;
 use engine::plugins::net::NetworkRuntimeHandle;
-use engine::plugins::render::domain::ShaderRegistryResource;
+use engine::plugins::render::ShaderRegistryResource;
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
 use engine::{App, AppRunner, AuthorityRole, SimulationProfile};
 use engine_net_quic::{

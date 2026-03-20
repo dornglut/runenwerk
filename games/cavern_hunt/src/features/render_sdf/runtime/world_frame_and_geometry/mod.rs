@@ -5,7 +5,7 @@ mod geometry_projection;
 mod setup;
 mod world_frame;
 
-pub(crate) use camera::update_camera_and_hud_system;
+pub(crate) use camera::{project_mouse_to_world, update_camera_and_hud_system};
 pub(crate) use setup::setup_render_resources;
 pub(crate) use world_frame::build_sdf_world_frame_system;
 

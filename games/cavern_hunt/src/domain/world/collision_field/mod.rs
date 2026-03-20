@@ -11,29 +11,29 @@ mod sampling;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, ecs::Resource)]
 pub struct CollisionFieldRevision(pub u64);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, ecs::Resource)]
 pub struct CollisionChunkKey {
     pub x: i32,
     pub y: i32,
     pub z: i32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CollisionChunkBounds {
     pub min: [f32; 3],
     pub max: [f32; 3],
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct ChunkBrick3 {
     pub resolution: [usize; 3],
     pub distances: Vec<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct CollisionChunk {
     pub key: CollisionChunkKey,
     pub bounds: CollisionChunkBounds,
@@ -43,18 +43,18 @@ pub struct CollisionChunk {
     pub brick: Option<ChunkBrick3>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct DirtyChunkSet {
     pub keys: BTreeSet<CollisionChunkKey>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
 pub enum CollisionQueryMode {
     Cached,
     Analytic,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct SweepHit3 {
     pub hit: bool,
     pub fraction: f32,
@@ -62,7 +62,7 @@ pub struct SweepHit3 {
     pub normal: [f32; 3],
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct PushOutResult3 {
     pub collided: bool,
     pub corrected_center: [f32; 3],
@@ -70,7 +70,7 @@ pub struct PushOutResult3 {
     pub penetration: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct CavernCollisionField {
     pub world_bounds: GeometryBounds3,
     pub chunk_size: [f32; 3],

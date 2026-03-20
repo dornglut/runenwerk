@@ -1,10 +1,12 @@
 use crate::plugins::render::backend::WgpuCtx;
 use crate::plugins::render::graph::CompiledRenderFlowPlan;
+use crate::plugins::render::inspect::{PassTimingSample, RuntimeResourceInspectionEntry};
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use crate::plugins::ui::domain::{FileFontProvider, TextRenderer, UiDrawCmd, UiDrawList};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
@@ -225,9 +227,12 @@ pub struct Renderer {
     rect_pass_shader_revision: u64,
     text_renderer: Option<TextRenderer>,
     text_renderer_format: Option<TextureFormat>,
+    flow_runtime_cache: BTreeMap<String, render_flow::FlowRuntimeResources>,
+    last_pass_timings: Vec<PassTimingSample>,
+    last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
 }
 
-#[derive(Debug, ecs::Component)]
+#[derive(Debug, ecs::Component, ecs::Resource)]
 pub struct Gfx {
     pub ctx: WgpuCtx<'static>,
     pub renderer: Renderer,

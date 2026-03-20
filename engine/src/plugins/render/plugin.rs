@@ -1,12 +1,10 @@
 use super::backend::{BackendPipelineCacheResource, BackendResourceAllocatorResource};
-use super::composition::{
-    RenderFlowFragmentHotReloadState, RenderFlowRegistryResource, sync_render_flow_registry_system,
-};
+use super::composition::{RenderFlowRegistryResource, sync_render_flow_registry_system};
 use super::inspect::{
     RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
+    RenderRuntimeResourceInspectorState,
     RenderTextureInspectorState,
 };
-use super::renderer::frame_bindings::RenderFrameResourceBindings;
 use super::renderer::submit::{frame_render_prepare_system, ui_render_submit_system};
 use super::shader::ShaderRegistryResource;
 use crate::app::App;
@@ -20,13 +18,12 @@ pub struct RenderPlugin;
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SceneResource>();
-        app.init_resource::<RenderFrameResourceBindings>();
         app.init_resource::<ShaderRegistryResource>();
         app.init_resource::<RenderFlowRegistryResource>();
-        app.init_resource::<RenderFlowFragmentHotReloadState>();
         app.init_resource::<BackendPipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
         app.init_resource::<RenderDebugOverlayState>();
+        app.init_resource::<RenderRuntimeResourceInspectorState>();
         app.init_resource::<RenderTextureInspectorState>();
         app.init_resource::<RenderDebugTimingsState>();
         app.init_resource::<RenderDebugGraphDumpState>();

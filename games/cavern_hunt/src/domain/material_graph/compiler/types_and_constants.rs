@@ -17,7 +17,7 @@ pub const MATERIAL_OP_BLEND: u32 = 10;
 pub const MATERIAL_OP_CLAMP01: u32 = 11;
 pub const MATERIAL_OP_TO_VEC3: u32 = 12;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum MaterialPortTypeV1 {
     Scalar,
     Vec2,
@@ -25,7 +25,7 @@ pub enum MaterialPortTypeV1 {
     Vec4,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct MaterialGraphAssetV1 {
     pub version: u32,
     pub id: String,
@@ -33,7 +33,7 @@ pub struct MaterialGraphAssetV1 {
     pub outputs: MaterialGraphOutputsV1,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct MaterialGraphOutputsV1 {
     pub base_color: String,
     pub roughness: String,
@@ -43,13 +43,13 @@ pub struct MaterialGraphOutputsV1 {
     pub emissive: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct MaterialNodeV1 {
     pub id: String,
     pub kind: MaterialNodeKindV1,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum MaterialNodeKindV1 {
     ConstantScalar {
         value: f32,
@@ -106,7 +106,7 @@ pub enum MaterialNodeKindV1 {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct MaterialOpCodeV1 {
     pub op: u32,
     pub dst: u32,
@@ -118,7 +118,7 @@ pub struct MaterialOpCodeV1 {
     pub output_type: MaterialPortTypeV1,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct MaterialProgramOutputsV1 {
     pub base_color: u32,
     pub roughness: u32,
@@ -128,7 +128,7 @@ pub struct MaterialProgramOutputsV1 {
     pub emissive: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct MaterialProgramV1 {
     pub version: u32,
     pub graph_id: String,

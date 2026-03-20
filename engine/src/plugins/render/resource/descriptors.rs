@@ -18,6 +18,7 @@ pub struct StorageBufferDescriptor {
     pub id: RenderResourceId,
     pub params_type_id: TypeId,
     pub params_type_name: &'static str,
+    pub element_count: u64,
     pub size_bytes: u64,
     pub lifetime: ResourceLifetime,
 }
@@ -102,7 +103,7 @@ impl RenderResourceDescriptor {
     where
         T: GpuParams + 'static,
     {
-        Self::storage_buffer_with_lifetime::<T>(id, ResourceLifetime::Persistent)
+        Self::storage_buffer_array_with_lifetime::<T>(id, 1, ResourceLifetime::Persistent)
     }
 
     pub fn storage_buffer_with_lifetime<T>(
@@ -112,11 +113,40 @@ impl RenderResourceDescriptor {
     where
         T: GpuParams + 'static,
     {
+        Self::storage_buffer_array_with_lifetime::<T>(id, 1, lifetime)
+    }
+
+    pub fn storage_buffer_array<T>(id: impl Into<RenderResourceId>, element_count: u64) -> Self
+    where
+        T: GpuParams + 'static,
+    {
+        Self::storage_buffer_array_with_lifetime::<T>(
+            id,
+            element_count,
+            ResourceLifetime::Persistent,
+        )
+    }
+
+    pub fn storage_buffer_array_with_lifetime<T>(
+        id: impl Into<RenderResourceId>,
+        element_count: u64,
+        lifetime: ResourceLifetime,
+    ) -> Self
+    where
+        T: GpuParams + 'static,
+    {
+        let unit_size = std::mem::size_of::<T::Raw>().max(1) as u64;
+        let size_bytes = if element_count == 0 {
+            0
+        } else {
+            unit_size.saturating_mul(element_count)
+        };
         Self::StorageBuffer(StorageBufferDescriptor {
             id: id.into(),
             params_type_id: TypeId::of::<T>(),
             params_type_name: type_name::<T>(),
-            size_bytes: std::mem::size_of::<T::Raw>().max(1) as u64,
+            element_count,
+            size_bytes,
             lifetime,
         })
     }

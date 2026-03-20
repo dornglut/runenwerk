@@ -18,12 +18,37 @@ pub struct PassUniformProjection {
     pub buffers: Vec<ProjectedUniformBuffer>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ProjectedUniformSet {
+    passes: Vec<PassUniformProjection>,
+    by_pass: BTreeMap<String, usize>,
+}
+
+impl ProjectedUniformSet {
+    pub fn from_passes(passes: Vec<PassUniformProjection>) -> Self {
+        let mut by_pass = BTreeMap::<String, usize>::new();
+        for (index, pass) in passes.iter().enumerate() {
+            by_pass.insert(pass.pass_id.clone(), index);
+        }
+        Self { passes, by_pass }
+    }
+
+    pub fn pass(&self, pass_id: &str) -> Option<&PassUniformProjection> {
+        self.by_pass
+            .get(pass_id)
+            .and_then(|index| self.passes.get(*index))
+    }
+
+    pub fn passes(&self) -> &[PassUniformProjection] {
+        &self.passes
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParamProjectionErrorKind {
-    MissingEcsResourceDeclaration,
-    MissingEcsResourceValue,
+    MissingStateResourceDeclaration,
+    MissingStateResourceValue,
     MissingUniformBuffer,
-    AmbiguousUniformBuffer,
     ProjectionFailed,
 }
 
@@ -55,6 +80,7 @@ pub trait ParamProjection: Send + Sync {
 
 #[derive(Clone)]
 pub struct PassParamBinding {
+    uniform_id: RenderResourceId,
     projection: Arc<dyn ParamProjection>,
 }
 
@@ -69,24 +95,33 @@ impl std::fmt::Debug for PassParamBinding {
 }
 
 impl PassParamBinding {
-    pub fn uniform_state<S, P>(build: fn(&S) -> P) -> Self
+    pub fn uniform_state<S, P>(uniform_id: RenderResourceId, build: fn(&S) -> P) -> Self
     where
-        S: ecs::Component + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
         P: GpuParams + Send + Sync + 'static,
     {
         Self {
+            uniform_id,
             projection: Arc::new(UniformStateProjection { build }),
         }
     }
 
-    pub fn uniform_state_with_surface<S, P>(build: fn(&S, (u32, u32)) -> P) -> Self
+    pub fn uniform_state_with_surface<S, P>(
+        uniform_id: RenderResourceId,
+        build: fn(&S, (u32, u32)) -> P,
+    ) -> Self
     where
-        S: ecs::Component + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
         P: GpuParams + Send + Sync + 'static,
     {
         Self {
+            uniform_id,
             projection: Arc::new(UniformStateWithSurfaceProjection { build }),
         }
+    }
+
+    pub fn uniform_id(&self) -> &RenderResourceId {
+        &self.uniform_id
     }
 
     pub fn state_type_id(&self) -> TypeId {
@@ -116,7 +151,7 @@ impl PassParamBinding {
 
 struct UniformStateProjection<S, P>
 where
-    S: ecs::Component + 'static,
+    S: ecs::Resource + 'static,
     P: GpuParams + 'static,
 {
     build: fn(&S) -> P,
@@ -124,7 +159,7 @@ where
 
 impl<S, P> ParamProjection for UniformStateProjection<S, P>
 where
-    S: ecs::Component + Send + Sync + 'static,
+    S: ecs::Resource + Send + Sync + 'static,
     P: GpuParams + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
@@ -157,7 +192,7 @@ where
 
 struct UniformStateWithSurfaceProjection<S, P>
 where
-    S: ecs::Component + 'static,
+    S: ecs::Resource + 'static,
     P: GpuParams + 'static,
 {
     build: fn(&S, (u32, u32)) -> P,
@@ -165,7 +200,7 @@ where
 
 impl<S, P> ParamProjection for UniformStateWithSurfaceProjection<S, P>
 where
-    S: ecs::Component + Send + Sync + 'static,
+    S: ecs::Resource + Send + Sync + 'static,
     P: GpuParams + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
@@ -211,14 +246,14 @@ pub fn project_uniform_bindings_for_pass(
         let params_type_name = binding.params_type_name();
         let pass_id = pass.id.as_str().to_string();
 
-        if !resources.has_ecs_resource(binding.state_type_id()) {
+        if !resources.has_state_resource(binding.state_type_id()) {
             errors.push(ParamProjectionError {
                 pass_id,
                 state_type_name,
                 params_type_name,
-                kind: ParamProjectionErrorKind::MissingEcsResourceDeclaration,
+                kind: ParamProjectionErrorKind::MissingStateResourceDeclaration,
                 details: format!(
-                    "missing ecs_resource::<{}>() declaration for uniform_state projection",
+                    "missing with_state::<{}>() declaration for uniform projection",
                     state_type_name
                 ),
             });
@@ -230,41 +265,25 @@ pub fn project_uniform_bindings_for_pass(
                 pass_id,
                 state_type_name,
                 params_type_name,
-                kind: ParamProjectionErrorKind::MissingEcsResourceValue,
+                kind: ParamProjectionErrorKind::MissingStateResourceValue,
                 details: format!(
-                    "missing ECS resource value for '{}' during projection",
+                    "missing state resource value for '{}' during projection",
                     state_type_name
                 ),
             });
             continue;
         };
 
-        let matching_buffers =
-            resources.uniform_buffer_ids_by_params_type(binding.params_type_id());
-        if matching_buffers.is_empty() {
+        if !resources.has_uniform_buffer(binding.uniform_id()) {
             errors.push(ParamProjectionError {
                 pass_id,
                 state_type_name,
                 params_type_name,
                 kind: ParamProjectionErrorKind::MissingUniformBuffer,
                 details: format!(
-                    "missing uniform_buffer::<{}>(...) for pass '{}'",
-                    params_type_name,
-                    pass.id.as_str()
-                ),
-            });
-            continue;
-        }
-        if matching_buffers.len() > 1 {
-            errors.push(ParamProjectionError {
-                pass_id,
-                state_type_name,
-                params_type_name,
-                kind: ParamProjectionErrorKind::AmbiguousUniformBuffer,
-                details: format!(
-                    "multiple uniform buffers match params type '{}' for pass '{}'",
-                    params_type_name,
-                    pass.id.as_str()
+                    "pass '{}' references missing uniform buffer '{}'",
+                    pass.id.as_str(),
+                    binding.uniform_id().as_str()
                 ),
             });
             continue;
@@ -284,7 +303,7 @@ pub fn project_uniform_bindings_for_pass(
             continue;
         };
 
-        let buffer_id = matching_buffers[0].clone();
+        let buffer_id = binding.uniform_id().clone();
         let key = buffer_id.as_str().to_string();
         if let Some(existing_index) = projected_by_buffer.get(&key) {
             let existing = &outputs[*existing_index];

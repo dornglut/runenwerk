@@ -3,10 +3,10 @@ use crate::resources::CavernSeed;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, ecs::Resource)]
 pub struct RoomId(pub u16);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum RoomRole {
     Start,
     Combat,
@@ -16,7 +16,7 @@ pub enum RoomRole {
     Extraction,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernRoom {
     pub id: RoomId,
     pub role: RoomRole,
@@ -25,7 +25,7 @@ pub struct CavernRoom {
     pub spawn_anchor: [f32; 2],
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernTunnel {
     pub from: RoomId,
     pub to: RoomId,
@@ -34,7 +34,7 @@ pub struct CavernTunnel {
     pub radius: f32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernLayout {
     pub rooms: Vec<CavernRoom>,
     pub connections: Vec<CavernTunnel>,
@@ -294,7 +294,7 @@ fn sd_capsule2(point: [f32; 2], start: [f32; 2], end: [f32; 2], radius: f32) -> 
     (dx * dx + dy * dy).sqrt() - radius
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ecs::Resource)]
 struct LayoutRng {
     state: u64,
 }

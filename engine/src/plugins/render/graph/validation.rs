@@ -1,5 +1,4 @@
 use crate::plugins::render::RenderResourceDescriptor;
-use crate::plugins::render::api::is_namespaced_id;
 use crate::plugins::render::graph::{RenderFlowGraph, RenderPassKind, RenderPassNode};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -30,14 +29,16 @@ pub fn validate_flow_graph(
     let mut resources_by_id = BTreeMap::<String, &RenderResourceDescriptor>::new();
     for resource in &graph.resources.resources {
         let resource_id = resource.id().as_str().trim();
-        if !is_namespaced_id(resource_id) {
-            issues.push(format!(
-                "resource id '{}' must use namespaced format (for example 'post.output')",
-                resource_id
-            ));
-        }
         if !resource_ids.insert(resource_id.to_string()) {
             issues.push(format!("duplicate resource id '{}'", resource_id));
+        }
+        if let RenderResourceDescriptor::StorageBuffer(value) = resource
+            && value.element_count == 0
+        {
+            issues.push(format!(
+                "storage_buffer '{}' declares zero elements; element_count must be greater than zero",
+                resource_id
+            ));
         }
         resources_by_id.insert(resource_id.to_string(), resource);
     }
@@ -45,12 +46,6 @@ pub fn validate_flow_graph(
     let mut pass_ids = BTreeSet::<String>::new();
     for pass in &graph.passes.passes {
         let pass_id = pass.id.as_str().trim();
-        if !is_namespaced_id(pass_id) {
-            issues.push(format!(
-                "pass id '{}' must use namespaced format (for example 'post.tonemap')",
-                pass_id
-            ));
-        }
         if !pass_ids.insert(pass_id.to_string()) {
             issues.push(format!("duplicate pass id '{}'", pass_id));
         }
@@ -91,35 +86,32 @@ pub fn validate_flow_graph(
         validate_pass_resource_usage(pass, &resources_by_id, &mut issues);
 
         for binding in &pass.uniform_bindings {
-            if !graph.resources.has_ecs_resource(binding.state_type_id()) {
+            if !graph.resources.has_state_resource(binding.state_type_id()) {
                 issues.push(format!(
-                    "pass '{}' uses uniform_state for ECS resource '{}' but ecs_resource::<...>() was not declared",
+                    "pass '{}' uses uniform projection for state '{}' but with_state::<...>() was not declared",
                     pass.id.as_str(),
                     binding.state_type_name()
                 ));
             }
 
-            let matching_uniform_buffers = graph
-                .resources
-                .uniform_buffer_ids_by_params_type(binding.params_type_id());
-            if matching_uniform_buffers.is_empty() {
+            if !graph.resources.has_uniform_buffer(binding.uniform_id()) {
                 issues.push(format!(
-                    "pass '{}' uses params type '{}' but no matching uniform_buffer::<...>() exists",
+                    "pass '{}' references missing uniform buffer '{}'",
                     pass.id.as_str(),
-                    binding.params_type_name()
-                ));
-            } else if matching_uniform_buffers.len() > 1 {
-                issues.push(format!(
-                    "pass '{}' uses params type '{}' with ambiguous uniform buffers ({})",
-                    pass.id.as_str(),
-                    binding.params_type_name(),
-                    matching_uniform_buffers
-                        .iter()
-                        .map(|id| id.as_str().to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    binding.uniform_id().as_str()
                 ));
             }
+        }
+
+        if let Some(dispatch) = &pass.compute_dispatch
+            && let crate::plugins::render::api::ComputeDispatchDescriptor::State(binding) = dispatch
+            && !graph.resources.has_state_resource(binding.state_type_id())
+        {
+            issues.push(format!(
+                "pass '{}' uses dispatch_from_state for resource '{}' but with_state::<...>() was not declared",
+                pass.id.as_str(),
+                binding.state_type_name()
+            ));
         }
     }
 
@@ -173,6 +165,12 @@ pub fn validate_flow_graph(
 fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
     match pass.kind {
         RenderPassKind::Compute => {
+            if pass.compute_dispatch.is_none() {
+                issues.push(format!(
+                    "compute pass '{}' must declare explicit dispatch(...) or dispatch_from_state(...)",
+                    pass.id.as_str()
+                ));
+            }
             if pass.depth_target.is_some() {
                 issues.push(format!(
                     "compute pass '{}' cannot declare a depth target",
@@ -195,11 +193,29 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                     pass.id.as_str()
                 ));
             }
+            if let Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(dims)) =
+                &pass.compute_dispatch
+                && (dims[0] == 0 || dims[1] == 0 || dims[2] == 0)
+            {
+                issues.push(format!(
+                    "compute pass '{}' declares invalid dispatch_workgroups({}, {}, {})",
+                    pass.id.as_str(),
+                    dims[0],
+                    dims[1],
+                    dims[2]
+                ));
+            }
         }
         RenderPassKind::Fullscreen => {
             if pass.workgroup_size.is_some() {
                 issues.push(format!(
                     "fullscreen pass '{}' cannot declare workgroup_size",
+                    pass.id.as_str()
+                ));
+            }
+            if pass.compute_dispatch.is_some() {
+                issues.push(format!(
+                    "fullscreen pass '{}' cannot declare compute dispatch",
                     pass.id.as_str()
                 ));
             }
@@ -239,6 +255,12 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                     pass.id.as_str()
                 ));
             }
+            if pass.compute_dispatch.is_some() {
+                issues.push(format!(
+                    "builtin_ui_composite pass '{}' cannot declare compute dispatch",
+                    pass.id.as_str()
+                ));
+            }
             if pass.depth_target.is_some() {
                 issues.push(format!(
                     "builtin_ui_composite pass '{}' cannot declare depth target",
@@ -247,7 +269,7 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
             }
             if !pass.uniform_bindings.is_empty() {
                 issues.push(format!(
-                    "builtin_ui_composite pass '{}' cannot declare uniform_state bindings",
+                    "builtin_ui_composite pass '{}' cannot declare uniform bindings",
                     pass.id.as_str()
                 ));
             }
@@ -271,6 +293,12 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                     pass.id.as_str()
                 ));
             }
+            if pass.compute_dispatch.is_some() {
+                issues.push(format!(
+                    "graphics pass '{}' cannot declare compute dispatch",
+                    pass.id.as_str()
+                ));
+            }
         }
         RenderPassKind::Copy => {
             if pass.reads.len() != 1 || pass.writes.len() != 1 {
@@ -281,6 +309,7 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
             }
             if pass.shader.is_some()
                 || pass.workgroup_size.is_some()
+                || pass.compute_dispatch.is_some()
                 || pass.clear_color.is_some()
                 || pass.depth_target.is_some()
                 || !pass.uniform_bindings.is_empty()
@@ -312,6 +341,7 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
             }
             if pass.shader.is_some()
                 || pass.workgroup_size.is_some()
+                || pass.compute_dispatch.is_some()
                 || pass.clear_color.is_some()
                 || pass.depth_target.is_some()
                 || !pass.uniform_bindings.is_empty()

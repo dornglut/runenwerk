@@ -1,15 +1,11 @@
 use crate::plugins::render::api::RenderFlow;
-use crate::plugins::render::composition::RenderFlowContribution;
-use crate::plugins::render::graph::{
-    CompiledRenderFlowPlan, compile_flow_plan, merge_flow_with_contributions,
-};
+use crate::plugins::render::graph::{CompiledRenderFlowPlan, compile_flow_plan};
 use crate::runtime::ResMut;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Resource)]
 pub struct RenderFlowRegistryResource {
     flows: BTreeMap<String, RenderFlow>,
-    contributions: BTreeMap<String, RenderFlowContribution>,
     compiled_flows: Vec<CompiledRenderFlowPlan>,
     revision: u64,
     applied_compiled_revision: u64,
@@ -34,35 +30,16 @@ impl RenderFlowRegistryResource {
         removed
     }
 
-    pub fn upsert_contribution(&mut self, contribution: RenderFlowContribution) {
-        self.contributions
-            .insert(contribution.namespace().to_string(), contribution);
-        self.bump_revision();
-    }
-
-    pub fn remove_contribution(&mut self, namespace: &str) -> bool {
-        let removed = self.contributions.remove(namespace).is_some();
-        if removed {
-            self.bump_revision();
-        }
-        removed
-    }
-
     pub fn clear(&mut self) {
-        if self.flows.is_empty() && self.contributions.is_empty() {
+        if self.flows.is_empty() {
             return;
         }
         self.flows.clear();
-        self.contributions.clear();
         self.bump_revision();
     }
 
     pub fn flow_count(&self) -> usize {
         self.flows.len()
-    }
-
-    pub fn contribution_count(&self) -> usize {
-        self.contributions.len()
     }
 
     pub fn compiled_flows(&self) -> &[CompiledRenderFlowPlan] {
@@ -74,23 +51,10 @@ impl RenderFlowRegistryResource {
             return;
         }
 
-        let contributions = self.contributions.values().cloned().collect::<Vec<_>>();
         let mut next_compiled = Vec::<CompiledRenderFlowPlan>::new();
 
         for flow in self.flows.values() {
-            let composed_flow = match merge_flow_with_contributions(flow, &contributions) {
-                Ok(value) => value,
-                Err(err) => {
-                    tracing::warn!(
-                        flow_id = flow.id().as_str(),
-                        error = %err,
-                        "skipping render flow due to contribution merge/validation errors"
-                    );
-                    continue;
-                }
-            };
-
-            match compile_flow_plan(&composed_flow) {
+            match compile_flow_plan(flow) {
                 Ok(compiled) => next_compiled.push(compiled),
                 Err(err) => tracing::warn!(
                     flow_id = flow.id().as_str(),
@@ -109,8 +73,6 @@ impl RenderFlowRegistryResource {
     }
 }
 
-pub(crate) fn sync_render_flow_registry_system(
-    mut flow_registry: ResMut<RenderFlowRegistryResource>,
-) {
+pub(crate) fn sync_render_flow_registry_system(mut flow_registry: ResMut<RenderFlowRegistryResource>) {
     flow_registry.sync_compiled_flows();
 }

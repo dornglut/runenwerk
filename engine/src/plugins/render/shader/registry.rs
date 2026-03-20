@@ -72,7 +72,13 @@ impl ShaderRegistryResource {
         self.config.force_reload = true;
     }
 
-    pub fn register_shader(
+    pub fn register_shader(&mut self, path: impl Into<String>) -> ShaderHandle {
+        let path = path.into();
+        let id = derive_shader_id_from_path(Path::new(&path));
+        self.register_shader_with_id(id, path)
+    }
+
+    pub fn register_shader_with_id(
         &mut self,
         id: impl Into<String>,
         path: impl Into<String>,

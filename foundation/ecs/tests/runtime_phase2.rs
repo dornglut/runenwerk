@@ -12,31 +12,31 @@ impl ScheduleLabel for Update {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Position(f32);
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Velocity(f32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Frame(u64);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Score(u64);
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct DeltaTime(f32);
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Bonus(f32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Marker;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct SeenCount(u32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct MissingRes;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

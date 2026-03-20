@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct AdaptiveSmoothingState {
     pub target_delay_ms: f32,
     pub effective_delay_ms: f32,
@@ -20,7 +20,7 @@ impl Default for AdaptiveSmoothingState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CorrectionStats {
     pub small_corrections: u64,
     pub medium_corrections: u64,
@@ -31,7 +31,7 @@ pub struct CorrectionStats {
     pub ema_distance: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize, ecs::Resource)]
 pub struct ReplicationRuntimeMetrics {
     pub bytes_sent_last_tick: u64,
     pub bytes_sent_total: u64,
@@ -78,7 +78,7 @@ pub struct ReplicationRuntimeMetrics {
     pub local_correction_hard_snaps_total: u64,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ReplicationBudgetConfig {
     pub enemy_ops_per_patch_level0: usize,
     pub enemy_ops_per_patch_level1: usize,
@@ -113,7 +113,7 @@ impl Default for ReplicationBudgetConfig {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ReplicationCadenceConfig {
     pub patch_emit_interval_level0: u64,
     pub patch_emit_interval_level1: u64,
@@ -154,7 +154,7 @@ impl Default for ReplicationCadenceConfig {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ReplicationLoadShedConfig {
     pub bytes_threshold_level1: u64,
     pub bytes_threshold_level2: u64,
@@ -177,7 +177,7 @@ impl Default for ReplicationLoadShedConfig {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ReplicationKeyframeConfig {
     pub interval_ticks: u64,
 }

@@ -4,7 +4,7 @@ use engine::prelude::Component;
 use serde::{Deserialize, Serialize};
 
 #[net_entity]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerReplicatedEntity;
 
 #[net_component(
@@ -13,7 +13,7 @@ pub struct PlayerReplicatedEntity;
     owner_prediction = true,
     interest = Spatial
 )]
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerStateReplicated {
     pub player_id: u32,
     pub position: [f32; 2],
@@ -59,7 +59,7 @@ impl PlayerStateReplicated {
     profile = InputCommand,
     interest = OwnerOnly
 )]
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerInputReplicated {
     pub player_id: u32,
     pub movement: [f32; 2],
@@ -101,7 +101,7 @@ impl PlayerInputReplicated {
     owner_prediction = false,
     interest = Global
 )]
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct HealthReplicated {
     pub player_id: u32,
     pub current: f32,

@@ -2,7 +2,7 @@ use engine::prelude::Component;
 use serde::{Deserialize, Serialize};
 
 // src/domain/gameplay/components/actor.rs
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct Health {
     pub current: f32,
     pub max: f32,
@@ -22,19 +22,19 @@ impl Health {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub enum Faction {
     Hunters,
     CavernBeasts,
     Neutral,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct HitFlashState {
     pub remaining_seconds: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct DamageFeedbackState {
     pub last_damage_taken: f32,
     pub last_damage_dealt: f32,

@@ -86,7 +86,7 @@ pub struct CompiledUiCompositePass {
 pub fn compile_flow_plan(
     flow: &RenderFlow,
 ) -> Result<CompiledRenderFlowPlan, RenderFlowValidationError> {
-    let report = flow.validate()?;
+    let report = flow.validation_report()?;
     let pass_lookup = flow
         .graph()
         .passes

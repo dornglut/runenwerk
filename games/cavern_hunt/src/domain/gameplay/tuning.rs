@@ -1,4 +1,4 @@
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct PlayerCombatTuning {
     pub move_speed: f32,
     pub dash_invulnerability_seconds: f32,
@@ -17,7 +17,7 @@ impl Default for PlayerCombatTuning {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct EnemyCombatTuning {
     pub swarmer_speed: f32,
     pub bruiser_speed: f32,

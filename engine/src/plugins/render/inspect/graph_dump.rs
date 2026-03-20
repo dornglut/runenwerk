@@ -1,6 +1,6 @@
 use crate::plugins::render::{RenderFlow, RenderFlowValidationError};
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct RenderDebugGraphDumpState {
     pub revision: u64,
     pub lines: Vec<String>,
@@ -15,7 +15,7 @@ pub struct RenderFlowGraphDump {
 pub fn dump_flow_graph(
     flow: &RenderFlow,
 ) -> Result<RenderFlowGraphDump, RenderFlowValidationError> {
-    let report = flow.validate()?;
+    let report = flow.validation_report()?;
     let mut lines = Vec::<String>::new();
 
     lines.push(format!("flow: {}", flow.id().as_str()));

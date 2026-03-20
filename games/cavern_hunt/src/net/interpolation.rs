@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct InterpolationConfig {
     pub min_delay_ms: f32,
     pub max_delay_ms: f32,

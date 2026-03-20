@@ -1,11 +1,11 @@
 use engine::SimulationTick;
 
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernAimState {
     pub world_point: [f32; 2],
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CavernControlState {
     pub movement: [f32; 2],
     pub aim_world: [f32; 2],
@@ -28,13 +28,13 @@ impl Default for CavernControlState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CavernPredictedFrame {
     pub tick: SimulationTick,
     pub control: CavernControlState,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernPredictionState {
     pub pending_frames: Vec<CavernPredictedFrame>,
     pub corrections_applied: u64,

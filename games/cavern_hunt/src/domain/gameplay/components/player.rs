@@ -2,35 +2,35 @@ use crate::{CompanionBehaviorRole, PlayerSpawnProfile, RelicKind, WeaponModKind}
 use ecs::Component;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct Player;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerId(pub u32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerActive;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerSpectator;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerCompanion {
     pub fill_slot: u8,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerRosterIdentity {
     pub player_code: String,
     pub roster_index: u8,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct PlayerSpawnState {
     pub profile: PlayerSpawnProfile,
 }
 
-#[derive(Debug, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct InventoryRunState {
     pub scrap: u32,
     pub weapon_mods: Vec<WeaponModKind>,

@@ -1,6 +1,6 @@
 use engine_net::replication::ReplicationProfilePreset;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CavernReplicationPolicy {
     pub player_state_profile: ReplicationProfilePreset,
     pub player_input_profile: ReplicationProfilePreset,

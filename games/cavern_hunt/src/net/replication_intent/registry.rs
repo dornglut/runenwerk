@@ -2,7 +2,7 @@ use super::components::{HealthReplicated, PlayerInputReplicated, PlayerStateRepl
 use super::policy::CavernReplicationPolicy;
 use engine_net::replication::{ReplicatedComponentDescriptor, ReplicationRegistry};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ecs::Resource)]
 pub struct CavernReplicationIntent {
     pub policy: CavernReplicationPolicy,
     pub registry: ReplicationRegistry,

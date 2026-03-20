@@ -1,5 +1,5 @@
 // Owner: Grotto Quest ECS - Query Runtime
-use crate::component::Component;
+use crate::component::{Component, Resource};
 use crate::entity::Entity;
 use crate::world::World;
 use std::any::TypeId;
@@ -78,17 +78,17 @@ impl QueryAccess {
         );
     }
 
-    pub(crate) fn add_resource_read<T: Component>(&mut self) {
+    pub(crate) fn add_resource_read<T: Resource>(&mut self) {
         push_unique_access(
             &mut self.resource_reads,
-            QueryTypeAccess::of::<T>(T::component_name()),
+            QueryTypeAccess::of::<T>(T::resource_name()),
         );
     }
 
-    pub(crate) fn add_resource_write<T: Component>(&mut self) {
+    pub(crate) fn add_resource_write<T: Resource>(&mut self) {
         push_unique_access(
             &mut self.resource_writes,
-            QueryTypeAccess::of::<T>(T::component_name()),
+            QueryTypeAccess::of::<T>(T::resource_name()),
         );
     }
 

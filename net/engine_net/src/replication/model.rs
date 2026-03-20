@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, ecs::Component, ecs::Resource)]
 pub struct Replicated;
 
 pub trait Replicate:

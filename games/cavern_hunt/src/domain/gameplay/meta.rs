@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernMetaProfile {
     pub cavern_marks: u32,
     pub bonus_max_health: u8,
@@ -21,7 +21,7 @@ impl Default for CavernMetaProfile {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
 pub struct CavernMetaPersistenceConfig {
     pub enabled: bool,
 }
@@ -32,7 +32,7 @@ impl Default for CavernMetaPersistenceConfig {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, ecs::Resource)]
 pub struct CavernMetaRewardState {
     pub last_awarded_run_id: Option<u64>,
 }

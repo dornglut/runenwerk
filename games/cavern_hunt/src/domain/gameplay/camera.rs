@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct CavernCameraState {
     pub target: [f32; 3],
     pub yaw: f32,

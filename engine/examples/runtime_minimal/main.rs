@@ -1,19 +1,19 @@
 use anyhow::Result;
 use engine::prelude::*;
 
-#[derive(Debug, Copy, Clone, PartialEq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource)]
 struct Position {
     x: i32,
     y: i32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource)]
 struct Velocity {
     x: i32,
     y: i32,
 }
 
-#[derive(Debug, Default, Component)]
+#[derive(Debug, Default, Component, ecs::Resource)]
 struct FrameCounter(u32);
 
 struct RuntimeMinimalPlugin;

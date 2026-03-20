@@ -118,18 +118,18 @@ pub struct SceneTransitionResult {
     pub world_pause_changed: bool,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component, ecs::Resource)]
 pub struct WorldFrameCounter {
     pub value: u64,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Component, ecs::Resource)]
 pub struct WorldDebugPosition {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Component, ecs::Resource)]
 pub struct WorldDebugVelocity {
     pub x: f32,
     pub y: f32,

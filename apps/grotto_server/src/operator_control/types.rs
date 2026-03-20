@@ -7,7 +7,7 @@ use std::time::Instant;
 use cavern_hunt::ServerNetworkConfigAssetV1;
 
 // Owner: Grotto Server - Operator Control Types
-#[derive(Debug, Clone, engine::prelude::Component)]
+#[derive(Debug, Clone, engine::prelude::Component, engine::prelude::Resource)]
 pub(super) struct OperatorRuntimeConfig {
     pub(super) server_id: String,
 }
@@ -20,7 +20,7 @@ impl OperatorRuntimeConfig {
     }
 }
 
-#[derive(Default, engine::prelude::Component)]
+#[derive(Default, engine::prelude::Component, engine::prelude::Resource)]
 pub(super) struct OperatorOutboundQueue {
     messages: Vec<AxiomOperatorOutboundMessage>,
 }
@@ -35,7 +35,7 @@ impl OperatorOutboundQueue {
     }
 }
 
-#[derive(Default, Clone, engine::prelude::Component)]
+#[derive(Default, Clone, engine::prelude::Component, engine::prelude::Resource)]
 pub(super) struct OperatorControlState {
     pub(super) recent_command_ids: VecDeque<String>,
     pub(super) dedupe_capacity: usize,
@@ -46,7 +46,7 @@ pub(super) struct OperatorControlState {
     pub(super) snapshot_interval_ticks: u64,
 }
 
-#[derive(Default, engine::prelude::Component)]
+#[derive(Default, engine::prelude::Component, engine::prelude::Resource)]
 pub(super) struct OperatorObservedState {
     pub(super) accepted_connections: u64,
     pub(super) rejected_connections: u64,
@@ -56,12 +56,12 @@ pub(super) struct OperatorObservedState {
     pub(super) last_error: Option<String>,
 }
 
-#[derive(engine::prelude::Component)]
+#[derive(engine::prelude::Component, engine::prelude::Resource)]
 pub(super) struct ServerRunSignal {
     pub(super) running: Arc<AtomicBool>,
 }
 
-#[derive(engine::prelude::Component)]
+#[derive(engine::prelude::Component, engine::prelude::Resource)]
 pub(super) struct OperatorRuntimeBridgeHandle {
     pub(super) handle: AxiomOperatorRuntimeHandle,
 }

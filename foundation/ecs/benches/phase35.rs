@@ -3,48 +3,48 @@ use ecs::prelude::*;
 use scheduler::{ScheduleLabel, SystemSet};
 use std::hint::black_box;
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 struct Position {
     x: f32,
     y: f32,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 struct Velocity {
     x: f32,
     y: f32,
 }
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 struct Simulated;
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 struct Disabled;
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 struct Health(i32);
 
-#[derive(Debug, Copy, Clone, ecs::Component)]
+#[derive(Debug, Copy, Clone, ecs::Component, ecs::Resource)]
 struct ChurnTag;
 
-#[derive(Debug, Default, ecs::Component)]
+#[derive(Debug, Default, ecs::Component, ecs::Resource)]
 struct MixedStats(u64);
 
-#[derive(Debug, Default, ecs::Component)]
+#[derive(Debug, Default, ecs::Component, ecs::Resource)]
 struct EventStats(u64);
 
 #[derive(Debug, Copy, Clone)]
 struct BenchEvent(u32);
 
-#[derive(Debug, Default, ecs::Component)]
+#[derive(Debug, Default, ecs::Component, ecs::Resource)]
 struct R0(u64);
-#[derive(Debug, Default, ecs::Component)]
+#[derive(Debug, Default, ecs::Component, ecs::Resource)]
 struct R1(u64);
-#[derive(Debug, Default, ecs::Component)]
+#[derive(Debug, Default, ecs::Component, ecs::Resource)]
 struct R2(u64);
-#[derive(Debug, Default, ecs::Component)]
+#[derive(Debug, Default, ecs::Component, ecs::Resource)]
 struct R3(u64);
-#[derive(Debug, Default, ecs::Component)]
+#[derive(Debug, Default, ecs::Component, ecs::Resource)]
 struct Sink(u64);
 
 #[derive(Copy, Clone)]

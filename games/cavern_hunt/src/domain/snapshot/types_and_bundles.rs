@@ -4,14 +4,14 @@ use engine::prelude::SimulationTick;
 use serde::{Deserialize, Serialize};
 
 // Owner: Cavern Hunt Snapshot Domain - Types and Spawn Bundles
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernInventorySnapshotV1 {
     pub scrap: u32,
     pub weapon_mods: Vec<WeaponModKind>,
     pub relics: Vec<RelicKind>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernPlayerSnapshotV1 {
     pub player_id: u32,
     pub owner_connection_id: Option<u64>,
@@ -37,14 +37,14 @@ pub struct CavernPlayerSnapshotV1 {
     pub extracting: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct RoomEncounterSnapshotV1 {
     pub room_id: RoomId,
     pub state: crate::RoomEncounterState,
     pub has_reward: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernEnemySnapshotV1 {
     #[serde(default)]
     pub network_entity_id: NetworkEntityId,
@@ -65,7 +65,7 @@ pub struct CavernEnemySnapshotV1 {
     pub elite_objective: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernProjectileSnapshotV1 {
     #[serde(default)]
     pub network_entity_id: NetworkEntityId,
@@ -79,7 +79,7 @@ pub struct CavernProjectileSnapshotV1 {
     pub faction: Faction,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernPickupSnapshotV1 {
     #[serde(default)]
     pub network_entity_id: NetworkEntityId,
@@ -93,7 +93,7 @@ pub struct CavernPickupSnapshotV1 {
     pub room_anchor: Option<RoomId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernExtractionSnapshotV1 {
     #[serde(default)]
     pub network_entity_id: NetworkEntityId,
@@ -104,24 +104,24 @@ pub struct CavernExtractionSnapshotV1 {
     pub room_anchor: Option<RoomId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernLayoutSnapshotV1 {
     pub seed: CavernSeed,
     pub layout: CavernLayout,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernTopologySnapshotV1 {
     pub topology: CavernTopology,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernGeometrySnapshotV1 {
     pub revision: u64,
     pub graph: CavernGeometryGraph,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernRunSnapshotV1 {
     pub run_id: u64,
     pub seed: CavernSeed,
@@ -147,7 +147,7 @@ pub struct CavernRunSnapshotV1 {
     pub extraction_zones: Vec<CavernExtractionSnapshotV1>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernRunDeltaV1 {
     pub run_id: Option<u64>,
     pub seed: CavernSeed,
@@ -173,7 +173,7 @@ pub struct CavernRunDeltaV1 {
     pub extraction_zones: Option<Vec<CavernExtractionSnapshotV1>>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernPatchPriority {
     Critical,
     High,
@@ -181,7 +181,7 @@ pub enum CavernPatchPriority {
     Low,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernPlayerPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
@@ -199,7 +199,7 @@ pub enum CavernPlayerPatchOp {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernRunStatePatch {
     pub phase: Option<CavernRunPhase>,
     pub elite_defeated: Option<bool>,
@@ -211,13 +211,13 @@ pub struct CavernRunStatePatch {
     pub extraction: Option<ExtractionState>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernKeyframeEvent {
     pub cursor: ReplicationCursor,
     pub snapshot: CavernRunSnapshotV1,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernPatchEvent {
     pub cursor: ReplicationCursor,
     pub run_state: Option<CavernRunStatePatch>,
@@ -228,7 +228,7 @@ pub struct CavernPatchEvent {
     pub extraction_ops: Vec<CavernExtractionPatchOp>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernEnemyPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
@@ -245,7 +245,7 @@ pub enum CavernEnemyPatchOp {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernProjectilePatchOp {
     Spawn {
         entity_id: NetworkEntityId,
@@ -262,7 +262,7 @@ pub enum CavernProjectilePatchOp {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernPickupPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
@@ -279,7 +279,7 @@ pub enum CavernPickupPatchOp {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum CavernExtractionPatchOp {
     Spawn {
         entity_id: NetworkEntityId,
@@ -296,7 +296,7 @@ pub enum CavernExtractionPatchOp {
     },
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, ecs::Resource)]
 pub(super) struct PlayerSnapshotBundle {
     pub(super) player: Player,
     pub(super) player_id: PlayerId,
@@ -312,7 +312,7 @@ pub(super) struct PlayerSnapshotBundle {
     pub(super) inventory: InventoryRunState,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, ecs::Resource)]
 pub(super) struct EnemySnapshotBundle {
     pub(super) enemy: Enemy,
     pub(super) enemy_kind: EnemyKind,
@@ -323,7 +323,7 @@ pub(super) struct EnemySnapshotBundle {
     pub(super) collider_radius: ColliderRadius,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, ecs::Resource)]
 pub(super) struct ProjectileSnapshotBundle {
     pub(super) projectile: Projectile,
     pub(super) projectile_visual_state: ProjectileVisualState,
@@ -333,14 +333,14 @@ pub(super) struct ProjectileSnapshotBundle {
     pub(super) faction: Faction,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, ecs::Resource)]
 pub(super) struct PickupSnapshotBundle {
     pub(super) pickup: Pickup,
     pub(super) transform: Transform2,
     pub(super) collider_radius: ColliderRadius,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, ecs::Resource)]
 pub(super) struct ExtractionSnapshotBundle {
     pub(super) extraction_zone: ExtractionZone,
     pub(super) transform: Transform2,

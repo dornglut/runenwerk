@@ -2,13 +2,13 @@ use crate::plugins::render::{RenderResourceDescriptor, RenderResourceId};
 use std::any::{TypeId, type_name};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EcsResourceDeclaration {
+pub struct StateResourceDeclaration {
     pub type_id: TypeId,
     pub type_name: &'static str,
 }
 
-impl EcsResourceDeclaration {
-    pub fn of<T: ecs::Component + 'static>() -> Self {
+impl StateResourceDeclaration {
+    pub fn of<T: ecs::Resource + 'static>() -> Self {
         Self {
             type_id: TypeId::of::<T>(),
             type_name: type_name::<T>(),
@@ -18,16 +18,17 @@ impl EcsResourceDeclaration {
 
 #[derive(Debug, Clone, Default)]
 pub struct ResourceGraph {
-    pub ecs_resources: Vec<EcsResourceDeclaration>,
+    pub state_resources: Vec<StateResourceDeclaration>,
     pub resources: Vec<RenderResourceDescriptor>,
 }
 
 impl ResourceGraph {
-    pub fn add_ecs_resource<T>(&mut self)
+    pub fn add_state_resource<T>(&mut self)
     where
-        T: ecs::Component + 'static,
+        T: ecs::Resource + 'static,
     {
-        self.ecs_resources.push(EcsResourceDeclaration::of::<T>());
+        self.state_resources
+            .push(StateResourceDeclaration::of::<T>());
     }
 
     pub fn add_resource(&mut self, descriptor: RenderResourceDescriptor) {
@@ -48,9 +49,18 @@ impl ResourceGraph {
             .collect()
     }
 
-    pub fn has_ecs_resource(&self, type_id: TypeId) -> bool {
-        self.ecs_resources
+    pub fn has_state_resource(&self, type_id: TypeId) -> bool {
+        self.state_resources
             .iter()
             .any(|resource| resource.type_id == type_id)
+    }
+
+    pub fn has_uniform_buffer(&self, id: &RenderResourceId) -> bool {
+        self.resources.iter().any(|resource| {
+            matches!(
+                resource,
+                RenderResourceDescriptor::UniformBuffer(value) if value.id == *id
+            )
+        })
     }
 }

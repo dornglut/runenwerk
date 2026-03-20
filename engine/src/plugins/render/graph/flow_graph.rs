@@ -27,8 +27,8 @@ impl RenderFlowGraph {
 
     pub fn merge(mut self, other: RenderFlowGraph) -> Self {
         self.resources
-            .ecs_resources
-            .extend(other.resources.ecs_resources);
+            .state_resources
+            .extend(other.resources.state_resources);
         self.resources.resources.extend(other.resources.resources);
         self.passes.passes.extend(other.passes.passes);
         self

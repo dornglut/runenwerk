@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum CompanionBehaviorRole {
     Skirmisher,
     SupportShooter,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct PlayerSpawnProfile {
     pub is_human: bool,
     pub role: Option<CompanionBehaviorRole>,
@@ -30,7 +30,7 @@ impl Default for PlayerSpawnProfile {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct RunDifficultyProfile {
     pub enemy_health_scale: f32,
     pub enemy_damage_scale: f32,
@@ -47,7 +47,7 @@ impl Default for RunDifficultyProfile {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct SessionSpawnPolicy {
     pub desired_human_players: u8,
     pub desired_total_participants: u8,

@@ -75,8 +75,10 @@ mod tests {
     #[test]
     fn register_shader_returns_stable_handle_for_same_id() {
         let mut registry = ShaderRegistryResource::with_roots(["assets/shaders"]);
-        let first = registry.register_shader("custom.main", "assets/shaders/custom_main.wgsl");
-        let second = registry.register_shader("custom.main", "assets/shaders/custom_main_v2.wgsl");
+        let first =
+            registry.register_shader_with_id("custom.main", "assets/shaders/custom_main.wgsl");
+        let second =
+            registry.register_shader_with_id("custom.main", "assets/shaders/custom_main_v2.wgsl");
         assert_eq!(first, second);
         assert_eq!(registry.shader_count(), 1);
     }

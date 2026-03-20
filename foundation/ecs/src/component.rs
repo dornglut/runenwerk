@@ -4,3 +4,10 @@ pub trait Component: 'static {
         std::any::type_name::<Self>()
     }
 }
+
+/// Marker trait for world resource types.
+pub trait Resource: 'static {
+    fn resource_name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
+}

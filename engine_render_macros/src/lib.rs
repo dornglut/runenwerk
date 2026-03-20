@@ -46,50 +46,117 @@ fn expand_gpu_params(input: TokenStream, layout: LayoutKind) -> TokenStream {
         }
     };
 
-    let field_defs = fields.iter().map(|field| {
-        let field_ident = field.ident.as_ref().expect("named field");
-        let ty = &field.ty;
-        quote! {
-            pub #field_ident: <#ty as #render_path::ToGpuValue>::Gpu
-        }
-    });
-
-    let field_inits = fields.iter().map(|field| {
-        let field_ident = field.ident.as_ref().expect("named field");
-        quote! {
-            #field_ident: #render_path::ToGpuValue::to_gpu_value(&self.#field_ident)
-        }
-    });
-
-    let field_bounds = fields.iter().map(|field| {
-        let ty = &field.ty;
-        quote! {
-            #ty: #render_path::ToGpuValue
-        }
-    });
-
-    let where_clause = append_bounds(input.generics, field_bounds.collect());
-
-    TokenStream::from(quote! {
-        #[doc(hidden)]
-        #[repr(C)]
-        #[derive(Clone, Copy, #bytemuck_path::Pod, #bytemuck_path::Zeroable)]
-        pub struct #raw_ident {
-            #(#field_defs,)*
-        }
-
-        impl #render_path::GpuParams for #struct_ident #where_clause {
-            type Raw = #raw_ident;
-
-            fn to_gpu(&self) -> Self::Raw {
-                #raw_ident {
-                    #(#field_inits,)*
+    match layout {
+        LayoutKind::Storage => {
+            let field_defs = fields.iter().map(|field| {
+                let field_ident = field.ident.as_ref().expect("named field");
+                let ty = &field.ty;
+                quote! {
+                    pub #field_ident: <#ty as #render_path::ToGpuValue>::Gpu
                 }
-            }
-        }
+            });
 
-        impl #gpu_layout_trait for #struct_ident #where_clause {}
-    })
+            let field_inits = fields.iter().map(|field| {
+                let field_ident = field.ident.as_ref().expect("named field");
+                quote! {
+                    #field_ident: #render_path::ToGpuValue::to_gpu_value(&self.#field_ident)
+                }
+            });
+
+            let field_bounds = fields.iter().map(|field| {
+                let ty = &field.ty;
+                quote! {
+                    #ty: #render_path::ToGpuValue
+                }
+            });
+            let where_clause = append_bounds(input.generics, field_bounds.collect());
+
+            TokenStream::from(quote! {
+                #[doc(hidden)]
+                #[repr(C)]
+                #[derive(Clone, Copy, #bytemuck_path::Pod, #bytemuck_path::Zeroable)]
+                pub struct #raw_ident {
+                    #(#field_defs,)*
+                }
+
+                impl #render_path::GpuParams for #struct_ident #where_clause {
+                    type Raw = #raw_ident;
+
+                    fn to_gpu(&self) -> Self::Raw {
+                        #raw_ident {
+                            #(#field_inits,)*
+                        }
+                    }
+                }
+
+                impl #gpu_layout_trait for #struct_ident #where_clause {}
+            })
+        }
+        LayoutKind::Uniform => {
+            let struct_tag = struct_ident.to_string().to_uppercase();
+            let total_size_ident = format_ident!("__{}_GPU_UNIFORM_SIZE", struct_tag);
+
+            let mut offset_consts = Vec::<proc_macro2::TokenStream>::new();
+            let mut write_calls = Vec::<proc_macro2::TokenStream>::new();
+            let mut where_bounds = Vec::<proc_macro2::TokenStream>::new();
+            let mut next_offset_expr = quote! { 0usize };
+
+            for field in &fields {
+                let field_ident = field.ident.as_ref().expect("named field");
+                let field_tag = field_ident.to_string().to_uppercase();
+                let offset_ident = format_ident!("__{}_GPU_OFFSET_{}", struct_tag, field_tag);
+                let ty = &field.ty;
+
+                offset_consts.push(quote! {
+                    const #offset_ident: usize = #render_path::align_up_const(
+                        #next_offset_expr,
+                        <#ty as #render_path::GpuUniformField>::ABI_ALIGN
+                    );
+                });
+
+                write_calls.push(quote! {
+                    #render_path::write_uniform_field::<#ty>(&mut bytes, #offset_ident, &self.#field_ident);
+                });
+
+                where_bounds.push(quote! {
+                    #ty: #render_path::GpuUniformField
+                });
+
+                next_offset_expr = quote! {
+                    #offset_ident + <#ty as #render_path::GpuUniformField>::ABI_SIZE
+                };
+            }
+
+            let total_size_def = quote! {
+                const #total_size_ident: usize = #render_path::align_up_const(#next_offset_expr, 16usize);
+            };
+            let where_clause = append_bounds(input.generics, where_bounds);
+
+            TokenStream::from(quote! {
+                #(#offset_consts)*
+                #total_size_def
+
+                #[doc(hidden)]
+                #[repr(C)]
+                #[derive(Clone, Copy, #bytemuck_path::Pod, #bytemuck_path::Zeroable)]
+                pub struct #raw_ident {
+                    pub bytes: [u8; #total_size_ident],
+                }
+
+                impl #render_path::GpuParams for #struct_ident #where_clause {
+                    type Raw = #raw_ident;
+
+                    fn to_gpu(&self) -> Self::Raw {
+                        let mut bytes = [0u8; #total_size_ident];
+                        #(#write_calls)*
+                        #raw_ident { bytes }
+                    }
+                }
+
+                impl #gpu_layout_trait for #struct_ident #where_clause {}
+            })
+        }
+    }
 }
 
 fn append_bounds(

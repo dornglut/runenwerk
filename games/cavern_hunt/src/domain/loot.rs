@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 // src/domain/loot.rs
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum WeaponModKind {
     DamageUp,
     FireRateUp,
@@ -10,14 +10,14 @@ pub enum WeaponModKind {
     ProjectileSpeedUp,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum RelicKind {
     MaxHealthUp,
     DashCooldownDown,
     CritChanceUp,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum PickupKind {
     Scrap(u32),
     WeaponMod(WeaponModKind),
@@ -25,7 +25,7 @@ pub enum PickupKind {
     HealingCharge(u32),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct EnemyDropTable {
     pub guaranteed_scrap: u32,
     pub weapon_mod_chance: f32,
@@ -71,7 +71,7 @@ impl EnemyDropTable {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct LootTableRegistry {
     pub swarmer: EnemyDropTable,
     pub bruiser: EnemyDropTable,

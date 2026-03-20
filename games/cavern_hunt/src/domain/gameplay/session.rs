@@ -1,7 +1,7 @@
 use crate::CavernSeed;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernRunConfig {
     pub max_players: u8,
     pub seed: CavernSeed,
@@ -28,7 +28,7 @@ impl Default for CavernRunConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernSessionSettings {
     pub seed: Option<CavernSeed>,
     pub enemy_density: Option<f32>,
@@ -41,7 +41,7 @@ pub struct CavernSessionSettings {
     pub elite_health_bonus: Option<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ecs::Resource)]
 pub struct SpawnDirector {
     pub initialized: bool,
 }

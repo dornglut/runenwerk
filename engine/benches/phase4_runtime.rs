@@ -3,25 +3,25 @@ use ecs::{With, Without};
 use engine::prelude::*;
 use std::hint::black_box;
 
-#[derive(Debug, Copy, Clone, PartialEq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource)]
 struct Position {
     x: f32,
     y: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource)]
 struct Velocity {
     x: f32,
     y: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource)]
 struct Simulated;
 
-#[derive(Debug, Copy, Clone, PartialEq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource)]
 struct Disabled;
 
-#[derive(Debug, Default, Component)]
+#[derive(Debug, Default, Component, ecs::Resource)]
 struct FrameAccumulator(u64);
 
 #[derive(Debug, Copy, Clone)]

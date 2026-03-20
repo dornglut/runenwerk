@@ -17,7 +17,7 @@ const DEFAULT_WORLD_FLOOR_Y: f32 = -1.5;
 const DEFAULT_WORLD_CEILING_MARGIN: f32 = 3.5;
 pub const CAVERN_GAMEPLAY_HEIGHT: f32 = DEFAULT_TUNNEL_CENTER_HEIGHT;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Resource)]
 pub struct GeometryRevision(pub u64);
 
 impl Default for GeometryRevision {
@@ -26,10 +26,10 @@ impl Default for GeometryRevision {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Resource)]
 pub struct GeometryPrimitiveId(pub u64);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum GeometryLayer {
     Terrain,
     Walkable,
@@ -39,7 +39,7 @@ pub enum GeometryLayer {
     NavHint,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum GeometryMaterial {
     Rock,
     CavernVoid,
@@ -48,7 +48,7 @@ pub enum GeometryMaterial {
     Marker,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum GeometryOp {
     AddSolid,
     SubtractVoid,
@@ -57,7 +57,7 @@ pub enum GeometryOp {
     HazardVolume,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct GeometryBounds3 {
     pub min: [f32; 3],
     pub max: [f32; 3],
@@ -128,7 +128,7 @@ impl GeometryBounds3 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum GeometryPrimitiveShape3 {
     Sphere {
         center: [f32; 3],
@@ -163,7 +163,7 @@ pub enum GeometryPrimitiveShape3 {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct GeometryPrimitive3 {
     pub id: GeometryPrimitiveId,
     pub layer: GeometryLayer,
@@ -179,7 +179,7 @@ impl GeometryPrimitive3 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernRoomNode {
     pub id: RoomId,
     pub role: RoomRole,
@@ -188,7 +188,7 @@ pub struct CavernRoomNode {
     pub spawn_anchor: [f32; 3],
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernConnection {
     pub from: RoomId,
     pub to: RoomId,
@@ -197,7 +197,7 @@ pub struct CavernConnection {
     pub radius: f32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernTopology {
     pub seed: CavernSeed,
     pub rooms: Vec<CavernRoomNode>,
@@ -222,7 +222,7 @@ impl Default for CavernTopology {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernGeometryGraph {
     pub revision: GeometryRevision,
     pub bounds: GeometryBounds3,
@@ -239,7 +239,7 @@ impl Default for CavernGeometryGraph {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum GeometryEditKind {
     AddBlocker(GeometryPrimitiveShape3),
     RemovePrimitive(GeometryPrimitiveId),

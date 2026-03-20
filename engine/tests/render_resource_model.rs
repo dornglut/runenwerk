@@ -23,7 +23,8 @@ fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
             assert!(value.params_type_name.contains("ResourceTestParams"));
             assert!(value.size_bytes > 0);
             let raw = ResourceTestParams { value: 9 }.to_gpu();
-            assert_eq!(raw.value, 9);
+            assert_eq!(raw.bytes.len() as u64, value.size_bytes);
+            assert_eq!(u32::from_le_bytes(raw.bytes[0..4].try_into().unwrap()), 9);
         }
         other => panic!("unexpected descriptor variant: {other:?}"),
     }

@@ -1,25 +1,25 @@
 use ecs::prelude::*;
 use scheduler::ScheduleLabel;
 
-#[derive(ecs::Component)]
+#[derive(ecs::Component, ecs::Resource)]
 struct Position {
     x: f32,
     y: f32,
 }
 
-#[derive(ecs::Component)]
+#[derive(ecs::Component, ecs::Resource)]
 struct Velocity {
     x: f32,
     y: f32,
 }
 
-#[derive(ecs::Component)]
+#[derive(ecs::Component, ecs::Resource)]
 struct Simulated;
 
-#[derive(ecs::Component)]
+#[derive(ecs::Component, ecs::Resource)]
 struct DeltaTime(pub f32);
 
-#[derive(ecs::Component)]
+#[derive(ecs::Component, ecs::Resource)]
 struct Frame(pub u64);
 
 fn tick(

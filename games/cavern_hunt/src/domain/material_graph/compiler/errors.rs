@@ -1,7 +1,7 @@
 use super::*;
 
 // Owner: Cavern Hunt Domain - Material Graph
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, ecs::Resource)]
 pub struct MaterialCompileError {
     pub node: Option<String>,
     pub message: String,

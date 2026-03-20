@@ -65,10 +65,6 @@ name = "render_flow_postprocess_compositor"
 path = "examples/render_flow_postprocess_compositor/main.rs"
 
 [[example]]
-name = "render_flow_contributions"
-path = "examples/render_flow_contributions/main.rs"
-
-[[example]]
 name = "render_flow_debug_inspect"
 path = "examples/render_flow_debug_inspect/main.rs"
 

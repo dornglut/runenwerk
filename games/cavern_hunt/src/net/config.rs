@@ -10,7 +10,7 @@ use std::time::SystemTime;
 
 // src/domain/net/config.rs
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub struct NetProtocolConfigAssetV1 {
     pub protocol_version: u16,
     pub game_content_version: u16,
@@ -47,7 +47,7 @@ impl From<&NetProtocolConfigAssetV1> for ProtocolVersion {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub struct NetDiagnosticsConfigAssetV1 {
     pub enable_periodic_log: bool,
     pub log_interval_ticks: u64,
@@ -64,7 +64,7 @@ impl Default for NetDiagnosticsConfigAssetV1 {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct NetHotReloadConfigAssetV1 {
     pub enabled: bool,
     pub poll_interval_seconds: f32,
@@ -79,7 +79,7 @@ impl Default for NetHotReloadConfigAssetV1 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub struct AxiomOperatorConfigAssetV1 {
     pub enabled: bool,
     pub ws_url: String,
@@ -102,7 +102,7 @@ impl Default for AxiomOperatorConfigAssetV1 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ClientNetworkConfigAssetV1 {
     pub version: u32,
     pub profile_id: String,
@@ -151,7 +151,7 @@ impl Default for ClientNetworkConfigAssetV1 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ServerNetworkConfigAssetV1 {
     pub version: u32,
     pub profile_id: String,
@@ -201,7 +201,7 @@ impl Default for ServerNetworkConfigAssetV1 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct NetConfigHotReloadState {
     pub path: PathBuf,
     pub enabled: bool,

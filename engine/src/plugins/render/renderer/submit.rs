@@ -1,9 +1,7 @@
 use crate::plugins::render::composition::RenderFlowRegistryResource;
-use crate::plugins::render::inspect::RenderDebugTimingsState;
+use crate::plugins::render::inspect::{RenderDebugTimingsState, RenderRuntimeResourceInspectorState};
 use crate::plugins::render::renderer::Gfx;
-use crate::plugins::render::renderer::frame_bindings::{
-    RenderFrameDataRegistry, RenderFrameResourceBindings,
-};
+use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use crate::plugins::scene::SceneResource;
 use crate::plugins::time::domain::Time;
@@ -12,6 +10,8 @@ use crate::runtime::{Res, ResMut, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
 use anyhow::anyhow;
 use scheduler::set_slow_node_logging_enabled;
+use std::any::TypeId;
+use std::collections::BTreeSet;
 use wgpu::SurfaceError;
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
@@ -88,18 +88,7 @@ pub(crate) fn ui_render_submit_system(
         gfx.resize(target_w, target_h);
     }
 
-    let render_frame_bindings = match world.resource::<RenderFrameResourceBindings>() {
-        Ok(bindings) => bindings,
-        Err(_) => {
-            world.insert_resource(shader_registry);
-            world.insert_resource(gfx);
-            return Ok(());
-        }
-    };
-
     let mut frame_data = RenderFrameDataRegistry::new();
-    render_frame_bindings.collect_frame_data(&world, &mut frame_data);
-
     let render_result = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
             Ok(registry) => registry,
@@ -110,9 +99,10 @@ pub(crate) fn ui_render_submit_system(
             }
         };
         let compiled_flows = flow_registry.compiled_flows();
+        collect_flow_declared_frame_resources(&world, compiled_flows, &mut frame_data);
+
         let ui_rect_shader: Option<ShaderHandle> =
             ui_rect_shader_id.and_then(|id| shader_registry.handle(id));
-
         gfx.render(
             &frame_data,
             &manager.overlay_runtime.ui.draw_list,
@@ -127,6 +117,12 @@ pub(crate) fn ui_render_submit_system(
             debug_metrics.last_timings = Some(timings);
             if let Ok(render_debug_timings) = world.resource_mut::<RenderDebugTimingsState>() {
                 render_debug_timings.observe_frame_timings(timings);
+                render_debug_timings.observe_pass_timings(gfx.renderer.last_pass_timings());
+            }
+            if let Ok(runtime_resources) =
+                world.resource_mut::<RenderRuntimeResourceInspectorState>()
+            {
+                runtime_resources.observe_runtime_resources(gfx.renderer.last_runtime_resources());
             }
             let mesh_hot = timings.renderer.mesh_hot_path;
             let warm_frame = mesh_hot.is_warm_frame();
@@ -241,6 +237,25 @@ pub(crate) fn ui_render_submit_system(
     world.insert_resource(shader_registry);
     world.insert_resource(gfx);
     result
+}
+
+fn collect_flow_declared_frame_resources<'a>(
+    world: &'a ecs::World,
+    compiled_flows: &[crate::plugins::render::CompiledRenderFlowPlan],
+    frame_data: &mut RenderFrameDataRegistry<'a>,
+) {
+    let mut type_ids = BTreeSet::<TypeId>::new();
+    for flow in compiled_flows {
+        for declaration in &flow.resources.state_resources {
+            type_ids.insert(declaration.type_id);
+        }
+    }
+
+    for type_id in type_ids {
+        if let Some(resource) = world.resource_by_type_id(type_id) {
+            frame_data.insert_by_type_id(type_id, resource);
+        }
+    }
 }
 
 fn clamp_lines(lines: &mut Vec<String>, max_lines: usize) {

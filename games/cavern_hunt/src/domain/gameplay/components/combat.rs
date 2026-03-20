@@ -2,7 +2,7 @@ use crate::NetworkEntityId;
 use ecs::Component;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct DashState {
     pub cooldown_remaining: f32,
     pub cooldown_seconds: f32,
@@ -23,7 +23,7 @@ impl Default for DashState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct WeaponState {
     pub cooldown_remaining: f32,
     pub fire_interval_seconds: f32,
@@ -42,16 +42,16 @@ impl Default for WeaponState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct Projectile {
     pub damage: f32,
     pub lifetime_seconds: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct ProjectileReplicationId(pub NetworkEntityId);
 
-#[derive(Debug, Copy, Clone, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct ProjectileVisualState {
     pub source_team: u8,
     pub life_elapsed_seconds: f32,

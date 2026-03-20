@@ -2,14 +2,14 @@ use crate::{RoomId, RoomRole};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub enum RoomEncounterState {
     Dormant,
     Active,
     Cleared,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct RoomEncounterStatus {
     pub room_id: RoomId,
     pub role: RoomRole,
@@ -17,7 +17,7 @@ pub struct RoomEncounterStatus {
     pub has_reward: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ecs::Resource)]
 pub struct RoomEncounterRegistry {
     pub by_room_id: BTreeMap<RoomId, RoomEncounterStatus>,
 }

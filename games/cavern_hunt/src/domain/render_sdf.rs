@@ -1,6 +1,6 @@
 use crate::CavernCameraState;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CavernSdfAgent {
     pub pos: [f32; 2],
     pub radius: f32,
@@ -9,7 +9,7 @@ pub struct CavernSdfAgent {
     pub kind: u32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CavernSdfGeometryPrimitive {
     pub shape_kind: u32,
     pub op_kind: u32,
@@ -20,7 +20,7 @@ pub struct CavernSdfGeometryPrimitive {
     pub p2: [f32; 4],
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CavernSdfMaterialProgramHeader {
     pub class_id: u32,
     pub op_offset: u32,
@@ -35,7 +35,7 @@ pub struct CavernSdfMaterialProgramHeader {
     pub emissive_slot: u32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Resource)]
 pub struct CavernSdfMaterialOp {
     pub op: u32,
     pub dst: u32,
@@ -46,7 +46,7 @@ pub struct CavernSdfMaterialOp {
     pub flags: u32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ecs::Resource)]
 pub struct CavernSdfWorldFrame {
     pub world_bounds: [f32; 4],
     pub floor_height: f32,

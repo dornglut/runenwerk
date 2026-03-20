@@ -8,11 +8,6 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use engine::plugins::render::domain::{
-    RenderFeatureGraphSpec, RenderFrameResourceBindings, RenderGraphRegistryResource,
-    RenderPassEncodeContext, RenderPassExecutor, RenderPassExecutorRegistryResource,
-    RenderPassPrepareContext,
-};
 use engine::prelude::{Entity, InputState, Res, ResMut, Time, WindowState, World, WorldRef};
 use std::sync::{Arc, Mutex};
 use wgpu::{
@@ -49,7 +44,7 @@ const CLEAR_COLOR: Color = Color {
 };
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, ecs::Resource)]
 struct CavernWorldParamsRaw {
     screen_size: [f32; 2],
     _pad0: [f32; 2],
@@ -73,7 +68,7 @@ struct CavernWorldParamsRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, ecs::Resource)]
 struct CavernAgentRaw {
     pos: [f32; 2],
     radius: f32,
@@ -84,7 +79,7 @@ struct CavernAgentRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, ecs::Resource)]
 struct CavernGeometryPrimitiveRaw {
     shape_kind: u32,
     op_kind: u32,
@@ -96,7 +91,7 @@ struct CavernGeometryPrimitiveRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, ecs::Resource)]
 struct CavernMaterialProgramHeaderRaw {
     class_id: u32,
     op_offset: u32,
@@ -113,7 +108,7 @@ struct CavernMaterialProgramHeaderRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, ecs::Resource)]
 struct CavernMaterialOpRaw {
     op: u32,
     dst: u32,
@@ -126,7 +121,7 @@ struct CavernMaterialOpRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, ecs::Resource)]
 struct CavernComposeParamsRaw {
     output_size: [f32; 2],
     target_aspect: f32,
@@ -134,7 +129,7 @@ struct CavernComposeParamsRaw {
     bar_color: [f32; 4],
 }
 
-#[derive(Default)]
+#[derive(Default, ecs::Resource)]
 struct CavernGpuSharedState {
     pass: Option<CavernGpuPass>,
 }

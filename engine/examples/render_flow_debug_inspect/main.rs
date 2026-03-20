@@ -1,28 +1,37 @@
 use anyhow::Result;
-use engine::plugins::render::RenderFlow;
 use engine::plugins::render::inspect::{
     PassTimingSample, dump_flow_graph, inspect_resources, inspect_texture_resources,
     summarize_pass_timings,
 };
+use engine::plugins::render::{GpuStorage, RenderFlow};
+
+const FLOW_ID: &str = "inspect.flow";
+
+#[derive(Debug, Clone, Copy, engine::plugins::render::GpuStorage)]
+struct InspectCell {
+    value: u32,
+}
 
 fn main() -> Result<()> {
-    let flow = RenderFlow::new("inspect.flow")
-        .import_texture("surface.color")
-        .history_texture("taa.history")
-        .transient_color_target("post.temp")
-        .fullscreen_pass("post.compose")
-        .reads("taa.history")
-        .writes("post.temp")
+    let flow = RenderFlow::new(FLOW_ID)
+        .with_surface_color()
+        .with_builtin_ui()
+        .double_buffer_storage_array::<InspectCell>("inspect.cells", 16)
+        .compute_pass("inspect.sim")
+        .shader_asset("assets/shaders/world_compute_basic.wgsl")
+        .bind_ping_pong_storage("inspect.cells")
+        .dispatch([1, 1, 1])
         .finish()
-        .copy_pass("post.copy_to_surface")
-        .reads("post.temp")
-        .writes("surface.color")
-        .depends_on("post.compose")
+        .fullscreen_pass("inspect.compose")
+        .shader_asset("assets/shaders/tonemap.wgsl")
+        .bind_ping_pong_storage("inspect.cells")
+        .write_surface_color()
+        .depends_on("inspect.sim")
         .finish()
-        .present_pass("post.present")
-        .reads("surface.color")
-        .depends_on("post.copy_to_surface")
-        .finish();
+        .builtin_ui_composite_pass("inspect.ui")
+        .depends_on("inspect.compose")
+        .finish()
+        .validate()?;
 
     let dump = dump_flow_graph(&flow)?;
     println!("graph dump:");
@@ -37,12 +46,18 @@ fn main() -> Result<()> {
 
     let timings = summarize_pass_timings(&[
         PassTimingSample {
-            pass_id: "post.compose".to_string(),
+            flow_id: FLOW_ID.to_string(),
+            pass_id: "inspect.sim".to_string(),
+            pass_kind: "compute".to_string(),
             millis: 0.5,
+            dispatch_workgroups: Some([1, 1, 1]),
         },
         PassTimingSample {
-            pass_id: "post.copy_to_surface".to_string(),
+            flow_id: FLOW_ID.to_string(),
+            pass_id: "inspect.compose".to_string(),
+            pass_kind: "fullscreen".to_string(),
             millis: 0.2,
+            dispatch_workgroups: None,
         },
     ]);
     println!(

@@ -7,17 +7,17 @@ use serde::{Deserialize, Serialize};
 use crate::CavernControlState;
 use crate::world::{GeometryEditEvent, GeometryPrimitiveId};
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernServerControlMap {
     pub by_player_id: BTreeMap<u32, CavernControlState>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernServerAppliedInputTickMap {
     pub by_player_id: BTreeMap<u32, SimulationTick>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernPlayerOwnershipState {
     pub by_connection_id: BTreeMap<u64, u32>,
 }
@@ -35,7 +35,7 @@ impl CavernPlayerOwnershipState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernGeometryRuntimeState {
     pub extraction_seal_primitive: Option<GeometryPrimitiveId>,
     pub edit_events: Vec<GeometryEditEvent>,

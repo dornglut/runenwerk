@@ -211,7 +211,7 @@ fn enemy_ai_system(mut world: WorldMut) -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, ecs::Resource)]
 struct PlayerTarget {
     entity: Entity,
     position: [f32; 2],

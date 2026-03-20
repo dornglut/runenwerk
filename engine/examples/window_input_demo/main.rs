@@ -3,10 +3,10 @@ use engine::plugins::default_plugins;
 use engine::plugins::input::domain::action;
 use engine::prelude::*;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource)]
 struct Player;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component, ecs::Resource)]
 struct Position {
     x: i32,
     y: i32,

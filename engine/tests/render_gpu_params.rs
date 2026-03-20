@@ -18,9 +18,10 @@ fn generated_raw_conversion_uses_to_gpu_value_for_each_field() {
         enabled: true,
     }
     .to_gpu();
-
-    assert_eq!(raw.grid_size, [160, 90]);
-    assert_eq!(raw.enabled, GpuBoolU32(1));
+    assert!(raw.bytes.len() >= 12);
+    assert_eq!(u32::from_le_bytes(raw.bytes[0..4].try_into().unwrap()), 160);
+    assert_eq!(u32::from_le_bytes(raw.bytes[4..8].try_into().unwrap()), 90);
+    assert_eq!(u32::from_le_bytes(raw.bytes[8..12].try_into().unwrap()), 1);
 }
 
 #[test]

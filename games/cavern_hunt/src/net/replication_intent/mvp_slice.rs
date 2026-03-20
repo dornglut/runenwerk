@@ -13,7 +13,7 @@ use engine_net::replication::{NetEntityMap, SnapshotTimeline};
 use engine_net::{ConnectionId, NetEntityId, SimulationTick};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, ecs::Resource)]
 pub struct MvpClientEntityMap {
     by_net_entity: BTreeMap<NetEntityId, Entity>,
 }

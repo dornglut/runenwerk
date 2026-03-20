@@ -1,6 +1,6 @@
 use crate::plugins::render::{RenderFlow, RenderResourceDescriptor, ResourceLifetime};
 
-#[derive(Debug, Clone, Default, ecs::Component)]
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct RenderTextureInspectorState {
     pub selected_texture: Option<String>,
     pub hovered_texture: Option<String>,

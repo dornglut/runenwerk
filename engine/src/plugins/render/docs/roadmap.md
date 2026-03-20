@@ -366,7 +366,8 @@ Support or complete:
 
 ### State projection
 Support or complete:
-- `.storage_state(...)`
+- `.uniform_state(...)`
+- `.uniform_state_with_surface(...)`
 
 ### Validation
 Validate resource role compatibility:

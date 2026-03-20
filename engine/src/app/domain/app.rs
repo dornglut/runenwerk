@@ -2,7 +2,7 @@ use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
 use crate::plugins::input::InputState;
-use crate::plugins::render::{RenderFlow, RenderFlowContribution, RenderFlowRegistryResource};
+use crate::plugins::render::{RenderFlow, RenderFlowRegistryResource};
 use crate::plugins::{
     SceneReplayArchive, load_replay, seek_loaded_replay, start_recording, stop_recording,
 };
@@ -10,7 +10,7 @@ use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
 use anyhow::Result;
-use ecs::{Component, Runtime, World};
+use ecs::{Resource, Runtime, World};
 use engine_sim::*;
 use scheduler::ScheduleLabel;
 use winit::event_loop::ControlFlow;
@@ -91,7 +91,7 @@ impl App {
 
     pub fn init_resource<R>(&mut self) -> &mut Self
     where
-        R: Component + Default,
+        R: Resource + Default,
     {
         if self.world.resource::<R>().is_err() {
             self.world.insert_resource(R::default());
@@ -101,7 +101,7 @@ impl App {
 
     pub fn insert_resource<R>(&mut self, value: R) -> &mut Self
     where
-        R: Component,
+        R: Resource,
     {
         self.world.insert_resource(value);
         self
@@ -144,20 +144,6 @@ impl App {
         }
         if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
             registry.upsert_flow(flow);
-        }
-        self
-    }
-
-    pub fn add_render_flow_contribution(
-        &mut self,
-        contribution: RenderFlowContribution,
-    ) -> &mut Self {
-        if self.world.resource::<RenderFlowRegistryResource>().is_err() {
-            self.world
-                .insert_resource(RenderFlowRegistryResource::default());
-        }
-        if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
-            registry.upsert_contribution(contribution);
         }
         self
     }

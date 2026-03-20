@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Bundle)]
+#[derive(Bundle, ecs::Resource)]
 pub(super) struct PlayerSpawnBundle {
     pub(super) player: Player,
     pub(super) player_id: PlayerId,
@@ -17,7 +17,7 @@ pub(super) struct PlayerSpawnBundle {
     pub(super) room_anchor: RoomAnchor,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, ecs::Resource)]
 pub(super) struct EnemySpawnBundle {
     pub(super) enemy: Enemy,
     pub(super) enemy_kind: EnemyKind,

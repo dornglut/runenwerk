@@ -36,43 +36,43 @@ impl SystemSet for PostGameplaySet {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Marker(u32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Extra(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Toggle;
 
-#[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct IndexedName(String);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct SeenCount(u32);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct DamageEvent(u32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct TargetEntity(Entity);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Step(u32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct SpawnGate(bool);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct CountHistory(Vec<usize>);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct AddedChangedHistory(Vec<(usize, usize)>);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct EventHistory(Vec<usize>);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct PresenceHistory(Vec<usize>);
 
 #[derive(Copy, Clone)]

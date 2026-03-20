@@ -5,21 +5,22 @@ use std::collections::BTreeMap;
 // src/domain/net/replication.rs
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+    ecs::Resource,
 )]
 pub struct NetworkEntityId(pub u64);
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct ServerReplicationMap {
     pub by_player_id: BTreeMap<u32, NetworkEntityId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct ClientReplicationMap {
     pub by_network_entity_id: BTreeMap<NetworkEntityId, Entity>,
     pub by_player_id: BTreeMap<u32, NetworkEntityId>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
 pub struct ReplicationCursor {
     pub server_tick: SimulationTick,
     pub stream_cursor: u64,

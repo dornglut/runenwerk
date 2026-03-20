@@ -2,16 +2,16 @@ use ecs::prelude::*;
 use scheduler::ScheduleLabel;
 use scheduler::label::SystemSet;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct A(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct B(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct C(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Disabled;
 
 #[derive(Copy, Clone)]
@@ -41,10 +41,10 @@ impl SystemSet for ObserveSet {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct QuerySpawnGate(bool);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct QueryAddedCounts(Vec<usize>);
 
 #[test]

@@ -8,31 +8,31 @@ use scheduler::ScheduleLabel;
 use scheduler::label::SystemSet;
 use std::any::TypeId;
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Position {
     x: f32,
     y: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Velocity {
     x: f32,
     y: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Player;
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Disabled;
 
-#[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, ecs::Component, ecs::Resource)]
 struct Health(i32);
 
-#[derive(Debug, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Name(String);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Frame(u64);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -47,13 +47,13 @@ struct CombatBundle {
     name: Name,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct A(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct B(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct C(i32);
 
 #[derive(Copy, Clone)]
@@ -83,10 +83,10 @@ impl SystemSet for ObserveStage {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct SpawnGate(bool);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct AddedHealthCounts(Vec<usize>);
 
 #[test]

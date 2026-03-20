@@ -1,16 +1,16 @@
 use ecs::prelude::*;
 use scheduler::ScheduleLabel;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct A(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct B(i32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct C(i32);
 
-#[derive(Debug, PartialEq, Eq, ecs::Component)]
+#[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct SeenCounts(Vec<usize>);
 
 #[derive(Copy, Clone)]

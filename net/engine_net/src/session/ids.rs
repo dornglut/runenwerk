@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use super::{AuthoritativeJoinState, ClientSessionTarget};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component, ecs::Resource)]
 pub struct ServerSessionConfig {
     pub server_id: String,
     pub protocol: ProtocolVersion,
@@ -35,7 +35,7 @@ pub enum SessionPhase {
     Closed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, ecs::Component, ecs::Resource)]
 pub struct ClientSessionState {
     pub phase: SessionPhase,
     pub target: Option<ClientSessionTarget>,
@@ -43,7 +43,7 @@ pub struct ClientSessionState {
     pub last_disconnect: Option<DisconnectReason>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component, ecs::Resource)]
 pub struct ServerSessionState {
     pub phase: SessionPhase,
     pub config: ServerSessionConfig,

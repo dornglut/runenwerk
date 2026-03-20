@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct PlayerStatusPanel {
     pub player_id: u32,
     pub label: String,
@@ -10,7 +10,7 @@ pub struct PlayerStatusPanel {
     pub health_ratio: f32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct RunObjectivePanel {
     pub title: String,
     pub detail: String,
@@ -25,7 +25,7 @@ impl Default for RunObjectivePanel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct ExtractionCountdownPanel {
     pub visible: bool,
     pub seconds_remaining: f32,
@@ -40,7 +40,7 @@ impl Default for ExtractionCountdownPanel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernHudState {
     pub visible: bool,
     pub local_health: f32,

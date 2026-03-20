@@ -188,7 +188,7 @@ pub(super) fn resolve_local_player_entity(world: &World) -> Option<Entity> {
     })
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
 pub(super) enum ProjectileStepMode {
     Authoritative,
     PredictedLocal,

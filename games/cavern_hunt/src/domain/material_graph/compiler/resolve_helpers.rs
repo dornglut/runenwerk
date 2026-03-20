@@ -1,7 +1,7 @@
 use super::*;
 
 // Owner: Cavern Hunt Domain - Material Graph
-#[derive(Default)]
+#[derive(Default, ecs::Resource)]
 pub(super) struct MaterialDefaults {
     count: u32,
 }

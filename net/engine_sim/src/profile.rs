@@ -42,7 +42,7 @@ impl Default for DeterminismLevel {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component, ecs::Resource)]
 pub struct SimulationProfileConfig {
     pub profile: SimulationProfile,
     pub authority: AuthorityRole,
