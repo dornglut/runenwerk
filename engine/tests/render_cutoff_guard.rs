@@ -2,8 +2,7 @@ use std::fs;
 use std::path::Path;
 
 fn read(path: &str) -> String {
-    fs::read_to_string(Path::new(path))
-        .unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
+    fs::read_to_string(Path::new(path)).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
 }
 
 #[test]

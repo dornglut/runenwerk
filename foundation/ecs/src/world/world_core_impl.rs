@@ -175,7 +175,9 @@ impl World {
     }
 
     pub fn resource_by_type_id(&self, type_id: TypeId) -> Option<&dyn Any> {
-        self.resources.get(&type_id).map(|resource| resource.as_ref())
+        self.resources
+            .get(&type_id)
+            .map(|resource| resource.as_ref())
     }
 
     pub fn resource_mut<R: Resource>(&mut self) -> Result<&mut R, ResourceError> {

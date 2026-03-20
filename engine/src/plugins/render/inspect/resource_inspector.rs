@@ -48,7 +48,9 @@ pub struct RuntimeResourceInspectionEntry {
     pub generation: Option<u64>,
 }
 
-pub fn resource_kind_name(resource: &crate::plugins::render::RenderResourceDescriptor) -> &'static str {
+pub fn resource_kind_name(
+    resource: &crate::plugins::render::RenderResourceDescriptor,
+) -> &'static str {
     match resource {
         crate::plugins::render::RenderResourceDescriptor::UniformBuffer(_) => "uniform_buffer",
         crate::plugins::render::RenderResourceDescriptor::StorageBuffer(_) => "storage_buffer",

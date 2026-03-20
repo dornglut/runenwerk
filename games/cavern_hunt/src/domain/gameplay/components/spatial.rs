@@ -16,7 +16,9 @@ impl Transform2 {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Default, Component, ecs::Resource, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Default, Component, ecs::Resource, Serialize, Deserialize,
+)]
 pub struct Velocity2 {
     pub x: f32,
     pub y: f32,
@@ -32,7 +34,9 @@ pub struct Transform3 {
     pub roll: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Default, Component, ecs::Resource, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Default, Component, ecs::Resource, Serialize, Deserialize,
+)]
 pub struct Velocity3 {
     pub x: f32,
     pub y: f32,

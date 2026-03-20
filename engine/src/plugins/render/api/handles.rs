@@ -62,11 +62,7 @@ pub struct DoubleBufferHandle<T> {
 }
 
 impl<T> DoubleBufferHandle<T> {
-    pub(crate) fn new(
-        name: String,
-        a: StorageArrayHandle<T>,
-        b: StorageArrayHandle<T>,
-    ) -> Self {
+    pub(crate) fn new(name: String, a: StorageArrayHandle<T>, b: StorageArrayHandle<T>) -> Self {
         Self { name, a, b }
     }
 

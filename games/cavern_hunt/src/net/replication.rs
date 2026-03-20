@@ -4,7 +4,17 @@ use std::collections::BTreeMap;
 
 // src/domain/net/replication.rs
 #[derive(
-    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
     ecs::Resource,
 )]
 pub struct NetworkEntityId(pub u64);

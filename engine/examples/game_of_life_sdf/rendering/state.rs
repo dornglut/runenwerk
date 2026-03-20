@@ -41,7 +41,6 @@ pub(crate) struct SimulationClock {
     initialized: bool,
     accumulator_seconds: f32,
     ticks_per_second: f32,
-    phase: SimulationPhase,
 }
 
 impl Default for SimulationClock {
@@ -50,7 +49,6 @@ impl Default for SimulationClock {
             initialized: false,
             accumulator_seconds: 0.0,
             ticks_per_second: DEFAULT_TICKS_PER_SECOND,
-            phase: SimulationPhase::Seed,
         }
     }
 }
@@ -59,8 +57,7 @@ impl SimulationClock {
     pub(crate) fn advance(&mut self, delta_seconds: f32) -> SimulationPhase {
         if !self.initialized {
             self.initialized = true;
-            self.phase = SimulationPhase::Seed;
-            return self.phase;
+            return SimulationPhase::Seed;
         }
 
         self.accumulator_seconds += delta_seconds.max(0.0);
@@ -68,31 +65,25 @@ impl SimulationClock {
 
         if self.accumulator_seconds >= interval {
             self.accumulator_seconds %= interval;
-            self.phase = SimulationPhase::Step;
+            SimulationPhase::Step
         } else {
-            self.phase = SimulationPhase::Idle;
+            SimulationPhase::Idle
         }
-
-        self.phase
-    }
-
-    pub(crate) fn set_ticks_per_second(&mut self, value: f32) {
-        self.ticks_per_second = value.max(1.0);
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct PingPongPhase {
+pub(crate) struct PingPongBuffers {
     current_is_a: bool,
 }
 
-impl Default for PingPongPhase {
+impl Default for PingPongBuffers {
     fn default() -> Self {
         Self { current_is_a: true }
     }
 }
 
-impl PingPongPhase {
+impl PingPongBuffers {
     pub(crate) fn current_is_a(&self) -> bool {
         self.current_is_a
     }
@@ -116,41 +107,40 @@ pub(crate) struct GameOfLifeRenderState {
     seed: u32,
     grid_size: UVec2,
     alive_mix: f32,
+    phase: SimulationPhase,
     clock: SimulationClock,
-    buffers: PingPongPhase,
+    buffers: PingPongBuffers,
 }
 
 impl Default for GameOfLifeRenderState {
     fn default() -> Self {
-        let mut clock = SimulationClock::default();
-        clock.set_ticks_per_second(DEFAULT_TICKS_PER_SECOND);
         Self {
             tick: 0,
             seed: 0xC0FF_EE11,
             grid_size: UVec2::new(DEFAULT_GRID_WIDTH, DEFAULT_GRID_HEIGHT),
             alive_mix: 1.0,
-            clock,
-            buffers: PingPongPhase::default(),
+            phase: SimulationPhase::Seed,
+            clock: SimulationClock::default(),
+            buffers: PingPongBuffers::default(),
         }
     }
 }
 
 impl GameOfLifeRenderState {
     pub(crate) fn advance_by_frame_delta(&mut self, delta_seconds: f32) {
-        let phase = self.clock.advance(delta_seconds);
-        if phase == SimulationPhase::Step {
+        self.phase = self.clock.advance(delta_seconds);
+        if self.phase == SimulationPhase::Step {
             self.tick = self.tick.saturating_add(1);
             self.buffers.flip();
         }
     }
 
     pub(crate) fn compute_params(&self) -> GameOfLifeComputeParams {
-        let phase = self.clock.phase;
         GameOfLifeComputeParams {
             tick: self.tick,
             seed: self.seed,
-            step: u32::from(phase == SimulationPhase::Step),
-            read_from_a: u32::from(self.buffers.read_from_a(phase)),
+            step: u32::from(self.phase == SimulationPhase::Step),
+            read_from_a: u32::from(self.buffers.read_from_a(self.phase)),
             grid_size: self.grid_size,
         }
     }
@@ -165,13 +155,17 @@ impl GameOfLifeRenderState {
     }
 
     pub(crate) fn dispatch_workgroups(&self) -> [u32; 3] {
-        [self.grid_size.x.div_ceil(8), self.grid_size.y.div_ceil(8), 1]
+        [
+            self.grid_size.x.div_ceil(8),
+            self.grid_size.y.div_ceil(8),
+            1,
+        ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{GameOfLifeRenderState, SimulationPhase, DEFAULT_TICKS_PER_SECOND};
+    use super::{DEFAULT_TICKS_PER_SECOND, GameOfLifeRenderState};
 
     #[test]
     fn first_update_keeps_seed_phase() {
@@ -204,6 +198,16 @@ mod tests {
         let params = state.compute_params();
         assert_eq!(params.step, 0);
         assert_eq!(params.read_from_a, 1);
-        let _ = SimulationPhase::Idle;
+    }
+
+    #[test]
+    fn large_delta_steps_once() {
+        let mut state = GameOfLifeRenderState::default();
+        state.advance_by_frame_delta(0.0);
+        state.advance_by_frame_delta(10.0);
+
+        let params = state.compute_params();
+        assert_eq!(params.tick, 1);
+        assert_eq!(params.step, 1);
     }
 }

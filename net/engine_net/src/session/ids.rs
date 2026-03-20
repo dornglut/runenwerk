@@ -35,7 +35,9 @@ pub enum SessionPhase {
     Closed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, ecs::Component, ecs::Resource)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, ecs::Component, ecs::Resource,
+)]
 pub struct ClientSessionState {
     pub phase: SessionPhase,
     pub target: Option<ClientSessionTarget>,

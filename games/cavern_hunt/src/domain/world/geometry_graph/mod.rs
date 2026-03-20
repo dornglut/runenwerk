@@ -17,7 +17,9 @@ const DEFAULT_WORLD_FLOOR_Y: f32 = -1.5;
 const DEFAULT_WORLD_CEILING_MARGIN: f32 = 3.5;
 pub const CAVERN_GAMEPLAY_HEIGHT: f32 = DEFAULT_TUNNEL_CENTER_HEIGHT;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Resource)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Resource,
+)]
 pub struct GeometryRevision(pub u64);
 
 impl Default for GeometryRevision {
@@ -26,7 +28,9 @@ impl Default for GeometryRevision {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Resource)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ecs::Resource,
+)]
 pub struct GeometryPrimitiveId(pub u64);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]

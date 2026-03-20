@@ -118,7 +118,9 @@ pub struct SceneTransitionResult {
     pub world_pause_changed: bool,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component, ecs::Resource)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Component, ecs::Resource,
+)]
 pub struct WorldFrameCounter {
     pub value: u64,
 }

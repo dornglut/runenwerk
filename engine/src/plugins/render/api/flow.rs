@@ -88,13 +88,8 @@ impl RenderFlow {
             len,
         ));
 
-        self.ping_pong_storage.insert(
-            base.clone(),
-            PingPongStorageRegistration {
-                a_id,
-                b_id,
-            },
-        );
+        self.ping_pong_storage
+            .insert(base.clone(), PingPongStorageRegistration { a_id, b_id });
         self
     }
 
@@ -128,10 +123,7 @@ impl RenderFlow {
         FullscreenPassBuilder::new(self, id.into())
     }
 
-    pub fn builtin_ui_composite_pass(
-        self,
-        id: impl Into<String>,
-    ) -> BuiltinUiCompositePassBuilder {
+    pub fn builtin_ui_composite_pass(self, id: impl Into<String>) -> BuiltinUiCompositePassBuilder {
         BuiltinUiCompositePassBuilder::new(self, id.into())
     }
 
@@ -196,13 +188,17 @@ impl RenderFlow {
         self
     }
 
-    pub(crate) fn allocate_uniform_resource<U>(&mut self, pass_id: &RenderPassId) -> UniformHandle<U>
+    pub(crate) fn allocate_uniform_resource<U>(
+        &mut self,
+        pass_id: &RenderPassId,
+    ) -> UniformHandle<U>
     where
         U: GpuParams + 'static,
     {
         let mut index = 0usize;
         loop {
-            let candidate = RenderResourceId::new(format!("{}.uniform.{}", pass_id.as_str(), index));
+            let candidate =
+                RenderResourceId::new(format!("{}.uniform.{}", pass_id.as_str(), index));
             if self
                 .graph
                 .resources

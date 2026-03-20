@@ -73,6 +73,8 @@ impl RenderFlowRegistryResource {
     }
 }
 
-pub(crate) fn sync_render_flow_registry_system(mut flow_registry: ResMut<RenderFlowRegistryResource>) {
+pub(crate) fn sync_render_flow_registry_system(
+    mut flow_registry: ResMut<RenderFlowRegistryResource>,
+) {
     flow_registry.sync_compiled_flows();
 }

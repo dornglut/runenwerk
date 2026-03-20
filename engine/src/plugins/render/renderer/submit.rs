@@ -1,5 +1,7 @@
 use crate::plugins::render::composition::RenderFlowRegistryResource;
-use crate::plugins::render::inspect::{RenderDebugTimingsState, RenderRuntimeResourceInspectorState};
+use crate::plugins::render::inspect::{
+    RenderDebugTimingsState, RenderRuntimeResourceInspectorState,
+};
 use crate::plugins::render::renderer::Gfx;
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};

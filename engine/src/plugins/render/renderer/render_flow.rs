@@ -269,7 +269,9 @@ impl FlowRuntimeResources {
         }
     }
 
-    fn buffer_allocation_spec(descriptor: &RenderResourceDescriptor) -> Option<BufferAllocationSpec> {
+    fn buffer_allocation_spec(
+        descriptor: &RenderResourceDescriptor,
+    ) -> Option<BufferAllocationSpec> {
         match descriptor {
             RenderResourceDescriptor::UniformBuffer(value) => Some(BufferAllocationSpec {
                 size: value.size_bytes,
@@ -474,7 +476,11 @@ impl FlowRuntimeResources {
         })
     }
 
-    fn resolve_buffer<'a>(&'a self, pass_id: &str, resource_id: &str) -> Result<ResolvedBufferRef<'a>> {
+    fn resolve_buffer<'a>(
+        &'a self,
+        pass_id: &str,
+        resource_id: &str,
+    ) -> Result<ResolvedBufferRef<'a>> {
         let kind = self.kind_of(resource_id).ok_or_else(|| {
             anyhow::anyhow!(
                 "pass '{}' references unknown resource '{}' during runtime encoding",
@@ -823,58 +829,63 @@ impl Renderer {
         runtime_resources: &FlowRuntimeResources,
     ) -> Result<Option<[u32; 3]>> {
         match pass {
-            CompiledPassDescriptor::Compute(value) => self.encode_compute_pass(
-                device,
-                encoder,
-                frame_texture,
-                frame_data,
-                packet,
-                runtime_resources,
-                flow_resources,
-                &value.node,
-                shader_registry,
-            )
-            .map(Some),
-            CompiledPassDescriptor::Fullscreen(value) => self.encode_fullscreen_pass(
-                device,
-                encoder,
-                frame_texture,
-                frame_view,
-                packet,
-                runtime_resources,
-                flow_resources,
-                &value.node,
-                shader_registry,
-            )
-            .map(|()| None),
-            CompiledPassDescriptor::Graphics(value) => self.encode_graphics_pass(
-                device,
-                encoder,
-                frame_texture,
-                frame_view,
-                packet,
-                runtime_resources,
-                flow_resources,
-                &value.node,
-                shader_registry,
-            )
-            .map(|()| None),
-            CompiledPassDescriptor::Copy(value) => self.encode_copy_pass(
-                encoder,
-                frame_texture,
-                packet,
-                runtime_resources,
-                &value.node,
-            )
-            .map(|()| None),
-            CompiledPassDescriptor::Present(value) => self.encode_present_pass(
-                encoder,
-                frame_texture,
-                packet,
-                runtime_resources,
-                &value.node,
-            )
-            .map(|()| None),
+            CompiledPassDescriptor::Compute(value) => self
+                .encode_compute_pass(
+                    device,
+                    encoder,
+                    frame_texture,
+                    frame_data,
+                    packet,
+                    runtime_resources,
+                    flow_resources,
+                    &value.node,
+                    shader_registry,
+                )
+                .map(Some),
+            CompiledPassDescriptor::Fullscreen(value) => self
+                .encode_fullscreen_pass(
+                    device,
+                    encoder,
+                    frame_texture,
+                    frame_view,
+                    packet,
+                    runtime_resources,
+                    flow_resources,
+                    &value.node,
+                    shader_registry,
+                )
+                .map(|()| None),
+            CompiledPassDescriptor::Graphics(value) => self
+                .encode_graphics_pass(
+                    device,
+                    encoder,
+                    frame_texture,
+                    frame_view,
+                    packet,
+                    runtime_resources,
+                    flow_resources,
+                    &value.node,
+                    shader_registry,
+                )
+                .map(|()| None),
+            CompiledPassDescriptor::Copy(value) => self
+                .encode_copy_pass(
+                    encoder,
+                    frame_texture,
+                    packet,
+                    runtime_resources,
+                    &value.node,
+                )
+                .map(|()| None),
+            CompiledPassDescriptor::Present(value) => self
+                .encode_present_pass(
+                    encoder,
+                    frame_texture,
+                    packet,
+                    runtime_resources,
+                    &value.node,
+                )
+                .map(|()| None),
             CompiledPassDescriptor::BuiltinUiComposite(_) => {
                 self.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
                 Ok(None)
@@ -909,7 +920,9 @@ impl Renderer {
         let shader_source = node
             .shader
             .as_ref()
-            .map(|reference| resolve_shader_source(reference, shader_registry, DEFAULT_COMPUTE_SHADER))
+            .map(|reference| {
+                resolve_shader_source(reference, shader_registry, DEFAULT_COMPUTE_SHADER)
+            })
             .unwrap_or(DEFAULT_COMPUTE_SHADER);
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("engine_compiled_compute_shader"),
@@ -1006,7 +1019,11 @@ impl Renderer {
                     texture.id
                 );
             }
-            sampled_texture_views.push(texture.texture.create_view(&TextureViewDescriptor::default()));
+            sampled_texture_views.push(
+                texture
+                    .texture
+                    .create_view(&TextureViewDescriptor::default()),
+            );
         }
 
         let mut uniform_buffers = Vec::<&Buffer>::new();
@@ -1227,8 +1244,11 @@ impl Renderer {
                 packet.surface_size,
                 packet.surface_format,
             )?;
-            sampled_texture_views
-                .push(texture.texture.create_view(&TextureViewDescriptor::default()));
+            sampled_texture_views.push(
+                texture
+                    .texture
+                    .create_view(&TextureViewDescriptor::default()),
+            );
         }
 
         let mut uniform_buffers = Vec::<&Buffer>::new();
@@ -1474,7 +1494,9 @@ impl Renderer {
         let shader_source = node
             .shader
             .as_ref()
-            .map(|reference| resolve_shader_source(reference, shader_registry, DEFAULT_GRAPHICS_SHADER))
+            .map(|reference| {
+                resolve_shader_source(reference, shader_registry, DEFAULT_GRAPHICS_SHADER)
+            })
             .unwrap_or(DEFAULT_GRAPHICS_SHADER);
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("engine_compiled_graphics_shader"),
@@ -1495,8 +1517,11 @@ impl Renderer {
                 packet.surface_size,
                 packet.surface_format,
             )?;
-            sampled_texture_views
-                .push(texture.texture.create_view(&TextureViewDescriptor::default()));
+            sampled_texture_views.push(
+                texture
+                    .texture
+                    .create_view(&TextureViewDescriptor::default()),
+            );
         }
 
         let mut uniform_buffers = Vec::<&Buffer>::new();
@@ -1753,9 +1778,9 @@ impl Renderer {
 
         let index_buffer = match node.index_buffers.as_slice() {
             [] => None,
-            [only] => Some(
-                runtime_resources.resolve_storage_buffer(node.id.as_str(), only.as_str())?,
-            ),
+            [only] => {
+                Some(runtime_resources.resolve_storage_buffer(node.id.as_str(), only.as_str())?)
+            }
             _ => {
                 bail!(
                     "graphics pass '{}' declares multiple index_buffer(...) resources; runtime currently supports exactly one",
@@ -1769,9 +1794,9 @@ impl Renderer {
 
         let indirect_buffer = match node.indirect_buffers.as_slice() {
             [] => None,
-            [only] => Some(
-                runtime_resources.resolve_storage_buffer(node.id.as_str(), only.as_str())?,
-            ),
+            [only] => {
+                Some(runtime_resources.resolve_storage_buffer(node.id.as_str(), only.as_str())?)
+            }
             _ => {
                 bail!(
                     "graphics pass '{}' declares multiple indirect_buffer(...) resources; runtime currently supports exactly one",
@@ -2068,7 +2093,8 @@ fn collect_storage_buffer_ids_for_pass(
         };
         if !matches!(
             descriptor,
-            RenderResourceDescriptor::StorageBuffer(_) | RenderResourceDescriptor::ImportedBuffer(_)
+            RenderResourceDescriptor::StorageBuffer(_)
+                | RenderResourceDescriptor::ImportedBuffer(_)
         ) {
             continue;
         }

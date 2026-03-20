@@ -10,11 +10,14 @@ pub(crate) fn run() -> Result<()> {
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     app.insert_resource(GameOfLifeRenderState::default());
-    app.add_systems(Update, game_of_life_update_system);
+    app.add_systems(Update, advance_game_of_life_simulation_clock_system);
     app.add_render_flow(build_render_flow());
     app.run()
 }
 
-fn game_of_life_update_system(time: Res<Time>, mut state: ResMut<GameOfLifeRenderState>) {
+fn advance_game_of_life_simulation_clock_system(
+    time: Res<Time>,
+    mut state: ResMut<GameOfLifeRenderState>,
+) {
     state.advance_by_frame_delta(time.delta_seconds);
 }

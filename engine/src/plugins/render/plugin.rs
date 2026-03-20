@@ -2,8 +2,7 @@ use super::backend::{BackendPipelineCacheResource, BackendResourceAllocatorResou
 use super::composition::{RenderFlowRegistryResource, sync_render_flow_registry_system};
 use super::inspect::{
     RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
-    RenderRuntimeResourceInspectorState,
-    RenderTextureInspectorState,
+    RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
 };
 use super::renderer::submit::{frame_render_prepare_system, ui_render_submit_system};
 use super::shader::ShaderRegistryResource;

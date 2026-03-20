@@ -1,7 +1,7 @@
+use engine::plugins::render::RenderResourceDescriptor;
 use engine::plugins::render::inspect::{
     PassTimingSample, RenderDebugTimingsState, resource_kind_name, summarize_pass_timings,
 };
-use engine::plugins::render::RenderResourceDescriptor;
 
 #[derive(Debug, Clone, Copy, engine::plugins::render::GpuStorage)]
 struct InspectStorage {
