@@ -1,12 +1,16 @@
 use crate::plugins::render::RenderFlowValidationError;
 use crate::plugins::render::api::RenderFlow;
-use crate::plugins::render::graph::{RenderPassKind, RenderPassNode, ResourceGraph};
+use crate::plugins::render::graph::{
+    CompiledFlowExecutionPlan, RenderPassKind, RenderPassNode, ResourceGraph,
+    compile_execution_plan,
+};
 
 #[derive(Debug, Clone)]
 pub struct CompiledRenderFlowPlan {
     pub flow_id: String,
     pub resources: ResourceGraph,
     pub pass_order: Vec<CompiledPassDescriptor>,
+    pub execution: CompiledFlowExecutionPlan,
 }
 
 #[derive(Debug, Clone)]
@@ -141,9 +145,12 @@ pub fn compile_flow_plan(
         pass_order.push(compiled);
     }
 
+    let execution = compile_execution_plan(&flow.graph().resources, &pass_order);
+
     Ok(CompiledRenderFlowPlan {
         flow_id: flow.id().as_str().to_string(),
         resources: flow.graph().resources.clone(),
         pass_order,
+        execution,
     })
 }

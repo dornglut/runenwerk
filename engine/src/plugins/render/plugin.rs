@@ -1,9 +1,11 @@
 use super::backend::{BackendPipelineCacheResource, BackendResourceAllocatorResource};
 use super::composition::{RenderFlowRegistryResource, sync_render_flow_registry_system};
+use super::frame_packet::PreparedRenderFrameResource;
 use super::inspect::{
     RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
     RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
 };
+use super::pipelines::PipelineCacheResource;
 use super::renderer::submit::{frame_render_prepare_system, ui_render_submit_system};
 use super::shader::ShaderRegistryResource;
 use crate::app::App;
@@ -19,6 +21,8 @@ impl Plugin for RenderPlugin {
         app.init_resource::<SceneResource>();
         app.init_resource::<ShaderRegistryResource>();
         app.init_resource::<RenderFlowRegistryResource>();
+        app.init_resource::<PreparedRenderFrameResource>();
+        app.init_resource::<PipelineCacheResource>();
         app.init_resource::<BackendPipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
         app.init_resource::<RenderDebugOverlayState>();

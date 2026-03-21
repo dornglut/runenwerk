@@ -1,13 +1,13 @@
-use crate::plugins::render::graph::CompiledPassDescriptor;
+use crate::plugins::render::graph::CompiledPassExecutionPlan;
 use anyhow::Result;
 
-pub fn ensure_compiled_pass_is_supported(pass: &CompiledPassDescriptor) -> Result<()> {
+pub fn ensure_compiled_pass_is_supported(pass: &CompiledPassExecutionPlan) -> Result<()> {
     match pass {
-        CompiledPassDescriptor::Compute(_) => Ok(()),
-        CompiledPassDescriptor::Fullscreen(_) => Ok(()),
-        CompiledPassDescriptor::Copy(_) => Ok(()),
-        CompiledPassDescriptor::Present(_) => Ok(()),
-        CompiledPassDescriptor::BuiltinUiComposite(_) => Ok(()),
-        CompiledPassDescriptor::Graphics(_) => Ok(()),
+        CompiledPassExecutionPlan::Compute(_) => Ok(()),
+        CompiledPassExecutionPlan::Fullscreen(_) => Ok(()),
+        CompiledPassExecutionPlan::Copy(_) => Ok(()),
+        CompiledPassExecutionPlan::Present(_) => Ok(()),
+        CompiledPassExecutionPlan::BuiltinUiComposite(_) => Ok(()),
+        CompiledPassExecutionPlan::Graphics(_) => Ok(()),
     }
 }

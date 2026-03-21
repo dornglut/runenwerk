@@ -1,4 +1,5 @@
 use super::*;
+use crate::plugins::render::frame_packet::PreparedUiInput;
 
 impl Renderer {
     pub(super) fn prepare_ui_draws(
@@ -71,14 +72,18 @@ impl Renderer {
         &mut self,
         device: &Device,
         queue: &Queue,
-        _frame_data: &RenderFrameDataRegistry<'_>,
-        draw_list: &UiDrawList,
+        prepared_frame: &PreparedRenderFrame,
         shader_registry: &mut ShaderRegistryResource,
         ui_rect_shader_handle: Option<ShaderHandle>,
         surface_format: TextureFormat,
-        surface_width: f32,
-        surface_height: f32,
     ) -> RendererPreparedPacket {
+        let (surface_width_u32, surface_height_u32) = prepared_frame.surface.target_size_px;
+        let surface_width = surface_width_u32.max(1) as f32;
+        let surface_height = surface_height_u32.max(1) as f32;
+        let draw_list = match &prepared_frame.ui {
+            PreparedUiInput::RawDrawList(value) => value,
+        };
+
         let mut prepare_timings = RendererFrameTimings::default();
         let ui_rect_shader = ui_rect_shader_handle
             .map(|handle| shader_registry.source_or_handle(handle, DEFAULT_UI_RECT_SHADER))
@@ -90,12 +95,9 @@ impl Renderer {
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
         self.ensure_text_renderer(device, queue, surface_format);
-        let surface_size = (
-            surface_width.max(1.0).round() as u32,
-            surface_height.max(1.0).round() as u32,
-        );
-        let world_scene_label = "unbound_world_scene".to_string();
-        let overlay_scene_label = "unbound_overlay_scene".to_string();
+        let surface_size = (surface_width_u32.max(1), surface_height_u32.max(1));
+        let world_scene_label = prepared_frame.scene.world_scene_label.clone();
+        let overlay_scene_label = prepared_frame.scene.overlay_scene_label.clone();
         let prepare_ui_start = Instant::now();
         let prepared_ui = {
             let _span = tracing::info_span!("renderer.prepare_ui_draws").entered();

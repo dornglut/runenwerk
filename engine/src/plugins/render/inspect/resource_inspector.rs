@@ -9,12 +9,19 @@ pub struct RenderDebugOverlayState {
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct RenderRuntimeResourceInspectorState {
     pub entries: Vec<RuntimeResourceInspectionEntry>,
+    pub pipeline_cache_hits: u64,
+    pub pipeline_cache_misses: u64,
 }
 
 impl RenderRuntimeResourceInspectorState {
     pub fn observe_runtime_resources(&mut self, entries: &[RuntimeResourceInspectionEntry]) {
         self.entries.clear();
         self.entries.extend_from_slice(entries);
+    }
+
+    pub fn observe_pipeline_cache_stats(&mut self, hits: u64, misses: u64) {
+        self.pipeline_cache_hits = hits;
+        self.pipeline_cache_misses = misses;
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::plugins::render::backend::WgpuCtx;
+use crate::plugins::render::frame_packet::PreparedRenderFrame;
 use crate::plugins::render::graph::CompiledRenderFlowPlan;
 use crate::plugins::render::inspect::{PassTimingSample, RuntimeResourceInspectionEntry};
-use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use crate::plugins::ui::domain::{FileFontProvider, TextRenderer, UiDrawCmd, UiDrawList};
 use anyhow::Result;
@@ -228,6 +228,7 @@ pub struct Renderer {
     text_renderer: Option<TextRenderer>,
     text_renderer_format: Option<TextureFormat>,
     flow_runtime_cache: BTreeMap<String, render_flow::FlowRuntimeResources>,
+    flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
     last_pass_timings: Vec<PassTimingSample>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
 }
@@ -260,8 +261,7 @@ impl Gfx {
 
     pub fn render(
         &mut self,
-        frame_data: &RenderFrameDataRegistry<'_>,
-        draw_list: &UiDrawList,
+        prepared_frame: &PreparedRenderFrame,
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
@@ -276,14 +276,11 @@ impl Gfx {
             &self.ctx.queue,
             &frame.texture,
             &view,
-            frame_data,
-            draw_list,
+            prepared_frame,
             shader_registry,
             compiled_flows,
             ui_rect_shader,
             self.ctx.surface_config.format,
-            self.ctx.surface_config.width as f32,
-            self.ctx.surface_config.height as f32,
         )?;
 
         let present_start = Instant::now();
@@ -294,6 +291,7 @@ impl Gfx {
 }
 
 mod extract;
+mod pipeline_cache;
 mod prepare;
 mod render_flow;
 mod setup;

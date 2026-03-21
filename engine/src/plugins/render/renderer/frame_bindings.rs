@@ -7,6 +7,8 @@ pub struct RenderFrameDataRegistry<'a> {
 }
 
 impl<'a> RenderFrameDataRegistry<'a> {
+    // Compatibility helper for projection APIs and tests.
+    // Runtime submit/render path uses PreparedRenderFrame and does not consume this registry.
     pub fn new() -> Self {
         Self::default()
     }

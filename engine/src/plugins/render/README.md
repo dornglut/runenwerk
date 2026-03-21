@@ -36,4 +36,5 @@ Render runtime orchestration for the engine runtime path.
 - Render docs index (reference): [../../../docs/reference/plugins/render/index.md](../../../docs/reference/plugins/render/index.md)
 - Render flow usage: [../../../docs/reference/plugins/render/render-flow-usage-guide.md](../../../docs/reference/plugins/render/render-flow-usage-guide.md)
 - GPU params: [../../../docs/reference/plugins/render/gpu-params-guide.md](../../../docs/reference/plugins/render/gpu-params-guide.md)
+- Public API reference: [../../../docs/reference/plugins/render/public-api-reference.md](../../../docs/reference/plugins/render/public-api-reference.md)
 - Render target architecture: [../../../docs/reference/plugins/render/render-target-architecture.md](../../../docs/reference/plugins/render/render-target-architecture.md)

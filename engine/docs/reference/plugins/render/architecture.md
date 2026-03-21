@@ -19,7 +19,18 @@
 
 - Owns: render runtime resources, flow registry integration, and render prepare/submit scheduling.
 - Non-ownership: app input mapping ownership and scene lifecycle ownership.
+- Prepare/submit boundary artifact: `PreparedRenderFrame` in `frame_packet.rs`.
+- Runtime compatibility helper: `RenderFrameDataRegistry` for projection helpers/tests only, not active submission.
 
 ## Inspection Boundary
 
 Inspection APIs live under `engine::plugins::render::inspect` and expose graph/resource/texture/timing diagnostics without leaking backend internals into common-path flow authoring.
+
+## API Map
+
+Use `public-api-reference.md` for the canonical map of:
+
+- common path authoring APIs
+- frame boundary APIs
+- execution-compile metadata APIs
+- runtime/debug integration surfaces

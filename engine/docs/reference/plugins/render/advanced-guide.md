@@ -31,3 +31,35 @@ Use:
 - `dump_flow_graph(...)`, `inspect_resources(...)`, `inspect_texture_resources(...)`, and `summarize_pass_timings(...)` for runtime diagnostics
 
 These APIs keep the graph explicit and testable while keeping common-path declaration compact.
+
+## Execution-Compile Surfaces
+
+Advanced integrations can inspect compile outputs in two layers:
+
+- graph compile (`CompiledRenderFlowPlan` with `pass_order` and `resources`)
+- execution compile (`CompiledFlowExecutionPlan` and `CompiledPassExecutionPlan`)
+
+Execution compile metadata includes:
+
+- bind group layout entries (`CompiledBindGroupPlan`, `CompiledBindingEntry`)
+- uniform/storage binding order (`CompiledPassBindings`, `CompiledStorageBinding`)
+- storage access mode (`CompiledStorageAccess`)
+- target and draw buffer plans (`CompiledTargetPlan`, `CompiledDrawBufferPlan`)
+- dispatch shape (`CompiledDispatchPlan`)
+- imported/builtin resources (`CompiledResourceRef`, `CompiledBuiltinImport`)
+
+This split keeps validation/graph inspection explicit while enabling renderer execution paths to consume execution-ready metadata.
+
+## Runtime Frame Boundary APIs
+
+Prepare/submit boundary types are public for inspection and integration:
+
+- `PreparedRenderFrame`
+- `PreparedRenderFrameResource`
+- `PreparedFlowInputs`
+- `PreparedSurfaceInfo`
+- `PreparedSceneInfo`
+- `PreparedUiInput`
+- `PreparedShaderSnapshot`
+
+`RenderFrameDataRegistry` remains available for projection helper compatibility and tests, but it is not part of the active runtime submit/render path.

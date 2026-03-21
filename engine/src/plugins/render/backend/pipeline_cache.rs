@@ -32,4 +32,8 @@ impl BackendPipelineCacheResource {
     pub fn stats(&self) -> BackendPipelineCacheStats {
         self.stats.clone()
     }
+
+    pub fn observe_stats(&mut self, stats: BackendPipelineCacheStats) {
+        self.stats = stats;
+    }
 }

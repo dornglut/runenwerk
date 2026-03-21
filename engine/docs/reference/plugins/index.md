@@ -28,6 +28,7 @@ Canonical guide map for engine plugin modules.
   - [Docs Index](render/index.md)
   - [Render Flow Usage](render/render-flow-usage-guide.md)
   - [GPU Params](render/gpu-params-guide.md)
+  - [Public API Reference](render/public-api-reference.md)
   - [Architecture Target](render/render-target-architecture.md)
   - [Usage](render/usage-guide.md)
   - [Advanced](render/advanced-guide.md)

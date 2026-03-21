@@ -3,6 +3,7 @@
 - [Render Flow Usage Guide](./render-flow-usage-guide.md)
 - [GPU Params Guide](./gpu-params-guide.md)
 - [Usage (plugin runtime wiring)](./usage-guide.md)
+- [Public API Reference](./public-api-reference.md)
 - [Advanced Guide](./advanced-guide.md)
 - [Architecture Summary](./architecture.md)
 - [Architecture Target](./render-target-architecture.md)

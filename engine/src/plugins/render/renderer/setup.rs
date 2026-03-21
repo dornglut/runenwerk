@@ -10,6 +10,7 @@ impl Renderer {
             text_renderer: None,
             text_renderer_format: None,
             flow_runtime_cache: std::collections::BTreeMap::new(),
+            flow_pipeline_cache: super::pipeline_cache::FlowPipelineArtifactCache::default(),
             last_pass_timings: Vec::new(),
             last_runtime_resources: Vec::new(),
         }
@@ -23,6 +24,10 @@ impl Renderer {
         &self,
     ) -> &[crate::plugins::render::inspect::RuntimeResourceInspectionEntry] {
         &self.last_runtime_resources
+    }
+
+    pub fn flow_pipeline_cache_stats(&self) -> super::pipeline_cache::RendererPipelineCacheStats {
+        self.flow_pipeline_cache.stats()
     }
 
     pub(super) fn ensure_rect_pass(

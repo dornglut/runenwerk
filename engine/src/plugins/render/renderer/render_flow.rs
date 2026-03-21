@@ -1,16 +1,23 @@
 use super::*;
-use crate::plugins::render::api::project_uniform_bindings_for_pass;
+use crate::plugins::render::RenderResourceDescriptor;
+use crate::plugins::render::api::{BUILTIN_UI_DRAW_LIST_RESOURCE_ID, SURFACE_COLOR_RESOURCE_ID};
 use crate::plugins::render::backend::ensure_compiled_pass_is_supported;
+use crate::plugins::render::frame_packet::{PreparedFlowInputs, PreparedRenderFrame};
 use crate::plugins::render::graph::{
-    CompiledPassDescriptor, CompiledRenderFlowPlan, RenderPassNode, RenderShaderReference,
-    ResourceGraph,
+    CompiledBindingEntry, CompiledBuiltinImport, CompiledComputeExecutionPlan,
+    CompiledCopyExecutionPlan, CompiledPassBindings, CompiledPassExecutionPlan,
+    CompiledPresentExecutionPlan, CompiledRasterExecutionPlan, CompiledRenderFlowPlan,
+    CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan, RenderShaderReference,
 };
 use crate::plugins::render::inspect::{
     PassTimingSample, RuntimeResourceInspectionEntry, RuntimeResourceReuse, resource_kind_name,
 };
-use crate::plugins::render::{RenderResourceDescriptor, RenderResourceId};
+use crate::plugins::render::pipelines::{
+    FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey, FlowPrimitiveTopologyClass,
+};
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RuntimeResourceKind {
@@ -72,6 +79,7 @@ struct ResolvedTextureRef<'a> {
     format: TextureFormat,
     size: (u32, u32),
     is_depth: bool,
+    generation: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -80,6 +88,7 @@ struct ResolvedBufferRef<'a> {
     buffer: &'a Buffer,
     size: u64,
     kind: RuntimeBufferKind,
+    generation: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -107,6 +116,21 @@ struct ResolvedColorTargetView<'a> {
 struct ResolvedDepthTargetView {
     view: TextureView,
     format: TextureFormat,
+}
+
+#[derive(Debug)]
+enum RuntimeBindingResource<'a> {
+    TextureView(TextureView),
+    SamplerPlaceholder,
+    Buffer(&'a Buffer),
+}
+
+#[derive(Debug)]
+struct RuntimeBindingResolved<'a> {
+    layout_ty: BindingType,
+    resource: RuntimeBindingResource<'a>,
+    generation_token: Option<u64>,
+    cacheable: bool,
 }
 
 impl FlowRuntimeResources {
@@ -298,13 +322,9 @@ impl FlowRuntimeResources {
         }
     }
 
-    fn descriptor_of(&self, id: &str) -> Option<&RenderResourceDescriptor> {
-        self.descriptors.get(id)
-    }
-
     fn kind_of(&self, id: &str) -> Option<RuntimeResourceKind> {
         self.kinds.get(id).copied().or_else(|| {
-            if id == "surface.color" {
+            if id == SURFACE_COLOR_RESOURCE_ID {
                 Some(RuntimeResourceKind::TextureLike)
             } else {
                 None
@@ -312,56 +332,90 @@ impl FlowRuntimeResources {
         })
     }
 
-    fn resolve_color_target_view<'a>(
+    fn resolve_resource_id<'a>(
+        &self,
+        pass_id: &str,
+        resource: &'a CompiledResourceRef,
+        role: &str,
+    ) -> Result<&'a str> {
+        match resource {
+            CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => {
+                Ok(id.as_str())
+            }
+            CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor) => {
+                Ok(SURFACE_COLOR_RESOURCE_ID)
+            }
+            CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::BuiltinUiDrawList) => {
+                bail!(
+                    "pass '{}' uses '{}' imported builtin resource '{}' as {}; only '{}' is valid in UI composite execution",
+                    pass_id,
+                    BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
+                    BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
+                    role,
+                    BUILTIN_UI_DRAW_LIST_RESOURCE_ID
+                )
+            }
+        }
+    }
+
+    fn resolve_color_target_from_plan<'a>(
         &'a self,
         pass_id: &str,
-        writes: &[RenderResourceId],
+        targets: &CompiledTargetPlan,
         frame_view: &'a TextureView,
         frame_format: TextureFormat,
     ) -> Result<ResolvedColorTargetView<'a>> {
-        if writes.len() != 1 {
+        if targets.color_outputs.len() != 1 {
             bail!(
-                "pass '{}' declares {} writes(...) resources but core runtime execution requires exactly one color output target",
+                "pass '{}' declares {} color outputs, but runtime execution currently requires exactly one color output",
                 pass_id,
-                writes.len()
+                targets.color_outputs.len()
             );
         }
 
-        let resource_id = writes[0].as_str();
-        if resource_id == "surface.color" {
+        let output = targets.color_outputs.first().ok_or_else(|| {
+            anyhow::anyhow!(
+                "pass '{}' is missing a color output target in execution plan",
+                pass_id
+            )
+        })?;
+        let output_id = self.resolve_resource_id(pass_id, output, "color_output")?;
+
+        if output_id == SURFACE_COLOR_RESOURCE_ID {
             return Ok(ResolvedColorTargetView {
                 view: RuntimeTextureView::Borrowed(frame_view),
                 format: frame_format,
             });
         }
 
-        let kind = self.kind_of(resource_id).ok_or_else(|| {
+        let kind = self.kind_of(output_id).ok_or_else(|| {
             anyhow::anyhow!(
-                "pass '{}' writes unknown resource '{}' during runtime encoding",
+                "pass '{}' writes unknown color target '{}' during runtime encoding",
                 pass_id,
-                resource_id
+                output_id
             )
         })?;
         if matches!(kind, RuntimeResourceKind::BufferLike) {
             bail!(
-                "pass '{}' writes '{}' as a color target, but it is buffer-like",
+                "pass '{}' color target '{}' is buffer-like",
                 pass_id,
-                resource_id
+                output_id
             );
         }
 
-        let Some(texture) = self.textures.get(resource_id) else {
+        let Some(texture) = self.textures.get(output_id) else {
             bail!(
-                "pass '{}' writes imported texture '{}' but only imported 'surface.color' is supported in core runtime execution",
+                "pass '{}' targets imported texture '{}', but only '{}' is currently supported as imported color target",
                 pass_id,
-                resource_id
+                output_id,
+                SURFACE_COLOR_RESOURCE_ID
             );
         };
         if texture.is_depth {
             bail!(
-                "pass '{}' writes '{}' as a color target, but it is depth-only",
+                "pass '{}' color target '{}' is depth-only",
                 pass_id,
-                resource_id
+                output_id
             );
         }
 
@@ -375,16 +429,20 @@ impl FlowRuntimeResources {
         })
     }
 
-    fn resolve_depth_target_view(
+    fn resolve_depth_target_from_plan(
         &self,
         pass_id: &str,
-        depth_target: &RenderResourceId,
-    ) -> Result<ResolvedDepthTargetView> {
-        let resource_id = depth_target.as_str();
-        if resource_id == "surface.color" {
+        targets: &CompiledTargetPlan,
+    ) -> Result<Option<ResolvedDepthTargetView>> {
+        let Some(depth_target) = targets.depth_output.as_ref() else {
+            return Ok(None);
+        };
+        let resource_id = self.resolve_resource_id(pass_id, depth_target, "depth_output")?;
+        if resource_id == SURFACE_COLOR_RESOURCE_ID {
             bail!(
-                "graphics pass '{}' uses 'surface.color' as depth_target, which is not supported",
-                pass_id
+                "graphics pass '{}' uses '{}' as depth target, which is not supported",
+                pass_id,
+                SURFACE_COLOR_RESOURCE_ID
             );
         }
 
@@ -397,7 +455,7 @@ impl FlowRuntimeResources {
         })?;
         if matches!(kind, RuntimeResourceKind::BufferLike) {
             bail!(
-                "graphics pass '{}' uses '{}' as depth_target, but it is buffer-like",
+                "graphics pass '{}' uses '{}' as depth target, but it is buffer-like",
                 pass_id,
                 resource_id
             );
@@ -405,25 +463,52 @@ impl FlowRuntimeResources {
 
         let Some(texture) = self.textures.get(resource_id) else {
             bail!(
-                "graphics pass '{}' uses imported depth target '{}' but core runtime execution only supports flow-owned depth targets",
+                "graphics pass '{}' uses imported depth target '{}' but runtime currently supports only flow-owned depth targets",
                 pass_id,
                 resource_id
             );
         };
         if !texture.is_depth {
             bail!(
-                "graphics pass '{}' uses '{}' as depth_target, but it is not a depth resource",
+                "graphics pass '{}' uses '{}' as depth target, but it is not depth-capable",
                 pass_id,
                 resource_id
             );
         }
 
-        Ok(ResolvedDepthTargetView {
+        Ok(Some(ResolvedDepthTargetView {
             view: texture
                 .texture
                 .create_view(&TextureViewDescriptor::default()),
             format: texture.format,
-        })
+        }))
+    }
+
+    fn resolve_texture_ref<'a>(
+        &'a self,
+        pass_id: &str,
+        resource: &CompiledResourceRef,
+        frame_texture: &'a Texture,
+        frame_size: (u32, u32),
+        frame_format: TextureFormat,
+    ) -> Result<ResolvedTextureRef<'a>> {
+        let resource_id = self.resolve_resource_id(pass_id, resource, "texture")?;
+        self.resolve_texture(
+            pass_id,
+            resource_id,
+            frame_texture,
+            frame_size,
+            frame_format,
+        )
+    }
+
+    fn resolve_storage_buffer_ref<'a>(
+        &'a self,
+        pass_id: &str,
+        resource: &CompiledResourceRef,
+    ) -> Result<ResolvedBufferRef<'a>> {
+        let resource_id = self.resolve_resource_id(pass_id, resource, "storage_buffer")?;
+        self.resolve_storage_buffer(pass_id, resource_id)
     }
 
     fn resolve_texture<'a>(
@@ -434,13 +519,14 @@ impl FlowRuntimeResources {
         frame_size: (u32, u32),
         frame_format: TextureFormat,
     ) -> Result<ResolvedTextureRef<'a>> {
-        if resource_id == "surface.color" {
+        if resource_id == SURFACE_COLOR_RESOURCE_ID {
             return Ok(ResolvedTextureRef {
                 id: resource_id.to_string(),
                 texture: frame_texture,
                 format: frame_format,
                 size: frame_size,
                 is_depth: false,
+                generation: None,
             });
         }
 
@@ -473,6 +559,7 @@ impl FlowRuntimeResources {
             format: texture.format,
             size: texture.size,
             is_depth: texture.is_depth,
+            generation: Some(texture.generation),
         })
     }
 
@@ -509,6 +596,7 @@ impl FlowRuntimeResources {
             buffer: &buffer.buffer,
             size: buffer.size,
             kind: buffer.kind,
+            generation: Some(buffer.generation),
         })
     }
 
@@ -632,7 +720,7 @@ impl Renderer {
         queue: &Queue,
         frame_texture: &Texture,
         frame_view: &TextureView,
-        frame_data: &RenderFrameDataRegistry<'_>,
+        prepared_frame: &PreparedRenderFrame,
         packet: RendererPreparedPacket,
         compiled_flows: &[CompiledRenderFlowPlan],
         shader_registry: &ShaderRegistryResource,
@@ -647,9 +735,10 @@ impl Renderer {
         let render_result = (|| -> Result<()> {
             let active_flow_ids = compiled_flows
                 .iter()
-                .map(|flow| flow.flow_id.as_str())
-                .collect::<BTreeSet<_>>();
-            flow_runtime_cache.retain(|flow_id, _| active_flow_ids.contains(flow_id.as_str()));
+                .map(|flow| flow.flow_id.clone())
+                .collect::<Vec<_>>();
+            flow_runtime_cache.retain(|flow_id, _| active_flow_ids.iter().any(|id| id == flow_id));
+            self.flow_pipeline_cache.retain_flows(&active_flow_ids);
 
             for flow in compiled_flows {
                 let runtime_resources = flow_runtime_cache.entry(flow.flow_id.clone()).or_default();
@@ -662,15 +751,17 @@ impl Renderer {
                 self.last_runtime_resources
                     .extend(runtime_resources.inspect_entries(flow.flow_id.as_str()));
 
-                self.upload_projected_uniform_buffers(
-                    queue,
-                    flow,
-                    frame_data,
-                    packet.surface_size,
-                    runtime_resources,
-                )?;
+                let flow_inputs = prepared_frame
+                    .flow_inputs(flow.flow_id.as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "missing prepared flow inputs for flow '{}' during frame execution",
+                            flow.flow_id
+                        )
+                    })?;
+                self.upload_projected_uniform_buffers(queue, flow_inputs, runtime_resources)?;
 
-                for pass in &flow.pass_order {
+                for pass in &flow.execution.passes {
                     ensure_compiled_pass_is_supported(pass)?;
                     let pass_encode_start = Instant::now();
                     let dispatch_workgroups = self.encode_compiled_pass(
@@ -678,17 +769,17 @@ impl Renderer {
                         &mut encoder,
                         frame_texture,
                         frame_view,
-                        frame_data,
                         &packet,
+                        flow,
+                        flow_inputs,
                         pass,
-                        &flow.resources,
                         shader_registry,
                         runtime_resources,
                     )?;
                     self.last_pass_timings.push(PassTimingSample {
                         flow_id: flow.flow_id.clone(),
-                        pass_id: pass.pass_id().to_string(),
-                        pass_kind: pass_kind_name(pass.node()).to_string(),
+                        pass_id: execution_pass_id(pass).to_string(),
+                        pass_kind: execution_pass_kind_name(pass).to_string(),
                         millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
                         dispatch_workgroups,
                     });
@@ -716,32 +807,26 @@ impl Renderer {
         queue: &Queue,
         frame_texture: &Texture,
         frame_view: &TextureView,
-        frame_data: &RenderFrameDataRegistry<'_>,
-        draw_list: &UiDrawList,
+        prepared_frame: &PreparedRenderFrame,
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
         surface_format: TextureFormat,
-        surface_width: f32,
-        surface_height: f32,
     ) -> Result<RendererFrameTimings> {
         let packet = self.prepare_packet(
             device,
             queue,
-            frame_data,
-            draw_list,
+            prepared_frame,
             shader_registry,
             ui_rect_shader,
             surface_format,
-            surface_width,
-            surface_height,
         );
         self.render_packet(
             device,
             queue,
             frame_texture,
             frame_view,
-            frame_data,
+            prepared_frame,
             packet,
             compiled_flows,
             shader_registry,
@@ -751,53 +836,10 @@ impl Renderer {
     fn upload_projected_uniform_buffers(
         &self,
         queue: &Queue,
-        flow: &CompiledRenderFlowPlan,
-        frame_data: &RenderFrameDataRegistry<'_>,
-        surface_size: (u32, u32),
+        flow_inputs: &PreparedFlowInputs,
         runtime_resources: &FlowRuntimeResources,
     ) -> Result<()> {
-        let mut projected_by_buffer = BTreeMap::<String, (Vec<u8>, String)>::new();
-
-        for pass in &flow.pass_order {
-            let pass_id = pass.pass_id().to_string();
-            let pass_buffers = project_uniform_bindings_for_pass(
-                pass.node(),
-                &flow.resources,
-                frame_data,
-                surface_size,
-            )
-            .map_err(|errors| {
-                anyhow::anyhow!(
-                    "uniform projection failed for flow '{}': {}",
-                    flow.flow_id,
-                    errors
-                        .into_iter()
-                        .map(|err| err.to_string())
-                        .collect::<Vec<_>>()
-                        .join("; ")
-                )
-            })?;
-
-            for projected in pass_buffers {
-                let key = projected.buffer_id.as_str().to_string();
-                if let Some((existing, first_pass)) = projected_by_buffer.get(&key) {
-                    if existing != &projected.bytes {
-                        bail!(
-                            "uniform projection conflict for buffer '{}' in flow '{}': pass '{}' and pass '{}' wrote different bytes",
-                            projected.buffer_id.as_str(),
-                            flow.flow_id,
-                            first_pass,
-                            pass_id
-                        );
-                    }
-                    continue;
-                }
-
-                projected_by_buffer.insert(key, (projected.bytes, pass_id.clone()));
-            }
-        }
-
-        for (buffer_id, (bytes, _pass_id)) in projected_by_buffer {
+        for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
             let runtime_buffer =
                 runtime_resources.resolve_uniform_buffer("uniform.upload", buffer_id.as_str())?;
             if bytes.len() as u64 > runtime_buffer.size {
@@ -821,72 +863,60 @@ impl Renderer {
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
         frame_view: &TextureView,
-        frame_data: &RenderFrameDataRegistry<'_>,
         packet: &RendererPreparedPacket,
-        pass: &CompiledPassDescriptor,
-        flow_resources: &ResourceGraph,
+        flow: &CompiledRenderFlowPlan,
+        flow_inputs: &PreparedFlowInputs,
+        pass: &CompiledPassExecutionPlan,
         shader_registry: &ShaderRegistryResource,
         runtime_resources: &FlowRuntimeResources,
     ) -> Result<Option<[u32; 3]>> {
         match pass {
-            CompiledPassDescriptor::Compute(value) => self
+            CompiledPassExecutionPlan::Compute(value) => self
                 .encode_compute_pass(
                     device,
                     encoder,
                     frame_texture,
-                    frame_data,
                     packet,
+                    flow,
+                    flow_inputs,
                     runtime_resources,
-                    flow_resources,
-                    &value.node,
+                    value,
                     shader_registry,
                 )
                 .map(Some),
-            CompiledPassDescriptor::Fullscreen(value) => self
+            CompiledPassExecutionPlan::Fullscreen(value) => self
                 .encode_fullscreen_pass(
                     device,
                     encoder,
                     frame_texture,
                     frame_view,
                     packet,
+                    flow,
                     runtime_resources,
-                    flow_resources,
-                    &value.node,
+                    value,
                     shader_registry,
                 )
                 .map(|()| None),
-            CompiledPassDescriptor::Graphics(value) => self
+            CompiledPassExecutionPlan::Graphics(value) => self
                 .encode_graphics_pass(
                     device,
                     encoder,
                     frame_texture,
                     frame_view,
                     packet,
+                    flow,
                     runtime_resources,
-                    flow_resources,
-                    &value.node,
+                    value,
                     shader_registry,
                 )
                 .map(|()| None),
-            CompiledPassDescriptor::Copy(value) => self
-                .encode_copy_pass(
-                    encoder,
-                    frame_texture,
-                    packet,
-                    runtime_resources,
-                    &value.node,
-                )
+            CompiledPassExecutionPlan::Copy(value) => self
+                .encode_copy_pass(encoder, frame_texture, packet, runtime_resources, value)
                 .map(|()| None),
-            CompiledPassDescriptor::Present(value) => self
-                .encode_present_pass(
-                    encoder,
-                    frame_texture,
-                    packet,
-                    runtime_resources,
-                    &value.node,
-                )
+            CompiledPassExecutionPlan::Present(value) => self
+                .encode_present_pass(encoder, frame_texture, packet, runtime_resources, value)
                 .map(|()| None),
-            CompiledPassDescriptor::BuiltinUiComposite(_) => {
+            CompiledPassExecutionPlan::BuiltinUiComposite(_) => {
                 self.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
                 Ok(None)
             }
@@ -895,285 +925,94 @@ impl Renderer {
 
     #[allow(clippy::too_many_arguments)]
     fn encode_compute_pass(
-        &self,
+        &mut self,
         device: &Device,
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
-        frame_data: &RenderFrameDataRegistry<'_>,
         packet: &RendererPreparedPacket,
+        flow: &CompiledRenderFlowPlan,
+        flow_inputs: &PreparedFlowInputs,
         runtime_resources: &FlowRuntimeResources,
-        flow_resources: &ResourceGraph,
-        node: &RenderPassNode,
+        pass: &CompiledComputeExecutionPlan,
         shader_registry: &ShaderRegistryResource,
     ) -> Result<[u32; 3]> {
-        if !node.vertex_buffers.is_empty()
-            || !node.index_buffers.is_empty()
-            || !node.instance_buffers.is_empty()
-            || !node.indirect_buffers.is_empty()
-        {
-            bail!(
-                "compute pass '{}' cannot bind graphics vertex/index/instance/indirect buffers",
-                node.id.as_str()
-            );
-        }
-
-        let shader_source = node
-            .shader
-            .as_ref()
-            .map(|reference| {
-                resolve_shader_source(reference, shader_registry, DEFAULT_COMPUTE_SHADER)
-            })
-            .unwrap_or(DEFAULT_COMPUTE_SHADER);
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_compiled_compute_shader"),
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        let workgroup = node.workgroup_size.unwrap_or([1, 1, 1]);
-        if workgroup[0] == 0 || workgroup[1] == 0 || workgroup[2] == 0 {
-            bail!(
-                "compute pass '{}' declared an invalid workgroup size",
-                node.id.as_str()
-            );
-        }
-
-        let dispatch = match &node.compute_dispatch {
-            Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(value)) => *value,
-            Some(crate::plugins::render::api::ComputeDispatchDescriptor::State(binding)) => {
-                let state = frame_data
-                    .get_by_type_id(binding.state_type_id())
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "compute pass '{}' dispatch_state requires missing ECS resource '{}'",
-                            node.id.as_str(),
-                            binding.state_type_name()
-                        )
-                    })?;
-                binding.project_dispatch(state).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "compute pass '{}' failed to project dispatch_state for '{}'",
-                        node.id.as_str(),
-                        binding.state_type_name()
-                    )
-                })?
-            }
-            None => {
-                bail!(
-                    "compute pass '{}' must declare explicit dispatch_workgroups(...) or dispatch_state(...)",
-                    node.id.as_str()
-                );
-            }
-        };
+        let shader = resolve_shader_material(
+            pass.shader.as_ref(),
+            shader_registry,
+            DEFAULT_COMPUTE_SHADER,
+            "builtin:compute",
+        );
+        let dispatch = flow_inputs
+            .projected_dispatch_workgroups
+            .get(pass.pass_id.as_str())
+            .copied()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "missing prepared dispatch for pass '{}' in flow '{}'",
+                    pass.pass_id.as_str(),
+                    flow.flow_id
+                )
+            })?;
         if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
             bail!(
                 "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
-                node.id.as_str(),
+                pass.pass_id.as_str(),
                 dispatch[0],
                 dispatch[1],
                 dispatch[2]
             );
         }
 
-        let write_texture_ids = dedupe_render_resource_ids(&node.write_textures);
-        let sampled_texture_ids = dedupe_render_resource_ids(&node.sampled_textures);
-        let uniform_ids = collect_uniform_buffer_ids_for_pass(node, flow_resources)?;
-        let storage_ids = collect_storage_buffer_ids_for_pass(node, runtime_resources);
+        let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
+            device,
+            frame_texture,
+            packet,
+            flow,
+            pass.pass_id.as_str(),
+            FlowPassKind::Compute,
+            shader.identity.as_str(),
+            shader.revision,
+            &pass.bindings,
+            ShaderStages::COMPUTE,
+            true,
+            Vec::new(),
+            None,
+            FlowPrimitiveTopologyClass::None,
+            runtime_resources,
+        )?;
 
-        let mut write_texture_views = Vec::<(TextureView, TextureFormat)>::new();
-        for texture_id in &write_texture_ids {
-            let texture = runtime_resources.resolve_texture(
-                node.id.as_str(),
-                texture_id.as_str(),
-                frame_texture,
-                packet.surface_size,
-                packet.surface_format,
-            )?;
-            if texture.is_depth {
-                bail!(
-                    "compute pass '{}' declares write_texture '{}' as depth; storage-texture writes require color-like resources",
-                    node.id.as_str(),
-                    texture.id
-                );
-            }
-            write_texture_views.push((
-                texture
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-                texture.format,
-            ));
-        }
-
-        let mut sampled_texture_views = Vec::<TextureView>::new();
-        for texture_id in &sampled_texture_ids {
-            let texture = runtime_resources.resolve_texture(
-                node.id.as_str(),
-                texture_id.as_str(),
-                frame_texture,
-                packet.surface_size,
-                packet.surface_format,
-            )?;
-            if texture.is_depth {
-                bail!(
-                    "compute pass '{}' samples depth texture '{}' but builtin runtime execution currently supports only color sampled textures",
-                    node.id.as_str(),
-                    texture.id
-                );
-            }
-            sampled_texture_views.push(
-                texture
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-            );
-        }
-
-        let mut uniform_buffers = Vec::<&Buffer>::new();
-        for uniform_id in &uniform_ids {
-            let buffer =
-                runtime_resources.resolve_uniform_buffer(node.id.as_str(), uniform_id.as_str())?;
-            uniform_buffers.push(buffer.buffer);
-        }
-
-        let storage_write_ids = node
-            .writes
-            .iter()
-            .map(|resource_id| resource_id.as_str().to_string())
-            .collect::<BTreeSet<_>>();
-
-        let mut storage_buffers = Vec::<(&Buffer, bool)>::new();
-        for storage_id in &storage_ids {
-            let buffer =
-                runtime_resources.resolve_storage_buffer(node.id.as_str(), storage_id.as_str())?;
-            let read_only = !storage_write_ids.contains(storage_id.as_str());
-            storage_buffers.push((buffer.buffer, read_only));
-        }
-
-        let sampler = if sampled_texture_views.is_empty() {
-            None
-        } else {
-            Some(device.create_sampler(&SamplerDescriptor::default()))
-        };
-
-        let mut bind_group_entries = Vec::<BindGroupEntry<'_>>::new();
-        let mut bind_group_layout_entries = Vec::<BindGroupLayoutEntry>::new();
-        let mut binding_index = 0u32;
-
-        for (view, format) in &write_texture_views {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: BindingResource::TextureView(view),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::StorageTexture {
-                    access: StorageTextureAccess::WriteOnly,
-                    format: *format,
-                    view_dimension: TextureViewDimension::D2,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        for view in &sampled_texture_views {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: BindingResource::TextureView(view),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
-                    view_dimension: TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-            if let Some(sampled) = sampler.as_ref() {
-                bind_group_entries.push(BindGroupEntry {
-                    binding: binding_index,
-                    resource: BindingResource::Sampler(sampled),
+        let shader_module =
+            self.flow_pipeline_cache
+                .get_or_create_shader_module(pipeline_key.clone(), || {
+                    device.create_shader_module(ShaderModuleDescriptor {
+                        label: Some("engine_compiled_compute_shader"),
+                        source: ShaderSource::Wgsl(shader.source.into()),
+                    })
                 });
-                bind_group_layout_entries.push(BindGroupLayoutEntry {
-                    binding: binding_index,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                });
-                binding_index = binding_index.saturating_add(1);
-            }
-        }
 
-        for buffer in &uniform_buffers {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: buffer.as_entire_binding(),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        for (buffer, read_only) in &storage_buffers {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: buffer.as_entire_binding(),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage {
-                        read_only: *read_only,
-                    },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        let bind_group_layout = if bind_group_layout_entries.is_empty() {
-            None
-        } else {
-            Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_compiled_compute_bind_group_layout"),
-                entries: &bind_group_layout_entries,
-            }))
-        };
         let pipeline_layout = bind_group_layout.as_ref().map(|layout| {
-            device.create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: Some("engine_compiled_compute_pipeline_layout"),
-                bind_group_layouts: &[layout],
-                push_constant_ranges: &[],
-            })
+            self.flow_pipeline_cache
+                .get_or_create_pipeline_layout(pipeline_key.clone(), || {
+                    device.create_pipeline_layout(&PipelineLayoutDescriptor {
+                        label: Some("engine_compiled_compute_pipeline_layout"),
+                        bind_group_layouts: &[layout],
+                        push_constant_ranges: &[],
+                    })
+                })
         });
-        let pipeline = device.create_compute_pipeline(&ComputePipelineDescriptor {
-            label: Some("engine_compiled_compute_pipeline"),
-            layout: pipeline_layout.as_ref(),
-            module: &shader,
-            entry_point: Some("cs_main"),
-            compilation_options: PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        let bind_group = bind_group_layout.as_ref().map(|layout| {
-            device.create_bind_group(&BindGroupDescriptor {
-                label: Some("engine_compiled_compute_bind_group"),
-                layout,
-                entries: &bind_group_entries,
-            })
-        });
+
+        let pipeline =
+            self.flow_pipeline_cache
+                .get_or_create_compute_pipeline(pipeline_key.clone(), || {
+                    device.create_compute_pipeline(&ComputePipelineDescriptor {
+                        label: Some("engine_compiled_compute_pipeline"),
+                        layout: pipeline_layout.as_ref(),
+                        module: &shader_module,
+                        entry_point: Some("cs_main"),
+                        compilation_options: PipelineCompilationOptions::default(),
+                        cache: None,
+                    })
+                });
 
         let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some("engine_compiled_compute_pass"),
@@ -1189,250 +1028,111 @@ impl Renderer {
 
     #[allow(clippy::too_many_arguments)]
     fn encode_fullscreen_pass(
-        &self,
+        &mut self,
         device: &Device,
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
         frame_view: &TextureView,
         packet: &RendererPreparedPacket,
+        flow: &CompiledRenderFlowPlan,
         runtime_resources: &FlowRuntimeResources,
-        flow_resources: &ResourceGraph,
-        node: &RenderPassNode,
+        plan: &CompiledRasterExecutionPlan,
         shader_registry: &ShaderRegistryResource,
     ) -> Result<()> {
-        if !node.vertex_buffers.is_empty()
-            || !node.index_buffers.is_empty()
-            || !node.instance_buffers.is_empty()
-            || !node.indirect_buffers.is_empty()
+        if !plan.draw_buffers.vertex_buffers.is_empty()
+            || !plan.draw_buffers.index_buffers.is_empty()
+            || !plan.draw_buffers.instance_buffers.is_empty()
+            || !plan.draw_buffers.indirect_buffers.is_empty()
         {
             bail!(
                 "fullscreen pass '{}' cannot bind graphics vertex/index/instance/indirect buffers",
-                node.id.as_str()
+                plan.pass_id.as_str()
             );
         }
 
-        let color_target = runtime_resources.resolve_color_target_view(
-            node.id.as_str(),
-            &node.writes,
+        let color_target = runtime_resources.resolve_color_target_from_plan(
+            plan.pass_id.as_str(),
+            &plan.targets,
             frame_view,
             packet.surface_format,
         )?;
 
-        let shader_source = node
-            .shader
-            .as_ref()
-            .map(|reference| {
-                resolve_shader_source(reference, shader_registry, DEFAULT_FULLSCREEN_SHADER)
-            })
-            .unwrap_or(DEFAULT_FULLSCREEN_SHADER);
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_compiled_fullscreen_shader"),
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
+        let shader = resolve_shader_material(
+            plan.shader.as_ref(),
+            shader_registry,
+            DEFAULT_FULLSCREEN_SHADER,
+            "builtin:fullscreen",
+        );
 
-        let sampled_texture_ids = dedupe_render_resource_ids(&node.sampled_textures);
-        let uniform_ids = collect_uniform_buffer_ids_for_pass(node, flow_resources)?;
-        let storage_ids = collect_storage_buffer_ids_for_pass(node, runtime_resources);
-        let write_texture_ids = dedupe_render_resource_ids(&node.write_textures);
+        let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
+            device,
+            frame_texture,
+            packet,
+            flow,
+            plan.pass_id.as_str(),
+            FlowPassKind::Fullscreen,
+            shader.identity.as_str(),
+            shader.revision,
+            &plan.bindings,
+            ShaderStages::VERTEX_FRAGMENT,
+            true,
+            vec![color_target.format],
+            None,
+            FlowPrimitiveTopologyClass::TriangleList,
+            runtime_resources,
+        )?;
 
-        let mut sampled_texture_views = Vec::<TextureView>::new();
-        for texture_id in &sampled_texture_ids {
-            let texture = runtime_resources.resolve_texture(
-                node.id.as_str(),
-                texture_id.as_str(),
-                frame_texture,
-                packet.surface_size,
-                packet.surface_format,
-            )?;
-            sampled_texture_views.push(
-                texture
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-            );
-        }
-
-        let mut uniform_buffers = Vec::<&Buffer>::new();
-        for uniform_id in &uniform_ids {
-            let buffer =
-                runtime_resources.resolve_uniform_buffer(node.id.as_str(), uniform_id.as_str())?;
-            uniform_buffers.push(buffer.buffer);
-        }
-
-        let mut storage_buffers = Vec::<&Buffer>::new();
-        for storage_id in &storage_ids {
-            let buffer =
-                runtime_resources.resolve_storage_buffer(node.id.as_str(), storage_id.as_str())?;
-            storage_buffers.push(buffer.buffer);
-        }
-
-        let mut write_texture_views = Vec::<(TextureView, TextureFormat)>::new();
-        for texture_id in &write_texture_ids {
-            let texture = runtime_resources.resolve_texture(
-                node.id.as_str(),
-                texture_id.as_str(),
-                frame_texture,
-                packet.surface_size,
-                packet.surface_format,
-            )?;
-            if texture.is_depth {
-                bail!(
-                    "fullscreen pass '{}' declares write_texture '{}' as depth; storage-texture writes require color-like resources",
-                    node.id.as_str(),
-                    texture.id
-                );
-            }
-            write_texture_views.push((
-                texture
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-                texture.format,
-            ));
-        }
-
-        let sampler = if sampled_texture_views.is_empty() {
-            None
-        } else {
-            Some(device.create_sampler(&SamplerDescriptor::default()))
-        };
-
-        let mut bind_group_entries = Vec::<BindGroupEntry<'_>>::new();
-        let mut bind_group_layout_entries = Vec::<BindGroupLayoutEntry>::new();
-        let mut binding_index = 0u32;
-
-        for view in &sampled_texture_views {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: BindingResource::TextureView(view),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
-                    view_dimension: TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-            if let Some(sampled) = sampler.as_ref() {
-                bind_group_entries.push(BindGroupEntry {
-                    binding: binding_index,
-                    resource: BindingResource::Sampler(sampled),
+        let shader_module =
+            self.flow_pipeline_cache
+                .get_or_create_shader_module(pipeline_key.clone(), || {
+                    device.create_shader_module(ShaderModuleDescriptor {
+                        label: Some("engine_compiled_fullscreen_shader"),
+                        source: ShaderSource::Wgsl(shader.source.into()),
+                    })
                 });
-                bind_group_layout_entries.push(BindGroupLayoutEntry {
-                    binding: binding_index,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                });
-                binding_index = binding_index.saturating_add(1);
-            }
-        }
 
-        for buffer in &uniform_buffers {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: buffer.as_entire_binding(),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        for buffer in &storage_buffers {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: buffer.as_entire_binding(),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        for (view, format) in &write_texture_views {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: BindingResource::TextureView(view),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::StorageTexture {
-                    access: StorageTextureAccess::WriteOnly,
-                    format: *format,
-                    view_dimension: TextureViewDimension::D2,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        let bind_group_layout = if bind_group_layout_entries.is_empty() {
-            None
-        } else {
-            Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_compiled_fullscreen_bind_group_layout"),
-                entries: &bind_group_layout_entries,
-            }))
-        };
         let pipeline_layout = bind_group_layout.as_ref().map(|layout| {
-            device.create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: Some("engine_compiled_fullscreen_pipeline_layout"),
-                bind_group_layouts: &[layout],
-                push_constant_ranges: &[],
-            })
-        });
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("engine_compiled_fullscreen_pipeline"),
-            layout: pipeline_layout.as_ref(),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[],
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(ColorTargetState {
-                    format: color_target.format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-        let bind_group = bind_group_layout.as_ref().map(|layout| {
-            device.create_bind_group(&BindGroupDescriptor {
-                label: Some("engine_compiled_fullscreen_bind_group"),
-                layout,
-                entries: &bind_group_entries,
-            })
+            self.flow_pipeline_cache
+                .get_or_create_pipeline_layout(pipeline_key.clone(), || {
+                    device.create_pipeline_layout(&PipelineLayoutDescriptor {
+                        label: Some("engine_compiled_fullscreen_pipeline_layout"),
+                        bind_group_layouts: &[layout],
+                        push_constant_ranges: &[],
+                    })
+                })
         });
 
-        let load = match node.clear_color {
+        let pipeline =
+            self.flow_pipeline_cache
+                .get_or_create_render_pipeline(pipeline_key.clone(), || {
+                    device.create_render_pipeline(&RenderPipelineDescriptor {
+                        label: Some("engine_compiled_fullscreen_pipeline"),
+                        layout: pipeline_layout.as_ref(),
+                        vertex: VertexState {
+                            module: &shader_module,
+                            entry_point: Some("vs_main"),
+                            compilation_options: PipelineCompilationOptions::default(),
+                            buffers: &[],
+                        },
+                        fragment: Some(FragmentState {
+                            module: &shader_module,
+                            entry_point: Some("fs_main"),
+                            compilation_options: PipelineCompilationOptions::default(),
+                            targets: &[Some(ColorTargetState {
+                                format: color_target.format,
+                                blend: Some(BlendState::ALPHA_BLENDING),
+                                write_mask: ColorWrites::ALL,
+                            })],
+                        }),
+                        primitive: PrimitiveState::default(),
+                        depth_stencil: None,
+                        multisample: MultisampleState::default(),
+                        multiview: None,
+                        cache: None,
+                    })
+                });
+
+        let load = match plan.clear_color {
             Some(color) => LoadOp::Clear(Color {
                 r: color[0] as f64,
                 g: color[1] as f64,
@@ -1468,259 +1168,108 @@ impl Renderer {
 
     #[allow(clippy::too_many_arguments)]
     fn encode_graphics_pass(
-        &self,
+        &mut self,
         device: &Device,
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
         frame_view: &TextureView,
         packet: &RendererPreparedPacket,
+        flow: &CompiledRenderFlowPlan,
         runtime_resources: &FlowRuntimeResources,
-        flow_resources: &ResourceGraph,
-        node: &RenderPassNode,
+        plan: &CompiledRasterExecutionPlan,
         shader_registry: &ShaderRegistryResource,
     ) -> Result<()> {
-        let color_target = runtime_resources.resolve_color_target_view(
-            node.id.as_str(),
-            &node.writes,
+        let color_target = runtime_resources.resolve_color_target_from_plan(
+            plan.pass_id.as_str(),
+            &plan.targets,
             frame_view,
             packet.surface_format,
         )?;
-        let depth_target = node
-            .depth_target
-            .as_ref()
-            .map(|target| runtime_resources.resolve_depth_target_view(node.id.as_str(), target))
-            .transpose()?;
+        let depth_target = runtime_resources
+            .resolve_depth_target_from_plan(plan.pass_id.as_str(), &plan.targets)?;
 
-        let shader_source = node
-            .shader
-            .as_ref()
-            .map(|reference| {
-                resolve_shader_source(reference, shader_registry, DEFAULT_GRAPHICS_SHADER)
-            })
-            .unwrap_or(DEFAULT_GRAPHICS_SHADER);
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_compiled_graphics_shader"),
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
+        let shader = resolve_shader_material(
+            plan.shader.as_ref(),
+            shader_registry,
+            DEFAULT_GRAPHICS_SHADER,
+            "builtin:graphics",
+        );
 
-        let sampled_texture_ids = dedupe_render_resource_ids(&node.sampled_textures);
-        let uniform_ids = collect_uniform_buffer_ids_for_pass(node, flow_resources)?;
-        let storage_ids = collect_storage_buffer_ids_for_pass(node, runtime_resources);
-        let write_texture_ids = dedupe_render_resource_ids(&node.write_textures);
+        let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
+            device,
+            frame_texture,
+            packet,
+            flow,
+            plan.pass_id.as_str(),
+            FlowPassKind::Graphics,
+            shader.identity.as_str(),
+            shader.revision,
+            &plan.bindings,
+            ShaderStages::VERTEX_FRAGMENT,
+            true,
+            vec![color_target.format],
+            depth_target.as_ref().map(|value| value.format),
+            FlowPrimitiveTopologyClass::TriangleList,
+            runtime_resources,
+        )?;
 
-        let mut sampled_texture_views = Vec::<TextureView>::new();
-        for texture_id in &sampled_texture_ids {
-            let texture = runtime_resources.resolve_texture(
-                node.id.as_str(),
-                texture_id.as_str(),
-                frame_texture,
-                packet.surface_size,
-                packet.surface_format,
-            )?;
-            sampled_texture_views.push(
-                texture
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-            );
-        }
-
-        let mut uniform_buffers = Vec::<&Buffer>::new();
-        for uniform_id in &uniform_ids {
-            let buffer =
-                runtime_resources.resolve_uniform_buffer(node.id.as_str(), uniform_id.as_str())?;
-            uniform_buffers.push(buffer.buffer);
-        }
-
-        let storage_write_ids = node
-            .writes
-            .iter()
-            .map(|resource_id| resource_id.as_str().to_string())
-            .collect::<BTreeSet<_>>();
-
-        let mut storage_buffers = Vec::<(&Buffer, bool)>::new();
-        for storage_id in &storage_ids {
-            let buffer =
-                runtime_resources.resolve_storage_buffer(node.id.as_str(), storage_id.as_str())?;
-            let read_only = !storage_write_ids.contains(storage_id.as_str());
-            storage_buffers.push((buffer.buffer, read_only));
-        }
-
-        let mut write_texture_views = Vec::<(TextureView, TextureFormat)>::new();
-        for texture_id in &write_texture_ids {
-            let texture = runtime_resources.resolve_texture(
-                node.id.as_str(),
-                texture_id.as_str(),
-                frame_texture,
-                packet.surface_size,
-                packet.surface_format,
-            )?;
-            if texture.is_depth {
-                bail!(
-                    "graphics pass '{}' declares write_texture '{}' as depth; storage-texture writes require color-like resources",
-                    node.id.as_str(),
-                    texture.id
-                );
-            }
-            write_texture_views.push((
-                texture
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-                texture.format,
-            ));
-        }
-
-        let sampler = if sampled_texture_views.is_empty() {
-            None
-        } else {
-            Some(device.create_sampler(&SamplerDescriptor::default()))
-        };
-
-        let mut bind_group_entries = Vec::<BindGroupEntry<'_>>::new();
-        let mut bind_group_layout_entries = Vec::<BindGroupLayoutEntry>::new();
-        let mut binding_index = 0u32;
-
-        for view in &sampled_texture_views {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: BindingResource::TextureView(view),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
-                    view_dimension: TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-            if let Some(sampled) = sampler.as_ref() {
-                bind_group_entries.push(BindGroupEntry {
-                    binding: binding_index,
-                    resource: BindingResource::Sampler(sampled),
+        let shader_module =
+            self.flow_pipeline_cache
+                .get_or_create_shader_module(pipeline_key.clone(), || {
+                    device.create_shader_module(ShaderModuleDescriptor {
+                        label: Some("engine_compiled_graphics_shader"),
+                        source: ShaderSource::Wgsl(shader.source.into()),
+                    })
                 });
-                bind_group_layout_entries.push(BindGroupLayoutEntry {
-                    binding: binding_index,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                });
-                binding_index = binding_index.saturating_add(1);
-            }
-        }
 
-        for buffer in &uniform_buffers {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: buffer.as_entire_binding(),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        for (buffer, read_only) in &storage_buffers {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: buffer.as_entire_binding(),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage {
-                        read_only: *read_only,
-                    },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        for (view, format) in &write_texture_views {
-            bind_group_entries.push(BindGroupEntry {
-                binding: binding_index,
-                resource: BindingResource::TextureView(view),
-            });
-            bind_group_layout_entries.push(BindGroupLayoutEntry {
-                binding: binding_index,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::StorageTexture {
-                    access: StorageTextureAccess::WriteOnly,
-                    format: *format,
-                    view_dimension: TextureViewDimension::D2,
-                },
-                count: None,
-            });
-            binding_index = binding_index.saturating_add(1);
-        }
-
-        let bind_group_layout = if bind_group_layout_entries.is_empty() {
-            None
-        } else {
-            Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_compiled_graphics_bind_group_layout"),
-                entries: &bind_group_layout_entries,
-            }))
-        };
         let pipeline_layout = bind_group_layout.as_ref().map(|layout| {
-            device.create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: Some("engine_compiled_graphics_pipeline_layout"),
-                bind_group_layouts: &[layout],
-                push_constant_ranges: &[],
-            })
-        });
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("engine_compiled_graphics_pipeline"),
-            layout: pipeline_layout.as_ref(),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[],
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(ColorTargetState {
-                    format: color_target.format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: depth_target.as_ref().map(|target| DepthStencilState {
-                format: target.format,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::LessEqual,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-        let bind_group = bind_group_layout.as_ref().map(|layout| {
-            device.create_bind_group(&BindGroupDescriptor {
-                label: Some("engine_compiled_graphics_bind_group"),
-                layout,
-                entries: &bind_group_entries,
-            })
+            self.flow_pipeline_cache
+                .get_or_create_pipeline_layout(pipeline_key.clone(), || {
+                    device.create_pipeline_layout(&PipelineLayoutDescriptor {
+                        label: Some("engine_compiled_graphics_pipeline_layout"),
+                        bind_group_layouts: &[layout],
+                        push_constant_ranges: &[],
+                    })
+                })
         });
 
-        let load = match node.clear_color {
+        let pipeline =
+            self.flow_pipeline_cache
+                .get_or_create_render_pipeline(pipeline_key.clone(), || {
+                    device.create_render_pipeline(&RenderPipelineDescriptor {
+                        label: Some("engine_compiled_graphics_pipeline"),
+                        layout: pipeline_layout.as_ref(),
+                        vertex: VertexState {
+                            module: &shader_module,
+                            entry_point: Some("vs_main"),
+                            compilation_options: PipelineCompilationOptions::default(),
+                            buffers: &[],
+                        },
+                        fragment: Some(FragmentState {
+                            module: &shader_module,
+                            entry_point: Some("fs_main"),
+                            compilation_options: PipelineCompilationOptions::default(),
+                            targets: &[Some(ColorTargetState {
+                                format: color_target.format,
+                                blend: Some(BlendState::ALPHA_BLENDING),
+                                write_mask: ColorWrites::ALL,
+                            })],
+                        }),
+                        primitive: PrimitiveState::default(),
+                        depth_stencil: depth_target.as_ref().map(|target| DepthStencilState {
+                            format: target.format,
+                            depth_write_enabled: true,
+                            depth_compare: CompareFunction::LessEqual,
+                            stencil: StencilState::default(),
+                            bias: DepthBiasState::default(),
+                        }),
+                        multisample: MultisampleState::default(),
+                        multiview: None,
+                        cache: None,
+                    })
+                });
+
+        let load = match plan.clear_color {
             Some(color) => LoadOp::Clear(Color {
                 r: color[0] as f64,
                 g: color[1] as f64,
@@ -1763,28 +1312,28 @@ impl Renderer {
         }
 
         let mut vertex_slot = 0u32;
-        for resource_id in &node.vertex_buffers {
+        for resource in &plan.draw_buffers.vertex_buffers {
             let buffer =
-                runtime_resources.resolve_storage_buffer(node.id.as_str(), resource_id.as_str())?;
+                runtime_resources.resolve_storage_buffer_ref(plan.pass_id.as_str(), resource)?;
             pass.set_vertex_buffer(vertex_slot, buffer.buffer.slice(..));
             vertex_slot = vertex_slot.saturating_add(1);
         }
-        for resource_id in &node.instance_buffers {
+        for resource in &plan.draw_buffers.instance_buffers {
             let buffer =
-                runtime_resources.resolve_storage_buffer(node.id.as_str(), resource_id.as_str())?;
+                runtime_resources.resolve_storage_buffer_ref(plan.pass_id.as_str(), resource)?;
             pass.set_vertex_buffer(vertex_slot, buffer.buffer.slice(..));
             vertex_slot = vertex_slot.saturating_add(1);
         }
 
-        let index_buffer = match node.index_buffers.as_slice() {
+        let index_buffer = match plan.draw_buffers.index_buffers.as_slice() {
             [] => None,
             [only] => {
-                Some(runtime_resources.resolve_storage_buffer(node.id.as_str(), only.as_str())?)
+                Some(runtime_resources.resolve_storage_buffer_ref(plan.pass_id.as_str(), only)?)
             }
             _ => {
                 bail!(
                     "graphics pass '{}' declares multiple index_buffer(...) resources; runtime currently supports exactly one",
-                    node.id.as_str()
+                    plan.pass_id.as_str()
                 );
             }
         };
@@ -1792,15 +1341,15 @@ impl Renderer {
             pass.set_index_buffer(index.buffer.slice(..), IndexFormat::Uint32);
         }
 
-        let indirect_buffer = match node.indirect_buffers.as_slice() {
+        let indirect_buffer = match plan.draw_buffers.indirect_buffers.as_slice() {
             [] => None,
             [only] => {
-                Some(runtime_resources.resolve_storage_buffer(node.id.as_str(), only.as_str())?)
+                Some(runtime_resources.resolve_storage_buffer_ref(plan.pass_id.as_str(), only)?)
             }
             _ => {
                 bail!(
                     "graphics pass '{}' declares multiple indirect_buffer(...) resources; runtime currently supports exactly one",
-                    node.id.as_str()
+                    plan.pass_id.as_str()
                 );
             }
         };
@@ -1812,6 +1361,242 @@ impl Renderer {
             (false, None) => pass.draw(0..3, 0..1),
         }
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_compiled_bind_group<'a>(
+        &mut self,
+        device: &Device,
+        frame_texture: &'a Texture,
+        packet: &RendererPreparedPacket,
+        flow: &CompiledRenderFlowPlan,
+        pass_id: &str,
+        pass_kind: FlowPassKind,
+        shader_identity: &str,
+        shader_revision: u64,
+        bindings: &CompiledPassBindings,
+        visibility: ShaderStages,
+        allow_depth_sampling: bool,
+        color_formats: Vec<TextureFormat>,
+        depth_format: Option<TextureFormat>,
+        primitive_topology_class: FlowPrimitiveTopologyClass,
+        runtime_resources: &'a FlowRuntimeResources,
+    ) -> Result<(
+        FlowPassPipelineKey,
+        Option<BindGroupLayout>,
+        Option<BindGroup>,
+    )> {
+        let mut resolved_entries = Vec::<RuntimeBindingResolved<'a>>::new();
+        for entry in &bindings.bind_group.entries {
+            match entry {
+                CompiledBindingEntry::SampledTexture { resource } => {
+                    let texture = runtime_resources.resolve_texture_ref(
+                        pass_id,
+                        resource,
+                        frame_texture,
+                        packet.surface_size,
+                        packet.surface_format,
+                    )?;
+                    if !allow_depth_sampling && texture.is_depth {
+                        bail!(
+                            "pass '{}' samples depth texture '{}' but this pass type only supports color sampled textures",
+                            pass_id,
+                            texture.id
+                        );
+                    }
+                    let sample_type = if texture.is_depth {
+                        TextureSampleType::Depth
+                    } else {
+                        TextureSampleType::Float { filterable: true }
+                    };
+                    resolved_entries.push(RuntimeBindingResolved {
+                        layout_ty: BindingType::Texture {
+                            sample_type,
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        resource: RuntimeBindingResource::TextureView(
+                            texture
+                                .texture
+                                .create_view(&TextureViewDescriptor::default()),
+                        ),
+                        generation_token: texture.generation,
+                        cacheable: texture.generation.is_some(),
+                    });
+                }
+                CompiledBindingEntry::Sampler => {
+                    resolved_entries.push(RuntimeBindingResolved {
+                        layout_ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        resource: RuntimeBindingResource::SamplerPlaceholder,
+                        generation_token: Some(0),
+                        cacheable: true,
+                    });
+                }
+                CompiledBindingEntry::StorageTexture { resource, access } => {
+                    let texture = runtime_resources.resolve_texture_ref(
+                        pass_id,
+                        resource,
+                        frame_texture,
+                        packet.surface_size,
+                        packet.surface_format,
+                    )?;
+                    if texture.is_depth {
+                        bail!(
+                            "pass '{}' declares storage texture '{}' as depth; storage-texture bindings require color-like resources",
+                            pass_id,
+                            texture.id
+                        );
+                    }
+                    resolved_entries.push(RuntimeBindingResolved {
+                        layout_ty: BindingType::StorageTexture {
+                            access: compiled_storage_access_to_storage_texture_access(*access),
+                            format: texture.format,
+                            view_dimension: TextureViewDimension::D2,
+                        },
+                        resource: RuntimeBindingResource::TextureView(
+                            texture
+                                .texture
+                                .create_view(&TextureViewDescriptor::default()),
+                        ),
+                        generation_token: texture.generation,
+                        cacheable: texture.generation.is_some(),
+                    });
+                }
+                CompiledBindingEntry::UniformBuffer { resource } => {
+                    let buffer =
+                        runtime_resources.resolve_uniform_buffer(pass_id, resource.as_str())?;
+                    resolved_entries.push(RuntimeBindingResolved {
+                        layout_ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        resource: RuntimeBindingResource::Buffer(buffer.buffer),
+                        generation_token: buffer.generation,
+                        cacheable: buffer.generation.is_some(),
+                    });
+                }
+                CompiledBindingEntry::StorageBuffer { resource, access } => {
+                    let buffer = runtime_resources.resolve_storage_buffer_ref(pass_id, resource)?;
+                    resolved_entries.push(RuntimeBindingResolved {
+                        layout_ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage {
+                                read_only: matches!(access, CompiledStorageAccess::ReadOnly),
+                            },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        resource: RuntimeBindingResource::Buffer(buffer.buffer),
+                        generation_token: buffer.generation,
+                        cacheable: buffer.generation.is_some(),
+                    });
+                }
+            }
+        }
+
+        let mut bind_group_layout_entries = Vec::<BindGroupLayoutEntry>::new();
+        for (binding, value) in resolved_entries.iter().enumerate() {
+            bind_group_layout_entries.push(BindGroupLayoutEntry {
+                binding: binding as u32,
+                visibility,
+                ty: value.layout_ty,
+                count: None,
+            });
+        }
+
+        let pipeline_key = FlowPassPipelineKey {
+            flow_id: flow.flow_id.clone(),
+            pass_id: pass_id.to_string(),
+            pass_kind,
+            shader_identity: shader_identity.to_string(),
+            shader_revision,
+            bind_group_layout_signature_hash: hash_bind_group_layout_entries(
+                &bind_group_layout_entries,
+            ),
+            color_formats,
+            depth_format,
+            sample_count: 1,
+            primitive_topology_class,
+        };
+
+        if bind_group_layout_entries.is_empty() {
+            return Ok((pipeline_key, None, None));
+        }
+
+        let shared_sampler = if resolved_entries
+            .iter()
+            .any(|entry| matches!(entry.resource, RuntimeBindingResource::SamplerPlaceholder))
+        {
+            Some(
+                self.flow_pipeline_cache
+                    .get_or_create_sampler(pipeline_key.clone(), || {
+                        device.create_sampler(&SamplerDescriptor::default())
+                    }),
+            )
+        } else {
+            None
+        };
+
+        let bind_group_layout =
+            self.flow_pipeline_cache
+                .get_or_create_bind_group_layout(pipeline_key.clone(), || {
+                    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                        label: Some("engine_compiled_flow_bind_group_layout"),
+                        entries: &bind_group_layout_entries,
+                    })
+                });
+
+        let mut bind_group_entries = Vec::<BindGroupEntry<'_>>::new();
+        let mut can_cache_bind_group = true;
+        let mut signature_hasher = std::collections::hash_map::DefaultHasher::new();
+        for (binding, value) in resolved_entries.iter().enumerate() {
+            (binding as u32).hash(&mut signature_hasher);
+            if value.cacheable {
+                value.generation_token.hash(&mut signature_hasher);
+            } else {
+                can_cache_bind_group = false;
+            }
+            let resource = match &value.resource {
+                RuntimeBindingResource::TextureView(view) => BindingResource::TextureView(view),
+                RuntimeBindingResource::SamplerPlaceholder => {
+                    let sampler = shared_sampler.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "pass '{}' resolved sampler placeholder but no sampler instance was available",
+                            pass_id
+                        )
+                    })?;
+                    BindingResource::Sampler(sampler)
+                }
+                RuntimeBindingResource::Buffer(buffer) => buffer.as_entire_binding(),
+            };
+            bind_group_entries.push(BindGroupEntry {
+                binding: binding as u32,
+                resource,
+            });
+        }
+
+        let bind_group = if can_cache_bind_group {
+            let bind_group_key = FlowPassBindGroupKey {
+                pipeline: pipeline_key.clone(),
+                resource_generation_signature_hash: signature_hasher.finish(),
+            };
+            self.flow_pipeline_cache
+                .get_or_create_bind_group(bind_group_key, || {
+                    device.create_bind_group(&BindGroupDescriptor {
+                        label: Some("engine_compiled_flow_bind_group"),
+                        layout: &bind_group_layout,
+                        entries: &bind_group_entries,
+                    })
+                })
+        } else {
+            device.create_bind_group(&BindGroupDescriptor {
+                label: Some("engine_compiled_flow_bind_group_noncached"),
+                layout: &bind_group_layout,
+                entries: &bind_group_entries,
+            })
+        };
+
+        Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
     }
 
     fn encode_texture_copy(
@@ -1899,17 +1684,28 @@ impl Renderer {
         frame_texture: &Texture,
         packet: &RendererPreparedPacket,
         runtime_resources: &FlowRuntimeResources,
-        node: &RenderPassNode,
+        pass: &CompiledCopyExecutionPlan,
     ) -> Result<()> {
-        if node.reads.len() != 1 || node.writes.len() != 1 {
-            bail!(
-                "copy pass '{}' must declare exactly one reads(...) and one writes(...) resource",
-                node.id.as_str()
-            );
-        }
+        let source = pass.source.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "copy pass '{}' is missing source resource in execution plan",
+                pass.pass_id
+            )
+        })?;
+        let destination = pass.destination.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "copy pass '{}' is missing destination resource in execution plan",
+                pass.pass_id
+            )
+        })?;
 
-        let source_id = node.reads[0].as_str();
-        let destination_id = node.writes[0].as_str();
+        let source_id =
+            runtime_resources.resolve_resource_id(pass.pass_id.as_str(), source, "copy_source")?;
+        let destination_id = runtime_resources.resolve_resource_id(
+            pass.pass_id.as_str(),
+            destination,
+            "copy_destination",
+        )?;
         if source_id == destination_id {
             return Ok(());
         }
@@ -1917,50 +1713,50 @@ impl Renderer {
         let source_kind = runtime_resources.kind_of(source_id).ok_or_else(|| {
             anyhow::anyhow!(
                 "copy pass '{}' references unknown source resource '{}'",
-                node.id.as_str(),
+                pass.pass_id.as_str(),
                 source_id
             )
         })?;
         let destination_kind = runtime_resources.kind_of(destination_id).ok_or_else(|| {
             anyhow::anyhow!(
                 "copy pass '{}' references unknown destination resource '{}'",
-                node.id.as_str(),
+                pass.pass_id.as_str(),
                 destination_id
             )
         })?;
 
         match (source_kind, destination_kind) {
             (RuntimeResourceKind::BufferLike, RuntimeResourceKind::BufferLike) => {
-                let source = runtime_resources.resolve_buffer(node.id.as_str(), source_id)?;
+                let source = runtime_resources.resolve_buffer(pass.pass_id.as_str(), source_id)?;
                 let destination =
-                    runtime_resources.resolve_buffer(node.id.as_str(), destination_id)?;
-                self.encode_buffer_copy(encoder, node.id.as_str(), source, destination)
+                    runtime_resources.resolve_buffer(pass.pass_id.as_str(), destination_id)?;
+                self.encode_buffer_copy(encoder, pass.pass_id.as_str(), source, destination)
             }
             (RuntimeResourceKind::BufferLike, RuntimeResourceKind::TextureLike)
             | (RuntimeResourceKind::TextureLike, RuntimeResourceKind::BufferLike) => {
                 bail!(
                     "copy pass '{}' mixes incompatible resource classes '{}' -> '{}'",
-                    node.id.as_str(),
+                    pass.pass_id.as_str(),
                     source_id,
                     destination_id
                 );
             }
             (RuntimeResourceKind::TextureLike, RuntimeResourceKind::TextureLike) => {
                 let source = runtime_resources.resolve_texture(
-                    node.id.as_str(),
+                    pass.pass_id.as_str(),
                     source_id,
                     frame_texture,
                     packet.surface_size,
                     packet.surface_format,
                 )?;
                 let destination = runtime_resources.resolve_texture(
-                    node.id.as_str(),
+                    pass.pass_id.as_str(),
                     destination_id,
                     frame_texture,
                     packet.surface_size,
                     packet.surface_format,
                 )?;
-                self.encode_texture_copy(encoder, node.id.as_str(), source, destination)
+                self.encode_texture_copy(encoder, pass.pass_id.as_str(), source, destination)
             }
         }
     }
@@ -1971,138 +1767,126 @@ impl Renderer {
         frame_texture: &Texture,
         packet: &RendererPreparedPacket,
         runtime_resources: &FlowRuntimeResources,
-        node: &RenderPassNode,
+        pass: &CompiledPresentExecutionPlan,
     ) -> Result<()> {
-        if node.reads.len() != 1 {
-            bail!(
-                "present pass '{}' must declare exactly one reads(...) resource",
-                node.id.as_str()
-            );
-        }
-
-        let source_id = node.reads[0].as_str();
-        if source_id == "surface.color" {
+        let source = pass.source.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "present pass '{}' is missing source resource in execution plan",
+                pass.pass_id
+            )
+        })?;
+        let source_id = runtime_resources.resolve_resource_id(
+            pass.pass_id.as_str(),
+            source,
+            "present_source",
+        )?;
+        if source_id == SURFACE_COLOR_RESOURCE_ID {
             return Ok(());
         }
 
         let source_kind = runtime_resources.kind_of(source_id).ok_or_else(|| {
             anyhow::anyhow!(
                 "present pass '{}' references unknown source resource '{}'",
-                node.id.as_str(),
+                pass.pass_id.as_str(),
                 source_id
             )
         })?;
         if matches!(source_kind, RuntimeResourceKind::BufferLike) {
             bail!(
                 "present pass '{}' reads buffer-like resource '{}' but present requires a texture-like source",
-                node.id.as_str(),
+                pass.pass_id.as_str(),
                 source_id
             );
         }
 
         let source = runtime_resources.resolve_texture(
-            node.id.as_str(),
+            pass.pass_id.as_str(),
             source_id,
             frame_texture,
             packet.surface_size,
             packet.surface_format,
         )?;
         let destination = ResolvedTextureRef {
-            id: "surface.color".to_string(),
+            id: SURFACE_COLOR_RESOURCE_ID.to_string(),
             texture: frame_texture,
             format: packet.surface_format,
             size: packet.surface_size,
             is_depth: false,
+            generation: None,
         };
-        self.encode_texture_copy(encoder, node.id.as_str(), source, destination)
+        self.encode_texture_copy(encoder, pass.pass_id.as_str(), source, destination)
     }
 }
 
-fn pass_kind_name(node: &RenderPassNode) -> &'static str {
-    match node.kind {
-        crate::plugins::render::RenderPassKind::Compute => "compute",
-        crate::plugins::render::RenderPassKind::Fullscreen => "fullscreen",
-        crate::plugins::render::RenderPassKind::Graphics => "graphics",
-        crate::plugins::render::RenderPassKind::Copy => "copy",
-        crate::plugins::render::RenderPassKind::Present => "present",
-        crate::plugins::render::RenderPassKind::BuiltinUiComposite => "builtin_ui_composite",
+fn execution_pass_kind_name(pass: &CompiledPassExecutionPlan) -> &'static str {
+    match pass {
+        CompiledPassExecutionPlan::Compute(_) => "compute",
+        CompiledPassExecutionPlan::Fullscreen(_) => "fullscreen",
+        CompiledPassExecutionPlan::Graphics(_) => "graphics",
+        CompiledPassExecutionPlan::Copy(_) => "copy",
+        CompiledPassExecutionPlan::Present(_) => "present",
+        CompiledPassExecutionPlan::BuiltinUiComposite(_) => "builtin_ui_composite",
     }
 }
 
-fn resolve_shader_source<'a>(
-    reference: &RenderShaderReference,
+fn execution_pass_id(pass: &CompiledPassExecutionPlan) -> &str {
+    match pass {
+        CompiledPassExecutionPlan::Compute(value) => value.pass_id.as_str(),
+        CompiledPassExecutionPlan::Fullscreen(value) => value.pass_id.as_str(),
+        CompiledPassExecutionPlan::Graphics(value) => value.pass_id.as_str(),
+        CompiledPassExecutionPlan::Copy(value) => value.pass_id.as_str(),
+        CompiledPassExecutionPlan::Present(value) => value.pass_id.as_str(),
+        CompiledPassExecutionPlan::BuiltinUiComposite(value) => value.pass_id.as_str(),
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedShaderMaterial<'a> {
+    source: &'a str,
+    identity: String,
+    revision: u64,
+}
+
+fn resolve_shader_material<'a>(
+    reference: Option<&RenderShaderReference>,
     shader_registry: &'a ShaderRegistryResource,
-    fallback: &'a str,
-) -> &'a str {
+    fallback_source: &'a str,
+    fallback_identity: &'static str,
+) -> ResolvedShaderMaterial<'a> {
     match reference {
-        RenderShaderReference::AssetPath(path) => shader_registry.source_or(path, fallback),
-        RenderShaderReference::RegistryHandle(handle) => {
-            shader_registry.source_or_handle(*handle, fallback)
-        }
+        Some(RenderShaderReference::AssetPath(path)) => ResolvedShaderMaterial {
+            source: shader_registry.source_or(path, fallback_source),
+            identity: format!("asset:{path}"),
+            revision: shader_registry.revision_for(path),
+        },
+        Some(RenderShaderReference::RegistryHandle(handle)) => ResolvedShaderMaterial {
+            source: shader_registry.source_or_handle(*handle, fallback_source),
+            identity: format!("handle:{}", handle.index()),
+            revision: shader_registry.revision_for_handle(*handle),
+        },
+        None => ResolvedShaderMaterial {
+            source: fallback_source,
+            identity: fallback_identity.to_string(),
+            revision: 0,
+        },
     }
 }
 
-fn dedupe_render_resource_ids(ids: &[RenderResourceId]) -> Vec<String> {
-    let mut seen = BTreeSet::<String>::new();
-    let mut ordered = Vec::<String>::new();
-    for id in ids {
-        let key = id.as_str().to_string();
-        if seen.insert(key.clone()) {
-            ordered.push(key);
-        }
+fn hash_bind_group_layout_entries(entries: &[BindGroupLayoutEntry]) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for entry in entries {
+        entry.binding.hash(&mut hasher);
+        entry.visibility.bits().hash(&mut hasher);
+        format!("{:?}", entry.ty).hash(&mut hasher);
     }
-    ordered
+    hasher.finish()
 }
 
-fn collect_uniform_buffer_ids_for_pass(
-    node: &RenderPassNode,
-    flow_resources: &ResourceGraph,
-) -> Result<Vec<String>> {
-    let mut seen = BTreeSet::<String>::new();
-    let mut ordered = Vec::<String>::new();
-
-    for binding in &node.uniform_bindings {
-        if !flow_resources.has_uniform_buffer(binding.uniform_id()) {
-            bail!(
-                "pass '{}' uniform binding references missing uniform buffer '{}'",
-                node.id.as_str(),
-                binding.uniform_id().as_str()
-            );
-        }
-
-        let key = binding.uniform_id().as_str().to_string();
-        if seen.insert(key.clone()) {
-            ordered.push(key);
-        }
+fn compiled_storage_access_to_storage_texture_access(
+    access: CompiledStorageAccess,
+) -> StorageTextureAccess {
+    match access {
+        CompiledStorageAccess::ReadOnly => StorageTextureAccess::ReadOnly,
+        CompiledStorageAccess::ReadWrite => StorageTextureAccess::ReadWrite,
     }
-
-    Ok(ordered)
-}
-
-fn collect_storage_buffer_ids_for_pass(
-    node: &RenderPassNode,
-    runtime_resources: &FlowRuntimeResources,
-) -> Vec<String> {
-    let mut seen = BTreeSet::<String>::new();
-    let mut ordered = Vec::<String>::new();
-
-    for id in node.reads.iter().chain(node.writes.iter()) {
-        let key = id.as_str();
-        let Some(descriptor) = runtime_resources.descriptor_of(key) else {
-            continue;
-        };
-        if !matches!(
-            descriptor,
-            RenderResourceDescriptor::StorageBuffer(_)
-                | RenderResourceDescriptor::ImportedBuffer(_)
-        ) {
-            continue;
-        }
-        let owned = key.to_string();
-        if seen.insert(owned.clone()) {
-            ordered.push(owned);
-        }
-    }
-
-    ordered
 }

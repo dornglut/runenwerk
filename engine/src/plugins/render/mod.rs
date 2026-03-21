@@ -1,6 +1,7 @@
 pub mod api;
 pub mod backend;
 pub mod composition;
+pub mod frame_packet;
 pub mod graph;
 pub mod inspect;
 pub mod params;
@@ -21,11 +22,21 @@ pub use api::{
 pub use bytemuck;
 pub use composition::RenderFlowRegistryResource;
 pub use engine_render_macros::{GpuStorage, GpuUniform};
+pub use frame_packet::{
+    PreparedFlowInputs, PreparedRenderFrame, PreparedRenderFrameResource, PreparedSceneInfo,
+    PreparedShaderSnapshot, PreparedStateTypeInfo, PreparedSurfaceInfo, PreparedUiInput,
+};
 pub use graph::{
-    CompiledComputePass, CompiledCopyPass, CompiledFullscreenPass, CompiledGraphicsPass,
-    CompiledPassDescriptor, CompiledPresentPass, CompiledRenderFlowPlan, CompiledUiCompositePass,
-    FlowValidationReport, RenderFlowGraph, RenderFlowValidationError, RenderPassKind,
-    RenderPassNode, RenderShaderReference, compile_flow_plan, validate_flow_graph,
+    CompiledBindGroupPlan, CompiledBindingEntry, CompiledBuiltinImport,
+    CompiledComputeExecutionPlan, CompiledComputePass, CompiledCopyExecutionPlan, CompiledCopyPass,
+    CompiledDispatchPlan, CompiledDrawBufferPlan, CompiledFlowExecutionPlan,
+    CompiledFullscreenPass, CompiledGraphicsPass, CompiledPassBindings, CompiledPassDescriptor,
+    CompiledPassExecutionPlan, CompiledPresentExecutionPlan, CompiledPresentPass,
+    CompiledRasterExecutionPlan, CompiledRenderFlowPlan, CompiledResourceRef,
+    CompiledStateRequirement, CompiledStorageAccess, CompiledStorageBinding, CompiledTargetPlan,
+    CompiledUiCompositeExecutionPlan, CompiledUiCompositePass, FlowValidationReport,
+    RenderFlowGraph, RenderFlowValidationError, RenderPassKind, RenderPassNode,
+    RenderShaderReference, compile_flow_plan, validate_flow_graph,
 };
 pub use params::{
     GpuBoolU32, GpuParams, GpuStorage, GpuUniform, GpuUniformField, ToGpuValue, align_up_const,
