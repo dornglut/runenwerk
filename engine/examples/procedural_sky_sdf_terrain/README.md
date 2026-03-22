@@ -2,8 +2,15 @@
 
 Windowed public `RenderFlow` sample that raymarches a noise-shaped SDF terrain and a fully procedural sky in one fullscreen pass.
 
+The window title shows a smoothed FPS and frame-time readout while the example runs.
+
 ## Controls
 
+- `W`, `A`, `S`, `D`: move forward/left/back/right
+- `Space`: move up
+- `Ctrl` (`Strg`): move down
+- `Shift`: sprint (faster movement)
+- mouse move: look around (free-fly camera)
 - `Tab`: cycle debug view mode (`lit` -> `height` -> `normals` -> `steps`)
 
 ## Structure

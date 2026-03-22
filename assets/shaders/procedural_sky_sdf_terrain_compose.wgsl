@@ -1,7 +1,8 @@
 struct ComposeParams {
     time_data: vec4<f32>, // time, pulse, wave_a, wave_b
     surface: vec4<f32>, // width, height, inv_width, inv_height
-    camera: vec4<f32>, // yaw, pitch, distance, fov_radians
+    camera_position: vec4<f32>, // position.xyz, fov_radians
+    camera_orientation: vec4<f32>, // yaw, pitch, _, _
     terrain: vec4<f32>, // base_height, height_scale, base_frequency, detail_gain
     sky: vec4<f32>, // turbidity, sun_elevation_weight, cloud_scale, cloud_speed
     view_data: vec4<u32>, // mode, _, _, _
@@ -72,15 +73,13 @@ fn fbm(p: vec2<f32>) -> f32 {
 }
 
 fn terrain_height(xz: vec2<f32>) -> f32 {
-    let t = params.time_data.x;
     let freq = max(params.terrain.z, 0.001);
 
-    let warp = fbm(xz * (freq * 0.35) + vec2<f32>(t * 0.030, -t * 0.021));
+    // Keep terrain static in world space to avoid camera-motion wobble.
+    let warp = fbm(xz * (freq * 0.35));
     let ridge_source = fbm(xz * freq + vec2<f32>(warp * 2.6, -warp * 1.9));
     let ridged = 1.0 - abs(ridge_source * 2.0 - 1.0);
-    let detail = fbm(
-        xz * freq * 2.7 + vec2<f32>(17.3, -4.6) + vec2<f32>(t * 0.080, t * 0.050),
-    );
+    let detail = fbm(xz * freq * 2.2 + vec2<f32>(17.3, -4.6));
     let shape = mix(ridged, detail, 0.35);
     return params.terrain.x + shape * params.terrain.y + detail * params.terrain.w;
 }
@@ -90,7 +89,7 @@ fn terrain_sdf(p: vec3<f32>) -> f32 {
 }
 
 fn calc_normal(p: vec3<f32>) -> vec3<f32> {
-    let e = 0.012;
+    let e = 0.010;
     let x = terrain_sdf(p + vec3<f32>(e, 0.0, 0.0)) - terrain_sdf(p - vec3<f32>(e, 0.0, 0.0));
     let y = terrain_sdf(p + vec3<f32>(0.0, e, 0.0)) - terrain_sdf(p - vec3<f32>(0.0, e, 0.0));
     let z = terrain_sdf(p + vec3<f32>(0.0, 0.0, e)) - terrain_sdf(p - vec3<f32>(0.0, 0.0, e));
@@ -141,19 +140,20 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
         1.0 - input.uv.y * 2.0,
     );
 
-    let yaw = params.camera.x;
-    let pitch = params.camera.y;
-    let orbit_distance = max(params.camera.z, 2.0);
-    let fov = max(params.camera.w, 0.3);
+    let yaw = params.camera_orientation.x;
+    let pitch = params.camera_orientation.y;
+    let fov = max(params.camera_position.w, 0.3);
+    let ro = params.camera_position.xyz;
 
-    let focus = vec3<f32>(0.0, 0.6, 0.0);
-    let ro = focus + vec3<f32>(
-        sin(yaw) * orbit_distance,
-        2.0 + sin(pitch) * orbit_distance * 0.62,
-        cos(yaw) * orbit_distance,
-    );
-
-    let forward = normalize(focus - ro);
+    let sin_yaw = sin(yaw);
+    let cos_yaw = cos(yaw);
+    let sin_pitch = sin(pitch);
+    let cos_pitch = cos(pitch);
+    let forward = normalize(vec3<f32>(
+        cos_pitch * sin_yaw,
+        sin_pitch,
+        cos_pitch * cos_yaw,
+    ));
     let right = normalize(cross(forward, vec3<f32>(0.0, 1.0, 0.0)));
     let up = normalize(cross(right, forward));
     let tan_half_fov = tan(fov * 0.5);
@@ -161,11 +161,12 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
         forward + right * ndc.x * tan_half_fov * aspect + up * ndc.y * tan_half_fov,
     );
 
-    let max_steps = 168u;
+    let max_steps = 220u;
     let max_distance = 160.0;
-    let hit_epsilon = 0.003;
+    let hit_epsilon = 0.002;
 
     var t = 0.0;
+    var prev_t = 0.0;
     var hit = false;
     var step_count = 0u;
     loop {
@@ -178,7 +179,8 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
             hit = true;
             break;
         }
-        t = t + clamp(max(dist, 0.0) * 0.85, 0.02, 1.6);
+        prev_t = t;
+        t = t + clamp(max(dist, 0.0) * 0.55, 0.01, 0.9);
         step_count = step_count + 1u;
     }
 
@@ -188,6 +190,20 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
     var depth01 = 1.0;
 
     if (hit) {
+        // A short refinement pass suppresses fixed-location hit jitter artifacts.
+        var t0 = prev_t;
+        var t1 = t;
+        for (var refine = 0; refine < 4; refine = refine + 1) {
+            let mid = 0.5 * (t0 + t1);
+            let d_mid = terrain_sdf(ro + rd * mid);
+            if (d_mid > 0.0) {
+                t0 = mid;
+            } else {
+                t1 = mid;
+            }
+        }
+        t = t1;
+
         let p = ro + rd * t;
         let n = calc_normal(p);
         hit_normal = n;

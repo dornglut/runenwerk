@@ -62,7 +62,7 @@ Use this map to pick an entry point quickly.
   - Run: `cargo run -p engine --example sdf_render_flow`
 - `procedural_sky_sdf_terrain`
   - Entry: `engine/examples/procedural_sky_sdf_terrain/main.rs`
-  - Focus: fullscreen procedural sky and fBm-shaped terrain SDF raymarch with Tab-cycled debug views.
+  - Focus: fullscreen procedural sky and fBm-shaped terrain SDF raymarch with free-fly camera, Shift sprint, title FPS readout, and Tab-cycled debug views.
   - Shader:
     - `assets/shaders/procedural_sky_sdf_terrain_compose.wgsl`
   - Run: `cargo run -p engine --example procedural_sky_sdf_terrain`
