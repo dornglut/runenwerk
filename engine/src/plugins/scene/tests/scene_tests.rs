@@ -7,6 +7,7 @@ use super::super::{
     capture_scene_simulation_snapshot, format_world_message, switch_scene_by_id,
 };
 use crate::prelude::*;
+use winit::event::{ElementState, MouseButton};
 
 #[test]
 fn format_world_message_renders_all_variants() {
@@ -210,9 +211,68 @@ fn scene_registered_apps_publish_overlay_draw_list_with_buttons() {
         commands.iter().any(|cmd| {
             matches!(
                 cmd,
-                UiDrawCmd::Text { content, .. } if content.contains("Confirm")
+                UiDrawCmd::Text { content, .. } if content.contains("Start") || content.contains("Settings")
             )
         }),
-        "overlay draw list should include the confirm button label"
+        "overlay draw list should include scene-template button labels"
     );
+}
+
+#[test]
+fn scene_template_buttons_switch_scene_on_click() {
+    let mut app = App::headless();
+    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
+    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/settings_menu.ron");
+    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/game_scene.ron");
+    app.add_plugin(ScenePlugin);
+
+    let mut app = app.run_for_frames(1).expect("scene plugin should run");
+
+    let click_target = {
+        let scene = app
+            .world()
+            .resource::<SceneResource>()
+            .expect("scene resource should exist");
+        let manager = scene
+            .manager
+            .as_ref()
+            .expect("scene manager should be initialized");
+        let transform = manager
+            .overlay_runtime
+            .world
+            .get::<crate::plugins::ui::domain::UiTransform>(
+                manager.overlay_runtime.ui.confirm_button,
+            )
+            .expect("secondary button transform should exist");
+        (
+            transform.x + transform.w * 0.5,
+            transform.y + transform.h * 0.5,
+        )
+    };
+
+    {
+        let mut input = app
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input state should exist");
+        input.handle_cursor_moved(click_target.0, click_target.1);
+        input.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+    }
+    app = app.run_for_frames(1).expect("press frame should run");
+
+    {
+        let mut input = app
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input state should exist");
+        input.handle_cursor_moved(click_target.0, click_target.1);
+        input.handle_mouse_input(ElementState::Released, MouseButton::Left);
+    }
+    let app = app.run_for_frames(1).expect("release frame should run");
+
+    let templates = app
+        .world()
+        .resource::<super::super::runtime::SceneTemplateFlowResource>()
+        .expect("scene template flow resource should exist");
+    assert_eq!(templates.active_scene_id(), Some("settings_menu"));
 }

@@ -8,6 +8,7 @@ pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SceneResource>();
+        app.init_resource::<super::runtime::SceneTemplateFlowResource>();
         app.init_resource::<SceneRuntimeState>();
         app.init_resource::<GameplayRuntimeConfig>();
         app.init_resource::<SessionRuntimeState>();

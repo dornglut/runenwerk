@@ -4,8 +4,10 @@ mod manager;
 pub mod messaging;
 mod overlay_ui;
 pub mod state_sync;
+mod template_flow;
 
 pub(crate) use helpers::*;
 pub(crate) use messaging::*;
 pub(crate) use overlay_ui::*;
 pub(crate) use state_sync::*;
+pub(crate) use template_flow::*;

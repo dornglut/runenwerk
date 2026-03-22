@@ -1,26 +1,39 @@
+use super::template_flow::{SceneTemplateButtonSlot, SceneTemplateFlowResource};
 use crate::plugins::SceneManager;
+use crate::plugins::input::InputState;
 use crate::plugins::ui::domain::{
     UiDrawCmd, UiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
     reload_console_template_if_changed,
 };
+use crate::prelude::Time;
 
 const TEXT_PADDING_X: f32 = 10.0;
 const TEXT_PADDING_Y: f32 = 8.0;
 const MIN_INPUT_WIDTH: f32 = 120.0;
 
 // Owner: Engine Scene Plugin - Overlay UI Composition
-pub(crate) fn rebuild_overlay_draw_list(manager: &mut SceneManager) -> anyhow::Result<()> {
+pub(crate) fn rebuild_overlay_draw_list(
+    manager: &mut SceneManager,
+    scene_templates: &SceneTemplateFlowResource,
+) -> anyhow::Result<()> {
     let overlay_visible = manager.overlay_visible();
     let world = &mut manager.overlay_runtime.world;
     let ui = &mut manager.overlay_runtime.ui;
+    let template_mode = scene_templates.has_scenes();
 
-    if let Err(err) = reload_console_template_if_changed(world, ui, false) {
-        ui.log_lines
-            .push(format!("[ui] template reload failed: {err:#}"));
+    if template_mode {
+        if let Some(scene) = scene_templates.active_scene() {
+            apply_scene_template_visuals(world, ui, scene);
+        }
+    } else {
+        if let Err(err) = reload_console_template_if_changed(world, ui, false) {
+            ui.log_lines
+                .push(format!("[ui] template reload failed: {err:#}"));
+        }
+        sync_runtime_text(world, ui);
     }
 
     apply_runtime_layout(world, ui);
-    sync_runtime_text(world, ui);
 
     if !overlay_visible {
         ui.draw_list.commands.clear();
@@ -29,11 +42,160 @@ pub(crate) fn rebuild_overlay_draw_list(manager: &mut SceneManager) -> anyhow::R
 
     let mut commands = Vec::new();
     push_panel_commands(world, ui.root, &mut commands);
-    push_text_block_commands(world, ui.scrollback, true, false, &mut commands);
-    push_text_block_commands(world, ui.input, true, false, &mut commands);
-    push_text_block_commands(world, ui.confirm_button, false, true, &mut commands);
+    if template_mode {
+        push_text_block_commands(world, ui.scrollback, false, false, &mut commands);
+        push_text_block_commands(world, ui.input, false, true, &mut commands);
+        push_text_block_commands(world, ui.confirm_button, false, true, &mut commands);
+    } else {
+        push_text_block_commands(world, ui.scrollback, true, false, &mut commands);
+        push_text_block_commands(world, ui.input, true, false, &mut commands);
+        push_text_block_commands(world, ui.confirm_button, false, true, &mut commands);
+    }
     ui.draw_list.commands = commands;
     Ok(())
+}
+
+pub(crate) fn process_overlay_pointer_input(
+    manager: &mut SceneManager,
+    input: &mut InputState,
+    scene_templates: &mut SceneTemplateFlowResource,
+    time: &Time,
+) -> anyhow::Result<()> {
+    if !manager.overlay_visible() || !scene_templates.has_scenes() {
+        return Ok(());
+    }
+
+    let hovered_slot = hit_test_button_slot(
+        &manager.overlay_runtime.world,
+        &manager.overlay_runtime.ui,
+        input.mouse_position,
+    );
+    if hovered_slot.is_some() {
+        input.overlay_consumed = true;
+    }
+
+    if input.left_mouse_pressed() {
+        scene_templates.begin_press(hovered_slot);
+    }
+
+    if let Some(slot) = scene_templates.update_hold(
+        hovered_slot,
+        input.left_mouse_down(),
+        time.delta_seconds.max(0.0) * 1000.0,
+    ) {
+        if let Some(action) = scene_templates.hold_action_for(slot).cloned() {
+            scene_templates.apply_action(
+                &action,
+                manager,
+                hold_trigger_name(slot),
+                Some(slot.button_name()),
+            )?;
+        }
+    }
+
+    if input.left_mouse_released()
+        && let Some(slot) = scene_templates.release_press(hovered_slot)
+        && let Some(action) = scene_templates.click_action_for(slot).cloned()
+    {
+        scene_templates.apply_action(
+            &action,
+            manager,
+            slot.trigger_name(),
+            Some(slot.button_name()),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn hold_trigger_name(slot: SceneTemplateButtonSlot) -> &'static str {
+    match slot {
+        SceneTemplateButtonSlot::Primary => "primary_hold",
+        SceneTemplateButtonSlot::Secondary => "secondary_hold",
+    }
+}
+
+fn hit_test_button_slot(
+    world: &ecs::World,
+    ui: &crate::plugins::ui::domain::ConsoleUiRuntimeState,
+    pointer: (f32, f32),
+) -> Option<SceneTemplateButtonSlot> {
+    if contains_point(world, ui.confirm_button, pointer) {
+        return Some(SceneTemplateButtonSlot::Secondary);
+    }
+    if contains_point(world, ui.input, pointer) {
+        return Some(SceneTemplateButtonSlot::Primary);
+    }
+    None
+}
+
+fn contains_point(world: &ecs::World, entity: ecs::Entity, pointer: (f32, f32)) -> bool {
+    let Some(node) = world.get::<UiNode>(entity) else {
+        return false;
+    };
+    if !node.visible {
+        return false;
+    }
+    let Some(transform) = world.get::<UiTransform>(entity) else {
+        return false;
+    };
+    pointer.0 >= transform.x
+        && pointer.0 <= transform.x + transform.w
+        && pointer.1 >= transform.y
+        && pointer.1 <= transform.y + transform.h
+}
+
+fn apply_scene_template_visuals(
+    world: &mut ecs::World,
+    ui: &mut crate::plugins::ui::domain::ConsoleUiRuntimeState,
+    scene: &crate::plugins::scene::runtime::SceneTemplateSceneSpec,
+) {
+    ui.presentation_mode = UiPresentationMode::CenteredDemo;
+    ui.layout_dirty = true;
+
+    if let Ok(mut entity_ref) = world.entity_mut(ui.root) {
+        if let Some(mut node) = entity_ref.get_mut::<UiNode>() {
+            node.visible = true;
+        }
+        if let Some(mut style) = entity_ref.get_mut::<UiStyle>() {
+            *style = scene.panel_style;
+        }
+    }
+    if let Ok(mut entity_ref) = world.entity_mut(ui.scrollback) {
+        if let Some(mut node) = entity_ref.get_mut::<UiNode>() {
+            node.visible = true;
+        }
+        if let Some(mut text) = entity_ref.get_mut::<UiText>() {
+            text.content = scene.body.clone();
+            text.color = scene.body_text_style.color;
+            text.size = scene.body_text_style.size;
+        }
+    }
+
+    apply_template_button(world, ui.input, scene.primary_button.as_ref());
+    apply_template_button(world, ui.confirm_button, scene.secondary_button.as_ref());
+}
+
+fn apply_template_button(
+    world: &mut ecs::World,
+    entity: ecs::Entity,
+    button: Option<&crate::plugins::scene::runtime::SceneTemplateButtonSpec>,
+) {
+    if let Ok(mut entity_ref) = world.entity_mut(entity) {
+        if let Some(mut node) = entity_ref.get_mut::<UiNode>() {
+            node.visible = button.is_some();
+        }
+        if let Some(button) = button {
+            if let Some(mut style) = entity_ref.get_mut::<UiStyle>() {
+                *style = button.style;
+            }
+            if let Some(mut text) = entity_ref.get_mut::<UiText>() {
+                text.content = button.label.clone();
+                text.color = button.text_style.color;
+                text.size = button.text_style.size;
+            }
+        }
+    }
 }
 
 fn apply_runtime_layout(
