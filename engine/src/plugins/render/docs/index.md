@@ -6,3 +6,4 @@
 - Public API reference: [../../../../docs/reference/plugins/render/public-api-reference.md](../../../../docs/reference/plugins/render/public-api-reference.md)
 - Architecture summary: [../../../../docs/reference/plugins/render/architecture.md](../../../../docs/reference/plugins/render/architecture.md)
 - Target architecture: [../../../../docs/reference/plugins/render/render-target-architecture.md](../../../../docs/reference/plugins/render/render-target-architecture.md)
+- Final architecture migration roadmap: [../../../../docs/roadmaps/render-final-architecture-migration.md](../../../../docs/roadmaps/render-final-architecture-migration.md)

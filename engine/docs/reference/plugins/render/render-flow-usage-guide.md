@@ -110,6 +110,7 @@ Advanced feature-tagged pass note:
 
 - `compute_pass(...)` and `fullscreen_pass(...)` expose optional `.for_feature("feature.id")` tagging.
 - Feature-tagged passes execute through the same compiled path but are gated by prepared feature status/fallback policy.
+- Only tag passes when the corresponding feature contribution is prepared for the frame; otherwise policy may skip those passes.
 
 Current multi-view scope:
 

@@ -56,10 +56,49 @@ Prepare/submit boundary types are public for inspection and integration:
 
 - `PreparedRenderFrame`
 - `PreparedRenderFrameResource`
+- `PreparedFrameContext`
+- `PreparedViewFrame`
 - `PreparedFlowInputs`
 - `PreparedSurfaceInfo`
-- `PreparedSceneInfo`
-- `PreparedUiInput`
 - `PreparedShaderSnapshot`
+- `PreparedFrameContributions`
+- `PreparedFeatureContribution`
+- `PreparedFeaturePayload`
+- `PreparedUiFeatureContribution`
+- `PreparedSceneRouteContribution`
+- `FeatureContributionStatus`
+- `FeatureFallbackPolicy`
 
 `RenderFrameDataRegistry` remains available for projection helper compatibility and tests, but it is not part of the active runtime submit/render path.
+
+## Feature Fallback Contract
+
+Prepare resolves contribution health for each feature and packages status into `PreparedFrameContributions`:
+
+- `Ready`
+- `Stale`
+- `Disabled`
+- `Missing`
+
+Fallback policy is explicit:
+
+- `ReuseLastGood`
+- `EmptyContribution`
+- `SkipFeaturePasses` (default)
+- `FailFrame`
+
+Submit/runtime does not re-query ECS for missing feature payloads.
+
+## Material Specialization Contract
+
+- Compile-time specialization is reserved for pipeline-shaping state.
+- Runtime parameter values remain bind/update payload data.
+- Pipeline key ownership is split by responsibility:
+  - core render owns the canonical key type (`FlowPassPipelineKey`)
+  - material feature contributes a specialization fragment hash folded into that key
+
+## Multi-view Execution Contract
+
+- Prepare carries view containers and execution plans carry `CompiledViewMask`.
+- Active runtime path is currently single-view only (`main`), and multi-view packets fail fast by design.
+- Per-flow-per-view execution and view-scoped pass subsets remain deferred until multi-view activation lands.

@@ -1,6 +1,4 @@
-use crate::rendering::{
-    DEFAULT_GRID_CELL_COUNT, GameOfLifeCell, GameOfLifeRenderState,
-};
+use crate::rendering::{DEFAULT_GRID_CELL_COUNT, GameOfLifeCell, GameOfLifeRenderState};
 use engine::plugins::render::RenderFlow;
 
 pub(crate) fn build_render_flow() -> RenderFlow {
@@ -31,7 +29,9 @@ pub(crate) fn build_render_flow() -> RenderFlow {
 
 #[cfg(test)]
 mod tests {
+    #[allow(deprecated)]
     use super::*;
+    #[allow(deprecated)]
     use engine::plugins::render::{RenderFrameDataRegistry, RenderPassKind};
 
     fn pass_kind(flow: &RenderFlow, pass_id: &str) -> RenderPassKind {
@@ -64,6 +64,8 @@ mod tests {
     fn state_projects_compute_and_compose_uniforms() {
         let flow = build_render_flow();
         let state = GameOfLifeRenderState::default();
+        // Projection-helper compatibility surface; active runtime submission uses PreparedRenderFrame.
+        #[allow(deprecated)]
         let frame_data = RenderFrameDataRegistry::new().with(&state);
 
         let uniforms = flow

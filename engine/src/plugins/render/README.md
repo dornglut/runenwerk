@@ -14,8 +14,12 @@ Render runtime orchestration for the engine runtime path.
   - Backend device/surface/format policy, pipeline cache, resource allocator, and compiled pass execution.
 - `graph/`
   - Canonical flow graph, pass graph, resource graph, planning, and validation.
+- `frame/`
+  - Neutral prepare/submit boundary packet types (`PreparedRenderFrame`, context/views/feature contributions).
+- `features/`
+  - Render feature registry, dependency ordering, and contribution fallback policies.
 - `renderer/`
-  - Per-frame orchestration (`extract`, `frame_bindings`, `prepare`, `submit`).
+  - Per-frame orchestration and execution (`extract`, `frame_bindings`, `prepare`, `submit`).
 - `shader/`
   - Shader registry/types/helpers/hot-reload entry.
 - `pipelines/`
@@ -38,3 +42,4 @@ Render runtime orchestration for the engine runtime path.
 - GPU params: [../../../docs/reference/plugins/render/gpu-params-guide.md](../../../docs/reference/plugins/render/gpu-params-guide.md)
 - Public API reference: [../../../docs/reference/plugins/render/public-api-reference.md](../../../docs/reference/plugins/render/public-api-reference.md)
 - Render target architecture: [../../../docs/reference/plugins/render/render-target-architecture.md](../../../docs/reference/plugins/render/render-target-architecture.md)
+- Final migration roadmap: [../../../docs/roadmaps/render-final-architecture-migration.md](../../../docs/roadmaps/render-final-architecture-migration.md)

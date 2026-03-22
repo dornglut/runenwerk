@@ -25,6 +25,8 @@ Navigation hub for crate-level engine documentation.
   - plugin registry map and feature entry points
 - [`benchmarks/render-flow-planning.md`](benchmarks/render-flow-planning.md)
   - render flow planning/validation benchmark guide
+- [`roadmaps/render-final-architecture-migration.md`](roadmaps/render-final-architecture-migration.md)
+  - staged migration contract for final render architecture cutover
 
 ## Plugin-Specific Docs
 

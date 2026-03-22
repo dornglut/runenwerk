@@ -7,3 +7,4 @@
 - [Advanced Guide](./advanced-guide.md)
 - [Architecture Summary](./architecture.md)
 - [Architecture Target](./render-target-architecture.md)
+- [Final Architecture Migration Roadmap](../../../roadmaps/render-final-architecture-migration.md)

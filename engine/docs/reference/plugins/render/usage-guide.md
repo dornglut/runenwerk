@@ -24,8 +24,9 @@ app.add_plugin(RenderPlugin);
 `RenderPlugin` initializes render runtime resources and systems, including:
 
 - flow registry
-- pass executor registry
-- pipeline/resource registries
+- feature registry
+- prepared frame resource
+- pipeline cache stats resource
 - render prepare/submit systems
 
 Feature modules should register feature-owned flow declarations and state resources; they should not duplicate plugin bootstrap wiring.
@@ -35,26 +36,30 @@ Feature modules should register feature-owned flow declarations and state resour
 `RenderPlugin` wires a two-phase render frame contract:
 
 1. `RenderPrepare`:
+   - `sync_render_feature_registry_system`
    - `sync_render_flow_registry_system`
    - `frame_render_prepare_system`
 2. `RenderSubmit`:
-   - `ui_render_submit_system`
+   - `frame_render_submit_system`
 
 `frame_render_prepare_system` publishes an owned `PreparedRenderFrame` into `PreparedRenderFrameResource`.
 
-`ui_render_submit_system` consumes the prepared frame and submits through renderer/backend runtime state. It should not perform live extraction of flow-declared ECS resources.
+`frame_render_submit_system` consumes the prepared frame and submits through renderer/backend runtime state. It does not perform live extraction of flow-declared ECS resources.
+
+Feature fallback policy is resolved in prepare (`Ready | Stale | Disabled | Missing`) and submit/runtime executes the encoded policy without ECS back-fills.
 
 ## Prepared Frame Surface
 
 `PreparedRenderFrame` carries the prepare/submit boundary payload:
 
+- frame context (`PreparedFrameContext`)
 - surface snapshot (`PreparedSurfaceInfo`)
-- scene labels (`PreparedSceneInfo`)
-- UI input (`PreparedUiInput`)
+- view container (`PreparedViewFrame`)
 - flow-projected uniforms and dispatch state (`PreparedFlowInputs`)
+- feature/domain contributions (`PreparedFrameContributions`)
 - shader revision snapshot (`PreparedShaderSnapshot`)
 
-Phase-1 note:
+Phase-1 UI note:
 
-- `PreparedUiInput::RawDrawList` is the current transport format.
+- UI currently travels as `PreparedFeaturePayload::Ui` carrying an owned `UiDrawList`.
 - Long-term direction is extracted backend-neutral prepared UI input.
