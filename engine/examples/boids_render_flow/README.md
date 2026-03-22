@@ -1,16 +1,27 @@
 # Boids Render Flow Example
 
-Declarative boids-oriented `RenderFlow` composition example that uses the builtin compiled path only:
+Windowed boids simulation sample built on the public `RenderFlow` API.
 
-- compute simulation pass
-- graphics draw pass
-- explicit copy pass to `surface.color`
-- explicit present pass
+What it demonstrates:
 
-This example validates and prints execution order. It intentionally avoids custom executors and low-level registry mutation.
+- ECS simulation state (`BoidsRenderState`) projected into flow uniforms.
+- ping-pong storage simulation (`boids.instances`) on a compute pass.
+- fullscreen compose pass that draws boids directly from storage.
+- pure builtin compiled runtime path (no custom executor hooks).
+
+Flow chain:
+
+- `boids.simulate` (compute, `assets/shaders/boids_compute.wgsl`)
+- `boids.compose` (fullscreen, `assets/shaders/boids_compose.wgsl`)
 
 Run:
 
 ```bash
 cargo run -p engine --example boids_render_flow
+```
+
+Tests:
+
+```bash
+cargo test -p engine --example boids_render_flow
 ```

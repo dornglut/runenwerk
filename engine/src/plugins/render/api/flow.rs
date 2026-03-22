@@ -11,6 +11,7 @@ use crate::plugins::render::{
 use std::collections::BTreeMap;
 
 pub const SURFACE_COLOR_RESOURCE_ID: &str = "surface.color";
+pub const SURFACE_DEPTH_RESOURCE_ID: &str = "surface.depth";
 pub const BUILTIN_UI_DRAW_LIST_RESOURCE_ID: &str = "ui.draw_list";
 
 #[derive(Debug, Clone)]
@@ -42,14 +43,21 @@ impl RenderFlow {
     }
 
     pub fn with_surface_color(mut self) -> Self {
-        self.upsert_resource(RenderResourceDescriptor::imported_texture(
+        self.upsert_resource(RenderResourceDescriptor::imported_surface_color(
             SURFACE_COLOR_RESOURCE_ID,
         ));
         self
     }
 
+    pub fn with_surface_depth(mut self) -> Self {
+        self.upsert_resource(RenderResourceDescriptor::imported_surface_depth(
+            SURFACE_DEPTH_RESOURCE_ID,
+        ));
+        self
+    }
+
     pub fn with_builtin_ui(mut self) -> Self {
-        self.upsert_resource(RenderResourceDescriptor::imported_texture(
+        self.upsert_resource(RenderResourceDescriptor::imported_ui_draw_list(
             BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
         ));
         self
@@ -225,13 +233,13 @@ impl RenderFlow {
     }
 
     pub(crate) fn ensure_surface_color_resource(&mut self) {
-        self.upsert_resource(RenderResourceDescriptor::imported_texture(
+        self.upsert_resource(RenderResourceDescriptor::imported_surface_color(
             SURFACE_COLOR_RESOURCE_ID,
         ));
     }
 
     pub(crate) fn ensure_builtin_ui_resource(&mut self) {
-        self.upsert_resource(RenderResourceDescriptor::imported_texture(
+        self.upsert_resource(RenderResourceDescriptor::imported_ui_draw_list(
             BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
         ));
     }

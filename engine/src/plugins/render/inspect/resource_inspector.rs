@@ -1,3 +1,4 @@
+use crate::plugins::render::resource::{ImportedBufferSemantic, ImportedTextureSemantic};
 use crate::plugins::render::{RenderFlow, ResourceLifetime};
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -66,8 +67,21 @@ pub fn resource_kind_name(
         crate::plugins::render::RenderResourceDescriptor::ColorTarget(_) => "color_target",
         crate::plugins::render::RenderResourceDescriptor::DepthTarget(_) => "depth_target",
         crate::plugins::render::RenderResourceDescriptor::HistoryTexture(_) => "history_texture",
-        crate::plugins::render::RenderResourceDescriptor::ImportedTexture(_) => "imported_texture",
-        crate::plugins::render::RenderResourceDescriptor::ImportedBuffer(_) => "imported_buffer",
+        crate::plugins::render::RenderResourceDescriptor::ImportedTexture(value) => {
+            match value.semantic {
+                ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
+                ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
+                ImportedTextureSemantic::BuiltinUiDrawList => "imported_texture(ui_draw_list)",
+                ImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
+                ImportedTextureSemantic::External => "imported_texture(external)",
+            }
+        }
+        crate::plugins::render::RenderResourceDescriptor::ImportedBuffer(value) => {
+            match value.semantic {
+                ImportedBufferSemantic::HistoryBuffer => "imported_buffer(history_buffer)",
+                ImportedBufferSemantic::External => "imported_buffer(external)",
+            }
+        }
     }
 }
 

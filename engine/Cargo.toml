@@ -49,6 +49,10 @@ name = "game_of_life_sdf"
 path = "examples/game_of_life_sdf/main.rs"
 
 [[example]]
+name = "boids_render_flow"
+path = "examples/boids_render_flow/main.rs"
+
+[[example]]
 name = "runtime_minimal"
 path = "examples/runtime_minimal/main.rs"
 

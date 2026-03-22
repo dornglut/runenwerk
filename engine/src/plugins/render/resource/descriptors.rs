@@ -1,6 +1,6 @@
+use super::{ImportedBufferSemantic, ImportedTextureSemantic, ResourceLifetime};
 use crate::plugins::render::GpuParams;
 use crate::plugins::render::api::RenderResourceId;
-use crate::plugins::render::resource::ResourceLifetime;
 use std::any::{TypeId, type_name};
 use std::collections::BTreeSet;
 
@@ -55,11 +55,13 @@ pub struct HistoryTextureDescriptor {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportedTextureDescriptor {
     pub id: RenderResourceId,
+    pub semantic: ImportedTextureSemantic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportedBufferDescriptor {
     pub id: RenderResourceId,
+    pub semantic: ImportedBufferSemantic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -207,16 +209,65 @@ impl RenderResourceDescriptor {
         })
     }
 
+    pub fn imported_surface_color(id: impl Into<RenderResourceId>) -> Self {
+        Self::ImportedTexture(ImportedTextureDescriptor {
+            id: id.into(),
+            semantic: ImportedTextureSemantic::SurfaceColor,
+        })
+    }
+
+    pub fn imported_surface_depth(id: impl Into<RenderResourceId>) -> Self {
+        Self::ImportedTexture(ImportedTextureDescriptor {
+            id: id.into(),
+            semantic: ImportedTextureSemantic::SurfaceDepth,
+        })
+    }
+
+    pub fn imported_ui_draw_list(id: impl Into<RenderResourceId>) -> Self {
+        Self::ImportedTexture(ImportedTextureDescriptor {
+            id: id.into(),
+            semantic: ImportedTextureSemantic::BuiltinUiDrawList,
+        })
+    }
+
+    pub fn imported_history_texture(id: impl Into<RenderResourceId>) -> Self {
+        Self::ImportedTexture(ImportedTextureDescriptor {
+            id: id.into(),
+            semantic: ImportedTextureSemantic::HistoryTexture,
+        })
+    }
+
+    pub fn imported_external_texture(id: impl Into<RenderResourceId>) -> Self {
+        Self::ImportedTexture(ImportedTextureDescriptor {
+            id: id.into(),
+            semantic: ImportedTextureSemantic::External,
+        })
+    }
+
     pub fn imported_texture(id: impl Into<RenderResourceId>) -> Self {
-        Self::ImportedTexture(ImportedTextureDescriptor { id: id.into() })
+        Self::imported_external_texture(id)
     }
 
     pub fn history_texture(id: impl Into<RenderResourceId>) -> Self {
         Self::HistoryTexture(HistoryTextureDescriptor { id: id.into() })
     }
 
+    pub fn imported_history_buffer(id: impl Into<RenderResourceId>) -> Self {
+        Self::ImportedBuffer(ImportedBufferDescriptor {
+            id: id.into(),
+            semantic: ImportedBufferSemantic::HistoryBuffer,
+        })
+    }
+
+    pub fn imported_external_buffer(id: impl Into<RenderResourceId>) -> Self {
+        Self::ImportedBuffer(ImportedBufferDescriptor {
+            id: id.into(),
+            semantic: ImportedBufferSemantic::External,
+        })
+    }
+
     pub fn imported_buffer(id: impl Into<RenderResourceId>) -> Self {
-        Self::ImportedBuffer(ImportedBufferDescriptor { id: id.into() })
+        Self::imported_external_buffer(id)
     }
 
     pub fn id(&self) -> &RenderResourceId {
@@ -243,6 +294,20 @@ impl RenderResourceDescriptor {
             Self::DepthTarget(value) => value.lifetime,
             Self::HistoryTexture(_) => ResourceLifetime::Persistent,
             Self::ImportedTexture(_) | Self::ImportedBuffer(_) => ResourceLifetime::Imported,
+        }
+    }
+
+    pub fn imported_texture_semantic(&self) -> Option<ImportedTextureSemantic> {
+        match self {
+            Self::ImportedTexture(value) => Some(value.semantic),
+            _ => None,
+        }
+    }
+
+    pub fn imported_buffer_semantic(&self) -> Option<ImportedBufferSemantic> {
+        match self {
+            Self::ImportedBuffer(value) => Some(value.semantic),
+            _ => None,
         }
     }
 }

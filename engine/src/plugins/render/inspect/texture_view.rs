@@ -1,3 +1,4 @@
+use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{RenderFlow, RenderResourceDescriptor, ResourceLifetime};
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -25,7 +26,13 @@ pub fn inspect_texture_resources(flow: &RenderFlow) -> Vec<TextureResourceView> 
                 RenderResourceDescriptor::ColorTarget(_) => Some("color_target"),
                 RenderResourceDescriptor::DepthTarget(_) => Some("depth_target"),
                 RenderResourceDescriptor::HistoryTexture(_) => Some("history_texture"),
-                RenderResourceDescriptor::ImportedTexture(_) => Some("imported_texture"),
+                RenderResourceDescriptor::ImportedTexture(value) => Some(match value.semantic {
+                    ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
+                    ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
+                    ImportedTextureSemantic::BuiltinUiDrawList => "imported_texture(ui_draw_list)",
+                    ImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
+                    ImportedTextureSemantic::External => "imported_texture(external)",
+                }),
                 _ => None,
             }?;
 

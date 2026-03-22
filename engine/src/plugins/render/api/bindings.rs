@@ -111,10 +111,7 @@ impl PassParamBinding {
         }
     }
 
-    pub fn uniform_state_with_surface<S, P, F>(
-        uniform_id: RenderResourceId,
-        build: F,
-    ) -> Self
+    pub fn uniform_state_with_surface<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         P: GpuParams + Send + Sync + 'static,

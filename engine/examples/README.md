@@ -12,6 +12,8 @@ Use this map to pick an entry point quickly.
   - `scene_manager_ui`
 - Explore the canonical RenderFlow v2 sample:
   - `game_of_life_sdf`
+- Explore boids-style compute simulation + compose rendering:
+  - `boids_render_flow`
 - Learn the smallest fullscreen render-flow declaration:
   - `render_flow_fullscreen_minimal`
 - Explore compute + compose flow authoring:
@@ -41,6 +43,13 @@ Use this map to pick an entry point quickly.
     - `assets/shaders/game_of_life_compute.wgsl`
     - `assets/shaders/game_of_life_compose.wgsl`
   - Run: `cargo run -p engine --example game_of_life_sdf`
+- `boids_render_flow`
+  - Entry: `engine/examples/boids_render_flow/main.rs`
+  - Focus: boids compute simulation with storage ping-pong and fullscreen compose.
+  - Shaders:
+    - `assets/shaders/boids_compute.wgsl`
+    - `assets/shaders/boids_compose.wgsl`
+  - Run: `cargo run -p engine --example boids_render_flow`
 - `render_flow_fullscreen_minimal`
   - Entry: `engine/examples/render_flow_fullscreen_minimal/main.rs`
   - Focus: minimal `with_surface_color` + `fullscreen_pass` + `write_surface_color` chain.

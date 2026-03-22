@@ -11,6 +11,7 @@ impl Renderer {
             text_renderer_format: None,
             flow_runtime_cache: std::collections::BTreeMap::new(),
             flow_pipeline_cache: super::pipeline_cache::FlowPipelineArtifactCache::default(),
+            last_good_ui_prepared: None,
             last_pass_timings: Vec::new(),
             last_runtime_resources: Vec::new(),
         }
