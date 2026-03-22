@@ -59,9 +59,21 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         render_flow.contains("get_or_create_render_pipeline"),
         "renderer runtime should use renderer-owned artifact cache for render pipelines"
     );
+    assert!(
+        render_flow.contains("execution_pass_feature_id(pass)"),
+        "renderer runtime must resolve feature-gated dispatch generically for every execution-plan pass kind"
+    );
+    assert!(
+        !render_flow.contains("feature_identity_for_pass_kind"),
+        "runtime must not hardcode UI-only feature identity inference in active dispatch paths"
+    );
+    assert!(
+        render_flow.contains("active runtime execution is single-view only"),
+        "single-view deferred contract must remain explicit and fail-fast for multi-view packets"
+    );
 
     let submit = read("src/plugins/render/renderer/submit.rs");
-    let submit_fn = function_body(&submit, "pub(crate) fn ui_render_submit_system(");
+    let submit_fn = function_body(&submit, "pub(crate) fn frame_render_submit_system(");
     assert!(
         !submit_fn.contains("collect_flow_declared_frame_resources"),
         "submit system must not perform live ECS extraction"
@@ -71,7 +83,24 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         "submit system must not perform uniform projection"
     );
     assert!(
+        !submit_fn.contains("RenderFrameDataRegistry"),
+        "submit system must not use RenderFrameDataRegistry on active runtime path"
+    );
+    assert!(
         !submit_fn.contains("poll_updates"),
         "submit system must not poll shader hot reloads"
     );
+
+    let pipeline_cache = read("src/plugins/render/pipelines/cache.rs");
+    for symbol in [
+        "PipelineKey",
+        "record_hit(",
+        "record_miss(",
+        "revision_for(",
+    ] {
+        assert!(
+            !pipeline_cache.contains(symbol),
+            "pipeline cache ECS resource must remain canonical stats-only sink; found legacy symbol '{symbol}'"
+        );
+    }
 }

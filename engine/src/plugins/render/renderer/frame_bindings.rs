@@ -2,6 +2,9 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
 #[derive(Default)]
+#[deprecated(
+    note = "compatibility projection helper only; active runtime submission uses PreparedRenderFrame"
+)]
 pub struct RenderFrameDataRegistry<'a> {
     by_type: HashMap<TypeId, &'a dyn Any>,
 }

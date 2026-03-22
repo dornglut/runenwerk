@@ -6,9 +6,15 @@ pub struct FlowPassPipelineKey {
     pub flow_id: String,
     pub pass_id: String,
     pub pass_kind: FlowPassKind,
+    pub feature_id: Option<String>,
     pub shader_identity: String,
     pub shader_revision: u64,
     pub bind_group_layout_signature_hash: u64,
+    // Core owns the full pipeline key type. Feature domains can contribute a
+    // specialization fragment hash that is folded into this key.
+    pub material_specialization_fragment_hash: u64,
+    pub view_signature_hash: u64,
+    pub feature_runtime_version: u64,
     pub color_formats: Vec<TextureFormat>,
     pub depth_format: Option<TextureFormat>,
     pub sample_count: u32,
@@ -18,13 +24,16 @@ pub struct FlowPassPipelineKey {
 impl FlowPassPipelineKey {
     pub fn stats_key(&self) -> String {
         format!(
-            "flow:{}:{}:{:?}:{}:{}:{}",
+            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}",
             self.flow_id,
             self.pass_id,
             self.pass_kind,
             self.shader_identity,
             self.shader_revision,
-            self.bind_group_layout_signature_hash
+            self.bind_group_layout_signature_hash,
+            self.material_specialization_fragment_hash,
+            self.view_signature_hash,
+            self.feature_runtime_version
         )
     }
 }
@@ -65,5 +74,46 @@ impl From<RenderPassKind> for FlowPassKind {
             RenderPassKind::Present => Self::Present,
             RenderPassKind::BuiltinUiComposite => Self::BuiltinUiComposite,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_key() -> FlowPassPipelineKey {
+        FlowPassPipelineKey {
+            flow_id: "flow".to_string(),
+            pass_id: "pass".to_string(),
+            pass_kind: FlowPassKind::Fullscreen,
+            feature_id: None,
+            shader_identity: "shader".to_string(),
+            shader_revision: 1,
+            bind_group_layout_signature_hash: 2,
+            material_specialization_fragment_hash: 3,
+            view_signature_hash: 4,
+            feature_runtime_version: 5,
+            color_formats: vec![TextureFormat::Rgba8Unorm],
+            depth_format: None,
+            sample_count: 1,
+            primitive_topology_class: FlowPrimitiveTopologyClass::TriangleList,
+        }
+    }
+
+    #[test]
+    fn stats_key_reflects_material_and_view_signatures() {
+        let key = sample_key();
+        let same = sample_key();
+        let mut changed_material = key.clone();
+        changed_material.material_specialization_fragment_hash = 99;
+        let mut changed_view = key.clone();
+        changed_view.view_signature_hash = 42;
+        let mut changed_feature_runtime = key.clone();
+        changed_feature_runtime.feature_runtime_version = 11;
+
+        assert_eq!(key.stats_key(), same.stats_key());
+        assert_ne!(key.stats_key(), changed_material.stats_key());
+        assert_ne!(key.stats_key(), changed_view.stats_key());
+        assert_ne!(key.stats_key(), changed_feature_runtime.stats_key());
     }
 }

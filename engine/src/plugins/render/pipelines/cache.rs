@@ -1,6 +1,3 @@
-use super::PipelineKey;
-use std::collections::BTreeMap;
-
 #[derive(Debug, Clone, Default)]
 pub struct PipelineCacheStats {
     pub hits: u64,
@@ -9,31 +6,29 @@ pub struct PipelineCacheStats {
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct PipelineCacheResource {
-    known: BTreeMap<PipelineKey, u64>,
     stats: PipelineCacheStats,
 }
 
 impl PipelineCacheResource {
-    pub fn revision_for(&self, key: &PipelineKey) -> Option<u64> {
-        self.known.get(key).copied()
-    }
-
-    pub fn record_hit(&mut self, key: &PipelineKey) {
-        if self.known.contains_key(key) {
-            self.stats.hits = self.stats.hits.saturating_add(1);
-        }
-    }
-
-    pub fn record_miss(&mut self, key: PipelineKey, revision: u64) {
-        self.stats.misses = self.stats.misses.saturating_add(1);
-        self.known.insert(key, revision);
-    }
-
     pub fn stats(&self) -> PipelineCacheStats {
         self.stats.clone()
     }
 
     pub fn observe_stats(&mut self, stats: PipelineCacheStats) {
         self.stats = stats;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PipelineCacheResource, PipelineCacheStats};
+
+    #[test]
+    fn pipeline_cache_resource_tracks_only_canonical_stats() {
+        let mut resource = PipelineCacheResource::default();
+        resource.observe_stats(PipelineCacheStats { hits: 3, misses: 1 });
+        let stats = resource.stats();
+        assert_eq!(stats.hits, 3);
+        assert_eq!(stats.misses, 1);
     }
 }
