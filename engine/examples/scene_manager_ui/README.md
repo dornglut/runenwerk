@@ -14,6 +14,7 @@ const GAME_SCENE: &str = ".../game_scene.ron";
 const LOADING_SCENE: &str = ".../loading_scene.ron";
 
 App::new()
+    .add_render_flow(build_scene_manager_ui_render_flow())
     .add_scene(LOADING_SCENE)
     .add_scene(MAIN_MENU_SCENE)
     .add_scene(SETTINGS_MENU_SCENE)
@@ -22,7 +23,7 @@ App::new()
     .run()?;
 ```
 
-`App::new()` now provides the default engine plugin stack automatically. `add_scene(".../foo.ron")` derives scene ids from template filenames and maps them to runtime `SceneHandle`s internally. Scene flow and template hot-reload are handled by the built-in `ScenePlugin`.
+`add_scene(".../foo.ron")` derives scene ids from template filenames and maps them to runtime `SceneHandle`s internally. Scene template loading/hot-reload are handled by `ScenePlugin`. Rendering still requires a flow registration in this example (`build_scene_manager_ui_render_flow`) so the builtin UI composite pass is executed.
 
 ## Scene Flow
 
@@ -185,6 +186,7 @@ cargo run -p engine --example scene_manager_ui
 ## Source
 
 - Entry: `engine/examples/scene_manager_ui/main.rs`
+- Render flow builder: `build_scene_manager_ui_render_flow()` in `engine/examples/scene_manager_ui/main.rs`
 - Scene flow runtime: `engine/src/plugins/scene/mod.rs`
 - App API: `engine::App`
 - Scene registration helpers: `App::add_scene(...)`, `App::add_scene_template(...)`
