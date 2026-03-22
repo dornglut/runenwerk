@@ -16,6 +16,8 @@ Use this map to pick an entry point quickly.
   - `boids_render_flow`
 - Explore a 3D SDF raymarching flow:
   - `sdf_render_flow`
+- Explore procedural sky + noise terrain SDF rendering:
+  - `procedural_sky_sdf_terrain`
 - Learn the smallest fullscreen render-flow declaration:
   - `render_flow_fullscreen_minimal`
 - Explore compute + compose flow authoring:
@@ -58,6 +60,12 @@ Use this map to pick an entry point quickly.
   - Shader:
     - `assets/shaders/sdf_render_flow_3d_compose.wgsl`
   - Run: `cargo run -p engine --example sdf_render_flow`
+- `procedural_sky_sdf_terrain`
+  - Entry: `engine/examples/procedural_sky_sdf_terrain/main.rs`
+  - Focus: fullscreen procedural sky and fBm-shaped terrain SDF raymarch with Tab-cycled debug views.
+  - Shader:
+    - `assets/shaders/procedural_sky_sdf_terrain_compose.wgsl`
+  - Run: `cargo run -p engine --example procedural_sky_sdf_terrain`
 - `render_flow_fullscreen_minimal`
   - Entry: `engine/examples/render_flow_fullscreen_minimal/main.rs`
   - Focus: minimal `with_surface_color` + `fullscreen_pass` + `write_surface_color` chain.

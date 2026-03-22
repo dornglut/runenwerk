@@ -99,6 +99,7 @@ See `examples/README.md` for the full map.
 - `game_of_life_sdf`: windowed public `RenderFlow` example on builtin compiled execution.
 - `boids_render_flow`: windowed boids compute+compose flow on the builtin compiled path.
 - `sdf_render_flow`: windowed 3D SDF raymarch flow rendered through a fullscreen compose pass.
+- `procedural_sky_sdf_terrain`: windowed procedural sky + noise-shaped terrain SDF raymarch flow.
 
 ## Test Map
 
