@@ -136,8 +136,21 @@ impl ShaderRegistryResource {
         self.by_id.get(&id).copied().map(ShaderHandle)
     }
 
+    fn handle_by_path(&self, path: impl AsRef<str>) -> Option<ShaderHandle> {
+        let lookup = normalize_shader_lookup_path(path.as_ref());
+        self.assets
+            .iter()
+            .position(|asset| normalize_shader_lookup_path(&asset.path) == lookup)
+            .map(ShaderHandle)
+    }
+
+    fn resolve_lookup_handle(&self, id_or_path: impl AsRef<str>) -> Option<ShaderHandle> {
+        let value = id_or_path.as_ref();
+        self.handle(value).or_else(|| self.handle_by_path(value))
+    }
+
     pub fn source_or<'a>(&'a self, id: &str, fallback: &'a str) -> &'a str {
-        self.handle(id)
+        self.resolve_lookup_handle(id)
             .and_then(|handle| self.asset(handle))
             .and_then(|asset| {
                 asset
@@ -160,7 +173,7 @@ impl ShaderRegistryResource {
     }
 
     pub fn revision_for(&self, id: &str) -> u64 {
-        self.handle(id)
+        self.resolve_lookup_handle(id)
             .map(|handle| self.revision_for_handle(handle))
             .unwrap_or(0)
     }
@@ -480,5 +493,17 @@ impl ShaderRegistryResource {
 
     fn asset_mut(&mut self, handle: ShaderHandle) -> Option<&mut ShaderAssetComponent> {
         self.assets.get_mut(handle.index())
+    }
+}
+
+fn normalize_shader_lookup_path(path: &str) -> String {
+    let normalized = path.trim().replace('\\', "/");
+    #[cfg(windows)]
+    {
+        normalized.to_ascii_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        normalized
     }
 }

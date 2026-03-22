@@ -56,6 +56,15 @@ mod tests {
         assert!(registry.handle("ui_rect").is_some());
         let src = registry.source_or("ui_rect", "fallback");
         assert_ne!(src, "fallback");
+        let path_lookup = file.to_string_lossy().to_string();
+        assert_ne!(
+            registry.source_or(path_lookup.as_str(), "fallback"),
+            "fallback"
+        );
+        assert!(
+            registry.revision_for(path_lookup.as_str()) > 0,
+            "path-based shader lookup should carry loaded revisions"
+        );
 
         let events = registry.drain_events();
         assert!(
