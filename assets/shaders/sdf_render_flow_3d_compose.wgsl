@@ -71,11 +71,15 @@ fn scene_distance(p: vec3<f32>) -> SurfaceHit {
     let d_sphere = sd_sphere(sphere_p, 0.95);
 
     var box_p = p - vec3<f32>(-1.8, 0.85, 0.2);
-    box_p.xz = rot2(box_p.xz, t * 0.52);
+    let box_xz = rot2(vec2<f32>(box_p.x, box_p.z), t * 0.52);
+    box_p.x = box_xz.x;
+    box_p.z = box_xz.y;
     let d_box = sd_box(box_p, vec3<f32>(0.75, 0.75, 0.75));
 
     var torus_p = p - vec3<f32>(1.7, 1.0, -0.6);
-    torus_p.xy = rot2(torus_p.xy, t * 0.44);
+    let torus_xy = rot2(vec2<f32>(torus_p.x, torus_p.y), t * 0.44);
+    torus_p.x = torus_xy.x;
+    torus_p.y = torus_xy.y;
     let d_torus = sd_torus(torus_p, vec2<f32>(1.05, 0.24));
 
     let shape = op_smooth_union(d_sphere, d_box, 0.45);
@@ -115,14 +119,14 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
     let orbit_distance = max(params.camera.z, 0.5);
     let fov = max(params.camera.w, 0.3);
 
-    let target = vec3<f32>(0.0, 0.8, 0.0);
-    let ro = target + vec3<f32>(
+    let focus_point = vec3<f32>(0.0, 0.8, 0.0);
+    let ro = focus_point + vec3<f32>(
         sin(yaw) * orbit_distance,
         sin(pitch) * orbit_distance * 0.85 + 0.6,
         cos(yaw) * orbit_distance,
     );
 
-    let forward = normalize(target - ro);
+    let forward = normalize(focus_point - ro);
     let right = normalize(cross(forward, vec3<f32>(0.0, 1.0, 0.0)));
     let up = normalize(cross(right, forward));
 
