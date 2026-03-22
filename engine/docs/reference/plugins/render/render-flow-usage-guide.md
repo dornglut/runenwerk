@@ -122,4 +122,5 @@ Current multi-view scope:
 - `engine/examples/render_flow_postprocess_compositor/main.rs`
 - `engine/examples/game_of_life_sdf/main.rs`
 - `engine/examples/boids_render_flow/main.rs`
+- `engine/examples/sdf_render_flow/main.rs`
 - `engine/examples/render_flow_debug_inspect/main.rs`

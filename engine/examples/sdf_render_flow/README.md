@@ -1,15 +1,21 @@
-# SDF Render Flow Example
+# 3D SDF Render Flow Example
 
-Declarative SDF/raymarch-oriented `RenderFlow` composition using builtin compiled pass kinds only:
+Windowed public `RenderFlow` example that renders a raymarched 3D SDF scene with a single fullscreen pass.
 
-- compute field update pass
-- fullscreen compose/raymarch pass
-- explicit copy pass to `surface.color`
-- explicit present pass
+## Structure
 
-This example validates flow composition and prints execution order without custom executors.
+- `main.rs`
+  - entry point
+- `rendering/graph.rs`
+  - flow declaration (`with_state`, `with_surface_color`, fullscreen compose pass)
+- `rendering/state.rs`
+  - ECS-owned render state and projected uniforms
+- `runtime/app.rs`
+  - app/plugin wiring and per-frame state advance
+- shader:
+  - `assets/shaders/sdf_render_flow_3d_compose.wgsl`
 
-Run:
+## Run
 
 ```bash
 cargo run -p engine --example sdf_render_flow

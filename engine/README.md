@@ -98,6 +98,7 @@ See `examples/README.md` for the full map.
 - `scene_manager_ui`: template-driven scene/UI flow.
 - `game_of_life_sdf`: windowed public `RenderFlow` example on builtin compiled execution.
 - `boids_render_flow`: windowed boids compute+compose flow on the builtin compiled path.
+- `sdf_render_flow`: windowed 3D SDF raymarch flow rendered through a fullscreen compose pass.
 
 ## Test Map
 

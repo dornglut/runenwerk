@@ -14,6 +14,8 @@ Use this map to pick an entry point quickly.
   - `game_of_life_sdf`
 - Explore boids-style compute simulation + compose rendering:
   - `boids_render_flow`
+- Explore a 3D SDF raymarching flow:
+  - `sdf_render_flow`
 - Learn the smallest fullscreen render-flow declaration:
   - `render_flow_fullscreen_minimal`
 - Explore compute + compose flow authoring:
@@ -50,6 +52,12 @@ Use this map to pick an entry point quickly.
     - `assets/shaders/boids_compute.wgsl`
     - `assets/shaders/boids_compose.wgsl`
   - Run: `cargo run -p engine --example boids_render_flow`
+- `sdf_render_flow`
+  - Entry: `engine/examples/sdf_render_flow/main.rs`
+  - Focus: fullscreen 3D SDF raymarch composition with ECS-projected camera/time uniforms.
+  - Shader:
+    - `assets/shaders/sdf_render_flow_3d_compose.wgsl`
+  - Run: `cargo run -p engine --example sdf_render_flow`
 - `render_flow_fullscreen_minimal`
   - Entry: `engine/examples/render_flow_fullscreen_minimal/main.rs`
   - Focus: minimal `with_surface_color` + `fullscreen_pass` + `write_surface_color` chain.
