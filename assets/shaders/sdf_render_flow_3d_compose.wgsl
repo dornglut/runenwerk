@@ -2,6 +2,7 @@ struct ComposeParams {
     time_data: vec4<f32>, // time, pulse, wave_a, wave_b
     surface: vec4<f32>, // width, height, inv_width, inv_height
     camera: vec4<f32>, // yaw, pitch, distance, fov_radians
+    view_data: vec4<u32>, // mode, _, _, _
     fog: vec4<f32>, // density, near, far, _
     color_a: vec4<f32>,
     color_b: vec4<f32>,
@@ -106,6 +107,7 @@ fn sky_color(rd: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
+    let view_mode = params.view_data.x;
     let size = max(params.surface.xy, vec2<f32>(1.0, 1.0));
     let aspect = size.x / size.y;
 
@@ -143,6 +145,7 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
     var hit = false;
     var step_count = 0u;
     var hit_material = 0.0;
+    var hit_normal = vec3<f32>(0.0, 1.0, 0.0);
 
     loop {
         if (step_count >= max_steps || t > max_distance) {
@@ -160,10 +163,12 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
     }
 
     var color = sky_color(rd);
+    var depth01 = 1.0;
 
     if (hit) {
         let p = ro + rd * t;
         let n = calc_normal(p);
+        hit_normal = n;
         let light_dir = normalize(vec3<f32>(-0.50, 0.85, -0.40));
         let view_dir = normalize(-rd);
         let half_dir = normalize(light_dir + view_dir);
@@ -192,10 +197,21 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
         let fog_t = clamp((t - fog_near) / (fog_far - fog_near), 0.0, 1.0);
         let fog_factor = 1.0 - exp(-fog_t * fog_density * 24.0);
         color = mix(color, sky_color(rd), fog_factor);
+        depth01 = clamp(t / max_distance, 0.0, 1.0);
     }
 
     let step_visual = clamp(f32(step_count) / f32(max_steps), 0.0, 1.0);
-    color = color + vec3<f32>(0.03, 0.02, 0.04) * step_visual * 0.25;
+    if (view_mode == 1u) {
+        let depth_color = vec3<f32>(1.0 - depth01);
+        color = select(vec3<f32>(0.0), depth_color, hit);
+    } else if (view_mode == 2u) {
+        let normals_color = hit_normal * 0.5 + vec3<f32>(0.5);
+        color = select(sky_color(rd), normals_color, hit);
+    } else if (view_mode == 3u) {
+        color = vec3<f32>(step_visual, step_visual * step_visual, 1.0 - step_visual);
+    } else {
+        color = color + vec3<f32>(0.03, 0.02, 0.04) * step_visual * 0.25;
+    }
     color = pow(max(color, vec3<f32>(0.0)), vec3<f32>(0.4545));
     return vec4<f32>(color, 1.0);
 }

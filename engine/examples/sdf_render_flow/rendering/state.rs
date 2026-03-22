@@ -2,11 +2,49 @@ use engine::plugins::render::GpuUniform;
 
 pub(crate) const DEFAULT_ORBIT_SPEED: f32 = 0.38;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SdfViewMode {
+    Lit,
+    Depth,
+    Normals,
+    Steps,
+}
+
+impl SdfViewMode {
+    pub(crate) fn next(self) -> Self {
+        match self {
+            Self::Lit => Self::Depth,
+            Self::Depth => Self::Normals,
+            Self::Normals => Self::Steps,
+            Self::Steps => Self::Lit,
+        }
+    }
+
+    pub(crate) fn as_u32(self) -> u32 {
+        match self {
+            Self::Lit => 0,
+            Self::Depth => 1,
+            Self::Normals => 2,
+            Self::Steps => 3,
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Lit => "lit",
+            Self::Depth => "depth",
+            Self::Normals => "normals",
+            Self::Steps => "steps",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, GpuUniform)]
 pub(crate) struct SdfComposeParams {
     pub time_data: [f32; 4],
     pub surface: [f32; 4],
     pub camera: [f32; 4],
+    pub view_data: [u32; 4],
     pub fog: [f32; 4],
     pub color_a: [f32; 4],
     pub color_b: [f32; 4],
@@ -20,6 +58,7 @@ pub(crate) struct Sdf3dRenderState {
     orbit_distance: f32,
     orbit_speed: f32,
     fov_radians: f32,
+    view_mode: SdfViewMode,
 }
 
 impl Default for Sdf3dRenderState {
@@ -31,11 +70,20 @@ impl Default for Sdf3dRenderState {
             orbit_distance: 5.2,
             orbit_speed: DEFAULT_ORBIT_SPEED,
             fov_radians: 57.0_f32.to_radians(),
+            view_mode: SdfViewMode::Lit,
         }
     }
 }
 
 impl Sdf3dRenderState {
+    pub(crate) fn cycle_view_mode(&mut self) {
+        self.view_mode = self.view_mode.next();
+    }
+
+    pub(crate) fn view_mode_label(&self) -> &'static str {
+        self.view_mode.label()
+    }
+
     pub(crate) fn advance_by_frame_delta(&mut self, delta_seconds: f32) {
         let safe_delta = delta_seconds.clamp(0.0, 1.0 / 15.0).max(1.0 / 240.0);
         self.time_seconds += safe_delta;
@@ -62,6 +110,7 @@ impl Sdf3dRenderState {
                 self.orbit_distance,
                 self.fov_radians,
             ],
+            view_data: [self.view_mode.as_u32(), 0, 0, 0],
             fog: [0.045, 2.4, 22.0, 0.0],
             color_a: [0.10, 0.52, 0.94, 1.0],
             color_b: [0.92, 0.34, 0.48, 1.0],
@@ -92,5 +141,19 @@ mod tests {
         assert_eq!(params.surface[1], 1080.0);
         assert!((params.surface[2] - (1.0 / 1920.0)).abs() < 1.0e-6);
         assert!((params.surface[3] - (1.0 / 1080.0)).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn cycle_view_mode_updates_uniform_mode() {
+        let mut state = Sdf3dRenderState::default();
+        assert_eq!(state.compose_params((1, 1)).view_data[0], 0);
+        state.cycle_view_mode();
+        assert_eq!(state.compose_params((1, 1)).view_data[0], 1);
+        state.cycle_view_mode();
+        assert_eq!(state.compose_params((1, 1)).view_data[0], 2);
+        state.cycle_view_mode();
+        assert_eq!(state.compose_params((1, 1)).view_data[0], 3);
+        state.cycle_view_mode();
+        assert_eq!(state.compose_params((1, 1)).view_data[0], 0);
     }
 }

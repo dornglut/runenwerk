@@ -2,6 +2,10 @@
 
 Windowed public `RenderFlow` example that renders a raymarched 3D SDF scene with a single fullscreen pass.
 
+## Controls
+
+- `Tab`: cycle view mode (`lit` -> `depth` -> `normals` -> `steps`)
+
 ## Structure
 
 - `main.rs`

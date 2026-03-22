@@ -54,7 +54,7 @@ Use this map to pick an entry point quickly.
   - Run: `cargo run -p engine --example boids_render_flow`
 - `sdf_render_flow`
   - Entry: `engine/examples/sdf_render_flow/main.rs`
-  - Focus: fullscreen 3D SDF raymarch composition with ECS-projected camera/time uniforms.
+  - Focus: fullscreen 3D SDF raymarch composition with ECS-projected camera/time uniforms and Tab-cycled debug views.
   - Shader:
     - `assets/shaders/sdf_render_flow_3d_compose.wgsl`
   - Run: `cargo run -p engine --example sdf_render_flow`
