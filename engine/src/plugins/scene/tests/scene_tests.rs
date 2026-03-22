@@ -1,4 +1,5 @@
 use crate::plugins::InputState;
+use crate::plugins::ui::domain::UiDrawCmd;
 // Owner: Engine Scene Plugin - Tests
 use super::super::domain::{QuestState, WorldToOverlayMessage};
 use super::super::{
@@ -166,4 +167,52 @@ fn scene_simulation_delta_round_trips_back_to_the_current_snapshot() {
         Some(current_snapshot.entities.debug_position)
     );
     assert_eq!(delta.context.world_scene_label, None);
+}
+
+#[test]
+fn scene_registered_apps_publish_overlay_draw_list_with_buttons() {
+    let mut app = App::headless();
+    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
+    app.add_plugin(ScenePlugin);
+
+    let app = app.run_for_frames(1).expect("scene plugin should run");
+    let scene = app
+        .world()
+        .resource::<SceneResource>()
+        .expect("scene resource should exist");
+    let manager = scene
+        .manager
+        .as_ref()
+        .expect("scene manager should be initialized");
+
+    assert!(
+        manager.overlay_visible(),
+        "overlay should auto-show for scene catalog apps"
+    );
+    let commands = &manager.overlay_runtime.ui.draw_list.commands;
+    assert!(
+        !commands.is_empty(),
+        "overlay draw list should not be empty"
+    );
+    assert!(
+        commands
+            .iter()
+            .any(|cmd| matches!(cmd, UiDrawCmd::Rect { .. })),
+        "overlay draw list should include rect commands"
+    );
+    assert!(
+        commands
+            .iter()
+            .any(|cmd| matches!(cmd, UiDrawCmd::Text { .. })),
+        "overlay draw list should include text commands"
+    );
+    assert!(
+        commands.iter().any(|cmd| {
+            matches!(
+                cmd,
+                UiDrawCmd::Text { content, .. } if content.contains("Confirm")
+            )
+        }),
+        "overlay draw list should include the confirm button label"
+    );
 }
