@@ -1,5 +1,9 @@
 use crate::plugins::render::RenderResourceDescriptor;
+use crate::plugins::render::api::{
+    BUILTIN_UI_DRAW_LIST_RESOURCE_ID, SURFACE_COLOR_RESOURCE_ID, SURFACE_DEPTH_RESOURCE_ID,
+};
 use crate::plugins::render::graph::{RenderFlowGraph, RenderPassKind, RenderPassNode};
+use crate::plugins::render::resource::{ImportedBufferSemantic, ImportedTextureSemantic};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -42,6 +46,7 @@ pub fn validate_flow_graph(
         }
         resources_by_id.insert(resource_id.to_string(), resource);
     }
+    validate_imported_resource_descriptors(&resources_by_id, &mut issues);
 
     let mut pass_ids = BTreeSet::<String>::new();
     for pass in &graph.passes.passes {
@@ -59,6 +64,15 @@ pub fn validate_flow_graph(
         .collect();
 
     for pass in &graph.passes.passes {
+        if let Some(feature_id) = pass.feature_id.as_ref()
+            && feature_id.trim().is_empty()
+        {
+            issues.push(format!(
+                "pass '{}' declares empty feature id; use for_feature(\"feature.id\") with non-empty id",
+                pass.id.as_str()
+            ));
+        }
+
         validate_pass_shape(pass, &mut issues);
 
         for dependency in &pass.depends_on {
@@ -237,6 +251,12 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
             }
         }
         RenderPassKind::BuiltinUiComposite => {
+            if pass.feature_id.is_some() {
+                issues.push(format!(
+                    "builtin_ui_composite pass '{}' cannot declare explicit feature id; feature is fixed to 'ui'",
+                    pass.id.as_str()
+                ));
+            }
             if pass.shader.is_some() {
                 issues.push(format!(
                     "builtin_ui_composite pass '{}' cannot declare shader",
@@ -283,6 +303,20 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                 issues.push(format!(
                     "builtin_ui_composite pass '{}' only supports reads/writes/depends_on",
                     pass.id.as_str()
+                ));
+            }
+            if pass.reads.len() != 1 || pass.reads[0].as_str() != BUILTIN_UI_DRAW_LIST_RESOURCE_ID {
+                issues.push(format!(
+                    "builtin_ui_composite pass '{}' must read exactly '{}' as UI input",
+                    pass.id.as_str(),
+                    BUILTIN_UI_DRAW_LIST_RESOURCE_ID
+                ));
+            }
+            if pass.writes.len() != 1 || pass.writes[0].as_str() != SURFACE_COLOR_RESOURCE_ID {
+                issues.push(format!(
+                    "builtin_ui_composite pass '{}' must write exactly '{}' as color output",
+                    pass.id.as_str(),
+                    SURFACE_COLOR_RESOURCE_ID
                 ));
             }
         }
@@ -370,6 +404,19 @@ fn validate_pass_resource_usage(
         let Some(resource) = resources_by_id.get(sampled.as_str()) else {
             continue;
         };
+        if matches!(
+            resource,
+            RenderResourceDescriptor::ImportedTexture(value)
+                if value.semantic == ImportedTextureSemantic::BuiltinUiDrawList
+        ) {
+            issues.push(format!(
+                "pass '{}' samples imported resource '{}' with semantic '{}'; UI draw-list imports are not texture-sampleable",
+                pass.id.as_str(),
+                sampled.as_str(),
+                ImportedTextureSemantic::BuiltinUiDrawList.as_str()
+            ));
+            continue;
+        }
         if !matches!(
             resource,
             RenderResourceDescriptor::SampledTexture(_)
@@ -433,13 +480,16 @@ fn validate_pass_resource_usage(
 
     if let Some(depth_target) = &pass.depth_target {
         if let Some(resource) = resources_by_id.get(depth_target.as_str()) {
-            if !matches!(
-                resource,
-                RenderResourceDescriptor::DepthTarget(_)
-                    | RenderResourceDescriptor::ImportedTexture(_)
-            ) {
+            let depth_ok = match resource {
+                RenderResourceDescriptor::DepthTarget(_) => true,
+                RenderResourceDescriptor::ImportedTexture(value) => {
+                    value.semantic == ImportedTextureSemantic::SurfaceDepth
+                }
+                _ => false,
+            };
+            if !depth_ok {
                 issues.push(format!(
-                    "graphics pass '{}' uses depth_target '{}' but kind '{}' is not depth/imported texture",
+                    "graphics pass '{}' uses depth_target '{}' but kind '{}' is not depth/surface-depth import",
                     pass.id.as_str(),
                     depth_target.as_str(),
                     resource_kind_name(resource)
@@ -491,21 +541,31 @@ fn validate_pass_resource_usage(
         let Some(resource) = resources_by_id.get(write.as_str()) else {
             continue;
         };
-        if matches!(resource, RenderResourceDescriptor::ImportedTexture(_))
-            && !matches!(
+        if let RenderResourceDescriptor::ImportedTexture(value) = resource {
+            if value.semantic != ImportedTextureSemantic::SurfaceColor {
+                issues.push(format!(
+                    "pass '{}' writes imported texture '{}' with semantic '{}'; only '{}' is writable in core runtime",
+                    pass.id.as_str(),
+                    write.as_str(),
+                    value.semantic.as_str(),
+                    ImportedTextureSemantic::SurfaceColor.as_str()
+                ));
+                continue;
+            }
+            if !matches!(
                 pass.kind,
                 RenderPassKind::Fullscreen
                     | RenderPassKind::Graphics
                     | RenderPassKind::BuiltinUiComposite
                     | RenderPassKind::Copy
-            )
-        {
-            issues.push(format!(
-                "pass '{}' writes imported texture '{}' but pass kind '{:?}' is not supported for imported texture writes",
-                pass.id.as_str(),
-                write.as_str(),
-                pass.kind
-            ));
+            ) {
+                issues.push(format!(
+                    "pass '{}' writes imported texture '{}' but pass kind '{:?}' is not supported for imported texture writes",
+                    pass.id.as_str(),
+                    write.as_str(),
+                    pass.kind
+                ));
+            }
         }
     }
 }
@@ -532,15 +592,17 @@ fn validate_buffer_role_resource(
 }
 
 fn is_texture_resource(resource: &RenderResourceDescriptor) -> bool {
-    matches!(
-        resource,
+    match resource {
         RenderResourceDescriptor::SampledTexture(_)
-            | RenderResourceDescriptor::StorageTexture(_)
-            | RenderResourceDescriptor::ColorTarget(_)
-            | RenderResourceDescriptor::DepthTarget(_)
-            | RenderResourceDescriptor::HistoryTexture(_)
-            | RenderResourceDescriptor::ImportedTexture(_)
-    )
+        | RenderResourceDescriptor::StorageTexture(_)
+        | RenderResourceDescriptor::ColorTarget(_)
+        | RenderResourceDescriptor::DepthTarget(_)
+        | RenderResourceDescriptor::HistoryTexture(_) => true,
+        RenderResourceDescriptor::ImportedTexture(value) => {
+            value.semantic != ImportedTextureSemantic::BuiltinUiDrawList
+        }
+        _ => false,
+    }
 }
 
 fn is_buffer_resource(resource: &RenderResourceDescriptor) -> bool {
@@ -561,8 +623,70 @@ fn resource_kind_name(resource: &RenderResourceDescriptor) -> &'static str {
         RenderResourceDescriptor::ColorTarget(_) => "color_target",
         RenderResourceDescriptor::DepthTarget(_) => "depth_target",
         RenderResourceDescriptor::HistoryTexture(_) => "history_texture",
-        RenderResourceDescriptor::ImportedTexture(_) => "imported_texture",
-        RenderResourceDescriptor::ImportedBuffer(_) => "imported_buffer",
+        RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
+            ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
+            ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
+            ImportedTextureSemantic::BuiltinUiDrawList => "imported_texture(ui_draw_list)",
+            ImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
+            ImportedTextureSemantic::External => "imported_texture(external)",
+        },
+        RenderResourceDescriptor::ImportedBuffer(value) => match value.semantic {
+            ImportedBufferSemantic::HistoryBuffer => "imported_buffer(history_buffer)",
+            ImportedBufferSemantic::External => "imported_buffer(external)",
+        },
+    }
+}
+
+fn validate_imported_resource_descriptors(
+    resources_by_id: &BTreeMap<String, &RenderResourceDescriptor>,
+    issues: &mut Vec<String>,
+) {
+    for (id, descriptor) in resources_by_id {
+        match descriptor {
+            RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
+                ImportedTextureSemantic::SurfaceColor => {
+                    if id.as_str() != SURFACE_COLOR_RESOURCE_ID {
+                        issues.push(format!(
+                            "imported surface-color texture must use canonical id '{}', got '{}'",
+                            SURFACE_COLOR_RESOURCE_ID, id
+                        ));
+                    }
+                }
+                ImportedTextureSemantic::SurfaceDepth => {
+                    if id.as_str() != SURFACE_DEPTH_RESOURCE_ID {
+                        issues.push(format!(
+                            "imported surface-depth texture must use canonical id '{}', got '{}'",
+                            SURFACE_DEPTH_RESOURCE_ID, id
+                        ));
+                    }
+                }
+                ImportedTextureSemantic::BuiltinUiDrawList => {
+                    if id.as_str() != BUILTIN_UI_DRAW_LIST_RESOURCE_ID {
+                        issues.push(format!(
+                            "imported UI draw-list texture must use canonical id '{}', got '{}'",
+                            BUILTIN_UI_DRAW_LIST_RESOURCE_ID, id
+                        ));
+                    }
+                }
+                ImportedTextureSemantic::HistoryTexture => {}
+                ImportedTextureSemantic::External => {
+                    issues.push(format!(
+                        "resource '{}' uses external imported texture semantics; external imports are compatibility-only and not supported in active runtime flows",
+                        id
+                    ));
+                }
+            },
+            RenderResourceDescriptor::ImportedBuffer(value) => match value.semantic {
+                ImportedBufferSemantic::HistoryBuffer => {}
+                ImportedBufferSemantic::External => {
+                    issues.push(format!(
+                        "resource '{}' uses external imported buffer semantics; external imports are compatibility-only and not supported in active runtime flows",
+                        id
+                    ));
+                }
+            },
+            _ => {}
+        }
     }
 }
 

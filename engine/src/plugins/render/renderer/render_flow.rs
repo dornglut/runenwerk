@@ -1,8 +1,10 @@
 use super::*;
 use crate::plugins::render::RenderResourceDescriptor;
-use crate::plugins::render::api::{BUILTIN_UI_DRAW_LIST_RESOURCE_ID, SURFACE_COLOR_RESOURCE_ID};
+use crate::plugins::render::api::{
+    BUILTIN_UI_DRAW_LIST_RESOURCE_ID, SURFACE_COLOR_RESOURCE_ID, SURFACE_DEPTH_RESOURCE_ID,
+};
 use crate::plugins::render::backend::ensure_compiled_pass_is_supported;
-use crate::plugins::render::frame_packet::{PreparedFlowInputs, PreparedRenderFrame};
+use crate::plugins::render::frame::{PreparedFlowInputs, PreparedRenderFrame};
 use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledBuiltinImport, CompiledComputeExecutionPlan,
     CompiledCopyExecutionPlan, CompiledPassBindings, CompiledPassExecutionPlan,
@@ -131,6 +133,12 @@ struct RuntimeBindingResolved<'a> {
     resource: RuntimeBindingResource<'a>,
     generation_token: Option<u64>,
     cacheable: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FeaturePassAction {
+    Execute,
+    Skip,
 }
 
 impl FlowRuntimeResources {
@@ -344,6 +352,13 @@ impl FlowRuntimeResources {
             }
             CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor) => {
                 Ok(SURFACE_COLOR_RESOURCE_ID)
+            }
+            CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceDepth) => {
+                bail!(
+                    "pass '{}' references imported builtin resource '{}' but surface-depth imports are not available in runtime execution yet; use flow-owned depth targets",
+                    pass_id,
+                    SURFACE_DEPTH_RESOURCE_ID
+                )
             }
             CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::BuiltinUiDrawList) => {
                 bail!(
@@ -731,6 +746,13 @@ impl Renderer {
         self.last_pass_timings.clear();
         self.last_runtime_resources.clear();
 
+        if packet.view_count > 1 {
+            bail!(
+                "prepared frame contains {} views but active runtime execution is single-view only; multi-view execution is explicitly deferred",
+                packet.view_count
+            );
+        }
+
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
         let render_result = (|| -> Result<()> {
             let active_flow_ids = compiled_flows
@@ -762,6 +784,9 @@ impl Renderer {
                 self.upload_projected_uniform_buffers(queue, flow_inputs, runtime_resources)?;
 
                 for pass in &flow.execution.passes {
+                    if !self.pass_targets_active_view(pass, packet.view_id.as_str()) {
+                        continue;
+                    }
                     ensure_compiled_pass_is_supported(pass)?;
                     let pass_encode_start = Instant::now();
                     let dispatch_workgroups = self.encode_compiled_pass(
@@ -870,6 +895,13 @@ impl Renderer {
         shader_registry: &ShaderRegistryResource,
         runtime_resources: &FlowRuntimeResources,
     ) -> Result<Option<[u32; 3]>> {
+        if let Some(feature_id) = execution_pass_feature_id(pass) {
+            match self.resolve_feature_pass_action(feature_id, execution_pass_id(pass), packet)? {
+                FeaturePassAction::Execute => {}
+                FeaturePassAction::Skip => return Ok(None),
+            }
+        }
+
         match pass {
             CompiledPassExecutionPlan::Compute(value) => self
                 .encode_compute_pass(
@@ -916,9 +948,78 @@ impl Renderer {
             CompiledPassExecutionPlan::Present(value) => self
                 .encode_present_pass(encoder, frame_texture, packet, runtime_resources, value)
                 .map(|()| None),
-            CompiledPassExecutionPlan::BuiltinUiComposite(_) => {
+            CompiledPassExecutionPlan::BuiltinUiComposite(_value) => {
                 self.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
                 Ok(None)
+            }
+        }
+    }
+
+    fn pass_targets_active_view(&self, pass: &CompiledPassExecutionPlan, view_id: &str) -> bool {
+        let view_mask = match pass {
+            CompiledPassExecutionPlan::Compute(value) => &value.view_mask,
+            CompiledPassExecutionPlan::Fullscreen(value) => &value.view_mask,
+            CompiledPassExecutionPlan::Graphics(value) => &value.view_mask,
+            CompiledPassExecutionPlan::Copy(value) => &value.view_mask,
+            CompiledPassExecutionPlan::Present(value) => &value.view_mask,
+            CompiledPassExecutionPlan::BuiltinUiComposite(value) => &value.view_mask,
+        };
+        view_mask.includes(view_id)
+    }
+
+    fn resolve_feature_pass_action(
+        &self,
+        feature_id: &str,
+        pass_id: &str,
+        packet: &RendererPreparedPacket,
+    ) -> Result<FeaturePassAction> {
+        let gate = packet
+            .feature_gates
+            .get(feature_id)
+            .copied()
+            .unwrap_or_default();
+
+        match gate.status {
+            crate::plugins::render::FeatureContributionStatus::Ready => {
+                Ok(FeaturePassAction::Execute)
+            }
+            crate::plugins::render::FeatureContributionStatus::Stale => {
+                match gate.fallback_policy {
+                    crate::plugins::render::FeatureFallbackPolicy::FailFrame => {
+                        bail!(
+                            "feature '{}' is stale for pass '{}' and fallback policy is fail-frame",
+                            feature_id,
+                            pass_id
+                        )
+                    }
+                    crate::plugins::render::FeatureFallbackPolicy::SkipFeaturePasses => {
+                        Ok(FeaturePassAction::Skip)
+                    }
+                    crate::plugins::render::FeatureFallbackPolicy::ReuseLastGood
+                    | crate::plugins::render::FeatureFallbackPolicy::EmptyContribution => {
+                        Ok(FeaturePassAction::Execute)
+                    }
+                }
+            }
+            crate::plugins::render::FeatureContributionStatus::Disabled
+            | crate::plugins::render::FeatureContributionStatus::Missing => {
+                match gate.fallback_policy {
+                    crate::plugins::render::FeatureFallbackPolicy::FailFrame => {
+                        bail!(
+                            "feature '{}' is {:?} for pass '{}' and fallback policy is fail-frame",
+                            feature_id,
+                            gate.status,
+                            pass_id
+                        )
+                    }
+                    crate::plugins::render::FeatureFallbackPolicy::SkipFeaturePasses => {
+                        Ok(FeaturePassAction::Skip)
+                    }
+                    crate::plugins::render::FeatureFallbackPolicy::ReuseLastGood
+                    | crate::plugins::render::FeatureFallbackPolicy::EmptyContribution => {
+                        Ok(FeaturePassAction::Execute)
+                    }
+                }
             }
         }
     }
@@ -970,6 +1071,7 @@ impl Renderer {
             flow,
             pass.pass_id.as_str(),
             FlowPassKind::Compute,
+            pass.feature_id.as_deref(),
             shader.identity.as_str(),
             shader.revision,
             &pass.bindings,
@@ -1071,6 +1173,7 @@ impl Renderer {
             flow,
             plan.pass_id.as_str(),
             FlowPassKind::Fullscreen,
+            plan.feature_id.as_deref(),
             shader.identity.as_str(),
             shader.revision,
             &plan.bindings,
@@ -1202,6 +1305,7 @@ impl Renderer {
             flow,
             plan.pass_id.as_str(),
             FlowPassKind::Graphics,
+            plan.feature_id.as_deref(),
             shader.identity.as_str(),
             shader.revision,
             &plan.bindings,
@@ -1372,6 +1476,7 @@ impl Renderer {
         flow: &CompiledRenderFlowPlan,
         pass_id: &str,
         pass_kind: FlowPassKind,
+        pass_feature_id: Option<&str>,
         shader_identity: &str,
         shader_revision: u64,
         bindings: &CompiledPassBindings,
@@ -1508,11 +1613,18 @@ impl Renderer {
             flow_id: flow.flow_id.clone(),
             pass_id: pass_id.to_string(),
             pass_kind,
+            feature_id: pass_feature_id.map(|value| value.to_string()),
             shader_identity: shader_identity.to_string(),
             shader_revision,
             bind_group_layout_signature_hash: hash_bind_group_layout_entries(
                 &bind_group_layout_entries,
             ),
+            material_specialization_fragment_hash: material_specialization_fragment_hash(
+                packet,
+                pass_feature_id,
+            ),
+            view_signature_hash: hash_view_signature(packet.view_id.as_str(), packet.surface_size),
+            feature_runtime_version: feature_runtime_version(packet, pass_feature_id),
             color_formats,
             depth_format,
             sample_count: 1,
@@ -1840,6 +1952,17 @@ fn execution_pass_id(pass: &CompiledPassExecutionPlan) -> &str {
     }
 }
 
+fn execution_pass_feature_id(pass: &CompiledPassExecutionPlan) -> Option<&str> {
+    match pass {
+        CompiledPassExecutionPlan::Compute(value) => value.feature_id.as_deref(),
+        CompiledPassExecutionPlan::Fullscreen(value) => value.feature_id.as_deref(),
+        CompiledPassExecutionPlan::Graphics(value) => value.feature_id.as_deref(),
+        CompiledPassExecutionPlan::Copy(value) => value.feature_id.as_deref(),
+        CompiledPassExecutionPlan::Present(value) => value.feature_id.as_deref(),
+        CompiledPassExecutionPlan::BuiltinUiComposite(value) => Some(value.feature_id.as_str()),
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ResolvedShaderMaterial<'a> {
     source: &'a str,
@@ -1882,11 +2005,191 @@ fn hash_bind_group_layout_entries(entries: &[BindGroupLayoutEntry]) -> u64 {
     hasher.finish()
 }
 
+fn hash_view_signature(view_id: &str, surface_size: (u32, u32)) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    view_id.hash(&mut hasher);
+    surface_size.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn material_specialization_fragment_hash(
+    packet: &RendererPreparedPacket,
+    pass_feature_id: Option<&str>,
+) -> u64 {
+    if !matches!(
+        pass_feature_id,
+        Some(crate::plugins::render::MATERIAL_RENDER_FEATURE_ID)
+    ) {
+        return 0;
+    }
+
+    pass_feature_id
+        .and_then(|feature_id| packet.feature_runtime_signatures.get(feature_id).copied())
+        .unwrap_or_default()
+}
+
+fn feature_runtime_version(packet: &RendererPreparedPacket, pass_feature_id: Option<&str>) -> u64 {
+    let Some(feature_id) = pass_feature_id else {
+        return 0;
+    };
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    feature_id.hash(&mut hasher);
+    if let Some(gate) = packet.feature_gates.get(feature_id) {
+        gate.status.hash(&mut hasher);
+        gate.fallback_policy.hash(&mut hasher);
+    }
+    packet
+        .feature_runtime_signatures
+        .get(feature_id)
+        .copied()
+        .unwrap_or_default()
+        .hash(&mut hasher);
+    hasher.finish()
+}
+
 fn compiled_storage_access_to_storage_texture_access(
     access: CompiledStorageAccess,
 ) -> StorageTextureAccess {
     match access {
         CompiledStorageAccess::ReadOnly => StorageTextureAccess::ReadOnly,
         CompiledStorageAccess::ReadWrite => StorageTextureAccess::ReadWrite,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::render::{CompiledPresentExecutionPlan, CompiledViewMask};
+
+    fn packet_with_feature_gate(
+        feature_id: &str,
+        gate: FeatureExecutionGate,
+    ) -> RendererPreparedPacket {
+        let mut feature_gates = BTreeMap::new();
+        feature_gates.insert(feature_id.to_string(), gate);
+        let mut feature_runtime_signatures = BTreeMap::new();
+        feature_runtime_signatures.insert(feature_id.to_string(), 1);
+        RendererPreparedPacket {
+            surface_format: TextureFormat::Rgba8Unorm,
+            surface_size: (1, 1),
+            view_id: "main".to_string(),
+            view_count: 1,
+            feature_gates,
+            feature_runtime_signatures,
+            prepared_ui: UiPreparedDraws::default(),
+            prepare_timings: RendererFrameTimings::default(),
+        }
+    }
+
+    #[test]
+    fn ui_feature_gate_skips_when_missing_and_policy_is_skip() {
+        let renderer = Renderer::new();
+        let packet = packet_with_feature_gate(
+            "ui",
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            },
+        );
+        let action = renderer
+            .resolve_feature_pass_action("ui", "ui", &packet)
+            .expect("skip policy should not error");
+        assert_eq!(action, FeaturePassAction::Skip);
+    }
+
+    #[test]
+    fn ui_feature_gate_fails_when_missing_and_policy_is_fail_frame() {
+        let renderer = Renderer::new();
+        let packet = packet_with_feature_gate(
+            "ui",
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy: FeatureFallbackPolicy::FailFrame,
+            },
+        );
+        assert!(
+            renderer
+                .resolve_feature_pass_action("ui", "ui", &packet)
+                .is_err(),
+            "missing + fail-frame should produce an execution error"
+        );
+    }
+
+    #[test]
+    fn generic_feature_gate_applies_to_non_ui_passes() {
+        let renderer = Renderer::new();
+        let packet = packet_with_feature_gate(
+            "world.draw",
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            },
+        );
+
+        let action = renderer
+            .resolve_feature_pass_action("world.draw", "compose", &packet)
+            .expect("skip policy should not error");
+        assert_eq!(action, FeaturePassAction::Skip);
+    }
+
+    #[test]
+    fn feature_runtime_version_changes_when_runtime_signature_changes() {
+        let mut packet = packet_with_feature_gate(
+            "world.draw",
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Ready,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            },
+        );
+        let base = feature_runtime_version(&packet, Some("world.draw"));
+        packet
+            .feature_runtime_signatures
+            .insert("world.draw".to_string(), 99);
+        let changed = feature_runtime_version(&packet, Some("world.draw"));
+        assert_ne!(base, changed);
+    }
+
+    #[test]
+    fn material_specialization_hash_uses_material_feature_signature() {
+        let mut packet = packet_with_feature_gate(
+            crate::plugins::render::MATERIAL_RENDER_FEATURE_ID,
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Ready,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            },
+        );
+        packet.feature_runtime_signatures.insert(
+            crate::plugins::render::MATERIAL_RENDER_FEATURE_ID.to_string(),
+            1234,
+        );
+        assert_eq!(
+            material_specialization_fragment_hash(
+                &packet,
+                Some(crate::plugins::render::MATERIAL_RENDER_FEATURE_ID),
+            ),
+            1234
+        );
+        assert_eq!(
+            material_specialization_fragment_hash(&packet, Some("world.draw")),
+            0
+        );
+    }
+
+    #[test]
+    fn pass_view_mask_filters_non_matching_views() {
+        let renderer = Renderer::new();
+        let mut explicit = BTreeSet::new();
+        explicit.insert("main".to_string());
+        let pass = CompiledPassExecutionPlan::Present(CompiledPresentExecutionPlan {
+            pass_id: "present".to_string(),
+            order_index: 0,
+            feature_id: None,
+            view_mask: CompiledViewMask::Explicit(explicit),
+            source: None,
+        });
+
+        assert!(renderer.pass_targets_active_view(&pass, "main"));
+        assert!(!renderer.pass_targets_active_view(&pass, "minimap"));
     }
 }

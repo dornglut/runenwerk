@@ -1,18 +1,24 @@
-use crate::plugins::render::api::project_uniform_bindings_for_pass;
-use crate::plugins::render::backend::{BackendPipelineCacheResource, BackendPipelineCacheStats};
 use crate::plugins::render::composition::RenderFlowRegistryResource;
-use crate::plugins::render::frame_packet::{
-    PreparedFlowInputs, PreparedRenderFrame, PreparedRenderFrameResource, PreparedSceneInfo,
-    PreparedShaderSnapshot, PreparedStateTypeInfo, PreparedSurfaceInfo, PreparedUiInput,
+use crate::plugins::render::features::{
+    DEFORMATION_RENDER_FEATURE_ID, FeatureContributionStatus, FeatureFallbackPolicy,
+    MATERIAL_RENDER_FEATURE_ID, PreparedDeformationFeatureResource, PreparedDrawFeatureResource,
+    PreparedMaterialFeatureResource, RenderFeatureId, RenderFeatureRegistryResource,
+    SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
+};
+use crate::plugins::render::frame::{
+    PreparedFlowInputs, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
+    PreparedRenderFrameResource, PreparedShaderSnapshot, PreparedStateTypeInfo,
+    PreparedSurfaceInfo, PreparedViewFrame,
 };
 use crate::plugins::render::inspect::{
     RenderDebugTimingsState, RenderRuntimeResourceInspectorState,
 };
 use crate::plugins::render::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::renderer::Gfx;
-use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
-use crate::plugins::render::{CompiledRenderFlowPlan, ParamProjectionError};
+use crate::plugins::render::{
+    CompiledPassExecutionPlan, CompiledRenderFlowPlan, ComputeDispatchDescriptor, RenderPassKind,
+};
 use crate::plugins::scene::SceneResource;
 use crate::plugins::time::domain::Time;
 use crate::plugins::ui::domain::UiRenderShaderConfig;
@@ -20,7 +26,7 @@ use crate::runtime::{Res, ResMut, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
 use anyhow::anyhow;
 use scheduler::set_slow_node_logging_enabled;
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use wgpu::SurfaceError;
 
@@ -85,13 +91,7 @@ pub(crate) fn frame_render_prepare_system(
         )
     };
 
-    let scene = PreparedSceneInfo {
-        world_scene_label: manager.world.active.label().to_string(),
-        overlay_scene_label: manager.active_overlay().label().to_string(),
-    };
-    let ui = PreparedUiInput::RawDrawList(manager.overlay_runtime.ui.draw_list.clone());
-
-    let (flow_registry_revision, compiled_flows, flows) = {
+    let (flow_registry_revision, compiled_flows, execution_feature_ids, flows) = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
             Ok(registry) => registry,
             Err(_) => {
@@ -101,36 +101,56 @@ pub(crate) fn frame_render_prepare_system(
             }
         };
         let compiled_flows = flow_registry.compiled_flows();
-        let mut frame_data = RenderFrameDataRegistry::new();
-        collect_flow_declared_frame_resources(&world, compiled_flows, &mut frame_data);
-        let flows = build_prepared_flow_inputs(compiled_flows, &frame_data, target_size)?;
-        (flow_registry.revision(), compiled_flows.len(), flows)
+        let execution_feature_ids = collect_execution_feature_ids(compiled_flows);
+        let extracted = collect_flow_declared_state_resources(&world, compiled_flows);
+        let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
+        (
+            flow_registry.revision(),
+            compiled_flows.len(),
+            execution_feature_ids,
+            flows,
+        )
     };
 
-    let frame_index = {
-        if let Ok(mut prepared_resource) = world.resource_mut::<PreparedRenderFrameResource>() {
-            prepared_resource.allocate_frame_index()
+    let (frame_index, prepare_epoch) = {
+        if let Ok(prepared_resource) = world.resource_mut::<PreparedRenderFrameResource>() {
+            (
+                prepared_resource.allocate_frame_index(),
+                prepared_resource.allocate_prepare_epoch(),
+            )
         } else {
-            0
+            (0, 0)
         }
     };
 
+    let contributions = build_frame_feature_contributions(
+        &world,
+        manager.world.active.label().to_string(),
+        manager.active_overlay().label().to_string(),
+        manager.overlay_runtime.ui.draw_list.clone(),
+        ui_rect_shader_id,
+        &execution_feature_ids,
+    );
+
     let prepared = PreparedRenderFrame {
-        frame_index,
-        flow_registry_revision,
+        context: PreparedFrameContext {
+            frame_index,
+            flow_registry_revision,
+            shader_registry_revision: shader_registry.revision(),
+            prepare_epoch,
+        },
         surface: PreparedSurfaceInfo {
             target_size_px: target_size,
         },
-        scene,
-        ui,
+        views: vec![PreparedViewFrame::main(target_size)],
         flows,
+        contributions,
         shader: PreparedShaderSnapshot {
             registry_revision: shader_registry.revision(),
         },
-        ui_rect_shader_id,
     };
 
-    if let Ok(mut prepared_resource) = world.resource_mut::<PreparedRenderFrameResource>() {
+    if let Ok(prepared_resource) = world.resource_mut::<PreparedRenderFrameResource>() {
         prepared_resource.publish(prepared);
     } else {
         let mut prepared_resource = PreparedRenderFrameResource::default();
@@ -147,10 +167,10 @@ pub(crate) fn frame_render_prepare_system(
     Ok(())
 }
 
-pub(crate) fn ui_render_submit_system(
+pub(crate) fn frame_render_submit_system(
     mut world: WorldMut,
     time: Res<Time>,
-    mut scene_resource: ResMut<SceneResource>,
+    scene_resource: ResMut<SceneResource>,
     mut startup: ResMut<StartupState>,
     mut debug_metrics: ResMut<DebugMetricsState>,
 ) -> anyhow::Result<()> {
@@ -158,7 +178,7 @@ pub(crate) fn ui_render_submit_system(
         return Ok(());
     }
 
-    let _submit_span = tracing::info_span!("systems.ui_render_submit").entered();
+    let _submit_span = tracing::info_span!("systems.frame_render_submit").entered();
     let startup_ready_before = startup.is_ready();
     let timing_log_enabled = render_timing_logging_enabled();
     set_slow_node_logging_enabled(startup_ready_before);
@@ -188,7 +208,10 @@ pub(crate) fn ui_render_submit_system(
         return Ok(());
     };
 
-    let (target_w, target_h) = prepared_frame.surface.target_size_px;
+    let (target_w, target_h) = prepared_frame
+        .main_view()
+        .map(|value| value.target_size_px)
+        .unwrap_or(prepared_frame.surface.target_size_px);
     if gfx.ctx.surface_config.width != target_w || gfx.ctx.surface_config.height != target_h {
         gfx.resize(target_w, target_h);
     }
@@ -202,7 +225,7 @@ pub(crate) fn ui_render_submit_system(
                 return Ok(());
             }
         };
-        if flow_registry.revision() != prepared_frame.flow_registry_revision {
+        if flow_registry.revision() != prepared_frame.context.flow_registry_revision {
             world.insert_resource(shader_registry);
             world.insert_resource(gfx);
             return Ok(());
@@ -210,8 +233,7 @@ pub(crate) fn ui_render_submit_system(
         let compiled_flows = flow_registry.compiled_flows();
 
         let ui_rect_shader: Option<ShaderHandle> = prepared_frame
-            .ui_rect_shader_id
-            .as_ref()
+            .ui_rect_shader_asset_id()
             .and_then(|id| shader_registry.handle(id));
 
         gfx.render(
@@ -230,16 +252,8 @@ pub(crate) fn ui_render_submit_system(
                 render_debug_timings.observe_pass_timings(gfx.renderer.last_pass_timings());
             }
             let cache_stats = gfx.renderer.flow_pipeline_cache_stats();
-            if let Ok(mut cache_resource) = world.resource_mut::<PipelineCacheResource>() {
+            if let Ok(cache_resource) = world.resource_mut::<PipelineCacheResource>() {
                 cache_resource.observe_stats(PipelineCacheStats {
-                    hits: cache_stats.hits,
-                    misses: cache_stats.misses,
-                });
-            }
-            if let Ok(mut backend_cache_resource) =
-                world.resource_mut::<BackendPipelineCacheResource>()
-            {
-                backend_cache_resource.observe_stats(BackendPipelineCacheStats {
                     hits: cache_stats.hits,
                     misses: cache_stats.misses,
                 });
@@ -367,14 +381,167 @@ pub(crate) fn ui_render_submit_system(
 }
 
 fn clear_prepared_frame(world: &mut WorldMut) {
-    if let Ok(mut prepared_resource) = world.resource_mut::<PreparedRenderFrameResource>() {
+    if let Ok(prepared_resource) = world.resource_mut::<PreparedRenderFrameResource>() {
         prepared_resource.clear();
     }
 }
 
+fn build_frame_feature_contributions(
+    world: &ecs::World,
+    world_scene_label: String,
+    overlay_scene_label: String,
+    draw_list: crate::plugins::ui::domain::UiDrawList,
+    ui_rect_shader_id: Option<String>,
+    execution_feature_ids: &[RenderFeatureId],
+) -> PreparedFrameContributions {
+    let mut contributions = PreparedFrameContributions::default();
+
+    let scene_policy = feature_policy(
+        world,
+        RenderFeatureId::new(SCENE_ROUTE_RENDER_FEATURE_ID),
+        FeatureFallbackPolicy::EmptyContribution,
+    );
+    contributions.insert_scene_route(
+        world_scene_label,
+        overlay_scene_label,
+        FeatureContributionStatus::Ready,
+        scene_policy,
+    );
+
+    let ui_policy = feature_policy(
+        world,
+        RenderFeatureId::new(UI_RENDER_FEATURE_ID),
+        FeatureFallbackPolicy::SkipFeaturePasses,
+    );
+    contributions.insert_ui(
+        draw_list,
+        ui_rect_shader_id,
+        FeatureContributionStatus::Ready,
+        ui_policy,
+    );
+
+    if let Ok(resource) = world.resource::<PreparedDrawFeatureResource>() {
+        let draw_policy = feature_policy(
+            world,
+            RenderFeatureId::new(WORLD_DRAW_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_draw(resource.payload.clone(), resource.status, draw_policy);
+    }
+
+    if let Ok(resource) = world.resource::<PreparedMaterialFeatureResource>() {
+        let material_policy = feature_policy(
+            world,
+            RenderFeatureId::new(MATERIAL_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_material(resource.payload.clone(), resource.status, material_policy);
+    }
+
+    if let Ok(resource) = world.resource::<PreparedDeformationFeatureResource>() {
+        let deformation_policy = feature_policy(
+            world,
+            RenderFeatureId::new(DEFORMATION_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_deformation(
+            resource.payload.clone(),
+            resource.status,
+            deformation_policy,
+        );
+    }
+
+    for feature_id in execution_feature_ids {
+        if contributions.feature(feature_id).is_some() {
+            continue;
+        }
+        let fallback_policy = feature_policy(
+            world,
+            feature_id.clone(),
+            FeatureFallbackPolicy::SkipFeaturePasses,
+        );
+        contributions.insert_missing(feature_id.clone(), fallback_policy);
+    }
+
+    if let Ok(feature_registry) = world.resource::<RenderFeatureRegistryResource>() {
+        for feature_id in feature_registry.resolved_order() {
+            if contributions.feature(feature_id).is_some() {
+                continue;
+            }
+            let fallback_policy = feature_registry
+                .descriptor(feature_id)
+                .map(|descriptor| descriptor.fallback_policy)
+                .unwrap_or(FeatureFallbackPolicy::SkipFeaturePasses);
+            contributions.insert_missing(feature_id.clone(), fallback_policy);
+        }
+    }
+
+    contributions
+}
+
+fn feature_policy(
+    world: &ecs::World,
+    feature_id: RenderFeatureId,
+    fallback: FeatureFallbackPolicy,
+) -> FeatureFallbackPolicy {
+    world
+        .resource::<RenderFeatureRegistryResource>()
+        .ok()
+        .and_then(|registry| registry.descriptor(&feature_id))
+        .map(|descriptor| descriptor.fallback_policy)
+        .unwrap_or(fallback)
+}
+
+fn collect_execution_feature_ids(
+    compiled_flows: &[CompiledRenderFlowPlan],
+) -> Vec<RenderFeatureId> {
+    let mut ids = BTreeSet::<String>::new();
+    for flow in compiled_flows {
+        for pass in &flow.execution.passes {
+            let feature_id = match pass {
+                CompiledPassExecutionPlan::Compute(value) => value.feature_id.as_deref(),
+                CompiledPassExecutionPlan::Fullscreen(value) => value.feature_id.as_deref(),
+                CompiledPassExecutionPlan::Graphics(value) => value.feature_id.as_deref(),
+                CompiledPassExecutionPlan::Copy(value) => value.feature_id.as_deref(),
+                CompiledPassExecutionPlan::Present(value) => value.feature_id.as_deref(),
+                CompiledPassExecutionPlan::BuiltinUiComposite(value) => {
+                    Some(value.feature_id.as_str())
+                }
+            };
+            if let Some(feature_id) = feature_id.map(str::trim).filter(|value| !value.is_empty()) {
+                ids.insert(feature_id.to_string());
+            }
+        }
+    }
+    ids.into_iter().map(RenderFeatureId::new).collect()
+}
+
+type ExtractedRenderStateMap<'a> = BTreeMap<TypeId, &'a dyn Any>;
+
+fn collect_flow_declared_state_resources<'a>(
+    world: &'a ecs::World,
+    compiled_flows: &[crate::plugins::render::CompiledRenderFlowPlan],
+) -> ExtractedRenderStateMap<'a> {
+    let mut values = ExtractedRenderStateMap::new();
+    let mut type_ids = BTreeSet::<TypeId>::new();
+    for flow in compiled_flows {
+        for declaration in &flow.resources.state_resources {
+            type_ids.insert(declaration.type_id);
+        }
+    }
+
+    for type_id in type_ids {
+        if let Some(resource) = world.resource_by_type_id(type_id) {
+            values.insert(type_id, resource);
+        }
+    }
+
+    values
+}
+
 fn build_prepared_flow_inputs(
     compiled_flows: &[CompiledRenderFlowPlan],
-    frame_data: &RenderFrameDataRegistry<'_>,
+    extracted_state: &ExtractedRenderStateMap<'_>,
     surface_size: (u32, u32),
 ) -> anyhow::Result<BTreeMap<String, PreparedFlowInputs>> {
     let mut outputs = BTreeMap::<String, PreparedFlowInputs>::new();
@@ -383,51 +550,68 @@ fn build_prepared_flow_inputs(
         let mut projected_uniform_bytes = BTreeMap::<String, Vec<u8>>::new();
 
         for pass in &flow.pass_order {
-            let pass_id = pass.pass_id().to_string();
-            let projected = project_uniform_bindings_for_pass(
-                pass.node(),
-                &flow.resources,
-                frame_data,
-                surface_size,
-            )
-            .map_err(|errors: Vec<ParamProjectionError>| {
-                anyhow::anyhow!(
-                    "uniform projection failed for flow '{}': {}",
-                    flow.flow_id,
-                    errors
-                        .into_iter()
-                        .map(|err| err.to_string())
-                        .collect::<Vec<_>>()
-                        .join("; ")
-                )
-            })?;
+            for binding in &pass.node().uniform_bindings {
+                if !flow.resources.has_state_resource(binding.state_type_id()) {
+                    anyhow::bail!(
+                        "uniform projection for flow '{}' pass '{}' requires undeclared state '{}'",
+                        flow.flow_id,
+                        pass.pass_id(),
+                        binding.state_type_name()
+                    );
+                }
 
-            for buffer in projected {
-                let key = buffer.buffer_id.as_str().to_string();
-                if let Some(existing) = projected_uniform_bytes.get(&key) {
-                    if existing != &buffer.bytes {
-                        anyhow::bail!(
-                            "uniform projection conflict for buffer '{}' in flow '{}': pass '{}' wrote different bytes than a prior pass",
-                            buffer.buffer_id.as_str(),
+                if !flow.resources.has_uniform_buffer(binding.uniform_id()) {
+                    anyhow::bail!(
+                        "uniform projection for flow '{}' pass '{}' references unknown uniform buffer '{}'",
+                        flow.flow_id,
+                        pass.pass_id(),
+                        binding.uniform_id().as_str()
+                    );
+                }
+
+                let state = extracted_state
+                    .get(&binding.state_type_id())
+                    .copied()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "uniform projection for flow '{}' pass '{}' requires missing ECS state '{}'",
                             flow.flow_id,
-                            pass_id
+                            pass.pass_id(),
+                            binding.state_type_name()
+                        )
+                    })?;
+
+                let bytes = binding.project_bytes(state, surface_size).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "uniform projection for flow '{}' pass '{}' failed for state '{}'",
+                        flow.flow_id,
+                        pass.pass_id(),
+                        binding.state_type_name()
+                    )
+                })?;
+
+                let key = binding.uniform_id().as_str().to_string();
+                if let Some(existing) = projected_uniform_bytes.get(&key) {
+                    if existing != &bytes {
+                        anyhow::bail!(
+                            "uniform projection conflict for buffer '{}' in flow '{}': pass '{}' produced bytes that disagree with prior projection",
+                            binding.uniform_id().as_str(),
+                            flow.flow_id,
+                            pass.pass_id()
                         );
                     }
                     continue;
                 }
-                projected_uniform_bytes.insert(key, buffer.bytes);
+                projected_uniform_bytes.insert(key, bytes);
             }
         }
 
         let mut projected_dispatch_workgroups = BTreeMap::<String, [u32; 3]>::new();
         for pass in &flow.pass_order {
-            if !matches!(
-                pass.node().kind,
-                crate::plugins::render::RenderPassKind::Compute
-            ) {
+            if !matches!(pass.node().kind, RenderPassKind::Compute) {
                 continue;
             }
-            let dispatch = project_dispatch_for_pass(pass.node(), frame_data)?;
+            let dispatch = project_dispatch_for_pass(pass.node(), extracted_state)?;
             projected_dispatch_workgroups.insert(pass.pass_id().to_string(), dispatch);
         }
 
@@ -455,13 +639,14 @@ fn build_prepared_flow_inputs(
 
 fn project_dispatch_for_pass(
     node: &crate::plugins::render::RenderPassNode,
-    frame_data: &RenderFrameDataRegistry<'_>,
+    extracted_state: &ExtractedRenderStateMap<'_>,
 ) -> anyhow::Result<[u32; 3]> {
     let dispatch = match &node.compute_dispatch {
-        Some(crate::plugins::render::ComputeDispatchDescriptor::Fixed(value)) => *value,
-        Some(crate::plugins::render::ComputeDispatchDescriptor::State(binding)) => {
-            let state = frame_data
-                .get_by_type_id(binding.state_type_id())
+        Some(ComputeDispatchDescriptor::Fixed(value)) => *value,
+        Some(ComputeDispatchDescriptor::State(binding)) => {
+            let state = extracted_state
+                .get(&binding.state_type_id())
+                .copied()
                 .ok_or_else(|| {
                     anyhow::anyhow!(
                         "compute pass '{}' dispatch_state requires missing ECS resource '{}'",
@@ -498,25 +683,6 @@ fn project_dispatch_for_pass(
     Ok(dispatch)
 }
 
-fn collect_flow_declared_frame_resources<'a>(
-    world: &'a ecs::World,
-    compiled_flows: &[crate::plugins::render::CompiledRenderFlowPlan],
-    frame_data: &mut RenderFrameDataRegistry<'a>,
-) {
-    let mut type_ids = BTreeSet::<TypeId>::new();
-    for flow in compiled_flows {
-        for declaration in &flow.resources.state_resources {
-            type_ids.insert(declaration.type_id);
-        }
-    }
-
-    for type_id in type_ids {
-        if let Some(resource) = world.resource_by_type_id(type_id) {
-            frame_data.insert_by_type_id(type_id, resource);
-        }
-    }
-}
-
 fn clamp_lines(lines: &mut Vec<String>, max_lines: usize) {
     if max_lines == 0 {
         lines.clear();
@@ -525,5 +691,122 @@ fn clamp_lines(lines: &mut Vec<String>, max_lines: usize) {
     let overflow = lines.len().saturating_sub(max_lines);
     if overflow > 0 {
         lines.drain(..overflow);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::render::frame::{
+        PreparedDeformationFeatureContribution, PreparedDeformationStream, PreparedDrawBatch,
+        PreparedDrawFeatureContribution, PreparedFeaturePayload,
+        PreparedMaterialFeatureContribution, PreparedMaterialInstanceInput,
+    };
+
+    fn test_world() -> ecs::World {
+        let mut world = ecs::World::default();
+        let mut registry = RenderFeatureRegistryResource::default();
+        registry.sync_order();
+        world.insert_resource(registry);
+        world
+    }
+
+    #[test]
+    fn frame_prepare_ingests_draw_material_deformation_feature_resources() {
+        let mut world = test_world();
+        world.insert_resource(PreparedDrawFeatureResource {
+            status: FeatureContributionStatus::Ready,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedDrawFeatureContribution {
+                batches: vec![PreparedDrawBatch {
+                    batch_id: "batch.0".to_string(),
+                    mesh_ref: "mesh.0".to_string(),
+                    material_ref: "material.0".to_string(),
+                    instance_count: 2,
+                }],
+            },
+        });
+        world.insert_resource(PreparedMaterialFeatureResource {
+            status: FeatureContributionStatus::Ready,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedMaterialFeatureContribution {
+                instances: vec![PreparedMaterialInstanceInput {
+                    material_instance_id: "mat.instance".to_string(),
+                    specialization_key_fragment: "opaque".to_string(),
+                    parameter_blob: vec![1, 2, 3],
+                }],
+            },
+        });
+        world.insert_resource(PreparedDeformationFeatureResource {
+            status: FeatureContributionStatus::Stale,
+            fallback_policy: FeatureFallbackPolicy::ReuseLastGood,
+            payload: PreparedDeformationFeatureContribution {
+                streams: vec![PreparedDeformationStream {
+                    stream_id: "skin.stream".to_string(),
+                    input_pose_ref: "pose.current".to_string(),
+                    output_buffer_ref: "buffer.skinning".to_string(),
+                }],
+            },
+        });
+
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world".to_string(),
+            "overlay".to_string(),
+            crate::plugins::ui::domain::UiDrawList::default(),
+            None,
+            &[],
+        );
+
+        let draw = contributions
+            .feature(&RenderFeatureId::new(WORLD_DRAW_RENDER_FEATURE_ID))
+            .expect("draw contribution should be published");
+        assert_eq!(draw.status, FeatureContributionStatus::Ready);
+        assert!(matches!(draw.payload, PreparedFeaturePayload::Draw(_)));
+
+        let material = contributions
+            .feature(&RenderFeatureId::new(MATERIAL_RENDER_FEATURE_ID))
+            .expect("material contribution should be published");
+        assert_eq!(material.status, FeatureContributionStatus::Ready);
+        assert!(matches!(
+            material.payload,
+            PreparedFeaturePayload::Material(_)
+        ));
+
+        let deformation = contributions
+            .feature(&RenderFeatureId::new(DEFORMATION_RENDER_FEATURE_ID))
+            .expect("deformation contribution should be published");
+        assert_eq!(deformation.status, FeatureContributionStatus::Stale);
+        assert_eq!(
+            deformation.fallback_policy,
+            FeatureFallbackPolicy::SkipFeaturePasses
+        );
+        assert!(matches!(
+            deformation.payload,
+            PreparedFeaturePayload::Deformation(_)
+        ));
+    }
+
+    #[test]
+    fn prepare_inserts_missing_gate_for_execution_referenced_feature_without_payload() {
+        let world = test_world();
+        let execution_feature_ids = vec![RenderFeatureId::new("custom.feature")];
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world".to_string(),
+            "overlay".to_string(),
+            crate::plugins::ui::domain::UiDrawList::default(),
+            None,
+            &execution_feature_ids,
+        );
+
+        let missing = contributions
+            .feature(&RenderFeatureId::new("custom.feature"))
+            .expect("execution-referenced feature should still publish gate");
+        assert_eq!(missing.status, FeatureContributionStatus::Missing);
+        assert_eq!(
+            missing.fallback_policy,
+            FeatureFallbackPolicy::SkipFeaturePasses
+        );
     }
 }

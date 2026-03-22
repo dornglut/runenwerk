@@ -21,6 +21,7 @@ pub enum RenderShaderReference {
 pub struct RenderPassNode {
     pub id: RenderPassId,
     pub kind: RenderPassKind,
+    pub feature_id: Option<String>,
     pub shader: Option<RenderShaderReference>,
     pub reads: Vec<RenderResourceId>,
     pub writes: Vec<RenderResourceId>,
@@ -43,6 +44,7 @@ impl RenderPassNode {
         Self {
             id: id.into(),
             kind,
+            feature_id: None,
             shader: None,
             reads: Vec::new(),
             writes: Vec::new(),

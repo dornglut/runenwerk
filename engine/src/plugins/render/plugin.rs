@@ -1,12 +1,17 @@
-use super::backend::{BackendPipelineCacheResource, BackendResourceAllocatorResource};
+use super::backend::BackendResourceAllocatorResource;
 use super::composition::{RenderFlowRegistryResource, sync_render_flow_registry_system};
-use super::frame_packet::PreparedRenderFrameResource;
+use super::features::{
+    PreparedDeformationFeatureResource, PreparedDrawFeatureResource,
+    PreparedMaterialFeatureResource, RenderFeatureRegistryResource,
+    sync_render_feature_registry_system,
+};
+use super::frame::PreparedRenderFrameResource;
 use super::inspect::{
     RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
     RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
 };
 use super::pipelines::PipelineCacheResource;
-use super::renderer::submit::{frame_render_prepare_system, ui_render_submit_system};
+use super::renderer::submit::{frame_render_prepare_system, frame_render_submit_system};
 use super::shader::ShaderRegistryResource;
 use crate::app::App;
 use crate::plugin::Plugin;
@@ -21,9 +26,12 @@ impl Plugin for RenderPlugin {
         app.init_resource::<SceneResource>();
         app.init_resource::<ShaderRegistryResource>();
         app.init_resource::<RenderFlowRegistryResource>();
+        app.init_resource::<RenderFeatureRegistryResource>();
+        app.init_resource::<PreparedDrawFeatureResource>();
+        app.init_resource::<PreparedMaterialFeatureResource>();
+        app.init_resource::<PreparedDeformationFeatureResource>();
         app.init_resource::<PreparedRenderFrameResource>();
         app.init_resource::<PipelineCacheResource>();
-        app.init_resource::<BackendPipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
         app.init_resource::<RenderDebugOverlayState>();
         app.init_resource::<RenderRuntimeResourceInspectorState>();
@@ -33,7 +41,8 @@ impl Plugin for RenderPlugin {
         app.init_resource::<StartupState>();
         app.init_resource::<DebugMetricsState>();
         app.add_systems(RenderPrepare, sync_render_flow_registry_system);
+        app.add_systems(RenderPrepare, sync_render_feature_registry_system);
         app.add_systems(RenderPrepare, frame_render_prepare_system);
-        app.add_systems(RenderSubmit, ui_render_submit_system);
+        app.add_systems(RenderSubmit, frame_render_submit_system);
     }
 }

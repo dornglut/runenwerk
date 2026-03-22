@@ -31,6 +31,11 @@ impl ComputePassBuilder {
         self
     }
 
+    pub fn for_feature(mut self, feature_id: impl Into<String>) -> Self {
+        self.pass.feature_id = Some(feature_id.into());
+        self
+    }
+
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
@@ -47,11 +52,7 @@ impl ComputePassBuilder {
         self
     }
 
-    pub fn uniform_from_state_to<S, U, F>(
-        mut self,
-        handle: UniformHandle<U>,
-        projection: F,
-    ) -> Self
+    pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
@@ -148,6 +149,11 @@ impl FullscreenPassBuilder {
         self
     }
 
+    pub fn for_feature(mut self, feature_id: impl Into<String>) -> Self {
+        self.pass.feature_id = Some(feature_id.into());
+        self
+    }
+
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
@@ -164,10 +170,7 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn uniform_from_state_with_surface<S, U, F>(
-        mut self,
-        projection: F,
-    ) -> Self
+    pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
@@ -183,11 +186,7 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn uniform_from_state_to<S, U, F>(
-        mut self,
-        handle: UniformHandle<U>,
-        projection: F,
-    ) -> Self
+    pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,

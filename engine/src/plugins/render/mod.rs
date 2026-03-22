@@ -1,6 +1,8 @@
 pub mod api;
 pub mod backend;
 pub mod composition;
+pub mod features;
+pub mod frame;
 pub mod frame_packet;
 pub mod graph;
 pub mod inspect;
@@ -22,9 +24,20 @@ pub use api::{
 pub use bytemuck;
 pub use composition::RenderFlowRegistryResource;
 pub use engine_render_macros::{GpuStorage, GpuUniform};
-pub use frame_packet::{
-    PreparedFlowInputs, PreparedRenderFrame, PreparedRenderFrameResource, PreparedSceneInfo,
-    PreparedShaderSnapshot, PreparedStateTypeInfo, PreparedSurfaceInfo, PreparedUiInput,
+pub use features::{
+    DEFORMATION_RENDER_FEATURE_ID, FeatureContributionStatus, FeatureFallbackPolicy,
+    MATERIAL_RENDER_FEATURE_ID, PreparedDeformationFeatureResource, PreparedDrawFeatureResource,
+    PreparedMaterialFeatureResource, RenderFeatureDescriptor, RenderFeatureId,
+    RenderFeatureRegistryResource, SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID,
+    WORLD_DRAW_RENDER_FEATURE_ID,
+};
+pub use frame::{
+    PreparedDeformationFeatureContribution, PreparedDeformationStream, PreparedDrawBatch,
+    PreparedDrawFeatureContribution, PreparedFeatureContribution, PreparedFeatureGate,
+    PreparedFeaturePayload, PreparedFlowInputs, PreparedFrameContext, PreparedFrameContributions,
+    PreparedMaterialFeatureContribution, PreparedMaterialInstanceInput, PreparedRenderFrame,
+    PreparedRenderFrameResource, PreparedSceneRouteContribution, PreparedShaderSnapshot,
+    PreparedStateTypeInfo, PreparedSurfaceInfo, PreparedUiFeatureContribution, PreparedViewFrame,
 };
 pub use graph::{
     CompiledBindGroupPlan, CompiledBindingEntry, CompiledBuiltinImport,
@@ -34,9 +47,9 @@ pub use graph::{
     CompiledPassExecutionPlan, CompiledPresentExecutionPlan, CompiledPresentPass,
     CompiledRasterExecutionPlan, CompiledRenderFlowPlan, CompiledResourceRef,
     CompiledStateRequirement, CompiledStorageAccess, CompiledStorageBinding, CompiledTargetPlan,
-    CompiledUiCompositeExecutionPlan, CompiledUiCompositePass, FlowValidationReport,
-    RenderFlowGraph, RenderFlowValidationError, RenderPassKind, RenderPassNode,
-    RenderShaderReference, compile_flow_plan, validate_flow_graph,
+    CompiledUiCompositeExecutionPlan, CompiledUiCompositePass, CompiledViewMask,
+    FlowValidationReport, RenderFlowGraph, RenderFlowValidationError, RenderPassKind,
+    RenderPassNode, RenderShaderReference, compile_flow_plan, validate_flow_graph,
 };
 pub use params::{
     GpuBoolU32, GpuParams, GpuStorage, GpuUniform, GpuUniformField, ToGpuValue, align_up_const,
@@ -46,7 +59,7 @@ pub use plugin::RenderPlugin;
 pub use renderer::frame_bindings::RenderFrameDataRegistry;
 pub use renderer::{Gfx, GfxFrameTimings, Renderer, RendererFrameTimings};
 pub use resource::{
-    RenderResourceDescriptor, ResourceLifetime, TransientAliasAssignment, TransientAliasCandidate,
-    TransientAliasSlot, TransientResourceWindow,
+    ImportedBufferSemantic, ImportedTextureSemantic, RenderResourceDescriptor, ResourceLifetime,
+    TransientAliasAssignment, TransientAliasCandidate, TransientAliasSlot, TransientResourceWindow,
 };
 pub use shader::{ShaderHandle, ShaderRegistryResource};

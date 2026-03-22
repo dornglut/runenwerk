@@ -1,7 +1,7 @@
 use super::{CompiledPassDescriptor, RenderPassKind, RenderPassNode, ResourceGraph};
-use crate::plugins::render::api::{
-    BUILTIN_UI_DRAW_LIST_RESOURCE_ID, ComputeDispatchDescriptor, SURFACE_COLOR_RESOURCE_ID,
-};
+use crate::plugins::render::api::ComputeDispatchDescriptor;
+use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
+use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{RenderResourceDescriptor, RenderResourceId, RenderShaderReference};
 use std::any::TypeId;
 use std::collections::BTreeSet;
@@ -32,7 +32,9 @@ pub enum CompiledPassExecutionPlan {
 pub struct CompiledComputeExecutionPlan {
     pub pass_id: String,
     pub order_index: usize,
+    pub feature_id: Option<String>,
     pub shader: Option<RenderShaderReference>,
+    pub view_mask: CompiledViewMask,
     pub bindings: CompiledPassBindings,
     pub dispatch: Option<CompiledDispatchPlan>,
 }
@@ -41,7 +43,9 @@ pub struct CompiledComputeExecutionPlan {
 pub struct CompiledRasterExecutionPlan {
     pub pass_id: String,
     pub order_index: usize,
+    pub feature_id: Option<String>,
     pub shader: Option<RenderShaderReference>,
+    pub view_mask: CompiledViewMask,
     pub bindings: CompiledPassBindings,
     pub targets: CompiledTargetPlan,
     pub draw_buffers: CompiledDrawBufferPlan,
@@ -52,6 +56,8 @@ pub struct CompiledRasterExecutionPlan {
 pub struct CompiledCopyExecutionPlan {
     pub pass_id: String,
     pub order_index: usize,
+    pub feature_id: Option<String>,
+    pub view_mask: CompiledViewMask,
     pub source: Option<CompiledResourceRef>,
     pub destination: Option<CompiledResourceRef>,
 }
@@ -60,6 +66,8 @@ pub struct CompiledCopyExecutionPlan {
 pub struct CompiledPresentExecutionPlan {
     pub pass_id: String,
     pub order_index: usize,
+    pub feature_id: Option<String>,
+    pub view_mask: CompiledViewMask,
     pub source: Option<CompiledResourceRef>,
 }
 
@@ -67,8 +75,26 @@ pub struct CompiledPresentExecutionPlan {
 pub struct CompiledUiCompositeExecutionPlan {
     pub pass_id: String,
     pub order_index: usize,
+    pub feature_id: String,
+    pub view_mask: CompiledViewMask,
     pub ui_input: CompiledResourceRef,
     pub color_output: CompiledResourceRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum CompiledViewMask {
+    #[default]
+    AllViews,
+    Explicit(BTreeSet<String>),
+}
+
+impl CompiledViewMask {
+    pub fn includes(&self, view_id: &str) -> bool {
+        match self {
+            Self::AllViews => true,
+            Self::Explicit(values) => values.contains(view_id),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -142,6 +168,7 @@ pub enum CompiledResourceRef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompiledBuiltinImport {
     SurfaceColor,
+    SurfaceDepth,
     BuiltinUiDrawList,
 }
 
@@ -186,7 +213,9 @@ fn compile_pass_execution(
             CompiledPassExecutionPlan::Compute(CompiledComputeExecutionPlan {
                 pass_id,
                 order_index,
+                feature_id: compile_feature_id(node),
                 shader: node.shader.clone(),
+                view_mask: compile_view_mask(node),
                 bindings,
                 dispatch: compile_dispatch_plan(node),
             })
@@ -195,7 +224,9 @@ fn compile_pass_execution(
             CompiledPassExecutionPlan::Fullscreen(CompiledRasterExecutionPlan {
                 pass_id,
                 order_index,
+                feature_id: compile_feature_id(node),
                 shader: node.shader.clone(),
+                view_mask: compile_view_mask(node),
                 bindings,
                 targets: compile_target_plan(node, resources),
                 draw_buffers: CompiledDrawBufferPlan::default(),
@@ -206,7 +237,9 @@ fn compile_pass_execution(
             CompiledPassExecutionPlan::Graphics(CompiledRasterExecutionPlan {
                 pass_id,
                 order_index,
+                feature_id: compile_feature_id(node),
                 shader: node.shader.clone(),
+                view_mask: compile_view_mask(node),
                 bindings,
                 targets: compile_target_plan(node, resources),
                 draw_buffers: compile_draw_buffer_plan(node, resources),
@@ -216,6 +249,8 @@ fn compile_pass_execution(
         RenderPassKind::Copy => CompiledPassExecutionPlan::Copy(CompiledCopyExecutionPlan {
             pass_id,
             order_index,
+            feature_id: compile_feature_id(node),
+            view_mask: compile_view_mask(node),
             source: node
                 .reads
                 .first()
@@ -229,6 +264,8 @@ fn compile_pass_execution(
             CompiledPassExecutionPlan::Present(CompiledPresentExecutionPlan {
                 pass_id,
                 order_index,
+                feature_id: compile_feature_id(node),
+                view_mask: compile_view_mask(node),
                 source: node
                     .reads
                     .first()
@@ -239,6 +276,8 @@ fn compile_pass_execution(
             CompiledPassExecutionPlan::BuiltinUiComposite(CompiledUiCompositeExecutionPlan {
                 pass_id,
                 order_index,
+                feature_id: UI_RENDER_FEATURE_ID.to_string(),
+                view_mask: compile_view_mask(node),
                 ui_input: CompiledResourceRef::ImportedBuiltin(
                     CompiledBuiltinImport::BuiltinUiDrawList,
                 ),
@@ -397,21 +436,40 @@ fn compile_dispatch_plan(node: &RenderPassNode) -> Option<CompiledDispatchPlan> 
     }
 }
 
+fn compile_view_mask(_node: &RenderPassNode) -> CompiledViewMask {
+    let mut values = BTreeSet::<String>::new();
+    values.insert("main".to_string());
+    CompiledViewMask::Explicit(values)
+}
+
+fn compile_feature_id(node: &RenderPassNode) -> Option<String> {
+    node.feature_id
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
+}
+
 fn compile_resource_ref(id: &RenderResourceId, resources: &ResourceGraph) -> CompiledResourceRef {
     let Some(descriptor) = find_descriptor(resources, id) else {
         return CompiledResourceRef::FlowOwned(id.clone());
     };
     match descriptor {
-        RenderResourceDescriptor::ImportedTexture(_)
-        | RenderResourceDescriptor::ImportedBuffer(_) => match id.as_str() {
-            SURFACE_COLOR_RESOURCE_ID => {
+        RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
+            ImportedTextureSemantic::SurfaceColor => {
                 CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor)
             }
-            BUILTIN_UI_DRAW_LIST_RESOURCE_ID => {
+            ImportedTextureSemantic::SurfaceDepth => {
+                CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceDepth)
+            }
+            ImportedTextureSemantic::BuiltinUiDrawList => {
                 CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::BuiltinUiDrawList)
             }
-            _ => CompiledResourceRef::Imported(id.clone()),
+            ImportedTextureSemantic::HistoryTexture | ImportedTextureSemantic::External => {
+                CompiledResourceRef::Imported(id.clone())
+            }
         },
+        RenderResourceDescriptor::ImportedBuffer(_) => CompiledResourceRef::Imported(id.clone()),
         _ => CompiledResourceRef::FlowOwned(id.clone()),
     }
 }
@@ -482,6 +540,7 @@ mod tests {
             .with_builtin_ui()
             .double_buffer_storage_array::<Cell>("cells", 16)
             .compute_pass("simulate")
+            .for_feature("world.draw")
             .uniform_from_state(FlowState::params)
             .bind_ping_pong_storage("cells")
             .dispatch_from_state(FlowState::dispatch)
@@ -544,6 +603,32 @@ mod tests {
                 state_type_name, ..
             }) if state_type_name == std::any::type_name::<FlowState>()
         ));
+        assert_eq!(
+            compute.feature_id.as_deref(),
+            Some("world.draw"),
+            "compute pass should preserve explicit feature identity"
+        );
+        assert!(
+            compute.view_mask.includes("main"),
+            "compute pass should target the canonical single active view"
+        );
+        assert!(
+            !compute.view_mask.includes("minimap"),
+            "single-view execution plan should not claim support for deferred view ids"
+        );
+
+        let fullscreen = execution
+            .passes
+            .iter()
+            .find_map(|pass| match pass {
+                CompiledPassExecutionPlan::Fullscreen(value) => Some(value),
+                _ => None,
+            })
+            .expect("fullscreen pass should exist");
+        assert!(
+            fullscreen.feature_id.is_none(),
+            "passes without explicit for_feature(...) should keep feature id empty"
+        );
     }
 
     #[test]
@@ -569,6 +654,10 @@ mod tests {
         assert_eq!(
             ui.color_output,
             CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor)
+        );
+        assert!(
+            ui.view_mask.includes("main"),
+            "ui pass should target the canonical single active view"
         );
     }
 }

@@ -1,5 +1,6 @@
 use crate::plugins::render::backend::WgpuCtx;
-use crate::plugins::render::frame_packet::PreparedRenderFrame;
+use crate::plugins::render::features::{FeatureContributionStatus, FeatureFallbackPolicy};
+use crate::plugins::render::frame::PreparedRenderFrame;
 use crate::plugins::render::graph::CompiledRenderFlowPlan;
 use crate::plugins::render::inspect::{PassTimingSample, RuntimeResourceInspectionEntry};
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
@@ -202,7 +203,7 @@ struct RectPass {
     screen_bind_group: BindGroup,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 struct UiPreparedDraws {
     rect_instances: usize,
     rect_instance_buffer: Option<Buffer>,
@@ -210,12 +211,29 @@ struct UiPreparedDraws {
     surface_size: (u32, u32),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FeatureExecutionGate {
+    status: FeatureContributionStatus,
+    fallback_policy: FeatureFallbackPolicy,
+}
+
+impl Default for FeatureExecutionGate {
+    fn default() -> Self {
+        Self {
+            status: FeatureContributionStatus::Missing,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct RendererPreparedPacket {
     surface_format: TextureFormat,
     surface_size: (u32, u32),
-    world_scene_label: String,
-    overlay_scene_label: String,
+    view_id: String,
+    view_count: usize,
+    feature_gates: BTreeMap<String, FeatureExecutionGate>,
+    feature_runtime_signatures: BTreeMap<String, u64>,
     prepared_ui: UiPreparedDraws,
     prepare_timings: RendererFrameTimings,
 }
@@ -229,6 +247,7 @@ pub struct Renderer {
     text_renderer_format: Option<TextureFormat>,
     flow_runtime_cache: BTreeMap<String, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
+    last_good_ui_prepared: Option<UiPreparedDraws>,
     last_pass_timings: Vec<PassTimingSample>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
 }
