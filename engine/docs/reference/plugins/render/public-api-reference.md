@@ -12,6 +12,7 @@ These are the APIs most users should start with.
   - `ComputePassBuilder`
   - `FullscreenPassBuilder`
   - `BuiltinUiCompositePassBuilder`
+  - advanced pass-feature hook: `ComputePassBuilder::for_feature`, `FullscreenPassBuilder::for_feature`
 - handles and IDs:
   - `PassHandle`
   - `RenderFlowId`
@@ -51,22 +52,55 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 
 - `PreparedRenderFrame`
 - `PreparedRenderFrameResource`
+- `PreparedFrameContext`
 - `PreparedSurfaceInfo`
-- `PreparedSceneInfo`
-- `PreparedUiInput`
+- `PreparedViewFrame`
 - `PreparedFlowInputs`
 - `PreparedStateTypeInfo`
 - `PreparedShaderSnapshot`
+- `PreparedFrameContributions`
+- `PreparedFeatureContribution`
+- `PreparedFeaturePayload`
+- `PreparedFeatureGate`
+- `PreparedUiFeatureContribution`
+- `PreparedSceneRouteContribution`
+- `PreparedDrawFeatureContribution`
+- `PreparedDrawBatch`
+- `PreparedMaterialFeatureContribution`
+- `PreparedMaterialInstanceInput`
+- `PreparedDeformationFeatureContribution`
+- `PreparedDeformationStream`
 
 Contract:
 
 - `frame_render_prepare_system` publishes one owned `PreparedRenderFrame` per renderable frame.
-- `ui_render_submit_system` consumes the prepared frame and does not perform live ECS extraction for flow data.
+- `frame_render_submit_system` consumes the prepared frame and does not perform live ECS extraction for flow data.
 
 Current UI note:
 
-- `PreparedUiInput::RawDrawList` is a phase-1 transport format.
+- Phase 1 uses `PreparedFeaturePayload::Ui` carrying an owned `UiDrawList` clone.
 - The target direction is backend-neutral extracted UI prepared input.
+
+## Feature Contribution APIs
+
+Feature ordering and fallback policies are explicit and live in ECS metadata:
+
+- `RenderFeatureId`
+- `RenderFeatureDescriptor`
+- `RenderFeatureRegistryResource`
+- `PreparedDrawFeatureResource`
+- `PreparedMaterialFeatureResource`
+- `PreparedDeformationFeatureResource`
+- `FeatureContributionStatus` (`Ready | Stale | Disabled | Missing`)
+- `FeatureFallbackPolicy` (`ReuseLastGood | EmptyContribution | SkipFeaturePasses | FailFrame`)
+
+Built-in feature IDs:
+
+- `SCENE_ROUTE_RENDER_FEATURE_ID`
+- `UI_RENDER_FEATURE_ID`
+- `WORLD_DRAW_RENDER_FEATURE_ID`
+- `MATERIAL_RENDER_FEATURE_ID`
+- `DEFORMATION_RENDER_FEATURE_ID`
 
 ## Graph and Execution Compilation APIs
 
@@ -123,11 +157,33 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
   - `ShaderRegistryResource`
   - `ShaderHandle`
   - `RenderResourceDescriptor`
+  - `ImportedTextureSemantic`
+  - `ImportedBufferSemantic`
   - `ResourceLifetime`
   - `TransientAliasAssignment`
   - `TransientAliasCandidate`
   - `TransientAliasSlot`
   - `TransientResourceWindow`
+
+Typed imported-resource contract:
+
+- Prefer typed imports:
+  - `RenderResourceDescriptor::imported_surface_color`
+  - `RenderResourceDescriptor::imported_surface_depth`
+  - `RenderResourceDescriptor::imported_ui_draw_list`
+  - `RenderResourceDescriptor::imported_history_texture`
+  - `RenderResourceDescriptor::imported_history_buffer`
+- `imported_texture` / `imported_buffer` remain compatibility constructors and compile to `External` semantics.
+- Active runtime flow validation rejects `External` imports.
+
+Pipeline-key specialization/runtime contract:
+
+- `FlowPassPipelineKey` is core-render-owned and includes shader/layout/target/view/runtime signatures.
+- material features contribute specialization fragment hashes folded into the core key.
+
+Current multi-view contract:
+
+- active runtime execution is single-view only (`PreparedViewFrame::main`); multi-view activation is explicitly deferred and guarded by runtime fail-fast checks.
 
 ## Compatibility Surface
 

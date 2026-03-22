@@ -4,6 +4,8 @@
 
 - Target architecture summary:
   - `engine/docs/reference/plugins/render/render-target-architecture.md`
+- Final migration roadmap:
+  - `engine/docs/roadmaps/render-final-architecture-migration.md`
 - Internal roadmap/backlog:
   - `engine/src/plugins/render/docs/roadmap.md`
 
@@ -19,8 +21,12 @@
 
 - Owns: render runtime resources, flow registry integration, and render prepare/submit scheduling.
 - Non-ownership: app input mapping ownership and scene lifecycle ownership.
-- Prepare/submit boundary artifact: `PreparedRenderFrame` in `frame_packet.rs`.
+- Prepare/submit boundary artifact: `PreparedRenderFrame` in `engine/src/plugins/render/frame/`.
 - Runtime compatibility helper: `RenderFrameDataRegistry` for projection helpers/tests only, not active submission.
+- Feature/domain payloads are carried as prepared contributions (`PreparedFrameContributions`) with explicit status/fallback policy.
+- Feature prepared payload handoff resources are explicit (`PreparedDrawFeatureResource`, `PreparedMaterialFeatureResource`, `PreparedDeformationFeatureResource`) and consumed only in `RenderPrepare`.
+- Active runtime validation only accepts typed import semantics (surface/UI/history categories); external imports are compatibility-only.
+- Active execute path is single-view only; multi-view packet execution is deferred and guarded by fail-fast runtime checks.
 
 ## Inspection Boundary
 

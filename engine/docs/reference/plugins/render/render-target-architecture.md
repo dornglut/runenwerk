@@ -1,33 +1,69 @@
-# Render Architecture Cutover
+# Render Target Architecture
 
-This reference is a short map to the current RenderFlow v2 architecture.
+This is the target steady-state architecture for render runtime evolution.
 
-## Canonical Module Surface
+## Architecture Rule
 
-The core render plugin architecture is:
+Render stays:
 
-- `api/`
-- `backend/`
-- `composition/`
-- `graph/`
-- `inspect/`
-- `params/`
-- `pipelines/`
-- `renderer/`
-- `resource/`
-- `shader/`
+- ECS-prepared
+- compiler-shaped
+- renderer-executed
+- feature/plugin-extensible
 
-Legacy architecture trees (`frame_graph/`, `resources/`, `domain/`, `debug/`) are removed from core render.
+## Layered Shape
 
-## Authoring Direction
+1. Authoring layer:
+   - `engine::plugins::render::api` remains ergonomic and declarative.
+2. Prepare layer:
+   - `frame_render_prepare_system` extracts render-relevant ECS state and publishes `PreparedRenderFrame`.
+3. Compile layer:
+   - graph compile: validation/order/inspectability.
+   - execution compile: explicit pass execution metadata.
+4. Execute layer:
+   - renderer consumes prepared packet + compiled execution plans and owns backend/runtime artifacts.
+5. Feature layer:
+   - feature descriptors and prepared contributions integrate through typed contracts.
 
-- normal authoring path: `RenderFlow` v2
-- common path: `with_state` + `double_buffer_storage_array` + pass builders
-- graph remains explicit and inspectable through `validation_report`, `graph`, and `project_uniforms`
-- advanced path remains explicit with typed handle bindings (`storage_array`, `bind_storage`, explicit uniform handles)
+## Ownership Boundary
 
-## Explicitly Removed
+- ECS/domain side owns:
+  - flow and feature registries
+  - shader metadata/revisions
+  - prepared frame and contribution payloads
+  - compile metadata and inspection snapshots
+  - cache stats metadata
+- renderer/backend side owns:
+  - all `wgpu` runtime objects
+  - runtime flow resources and temporal/history allocations
+  - command encoding and submission
 
-- flow contribution merge APIs
-- data-driven fragment composition APIs
-- string-only low-level pass read/write binding path in normal usage
+`RenderFrameDataRegistry` remains compatibility-only (projection helpers/tests), not active runtime submission.
+
+## Typed Import Boundary
+
+Active runtime accepts typed import semantics only:
+
+- surface color
+- surface depth
+- builtin UI draw list
+- history categories (typed texture/buffer)
+
+Generic external imports remain compatibility constructors and are rejected in active runtime validation.
+
+## Multi-view and Feature Policy
+
+- Prepared frame carries a view container (`PreparedViewFrame`) even for single-view operation.
+- Execution plans carry view masks (`CompiledViewMask`) to support view-scoped pass subsets.
+- Active runtime execution is currently single-view only; multi-view packets fail fast to avoid misleading partial support.
+- Feature contribution status/fallback policy is resolved in prepare and executed without submit-time world extraction.
+
+## Non-goals
+
+- no full render-graph scheduler rewrite
+- no generalized external imports beyond typed supported categories
+- no universal simulation abstraction inside renderer
+
+## Migration Reference
+
+- [Final architecture migration roadmap](../../../roadmaps/render-final-architecture-migration.md)

@@ -5,7 +5,7 @@
 1. Add `RenderPlugin`.
 2. Model frame-owned simulation/render values as ECS `Resource` types.
 3. Build a `RenderFlow` with ergonomic declarations:
-   - `with_state`, `with_surface_color`, `with_builtin_ui`
+   - `with_state`, `with_surface_color`, `with_surface_depth` (optional), `with_builtin_ui`
    - `double_buffer_storage_array`
    - pass builders (`compute_pass`, `fullscreen_pass`, `builtin_ui_composite_pass`)
 4. Validate (`.validate()?`) and register with `App::add_render_flow(...)`.
@@ -94,6 +94,26 @@ let flow = RenderFlow::new("sim.flow")
 - `flow.validation_report()` returns pass order and validation result details.
 - `flow.graph()` exposes declared pass/resource topology for tests and tooling.
 - `flow.project_uniforms(frame_data, surface_size)` verifies state projection at frame time.
+
+Import-model contract:
+
+- Use typed imports from the public flow API (`with_surface_color`, `with_surface_depth`, `with_builtin_ui`).
+- Avoid generic `RenderResourceDescriptor::imported_texture(...)` / `imported_buffer(...)` for active runtime flows.
+- Active validation rejects external/generic import semantics in the runtime path.
+
+Runtime boundary note:
+
+- `RenderFrameDataRegistry` remains a compatibility helper for projection tests/tools.
+- Active frame execution uses `PreparedRenderFrame` produced in `RenderPrepare`.
+
+Advanced feature-tagged pass note:
+
+- `compute_pass(...)` and `fullscreen_pass(...)` expose optional `.for_feature("feature.id")` tagging.
+- Feature-tagged passes execute through the same compiled path but are gated by prepared feature status/fallback policy.
+
+Current multi-view scope:
+
+- active runtime execution is single-view only; prepare may carry view containers, but multi-view execution remains explicitly deferred.
 
 ## Related Examples
 
