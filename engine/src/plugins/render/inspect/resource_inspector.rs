@@ -12,6 +12,11 @@ pub struct RenderRuntimeResourceInspectorState {
     pub entries: Vec<RuntimeResourceInspectionEntry>,
     pub pipeline_cache_hits: u64,
     pub pipeline_cache_misses: u64,
+    pub world_resident_chunks: usize,
+    pub world_stale_chunks: usize,
+    pub world_page_miss_count: u64,
+    pub world_interactive_queue_depth: usize,
+    pub world_background_queue_depth: usize,
 }
 
 impl RenderRuntimeResourceInspectorState {
@@ -23,6 +28,21 @@ impl RenderRuntimeResourceInspectorState {
     pub fn observe_pipeline_cache_stats(&mut self, hits: u64, misses: u64) {
         self.pipeline_cache_hits = hits;
         self.pipeline_cache_misses = misses;
+    }
+
+    pub fn observe_world_runtime(
+        &mut self,
+        resident_chunks: usize,
+        stale_chunks: usize,
+        page_miss_count: u64,
+        interactive_queue_depth: usize,
+        background_queue_depth: usize,
+    ) {
+        self.world_resident_chunks = resident_chunks;
+        self.world_stale_chunks = stale_chunks;
+        self.world_page_miss_count = page_miss_count;
+        self.world_interactive_queue_depth = interactive_queue_depth;
+        self.world_background_queue_depth = background_queue_depth;
     }
 }
 

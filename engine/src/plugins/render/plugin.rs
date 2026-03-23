@@ -1,14 +1,18 @@
 use super::backend::BackendResourceAllocatorResource;
 use super::composition::{RenderFlowRegistryResource, sync_render_flow_registry_system};
 use super::features::{
-    PreparedDeformationFeatureResource, PreparedDrawFeatureResource,
-    PreparedMaterialFeatureResource, RenderFeatureRegistryResource,
+    PreparedCaveFeatureResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
+    PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
+    PreparedProceduralWorldFeatureResource, PreparedWindFieldFeatureResource,
+    PreparedWorldFeatureResource, RenderFeatureRegistryResource,
     sync_render_feature_registry_system,
+    world::{WorldLodPolicyResource, WorldLodSelectionResource, WorldRuntimeCacheResource},
 };
 use super::frame::PreparedRenderFrameResource;
 use super::inspect::{
     RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
     RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
+    WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
 use super::renderer::submit::{frame_render_prepare_system, frame_render_submit_system};
@@ -28,8 +32,16 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderFlowRegistryResource>();
         app.init_resource::<RenderFeatureRegistryResource>();
         app.init_resource::<PreparedDrawFeatureResource>();
+        app.init_resource::<PreparedWorldFeatureResource>();
+        app.init_resource::<PreparedCaveFeatureResource>();
+        app.init_resource::<PreparedDetailFeatureResource>();
+        app.init_resource::<PreparedProceduralWorldFeatureResource>();
         app.init_resource::<PreparedMaterialFeatureResource>();
         app.init_resource::<PreparedDeformationFeatureResource>();
+        app.init_resource::<PreparedWindFieldFeatureResource>();
+        app.init_resource::<WorldRuntimeCacheResource>();
+        app.init_resource::<WorldLodPolicyResource>();
+        app.init_resource::<WorldLodSelectionResource>();
         app.init_resource::<PreparedRenderFrameResource>();
         app.init_resource::<PipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
@@ -38,6 +50,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderTextureInspectorState>();
         app.init_resource::<RenderDebugTimingsState>();
         app.init_resource::<RenderDebugGraphDumpState>();
+        app.init_resource::<WorldRuntimeInspectorSnapshot>();
         app.init_resource::<StartupState>();
         app.init_resource::<DebugMetricsState>();
         app.add_systems(RenderPrepare, sync_render_flow_registry_system);

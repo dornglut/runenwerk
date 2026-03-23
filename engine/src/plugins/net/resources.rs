@@ -409,7 +409,10 @@ where
 {
     pub checkpoints: BTreeMap<ConnectionId, ConnectionBaselineCheckpoint>,
     pub snapshot_history: BTreeMap<SnapshotCursor, TSnapshot>,
+    pub snapshot_history_per_connection:
+        BTreeMap<ConnectionId, BTreeMap<SnapshotCursor, TSnapshot>>,
     pub latest_snapshot: Option<TSnapshot>,
+    pub latest_snapshot_per_connection: BTreeMap<ConnectionId, TSnapshot>,
     pub latest_tick: SimulationTick,
 }
 
@@ -421,7 +424,9 @@ where
         Self {
             checkpoints: BTreeMap::new(),
             snapshot_history: BTreeMap::new(),
+            snapshot_history_per_connection: BTreeMap::new(),
             latest_snapshot: None,
+            latest_snapshot_per_connection: BTreeMap::new(),
             latest_tick: SimulationTick::default(),
         }
     }
@@ -436,6 +441,7 @@ where
     pub last_received_tick: SimulationTick,
     pub applied_snapshots: u64,
     pub last_received_snapshot: Option<TSnapshot>,
+    pub snapshot_history: BTreeMap<SnapshotCursor, TSnapshot>,
 }
 
 impl<TSnapshot> Default for ClientSnapshotReplicationState<TSnapshot>
@@ -448,6 +454,7 @@ where
             last_received_tick: SimulationTick::default(),
             applied_snapshots: 0,
             last_received_snapshot: None,
+            snapshot_history: BTreeMap::new(),
         }
     }
 }

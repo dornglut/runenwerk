@@ -1,6 +1,5 @@
 use super::geometry_projection::{
-    geometry_primitives_from_graph, geometry_primitives_from_layout,
-    geometry_primitives_from_topology,
+    geometry_primitives_from_layout, geometry_primitives_from_topology,
 };
 use super::*;
 
@@ -12,17 +11,7 @@ pub(crate) fn build_sdf_world_frame_system(
     mut frame: ResMut<CavernSdfWorldFrame>,
 ) -> Result<()> {
     let (world_bounds, geometry_primitives) =
-        if let Ok(graph) = world.resource::<CavernGeometryGraph>() {
-            (
-                [
-                    graph.bounds.min[0],
-                    graph.bounds.min[2],
-                    graph.bounds.max[0],
-                    graph.bounds.max[2],
-                ],
-                geometry_primitives_from_graph(&graph),
-            )
-        } else if let Ok(topology) = world.resource::<CavernTopology>() {
+        if let Ok(topology) = world.resource::<CavernTopology>() {
             (
                 [
                     topology.world_bounds.min[0],

@@ -15,6 +15,14 @@ pub trait ReplicationDriver {
 
     fn capture_snapshot(world: &World) -> Result<Option<Self::Snapshot>, Self::Error>;
 
+    fn capture_snapshot_for_connection(
+        world: &World,
+        connection_id: ConnectionId,
+    ) -> Result<Option<Self::Snapshot>, Self::Error> {
+        let _ = connection_id;
+        Self::capture_snapshot(world)
+    }
+
     fn build_delta(previous: &Self::Snapshot, current: &Self::Snapshot) -> Self::Delta;
 
     fn apply_delta_to_snapshot(base: &Self::Snapshot, delta: &Self::Delta) -> Self::Snapshot;

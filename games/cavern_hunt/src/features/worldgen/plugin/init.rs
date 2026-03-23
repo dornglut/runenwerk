@@ -1,5 +1,14 @@
 use super::enemy_spawn::spawn_enemy;
 use super::*;
+use engine::plugins::world::WorldAuthorityState;
+use engine::plugins::world::chunks::dirty::{ChunkDirtyReason, WorldDirtyChunkMapResource};
+use engine::plugins::world::chunks::partition::WorldPartitionConfig;
+use engine::plugins::world::edits::log::WorldOperationLog;
+use engine::plugins::world::edits::operation::{
+    WorldOperation, WorldOperationRecord, quantize_aabb,
+};
+use engine::plugins::world::ids::{ChunkCoord3, ChunkId, PlanetId, WorldOpId, WorldRevision};
+use engine::prelude::SimulationTick;
 
 pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool) -> Result<()> {
     let config = world
@@ -15,6 +24,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     world.insert_resource(geometry_graph);
     world.insert_resource(collision_field);
     world.insert_resource(CavernGeometryRuntimeState::default());
+    seed_world_plugin_from_initial_graph(world);
 
     let mut run_state = CavernRunState::default();
     run_state.seed = config.seed;
@@ -181,4 +191,76 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     }
 
     Ok(())
+}
+
+fn seed_world_plugin_from_initial_graph(world: &mut World) {
+    let (bounds, fixed_point_scale, base_world_revision) = {
+        let bounds = world
+            .resource::<CavernGeometryGraph>()
+            .map(|graph| graph.bounds)
+            .unwrap_or_default();
+        let fixed_point_scale = world
+            .resource::<engine::plugins::world::WorldRuntimeConfig>()
+            .map(|config| config.fixed_point_scale)
+            .unwrap_or(1024);
+        let base_world_revision = world
+            .resource::<WorldAuthorityState>()
+            .map(|value| value.world_revision)
+            .unwrap_or(WorldRevision::default());
+        (bounds, fixed_point_scale, base_world_revision)
+    };
+
+    let server_tick = world
+        .resource::<SimulationTick>()
+        .copied()
+        .unwrap_or_default();
+
+    if let Ok(mut op_log) = world.resource_mut::<WorldOperationLog>() {
+        let _ = op_log.append(WorldOperationRecord {
+            op_id: WorldOpId(0),
+            base_world_revision,
+            operation: WorldOperation::Stamp {
+                stamp_id: "cavern_hunt.initial_seed".to_string(),
+                anchor_q: engine::plugins::world::edits::operation::quantize_position(
+                    [
+                        (bounds.min[0] + bounds.max[0]) * 0.5,
+                        (bounds.min[1] + bounds.max[1]) * 0.5,
+                        (bounds.min[2] + bounds.max[2]) * 0.5,
+                    ],
+                    fixed_point_scale,
+                ),
+                payload: format!("seed_bounds:{:?}:{:?}", bounds.min, bounds.max).into_bytes(),
+            },
+            affected_bounds_q: quantize_aabb(bounds.min, bounds.max, fixed_point_scale),
+            deterministic_seed: 0,
+            server_tick,
+            author_connection_id: None,
+        });
+    }
+
+    let chunk_range = world
+        .resource::<WorldPartitionConfig>()
+        .ok()
+        .map(|partition| {
+            (
+                partition.chunk_coord_from_planet_local_position(bounds.min),
+                partition.chunk_coord_from_planet_local_position(bounds.max),
+            )
+        });
+
+    if let (Some((min, max)), Ok(mut dirty)) = (
+        chunk_range,
+        world.resource_mut::<WorldDirtyChunkMapResource>(),
+    ) {
+        for z in min.z..=max.z {
+            for y in min.y..=max.y {
+                for x in min.x..=max.x {
+                    dirty.mark_dirty(
+                        ChunkId::new(PlanetId(0), ChunkCoord3 { x, y, z }),
+                        ChunkDirtyReason::Geometry,
+                    );
+                }
+            }
+        }
+    }
 }

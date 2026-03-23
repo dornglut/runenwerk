@@ -1,9 +1,10 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [ValidateRange(1, 4)]
-    [int]$ClientCount = 2
+    [int]$ClientCount = 2,
+    [switch]$LiveLogWindows
 )
+
+$ErrorActionPreference = "Stop"
 
 function Get-RepoRoot {
     param([string]$ScriptDir)
@@ -54,6 +55,27 @@ function Resolve-BinaryPath {
     return $exePath
 }
 
+function Start-LogTailWindow {
+    param(
+        [string]$Title,
+        [string]$LogPath
+    )
+
+    $pwshPath = (Get-Process -Id $PID).Path
+    $safeTitle = $Title.Replace("'", "''")
+    $safeLogPath = $LogPath.Replace("'", "''")
+    $tailCommand = @"
+`$Host.UI.RawUI.WindowTitle = '$safeTitle'
+if (-not (Test-Path '$safeLogPath')) {
+    New-Item -ItemType File -Path '$safeLogPath' -Force | Out-Null
+}
+Write-Host \"Tailing $safeLogPath\"
+Get-Content -Path '$safeLogPath' -Wait -Tail 40
+"@
+
+    Start-Process -FilePath $pwshPath -ArgumentList @("-NoLogo", "-NoProfile", "-Command", $tailCommand) | Out-Null
+}
+
 $scriptDir = Split-Path -Parent $PSCommandPath
 $rootDir = Get-RepoRoot -ScriptDir $scriptDir
 Set-Location $rootDir
@@ -88,6 +110,8 @@ $logDir = if (-not [string]::IsNullOrWhiteSpace($env:CAVERN_LOG_DIR)) {
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 $useRelease = Test-EnvFlag -Value $env:CAVERN_RELEASE -Default $true
+$showChildWindows = Test-EnvFlag -Value $env:CAVERN_SHOW_CHILD_WINDOWS -Default $false
+$liveLogWindowsEnabled = $LiveLogWindows -or (Test-EnvFlag -Value $env:CAVERN_LIVE_LOG_WINDOWS -Default $false)
 $clientMaterialProfile = if ([string]::IsNullOrWhiteSpace($env:CAVERN_MATERIAL_PROFILE)) {
     "performance"
 } else {
@@ -134,7 +158,19 @@ if (Test-Path $certPath) {
     Remove-Item $certPath -Force
 }
 
-$serverProcess = Start-Process -FilePath $serverBin -ArgumentList @("--config", $serverConfigPath) -RedirectStandardOutput $serverLog -RedirectStandardError $serverErr -PassThru
+$serverStartArgs = @{
+    FilePath     = $serverBin
+    ArgumentList = @("--config", $serverConfigPath)
+    PassThru     = $true
+}
+if (-not $showChildWindows -or $liveLogWindowsEnabled) {
+    $serverStartArgs["RedirectStandardOutput"] = $serverLog
+    $serverStartArgs["RedirectStandardError"] = $serverErr
+}
+if (-not $showChildWindows -or $liveLogWindowsEnabled) {
+    $serverStartArgs["WindowStyle"] = "Hidden"
+}
+$serverProcess = Start-Process @serverStartArgs
 $clientProcesses = @()
 
 try {
@@ -157,6 +193,9 @@ try {
     Write-Host "Server logs: $serverLog, $serverErr"
     Write-Host "Network profile: $netProfile"
     Write-Host "Client material profile: $clientMaterialProfile"
+    if ($liveLogWindowsEnabled) {
+        Start-LogTailWindow -Title "Cavern Server Log" -LogPath $serverLog
+    }
 
     for ($index = 1; $index -le $ClientCount; $index++) {
         $clientLog = Join-Path $logDir "cavern_hunt_client_$index.log"
@@ -166,8 +205,24 @@ try {
         $envBlock = @{
             CAVERN_MATERIAL_PROFILE = $clientMaterialProfile
         }
-        $client = Start-Process -FilePath $clientBin -ArgumentList @("--config", $clientConfigPath) -RedirectStandardOutput $clientLog -RedirectStandardError $clientErr -Environment $envBlock -PassThru
+        $clientStartArgs = @{
+            FilePath     = $clientBin
+            ArgumentList = @("--config", $clientConfigPath)
+            Environment  = $envBlock
+            PassThru     = $true
+        }
+        if (-not $showChildWindows -or $liveLogWindowsEnabled) {
+            $clientStartArgs["RedirectStandardOutput"] = $clientLog
+            $clientStartArgs["RedirectStandardError"] = $clientErr
+        }
+        if (-not $showChildWindows -or $liveLogWindowsEnabled) {
+            $clientStartArgs["WindowStyle"] = "Hidden"
+        }
+        $client = Start-Process @clientStartArgs
         $clientProcesses += $client
+        if ($liveLogWindowsEnabled) {
+            Start-LogTailWindow -Title "Cavern Client $index Log" -LogPath $clientLog
+        }
         if ($index -lt $ClientCount) {
             Start-Sleep -Seconds $clientStartStaggerSeconds
         }

@@ -10,7 +10,6 @@ pub(super) fn client_setup_system(mut world: WorldMut) -> Result<()> {
         world.insert_resource(CavernMetaProfile::default());
     }
     worldgen::initialize_run_world(&mut world, true)?;
-    render_sdf::setup_render_resources(&mut world)?;
     Ok(())
 }
 

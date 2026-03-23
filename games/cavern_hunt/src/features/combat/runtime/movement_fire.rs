@@ -19,7 +19,6 @@ pub(super) fn move_player_with_control(
         aim.y = control.aim_world[1];
     }
 
-    let graph = world.resource::<CavernGeometryGraph>()?.clone();
     let Some(health) = world.get::<Health>(entity).copied() else {
         return Ok(());
     };
@@ -63,16 +62,12 @@ pub(super) fn move_player_with_control(
         }
     }
 
-    let next = {
-        let mut field = world.resource_mut::<CavernCollisionField>()?;
-        constrained_move(
-            &mut field,
-            &graph,
-            [current.x, current.y],
-            delta,
-            movement_footprint_radius(radius),
-        )
-    };
+    let next = constrained_move_with_world(
+        world,
+        [current.x, current.y],
+        delta,
+        movement_footprint_radius(radius),
+    );
     let aim = world.get::<AimTarget2>(entity).copied();
     if let Some(mut transform) = world.get_mut::<Transform2>(entity) {
         transform.x = next[0];

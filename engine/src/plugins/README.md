@@ -67,6 +67,10 @@ This directory is the feature composition layer for `engine`.
   - README: [`shared/README.md`](./shared/README.md)
   - Guides: [`../../docs/reference/plugins/shared/usage-guide.md`](../../docs/reference/plugins/shared/usage-guide.md)
   - Purpose: shared helper utilities.
+- `world/`
+  - README: [`world/README.md`](./world/README.md)
+  - Guides: [`../../docs/reference/plugins/world/index.md`](../../docs/reference/plugins/world/index.md)
+  - Purpose: authoritative chunked SDF world runtime, op-log edits, rebuild graph, streaming contracts, and render-prepare world feature payloads.
 
 ## Entry Points
 

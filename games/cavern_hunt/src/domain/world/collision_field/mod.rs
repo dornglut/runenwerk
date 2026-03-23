@@ -1,3 +1,5 @@
+// Legacy collision cache compatibility surface.
+// Authoritative query/cache ownership is being migrated to `engine::plugins::world`.
 use crate::world::geometry_graph::{
     CavernGeometryGraph, GeometryBounds3, GeometryOp, GeometryPrimitive3, GeometryRevision,
 };

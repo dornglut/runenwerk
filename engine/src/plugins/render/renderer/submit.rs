@@ -1,9 +1,13 @@
 use crate::plugins::render::composition::RenderFlowRegistryResource;
 use crate::plugins::render::features::{
-    DEFORMATION_RENDER_FEATURE_ID, FeatureContributionStatus, FeatureFallbackPolicy,
-    MATERIAL_RENDER_FEATURE_ID, PreparedDeformationFeatureResource, PreparedDrawFeatureResource,
-    PreparedMaterialFeatureResource, RenderFeatureId, RenderFeatureRegistryResource,
-    SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
+    CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
+    FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
+    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedCaveFeatureResource,
+    PreparedDeformationFeatureResource, PreparedDetailFeatureResource, PreparedDrawFeatureResource,
+    PreparedMaterialFeatureResource, PreparedProceduralWorldFeatureResource,
+    PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureId,
+    RenderFeatureRegistryResource, SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID,
+    WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use crate::plugins::render::frame::{
     PreparedFlowInputs, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
@@ -420,13 +424,54 @@ fn build_frame_feature_contributions(
         ui_policy,
     );
 
-    if let Ok(resource) = world.resource::<PreparedDrawFeatureResource>() {
-        let draw_policy = feature_policy(
+    if let Ok(resource) = world.resource::<PreparedWorldFeatureResource>() {
+        let world_policy = feature_policy(
             world,
             RenderFeatureId::new(WORLD_DRAW_RENDER_FEATURE_ID),
             resource.fallback_policy,
         );
-        contributions.insert_draw(resource.payload.clone(), resource.status, draw_policy);
+        contributions.insert_world(resource.payload.clone(), resource.status, world_policy);
+    }
+
+    if let Ok(resource) = world.resource::<PreparedDrawFeatureResource>() {
+        let world_feature_id = RenderFeatureId::new(WORLD_DRAW_RENDER_FEATURE_ID);
+        let should_publish_draw = !matches!(resource.status, FeatureContributionStatus::Missing)
+            || contributions.feature(&world_feature_id).is_none();
+        if should_publish_draw {
+            let draw_policy = feature_policy(world, world_feature_id, resource.fallback_policy);
+            contributions.insert_draw(resource.payload.clone(), resource.status, draw_policy);
+        }
+    }
+
+    if let Ok(resource) = world.resource::<PreparedCaveFeatureResource>() {
+        let cave_policy = feature_policy(
+            world,
+            RenderFeatureId::new(CAVE_INTERIOR_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_caves(resource.payload.clone(), resource.status, cave_policy);
+    }
+
+    if let Ok(resource) = world.resource::<PreparedDetailFeatureResource>() {
+        let detail_policy = feature_policy(
+            world,
+            RenderFeatureId::new(DETAIL_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_detail(resource.payload.clone(), resource.status, detail_policy);
+    }
+
+    if let Ok(resource) = world.resource::<PreparedProceduralWorldFeatureResource>() {
+        let procedural_policy = feature_policy(
+            world,
+            RenderFeatureId::new(PROCEDURAL_WORLD_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_procedural_world(
+            resource.payload.clone(),
+            resource.status,
+            procedural_policy,
+        );
     }
 
     if let Ok(resource) = world.resource::<PreparedMaterialFeatureResource>() {
@@ -449,6 +494,15 @@ fn build_frame_feature_contributions(
             resource.status,
             deformation_policy,
         );
+    }
+
+    if let Ok(resource) = world.resource::<PreparedWindFieldFeatureResource>() {
+        let wind_policy = feature_policy(
+            world,
+            RenderFeatureId::new(WIND_FIELDS_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_wind_fields(resource.payload.clone(), resource.status, wind_policy);
     }
 
     for feature_id in execution_feature_ids {

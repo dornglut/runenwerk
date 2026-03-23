@@ -5,6 +5,7 @@ use crate::{
     MaterialProfileAssetV1, compile_material_graph,
 };
 use anyhow::Result;
+use engine::plugins::world::WorldAuthorityState;
 use engine::prelude::{App, Plugin, PreUpdate, Res, Startup, Time, World, WorldMut};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -76,8 +77,13 @@ fn gi_probe_scaffold_system(mut world: WorldMut) -> Result<()> {
     }
 
     let geometry_revision = world
-        .resource::<CavernGeometryGraph>()
-        .map(|graph| graph.revision.0)
+        .resource::<WorldAuthorityState>()
+        .map(|state| state.world_revision.0)
+        .or_else(|_| {
+            world
+                .resource::<CavernGeometryGraph>()
+                .map(|graph| graph.revision.0)
+        })
         .unwrap_or_default();
     let mut probe_grid = world.remove_resource::<GiProbeGrid>().unwrap_or_default();
     let mut update_queue = world

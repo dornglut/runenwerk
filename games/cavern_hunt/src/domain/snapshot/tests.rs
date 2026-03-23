@@ -12,6 +12,19 @@ mod tests {
     };
     use engine::plugins::InputState;
     use engine::plugins::net::NetworkSessionStatus;
+    use engine::plugins::world::WorldAuthorityState;
+    use engine::plugins::world::chunks::lifecycle::{
+        ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord,
+    };
+    use engine::plugins::world::edits::log::WorldOperationLog;
+    use engine::plugins::world::edits::operation::{
+        QuantizedAabb, WorldOperation, WorldOperationRecord,
+    };
+    use engine::plugins::world::ids::{
+        BuildGeneration, ChunkCoord3, ChunkGeneration, ChunkId, ChunkRevision, PlanetId, WorldOpId,
+        WorldRevision,
+    };
+    use engine::plugins::world::sdf::storage::{SdfChunkPayload, WorldSdfChunkStoreResource};
     use engine::prelude::*;
     use engine_net::ConnectionId;
 
@@ -168,5 +181,87 @@ mod tests {
             local_snapshot.authoritative_input_tick,
             Some(SimulationTick(42))
         );
+    }
+
+    #[test]
+    fn capture_and_restore_round_trips_world_checkpoint_payloads() {
+        let mut source = seeded_world();
+        let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 3, y: -1, z: 2 });
+
+        source.insert_resource(WorldAuthorityState {
+            world_revision: WorldRevision(77),
+        });
+        source.insert_resource(WorldChunkRuntimeMapResource {
+            by_chunk_id: std::iter::once((
+                chunk_id,
+                WorldChunkRuntimeRecord {
+                    chunk_id,
+                    lifecycle: ChunkLifecycleState::Ready,
+                    chunk_revision: ChunkRevision(9),
+                    chunk_generation: ChunkGeneration(4),
+                    build_generation: BuildGeneration(4),
+                    dirty_reasons: Default::default(),
+                    pending_build_generation: None,
+                    gameplay_locked: true,
+                },
+            ))
+            .collect(),
+        });
+        source.insert_resource(WorldSdfChunkStoreResource {
+            chunks: std::iter::once((
+                chunk_id,
+                SdfChunkPayload {
+                    chunk_id,
+                    chunk_revision: ChunkRevision(9),
+                    chunk_generation: ChunkGeneration(4),
+                    page_table: Default::default(),
+                    hierarchy_revision: 4,
+                    checksum: 0xBEEF,
+                },
+            ))
+            .collect(),
+            region_summaries: Default::default(),
+        });
+        source.insert_resource(WorldOperationLog {
+            operations: vec![WorldOperationRecord {
+                op_id: WorldOpId(1),
+                base_world_revision: WorldRevision(76),
+                operation: WorldOperation::Stamp {
+                    stamp_id: "checkpoint-test".to_string(),
+                    anchor_q: Default::default(),
+                    payload: vec![1, 2, 3],
+                },
+                affected_bounds_q: QuantizedAabb::default(),
+                deterministic_seed: 7,
+                server_tick: SimulationTick(123),
+                author_connection_id: Some(44),
+            }],
+            by_id: std::iter::once((WorldOpId(1), 0)).collect(),
+            next_op_id: 2,
+        });
+
+        let snapshot = capture_cavern_run_snapshot(&source).unwrap();
+        let checkpoint = snapshot
+            .world_checkpoint
+            .as_ref()
+            .expect("world checkpoint should be captured");
+        assert_eq!(checkpoint.world_revision, WorldRevision(77));
+        assert_eq!(checkpoint.chunk_headers.len(), 1);
+        assert_eq!(checkpoint.chunk_contents.len(), 1);
+        assert_eq!(checkpoint.op_windows.len(), 1);
+
+        let mut restored = World::new();
+        restored.insert_resource(LocalPlayerRef::default());
+        restore_cavern_run_snapshot(&mut restored, &snapshot).unwrap();
+
+        let restored_authority = restored.resource::<WorldAuthorityState>().unwrap();
+        assert_eq!(restored_authority.world_revision, WorldRevision(77));
+
+        let restored_ops = restored.resource::<WorldOperationLog>().unwrap();
+        assert_eq!(restored_ops.operations.len(), 1);
+        assert_eq!(restored_ops.next_op_id, 2);
+
+        let restored_store = restored.resource::<WorldSdfChunkStoreResource>().unwrap();
+        assert!(restored_store.chunks.contains_key(&chunk_id));
     }
 }

@@ -1,4 +1,10 @@
 use super::*;
+use engine::plugins::world::chunks::partition::WorldPartitionConfig;
+use engine::plugins::world::ids::PlanetId;
+use engine::plugins::world::queries::collision::{
+    SphereSweepQuery, WorldCollisionQueryServiceResource,
+};
+use engine::plugins::world::sdf::storage::WorldSdfChunkStoreResource;
 
 // Owner: Cavern Hunt Combat Plugin - Projectiles and Spatial Helpers
 pub(super) fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Result<()> {
@@ -7,7 +13,6 @@ pub(super) fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepM
         return Ok(());
     }
 
-    let graph = world.resource::<CavernGeometryGraph>()?.clone();
     let projectile_entities = {
         let query = world.query_state::<(Entity, &Projectile), ()>();
         query
@@ -56,17 +61,7 @@ pub(super) fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepM
         let current_pos = [transform.x, transform.y];
         drop(transform);
 
-        let wall_hit = {
-            let mut field = world.resource_mut::<CavernCollisionField>()?;
-            field
-                .sweep_sphere(
-                    &graph,
-                    [previous_pos[0], CAVERN_GAMEPLAY_HEIGHT, previous_pos[1]],
-                    [current_pos[0], CAVERN_GAMEPLAY_HEIGHT, current_pos[1]],
-                    radius,
-                )
-                .hit
-        };
+        let wall_hit = sweep_world_collision(world, previous_pos, current_pos, radius);
         if wall_hit {
             despawns.push(entity);
             continue;
@@ -238,6 +233,20 @@ pub(crate) fn constrained_move(
     current
 }
 
+pub(crate) fn constrained_move_with_world(
+    world: &mut World,
+    current: [f32; 2],
+    delta: [f32; 2],
+    radius: f32,
+) -> [f32; 2] {
+    let candidate = [current[0] + delta[0], current[1] + delta[1]];
+    match sweep_world_collision_authoritative(world, current, candidate, radius) {
+        Some(false) => candidate,
+        Some(true) => current,
+        None => candidate,
+    }
+}
+
 pub(crate) fn spawn_projectile(
     world: &mut World,
     origin: [f32; 2],
@@ -297,4 +306,43 @@ fn distance_squared(a: [f32; 2], b: [f32; 2]) -> f32 {
     let dx = a[0] - b[0];
     let dy = a[1] - b[1];
     dx * dx + dy * dy
+}
+
+fn sweep_world_collision(world: &mut World, start: [f32; 2], end: [f32; 2], radius: f32) -> bool {
+    sweep_world_collision_authoritative(world, start, end, radius).unwrap_or(false)
+}
+
+fn sweep_world_collision_authoritative(
+    world: &World,
+    start: [f32; 2],
+    end: [f32; 2],
+    radius: f32,
+) -> Option<bool> {
+    let service = world
+        .resource::<WorldCollisionQueryServiceResource>()
+        .ok()?;
+    let partition = world.resource::<WorldPartitionConfig>().ok()?;
+    let store = world.resource::<WorldSdfChunkStoreResource>().ok()?;
+
+    let start_world = [start[0], CAVERN_GAMEPLAY_HEIGHT, start[1]];
+    let end_world = [end[0], CAVERN_GAMEPLAY_HEIGHT, end[1]];
+    let end_chunk = partition.chunk_id_from_position(PlanetId(0), end_world);
+    let has_authoritative_pages = store
+        .chunks
+        .get(&end_chunk)
+        .map(|payload| !payload.page_table.is_empty())
+        .unwrap_or(false);
+    if !has_authoritative_pages {
+        return None;
+    }
+
+    let query = SphereSweepQuery {
+        start: start_world,
+        end: end_world,
+        radius,
+    };
+    let hit = service
+        .sweep_sphere(partition, store, PlanetId(0), query)
+        .is_some();
+    Some(hit)
 }

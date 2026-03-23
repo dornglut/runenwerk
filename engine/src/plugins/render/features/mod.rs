@@ -1,15 +1,25 @@
 use crate::plugins::render::frame::{
-    PreparedDeformationFeatureContribution, PreparedDrawFeatureContribution,
-    PreparedMaterialFeatureContribution,
+    PreparedCaveFeatureContribution, PreparedDeformationFeatureContribution,
+    PreparedDetailFeatureContribution, PreparedDrawFeatureContribution,
+    PreparedMaterialFeatureContribution, PreparedProceduralWorldFeatureContribution,
+    PreparedWindFieldFeatureContribution, PreparedWorldFeatureContribution,
 };
 use crate::runtime::ResMut;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+pub mod caves;
+pub mod detail;
+pub mod world;
+
 pub const SCENE_ROUTE_RENDER_FEATURE_ID: &str = "scene.route";
 pub const UI_RENDER_FEATURE_ID: &str = "ui";
 pub const WORLD_DRAW_RENDER_FEATURE_ID: &str = "world.draw";
+pub const CAVE_INTERIOR_RENDER_FEATURE_ID: &str = "cave.interior";
+pub const PROCEDURAL_WORLD_RENDER_FEATURE_ID: &str = "procedural.world";
+pub const DETAIL_RENDER_FEATURE_ID: &str = "detail";
 pub const MATERIAL_RENDER_FEATURE_ID: &str = "material";
 pub const DEFORMATION_RENDER_FEATURE_ID: &str = "deformation";
+pub const WIND_FIELDS_RENDER_FEATURE_ID: &str = "wind.fields";
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RenderFeatureId(String);
@@ -71,6 +81,91 @@ impl Default for PreparedDrawFeatureResource {
             status: FeatureContributionStatus::Missing,
             fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
             payload: PreparedDrawFeatureContribution::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+pub struct PreparedWorldFeatureResource {
+    pub status: FeatureContributionStatus,
+    pub fallback_policy: FeatureFallbackPolicy,
+    pub payload: PreparedWorldFeatureContribution,
+}
+
+impl Default for PreparedWorldFeatureResource {
+    fn default() -> Self {
+        Self {
+            status: FeatureContributionStatus::Missing,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedWorldFeatureContribution::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+pub struct PreparedCaveFeatureResource {
+    pub status: FeatureContributionStatus,
+    pub fallback_policy: FeatureFallbackPolicy,
+    pub payload: PreparedCaveFeatureContribution,
+}
+
+impl Default for PreparedCaveFeatureResource {
+    fn default() -> Self {
+        Self {
+            status: FeatureContributionStatus::Missing,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedCaveFeatureContribution::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+pub struct PreparedDetailFeatureResource {
+    pub status: FeatureContributionStatus,
+    pub fallback_policy: FeatureFallbackPolicy,
+    pub payload: PreparedDetailFeatureContribution,
+}
+
+impl Default for PreparedDetailFeatureResource {
+    fn default() -> Self {
+        Self {
+            status: FeatureContributionStatus::Missing,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedDetailFeatureContribution::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+pub struct PreparedProceduralWorldFeatureResource {
+    pub status: FeatureContributionStatus,
+    pub fallback_policy: FeatureFallbackPolicy,
+    pub payload: PreparedProceduralWorldFeatureContribution,
+}
+
+impl Default for PreparedProceduralWorldFeatureResource {
+    fn default() -> Self {
+        Self {
+            status: FeatureContributionStatus::Missing,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedProceduralWorldFeatureContribution::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+pub struct PreparedWindFieldFeatureResource {
+    pub status: FeatureContributionStatus,
+    pub fallback_policy: FeatureFallbackPolicy,
+    pub payload: PreparedWindFieldFeatureContribution,
+}
+
+impl Default for PreparedWindFieldFeatureResource {
+    fn default() -> Self {
+        Self {
+            status: FeatureContributionStatus::Missing,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedWindFieldFeatureContribution::default(),
         }
     }
 }
@@ -217,8 +312,28 @@ impl RenderFeatureRegistryResource {
                 .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
+            RenderFeatureDescriptor::new(CAVE_INTERIOR_RENDER_FEATURE_ID)
+                .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+                .with_order_hint(12)
+                .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+        );
+        self.upsert_descriptor(
+            RenderFeatureDescriptor::new(PROCEDURAL_WORLD_RENDER_FEATURE_ID)
+                .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+                .with_order_hint(14)
+                .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+        );
+        self.upsert_descriptor(
+            RenderFeatureDescriptor::new(DETAIL_RENDER_FEATURE_ID)
+                .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+                .with_order_hint(16)
+                .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+        );
+        self.upsert_descriptor(
             RenderFeatureDescriptor::new(MATERIAL_RENDER_FEATURE_ID)
                 .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+                .depends_on(DETAIL_RENDER_FEATURE_ID)
+                .depends_on(CAVE_INTERIOR_RENDER_FEATURE_ID)
                 .with_order_hint(20)
                 .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
@@ -226,6 +341,12 @@ impl RenderFeatureRegistryResource {
             RenderFeatureDescriptor::new(DEFORMATION_RENDER_FEATURE_ID)
                 .depends_on(MATERIAL_RENDER_FEATURE_ID)
                 .with_order_hint(30)
+                .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+        );
+        self.upsert_descriptor(
+            RenderFeatureDescriptor::new(WIND_FIELDS_RENDER_FEATURE_ID)
+                .depends_on(DEFORMATION_RENDER_FEATURE_ID)
+                .with_order_hint(40)
                 .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
     }
@@ -360,8 +481,12 @@ mod tests {
                 "scene.route".to_string(),
                 "ui".to_string(),
                 "world.draw".to_string(),
+                "cave.interior".to_string(),
+                "procedural.world".to_string(),
+                "detail".to_string(),
                 "material".to_string(),
                 "deformation".to_string(),
+                "wind.fields".to_string(),
             ]
         );
         assert!(registry.issues().is_empty());

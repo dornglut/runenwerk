@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use cavern_hunt::{
     CavernHuntClientPlugin, CavernHuntPlugin, CavernReplicationDriver, ClientNetworkConfigAssetV1,
-    NetConfigHotReloadState, load_client_network_config_from_path,
+    NetConfigHotReloadState, build_cavern_render_flow, load_client_network_config_from_path,
 };
 use engine::net::prelude::*;
 use engine::plugins::net::NetworkRuntimeHandle;
@@ -104,6 +104,7 @@ fn build_client_app(config: &ClientNetworkConfigAssetV1, config_path: &Path) -> 
         NetPlugin::<CavernReplicationDriver>::new(NetRole::Client),
     ));
     app.add_plugins((CavernHuntPlugin, CavernHuntClientPlugin));
+    app.add_render_flow(build_cavern_render_flow());
     app.world_mut().insert_resource(config.clone());
     app.world_mut()
         .insert_resource(NetConfigHotReloadState::new(

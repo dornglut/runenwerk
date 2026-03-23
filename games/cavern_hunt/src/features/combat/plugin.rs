@@ -19,7 +19,9 @@ use std::collections::BTreeSet;
 mod runtime;
 
 pub use runtime::CavernHuntCombatPlugin;
-pub(crate) use runtime::{constrained_move, replay_predicted_local_frame, spawn_projectile};
+pub(crate) use runtime::{
+    constrained_move_with_world, replay_predicted_local_frame, spawn_projectile,
+};
 
 fn combat_fixed_step_seconds(world: &World) -> f32 {
     fixed_step_seconds(world)

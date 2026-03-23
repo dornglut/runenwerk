@@ -1,7 +1,18 @@
 use crate::*;
 use anyhow::Result;
 use ecs::{Entity, World};
+use engine::plugins::world::WorldAuthorityState;
+use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
+use engine::plugins::world::edits::log::WorldOperationLog;
+use engine::plugins::world::ids::{ChunkSyncCursor, WorldOpId, WorldRevision};
+use engine::plugins::world::sdf::storage::WorldSdfChunkStoreResource;
+use engine::plugins::world::streaming::interest::WorldStreamingInterestResource;
+use engine::plugins::world::streaming::replication::{
+    ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
+};
 use engine::prelude::SimulationTick;
+use engine_net::ConnectionId;
+use std::collections::BTreeSet;
 
 // Owner: Cavern Hunt Snapshot Domain - Capture and Delta Builders
 pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1> {
@@ -11,10 +22,6 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
         .resource::<CavernTopology>()
         .cloned()
         .unwrap_or_else(|_| CavernTopology::from_layout(&layout, run_state.seed));
-    let geometry = world
-        .resource::<CavernGeometryGraph>()
-        .cloned()
-        .unwrap_or_else(|_| CavernGeometryGraph::from_topology(&topology));
     let runtime_geometry = world
         .resource::<CavernGeometryRuntimeState>()
         .cloned()
@@ -285,15 +292,7 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
             layout,
         },
         topology: Some(CavernTopologySnapshotV1 { topology }),
-        geometry: Some(CavernGeometrySnapshotV1 {
-            revision: geometry.revision.0,
-            graph: geometry,
-        }),
-        geometry_revision: world
-            .resource::<CavernGeometryGraph>()
-            .map(|graph| graph.revision.0)
-            .unwrap_or_default(),
-        geometry_edits: runtime_geometry.edit_events,
+        world_checkpoint: capture_world_checkpoint(world, None),
         extraction_seal_primitive: runtime_geometry.extraction_seal_primitive,
         players,
         enemies,
@@ -330,15 +329,9 @@ pub fn build_cavern_run_delta(
         } else {
             None
         },
-        geometry: if base.geometry != current.geometry {
-            current.geometry.clone()
-        } else {
-            None
-        },
-        geometry_revision: (base.geometry_revision != current.geometry_revision)
-            .then_some(current.geometry_revision),
-        geometry_edits: (base.geometry_edits != current.geometry_edits)
-            .then_some(current.geometry_edits.clone()),
+        world_checkpoint: (base.world_checkpoint != current.world_checkpoint)
+            .then_some(current.world_checkpoint.clone())
+            .flatten(),
         extraction_seal_primitive: (base.extraction_seal_primitive
             != current.extraction_seal_primitive)
             .then_some(current.extraction_seal_primitive),
@@ -381,12 +374,10 @@ pub fn apply_cavern_run_delta(
             .unwrap_or_else(|| base.encounters.clone()),
         layout: delta.layout.clone().unwrap_or_else(|| base.layout.clone()),
         topology: delta.topology.clone().or_else(|| base.topology.clone()),
-        geometry: delta.geometry.clone().or_else(|| base.geometry.clone()),
-        geometry_revision: delta.geometry_revision.unwrap_or(base.geometry_revision),
-        geometry_edits: delta
-            .geometry_edits
+        world_checkpoint: delta
+            .world_checkpoint
             .clone()
-            .unwrap_or_else(|| base.geometry_edits.clone()),
+            .or_else(|| base.world_checkpoint.clone()),
         extraction_seal_primitive: delta
             .extraction_seal_primitive
             .unwrap_or(base.extraction_seal_primitive),
@@ -428,4 +419,100 @@ fn network_entity_id_from_entity(entity: Entity) -> NetworkEntityId {
 
 fn sanitize_authoritative_input_tick(tick: Option<SimulationTick>) -> Option<SimulationTick> {
     tick.filter(|tick| tick.0 > 0)
+}
+
+pub(crate) fn capture_world_checkpoint(
+    world: &World,
+    connection_id: Option<ConnectionId>,
+) -> Option<CavernWorldCheckpointV1> {
+    let world_revision = world
+        .resource::<WorldAuthorityState>()
+        .map(|state| state.world_revision)
+        .unwrap_or(WorldRevision::default());
+
+    let mut next_op_id = WorldOpId(0);
+    let mut op_windows = Vec::<OpWindowDelta>::new();
+    if let Ok(op_log) = world.resource::<WorldOperationLog>() {
+        next_op_id = WorldOpId(op_log.next_op_id);
+        if let (Some(first), Some(last)) = (op_log.operations.first(), op_log.operations.last()) {
+            op_windows.push(OpWindowDelta {
+                start_exclusive: WorldOpId(first.op_id.0.saturating_sub(1)),
+                end_inclusive: last.op_id,
+                operations: op_log.operations.clone(),
+            });
+        }
+    }
+
+    let mut chunk_headers = Vec::<ChunkHeaderDelta>::new();
+    let mut residency_hints = Vec::<ChunkResidencyHint>::new();
+    if let Ok(chunk_runtime) = world.resource::<WorldChunkRuntimeMapResource>() {
+        for record in chunk_runtime.by_chunk_id.values() {
+            chunk_headers.push(ChunkHeaderDelta {
+                chunk_id: record.chunk_id,
+                chunk_revision: record.chunk_revision,
+                chunk_generation: record.chunk_generation,
+                checksum: 0,
+                flags: if record.gameplay_locked { 1 } else { 0 },
+            });
+            residency_hints.push(ChunkResidencyHint {
+                chunk_id: record.chunk_id,
+                relevant_to_client: true,
+                gameplay_locked: record.gameplay_locked,
+            });
+        }
+    }
+
+    let mut chunk_contents = Vec::<ChunkContentDelta>::new();
+    if let Ok(store) = world.resource::<WorldSdfChunkStoreResource>() {
+        for payload in store.chunks.values() {
+            if let Ok(full_payload) = postcard::to_allocvec(payload) {
+                chunk_contents.push(ChunkContentDelta {
+                    chunk_id: payload.chunk_id,
+                    chunk_revision: payload.chunk_revision,
+                    page_deltas: Vec::new(),
+                    full_payload: Some(full_payload),
+                });
+            }
+        }
+    }
+
+    let mut chunk_sync_cursor = None::<ChunkSyncCursor>;
+    if let Some(connection_id) = connection_id
+        && let Ok(streaming_interest) = world.resource::<WorldStreamingInterestResource>()
+        && let Some(interest) = streaming_interest.per_connection.get(&connection_id)
+    {
+        chunk_sync_cursor = Some(interest.last_sent_cursor);
+        let relevant = interest
+            .relevant_chunks
+            .union(&interest.gameplay_locked_chunks)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if !relevant.is_empty() {
+            chunk_headers.retain(|entry| relevant.contains(&entry.chunk_id));
+            chunk_contents.retain(|entry| relevant.contains(&entry.chunk_id));
+            residency_hints.retain(|entry| relevant.contains(&entry.chunk_id));
+        }
+    }
+
+    chunk_headers.sort_by_key(|entry| entry.chunk_id);
+    chunk_contents.sort_by_key(|entry| entry.chunk_id);
+    residency_hints.sort_by_key(|entry| entry.chunk_id);
+
+    let has_checkpoint_data = !chunk_headers.is_empty()
+        || !chunk_contents.is_empty()
+        || !op_windows.is_empty()
+        || world_revision.0 > 0;
+    if !has_checkpoint_data {
+        return None;
+    }
+
+    Some(CavernWorldCheckpointV1 {
+        world_revision,
+        next_op_id,
+        chunk_sync_cursor,
+        chunk_headers,
+        chunk_contents,
+        op_windows,
+        residency_hints,
+    })
 }

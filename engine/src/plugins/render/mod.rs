@@ -25,19 +25,27 @@ pub use bytemuck;
 pub use composition::RenderFlowRegistryResource;
 pub use engine_render_macros::{GpuStorage, GpuUniform};
 pub use features::{
-    DEFORMATION_RENDER_FEATURE_ID, FeatureContributionStatus, FeatureFallbackPolicy,
-    MATERIAL_RENDER_FEATURE_ID, PreparedDeformationFeatureResource, PreparedDrawFeatureResource,
-    PreparedMaterialFeatureResource, RenderFeatureDescriptor, RenderFeatureId,
-    RenderFeatureRegistryResource, SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID,
-    WORLD_DRAW_RENDER_FEATURE_ID,
+    CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
+    FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
+    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedCaveFeatureResource,
+    PreparedDeformationFeatureResource, PreparedDetailFeatureResource, PreparedDrawFeatureResource,
+    PreparedMaterialFeatureResource, PreparedProceduralWorldFeatureResource,
+    PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureDescriptor,
+    RenderFeatureId, RenderFeatureRegistryResource, SCENE_ROUTE_RENDER_FEATURE_ID,
+    UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 pub use frame::{
-    PreparedDeformationFeatureContribution, PreparedDeformationStream, PreparedDrawBatch,
-    PreparedDrawFeatureContribution, PreparedFeatureContribution, PreparedFeatureGate,
-    PreparedFeaturePayload, PreparedFlowInputs, PreparedFrameContext, PreparedFrameContributions,
-    PreparedMaterialFeatureContribution, PreparedMaterialInstanceInput, PreparedRenderFrame,
-    PreparedRenderFrameResource, PreparedSceneRouteContribution, PreparedShaderSnapshot,
-    PreparedStateTypeInfo, PreparedSurfaceInfo, PreparedUiFeatureContribution, PreparedViewFrame,
+    PreparedCaveFeatureContribution, PreparedDeformationFeatureContribution,
+    PreparedDeformationStream, PreparedDetailCellContribution, PreparedDetailFeatureContribution,
+    PreparedDrawBatch, PreparedDrawFeatureContribution, PreparedFeatureContribution,
+    PreparedFeatureGate, PreparedFeaturePayload, PreparedFlowInputs, PreparedFrameContext,
+    PreparedFrameContributions, PreparedMaterialFeatureContribution, PreparedMaterialInstanceInput,
+    PreparedProceduralOverlayContribution, PreparedProceduralWorldFeatureContribution,
+    PreparedRenderFrame, PreparedRenderFrameResource, PreparedSceneRouteContribution,
+    PreparedShaderSnapshot, PreparedStateTypeInfo, PreparedSurfaceInfo,
+    PreparedUiFeatureContribution, PreparedViewFrame, PreparedWindFieldContribution,
+    PreparedWindFieldFeatureContribution, PreparedWorldChunkContribution,
+    PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
 };
 pub use graph::{
     CompiledBindGroupPlan, CompiledBindingEntry, CompiledBuiltinImport,

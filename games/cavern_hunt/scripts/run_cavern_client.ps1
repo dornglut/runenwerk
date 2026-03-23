@@ -1,10 +1,10 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$ConfigPath,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$PassThroughArgs
 )
+
+$ErrorActionPreference = "Stop"
 
 function Get-RepoRoot {
     param([string]$ScriptDir)

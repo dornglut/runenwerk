@@ -1,8 +1,8 @@
 use crate::rendering::{Sdf3dRenderState, build_render_flow};
 use anyhow::Result;
+use engine::SystemConfigExt;
 use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, CoreSet, InputState, Res, ResMut, Startup, Time, Update, WindowState};
-use engine::SystemConfigExt;
 use winit::keyboard::KeyCode;
 
 const ACTION_CYCLE_VIEW_MODE: &str = "sdf.view.cycle";

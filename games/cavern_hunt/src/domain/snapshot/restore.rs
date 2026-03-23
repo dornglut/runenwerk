@@ -6,15 +6,29 @@ use crate::*;
 use anyhow::Result;
 use ecs::World;
 use engine::plugins::net::NetworkSessionStatus;
+use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
+use engine::plugins::world::ids::{BuildGeneration, ChunkGeneration};
+use engine::plugins::world::sdf::storage::{SdfChunkPayload, WorldSdfChunkStoreResource};
+use engine::plugins::world::streaming::replication::WorldReplicationStateResource;
+use engine::plugins::world::{
+    WorldAuthorityState, WorldRuntimeState,
+    build::queue::WorldBuildQueueResource,
+    chunks::{
+        dirty::WorldDirtyChunkMapResource,
+        lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord},
+        partition::WorldPartitionConfig,
+    },
+    edits::log::WorldOperationLog,
+};
 use engine::prelude::Entity;
 use engine_net::SimulationTick;
+use std::collections::BTreeMap;
 
 // Owner: Cavern Hunt Snapshot Domain - Restore and Entity Reset
 pub fn restore_cavern_run_snapshot(
     world: &mut World,
     snapshot: &CavernRunSnapshotV1,
 ) -> Result<()> {
-    let previous_geometry = world.resource::<CavernGeometryGraph>().ok().cloned();
     let current_connection_id = world
         .resource::<NetworkSessionStatus>()
         .ok()
@@ -35,6 +49,8 @@ pub fn restore_cavern_run_snapshot(
         })
         .or(previous_local_player_id);
 
+    restore_world_checkpoint(world, snapshot.world_checkpoint.as_ref())?;
+
     clear_cavern_run_entities(world);
     let layout = snapshot.layout.layout.clone();
     world.insert_resource(layout.clone());
@@ -50,18 +66,9 @@ pub fn restore_cavern_run_snapshot(
         })
         .unwrap_or_else(|| CavernTopology::from_layout(&layout, snapshot.seed));
     world.insert_resource(topology.clone());
-    let mut geometry = snapshot
-        .geometry
-        .as_ref()
-        .map(|snapshot| snapshot.graph.clone())
-        .unwrap_or_else(|| CavernGeometryGraph::from_topology(&topology));
-    if snapshot.geometry.is_none() {
-        for event in &snapshot.geometry_edits {
-            let _ = geometry.apply_edit(&event.edit);
-        }
-    }
-    let geometry_changed = previous_geometry
-        .as_ref()
+    let geometry = CavernGeometryGraph::from_topology(&topology);
+    let geometry_changed = world
+        .resource::<CavernGeometryGraph>()
         .map(|previous| previous != &geometry)
         .unwrap_or(true);
     world.insert_resource(geometry.clone());
@@ -74,7 +81,7 @@ pub fn restore_cavern_run_snapshot(
     }
     world.insert_resource(CavernGeometryRuntimeState {
         extraction_seal_primitive: snapshot.extraction_seal_primitive,
-        edit_events: snapshot.geometry_edits.clone(),
+        edit_events: Vec::new(),
     });
     world.insert_resource(CavernRunState {
         run_id: snapshot.run_id,
@@ -316,6 +323,178 @@ pub fn restore_cavern_run_snapshot(
     if let Ok(mut local_player) = world.resource_mut::<LocalPlayerRef>() {
         local_player.player_id = restored_local_player_id;
         local_player.entity = restored_local_entity;
+    }
+
+    Ok(())
+}
+
+fn restore_world_checkpoint(
+    world: &mut World,
+    checkpoint: Option<&CavernWorldCheckpointV1>,
+) -> Result<()> {
+    let Some(checkpoint) = checkpoint else {
+        return Ok(());
+    };
+
+    if world.resource::<WorldAuthorityState>().is_err() {
+        world.insert_resource(WorldAuthorityState::default());
+    }
+    if world.resource::<WorldRuntimeState>().is_err() {
+        world.insert_resource(WorldRuntimeState::default());
+    }
+    if world.resource::<WorldChunkRuntimeMapResource>().is_err() {
+        world.insert_resource(WorldChunkRuntimeMapResource::default());
+    }
+    if world.resource::<WorldSdfChunkStoreResource>().is_err() {
+        world.insert_resource(WorldSdfChunkStoreResource::default());
+    }
+    if world.resource::<WorldOperationLog>().is_err() {
+        world.insert_resource(WorldOperationLog::default());
+    }
+    if world.resource::<WorldReplicationStateResource>().is_err() {
+        world.insert_resource(WorldReplicationStateResource::default());
+    }
+    if world.resource::<WorldDirtyChunkMapResource>().is_err() {
+        world.insert_resource(WorldDirtyChunkMapResource::default());
+    }
+    if world.resource::<WorldBuildQueueResource>().is_err() {
+        world.insert_resource(WorldBuildQueueResource::default());
+    }
+    if world.resource::<WorldDebugMetricsResource>().is_err() {
+        world.insert_resource(WorldDebugMetricsResource::default());
+    }
+
+    let partition = world
+        .resource::<WorldPartitionConfig>()
+        .map(|value| value.clone())
+        .unwrap_or_default();
+
+    let mut gameplay_lock_by_chunk = BTreeMap::new();
+    for hint in &checkpoint.residency_hints {
+        gameplay_lock_by_chunk.insert(hint.chunk_id, hint.gameplay_locked);
+    }
+
+    let mut runtime_chunks = WorldChunkRuntimeMapResource::default();
+    for header in &checkpoint.chunk_headers {
+        runtime_chunks.by_chunk_id.insert(
+            header.chunk_id,
+            WorldChunkRuntimeRecord {
+                chunk_id: header.chunk_id,
+                lifecycle: ChunkLifecycleState::Ready,
+                chunk_revision: header.chunk_revision,
+                chunk_generation: header.chunk_generation,
+                build_generation: BuildGeneration(header.chunk_generation.0),
+                dirty_reasons: Default::default(),
+                pending_build_generation: None,
+                gameplay_locked: gameplay_lock_by_chunk
+                    .get(&header.chunk_id)
+                    .copied()
+                    .unwrap_or(false),
+            },
+        );
+    }
+
+    let mut op_log = WorldOperationLog::default();
+    let mut by_op_id = BTreeMap::new();
+    for window in &checkpoint.op_windows {
+        for record in &window.operations {
+            by_op_id.insert(record.op_id, record.clone());
+        }
+    }
+    for record in by_op_id.into_values() {
+        op_log.by_id.insert(record.op_id, op_log.operations.len());
+        op_log.operations.push(record);
+    }
+    let last_seen_op = op_log
+        .operations
+        .last()
+        .map(|record| record.op_id.0)
+        .unwrap_or(0);
+    let checkpoint_next_op = checkpoint.next_op_id.0.max(last_seen_op.saturating_add(1));
+    op_log.next_op_id = checkpoint_next_op;
+
+    let mut sdf_store = WorldSdfChunkStoreResource::default();
+    for delta in &checkpoint.chunk_contents {
+        let payload = if let Some(full_payload) = &delta.full_payload {
+            let mut decoded: SdfChunkPayload =
+                postcard::from_bytes(full_payload).map_err(|error| {
+                    anyhow::anyhow!(
+                        "decode world chunk payload failed for {:?}: {}",
+                        delta.chunk_id,
+                        error
+                    )
+                })?;
+            decoded.chunk_id = delta.chunk_id;
+            decoded.chunk_revision = delta.chunk_revision;
+            decoded
+        } else {
+            SdfChunkPayload {
+                chunk_id: delta.chunk_id,
+                chunk_revision: delta.chunk_revision,
+                chunk_generation: ChunkGeneration::default(),
+                page_table: Default::default(),
+                hierarchy_revision: 0,
+                checksum: 0,
+            }
+        };
+
+        let region_id = partition.region_id_from_chunk_id(payload.chunk_id);
+        let summary = sdf_store.region_summaries.entry(region_id).or_default();
+        if !payload.page_table.is_empty() {
+            summary.occupied_chunk_count = summary.occupied_chunk_count.saturating_add(1);
+            summary.surface_chunk_count = summary.surface_chunk_count.saturating_add(1);
+            summary.min_distance = summary.min_distance.min(-1);
+            summary.max_distance = summary.max_distance.max(1);
+        }
+        sdf_store.chunks.insert(payload.chunk_id, payload);
+    }
+
+    for payload in sdf_store.chunks.values() {
+        runtime_chunks
+            .by_chunk_id
+            .entry(payload.chunk_id)
+            .or_insert_with(|| WorldChunkRuntimeRecord {
+                chunk_id: payload.chunk_id,
+                lifecycle: ChunkLifecycleState::Ready,
+                chunk_revision: payload.chunk_revision,
+                chunk_generation: payload.chunk_generation,
+                build_generation: BuildGeneration(payload.chunk_generation.0),
+                dirty_reasons: Default::default(),
+                pending_build_generation: None,
+                gameplay_locked: gameplay_lock_by_chunk
+                    .get(&payload.chunk_id)
+                    .copied()
+                    .unwrap_or(false),
+            });
+    }
+
+    let mut replication = WorldReplicationStateResource::default();
+    replication.pending_header_deltas = checkpoint
+        .chunk_headers
+        .iter()
+        .cloned()
+        .map(|value| (value.chunk_id, value))
+        .collect();
+    replication.pending_content_deltas = checkpoint
+        .chunk_contents
+        .iter()
+        .cloned()
+        .map(|value| (value.chunk_id, value))
+        .collect();
+    replication.pending_op_windows = checkpoint.op_windows.clone();
+
+    world.insert_resource(WorldAuthorityState {
+        world_revision: checkpoint.world_revision,
+    });
+    world.insert_resource(runtime_chunks);
+    world.insert_resource(sdf_store);
+    world.insert_resource(op_log.clone());
+    world.insert_resource(replication);
+    world.insert_resource(WorldDirtyChunkMapResource::default());
+    world.insert_resource(WorldBuildQueueResource::default());
+
+    if let Ok(mut metrics) = world.resource_mut::<WorldDebugMetricsResource>() {
+        metrics.op_log_count = op_log.operations.len() as u64;
     }
 
     Ok(())

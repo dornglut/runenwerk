@@ -205,6 +205,52 @@ fn hash_prepared_feature_contribution(
                 batch.instance_count.hash(&mut hasher);
             }
         }
+        crate::plugins::render::PreparedFeaturePayload::World(value) => {
+            "world".hash(&mut hasher);
+            value.visible_chunks.len().hash(&mut hasher);
+            value.residency_intents.len().hash(&mut hasher);
+            for chunk in &value.visible_chunks {
+                chunk.chunk_id.hash(&mut hasher);
+                chunk.chunk_revision.hash(&mut hasher);
+                chunk.chunk_generation.hash(&mut hasher);
+                chunk.draw_batch_ref.hash(&mut hasher);
+            }
+            for intent in &value.residency_intents {
+                intent.chunk_id.hash(&mut hasher);
+                intent.priority.hash(&mut hasher);
+                intent.hard_pin.hash(&mut hasher);
+            }
+        }
+        crate::plugins::render::PreparedFeaturePayload::Caves(value) => {
+            "caves".hash(&mut hasher);
+            value.visible_sector_ids.hash(&mut hasher);
+            value.scoped_light_volume_count.hash(&mut hasher);
+        }
+        crate::plugins::render::PreparedFeaturePayload::Detail(value) => {
+            "detail".hash(&mut hasher);
+            value.cells.len().hash(&mut hasher);
+            for cell in &value.cells {
+                cell.cell_id.hash(&mut hasher);
+                cell.chunk_id.hash(&mut hasher);
+                cell.instance_count.hash(&mut hasher);
+            }
+        }
+        crate::plugins::render::PreparedFeaturePayload::ProceduralWorld(value) => {
+            "procedural_world".hash(&mut hasher);
+            value.overlays.len().hash(&mut hasher);
+            for overlay in &value.overlays {
+                overlay.overlay_id.hash(&mut hasher);
+                overlay.source_revision.hash(&mut hasher);
+            }
+        }
+        crate::plugins::render::PreparedFeaturePayload::WindFields(value) => {
+            "wind_fields".hash(&mut hasher);
+            value.fields.len().hash(&mut hasher);
+            for field in &value.fields {
+                field.field_id.hash(&mut hasher);
+                field.strength.to_bits().hash(&mut hasher);
+            }
+        }
         crate::plugins::render::PreparedFeaturePayload::Material(value) => {
             "material".hash(&mut hasher);
             value.instances.len().hash(&mut hasher);

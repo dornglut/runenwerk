@@ -5,7 +5,7 @@ use engine_net::replication::ReplicationDriver;
 
 use crate::{
     CavernCommandEnvelope, CavernRunDeltaV1, CavernRunSnapshotV1, apply_cavern_run_delta,
-    build_cavern_run_delta, capture_cavern_run_snapshot,
+    build_cavern_run_delta, capture_cavern_run_snapshot, capture_world_checkpoint,
 };
 
 pub struct CavernReplicationDriver;
@@ -23,6 +23,16 @@ impl ReplicationDriver for CavernReplicationDriver {
     fn capture_snapshot(world: &World) -> Result<Option<Self::Snapshot>, Self::Error> {
         let snapshot = capture_cavern_run_snapshot(world)
             .map_err(|error| into_driver_error("capture cavern snapshot", error))?;
+        Ok(Some(snapshot))
+    }
+
+    fn capture_snapshot_for_connection(
+        world: &World,
+        connection_id: engine_net::ConnectionId,
+    ) -> Result<Option<Self::Snapshot>, Self::Error> {
+        let mut snapshot = capture_cavern_run_snapshot(world)
+            .map_err(|error| into_driver_error("capture cavern snapshot for connection", error))?;
+        snapshot.world_checkpoint = capture_world_checkpoint(world, Some(connection_id));
         Ok(Some(snapshot))
     }
 

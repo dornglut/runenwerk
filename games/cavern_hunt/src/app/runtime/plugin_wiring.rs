@@ -1,4 +1,5 @@
 use super::*;
+use engine::plugins::world::WorldPlugin;
 
 // Owner: Cavern Hunt Gameplay Plugin - Plugin Wiring
 pub struct CavernHuntPlugin;
@@ -48,6 +49,7 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<EnemyCombatTuning>();
         app.init_resource::<UiWorldHudStats>();
         app.add_plugins((
+            WorldPlugin,
             materials::CavernHuntMaterialPlugin,
             net_config::CavernHuntNetConfigPlugin,
             combat::CavernHuntCombatPlugin,

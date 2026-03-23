@@ -1,4 +1,8 @@
 use crate::*;
+use engine::plugins::world::ids::{ChunkSyncCursor, WorldOpId, WorldRevision};
+use engine::plugins::world::streaming::replication::{
+    ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
+};
 use engine::prelude::Bundle;
 use engine::prelude::SimulationTick;
 use serde::{Deserialize, Serialize};
@@ -115,10 +119,20 @@ pub struct CavernTopologySnapshotV1 {
     pub topology: CavernTopology,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
-pub struct CavernGeometrySnapshotV1 {
-    pub revision: u64,
-    pub graph: CavernGeometryGraph,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, ecs::Resource)]
+pub struct CavernWorldCheckpointV1 {
+    pub world_revision: WorldRevision,
+    pub next_op_id: WorldOpId,
+    #[serde(default)]
+    pub chunk_sync_cursor: Option<ChunkSyncCursor>,
+    #[serde(default)]
+    pub chunk_headers: Vec<ChunkHeaderDelta>,
+    #[serde(default)]
+    pub chunk_contents: Vec<ChunkContentDelta>,
+    #[serde(default)]
+    pub op_windows: Vec<OpWindowDelta>,
+    #[serde(default)]
+    pub residency_hints: Vec<ChunkResidencyHint>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
@@ -136,9 +150,8 @@ pub struct CavernRunSnapshotV1 {
     pub encounters: Vec<RoomEncounterSnapshotV1>,
     pub layout: CavernLayoutSnapshotV1,
     pub topology: Option<CavernTopologySnapshotV1>,
-    pub geometry: Option<CavernGeometrySnapshotV1>,
-    pub geometry_revision: u64,
-    pub geometry_edits: Vec<GeometryEditEvent>,
+    #[serde(default)]
+    pub world_checkpoint: Option<CavernWorldCheckpointV1>,
     pub extraction_seal_primitive: Option<GeometryPrimitiveId>,
     pub players: Vec<CavernPlayerSnapshotV1>,
     pub enemies: Vec<CavernEnemySnapshotV1>,
@@ -162,9 +175,8 @@ pub struct CavernRunDeltaV1 {
     pub encounters: Option<Vec<RoomEncounterSnapshotV1>>,
     pub layout: Option<CavernLayoutSnapshotV1>,
     pub topology: Option<CavernTopologySnapshotV1>,
-    pub geometry: Option<CavernGeometrySnapshotV1>,
-    pub geometry_revision: Option<u64>,
-    pub geometry_edits: Option<Vec<GeometryEditEvent>>,
+    #[serde(default)]
+    pub world_checkpoint: Option<CavernWorldCheckpointV1>,
     pub extraction_seal_primitive: Option<Option<GeometryPrimitiveId>>,
     pub players: Option<Vec<CavernPlayerSnapshotV1>>,
     pub enemies: Option<Vec<CavernEnemySnapshotV1>>,

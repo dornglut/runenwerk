@@ -1,7 +1,8 @@
 use crate::plugins::render::features::{
-    DEFORMATION_RENDER_FEATURE_ID, FeatureContributionStatus, FeatureFallbackPolicy,
-    MATERIAL_RENDER_FEATURE_ID, RenderFeatureId, SCENE_ROUTE_RENDER_FEATURE_ID,
-    UI_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
+    CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
+    FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
+    PROCEDURAL_WORLD_RENDER_FEATURE_ID, RenderFeatureId, SCENE_ROUTE_RENDER_FEATURE_ID,
+    UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use crate::plugins::ui::domain::UiDrawList;
 use std::collections::BTreeMap;
@@ -82,6 +83,86 @@ impl PreparedFrameContributions {
                 status,
                 fallback_policy,
                 payload: PreparedFeaturePayload::Draw(payload),
+            },
+        );
+    }
+
+    pub fn insert_world(
+        &mut self,
+        payload: PreparedWorldFeatureContribution,
+        status: FeatureContributionStatus,
+        fallback_policy: FeatureFallbackPolicy,
+    ) {
+        self.insert(
+            RenderFeatureId::new(WORLD_DRAW_RENDER_FEATURE_ID),
+            PreparedFeatureContribution {
+                status,
+                fallback_policy,
+                payload: PreparedFeaturePayload::World(payload),
+            },
+        );
+    }
+
+    pub fn insert_caves(
+        &mut self,
+        payload: PreparedCaveFeatureContribution,
+        status: FeatureContributionStatus,
+        fallback_policy: FeatureFallbackPolicy,
+    ) {
+        self.insert(
+            RenderFeatureId::new(CAVE_INTERIOR_RENDER_FEATURE_ID),
+            PreparedFeatureContribution {
+                status,
+                fallback_policy,
+                payload: PreparedFeaturePayload::Caves(payload),
+            },
+        );
+    }
+
+    pub fn insert_detail(
+        &mut self,
+        payload: PreparedDetailFeatureContribution,
+        status: FeatureContributionStatus,
+        fallback_policy: FeatureFallbackPolicy,
+    ) {
+        self.insert(
+            RenderFeatureId::new(DETAIL_RENDER_FEATURE_ID),
+            PreparedFeatureContribution {
+                status,
+                fallback_policy,
+                payload: PreparedFeaturePayload::Detail(payload),
+            },
+        );
+    }
+
+    pub fn insert_procedural_world(
+        &mut self,
+        payload: PreparedProceduralWorldFeatureContribution,
+        status: FeatureContributionStatus,
+        fallback_policy: FeatureFallbackPolicy,
+    ) {
+        self.insert(
+            RenderFeatureId::new(PROCEDURAL_WORLD_RENDER_FEATURE_ID),
+            PreparedFeatureContribution {
+                status,
+                fallback_policy,
+                payload: PreparedFeaturePayload::ProceduralWorld(payload),
+            },
+        );
+    }
+
+    pub fn insert_wind_fields(
+        &mut self,
+        payload: PreparedWindFieldFeatureContribution,
+        status: FeatureContributionStatus,
+        fallback_policy: FeatureFallbackPolicy,
+    ) {
+        self.insert(
+            RenderFeatureId::new(WIND_FIELDS_RENDER_FEATURE_ID),
+            PreparedFeatureContribution {
+                status,
+                fallback_policy,
+                payload: PreparedFeaturePayload::WindFields(payload),
             },
         );
     }
@@ -230,6 +311,11 @@ pub enum PreparedFeaturePayload {
     Ui(PreparedUiFeatureContribution),
     SceneRoute(PreparedSceneRouteContribution),
     Draw(PreparedDrawFeatureContribution),
+    World(PreparedWorldFeatureContribution),
+    Caves(PreparedCaveFeatureContribution),
+    Detail(PreparedDetailFeatureContribution),
+    ProceduralWorld(PreparedProceduralWorldFeatureContribution),
+    WindFields(PreparedWindFieldFeatureContribution),
     Material(PreparedMaterialFeatureContribution),
     Deformation(PreparedDeformationFeatureContribution),
 }
@@ -249,6 +335,67 @@ pub struct PreparedSceneRouteContribution {
 #[derive(Debug, Clone, Default)]
 pub struct PreparedDrawFeatureContribution {
     pub batches: Vec<PreparedDrawBatch>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedWorldFeatureContribution {
+    pub visible_chunks: Vec<PreparedWorldChunkContribution>,
+    pub residency_intents: Vec<PreparedWorldResidencyIntent>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedWorldChunkContribution {
+    pub chunk_id: String,
+    pub chunk_revision: u64,
+    pub chunk_generation: u64,
+    pub draw_batch_ref: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedWorldResidencyIntent {
+    pub chunk_id: String,
+    pub priority: i32,
+    pub hard_pin: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedCaveFeatureContribution {
+    pub visible_sector_ids: Vec<u32>,
+    pub scoped_light_volume_count: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedDetailFeatureContribution {
+    pub cells: Vec<PreparedDetailCellContribution>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedDetailCellContribution {
+    pub cell_id: String,
+    pub chunk_id: String,
+    pub instance_count: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedProceduralWorldFeatureContribution {
+    pub overlays: Vec<PreparedProceduralOverlayContribution>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedProceduralOverlayContribution {
+    pub overlay_id: String,
+    pub source_revision: u64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedWindFieldFeatureContribution {
+    pub fields: Vec<PreparedWindFieldContribution>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedWindFieldContribution {
+    pub field_id: String,
+    pub strength: f32,
 }
 
 #[derive(Debug, Clone, Default)]

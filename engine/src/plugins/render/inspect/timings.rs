@@ -9,6 +9,9 @@ pub struct RenderDebugTimingsState {
     pub slowest_pass_id: Option<String>,
     pub slowest_pass_millis: f32,
     pub compute_dispatches: Vec<ComputeDispatchSample>,
+    pub world_rebuild_latency_ms: f32,
+    pub world_rebuild_samples: u64,
+    pub world_prepare_samples: u64,
 }
 
 impl RenderDebugTimingsState {
@@ -38,6 +41,15 @@ impl RenderDebugTimingsState {
                     })
             })
             .collect();
+    }
+
+    pub fn observe_world_rebuild_latency(&mut self, latency_ms: f32) {
+        self.world_rebuild_latency_ms = latency_ms.max(0.0);
+        self.world_rebuild_samples = self.world_rebuild_samples.saturating_add(1);
+    }
+
+    pub fn observe_world_prepare_sample(&mut self) {
+        self.world_prepare_samples = self.world_prepare_samples.saturating_add(1);
     }
 }
 

@@ -9,6 +9,7 @@ use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
 
 const FULL_SNAPSHOT_INTERVAL_TICKS: u64 = 30;
 const MAX_SERVER_SNAPSHOT_HISTORY: usize = 256;
+const MAX_CLIENT_SNAPSHOT_HISTORY: usize = 256;
 
 pub fn replication_step_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
 where
@@ -46,9 +47,6 @@ where
         *cursor
     };
 
-    let captured_snapshot = TDriver::capture_snapshot(&world)
-        .map_err(|e| map_driver_error::<TDriver>(e, "capture snapshot"))?;
-
     let active_connections = world
         .resource::<ServerSessionState>()
         .map(|session| {
@@ -61,18 +59,48 @@ where
         .unwrap_or_default();
 
     let mut outbound = Vec::<OutboundServerMessage>::new();
-    if let Some(snapshot) = captured_snapshot {
+    if !active_connections.is_empty() {
+        let mut snapshots_for_connections = Vec::<(ConnectionId, TDriver::Snapshot)>::new();
+        for connection_id in &active_connections {
+            let captured_snapshot =
+                TDriver::capture_snapshot_for_connection(&world, *connection_id).map_err(|e| {
+                    map_driver_error::<TDriver>(e, "capture snapshot for connection")
+                })?;
+            if let Some(snapshot) = captured_snapshot {
+                snapshots_for_connections.push((*connection_id, snapshot));
+            }
+        }
+
         let mut state =
             world.resource_mut::<ServerSnapshotReplicationState<TDriver::Snapshot>>()?;
         state.latest_tick = tick;
-        state.latest_snapshot = Some(snapshot.clone());
-        state.snapshot_history.insert(cursor, snapshot.clone());
-        prune_snapshot_history(&mut state);
         state
             .checkpoints
             .retain(|connection_id, _| active_connections.contains(connection_id));
+        state
+            .snapshot_history_per_connection
+            .retain(|connection_id, _| active_connections.contains(connection_id));
+        state
+            .latest_snapshot_per_connection
+            .retain(|connection_id, _| active_connections.contains(connection_id));
 
-        for connection_id in active_connections {
+        let mut first_snapshot_for_tick: Option<TDriver::Snapshot> = None;
+
+        for (connection_id, snapshot) in snapshots_for_connections {
+            if first_snapshot_for_tick.is_none() {
+                first_snapshot_for_tick = Some(snapshot.clone());
+            }
+
+            state
+                .latest_snapshot_per_connection
+                .insert(connection_id, snapshot.clone());
+            state
+                .snapshot_history_per_connection
+                .entry(connection_id)
+                .or_default()
+                .insert(cursor, snapshot.clone());
+            prune_snapshot_history_for_connection(&mut state, connection_id);
+
             let (last_ack_cursor, needs_full_resync) = {
                 let checkpoint = state.checkpoints.entry(connection_id).or_default();
                 (checkpoint.last_ack_cursor, checkpoint.needs_full_resync)
@@ -91,7 +119,11 @@ where
                     entity_ids: Vec::new(),
                     payload,
                 })
-            } else if let Some(base_snapshot) = state.snapshot_history.get(&last_ack_cursor) {
+            } else if let Some(base_snapshot) = state
+                .snapshot_history_per_connection
+                .get(&connection_id)
+                .and_then(|history| history.get(&last_ack_cursor))
+            {
                 let delta = TDriver::build_delta(base_snapshot, &snapshot);
                 let payload = TDriver::encode_delta(&delta)
                     .map_err(|e| map_driver_error::<TDriver>(e, "encode delta"))?;
@@ -129,6 +161,12 @@ where
                 connection_id,
                 message,
             });
+        }
+
+        if let Some(snapshot) = first_snapshot_for_tick {
+            state.latest_snapshot = Some(snapshot.clone());
+            state.snapshot_history.insert(cursor, snapshot);
+            prune_snapshot_history(&mut state);
         }
     }
 
@@ -257,16 +295,26 @@ pub fn update_connection_closed<TSnapshot>(
             match connection_id {
                 Some(connection_id) => {
                     state.checkpoints.remove(&connection_id);
+                    state.snapshot_history_per_connection.remove(&connection_id);
+                    state.latest_snapshot_per_connection.remove(&connection_id);
                 }
                 None => {
                     state.checkpoints.clear();
                     state.snapshot_history.clear();
+                    state.snapshot_history_per_connection.clear();
                     state.latest_snapshot = None;
+                    state.latest_snapshot_per_connection.clear();
                     state.latest_tick = SimulationTick::default();
                 }
             }
             state
                 .checkpoints
+                .retain(|connection_id, _| active_connections.contains(connection_id));
+            state
+                .snapshot_history_per_connection
+                .retain(|connection_id, _| active_connections.contains(connection_id));
+            state
+                .latest_snapshot_per_connection
                 .retain(|connection_id, _| active_connections.contains(connection_id));
         }
     } else {
@@ -316,7 +364,9 @@ where
         state.last_acknowledged_cursor = cursor;
         state.last_received_tick = tick;
         state.applied_snapshots = state.applied_snapshots.saturating_add(1);
-        state.last_received_snapshot = Some(snapshot);
+        state.last_received_snapshot = Some(snapshot.clone());
+        state.snapshot_history.insert(cursor, snapshot);
+        prune_client_snapshot_history(&mut state);
     }
 
     if let Ok(mut diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
@@ -344,13 +394,27 @@ where
 
     let (expected_base, base_snapshot) = {
         let state = world.resource::<ClientSnapshotReplicationState<TDriver::Snapshot>>()?;
-        let base_snapshot = state.last_received_snapshot.clone().ok_or_else(|| {
-            anyhow::anyhow!("received delta snapshot without a baseline snapshot")
-        })?;
+        let base_snapshot = state
+            .snapshot_history
+            .get(&base)
+            .cloned()
+            .or_else(|| {
+                if state.last_acknowledged_cursor == base {
+                    state.last_received_snapshot.clone()
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "received delta snapshot with unknown baseline cursor={}",
+                    base.0
+                )
+            })?;
         (state.last_acknowledged_cursor, base_snapshot)
     };
 
-    if expected_base != base {
+    if base.0 > expected_base.0 {
         anyhow::bail!(
             "delta base cursor mismatch: expected {} got {}",
             expected_base.0,
@@ -358,9 +422,14 @@ where
         );
     }
 
-    let corrected = TDriver::apply_delta(world, tick, delta.clone())
-        .map_err(|e| map_driver_error::<TDriver>(e, "apply authoritative delta"))?;
     let rebuilt_snapshot = TDriver::apply_delta_to_snapshot(&base_snapshot, &delta);
+    let corrected = if base == expected_base {
+        TDriver::apply_delta(world, tick, delta.clone())
+            .map_err(|e| map_driver_error::<TDriver>(e, "apply authoritative delta"))?
+    } else {
+        TDriver::apply_snapshot(world, tick, rebuilt_snapshot.clone())
+            .map_err(|e| map_driver_error::<TDriver>(e, "apply delta via snapshot fallback"))?
+    };
 
     if let Ok(mut tick_resource) = world.resource_mut::<SimulationTick>() {
         *tick_resource = tick;
@@ -371,7 +440,9 @@ where
         state.last_acknowledged_cursor = cursor;
         state.last_received_tick = tick;
         state.applied_snapshots = state.applied_snapshots.saturating_add(1);
-        state.last_received_snapshot = Some(rebuilt_snapshot);
+        state.last_received_snapshot = Some(rebuilt_snapshot.clone());
+        state.snapshot_history.insert(cursor, rebuilt_snapshot);
+        prune_client_snapshot_history(&mut state);
     }
 
     if let Ok(mut diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
@@ -415,6 +486,7 @@ where
     state.last_received_tick = SimulationTick::default();
     state.applied_snapshots = 0;
     state.last_received_snapshot = None;
+    state.snapshot_history.clear();
 }
 
 fn prune_snapshot_history<TSnapshot>(state: &mut ServerSnapshotReplicationState<TSnapshot>)
@@ -422,6 +494,38 @@ where
     TSnapshot: Clone + PartialEq,
 {
     while state.snapshot_history.len() > MAX_SERVER_SNAPSHOT_HISTORY {
+        let Some(oldest_cursor) = state.snapshot_history.keys().next().copied() else {
+            break;
+        };
+        state.snapshot_history.remove(&oldest_cursor);
+    }
+}
+
+fn prune_snapshot_history_for_connection<TSnapshot>(
+    state: &mut ServerSnapshotReplicationState<TSnapshot>,
+    connection_id: ConnectionId,
+) where
+    TSnapshot: Clone + PartialEq,
+{
+    let Some(history) = state
+        .snapshot_history_per_connection
+        .get_mut(&connection_id)
+    else {
+        return;
+    };
+    while history.len() > MAX_SERVER_SNAPSHOT_HISTORY {
+        let Some(oldest_cursor) = history.keys().next().copied() else {
+            break;
+        };
+        history.remove(&oldest_cursor);
+    }
+}
+
+fn prune_client_snapshot_history<TSnapshot>(state: &mut ClientSnapshotReplicationState<TSnapshot>)
+where
+    TSnapshot: Clone + PartialEq,
+{
+    while state.snapshot_history.len() > MAX_CLIENT_SNAPSHOT_HISTORY {
         let Some(oldest_cursor) = state.snapshot_history.keys().next().copied() else {
             break;
         };

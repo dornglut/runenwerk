@@ -1,3 +1,5 @@
+// Legacy geometry graph compatibility surface.
+// Authoritative world ownership is being migrated to `engine::plugins::world`.
 use crate::CavernSeed;
 use crate::world::worldgen::{RoomId, RoomRole};
 use serde::{Deserialize, Serialize};
