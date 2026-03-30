@@ -1,0 +1,38 @@
+---
+title: "grotto_online"
+description: "Documentation for grotto_online."
+---
+
+# grotto_online
+
+`grotto_online` bridges the game runtime to Axiom control-plane services.
+
+## Purpose
+
+- request join grants
+- refresh or restore auth/session data
+- consume join tickets on the dedicated server path
+- validate join-grant metadata before runtime admission
+- map consumed Axiom handoff data into runtime-facing admission state
+- provide an operator bridge protocol for runtime control and observability
+
+## Current State
+
+Implemented now:
+
+- `JoinGrant` validation and conversion into runtime session targets
+- HTTP client for auth refresh and join-grant issue/consume
+- client-side grant provider integration
+- server-side ticket verification integration
+- Axiom operator bridge with:
+  - persistent WebSocket transport
+  - heartbeat/reconnect/backoff
+  - inbound operator command stream
+  - outbound command results, snapshots, and events
+  - compatible with Axiom runtime bridge endpoint `/v2/operator/runtime/ws`
+
+Not yet complete:
+
+- full client control-plane boot flow
+- websocket resync
+- richer cross-service operator orchestration between runtime and lifecycle services

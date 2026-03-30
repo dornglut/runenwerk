@@ -1,5 +1,3 @@
-#![doc = include_str!("../README.md")]
-
 extern crate self as ecs;
 
 mod bundle;

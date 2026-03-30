@@ -183,6 +183,6 @@ Suggested workflow:
 
 Related benchmark docs:
 
-- [`../benchmarks/phase6/benchmark-suite.md`](../../../../../../domain/ecs/docs/benchmarks/phase6/benchmark-suite.md)
-- [`../benchmarks/phase6/progress-report.md`](../../../../../../domain/ecs/docs/benchmarks/phase6/progress-report.md)
-- [`../benchmarks/phase6/final-decision-report.md`](../../../../../../domain/ecs/docs/benchmarks/phase6/final-decision-report.md)
+- [`../benchmarks/phase6/benchmark-suite.md`](./benchmarks/phase6/benchmark-suite.md)
+- [`../benchmarks/phase6/progress-report.md`](./benchmarks/phase6/progress-report.md)
+- [`../benchmarks/phase6/final-decision-report.md`](./benchmarks/phase6/final-decision-report.md)

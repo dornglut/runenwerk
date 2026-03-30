@@ -121,4 +121,4 @@ world.resource_mut::<Frame>().unwrap().0 += 1;
 - [usage-guide.md](usage-guide.md) – Basic ECS API usage.
 - [advanced-guide.md](advanced-guide.md) – Deferred commands, events, and runtime integration.
 - [architecture.md](architecture.md) – Internal invariants and unsafe boundaries.
-- [01-roadmap.md](01-roadmap.md) – ECS feature roadmap and prioritization.
+- [Domain roadmap](../01-roadmap.md) – ECS feature roadmap and prioritization.
