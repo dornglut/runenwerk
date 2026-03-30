@@ -66,7 +66,7 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
 
     let start_room = layout
         .room(layout.start_room)
-        .expect("generated layout must contain start room");
+        .expect("generated layouts must contain start room");
     let meta_profile = world
         .resource::<CavernMetaProfile>()
         .cloned()

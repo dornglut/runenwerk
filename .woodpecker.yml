@@ -6,9 +6,9 @@ when:
         - Cargo.lock
         - "**/Cargo.toml"
         - "**/*.rs"
-        - foundation/ecs/README.md
-        - foundation/ecs/USAGE_GUIDE.md
-        - foundation/ecs/ARCHITECTURE.md
+        - domain/ecs/README.md
+        - domain/ecs/USAGE_GUIDE.md
+        - domain/ecs/ARCHITECTURE.md
         - .woodpecker.yml
 
 steps:

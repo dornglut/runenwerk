@@ -1,6 +1,6 @@
 //! Common imports for engine app/plugin authoring.
 //!
-//! This prelude focuses on runtime composition and ECS ergonomics.
+//! This prelude focuses on runtime composition and ecs ergonomics.
 //! Feature-heavy or domain-specific APIs stay in their owning modules
 //! (for example `engine::plugins::net` or `engine::plugins::render`).
 

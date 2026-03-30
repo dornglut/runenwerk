@@ -628,7 +628,7 @@ fn build_prepared_flow_inputs(
                     .copied()
                     .ok_or_else(|| {
                         anyhow::anyhow!(
-                            "uniform projection for flow '{}' pass '{}' requires missing ECS state '{}'",
+                            "uniform projection for flow '{}' pass '{}' requires missing ecs state '{}'",
                             flow.flow_id,
                             pass.pass_id(),
                             binding.state_type_name()
@@ -703,7 +703,7 @@ fn project_dispatch_for_pass(
                 .copied()
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "compute pass '{}' dispatch_state requires missing ECS resource '{}'",
+                        "compute pass '{}' dispatch_state requires missing ecs resource '{}'",
                         node.id.as_str(),
                         binding.state_type_name()
                     )

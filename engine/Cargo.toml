@@ -27,9 +27,8 @@ glam = "0.30.8"
 postcard = { version = "1.1.3", features = ["alloc"] }
 tokio = { version = "1.48.0", features = ["sync"] }
 
-ecs = { path = "../foundation/ecs" }
-scheduler = { path = "../foundation/scheduler" }
-grid = { path = "../foundation/grid" }
+ecs = { path = "../domain/ecs" }
+scheduler = { path = "../domain/scheduler" }
 engine_render_macros = { path = "../engine_render_macros" }
 engine_replay = { path = "../net/engine_history" }
 engine_net = { path = "../net/engine_net" }

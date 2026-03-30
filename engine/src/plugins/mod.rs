@@ -1,6 +1,6 @@
 //! Engine plugin registry and default plugin stack helpers.
 //!
-//! See `engine/src/plugins/README.md` for plugin docs/navigation.
+//! See `engine/src/plugins/README.md` for plugin geometry-old/navigation.
 
 pub mod debug_metrics;
 pub mod fixed_step;

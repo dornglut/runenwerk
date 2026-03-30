@@ -817,7 +817,6 @@ dependencies = [
  "engine_sim",
  "glam 0.30.10",
  "gltf",
- "grid",
  "image",
  "pollster",
  "postcard",
@@ -929,15 +928,6 @@ dependencies = [
  "libm",
  "rand",
  "siphasher",
-]
-
-[[package]]
-name = "fastnoise-lite"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e5f3c3cc9081e5d0e18bcd50e80cd33cba47fc22f88a9da9c33ecd1c87ea5c0"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -1302,15 +1292,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
 dependencies = [
  "bitflags 2.11.0",
-]
-
-[[package]]
-name = "grid"
-version = "0.1.0"
-dependencies = [
- "fastnoise-lite",
- "glam 0.31.1",
- "rand",
 ]
 
 [[package]]

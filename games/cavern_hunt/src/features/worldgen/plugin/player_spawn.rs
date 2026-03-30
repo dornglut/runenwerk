@@ -14,11 +14,11 @@ pub(crate) fn spawn_player_entity(
 ) -> Entity {
     let layout = world
         .resource::<CavernLayout>()
-        .expect("cavern layout initialized")
+        .expect("cavern layouts initialized")
         .clone();
     let start_room = layout
         .room(layout.start_room)
-        .expect("generated layout must contain start room");
+        .expect("generated layouts must contain start room");
     let player_count = world
         .resource::<CavernRunConfig>()
         .map(|config| usize::from(config.max_players.max(1)))

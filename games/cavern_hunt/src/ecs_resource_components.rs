@@ -1,6 +1,6 @@
-// Owner: Cavern Hunt ECS migration - Resource component markers
+// Owner: Cavern Hunt ecs migration - Resource component markers
 //
-// Phase 3 aligns resource usage with ECS component-backed resources.
+// Phase 3 aligns resource usage with ecs component-backed resources.
 // These impls keep resource marker wiring explicit without changing
 // domain type definitions.
 
