@@ -1,9 +1,10 @@
 use super::super::chunks::dirty::ChunkDirtyReasonSet;
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::chunks::partition::WorldPartitionConfig;
+use super::super::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::super::ids::{BuildGeneration, ChunkId, ChunkRevision};
-use super::super::plugin::WorldRuntimeState;
+use super::super::ids::{BuildGeneration, ChunkId, ChunkRevision, WorldRevision};
+use super::super::plugin::{WorldAuthorityState, WorldRuntimeState};
 use super::super::sdf::storage::{RegionSdfSummary, SdfChunkPayload, WorldSdfChunkStoreResource};
 use super::jobs::WorldBuildStaleness;
 use crate::runtime::{Res, ResMut};
@@ -30,6 +31,8 @@ pub fn integrate_completed_build_outputs_system(
     mut sdf_store: ResMut<WorldSdfChunkStoreResource>,
     partition: Res<WorldPartitionConfig>,
     mut runtime: ResMut<WorldRuntimeState>,
+    mut authority: ResMut<WorldAuthorityState>,
+    mut render_cache_invalidation: ResMut<WorldRenderCacheInvalidationQueueResource>,
     mut debug: ResMut<WorldDebugMetricsResource>,
 ) {
     let mut integrated = 0_u64;
@@ -63,12 +66,17 @@ pub fn integrate_completed_build_outputs_system(
         sdf_store
             .region_summaries
             .insert(region_id, output.region_summary);
+        render_cache_invalidation.enqueue(output.chunk_id);
         integrated = integrated.saturating_add(1);
     }
 
     runtime.integrated_build_outputs = runtime.integrated_build_outputs.saturating_add(integrated);
     runtime.dropped_stale_build_outputs =
         runtime.dropped_stale_build_outputs.saturating_add(dropped);
+    if integrated > 0 {
+        authority.world_revision =
+            WorldRevision(authority.world_revision.0.saturating_add(integrated));
+    }
     debug.integrated_build_outputs = debug.integrated_build_outputs.saturating_add(integrated);
     debug.dropped_stale_build_outputs = debug.dropped_stale_build_outputs.saturating_add(dropped);
 }
