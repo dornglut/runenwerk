@@ -1,60 +1,51 @@
 ---
-title: Feature Overview
-description: Overview of the ecs features.
+title: Feature Map
+description: Current capability map for the ecs crate.
 ---
 
-
 - ✅ Core-supported
-- ⚠ Partial / limited support
+- ⚠ Partial / constrained support
 - ❌ Missing
 
+| Area | Capability | Status | Notes |
+| --- | --- | --- | --- |
+| **Derives** | `Component` | ✅ | Stable derive and runtime registration flow. |
+|  | `Resource` | ✅ | Stable derive and resource lifecycle APIs. |
+|  | `Bundle` | ✅ | Supported for spawn/insert/remove composition. |
+|  | `StatefulComponent` | ✅ | Generation/version state is available and explicit-change APIs are implemented. |
+|  | `Event` derive (`#[derive(Event)]`) | ❌ | Event channels are typed but event registration derive is not present. |
+| **World Core** | Entities (`spawn`, `despawn`, `entity`, `entity_mut`) | ✅ | Core lifecycle is stable with archetype-backed storage. |
+|  | Resources (`insert_resource`, `resource`, `resource_mut`, `remove_resource`) | ✅ | Includes change-log reporting APIs. |
+|  | Change logs (`component_changes_since`, `resource_changes_since`) | ✅ | Reporting layer is separate from query filter semantics. |
+| **Queries** | `Query<&T>`, `Query<&mut T>`, tuples, optional forms | ✅ | Core query surface is in place. |
+|  | Filters `With`, `Without`, `Added`, `Changed` | ✅ | Filter semantics backed by archetype metadata ticks. |
+|  | Reusable `QueryState<Q, F>` | ✅ | Detached query state and cache reuse supported. |
+|  | `QueryOrphaned<T>` / `QueryOrphanedState<T>` | ✅ | Removed-component stage window is supported. |
+|  | Query history / undo-oriented query APIs | ❌ | Not part of current ECS scope. |
+| **System Params** | `Res<T>`, `ResMut<T>`, `ResView<T>` | ✅ | `ResView<T>` is a semantic alias for read-only resource access. |
+|  | `Commands` param | ✅ | Deferred structural mutation param with runtime scope protection. |
+|  | `EventReader<T>`, `EventWriter<T>` | ✅ | Typed read/write event params are implemented. |
+|  | `EventChannel<T>` param (`iter_all`, `iter_new`, `send`) | ✅ | Per-system cursor state for incremental event reads. |
+| **Commands / Runtime** | `Commands` queue + `apply` | ✅ | Deferred commands are collected and flushed at stage boundary. |
+|  | `DeferredCommand<T>` | ✅ | Typed deferred command trait is available. |
+|  | `BatchCommands` | ✅ | Ordered batched mutations are implemented. |
+|  | Stage-failure command isolation | ✅ | Commands from failed runs are discarded, not replayed on later runs. |
+|  | Conditional command DSL (`ConditionalCommands`) | ❌ | No dedicated conditional command primitive. |
+| **Events / Reactivity** | World events (`emit_event`, `read_events`, `drain_events`, `clear_events`) | ✅ | Typed event channels with world APIs are implemented. |
+|  | Channel config (`EventChannelConfig`) | ✅ | Capacity, overflow, lifetime, tracing policy are supported. |
+|  | Event observers (`observe_events`, triggers, notifications) | ✅ | `OnEmit`, `OnDrain`, `EndOfFrame` observer triggers are available. |
+|  | Drain helpers (`drain_events_map`, `drain_events_filter`) | ✅ | Helper transforms for consumed events are available. |
+|  | Event history buffers / replay store | ❌ | No first-class retained event history abstraction. |
+| **Indexes** | Component secondary indexes | ✅ | Named indexes keyed by `(component type, key type, name)`. |
+|  | Multiple named indexes per component | ✅ | Supported via `ensure_component_index_named` / `find_*_by_index_named`. |
+|  | Spatial index API (`SpatialIndex`) | ✅ | Trait and world integration are in place. |
+|  | Spatial hash backend (`SpatialHashIndex`) | ✅ | Current backend implementation is available. |
+|  | Additional spatial backends (octree/BVH/etc.) | ❌ | Not implemented in this crate yet. |
+| **Telemetry** | Feature-gated telemetry (`reset`, `snapshot`) | ✅ | Runtime/query/scheduler/event instrumentation is available behind `telemetry`. |
+|  | Dedicated query/event profiler APIs | ❌ | No separate high-level profiler subsystem yet. |
 
-| Domain                    | Feature / Concept                                 | Current ECS Support | Notes / Gap Analysis                                                  |
-| ------------------------- | ------------------------------------------------- | ------------------- | --------------------------------------------------------------------- |
-| **Derives**               | `Component`                                       | ✅                   | Fully supported                                                       |
-|                           | `Resource`                                        | ✅                   | Fully supported                                                       |
-|                           | `Event`                                           | ❌                   | Not yet ECS-native; only ad-hoc event APIs exist                      |
-|                           | `Flag` / zero-sized markers                       | ⚠                   | Can use empty `Component`s but no dedicated derive                    |
-|                           | `StatefulComponent`                               | ❌                   | Automatic change tracking per component would help queries/reactivity |
-|                           | `Inspectable`                                     | ❌                   | Useful for editor/UI panels                                           |
-|                           | `NetworkSync`                                     | ❌                   | Component-level replication / serialization missing                   |
-|                           | `BundlePartial`                                   | ❌                   | Optional component bundles missing                                    |
-| **Queries**               | `Query<&T>` / `Query<&mut T>` / tuples            | ✅                   | Core queries supported                                                |
-|                           | Filters: `With`, `Without`, `Added`, `Changed`    | ✅                   | Fully supported                                                       |
-|                           | Detached / reusable `QueryState`                  | ✅                   | Supported                                                             |
-|                           | `QueryMutOrDefault<T>`                            | ❌                   | Auto-insert default missing                                           |
-|                           | `QueryOnce<T>`                                    | ❌                   | One-off queries missing                                               |
-|                           | `QueryWithHistory<T>`                             | ❌                   | Useful for undo/redo or editor history                                |
-|                           | `QueryOrphaned<T>`                                | ❌                   | Track removed components for transient operations                     |
-|                           | `QueryIndexable<T>`                               | ❌                   | Combine query + secondary index for fast lookups                      |
-| **Events / Reactivity**   | `emit_event`, `read_events`, `drain_events`       | ✅                   | Basic per-frame events exist                                          |
-|                           | `#[derive(Event)]`                                | ❌                   | Type-level ECS event registration missing                             |
-|                           | `Reactive<T>`                                     | ❌                   | Auto `Changed<T>` notifications across systems missing                |
-|                           | `EventChannel<T>`                                 | ❌                   | Multi-consumer, per-system cursors missing                            |
-|                           | `EventFilter<T>`                                  | ❌                   | Predicate-based event filtering missing                               |
-|                           | `EventHistory<T>`                                 | ❌                   | Store N previous frames missing                                       |
-| **Resources**             | `Resource` insert / read / remove / mut           | ✅                   | Core supported                                                        |
-|                           | `ResHistory<T>`                                   | ❌                   | Historical snapshots for undo/redo                                    |
-|                           | `ResView<T>`                                      | ❌                   | Read-only snapshot for safe access                                    |
-|                           | `LazyResource<T>`                                 | ❌                   | Deferred initialization missing                                       |
-|                           | `GlobalEventQueue<T>`                             | ❌                   | Cross-system event queue missing                                      |
-| **Commands / Scheduling** | `commands().insert/spawn/apply`                   | ✅                   | Core supported                                                        |
-|                           | `ScheduleLabel`                                   | ✅                   | Supported                                                             |
-|                           | `DeferredCommand<T>`                              | ❌                   | Safe mutation after queries missing                                   |
-|                           | `BatchCommands`                                   | ❌                   | Atomic batch application missing                                      |
-|                           | `ConditionalCommands`                             | ❌                   | Apply only if query condition holds missing                           |
-|                           | `ScheduleParam`                                   | ❌                   | Ergonomic scheduling with dependencies missing                        |
-| **Editor / UI**           | `InspectableComponent`                            | ❌                   | Auto-bind to editor panels missing                                    |
-|                           | `GizmoBundle`                                     | ❌                   | Editor handles / manipulators missing                                 |
-|                           | `UiNode ECS`                                      | ❌                   | UI state in ECS missing                                               |
-|                           | `UndoRedo`                                        | ❌                   | Requires `ResHistory` / `QueryWithHistory`                            |
-|                           | `TransientComponent`                              | ❌                   | Auto-remove per frame for ephemeral editor objects                    |
-| **Indexes**               | `ensure_component_index` / `find_entity_by_index` | ⚠                   | Single-index supported                                                |
-|                           | `MultiIndex`                                      | ❌                   | Map one component to multiple keys missing                            |
-|                           | `IndexChain`                                      | ❌                   | Chained indexes for complex lookups missing                           |
-|                           | `SpatialIndex`                                    | ❌                   | Grid / octree for editor/world queries missing                        |
-| **Debug / Telemetry**     | Telemetry APIs `reset()`, `snapshot()`            | ✅                   | Feature-gated profiling exists                                        |
-|                           | `QueryProfiler`                                   | ❌                   | Per-query cost tracking missing                                       |
-|                           | `ComponentUsageTracker`                           | ❌                   | Track hot components missing                                          |
-|                           | `EventProfiler`                                   | ❌                   | Track event frequency missing                                         |
-|                           | `ChangeHeatmap`                                   | ❌                   | Visualize component change density missing                            |
+## Notes on Scope
+
+Current ECS priorities are core runtime correctness, deterministic scheduling/flush semantics, and maintainable module boundaries (`world`, `commands`, `spatial`, `query`, `system`).
+
+Editor-facing reflection, network replication derives, and history/undo primitives are intentionally out of scope for this phase.

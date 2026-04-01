@@ -28,6 +28,17 @@ pub struct SphereSweepQuery {
 pub struct WorldCollisionQueryServiceResource;
 
 impl WorldCollisionQueryServiceResource {
+    pub fn chunk_has_authoritative_payload(
+        &self,
+        partition: &WorldPartitionConfig,
+        store: &WorldSdfChunkStoreResource,
+        planet_id: PlanetId,
+        world_position: [f32; 3],
+    ) -> bool {
+        let chunk_id = partition.chunk_id_from_position(planet_id, world_position);
+        store.chunks.contains_key(&chunk_id)
+    }
+
     pub fn sample_signed_distance(
         &self,
         partition: &WorldPartitionConfig,
@@ -56,8 +67,15 @@ impl WorldCollisionQueryServiceResource {
         query: SphereSweepQuery,
     ) -> Option<WorldCollisionHit> {
         let end_chunk = partition.chunk_id_from_position(planet_id, query.end);
+        if !store.chunks.contains_key(&end_chunk) {
+            return None;
+        }
         let payload = store.chunks.get(&end_chunk)?;
-        if payload.page_table.is_empty() {
+        let has_geometry_pages = payload
+            .page_table
+            .values()
+            .any(|page| !page.bricks.is_empty());
+        if !has_geometry_pages {
             return None;
         }
         Some(WorldCollisionHit {

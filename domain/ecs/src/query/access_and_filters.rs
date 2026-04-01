@@ -31,6 +31,7 @@ impl QueryTypeAccess {
 #[derive(Debug, Clone, Default)]
 pub struct QueryAccess {
     component_reads: Vec<QueryTypeAccess>,
+    orphaned_component_reads: Vec<QueryTypeAccess>,
     component_writes: Vec<QueryTypeAccess>,
     resource_reads: Vec<QueryTypeAccess>,
     resource_writes: Vec<QueryTypeAccess>,
@@ -50,6 +51,10 @@ impl QueryAccess {
 
     pub fn component_writes(&self) -> &[QueryTypeAccess] {
         &self.component_writes
+    }
+
+    pub fn orphaned_component_reads(&self) -> &[QueryTypeAccess] {
+        &self.orphaned_component_reads
     }
 
     pub fn resource_reads(&self) -> &[QueryTypeAccess] {
@@ -74,6 +79,13 @@ impl QueryAccess {
     pub(crate) fn add_component_write<T: Component>(&mut self) {
         push_unique_access(
             &mut self.component_writes,
+            QueryTypeAccess::of::<T>(T::component_name()),
+        );
+    }
+
+    pub(crate) fn add_orphaned_component_read<T: Component>(&mut self) {
+        push_unique_access(
+            &mut self.orphaned_component_reads,
             QueryTypeAccess::of::<T>(T::component_name()),
         );
     }

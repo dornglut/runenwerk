@@ -2,7 +2,7 @@ use ecs::{QueryAccess, SystemParam, SystemParamError, World};
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
-pub use ecs::{Commands, EventReader, EventWriter, Query, Res, ResMut};
+pub use ecs::{Commands, EventChannel, EventReader, EventWriter, Query, Res, ResMut};
 
 pub struct WorldRef {
     world: NonNull<World>,

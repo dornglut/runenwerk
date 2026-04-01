@@ -57,6 +57,11 @@ pub fn advance_chunk_lifecycle_system(
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
     mut dirty: ResMut<WorldDirtyChunkMapResource>,
 ) {
+    let dirty_ids = dirty.by_chunk.keys().copied().collect::<Vec<_>>();
+    for chunk_id in dirty_ids {
+        chunks.ensure_chunk(chunk_id);
+    }
+
     let ids = chunks.by_chunk_id.keys().copied().collect::<Vec<_>>();
     for chunk_id in ids {
         let Some(record) = chunks.by_chunk_id.get_mut(&chunk_id) else {

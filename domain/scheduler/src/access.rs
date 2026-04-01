@@ -4,6 +4,7 @@ use std::collections::HashSet;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AccessDomain {
     Component,
+    OrphanedComponent,
     Resource,
     Structural,
 }
@@ -30,6 +31,18 @@ impl AccessKey {
 
     pub fn resource<T: 'static>(name: &'static str) -> Self {
         Self::resource_by_id(TypeId::of::<T>(), name)
+    }
+
+    pub fn orphaned_component<T: 'static>(name: &'static str) -> Self {
+        Self::orphaned_component_by_id(TypeId::of::<T>(), name)
+    }
+
+    pub fn orphaned_component_by_id(type_id: TypeId, name: &'static str) -> Self {
+        Self {
+            domain: AccessDomain::OrphanedComponent,
+            type_id: Some(type_id),
+            name,
+        }
     }
 
     pub fn resource_by_id(type_id: TypeId, name: &'static str) -> Self {

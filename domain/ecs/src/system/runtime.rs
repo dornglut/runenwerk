@@ -367,7 +367,7 @@ macro_rules! impl_into_system {
                 let deferred_commands_ref = deferred_commands.clone();
 
                 RegisteredSystem::new::<L>(system_name, access, move |world| {
-                    let mut commands = Commands::new();
+                    let mut commands = Commands::new_external_owner();
                     $(
                         let $param = unsafe {
                             <$param as SystemParamState>::extract(
@@ -377,9 +377,12 @@ macro_rules! impl_into_system {
                             )?
                         };
                     )*
-                    let result = func($($param),*);
-                    deferred_commands_ref.borrow_mut().push(commands);
-                    result.into_result()
+                    let result = func($($param),*).into_result();
+                    let staged_commands = commands.finalize_external_owner();
+                    if result.is_ok() {
+                        deferred_commands_ref.borrow_mut().push(staged_commands);
+                    }
+                    result
                 })
             }
         }
@@ -449,7 +452,10 @@ impl Runtime {
     }
 
     pub fn run_schedule<L: ScheduleLabel>(&mut self, world: &mut World) -> Result<()> {
-        self.ensure_build_ready()?;
+        if let Err(err) = self.ensure_build_ready() {
+            self.discard_deferred_commands();
+            return Err(err);
+        }
         let plan_start = Instant::now();
         let Some(plan) = self.scheduler.plan_for::<L>().cloned() else {
             telemetry::record_runtime_plan(plan_start.elapsed().as_nanos() as u64);
@@ -460,17 +466,22 @@ impl Runtime {
         for stage in plan.stages {
             let stage_start = Instant::now();
             for system_index in stage.system_indices {
-                let system = self
-                    .scheduler
-                    .systems_mut()
-                    .get_mut(system_index)
-                    .ok_or_else(|| anyhow!("execution plan referenced missing system"))?;
-                system.run(world)?;
+                let Some(system) = self.scheduler.systems_mut().get_mut(system_index) else {
+                    self.discard_deferred_commands();
+                    return Err(anyhow!("execution plan referenced missing system"));
+                };
+                if let Err(err) = system.run(world) {
+                    self.discard_deferred_commands();
+                    return Err(err);
+                }
             }
             telemetry::record_runtime_stage(stage_start.elapsed().as_nanos() as u64);
             // Deferred commands are a stage boundary contract: structural effects become visible
             // only after all systems in the current stage have completed.
-            self.flush_stage_commands(world)?;
+            if let Err(err) = self.flush_stage_commands(world) {
+                self.discard_deferred_commands();
+                return Err(err);
+            }
         }
 
         Ok(())
@@ -486,6 +497,7 @@ impl Runtime {
 
     fn flush_stage_commands(&self, world: &mut World) -> Result<()> {
         let start = Instant::now();
+        world.begin_stage_command_flush();
         let stage_commands = std::mem::take(&mut *self.deferred_commands.borrow_mut());
         let command_queue_count = stage_commands.len() as u64;
         for commands in stage_commands {
@@ -494,12 +506,22 @@ impl Runtime {
         telemetry::record_runtime_flush(start.elapsed().as_nanos() as u64, command_queue_count);
         Ok(())
     }
+
+    fn discard_deferred_commands(&self) {
+        self.deferred_commands.borrow_mut().clear();
+    }
 }
 
 fn query_access_to_system_access(access: QueryAccess) -> SystemAccess {
     let mut system_access = SystemAccess::new();
     for read in access.component_reads() {
         system_access.add_read(AccessKey::component_by_id(read.type_id(), read.name()));
+    }
+    for read in access.orphaned_component_reads() {
+        system_access.add_read(AccessKey::orphaned_component_by_id(
+            read.type_id(),
+            read.name(),
+        ));
     }
     for write in access.component_writes() {
         system_access.add_write(AccessKey::component_by_id(write.type_id(), write.name()));

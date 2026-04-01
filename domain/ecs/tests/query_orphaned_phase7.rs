@@ -1,0 +1,509 @@
+use ecs::prelude::*;
+use scheduler::ScheduleLabel;
+use scheduler::label::SystemSet;
+
+#[derive(Copy, Clone)]
+struct Update;
+
+impl ScheduleLabel for Update {
+    fn name() -> &'static str {
+        "QueryOrphanedUpdate"
+    }
+}
+
+#[derive(Copy, Clone)]
+struct QueueSet;
+
+impl SystemSet for QueueSet {
+    fn name() -> &'static str {
+        "QueryOrphanedQueueSet"
+    }
+}
+
+#[derive(Copy, Clone)]
+struct ObserveSet;
+
+impl SystemSet for ObserveSet {
+    fn name() -> &'static str {
+        "QueryOrphanedObserveSet"
+    }
+}
+
+#[derive(Copy, Clone)]
+struct LateObserveSet;
+
+impl SystemSet for LateObserveSet {
+    fn name() -> &'static str {
+        "QueryOrphanedLateObserveSet"
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
+struct A(i32);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
+struct B(i32);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
+struct Target(Entity);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
+struct TargetPair(Entity, Entity);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
+struct Gate(bool);
+
+#[derive(Debug, Default, PartialEq, Eq, ecs::Resource)]
+struct StageCounts {
+    same_stage: Vec<usize>,
+    post_stage: Vec<usize>,
+    late_stage: Vec<usize>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq, ecs::Resource)]
+struct EntityHistory(Vec<Vec<Entity>>);
+
+#[derive(Debug, Default, PartialEq, Eq, ecs::Resource)]
+struct TypeIsolationCounts {
+    a_entities: Vec<Entity>,
+    b_entities: Vec<Entity>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq, ecs::Resource)]
+struct DoubleReadCounts(Vec<(usize, usize)>);
+
+#[derive(Debug, Default, PartialEq, Eq, ecs::Resource)]
+struct WindowSnapshot {
+    orphaned: Vec<usize>,
+    live: Vec<usize>,
+}
+
+#[test]
+fn explicit_remove_is_not_visible_before_flush_and_visible_after_flush() {
+    fn queue_remove_once(mut gate: ResMut<Gate>, target: Res<Target>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(target.0);
+        gate.0 = true;
+    }
+
+    fn observe_same_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.same_stage.push(orphaned.iter().count());
+    }
+
+    fn observe_post_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.post_stage.push(orphaned.iter().count());
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn(A(1));
+    world.insert_resource(Target(entity));
+    world.insert_resource(Gate(false));
+    world.insert_resource(StageCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_remove_once.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(&mut world, observe_same_stage.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_post_stage.in_set(ObserveSet).after(QueueSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<StageCounts>().unwrap();
+    assert_eq!(counts.same_stage, vec![0]);
+    assert_eq!(counts.post_stage, vec![1]);
+}
+
+#[test]
+fn despawn_with_component_is_visible_after_flush() {
+    fn queue_despawn_once(mut gate: ResMut<Gate>, target: Res<Target>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.despawn(target.0);
+        gate.0 = true;
+    }
+
+    fn observe_post_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.post_stage.push(orphaned.iter().count());
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn((A(2), B(9)));
+    world.insert_resource(Target(entity));
+    world.insert_resource(Gate(false));
+    world.insert_resource(StageCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_despawn_once.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_post_stage.in_set(ObserveSet).after(QueueSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<StageCounts>().unwrap();
+    assert_eq!(counts.post_stage, vec![1]);
+}
+
+#[test]
+fn orphaned_records_are_visible_only_for_one_stage_window() {
+    fn queue_remove_once(mut gate: ResMut<Gate>, target: Res<Target>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(target.0);
+        gate.0 = true;
+    }
+
+    fn observe_post_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.post_stage.push(orphaned.iter().count());
+    }
+
+    fn observe_late_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.late_stage.push(orphaned.iter().count());
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn(A(3));
+    world.insert_resource(Target(entity));
+    world.insert_resource(Gate(false));
+    world.insert_resource(StageCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_remove_once.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_post_stage.in_set(ObserveSet).after(QueueSet),
+    );
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_late_stage.in_set(LateObserveSet).after(ObserveSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<StageCounts>().unwrap();
+    assert_eq!(counts.post_stage, vec![1]);
+    assert_eq!(counts.late_stage, vec![0]);
+}
+
+#[test]
+fn multiple_removals_in_one_stage_are_reported() {
+    fn queue_remove_pair_once(
+        mut gate: ResMut<Gate>,
+        targets: Res<TargetPair>,
+        mut commands: Commands,
+    ) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(targets.0);
+        commands.remove::<A>(targets.1);
+        gate.0 = true;
+    }
+
+    fn observe_entities(mut orphaned: QueryOrphaned<A>, mut history: ResMut<EntityHistory>) {
+        let mut entities = orphaned
+            .iter()
+            .map(|record| record.entity())
+            .collect::<Vec<_>>();
+        entities.sort_unstable();
+        history.0.push(entities);
+    }
+
+    let mut world = World::new();
+    let first = world.spawn(A(10));
+    let second = world.spawn(A(11));
+    world.insert_resource(TargetPair(first, second));
+    world.insert_resource(Gate(false));
+    world.insert_resource(EntityHistory::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_remove_pair_once.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_entities.in_set(ObserveSet).after(QueueSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let mut expected = vec![first, second];
+    expected.sort_unstable();
+    assert_eq!(world.resource::<EntityHistory>().unwrap().0, vec![expected]);
+}
+
+#[test]
+fn query_orphaned_is_component_type_isolated() {
+    fn queue_type_specific_removes_once(
+        mut gate: ResMut<Gate>,
+        targets: Res<TargetPair>,
+        mut commands: Commands,
+    ) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(targets.0);
+        commands.remove::<B>(targets.1);
+        gate.0 = true;
+    }
+
+    fn observe_type_isolation(
+        mut orphaned_a: QueryOrphaned<A>,
+        mut orphaned_b: QueryOrphaned<B>,
+        mut counts: ResMut<TypeIsolationCounts>,
+    ) {
+        counts.a_entities = orphaned_a.iter().map(|record| record.entity()).collect();
+        counts.b_entities = orphaned_b.iter().map(|record| record.entity()).collect();
+    }
+
+    let mut world = World::new();
+    let entity_a = world.spawn((A(4), B(14)));
+    let entity_b = world.spawn((A(5), B(15)));
+    world.insert_resource(TargetPair(entity_a, entity_b));
+    world.insert_resource(Gate(false));
+    world.insert_resource(TypeIsolationCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        queue_type_specific_removes_once.in_set(QueueSet),
+    );
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_type_isolation.in_set(ObserveSet).after(QueueSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<TypeIsolationCounts>().unwrap();
+    assert_eq!(counts.a_entities, vec![entity_a]);
+    assert_eq!(counts.b_entities, vec![entity_b]);
+}
+
+#[test]
+fn orphaned_entries_do_not_repeat_across_later_runs() {
+    fn queue_remove_once(mut gate: ResMut<Gate>, target: Res<Target>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(target.0);
+        gate.0 = true;
+    }
+
+    fn observe_post_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.post_stage.push(orphaned.iter().count());
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn(A(6));
+    world.insert_resource(Target(entity));
+    world.insert_resource(Gate(false));
+    world.insert_resource(StageCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_remove_once.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_post_stage.in_set(ObserveSet).after(QueueSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<StageCounts>().unwrap();
+    assert_eq!(counts.post_stage, vec![1, 0]);
+}
+
+#[test]
+fn repeated_iter_calls_return_same_window_snapshot() {
+    fn queue_remove_once(mut gate: ResMut<Gate>, target: Res<Target>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(target.0);
+        gate.0 = true;
+    }
+
+    fn observe_twice(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<DoubleReadCounts>) {
+        let first = orphaned.iter().count();
+        let second = orphaned.iter().count();
+        counts.0.push((first, second));
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn(A(7));
+    world.insert_resource(Target(entity));
+    world.insert_resource(Gate(false));
+    world.insert_resource(DoubleReadCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_remove_once.in_set(QueueSet));
+    runtime
+        .add_systems::<Update, _, _>(&mut world, observe_twice.in_set(ObserveSet).after(QueueSet));
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<DoubleReadCounts>().unwrap();
+    assert_eq!(counts.0, vec![(1, 1)]);
+}
+
+#[test]
+fn remove_then_reinsert_in_one_flush_still_reports_orphaned_removal() {
+    fn queue_remove_then_reinsert_once(
+        mut gate: ResMut<Gate>,
+        target: Res<Target>,
+        mut commands: Commands,
+    ) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(target.0);
+        commands.insert(target.0, A(99));
+        gate.0 = true;
+    }
+
+    fn observe_window(
+        mut orphaned: QueryOrphaned<A>,
+        mut live: Query<&A>,
+        mut snapshot: ResMut<WindowSnapshot>,
+    ) {
+        snapshot.orphaned.push(orphaned.iter().count());
+        snapshot.live.push(live.iter().count());
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn(A(8));
+    world.insert_resource(Target(entity));
+    world.insert_resource(Gate(false));
+    world.insert_resource(WindowSnapshot::default());
+
+    let mut runtime = Runtime::new();
+    runtime
+        .add_systems::<Update, _, _>(&mut world, queue_remove_then_reinsert_once.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_window.in_set(ObserveSet).after(QueueSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let snapshot = world.resource::<WindowSnapshot>().unwrap();
+    assert_eq!(snapshot.orphaned, vec![1]);
+    assert_eq!(snapshot.live, vec![1]);
+    assert_eq!(world.require::<A>(entity).unwrap().0, 99);
+}
+
+#[test]
+fn previous_run_orphaned_window_is_visible_in_next_run_first_stage_only() {
+    fn queue_remove_once(mut gate: ResMut<Gate>, target: Res<Target>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.remove::<A>(target.0);
+        gate.0 = true;
+    }
+
+    fn observe_same_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.same_stage.push(orphaned.iter().count());
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn(A(9));
+    world.insert_resource(Target(entity));
+    world.insert_resource(Gate(false));
+    world.insert_resource(StageCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        (
+            queue_remove_once.in_set(QueueSet),
+            observe_same_stage.in_set(QueueSet),
+        ),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<StageCounts>().unwrap();
+    assert_eq!(counts.same_stage, vec![0, 1, 0]);
+}
+
+#[test]
+fn query_orphaned_does_not_conflict_with_live_mut_query_access() {
+    fn mutate_live(mut query: Query<&mut A>) {
+        for value in query.iter() {
+            value.0 += 1;
+        }
+    }
+
+    fn observe_orphaned(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.same_stage.push(orphaned.iter().count());
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn(A(3));
+    world.insert_resource(StageCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, (mutate_live, observe_orphaned));
+
+    let plan = runtime.plan_for::<Update>().unwrap().clone();
+    assert_eq!(plan.conflicts.len(), 0);
+    assert_eq!(plan.stages.len(), 1);
+    assert_eq!(plan.stages[0].system_indices.len(), 2);
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.require::<A>(entity).unwrap().0, 4);
+    assert_eq!(world.resource::<StageCounts>().unwrap().same_stage, vec![0]);
+}
+
+#[test]
+fn batch_remove_and_despawn_preserve_orphaned_stage_window_semantics() {
+    fn queue_batch_once(mut gate: ResMut<Gate>, targets: Res<TargetPair>, mut commands: Commands) {
+        if gate.0 {
+            return;
+        }
+        commands.batch(|batch| {
+            batch.remove::<A>(targets.0);
+            batch.despawn(targets.1);
+        });
+        gate.0 = true;
+    }
+
+    fn observe_same_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.same_stage.push(orphaned.iter().count());
+    }
+
+    fn observe_post_stage(mut orphaned: QueryOrphaned<A>, mut counts: ResMut<StageCounts>) {
+        counts.post_stage.push(orphaned.iter().count());
+    }
+
+    let mut world = World::new();
+    let remove_only = world.spawn((A(20), B(1)));
+    let despawn_target = world.spawn((A(21), B(2)));
+    world.insert_resource(TargetPair(remove_only, despawn_target));
+    world.insert_resource(Gate(false));
+    world.insert_resource(StageCounts::default());
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, queue_batch_once.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(&mut world, observe_same_stage.in_set(QueueSet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_post_stage.in_set(ObserveSet).after(QueueSet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let counts = world.resource::<StageCounts>().unwrap();
+    assert_eq!(counts.same_stage, vec![0]);
+    assert_eq!(counts.post_stage, vec![2]);
+}

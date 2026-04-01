@@ -31,3 +31,15 @@ pub enum QueryError {
     #[error("query expected exactly one result but found {count}")]
     MultipleResults { count: usize },
 }
+
+#[derive(Debug, Error, Clone, PartialEq)]
+pub enum SpatialIndexError {
+    #[error(transparent)]
+    Entity(#[from] EntityError),
+    #[error("spatial index {name:?} does not exist")]
+    MissingIndex { name: String },
+    #[error("spatial hash cell size must be finite and > 0 (got {cell_size})")]
+    InvalidCellSize { cell_size: f32 },
+    #[error("spatial bounds are invalid")]
+    InvalidBounds,
+}

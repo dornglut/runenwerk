@@ -326,14 +326,10 @@ fn sweep_world_collision_authoritative(
 
     let start_world = [start[0], CAVERN_GAMEPLAY_HEIGHT, start[1]];
     let end_world = [end[0], CAVERN_GAMEPLAY_HEIGHT, end[1]];
-    let end_chunk = partition.chunk_id_from_position(PlanetId(0), end_world);
-    let has_authoritative_pages = store
-        .chunks
-        .get(&end_chunk)
-        .map(|payload| !payload.page_table.is_empty())
-        .unwrap_or(false);
-    if !has_authoritative_pages {
-        return None;
+    let has_authoritative_payload =
+        service.chunk_has_authoritative_payload(partition, store, PlanetId(0), end_world);
+    if !has_authoritative_payload {
+        return Some(true);
     }
 
     let query = SphereSweepQuery {

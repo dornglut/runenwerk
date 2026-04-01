@@ -1,15 +1,17 @@
 // Owner: ecs World - Core Entity/Resource Lifecycle
-use super::events_and_indexes::{
-    ComponentChangeKind, ComponentChangeRecord, DEFAULT_COMPONENT_INDEX_NAME, EntityDespawnedEvent,
-    EntitySpawnedEvent, ResourceChangeKind, ResourceChangeRecord,
+use super::change_tracking::{
+    ComponentChangeKind, ComponentChangeRecord, ResourceChangeKind, ResourceChangeRecord,
 };
-use super::handles_and_commands::{Commands, EntityMut, EntityRef, Mut};
+use super::component_indexes::DEFAULT_COMPONENT_INDEX_NAME;
+use super::entity_handles::{EntityMut, EntityRef, Mut};
+use super::event_channels::{EntityDespawnedEvent, EntitySpawnedEvent};
 use super::world_struct::World;
 use crate::bundle::Bundle;
-use crate::component::{Component, Resource};
+use crate::commands::Commands;
+use crate::component::{Component, ComponentState, Resource, StatefulComponent};
 use crate::entity::{Entity, EntityAllocator};
 use crate::errors::{EntityError, ResourceError};
-use crate::query::{QueryFilter, QuerySpec, QueryState};
+use crate::query::{QueryFilter, QueryOrphanedState, QuerySpec, QueryState};
 use crate::storage::ArchetypeRegistry;
 use std::any::{Any, TypeId, type_name};
 use std::cell::RefCell;
@@ -27,12 +29,14 @@ impl World {
             event_observers: HashMap::new(),
             event_observer_notifications: Vec::new(),
             component_indexes: RefCell::new(HashMap::new()),
+            spatial_indexes: HashMap::new(),
             archetype_registry: ArchetypeRegistry::new(),
             entity_locations: Default::default(),
             change_tick: 0,
             component_change_ticks: HashMap::new(),
             resource_change_ticks: HashMap::new(),
             component_change_log: Vec::new(),
+            removed_component_records: HashMap::new(),
             resource_change_log: Vec::new(),
         }
     }
@@ -59,6 +63,7 @@ impl World {
 
     pub fn despawn(&mut self, entity: Entity) -> Result<(), EntityError> {
         self.ensure_entity_exists(entity)?;
+        self.remove_entity_from_spatial_indexes(entity);
         let removed_types = self
             .entity_locations
             .get(entity)
@@ -115,6 +120,35 @@ impl World {
         Some(Mut { value })
     }
 
+    pub fn component_state<T: StatefulComponent>(&self, entity: Entity) -> Option<ComponentState> {
+        if !self.contains(entity) {
+            return None;
+        }
+        let (generation, version) = self.archetype_registry.component_state_by_id(
+            entity,
+            TypeId::of::<T>(),
+            &self.entity_locations,
+        )?;
+        Some(ComponentState {
+            generation,
+            version,
+        })
+    }
+
+    pub fn mark_stateful_changed<T: StatefulComponent>(&mut self, entity: Entity) -> bool {
+        if !self.has_component_by_type_id(entity, TypeId::of::<T>()) {
+            return false;
+        }
+        self.mark_component_modified_by_id(entity, TypeId::of::<T>(), T::component_name());
+        self.archetype_registry
+            .mark_component_stateful_changed_by_id(
+                entity,
+                TypeId::of::<T>(),
+                self.change_tick,
+                &self.entity_locations,
+            )
+    }
+
     pub fn require<T: Component>(&self, entity: Entity) -> Result<&T, EntityError> {
         self.get::<T>(entity).ok_or(EntityError::MissingComponent {
             entity,
@@ -148,6 +182,10 @@ impl World {
 
     pub fn query_state<Q: QuerySpec, F: QueryFilter>(&self) -> QueryState<Q, F> {
         QueryState::new(self)
+    }
+
+    pub fn query_orphaned_state<T: Component>(&self) -> QueryOrphanedState<T> {
+        QueryOrphanedState::new(self)
     }
 
     pub fn insert_resource<R: Resource>(&mut self, resource: R) {

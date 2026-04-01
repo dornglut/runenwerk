@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: Engine-agnostic guide for ecs usage.
+description: Internal architecture and invariants for the ecs runtime.
 ---
 
 # ECS Architecture
@@ -17,11 +17,27 @@ For advanced integration patterns, see [advanced-guide.md](advanced-guide.md).
 
 - param state is initialized at registration time
 - extraction happens each run via raw world pointers
-- each system run owns an ephemeral `Commands` queue
+- each system run owns an ephemeral deferred command owner
 
 Supported function system arity is implemented up to 8 parameters.
 
-## 2. Scheduling and Access Model
+## 2. Module Boundaries
+
+Current ownership split:
+
+- `world/*`: world state, lifecycle orchestration, world-facing APIs
+- `commands/*`: deferred command abstraction, typed-erased queue, batching
+- `spatial/*`: spatial index traits and backend implementations
+- `query/*`: query/filter modeling and execution
+- `system/*`: param extraction and scheduler runtime bridge
+
+Boundary intent:
+
+- avoid `world` becoming a dumping ground for command/spatial internals
+- keep command mechanics in `commands`
+- keep spatial infrastructure in `spatial`
+
+## 3. Scheduling and Access Model
 
 `QueryAccess` is transformed into scheduler `SystemAccess` keys:
 
@@ -35,13 +51,7 @@ Planning combines:
 - explicit set dependencies (`in_set`, `before`, `after`)
 - access conflict analysis (read/write, write/write)
 
-Structural mutation policy:
-
-- multiple deferred structural producers may exist in one stage
-- visibility of structural effects is delayed until stage flush
-- component/resource/event conflicts still enforce stage separation
-
-## 3. Deferred Command Contract
+## 4. Deferred Command Contract
 
 Deterministic ordering contract:
 
@@ -49,9 +59,12 @@ Deterministic ordering contract:
 2. command queues are collected in system execution order
 3. queues are applied at stage end in that order
 
-This guarantees that within-stage observers cannot read queued structural changes before flush.
+Failure atomicity contract:
 
-## 4. Query Engine Internals
+- commands are staged only for successful system runs
+- failed schedule runs discard deferred queues instead of replaying later
+
+## 5. Query Engine Internals
 
 `QueryState<Q, F>` stores:
 
@@ -67,7 +80,7 @@ Execution path split:
 
 `Changed<T>` and `Added<T>` evaluate archetype row ticks against query-local last-seen tick.
 
-## 5. Change Boundary
+## 6. Change Boundary
 
 Two separate mechanisms intentionally coexist:
 
@@ -79,7 +92,7 @@ Two separate mechanisms intentionally coexist:
   - APIs: `component_changed_since`, `resource_changed_since`,
     `component_changes_since`, `resource_changes_since`
 
-## 6. Event Subsystem Internals
+## 7. Event Subsystem Internals
 
 Event channels are keyed by event `TypeId` and carry per-channel configuration, counters,
 and pending event storage.
@@ -88,18 +101,25 @@ Core mechanics:
 
 - emit path applies capacity/overflow policy
 - drain path updates channel counters
-- frame-finalization path handles `FrameTransient` lifetime cleanup
-- observer triggers are emitted on configured boundaries
+- frame-finalization handles `FrameTransient` cleanup
+- observer triggers emit on configured boundaries
+- `EventChannel<T>` param state tracks per-system read cursor (`iter_new`)
 
-## 7. Secondary Index Internals
+## 8. Secondary and Spatial Index Internals
 
-Secondary indexes:
+Secondary component indexes:
 
-- are registered by `(component type, key type, name)`
-- are lazily rebuilt when marked dirty by component churn
-- expose `&self` read APIs while mutating index caches via interior mutability
+- registered by `(component type, key type, name)`
+- lazily rebuilt when marked dirty by component churn
+- expose `&self` read APIs using interior mutability for cache rebuilds
 
-## 8. Unsafe Boundaries and Required Invariants
+Spatial indexes:
+
+- live behind `SpatialIndex` trait storage in world state
+- current backend is `SpatialHashIndex`
+- entity despawn removes membership from all registered spatial indexes
+
+## 9. Unsafe Boundaries and Required Invariants
 
 Concentrated unsafe sites:
 
@@ -107,18 +127,18 @@ Concentrated unsafe sites:
 - `query/traits_and_state.rs`
 - `system/runtime.rs`
 - `system/params.rs`
-- `world/handles_and_commands.rs`
+- `commands/commands.rs`
 
 Required invariants:
 
 - `SystemParam::State` is lifetime-independent
 - world pointers used during extraction remain valid for call duration
 - mutable query shapes do not alias mutably for same component type
-- borrowed command queue forwarding always targets a live owner
+- borrowed command queue forwarding always targets a live owner scope
 
 Unsafe blocks in these files require local invariant comments and focused tests.
 
-## 9. Telemetry Architecture (Phase 6)
+## 10. Telemetry Architecture
 
 Feature-gated telemetry (`--features telemetry`) records hot-path cost attribution for:
 

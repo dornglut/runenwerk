@@ -1,6 +1,6 @@
 ---
 title: "ECS Crate"
-description: "Documentation for ECS Crate."
+description: "Documentation for ECS crate."
 ---
 
 # ECS Crate
@@ -9,10 +9,12 @@ description: "Documentation for ECS Crate."
 
 ## Quick Overview
 
-- `World`: entities, components, resources, events, indexes
-- `QueryState<Q, F>`: reusable runtime querying
-- `Runtime`: function-system scheduling and execution
-- Core params: `Query`, `Res`, `ResMut`, `Commands`, `EventReader`, `EventWriter`
+- `World`: entities/components/resources, event channels, component indexes, spatial indexes
+- Query runtime: `Query`, `QueryState`, `QueryOrphaned`
+- Runtime and scheduling bridge: `Runtime`, `IntoSystem`, set ordering (`in_set`, `before`, `after`)
+- System params: `Res`, `ResMut`, `ResView`, `Commands`, `EventReader`, `EventWriter`, `EventChannel`
+- Deferred mutation primitives: `Commands`, `DeferredCommand`, `BatchCommands`
+- Stateful tracking: `StatefulComponent`, `component_state`, `mark_stateful_changed`
 
 ## Minimal Getting Started
 
@@ -33,7 +35,8 @@ assert_eq!(world.require::<Position>(entity).unwrap().x, 2.0);
 
 ## Documentation
 
-- Docs hub: [`00-overview.md`](./00-overview.md)
-- Usage guide: [`usage-guide.md`](./usage-guide.md)
-- Advanced guide: [`advanced-guide.md`](./advanced-guide.md)
-- Architecture (internals): [`architecture.md`](./architecture.md)
+- Docs hub: [00-overview.md](./00-overview.md)
+- Usage guide: [usage-guide.md](./usage-guide.md)
+- Advanced guide: [advanced-guide.md](./advanced-guide.md)
+- Architecture (internals): [architecture.md](./architecture.md)
+- Feature map: [features.md](./features.md)

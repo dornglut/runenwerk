@@ -3,7 +3,9 @@ use super::*;
 // Owner: Cavern Hunt Combat Plugin - Tests
 #[cfg(test)]
 mod tests {
-    use super::{CAVERN_GAMEPLAY_HEIGHT, constrained_move, update_local_aim};
+    use super::{
+        CAVERN_GAMEPLAY_HEIGHT, constrained_move, constrained_move_with_world, update_local_aim,
+    };
     use crate::app::composition as game;
     use crate::features::worldgen::plugin as worldgen;
     use crate::{
@@ -13,6 +15,10 @@ mod tests {
         EnemyKind, LocalPlayerRef, LootTableRegistry, PlayerActive, PlayerCompanion, SpawnDirector,
         Transform2,
     };
+    use engine::plugins::world::chunks::partition::WorldPartitionConfig;
+    use engine::plugins::world::ids::{ChunkGeneration, ChunkRevision, PlanetId};
+    use engine::plugins::world::queries::collision::WorldCollisionQueryServiceResource;
+    use engine::plugins::world::sdf::storage::{SdfChunkPayload, WorldSdfChunkStoreResource};
     use engine::prelude::{
         AuthorityRole, InputState, SimulationProfile, SimulationProfileConfig, Time, WindowState,
         World,
@@ -208,5 +214,44 @@ mod tests {
 
         let projectile_count_after = projectile_query.iter(&world).count();
         assert!(projectile_count_after > projectile_count_before);
+    }
+
+    #[test]
+    fn authoritative_move_blocks_without_chunk_payload() {
+        let mut world = World::new();
+        world.insert_resource(WorldCollisionQueryServiceResource);
+        world.insert_resource(WorldPartitionConfig::default());
+        world.insert_resource(WorldSdfChunkStoreResource::default());
+
+        let next = constrained_move_with_world(&mut world, [4.0, 3.0], [1.0, 0.0], 0.25);
+        assert_eq!(next, [4.0, 3.0]);
+    }
+
+    #[test]
+    fn authoritative_move_allows_clear_chunk_payload() {
+        let mut world = World::new();
+        let partition = WorldPartitionConfig::default();
+        let end = [5.0, CAVERN_GAMEPLAY_HEIGHT, 3.0];
+        let chunk_id = partition.chunk_id_from_position(PlanetId(0), end);
+
+        let mut store = WorldSdfChunkStoreResource::default();
+        store.chunks.insert(
+            chunk_id,
+            SdfChunkPayload {
+                chunk_id,
+                chunk_revision: ChunkRevision::default(),
+                chunk_generation: ChunkGeneration::default(),
+                page_table: Default::default(),
+                hierarchy_revision: 0,
+                checksum: 1,
+            },
+        );
+
+        world.insert_resource(WorldCollisionQueryServiceResource);
+        world.insert_resource(partition);
+        world.insert_resource(store);
+
+        let next = constrained_move_with_world(&mut world, [4.0, 3.0], [1.0, 0.0], 0.25);
+        assert_eq!(next, [5.0, 3.0]);
     }
 }

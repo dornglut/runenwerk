@@ -1,100 +1,12 @@
-// Owner: ecs World - Secondary Index and Event Channel APIs
-use super::events_and_indexes::{
-    ComponentIndexKey, ComponentSecondaryIndex, DEFAULT_COMPONENT_INDEX_NAME, EventChannelConfig,
-    EventChannelStats, EventChannelStorage, EventLifetime, EventObserver,
+// Owner: ecs World - Event Channel APIs
+use super::event_channels::{
+    EventChannelConfig, EventChannelStats, EventChannelStorage, EventLifetime, EventObserver,
     EventObserverNotification, ObserverTrigger, OverflowPolicy,
 };
 use super::world_struct::World;
-use crate::component::Component;
-use crate::entity::Entity;
 use std::any::TypeId;
 
 impl World {
-    pub fn ensure_component_index_named<T: Component, K: Ord + Clone + 'static>(
-        &mut self,
-        name: impl Into<String>,
-        extractor: fn(&T) -> K,
-    ) -> bool {
-        self.__register_component::<T>();
-        let key = ComponentIndexKey::new(TypeId::of::<T>(), TypeId::of::<K>(), name);
-        let mut indexes = self.component_indexes.borrow_mut();
-        if indexes.contains_key(&key) {
-            return false;
-        }
-        indexes.insert(
-            key,
-            Box::new(ComponentSecondaryIndex::<T, K>::new(extractor)),
-        );
-        drop(indexes);
-        self.mark_component_indexes_dirty(TypeId::of::<T>());
-        true
-    }
-
-    pub fn find_entity_by_index<T: Component, K: Ord + Clone + 'static>(
-        &self,
-        key: &K,
-    ) -> Option<Entity> {
-        self.find_entity_by_index_named::<T, K>(DEFAULT_COMPONENT_INDEX_NAME, key)
-    }
-
-    pub fn find_entity_by_index_named<T: Component, K: Ord + Clone + 'static>(
-        &self,
-        name: impl Into<String>,
-        key: &K,
-    ) -> Option<Entity> {
-        let index_key = ComponentIndexKey::new(TypeId::of::<T>(), TypeId::of::<K>(), name);
-        let mut indexes = self.component_indexes.borrow_mut();
-        let Some(index) = indexes.get_mut(&index_key) else {
-            return None;
-        };
-        index.rebuild(self);
-        index
-            .as_any()
-            .downcast_ref::<ComponentSecondaryIndex<T, K>>()
-            .and_then(|index| index.first_entity_for(key))
-    }
-
-    pub fn find_entities_by_index<T: Component, K: Ord + Clone + 'static>(
-        &self,
-        key: &K,
-    ) -> Vec<Entity> {
-        self.find_entities_by_index_named::<T, K>(DEFAULT_COMPONENT_INDEX_NAME, key)
-    }
-
-    pub fn find_entities_by_index_named<T: Component, K: Ord + Clone + 'static>(
-        &self,
-        name: impl Into<String>,
-        key: &K,
-    ) -> Vec<Entity> {
-        let index_key = ComponentIndexKey::new(TypeId::of::<T>(), TypeId::of::<K>(), name);
-        let mut indexes = self.component_indexes.borrow_mut();
-        let Some(index) = indexes.get_mut(&index_key) else {
-            return Vec::new();
-        };
-        index.rebuild(self);
-        index
-            .as_any()
-            .downcast_ref::<ComponentSecondaryIndex<T, K>>()
-            .map(|index| index.entities_for(key))
-            .unwrap_or_default()
-    }
-
-    pub fn find_component_by_index<T: Component, K: Ord + Clone + 'static>(
-        &self,
-        key: &K,
-    ) -> Option<&T> {
-        self.find_component_by_index_named::<T, K>(DEFAULT_COMPONENT_INDEX_NAME, key)
-    }
-
-    pub fn find_component_by_index_named<T: Component, K: Ord + Clone + 'static>(
-        &self,
-        name: impl Into<String>,
-        key: &K,
-    ) -> Option<&T> {
-        let entity = self.find_entity_by_index_named::<T, K>(name, key)?;
-        self.get::<T>(entity)
-    }
-
     pub fn has_event_channel<T: 'static>(&self) -> bool {
         self.event_channels.contains_key(&TypeId::of::<T>())
     }
@@ -127,49 +39,61 @@ impl World {
                 .or_insert_with(EventChannelStorage::new::<T>);
             let config = channel.config;
             let event_type_name = channel.event_type_name;
-            let events = channel.events_mut::<T>();
-            let before = events.len();
             let mut dropped = false;
             let mut accepted = false;
+            let mut removed_from_front = 0usize;
 
-            match config.capacity {
-                None => {
-                    events.push(event);
-                    accepted = true;
-                }
-                Some(capacity) => {
-                    if capacity == 0 {
-                        dropped = true;
-                        if matches!(config.overflow, OverflowPolicy::Panic) {
-                            panic!("event channel overflow for {event_type_name} with capacity=0");
-                        }
-                    } else if before < capacity {
+            {
+                let events = channel.events_mut::<T>();
+                let before = events.len();
+                match config.capacity {
+                    None => {
                         events.push(event);
                         accepted = true;
-                    } else {
-                        match config.overflow {
-                            OverflowPolicy::DropOldest => {
-                                events.remove(0);
-                                events.push(event);
-                                dropped = true;
-                                accepted = true;
-                            }
-                            OverflowPolicy::DropNewest => {
-                                dropped = true;
-                            }
-                            OverflowPolicy::Panic => {
+                    }
+                    Some(capacity) => {
+                        if capacity == 0 {
+                            dropped = true;
+                            if matches!(config.overflow, OverflowPolicy::Panic) {
                                 panic!(
-                                    "event channel overflow for {event_type_name} at capacity={capacity}"
+                                    "event channel overflow for {event_type_name} with capacity=0"
                                 );
+                            }
+                        } else if before < capacity {
+                            events.push(event);
+                            accepted = true;
+                        } else {
+                            match config.overflow {
+                                OverflowPolicy::DropOldest => {
+                                    events.remove(0);
+                                    removed_from_front = 1;
+                                    events.push(event);
+                                    dropped = true;
+                                    accepted = true;
+                                }
+                                OverflowPolicy::DropNewest => {
+                                    dropped = true;
+                                }
+                                OverflowPolicy::Panic => {
+                                    panic!(
+                                        "event channel overflow for {event_type_name} at capacity={capacity}"
+                                    );
+                                }
                             }
                         }
                     }
                 }
             }
+            if removed_from_front > 0 {
+                channel.advance_sequence_for_removed(removed_from_front);
+            }
 
             channel.emitted = channel.emitted.saturating_add(1);
             if dropped {
                 channel.dropped = channel.dropped.saturating_add(1);
+            }
+            if accepted {
+                channel.next_sequence = channel.next_sequence.saturating_add(1);
             }
 
             (event_type_name, usize::from(accepted))
@@ -191,6 +115,16 @@ impl World {
             .unwrap_or(&[])
     }
 
+    pub(crate) fn read_events_since<T: 'static>(&self, sequence: u64) -> (&[T], u64) {
+        let Some(channel) = self.event_channels.get(&TypeId::of::<T>()) else {
+            return (&[], 0);
+        };
+        (
+            channel.events_ref_since::<T>(sequence),
+            channel.next_sequence,
+        )
+    }
+
     pub fn drain_events<T: 'static>(&mut self) -> Vec<T> {
         let type_id = TypeId::of::<T>();
         let (drained, event_type_name, drained_count) = {
@@ -201,6 +135,7 @@ impl World {
             let drained = std::mem::take(channel.events_mut::<T>());
             let drained_count = drained.len();
             if drained_count > 0 {
+                channel.advance_sequence_for_removed(drained_count);
                 channel.drained = channel.drained.saturating_add(drained_count as u64);
             }
             (drained, event_type_name, drained_count)
@@ -220,8 +155,7 @@ impl World {
         let Some(channel) = self.event_channels.get_mut(&TypeId::of::<T>()) else {
             return 0;
         };
-        let removed = channel.events_mut::<T>().len();
-        channel.events_mut::<T>().clear();
+        let removed = channel.clear_any();
         channel.drained = channel.drained.saturating_add(removed as u64);
         removed
     }

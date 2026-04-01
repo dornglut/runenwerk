@@ -69,8 +69,8 @@ fn op_log_replay_and_invalidation_are_deterministic() {
     let partition = WorldPartitionConfig::default();
     let mut dirty_a = WorldDirtyChunkMapResource::default();
     let mut dirty_b = WorldDirtyChunkMapResource::default();
-    invalidate_dirty_chunks_from_op_log(&mut dirty_a, &partition, &log_a, PlanetId(0));
-    invalidate_dirty_chunks_from_op_log(&mut dirty_b, &partition, &log_b, PlanetId(0));
+    invalidate_dirty_chunks_from_op_log(&mut dirty_a, &partition, &log_a, PlanetId(0), 1024);
+    invalidate_dirty_chunks_from_op_log(&mut dirty_b, &partition, &log_b, PlanetId(0), 1024);
     assert_eq!(
         dirty_a.by_chunk, dirty_b.by_chunk,
         "dirty invalidation set must be deterministic for identical op logs"

@@ -31,10 +31,19 @@ This section tracks the final world/runtime architecture migration for `engine/s
 - Plugin wiring: `engine/src/plugins/world/plugin.rs`
 - Lifecycle: `engine/src/plugins/world/chunks/lifecycle.rs`
 - Operation log: `engine/src/plugins/world/edits/log.rs`
+- Edit ingress: `engine/src/plugins/world/edits/ingress.rs`
 - Build dispatch/integration:
   - `engine/src/plugins/world/build/jobs.rs`
   - `engine/src/plugins/world/build/integration.rs`
 - Prepare contributions: `engine/src/plugins/world/prepare/contributions.rs`
+
+## Current Guarantees
+
+- Dirty chunk IDs can no longer stall because of missing runtime chunk records.
+- World maintenance runs in fixed-step simulation scheduling and is ordered before replication.
+- World edit ingestion is centralized through world plugin ingress APIs, not ad hoc game-side dirty-map writes.
+- World authority revision advances from integrated build outputs.
+- Collision authority now has explicit missing-payload behavior; missing chunk payload data does not silently bypass world authority.
 
 ## Related Docs
 
