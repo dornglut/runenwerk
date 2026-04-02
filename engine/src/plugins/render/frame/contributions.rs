@@ -5,6 +5,7 @@ use crate::plugins::render::features::{
     UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use crate::plugins::ui::domain::UiDrawList;
+use crate::plugins::world::ids::ChunkId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default)]
@@ -345,15 +346,20 @@ pub struct PreparedWorldFeatureContribution {
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedWorldChunkContribution {
-    pub chunk_id: String,
+    pub chunk_id: ChunkId,
     pub chunk_revision: u64,
     pub chunk_generation: u64,
-    pub draw_batch_ref: String,
+    pub draw_batch_ref: PreparedWorldDrawBatchRef,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+pub struct PreparedWorldDrawBatchRef {
+    pub chunk_id: ChunkId,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedWorldResidencyIntent {
-    pub chunk_id: String,
+    pub chunk_id: ChunkId,
     pub priority: i32,
     pub hard_pin: bool,
 }
@@ -372,7 +378,7 @@ pub struct PreparedDetailFeatureContribution {
 #[derive(Debug, Clone, Default)]
 pub struct PreparedDetailCellContribution {
     pub cell_id: String,
-    pub chunk_id: String,
+    pub chunk_id: ChunkId,
     pub instance_count: u32,
 }
 

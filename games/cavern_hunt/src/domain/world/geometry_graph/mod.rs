@@ -248,6 +248,7 @@ impl Default for CavernGeometryGraph {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub enum GeometryEditKind {
     AddBlocker(GeometryPrimitiveShape3),
+    RemoveBlocker(GeometryPrimitiveShape3),
     RemovePrimitive(GeometryPrimitiveId),
     EnablePrimitive(GeometryPrimitiveId),
     DisablePrimitive(GeometryPrimitiveId),

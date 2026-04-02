@@ -1,13 +1,13 @@
-use super::super::WorldAuthorityState;
 use super::super::chunks::dirty::WorldDirtyChunkMapResource;
 use super::super::chunks::partition::WorldPartitionConfig;
 use super::super::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::ids::{PlanetId, WorldOpId};
-use super::super::plugin::WorldRuntimeConfig;
+use super::super::{WorldAuthorityState, WorldRuntimeConfig, WorldRuntimeMode};
 use super::invalidation::invalidate_dirty_chunks_from_quantized_bounds;
 use super::log::WorldOperationLog;
 use super::operation::{QuantizedAabb, WorldOperation, WorldOperationRecord};
+use super::region_journal::WorldRegionInvalidationJournalResource;
 use ecs::World;
 use engine_sim::SimulationTick;
 
@@ -36,6 +36,10 @@ pub fn submit_world_operation(
     affected_bounds_q: QuantizedAabb,
     meta: WorldEditIngressMeta,
 ) -> Option<WorldOpId> {
+    if !world_runtime_is_authoritative(world) {
+        return None;
+    }
+
     let base_world_revision = world
         .resource::<WorldAuthorityState>()
         .map(|value| value.world_revision)
@@ -46,6 +50,7 @@ pub fn submit_world_operation(
         op_log.append(WorldOperationRecord {
             op_id: WorldOpId(0),
             base_world_revision,
+            planet_id: meta.planet_id,
             operation,
             affected_bounds_q,
             deterministic_seed: meta.deterministic_seed,
@@ -54,11 +59,8 @@ pub fn submit_world_operation(
         })
     };
 
-    let fixed_point_scale = world
-        .resource::<WorldRuntimeConfig>()
-        .map(|config| config.fixed_point_scale)
-        .unwrap_or(1024);
     let partition = world.resource::<WorldPartitionConfig>().ok()?.clone();
+    let fixed_point_scale = partition.quantization_scale();
     let touched_chunks = {
         let dirty = world.resource_mut::<WorldDirtyChunkMapResource>().ok()?;
         invalidate_dirty_chunks_from_quantized_bounds(
@@ -69,9 +71,13 @@ pub fn submit_world_operation(
             fixed_point_scale,
         )
     };
+    let invalidated_chunk_count = touched_chunks.len() as u64;
 
     if let Ok(queue) = world.resource_mut::<WorldRenderCacheInvalidationQueueResource>() {
-        queue.enqueue_many(touched_chunks);
+        queue.enqueue_ingress_bounds(&partition, touched_chunks.clone());
+    }
+    if let Ok(journal) = world.resource_mut::<WorldRegionInvalidationJournalResource>() {
+        journal.append_ingress_record(&partition, touched_chunks, base_world_revision, op_id);
     }
 
     let op_count = world
@@ -82,7 +88,18 @@ pub fn submit_world_operation(
         (op_count, world.resource_mut::<WorldDebugMetricsResource>())
     {
         metrics.op_log_count = op_count;
+        metrics.ingress_operations = metrics.ingress_operations.saturating_add(1);
+        metrics.invalidated_chunks = metrics
+            .invalidated_chunks
+            .saturating_add(invalidated_chunk_count);
     }
 
     Some(op_id)
+}
+
+fn world_runtime_is_authoritative(world: &World) -> bool {
+    world
+        .resource::<WorldRuntimeConfig>()
+        .map(|config| matches!(config.mode, WorldRuntimeMode::ServerAuthoritative))
+        .unwrap_or(true)
 }

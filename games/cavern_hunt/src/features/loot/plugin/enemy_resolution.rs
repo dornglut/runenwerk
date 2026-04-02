@@ -41,13 +41,16 @@ pub(super) fn resolve_enemy_deaths(world: &mut World) -> Result<()> {
             run_state.extraction_active = true;
             run_state.phase = CavernRunPhase::Extraction;
             drop(run_state);
-            if let Ok(runtime) = world.resource::<CavernGeometryRuntimeState>()
-                && let Some(seal_id) = runtime.extraction_seal_primitive
-            {
+            let extraction_center = world.resource::<CavernLayout>().ok().and_then(|layout| {
+                layout
+                    .room(layout.extraction_room)
+                    .map(|room| [room.center[0], room.center[1]])
+            });
+            if let Some([x, y]) = extraction_center {
                 let _ = apply_runtime_geometry_edit(
                     world,
                     &GeometryEdit {
-                        kind: GeometryEditKind::DisablePrimitive(seal_id),
+                        kind: GeometryEditKind::RemoveBlocker(extraction_seal_shape(x, y)),
                     },
                 );
             }

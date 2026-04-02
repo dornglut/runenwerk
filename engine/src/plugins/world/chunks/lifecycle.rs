@@ -68,8 +68,12 @@ pub fn advance_chunk_lifecycle_system(
             continue;
         };
         if let Some(reasons) = dirty.take_reasons(&chunk_id) {
-            record.dirty_reasons = reasons;
-            record.lifecycle = ChunkLifecycleState::Dirty;
+            record.dirty_reasons.merge_from(reasons);
+            if record.pending_build_generation.is_none()
+                && !matches!(record.lifecycle, ChunkLifecycleState::Rebuilding)
+            {
+                record.lifecycle = ChunkLifecycleState::Dirty;
+            }
         }
         if matches!(record.lifecycle, ChunkLifecycleState::Loading) {
             record.lifecycle = ChunkLifecycleState::Ready;

@@ -1,5 +1,5 @@
 use crate::{
-    CavernCameraState, CavernGeometryGraph, CavernLayout, CavernMaterialQualityConfig,
+    CavernCameraState, CavernLayout, CavernMaterialQualityConfig,
     CavernMaterialRuntimeState, CavernSdfAgent, CavernSdfGeometryPrimitive, CavernSdfMaterialOp,
     CavernSdfWorldFrame, CavernTopology, Chest, ColliderRadius, EnemyKind, ExtractionZone,
     GeometryMaterial, GeometryOp, GeometryPrimitiveShape3, Health, LocalPlayerRef, LootDrop,

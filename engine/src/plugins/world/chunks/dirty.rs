@@ -26,6 +26,10 @@ impl ChunkDirtyReasonSet {
     pub fn insert(&mut self, reason: ChunkDirtyReason) {
         self.reasons.insert(reason);
     }
+
+    pub fn merge_from(&mut self, other: ChunkDirtyReasonSet) {
+        self.reasons.extend(other.reasons);
+    }
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]

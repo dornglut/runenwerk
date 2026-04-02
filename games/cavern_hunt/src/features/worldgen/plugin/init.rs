@@ -12,14 +12,9 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
         .unwrap_or_else(|_| CavernRunConfig::default());
     let layout = CavernLayout::generate(config.seed, &config);
     let topology = CavernTopology::from_layout(&layout, config.seed);
-    let geometry_graph = CavernGeometryGraph::from_topology(&topology);
-    let collision_field = CavernCollisionField::from_graph(&geometry_graph);
     world.insert_resource(layout.clone());
     world.insert_resource(topology);
-    world.insert_resource(geometry_graph);
-    world.insert_resource(collision_field);
-    world.insert_resource(CavernGeometryRuntimeState::default());
-    seed_world_plugin_from_initial_graph(world);
+    seed_world_plugin_from_initial_topology(world);
 
     let mut run_state = CavernRunState::default();
     run_state.seed = config.seed;
@@ -155,27 +150,13 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
                 room_id: extraction_room.id,
             },
         ));
-        let seal_id = world
-            .resource::<CavernGeometryGraph>()
-            .ok()
-            .map(|graph| graph.next_primitive_id());
         let seal_edit = GeometryEdit {
-            kind: GeometryEditKind::AddBlocker(GeometryPrimitiveShape3::Cylinder {
-                center: [
-                    extraction_room.center[0],
-                    CAVERN_GAMEPLAY_HEIGHT,
-                    extraction_room.center[1],
-                ],
-                radius: 1.95,
-                half_height: 2.7,
-            }),
+            kind: GeometryEditKind::AddBlocker(extraction_seal_shape(
+                extraction_room.center[0],
+                extraction_room.center[1],
+            )),
         };
         let _ = apply_runtime_geometry_edit(world, &seal_edit);
-        if let (Some(seal_id), Ok(mut runtime)) =
-            (seal_id, world.resource_mut::<CavernGeometryRuntimeState>())
-        {
-            runtime.extraction_seal_primitive = Some(seal_id);
-        }
     }
 
     if let Ok(mut camera) = world.resource_mut::<CavernCameraState>() {
@@ -188,15 +169,23 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     Ok(())
 }
 
-fn seed_world_plugin_from_initial_graph(world: &mut World) {
+pub(crate) fn extraction_seal_shape(x: f32, y: f32) -> GeometryPrimitiveShape3 {
+    GeometryPrimitiveShape3::Cylinder {
+        center: [x, CAVERN_GAMEPLAY_HEIGHT, y],
+        radius: 1.95,
+        half_height: 2.7,
+    }
+}
+
+fn seed_world_plugin_from_initial_topology(world: &mut World) {
     let (bounds, fixed_point_scale) = {
         let bounds = world
-            .resource::<CavernGeometryGraph>()
-            .map(|graph| graph.bounds)
+            .resource::<CavernTopology>()
+            .map(|topology| topology.world_bounds)
             .unwrap_or_default();
         let fixed_point_scale = world
-            .resource::<engine::plugins::world::WorldRuntimeConfig>()
-            .map(|config| config.fixed_point_scale)
+            .resource::<engine::plugins::world::chunks::partition::WorldPartitionConfig>()
+            .map(|config| config.quantization_scale())
             .unwrap_or(1024);
         (bounds, fixed_point_scale)
     };

@@ -1,11 +1,21 @@
+use super::super::chunks::dirty::ChunkDirtyReasonSet;
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
+use super::super::chunks::partition::WorldPartitionConfig;
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::super::ids::{BuildGeneration, ChunkGeneration, ChunkId, ChunkRevision};
-use super::super::sdf::storage::{RegionSdfSummary, SdfChunkPayload};
+use super::super::edits::invalidation::touched_chunks_from_quantized_bounds;
+use super::super::edits::log::WorldOperationLog;
+use super::super::edits::operation::{WorldOperation, WorldOperationRecord};
+use super::super::ids::{BuildGeneration, ChunkGeneration, ChunkId, ChunkRevision, WorldOpId};
+use super::super::sdf::storage::{
+    RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload,
+    SdfPageCoord3, SdfPageRecord,
+};
 use super::graph::{WorldBuildGraphNode, WorldBuildGraphPhase, WorldBuildGraphResource};
 use super::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource};
 use super::queue::{WorldBuildQueueClass, WorldBuildQueueItem, WorldBuildQueueResource};
-use crate::runtime::ResMut;
+use crate::runtime::{Res, ResMut};
+use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
 pub enum WorldBuildStaleness {
@@ -46,12 +56,10 @@ pub fn dispatch_world_build_jobs_system(
     mut graph: ResMut<WorldBuildGraphResource>,
     mut runtime: ResMut<WorldBuildJobRuntimeResource>,
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
-    mut debug: ResMut<WorldDebugMetricsResource>,
+    partition: Res<WorldPartitionConfig>,
+    op_log: Res<WorldOperationLog>,
 ) {
     queue_dirty_chunks(&chunks, &mut queue, &mut runtime);
-    let (interactive_depth, background_depth) = queue.queue_depths();
-    debug.interactive_queue_depth = interactive_depth;
-    debug.background_queue_depth = background_depth;
 
     for _ in 0..runtime.max_jobs_per_update {
         let Some(item) = queue.pop_next() else {
@@ -69,6 +77,9 @@ pub fn dispatch_world_build_jobs_system(
 
         let target_chunk_revision = ChunkRevision(record.chunk_revision.0.saturating_add(1));
         let target_build_generation = BuildGeneration(record.build_generation.0.saturating_add(1));
+        // Dirty reasons are consumed by this build generation. Any new dirty reasons that arrive
+        // while rebuilding will be merged back by lifecycle and trigger follow-up rebuilds.
+        record.dirty_reasons = ChunkDirtyReasonSet::default();
         record.pending_build_generation = Some(target_build_generation);
         record.lifecycle = ChunkLifecycleState::Rebuilding;
 
@@ -79,27 +90,35 @@ pub fn dispatch_world_build_jobs_system(
             target_build_generation,
         );
 
-        let payload = placeholder_chunk_payload(
+        let payload = build_chunk_payload_from_op_window(
             item.chunk_id,
             target_chunk_revision,
             target_build_generation,
+            &partition,
+            &op_log,
+            partition.quantization_scale(),
         );
+        let region_summary = summarize_region_from_payload(&payload);
         completed.outputs.push_back(WorldCompletedBuildOutput {
             chunk_id: item.chunk_id,
             target_chunk_revision,
             target_build_generation,
             staleness: WorldBuildStaleness::Current,
             chunk_payload: payload,
-            region_summary: RegionSdfSummary {
-                min_distance: -32,
-                max_distance: 32,
-                occupied_chunk_count: 1,
-                surface_chunk_count: 1,
-            },
+            region_summary,
         });
         runtime.completed_jobs = runtime.completed_jobs.saturating_add(1);
     }
+}
 
+pub fn sync_world_build_debug_metrics_system(
+    queue: Res<WorldBuildQueueResource>,
+    runtime: Res<WorldBuildJobRuntimeResource>,
+    mut debug: ResMut<WorldDebugMetricsResource>,
+) {
+    let (interactive_depth, background_depth) = queue.queue_depths();
+    debug.interactive_queue_depth = interactive_depth;
+    debug.background_queue_depth = background_depth;
     debug.enqueued_build_jobs = runtime.enqueued_jobs;
     debug.completed_build_jobs = runtime.completed_jobs;
 }
@@ -174,23 +193,161 @@ fn push_phase_nodes(
     }
 }
 
-fn placeholder_chunk_payload(
+fn build_chunk_payload_from_op_window(
     chunk_id: ChunkId,
-    chunk_revision: ChunkRevision,
-    build_generation: BuildGeneration,
+    target_chunk_revision: ChunkRevision,
+    target_build_generation: BuildGeneration,
+    partition: &WorldPartitionConfig,
+    op_log: &WorldOperationLog,
+    fixed_point_scale: i32,
 ) -> SdfChunkPayload {
-    let chunk_generation = ChunkGeneration(build_generation.0);
-    let checksum = chunk_id.coord.x as u64
-        ^ ((chunk_id.coord.y as u64) << 16)
-        ^ ((chunk_id.coord.z as u64) << 32)
-        ^ chunk_revision.0
-        ^ build_generation.0.rotate_left(7);
+    let affecting_ops =
+        operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale.max(1));
+    let (solid_payload, last_op_id, material_channel_mask) =
+        chunk_solid_state_from_operations(&affecting_ops);
+    let mut page_table = BTreeMap::<SdfPageCoord3, SdfPageRecord>::new();
+    if solid_payload {
+        let brick = SdfBrickRecord {
+            metadata: SdfBrickMetadata {
+                min_distance: -16,
+                max_distance: 16,
+                occupancy_mask: 0xFF,
+                material_channel_mask,
+                last_touched_op_id: last_op_id,
+                surface_band_present: true,
+                compression_scheme: 1,
+            },
+            samples: SdfBrickSamples {
+                distances: vec![-8; 8],
+            },
+        };
+        let mut page = SdfPageRecord {
+            page_generation: target_build_generation.0,
+            bricks: BTreeMap::new(),
+        };
+        page.bricks.insert([0, 0, 0], brick);
+        page_table.insert(SdfPageCoord3 { x: 0, y: 0, z: 0 }, page);
+    }
+
+    let mut checksum_hasher = std::collections::hash_map::DefaultHasher::new();
+    chunk_id.hash(&mut checksum_hasher);
+    target_chunk_revision.0.hash(&mut checksum_hasher);
+    target_build_generation.0.hash(&mut checksum_hasher);
+    solid_payload.hash(&mut checksum_hasher);
+    for record in &affecting_ops {
+        operation_signature(record).hash(&mut checksum_hasher);
+    }
+
     SdfChunkPayload {
         chunk_id,
-        chunk_revision,
-        chunk_generation,
-        page_table: Default::default(),
-        hierarchy_revision: build_generation.0,
-        checksum,
+        chunk_revision: target_chunk_revision,
+        chunk_generation: ChunkGeneration(target_build_generation.0),
+        page_table,
+        hierarchy_revision: last_op_id.0.max(target_build_generation.0),
+        checksum: checksum_hasher.finish(),
     }
+}
+
+fn operations_affecting_chunk<'a>(
+    op_log: &'a WorldOperationLog,
+    partition: &WorldPartitionConfig,
+    chunk_id: ChunkId,
+    fixed_point_scale: i32,
+) -> Vec<&'a WorldOperationRecord> {
+    op_log
+        .operations
+        .iter()
+        .filter(|record| {
+            if record.planet_id != chunk_id.planet_id {
+                return false;
+            }
+            touched_chunks_from_quantized_bounds(
+                partition,
+                record.affected_bounds_q,
+                chunk_id.planet_id,
+                fixed_point_scale,
+            )
+            .contains(&chunk_id)
+        })
+        .collect()
+}
+
+fn chunk_solid_state_from_operations(records: &[&WorldOperationRecord]) -> (bool, WorldOpId, u16) {
+    let mut solid_payload = false;
+    let mut material_channel_mask = 0_u16;
+    let mut last_op_id = WorldOpId::default();
+
+    for record in records {
+        last_op_id = record.op_id;
+        match &record.operation {
+            WorldOperation::CsgAdd {
+                material_channel, ..
+            } => {
+                solid_payload = true;
+                material_channel_mask |= material_channel_bit(*material_channel);
+            }
+            WorldOperation::Stamp { .. } => {
+                solid_payload = true;
+                material_channel_mask |= 1;
+            }
+            WorldOperation::StructurePlace { .. } => {
+                solid_payload = true;
+                material_channel_mask |= 1;
+            }
+            WorldOperation::CsgSubtract { .. } | WorldOperation::StructureRemove { .. } => {
+                solid_payload = false;
+            }
+            WorldOperation::MaterialFieldEdit { channel_mask, .. } => {
+                material_channel_mask |= *channel_mask;
+            }
+            WorldOperation::Smooth { .. } | WorldOperation::DensityFieldDeform { .. } => {}
+        }
+    }
+
+    if solid_payload && material_channel_mask == 0 {
+        material_channel_mask = 1;
+    }
+
+    (solid_payload, last_op_id, material_channel_mask)
+}
+
+fn material_channel_bit(material_channel: u16) -> u16 {
+    1_u16
+        .checked_shl((material_channel as u32).min(15))
+        .unwrap_or(1)
+}
+
+fn operation_signature(record: &WorldOperationRecord) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    record.op_id.0.hash(&mut hasher);
+    record.base_world_revision.0.hash(&mut hasher);
+    record.planet_id.hash(&mut hasher);
+    record.deterministic_seed.hash(&mut hasher);
+    record.server_tick.0.hash(&mut hasher);
+    format!("{:?}", record.operation).hash(&mut hasher);
+    hasher.finish()
+}
+
+fn summarize_region_from_payload(payload: &SdfChunkPayload) -> RegionSdfSummary {
+    let mut summary = RegionSdfSummary::default();
+    let mut saw_any = false;
+    for page in payload.page_table.values() {
+        for brick in page.bricks.values() {
+            if !saw_any {
+                summary.min_distance = brick.metadata.min_distance;
+                summary.max_distance = brick.metadata.max_distance;
+                saw_any = true;
+            } else {
+                summary.min_distance = summary.min_distance.min(brick.metadata.min_distance);
+                summary.max_distance = summary.max_distance.max(brick.metadata.max_distance);
+            }
+            if brick.metadata.occupancy_mask != 0 {
+                summary.occupied_chunk_count = 1;
+            }
+            if brick.metadata.surface_band_present {
+                summary.surface_chunk_count = 1;
+            }
+        }
+    }
+    summary
 }

@@ -3,20 +3,20 @@ use super::*;
 // Owner: Cavern Hunt Combat Plugin - Tests
 #[cfg(test)]
 mod tests {
-    use super::{
-        CAVERN_GAMEPLAY_HEIGHT, constrained_move, constrained_move_with_world, update_local_aim,
-    };
+    use super::{CAVERN_GAMEPLAY_HEIGHT, constrained_move_with_world, update_local_aim};
     use crate::app::composition as game;
     use crate::features::worldgen::plugin as worldgen;
     use crate::{
-        CavernAimState, CavernCameraState, CavernCollisionField, CavernControlState,
-        CavernGeometryGraph, CavernLayout, CavernMetaProfile, CavernPlayerOwnershipState,
-        CavernRunConfig, CavernRunState, CavernSeed, CavernServerControlMap, CavernTopology,
+        CavernAimState, CavernCameraState, CavernControlState, CavernLayout, CavernMetaProfile,
+        CavernPlayerOwnershipState, CavernRunConfig, CavernRunState, CavernServerControlMap,
         EnemyKind, LocalPlayerRef, LootTableRegistry, PlayerActive, PlayerCompanion, SpawnDirector,
         Transform2,
     };
     use engine::plugins::world::chunks::partition::WorldPartitionConfig;
-    use engine::plugins::world::ids::{ChunkGeneration, ChunkRevision, PlanetId};
+    use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
+    use engine::plugins::world::ids::{
+        ChunkCoord3, ChunkGeneration, ChunkId, ChunkRevision, PlanetId,
+    };
     use engine::plugins::world::queries::collision::WorldCollisionQueryServiceResource;
     use engine::plugins::world::sdf::storage::{SdfChunkPayload, WorldSdfChunkStoreResource};
     use engine::prelude::{
@@ -24,17 +24,6 @@ mod tests {
         World,
     };
     use engine::state::SessionRuntimeState;
-
-    #[test]
-    fn constrained_move_stays_inside_layout() {
-        let layout = CavernLayout::generate(CavernSeed::default(), &CavernRunConfig::default());
-        let topology = CavernTopology::from_layout(&layout, CavernSeed::default());
-        let graph = CavernGeometryGraph::from_topology(&topology);
-        let mut field = CavernCollisionField::from_graph(&graph);
-        let start = layout.room(layout.start_room).unwrap().center;
-        let next = constrained_move(&mut field, &graph, start, [100.0, 100.0], 0.5);
-        assert!(field.distance(&graph, [next[0], CAVERN_GAMEPLAY_HEIGHT, next[1]]) <= -0.5);
-    }
 
     #[test]
     fn local_aim_updates_from_mouse_projection() {
@@ -222,9 +211,15 @@ mod tests {
         world.insert_resource(WorldCollisionQueryServiceResource);
         world.insert_resource(WorldPartitionConfig::default());
         world.insert_resource(WorldSdfChunkStoreResource::default());
+        world.insert_resource(WorldDebugMetricsResource::default());
 
         let next = constrained_move_with_world(&mut world, [4.0, 3.0], [1.0, 0.0], 0.25);
         assert_eq!(next, [4.0, 3.0]);
+        let metrics = world
+            .resource::<WorldDebugMetricsResource>()
+            .expect("metrics should exist");
+        assert_eq!(metrics.collision_queries, 1);
+        assert_eq!(metrics.collision_authority_misses, 1);
     }
 
     #[test]
@@ -250,8 +245,59 @@ mod tests {
         world.insert_resource(WorldCollisionQueryServiceResource);
         world.insert_resource(partition);
         world.insert_resource(store);
+        world.insert_resource(WorldDebugMetricsResource::default());
 
         let next = constrained_move_with_world(&mut world, [4.0, 3.0], [1.0, 0.0], 0.25);
         assert_eq!(next, [5.0, 3.0]);
+        let metrics = world
+            .resource::<WorldDebugMetricsResource>()
+            .expect("metrics should exist");
+        assert_eq!(metrics.collision_queries, 1);
+        assert_eq!(metrics.collision_authority_misses, 0);
+    }
+
+    #[test]
+    fn authoritative_move_blocks_when_sweep_crosses_missing_intermediate_chunk_payload() {
+        let mut world = World::new();
+        let partition = WorldPartitionConfig {
+            chunk_edge_meters: 1.0,
+            region_chunk_dims: [8, 8, 8],
+            fixed_point_scale: 1024,
+        };
+        let planet_id = PlanetId(0);
+        let mut store = WorldSdfChunkStoreResource::default();
+
+        let start_chunk = ChunkId::new(planet_id, ChunkCoord3 { x: 0, y: 2, z: 0 });
+        let end_chunk = ChunkId::new(planet_id, ChunkCoord3 { x: 2, y: 2, z: 0 });
+        for chunk_id in [start_chunk, end_chunk] {
+            store.chunks.insert(
+                chunk_id,
+                SdfChunkPayload {
+                    chunk_id,
+                    chunk_revision: ChunkRevision::default(),
+                    chunk_generation: ChunkGeneration::default(),
+                    page_table: Default::default(),
+                    hierarchy_revision: 0,
+                    checksum: 1,
+                },
+            );
+        }
+
+        world.insert_resource(WorldCollisionQueryServiceResource);
+        world.insert_resource(partition);
+        world.insert_resource(store);
+        world.insert_resource(WorldDebugMetricsResource::default());
+
+        let next = constrained_move_with_world(&mut world, [0.1, 0.1], [2.0, 0.0], 0.0);
+        assert_eq!(
+            next,
+            [0.1, 0.1],
+            "movement should fail-safe block when any swept chunk payload is missing"
+        );
+        let metrics = world
+            .resource::<WorldDebugMetricsResource>()
+            .expect("metrics should exist");
+        assert_eq!(metrics.collision_queries, 1);
+        assert_eq!(metrics.collision_authority_misses, 1);
     }
 }

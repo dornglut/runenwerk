@@ -11,7 +11,5 @@ pub(crate) use world_frame::build_sdf_world_frame_system;
 
 #[cfg(test)]
 pub(super) use geometry_projection::{
-    OP_ADD_SOLID, OP_BLOCKER, OP_SUBTRACT_VOID, SHAPE_BOX, SHAPE_CAPSULE, SHAPE_CYLINDER,
-    SHAPE_ELLIPSOID, SHAPE_SPHERE, geometry_primitives_from_graph,
-    geometry_primitives_from_topology,
+    OP_ADD_SOLID, OP_SUBTRACT_VOID, SHAPE_BOX, SHAPE_CYLINDER, geometry_primitives_from_topology,
 };

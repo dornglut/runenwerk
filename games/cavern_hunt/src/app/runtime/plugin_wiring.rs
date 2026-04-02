@@ -12,8 +12,6 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<CavernRunState>();
         app.init_resource::<CavernLayout>();
         app.init_resource::<CavernTopology>();
-        app.init_resource::<CavernGeometryGraph>();
-        app.init_resource::<CavernCollisionField>();
         app.init_resource::<SpawnDirector>();
         app.init_resource::<LootTableRegistry>();
         app.init_resource::<CavernMetaProfile>();
@@ -39,7 +37,6 @@ impl Plugin for CavernHuntPlugin {
         app.init_resource::<ReplicationRuntimeMetrics>();
         app.init_resource::<NetDiagnosticsConfigAssetV1>();
         app.init_resource::<CavernSdfWorldFrame>();
-        app.init_resource::<CavernGeometryRuntimeState>();
         app.init_resource::<SessionSpawnPolicy>();
         app.init_resource::<RoomEncounterRegistry>();
         app.init_resource::<CavernObjectiveState>();

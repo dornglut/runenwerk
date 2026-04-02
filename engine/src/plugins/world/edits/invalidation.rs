@@ -9,7 +9,6 @@ pub fn invalidate_dirty_chunks_from_op_log(
     dirty: &mut WorldDirtyChunkMapResource,
     partition: &WorldPartitionConfig,
     log: &WorldOperationLog,
-    planet_id: PlanetId,
     fixed_point_scale: i32,
 ) {
     for record in &log.operations {
@@ -17,7 +16,7 @@ pub fn invalidate_dirty_chunks_from_op_log(
             dirty,
             partition,
             record.affected_bounds_q,
-            planet_id,
+            record.planet_id,
             fixed_point_scale,
         );
     }

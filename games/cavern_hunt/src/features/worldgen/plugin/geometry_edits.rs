@@ -7,53 +7,36 @@ use engine::plugins::world::edits::{WorldEditIngressMeta, submit_world_operation
 use engine::plugins::world::ids::PlanetId;
 use engine::prelude::SimulationTick;
 
-pub(crate) fn apply_runtime_geometry_edit(world: &mut World, edit: &GeometryEdit) -> bool {
-    let (affected, revision, world_bounds) = {
-        let graph = match world.resource_mut::<CavernGeometryGraph>() {
-            Ok(graph) => graph,
-            Err(_) => return false,
-        };
-        let affected = graph.apply_edit(edit);
-        (affected, graph.revision, graph.bounds)
+pub(crate) fn apply_runtime_geometry_edit(
+    world: &mut World,
+    edit: &GeometryEdit,
+) -> bool {
+    let Some(bounds) = affected_bounds_from_edit(edit) else {
+        return false;
     };
-    let event = GeometryEditEvent {
-        revision,
-        edit: edit.clone(),
-    };
-
-    if let Some(bounds) = affected
-        && let Ok(mut field) = world.resource_mut::<CavernCollisionField>()
-    {
-        field.invalidate_bounds(bounds);
-        field.revision_seen = revision;
-        field.world_bounds = world_bounds;
-    }
-
-    if let Ok(mut runtime) = world.resource_mut::<CavernGeometryRuntimeState>() {
-        runtime.edit_events.push(event);
-    }
-
-    if let Some(bounds) = affected {
-        mirror_edit_into_world_op_log(world, edit, bounds);
-    }
-
-    true
+    mirror_edit_into_world_op_log(world, edit, bounds)
 }
 
-fn mirror_edit_into_world_op_log(world: &mut World, edit: &GeometryEdit, bounds: GeometryBounds3) {
+fn mirror_edit_into_world_op_log(
+    world: &mut World,
+    edit: &GeometryEdit,
+    bounds: GeometryBounds3,
+) -> bool {
     let fixed_point_scale = world
-        .resource::<engine::plugins::world::WorldRuntimeConfig>()
-        .map(|config| config.fixed_point_scale)
+        .resource::<engine::plugins::world::chunks::partition::WorldPartitionConfig>()
+        .map(|config| config.quantization_scale())
         .unwrap_or(1024);
 
     let affected_bounds_q = quantize_aabb(bounds.min, bounds.max, fixed_point_scale);
-    let operation = map_geometry_edit_to_world_operation(edit, bounds, fixed_point_scale);
+    let Some(operation) = map_geometry_edit_to_world_operation(edit, fixed_point_scale) else {
+        return false;
+    };
     let server_tick = world
         .resource::<SimulationTick>()
         .copied()
         .unwrap_or_default();
 
-    let _ = submit_world_operation(
+    submit_world_operation(
         world,
         operation,
         affected_bounds_q,
@@ -63,33 +46,38 @@ fn mirror_edit_into_world_op_log(world: &mut World, edit: &GeometryEdit, bounds:
             server_tick,
             author_connection_id: None,
         },
-    );
+    )
+    .is_some()
+}
+
+fn affected_bounds_from_edit(edit: &GeometryEdit) -> Option<GeometryBounds3> {
+    match &edit.kind {
+        GeometryEditKind::AddBlocker(shape) | GeometryEditKind::RemoveBlocker(shape) => {
+            Some(shape.bounds())
+        }
+        GeometryEditKind::RemovePrimitive(_)
+        | GeometryEditKind::EnablePrimitive(_)
+        | GeometryEditKind::DisablePrimitive(_)
+        | GeometryEditKind::ReplacePrimitive(_, _) => None,
+    }
 }
 
 fn map_geometry_edit_to_world_operation(
     edit: &GeometryEdit,
-    bounds: GeometryBounds3,
     fixed_point_scale: i32,
-) -> WorldOperation {
+) -> Option<WorldOperation> {
     match &edit.kind {
-        GeometryEditKind::AddBlocker(shape) => WorldOperation::CsgAdd {
+        GeometryEditKind::AddBlocker(shape) => Some(WorldOperation::CsgAdd {
             brush: shape_to_world_brush(shape, fixed_point_scale),
             material_channel: 1,
-        },
-        GeometryEditKind::RemovePrimitive(id) => WorldOperation::StructureRemove {
-            structure_instance_id: id.0,
-        },
-        GeometryEditKind::EnablePrimitive(id) | GeometryEditKind::DisablePrimitive(id) => {
-            WorldOperation::MaterialFieldEdit {
-                bounds_q: quantize_aabb(bounds.min, bounds.max, fixed_point_scale),
-                channel_mask: 1,
-                payload: id.0.to_le_bytes().to_vec(),
-            }
-        }
-        GeometryEditKind::ReplacePrimitive(id, replacement) => WorldOperation::DensityFieldDeform {
-            bounds_q: quantize_aabb(bounds.min, bounds.max, fixed_point_scale),
-            payload: format!("replace:{}:{:?}", id.0, replacement.shape).into_bytes(),
-        },
+        }),
+        GeometryEditKind::RemoveBlocker(shape) => Some(WorldOperation::CsgSubtract {
+            brush: shape_to_world_brush(shape, fixed_point_scale),
+        }),
+        GeometryEditKind::RemovePrimitive(_)
+        | GeometryEditKind::EnablePrimitive(_)
+        | GeometryEditKind::DisablePrimitive(_)
+        | GeometryEditKind::ReplacePrimitive(_, _) => None,
     }
 }
 

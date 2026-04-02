@@ -1,16 +1,22 @@
 use crate::app::App;
 use crate::plugin::Plugin;
-use crate::runtime::{CoreSet, FixedUpdate, IntoSystemSetKey, RenderPrepare, SystemConfigExt};
+use crate::runtime::{
+    CoreSet, FixedUpdate, IntoSystemSetKey, RenderPrepare, Res, ResMut, SystemConfigExt,
+};
+use engine_sim::{AuthorityRole, SimulationProfileConfig};
 use scheduler::SystemSetKey;
 
-use super::build::integration::integrate_completed_build_outputs_system;
-use super::build::jobs::dispatch_world_build_jobs_system;
+use super::build::integration::{
+    integrate_completed_build_outputs_system, sync_world_runtime_debug_metrics_system,
+};
+use super::build::jobs::{dispatch_world_build_jobs_system, sync_world_build_debug_metrics_system};
 use super::chunks::lifecycle::advance_chunk_lifecycle_system;
 use super::chunks::render_cache_bridge::{
     WorldRenderCacheInvalidationQueueResource, flush_world_render_cache_invalidations_system,
 };
 use super::debug::metrics::WorldDebugMetricsResource;
 use super::prepare::contributions::prepare_world_feature_contributions_system;
+use super::streaming::replication::rebuild_world_replication_state_system;
 use super::{
     build::{graph::WorldBuildGraphResource, queue::WorldBuildQueueResource},
     caves::{
@@ -21,12 +27,13 @@ use super::{
         dirty::WorldDirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource,
         partition::WorldPartitionConfig,
     },
-    edits::log::WorldOperationLog,
+    edits::{log::WorldOperationLog, region_journal::WorldRegionInvalidationJournalResource},
     frames::planet_frame::{CameraRelativeFrameResource, PlanetFrameResource},
     queries::{collision::WorldCollisionQueryServiceResource, nav::WorldNavSummaryResource},
     sdf::storage::WorldSdfChunkStoreResource,
     streaming::{
-        interest::WorldStreamingInterestResource, replication::WorldReplicationStateResource,
+        interest::{WorldStreamingInterestResource, sync_world_streaming_interest_system},
+        replication::WorldReplicationStateResource,
     },
 };
 
@@ -45,18 +52,12 @@ impl Default for WorldRuntimeMode {
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct WorldRuntimeConfig {
     pub mode: WorldRuntimeMode,
-    pub chunk_edge_meters: f32,
-    pub region_chunk_dims: [u32; 3],
-    pub fixed_point_scale: i32,
 }
 
 impl Default for WorldRuntimeConfig {
     fn default() -> Self {
         Self {
             mode: WorldRuntimeMode::ClientReplica,
-            chunk_edge_meters: 32.0,
-            region_chunk_dims: [8, 8, 8],
-            fixed_point_scale: 1024,
         }
     }
 }
@@ -75,19 +76,27 @@ pub struct WorldRuntimeState {
 pub struct WorldPlugin;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum WorldRuntimeSet {
+pub enum WorldRuntimeSet {
+    ModeSync,
     Lifecycle,
     BuildDispatch,
+    BuildMetrics,
     BuildIntegrate,
     RenderCacheSync,
+    StreamingInterest,
+    ReplicationState,
 }
 
 impl IntoSystemSetKey for WorldRuntimeSet {
     fn system_set_key(&self) -> SystemSetKey {
         match self {
+            Self::ModeSync => SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::ModeSync"),
             Self::Lifecycle => SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::Lifecycle"),
             Self::BuildDispatch => {
                 SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::BuildDispatch")
+            }
+            Self::BuildMetrics => {
+                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::BuildMetrics")
             }
             Self::BuildIntegrate => {
                 SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::BuildIntegrate")
@@ -95,8 +104,30 @@ impl IntoSystemSetKey for WorldRuntimeSet {
             Self::RenderCacheSync => {
                 SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::RenderCacheSync")
             }
+            Self::StreamingInterest => {
+                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::StreamingInterest")
+            }
+            Self::ReplicationState => {
+                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::ReplicationState")
+            }
         }
     }
+}
+
+pub fn world_runtime_mode_for_authority(authority: AuthorityRole) -> WorldRuntimeMode {
+    match authority {
+        AuthorityRole::Client => WorldRuntimeMode::ClientReplica,
+        AuthorityRole::Local | AuthorityRole::Server | AuthorityRole::Peer => {
+            WorldRuntimeMode::ServerAuthoritative
+        }
+    }
+}
+
+fn sync_world_runtime_mode_system(
+    simulation_profile: Res<SimulationProfileConfig>,
+    mut runtime_config: ResMut<WorldRuntimeConfig>,
+) {
+    runtime_config.mode = world_runtime_mode_for_authority(simulation_profile.authority);
 }
 
 impl Plugin for WorldPlugin {
@@ -112,6 +143,7 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldRenderCacheInvalidationQueueResource>();
         app.init_resource::<WorldSdfChunkStoreResource>();
         app.init_resource::<WorldOperationLog>();
+        app.init_resource::<WorldRegionInvalidationJournalResource>();
         app.init_resource::<WorldBuildGraphResource>();
         app.init_resource::<WorldBuildQueueResource>();
         app.init_resource::<super::build::jobs::WorldBuildJobRuntimeResource>();
@@ -125,11 +157,32 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldCaveLightingScopeResource>();
         app.init_resource::<WorldDebugMetricsResource>();
 
+        let authority = app
+            .world()
+            .resource::<SimulationProfileConfig>()
+            .map(|config| config.authority)
+            .ok();
+        if let (Some(authority), Ok(runtime_config)) = (
+            authority,
+            app.world_mut().resource_mut::<WorldRuntimeConfig>(),
+        ) {
+            runtime_config.mode = world_runtime_mode_for_authority(authority);
+        }
+
+        app.add_systems(
+            FixedUpdate,
+            sync_world_runtime_mode_system
+                .in_set(WorldRuntimeSet::ModeSync)
+                .in_set(CoreSet::Simulation)
+                .before(WorldRuntimeSet::Lifecycle)
+                .before(CoreSet::Replication),
+        );
         app.add_systems(
             FixedUpdate,
             advance_chunk_lifecycle_system
                 .in_set(WorldRuntimeSet::Lifecycle)
                 .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::ModeSync)
                 .before(CoreSet::Replication),
         );
         app.add_systems(
@@ -142,10 +195,26 @@ impl Plugin for WorldPlugin {
         );
         app.add_systems(
             FixedUpdate,
+            sync_world_build_debug_metrics_system
+                .in_set(WorldRuntimeSet::BuildMetrics)
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::BuildDispatch)
+                .before(CoreSet::Replication),
+        );
+        app.add_systems(
+            FixedUpdate,
             integrate_completed_build_outputs_system
                 .in_set(WorldRuntimeSet::BuildIntegrate)
                 .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::BuildDispatch)
+                .after(WorldRuntimeSet::BuildMetrics)
+                .before(CoreSet::Replication),
+        );
+        app.add_systems(
+            FixedUpdate,
+            sync_world_runtime_debug_metrics_system
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::BuildIntegrate)
+                .before(WorldRuntimeSet::RenderCacheSync)
                 .before(CoreSet::Replication),
         );
         app.add_systems(
@@ -154,6 +223,22 @@ impl Plugin for WorldPlugin {
                 .in_set(WorldRuntimeSet::RenderCacheSync)
                 .in_set(CoreSet::Simulation)
                 .after(WorldRuntimeSet::BuildIntegrate)
+                .before(CoreSet::Replication),
+        );
+        app.add_systems(
+            FixedUpdate,
+            sync_world_streaming_interest_system
+                .in_set(WorldRuntimeSet::StreamingInterest)
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::RenderCacheSync)
+                .before(CoreSet::Replication),
+        );
+        app.add_systems(
+            FixedUpdate,
+            rebuild_world_replication_state_system
+                .in_set(WorldRuntimeSet::ReplicationState)
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::StreamingInterest)
                 .before(CoreSet::Replication),
         );
         app.add_systems(RenderPrepare, prepare_world_feature_contributions_system);

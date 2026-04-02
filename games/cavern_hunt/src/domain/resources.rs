@@ -1,5 +1,4 @@
 use crate::domain::loot::EnemyDropTable;
-use crate::domain::world::geometry_graph::{GeometryEditEvent, GeometryPrimitiveId};
 use crate::domain::world::worldgen::{RoomId, RoomRole};
 use engine::prelude::{Entity, SimulationTick};
 use serde::{Deserialize, Serialize};

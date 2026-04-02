@@ -1,4 +1,4 @@
-use super::super::ids::{WorldOpId, WorldRevision};
+use super::super::ids::{PlanetId, WorldOpId, WorldRevision};
 use engine_sim::SimulationTick;
 use serde::{Deserialize, Serialize};
 
@@ -80,6 +80,8 @@ pub enum WorldOperation {
 pub struct WorldOperationRecord {
     pub op_id: WorldOpId,
     pub base_world_revision: WorldRevision,
+    #[serde(default)]
+    pub planet_id: PlanetId,
     pub operation: WorldOperation,
     pub affected_bounds_q: QuantizedAabb,
     pub deterministic_seed: u64,

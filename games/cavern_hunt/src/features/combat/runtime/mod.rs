@@ -9,7 +9,7 @@ mod tests;
 
 pub(crate) use control_step::replay_predicted_local_frame;
 pub use plugin_aim::CavernHuntCombatPlugin;
-pub(crate) use projectiles::{constrained_move, constrained_move_with_world, spawn_projectile};
+pub(crate) use projectiles::{constrained_move_with_world, spawn_projectile};
 
 use control_step::{fixed_step_combat_system, run_authoritative_combat_step};
 use movement_fire::{

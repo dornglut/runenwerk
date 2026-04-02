@@ -1,5 +1,7 @@
 use super::*;
 use crate::WorldMut;
+use crate::plugins::world::ids::ChunkSyncCursor;
+use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use ecs::World;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
@@ -59,6 +61,7 @@ where
         .unwrap_or_default();
 
     let mut outbound = Vec::<OutboundServerMessage>::new();
+    let mut world_streaming_updates = Vec::<(ConnectionId, ChunkSyncCursor, bool)>::new();
     if !active_connections.is_empty() {
         let mut snapshots_for_connections = Vec::<(ConnectionId, TDriver::Snapshot)>::new();
         for connection_id in &active_connections {
@@ -156,6 +159,7 @@ where
                     checkpoint.needs_full_resync = false;
                 }
             }
+            world_streaming_updates.push((connection_id, ChunkSyncCursor(cursor.0), send_full));
 
             outbound.push(OutboundServerMessage::ToConnection {
                 connection_id,
@@ -167,6 +171,14 @@ where
             state.latest_snapshot = Some(snapshot.clone());
             state.snapshot_history.insert(cursor, snapshot);
             prune_snapshot_history(&mut state);
+        }
+    }
+
+    if !world_streaming_updates.is_empty()
+        && let Ok(mut streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>()
+    {
+        for (connection_id, cursor, sent_full_snapshot) in world_streaming_updates {
+            streaming_interest.mark_snapshot_sent(connection_id, cursor, sent_full_snapshot);
         }
     }
 
@@ -315,6 +327,20 @@ pub fn update_connection_closed<TSnapshot>(
                 .retain(|connection_id, _| active_connections.contains(connection_id));
             state
                 .latest_snapshot_per_connection
+                .retain(|connection_id, _| active_connections.contains(connection_id));
+        }
+
+        if let Ok(mut streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>() {
+            match connection_id {
+                Some(connection_id) => {
+                    streaming_interest.per_connection.remove(&connection_id);
+                }
+                None => {
+                    streaming_interest.per_connection.clear();
+                }
+            }
+            streaming_interest
+                .per_connection
                 .retain(|connection_id, _| active_connections.contains(connection_id));
         }
     } else {

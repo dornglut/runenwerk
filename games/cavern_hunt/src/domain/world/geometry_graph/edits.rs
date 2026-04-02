@@ -36,6 +36,13 @@ impl CavernGeometryGraph {
                 self.primitives.push(primitive);
                 Some(bounds)
             }
+            GeometryEditKind::RemoveBlocker(shape) => {
+                let index = self.primitives.iter().position(|primitive| {
+                    primitive.layer == GeometryLayer::Blocker && primitive.shape == *shape
+                })?;
+                let primitive = self.primitives.remove(index);
+                Some(primitive.bounds())
+            }
             GeometryEditKind::RemovePrimitive(id) => {
                 let index = self
                     .primitives

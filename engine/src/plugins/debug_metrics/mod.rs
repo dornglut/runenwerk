@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::InputState;
+use crate::plugins::render::inspect::WorldRuntimeInspectorSnapshot;
 use crate::plugins::time::domain::Time;
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup};
 use crate::state::{
@@ -19,6 +20,7 @@ impl Plugin for DebugMetricsPlugin {
         app.init_resource::<StartupState>();
         app.init_resource::<SceneRuntimeState>();
         app.init_resource::<UiOverlayState>();
+        app.init_resource::<WorldRuntimeInspectorSnapshot>();
         app.add_systems(Startup, setup_debug_metrics_input_binding);
         app.add_systems(RenderPrepare, debug_metrics_overlay_system);
     }
@@ -33,6 +35,7 @@ fn debug_metrics_overlay_system(
     time: Res<Time>,
     startup: Res<StartupState>,
     scene: Res<SceneRuntimeState>,
+    world_runtime: Res<WorldRuntimeInspectorSnapshot>,
     mut debug_metrics: ResMut<DebugMetricsState>,
     mut ui: ResMut<UiOverlayState>,
 ) {
@@ -52,7 +55,7 @@ fn debug_metrics_overlay_system(
     let x = 12.0 * scale;
     let y = 12.0 * scale;
     let w = (380.0 * scale).min((screen_w - x * 2.0).max(120.0));
-    let h = 170.0 * scale;
+    let h = 282.0 * scale;
     let clip = Some([x, y, w, h]);
 
     ui.debug_draw_list.commands.push(OverlayDrawCmd::Rect {
@@ -110,6 +113,38 @@ fn debug_metrics_overlay_system(
     if let Some(workload) = workload_ms {
         lines.push(format!("workload={workload:.2}ms"));
     }
+    lines.push(format!(
+        "world rev={} dirty={} q={}/{}",
+        world_runtime.world_revision,
+        world_runtime.chunk_dirty_count,
+        world_runtime.queued_interactive,
+        world_runtime.queued_background
+    ));
+    lines.push(format!(
+        "build int={} drop={} oplog={}",
+        world_runtime.integrated_build_outputs,
+        world_runtime.dropped_stale_outputs,
+        world_runtime.op_log_count
+    ));
+    lines.push(format!(
+        "ingress={} invalid={}",
+        world_runtime.ingress_operations, world_runtime.invalidated_chunks
+    ));
+    lines.push(format!(
+        "collision q={} miss={}",
+        world_runtime.collision_queries, world_runtime.collision_authority_misses
+    ));
+    lines.push(format!(
+        "stream conn={} resync={} lag={} rlag={}",
+        world_runtime.streaming_connection_count,
+        world_runtime.streaming_needs_resync_count,
+        world_runtime.streaming_max_cursor_lag,
+        world_runtime.streaming_max_region_sequence_lag
+    ));
+    lines.push(format!(
+        "region seq={} records={}",
+        world_runtime.region_journal_latest_sequence, world_runtime.region_journal_record_count
+    ));
 
     let line_h = 16.0 * scale;
     for (idx, line) in lines.into_iter().enumerate() {

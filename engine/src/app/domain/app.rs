@@ -167,8 +167,15 @@ impl App {
     }
 
     pub fn set_authority_role(&mut self, authority: AuthorityRole) -> &mut Self {
-        if let Ok(mut config) = self.world.resource_mut::<SimulationProfileConfig>() {
+        if let Ok(config) = self.world.resource_mut::<SimulationProfileConfig>() {
             config.authority = authority;
+        }
+        if let Ok(world_runtime_config) =
+            self.world
+                .resource_mut::<crate::plugins::world::plugin::WorldRuntimeConfig>()
+        {
+            world_runtime_config.mode =
+                crate::plugins::world::plugin::world_runtime_mode_for_authority(authority);
         }
         self
     }

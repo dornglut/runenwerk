@@ -1,4 +1,6 @@
 use super::*;
+use crate::plugins::world::ids::ChunkSyncCursor;
+use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use crate::{SessionRuntimeState, WorldMut};
 use anyhow::Context;
 use ecs::World;
@@ -123,6 +125,11 @@ where
                             .entry(connection)
                             .or_default()
                             .needs_full_resync = true;
+                    }
+                    if let Ok(mut streaming_interest) =
+                        world.resource_mut::<WorldStreamingInterestResource>()
+                    {
+                        streaming_interest.mark_needs_full_resync(connection);
                     }
                 }
 
@@ -414,13 +421,21 @@ where
         let message = incoming.message;
 
         if let ClientMessage::Ack(ack) = &message
-            && let Ok(mut state) =
-                world.resource_mut::<ServerSnapshotReplicationState<TDriver::Snapshot>>()
             && let Some(connection_id) = connection_id
         {
-            let checkpoint = state.checkpoints.entry(connection_id).or_default();
-            checkpoint.last_ack_cursor = ack.cursor;
-            checkpoint.needs_full_resync = false;
+            if let Ok(mut state) =
+                world.resource_mut::<ServerSnapshotReplicationState<TDriver::Snapshot>>()
+            {
+                let checkpoint = state.checkpoints.entry(connection_id).or_default();
+                checkpoint.last_ack_cursor = ack.cursor;
+                checkpoint.needs_full_resync = false;
+            }
+            if let Ok(mut streaming_interest) =
+                world.resource_mut::<WorldStreamingInterestResource>()
+            {
+                streaming_interest
+                    .mark_snapshot_acknowledged(connection_id, ChunkSyncCursor(ack.cursor.0));
+            }
         }
 
         if let ClientMessage::InputFrame(frame) = &message
