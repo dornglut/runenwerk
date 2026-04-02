@@ -1,29 +1,37 @@
 extern crate self as ecs;
 
 mod bundle;
+mod commands;
 mod component;
 mod entity;
 mod errors;
 pub mod prelude;
 pub mod query;
+mod spatial;
 mod storage;
 pub mod system;
 pub mod telemetry;
 mod world;
 
 pub use bundle::Bundle;
-pub use component::{Component, Resource};
-pub use ecs_macros::{Bundle, Component, Resource};
+pub use commands::{BatchCommands, Commands, DeferredCommand};
+pub use component::{Component, ComponentState, Resource, StatefulComponent};
+pub use ecs_macros::{Bundle, Component, Resource, StatefulComponent};
 pub use entity::{Entity, EntityAllocator};
-pub use errors::{CommandError, EntityError, QueryError, ResourceError};
-pub use query::{Added, Changed, Query, QueryAccess, QueryState, QueryTypeAccess, With, Without};
+pub use errors::{CommandError, EntityError, QueryError, ResourceError, SpatialIndexError};
+pub use query::{
+    Added, Changed, Orphaned, Query, QueryAccess, QueryOrphaned, QueryOrphanedState, QueryState,
+    QueryTypeAccess, With, Without,
+};
+pub use spatial::{DEFAULT_SPATIAL_INDEX_NAME, SpatialHashConfig, SpatialHashIndex, SpatialIndex};
 pub use system::{
-    ConfiguredSystem, EventReader, EventWriter, IntoSystem, IntoSystemConfigs, IntoSystemSetKey,
-    Res, ResMut, Runtime, SystemConfigExt, SystemParam, SystemParamError,
+    ConfiguredSystem, EventChannel, EventReader, EventWriter, IntoSystem, IntoSystemConfigs,
+    IntoSystemSetKey, Res, ResMut, ResView, Runtime, SystemConfigExt, SystemParam,
+    SystemParamError,
 };
 pub use world::{
-    Commands, ComponentChangeKind, ComponentChangeRecord, EntityDespawnedEvent, EntityMut,
-    EntityRef, EntitySpawnedEvent, EventChannelConfig, EventChannelStats, EventLifetime,
+    ComponentChangeKind, ComponentChangeRecord, EntityDespawnedEvent, EntityMut, EntityRef,
+    EntitySpawnedEvent, EventChannelConfig, EventChannelStats, EventLifetime,
     EventObserverNotification, EventTracingPolicy, Mut, ObserverTrigger, OverflowPolicy,
     ResourceChangeKind, ResourceChangeRecord, World,
 };

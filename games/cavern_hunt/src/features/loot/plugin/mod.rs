@@ -1,16 +1,17 @@
 use crate::features::timing::fixed_step_seconds;
-use crate::features::worldgen::plugin::apply_runtime_geometry_edit;
+use crate::features::worldgen::plugin::{apply_runtime_geometry_edit, extraction_seal_shape};
 use crate::{
-    CavernControlState, CavernGeometryRuntimeState, CavernRunConfig, CavernRunPhase,
-    CavernRunState, CavernServerControlMap, Chest, ColliderRadius, DashState, EliteObjective,
-    EnemyKind, ExtractionZone, GeometryEdit, GeometryEditKind, Health, InventoryRunState, LootDrop,
+    CavernControlState, CavernLayout, CavernRunConfig, CavernRunPhase, CavernRunState,
+    CavernServerControlMap, Chest, ColliderRadius, DashState, EliteObjective, EnemyKind,
+    ExtractionZone, GeometryEdit, GeometryEditKind, Health, InventoryRunState, LootDrop,
     LootTableRegistry, Pickup, PickupKind, PlayerId, PlayerSpectator, RelicKind, Transform2,
     WeaponModKind, WeaponState, is_active_player_entity,
 };
 use anyhow::Result;
+use engine::plugins::world::WorldRuntimeSet;
 use engine::prelude::{
-    App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, SimulationRng,
-    SimulationTick, World, WorldMut,
+    App, AuthorityRole, CoreSet, Entity, FixedUpdate, Plugin, SimulationProfileConfig,
+    SimulationRng, SimulationTick, SystemConfigExt, World, WorldMut,
 };
 
 mod enemy_resolution;
@@ -29,7 +30,13 @@ pub struct CavernHuntLootPlugin;
 
 impl Plugin for CavernHuntLootPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, resolve_loot_and_run_state_system);
+        app.add_systems(
+            FixedUpdate,
+            resolve_loot_and_run_state_system
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::BuildIntegrate)
+                .before(CoreSet::Replication),
+        );
     }
 }
 

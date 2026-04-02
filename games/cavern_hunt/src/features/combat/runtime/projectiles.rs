@@ -1,8 +1,9 @@
 use super::*;
 use engine::plugins::world::chunks::partition::WorldPartitionConfig;
+use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
 use engine::plugins::world::ids::PlanetId;
 use engine::plugins::world::queries::collision::{
-    SphereSweepQuery, WorldCollisionQueryServiceResource,
+    SphereSweepQuery, WorldCollisionQueryServiceResource, WorldCollisionSweepOutcome,
 };
 use engine::plugins::world::sdf::storage::WorldSdfChunkStoreResource;
 
@@ -163,76 +164,6 @@ pub(super) fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepM
     Ok(())
 }
 
-pub(crate) fn constrained_move(
-    field: &mut CavernCollisionField,
-    graph: &CavernGeometryGraph,
-    current: [f32; 2],
-    delta: [f32; 2],
-    radius: f32,
-) -> [f32; 2] {
-    let candidate = [current[0] + delta[0], current[1] + delta[1]];
-    let candidate_3 = [candidate[0], CAVERN_GAMEPLAY_HEIGHT, candidate[1]];
-    if field.distance(graph, candidate_3) <= -radius {
-        return candidate;
-    }
-
-    let normal = field.normal(graph, candidate_3);
-    let penetration = field.distance(graph, candidate_3) + radius;
-    if (normal[0].abs() > f32::EPSILON || normal[2].abs() > f32::EPSILON) && penetration > 0.0 {
-        let pushed = [
-            candidate[0] - normal[0] * (penetration + 0.02),
-            candidate[1] - normal[2] * (penetration + 0.02),
-        ];
-        if field.distance(graph, [pushed[0], CAVERN_GAMEPLAY_HEIGHT, pushed[1]]) <= -radius {
-            return pushed;
-        }
-    }
-
-    let tangent = [-normal[2], normal[0]];
-    if tangent[0].abs() > f32::EPSILON || tangent[1].abs() > f32::EPSILON {
-        let slide_amount = delta[0] * tangent[0] + delta[1] * tangent[1];
-        let slide_candidate = [
-            current[0] + tangent[0] * slide_amount,
-            current[1] + tangent[1] * slide_amount,
-        ];
-        let slide_penetration = field.distance(
-            graph,
-            [
-                slide_candidate[0],
-                CAVERN_GAMEPLAY_HEIGHT,
-                slide_candidate[1],
-            ],
-        ) + radius;
-        if slide_penetration <= 0.0 {
-            return slide_candidate;
-        }
-
-        let slide_pushed = [
-            slide_candidate[0] - normal[0] * (slide_penetration + 0.02),
-            slide_candidate[1] - normal[2] * (slide_penetration + 0.02),
-        ];
-        if field.distance(
-            graph,
-            [slide_pushed[0], CAVERN_GAMEPLAY_HEIGHT, slide_pushed[1]],
-        ) <= -radius
-        {
-            return slide_pushed;
-        }
-    }
-
-    let x_only = [current[0] + delta[0], current[1]];
-    if field.distance(graph, [x_only[0], CAVERN_GAMEPLAY_HEIGHT, x_only[1]]) <= -radius {
-        return x_only;
-    }
-
-    let y_only = [current[0], current[1] + delta[1]];
-    if field.distance(graph, [y_only[0], CAVERN_GAMEPLAY_HEIGHT, y_only[1]]) <= -radius {
-        return y_only;
-    }
-
-    current
-}
-
 pub(crate) fn constrained_move_with_world(
     world: &mut World,
     current: [f32; 2],
@@ -313,36 +244,36 @@ fn sweep_world_collision(world: &mut World, start: [f32; 2], end: [f32; 2], radi
 }
 
 fn sweep_world_collision_authoritative(
-    world: &World,
+    world: &mut World,
     start: [f32; 2],
     end: [f32; 2],
     radius: f32,
 ) -> Option<bool> {
-    let service = world
-        .resource::<WorldCollisionQueryServiceResource>()
-        .ok()?;
-    let partition = world.resource::<WorldPartitionConfig>().ok()?;
-    let store = world.resource::<WorldSdfChunkStoreResource>().ok()?;
-
     let start_world = [start[0], CAVERN_GAMEPLAY_HEIGHT, start[1]];
     let end_world = [end[0], CAVERN_GAMEPLAY_HEIGHT, end[1]];
-    let end_chunk = partition.chunk_id_from_position(PlanetId(0), end_world);
-    let has_authoritative_pages = store
-        .chunks
-        .get(&end_chunk)
-        .map(|payload| !payload.page_table.is_empty())
-        .unwrap_or(false);
-    if !has_authoritative_pages {
-        return None;
+    let outcome = {
+        let service = world
+            .resource::<WorldCollisionQueryServiceResource>()
+            .ok()?;
+        let partition = world.resource::<WorldPartitionConfig>().ok()?;
+        let store = world.resource::<WorldSdfChunkStoreResource>().ok()?;
+        let query = SphereSweepQuery {
+            start: start_world,
+            end: end_world,
+            radius,
+        };
+        service.sweep_sphere_authoritative(partition, store, PlanetId(0), query)
+    };
+    if let Ok(mut metrics) = world.resource_mut::<WorldDebugMetricsResource>() {
+        metrics.collision_queries = metrics.collision_queries.saturating_add(1);
+        if matches!(outcome, WorldCollisionSweepOutcome::MissingPayload { .. }) {
+            metrics.collision_authority_misses =
+                metrics.collision_authority_misses.saturating_add(1);
+        }
     }
 
-    let query = SphereSweepQuery {
-        start: start_world,
-        end: end_world,
-        radius,
-    };
-    let hit = service
-        .sweep_sphere(partition, store, PlanetId(0), query)
-        .is_some();
-    Some(hit)
+    Some(matches!(
+        outcome,
+        WorldCollisionSweepOutcome::MissingPayload { .. } | WorldCollisionSweepOutcome::Hit(_)
+    ))
 }

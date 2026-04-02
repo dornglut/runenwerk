@@ -75,6 +75,32 @@ struct EventHistory(Vec<usize>);
 #[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct PresenceHistory(Vec<usize>);
 
+#[derive(ecs::Resource)]
+struct EscapedCommands(Option<Commands>);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct SpawnMarkerDeferred(u32);
+
+impl DeferredCommand<()> for SpawnMarkerDeferred {
+    fn apply(self: Box<Self>, world: &mut World) -> Result<(), ecs::CommandError> {
+        world.spawn(Marker(self.0));
+        Ok(())
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct InsertExtraDeferred {
+    entity: Entity,
+    value: i32,
+}
+
+impl DeferredCommand<()> for InsertExtraDeferred {
+    fn apply(self: Box<Self>, world: &mut World) -> Result<(), ecs::CommandError> {
+        world.insert(self.entity, Extra(self.value))?;
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone)]
 struct LateObserveSet;
 
@@ -237,6 +263,267 @@ fn command_flush_occurs_at_stage_boundary() {
     assert_eq!(world.resource::<SeenCount>().unwrap().0, 1);
 }
 
+#[test]
+fn closure_commands_queue_api_remains_functional() {
+    let mut world = World::new();
+    let mut commands = world.commands();
+    commands.queue(|world| {
+        world.spawn(Marker(33));
+        Ok(())
+    });
+
+    assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 0);
+    commands.apply(&mut world).unwrap();
+
+    let values: Vec<_> = world
+        .query_state::<&Marker, ()>()
+        .iter(&world)
+        .map(|marker| marker.0)
+        .collect();
+    assert_eq!(values, vec![33]);
+}
+
+#[test]
+fn typed_deferred_commands_apply_correctly() {
+    let mut world = World::new();
+    let mut commands = world.commands();
+    commands.defer(SpawnMarkerDeferred(77));
+
+    assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 0);
+    commands.apply(&mut world).unwrap();
+
+    let values: Vec<_> = world
+        .query_state::<&Marker, ()>()
+        .iter(&world)
+        .map(|marker| marker.0)
+        .collect();
+    assert_eq!(values, vec![77]);
+}
+
+#[test]
+fn mixed_legacy_and_typed_commands_apply_in_deterministic_order() {
+    let mut world = World::new();
+    let mut commands = world.commands();
+    commands.spawn(Marker(1));
+    commands.defer(SpawnMarkerDeferred(2));
+    commands.queue(|world| {
+        world.spawn(Marker(3));
+        Ok(())
+    });
+    commands.defer(SpawnMarkerDeferred(4));
+
+    commands.apply(&mut world).unwrap();
+
+    let values: Vec<_> = world
+        .query_state::<&Marker, ()>()
+        .iter(&world)
+        .map(|marker| marker.0)
+        .collect();
+    assert_eq!(values, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn batch_commands_apply_in_deterministic_insertion_order() {
+    let mut world = World::new();
+    let mut commands = world.commands();
+    commands.batch(|batch| {
+        batch.spawn(Marker(1));
+        batch.defer(SpawnMarkerDeferred(2));
+        batch.queue(|world| {
+            world.spawn(Marker(3));
+            Ok(())
+        });
+    });
+
+    commands.apply(&mut world).unwrap();
+
+    let values: Vec<_> = world
+        .query_state::<&Marker, ()>()
+        .iter(&world)
+        .map(|marker| marker.0)
+        .collect();
+    assert_eq!(values, vec![1, 2, 3]);
+}
+
+#[test]
+fn batch_commands_do_not_mutate_before_stage_flush() {
+    fn enqueue_batch(mut commands: Commands) {
+        commands.batch(|batch| {
+            batch.spawn(Marker(9));
+        });
+    }
+
+    fn observe_same_stage(mut seen: ResMut<SeenCount>, mut query: Query<&Marker>) {
+        seen.0 = query.iter().count() as u32;
+    }
+
+    let mut world = World::new();
+    world.insert_resource(SeenCount(99));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, (enqueue_batch, observe_same_stage));
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 0);
+    assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 1);
+}
+
+#[test]
+fn batch_and_non_batch_commands_share_queue_order_deterministically() {
+    let mut world = World::new();
+    let mut commands = world.commands();
+    commands.spawn(Marker(1));
+    commands.batch(|batch| {
+        batch.spawn(Marker(2));
+    });
+    commands.queue(|world| {
+        world.spawn(Marker(3));
+        Ok(())
+    });
+    commands.batch(|batch| {
+        batch.defer(SpawnMarkerDeferred(4));
+    });
+
+    commands.apply(&mut world).unwrap();
+
+    let values: Vec<_> = world
+        .query_state::<&Marker, ()>()
+        .iter(&world)
+        .map(|marker| marker.0)
+        .collect();
+    assert_eq!(values, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn batch_supports_mixed_command_kinds() {
+    let mut world = World::new();
+    let entity = world.spawn(Marker(1));
+    let mut commands = world.commands();
+    commands.batch(|batch| {
+        batch.queue(move |world| {
+            world.insert(entity, Extra(5))?;
+            Ok(())
+        });
+        batch.defer(InsertExtraDeferred { entity, value: 6 });
+        batch.remove::<Extra>(entity);
+    });
+
+    commands.apply(&mut world).unwrap();
+    assert!(world.get::<Extra>(entity).is_none());
+}
+
+#[test]
+fn batch_stops_on_first_error_and_keeps_earlier_mutations() {
+    let mut world = World::new();
+    let target = world.spawn(Marker(0));
+    let mut commands = world.commands();
+    commands.batch(|batch| {
+        batch.spawn(Marker(10));
+        batch.remove::<Extra>(target);
+        batch.spawn(Marker(11));
+    });
+
+    let result = commands.apply(&mut world);
+    assert!(matches!(
+        result,
+        Err(ecs::CommandError::Entity(
+            ecs::EntityError::MissingComponent { .. }
+        ))
+    ));
+
+    let values: Vec<_> = world
+        .query_state::<&Marker, ()>()
+        .iter(&world)
+        .map(|marker| marker.0)
+        .collect();
+    assert_eq!(values, vec![0, 10]);
+}
+
+#[test]
+fn multiple_batches_in_one_stage_keep_deterministic_system_order() {
+    fn enqueue_batch_a(mut commands: Commands) {
+        commands.batch(|batch| {
+            batch.spawn(Marker(1));
+            batch.spawn(Marker(2));
+        });
+    }
+
+    fn enqueue_batch_b(mut commands: Commands) {
+        commands.batch(|batch| {
+            batch.spawn(Marker(3));
+        });
+    }
+
+    let mut world = World::new();
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, (enqueue_batch_a, enqueue_batch_b));
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let values: Vec<_> = world
+        .query_state::<&Marker, ()>()
+        .iter(&world)
+        .map(|marker| marker.0)
+        .collect();
+    assert_eq!(values, vec![1, 2, 3]);
+}
+
+#[test]
+fn typed_commands_do_not_mutate_before_stage_flush() {
+    fn enqueue_typed(mut commands: Commands) {
+        commands.defer(SpawnMarkerDeferred(9));
+    }
+
+    fn observe_same_stage(mut seen: ResMut<SeenCount>, mut query: Query<&Marker>) {
+        seen.0 = query.iter().count() as u32;
+    }
+
+    let mut world = World::new();
+    world.insert_resource(SeenCount(99));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, (enqueue_typed, observe_same_stage));
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 0);
+    assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 1);
+}
+
+#[test]
+fn typed_commands_follow_stage_boundary_visibility_contract() {
+    fn enqueue_stage_typed(target: Res<TargetEntity>, mut commands: Commands) {
+        commands.defer(InsertExtraDeferred {
+            entity: target.0,
+            value: 17,
+        });
+    }
+
+    fn observe_followup_stage(mut seen: ResMut<SeenCount>, mut query: Query<&Extra>) {
+        seen.0 = query.iter().count() as u32;
+    }
+
+    let mut world = World::new();
+    let target = world.spawn(Marker(1));
+    world.insert_resource(TargetEntity(target));
+    world.insert_resource(SeenCount(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, enqueue_stage_typed.in_set(GameplaySet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        observe_followup_stage
+            .in_set(PostGameplaySet)
+            .after(GameplaySet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 1);
+    assert_eq!(world.require::<Extra>(target).unwrap().0, 17);
+}
+
 static NEXT_MARKER_ID: AtomicU32 = AtomicU32::new(0);
 
 #[test]
@@ -269,6 +556,54 @@ fn borrowed_command_owner_is_stable_across_repeated_runs() {
     ids.sort_unstable();
     assert_eq!(ids.len(), 40);
     assert_eq!(ids, (0..40).collect::<Vec<_>>());
+}
+
+#[test]
+fn failed_schedule_drops_stage_deferred_commands_instead_of_replaying_next_run() {
+    fn enqueue_then_fail_once(
+        mut gate: ResMut<SpawnGate>,
+        mut commands: Commands,
+    ) -> anyhow::Result<()> {
+        if gate.0 {
+            return Ok(());
+        }
+        commands.spawn(Marker(99));
+        gate.0 = true;
+        anyhow::bail!("intentional failure");
+    }
+
+    let mut world = World::new();
+    world.insert_resource(SpawnGate(false));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, enqueue_then_fail_once);
+
+    assert!(runtime.run_schedule::<Update>(&mut world).is_err());
+    assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 0);
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 0);
+}
+
+#[test]
+#[should_panic(expected = "commands param escaped its system execution scope")]
+fn escaped_commands_panics_after_system_scope() {
+    fn stash_commands_once(mut escaped: ResMut<EscapedCommands>, commands: Commands) {
+        if escaped.0.is_none() {
+            escaped.0 = Some(commands);
+        }
+    }
+
+    let mut world = World::new();
+    world.insert_resource(EscapedCommands(None));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, stash_commands_once);
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    let mut escaped = world.remove_resource::<EscapedCommands>().unwrap();
+    let mut commands = escaped.0.take().expect("commands should have been stashed");
+    commands.spawn(Marker(1));
 }
 
 static PARAM_INIT_CALLS: AtomicUsize = AtomicUsize::new(0);
@@ -544,4 +879,72 @@ fn deferred_commands_keep_secondary_indexes_correct_after_apply() {
         world.find_entity_by_index::<IndexedName, String>(&"restored".to_string()),
         Some(target)
     );
+}
+
+#[test]
+fn event_channel_iter_new_reads_only_unseen_events_across_runs() {
+    fn produce_once(mut step: ResMut<Step>, mut writer: EventWriter<DamageEvent>) {
+        if step.0 == 0 {
+            writer.send(DamageEvent(7));
+        }
+        step.0 = step.0.saturating_add(1);
+    }
+
+    fn consume_unread(mut channel: EventChannel<DamageEvent>, mut history: ResMut<EventHistory>) {
+        history.0.push(channel.iter_new().count());
+    }
+
+    let mut world = World::new();
+    world.insert_resource(Step(0));
+    world.insert_resource(EventHistory(Vec::new()));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, produce_once.in_set(GameplaySet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        consume_unread.in_set(PostGameplaySet).after(GameplaySet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<EventHistory>().unwrap().0, vec![1, 0]);
+    assert_eq!(world.event_count::<DamageEvent>(), 1);
+}
+
+#[test]
+fn event_channel_iter_new_survives_drop_oldest_overflow() {
+    fn emit_each_run(mut step: ResMut<Step>, mut writer: EventWriter<DamageEvent>) {
+        step.0 = step.0.saturating_add(1);
+        writer.send(DamageEvent(step.0));
+    }
+
+    fn consume_unread(mut channel: EventChannel<DamageEvent>, mut history: ResMut<EventHistory>) {
+        history.0.push(channel.iter_new().count());
+    }
+
+    let mut world = World::new();
+    world.configure_event_channel::<DamageEvent>(EventChannelConfig {
+        capacity: Some(1),
+        overflow: OverflowPolicy::DropOldest,
+        lifetime: EventLifetime::Manual,
+        tracing: EventTracingPolicy::Disabled,
+    });
+    world.insert_resource(Step(0));
+    world.insert_resource(EventHistory(Vec::new()));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, emit_each_run.in_set(GameplaySet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        consume_unread.in_set(PostGameplaySet).after(GameplaySet),
+    );
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<EventHistory>().unwrap().0, vec![1, 1, 1]);
+    assert_eq!(world.event_count::<DamageEvent>(), 1);
+    assert_eq!(world.read_events::<DamageEvent>(), &[DamageEvent(3)]);
 }

@@ -5,39 +5,49 @@ description: Engine-agnostic guide for ecs queries.
 
 # ECS Queries
 
-Queries retrieve entities and components according to specific constraints.
+Queries retrieve entities/components through typed access rules and filters.
 
 ## Purpose
-- Select subsets of entities based on component composition.
-- Support both read-only and mutable access.
-- Enable filters like `With`, `Without`, `Added`, `Changed`.
+
+- Select entity subsets by component composition.
+- Support read and mutable access with scheduler conflict safety.
+- Express change-driven logic with `Added<T>` and `Changed<T>`.
+- Observe recent removals through `QueryOrphaned<T>`.
 
 ## Key Concepts
-- Query – Defines which entities/components a system can access.
-- QueryState – Detached reusable query object.
-- Filters – Include or exclude entities based on components or state.
-- Changed / Added – Track per-query modifications since last run.
 
-## Implementation / API
-Detached query example:
+- `Query<Q, F>`: in-system typed query param.
+- `QueryState<Q, F>`: detached reusable query state.
+- Filters: `With<T>`, `Without<T>`, `Added<T>`, `Changed<T>`.
+- `QueryOrphaned<T>` / `QueryOrphanedState<T>`: removed-component stage window.
 
-    let query = world.query_state::<(&mut Position, &Velocity), ()>();
-    for (pos, vel) in query.iter(&mut world) {
-        pos.x += vel.x;
-        pos.y += vel.y;
+## API Notes
+
+Detached query state:
+
+```rust
+let query = world.query_state::<(&mut Position, &Velocity), ()>();
+for (pos, vel) in query.iter(&mut world) {
+    pos.x += vel.x;
+    pos.y += vel.y;
+}
+```
+
+Orphaned component window:
+
+```rust
+fn process_removed(mut orphaned: QueryOrphaned<Velocity>) {
+    for removed in orphaned.iter() {
+        let entity = removed.entity();
+        let tick = removed.tick();
+        let _ = (entity, tick);
     }
+}
+```
 
-Filters:
-- With<T> – Include only entities with component T.
-- Without<T> – Exclude entities with component T.
-- Added<T> – Entities where T was just added.
-- Changed<T> – Entities where T changed since last query.
+## Invariants
 
-## Invariants & Rules
-- Queries do not see deferred command changes until stage flush.
-- Changed<T> / Added<T> are per-query instance stateful.
-- Avoid mutable aliasing conflicts in the same query.
-
-## Usage Examples
-- Iterating all players with Position and Velocity.
-- Filtering only newly added components for initialization.
+- Queries do not observe deferred structural changes until stage flush.
+- `Added<T>`/`Changed<T>` are query-instance stateful and tick-based.
+- `QueryOrphaned<T>` reports removals in the current stage flush window.
+- Mutable query shapes must not alias the same component mutably.

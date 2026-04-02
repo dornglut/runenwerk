@@ -1,8 +1,8 @@
 use crate::{
-    CavernGeometryGraph, CavernGiConfig, CavernGiMode, CavernGiQuality,
-    CavernMaterialQualityConfig, CavernMaterialRegistry, CavernMaterialRuntimeState,
-    CavernRenderMode, GiProbeGrid, GiProbeUpdateQueue, MATERIAL_CLASS_ROCK, MaterialGraphAssetV1,
-    MaterialProfileAssetV1, compile_material_graph,
+    CavernGiConfig, CavernGiMode, CavernGiQuality, CavernMaterialQualityConfig,
+    CavernMaterialRegistry, CavernMaterialRuntimeState, CavernRenderMode, GiProbeGrid,
+    GiProbeUpdateQueue, MATERIAL_CLASS_ROCK, MaterialGraphAssetV1, MaterialProfileAssetV1,
+    compile_material_graph,
 };
 use anyhow::Result;
 use engine::plugins::world::WorldAuthorityState;
@@ -79,11 +79,6 @@ fn gi_probe_scaffold_system(mut world: WorldMut) -> Result<()> {
     let geometry_revision = world
         .resource::<WorldAuthorityState>()
         .map(|state| state.world_revision.0)
-        .or_else(|_| {
-            world
-                .resource::<CavernGeometryGraph>()
-                .map(|graph| graph.revision.0)
-        })
         .unwrap_or_default();
     let mut probe_grid = world.remove_resource::<GiProbeGrid>().unwrap_or_default();
     let mut update_queue = world

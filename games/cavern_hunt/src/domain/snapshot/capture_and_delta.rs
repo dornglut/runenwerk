@@ -2,30 +2,27 @@ use crate::*;
 use anyhow::Result;
 use ecs::{Entity, World};
 use engine::plugins::world::WorldAuthorityState;
-use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
-use engine::plugins::world::edits::log::WorldOperationLog;
+use engine::plugins::world::chunks::partition::WorldPartitionConfig;
+use engine::plugins::world::edits::invalidation::touched_chunks_from_quantized_bounds;
+use engine::plugins::world::edits::operation::WorldOperationRecord;
 use engine::plugins::world::ids::{ChunkSyncCursor, WorldOpId, WorldRevision};
-use engine::plugins::world::sdf::storage::WorldSdfChunkStoreResource;
 use engine::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use engine::plugins::world::streaming::replication::{
     ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
+    WorldReplicationStateResource,
 };
 use engine::prelude::SimulationTick;
 use engine_net::ConnectionId;
 use std::collections::BTreeSet;
 
 // Owner: Cavern Hunt Snapshot Domain - Capture and Delta Builders
-pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1> {
+pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV2> {
     let layout = world.resource::<CavernLayout>()?.clone();
     let run_state = world.resource::<CavernRunState>()?.clone();
     let topology = world
         .resource::<CavernTopology>()
         .cloned()
         .unwrap_or_else(|_| CavernTopology::from_layout(&layout, run_state.seed));
-    let runtime_geometry = world
-        .resource::<CavernGeometryRuntimeState>()
-        .cloned()
-        .unwrap_or_default();
     let objective = world.resource::<CavernObjectiveState>()?.clone();
     let extraction = world.resource::<ExtractionState>()?.clone();
     let encounters = world
@@ -275,7 +272,8 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
     pickups.sort_by(|a, b| a.x.total_cmp(&b.x).then_with(|| a.y.total_cmp(&b.y)));
     extraction_zones.sort_by(|a, b| a.x.total_cmp(&b.x).then_with(|| a.y.total_cmp(&b.y)));
 
-    Ok(CavernRunSnapshotV1 {
+    Ok(CavernRunSnapshotV2 {
+        wire_version: 2,
         run_id: run_state.run_id,
         seed: run_state.seed,
         phase: run_state.phase,
@@ -293,7 +291,6 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
         },
         topology: Some(CavernTopologySnapshotV1 { topology }),
         world_checkpoint: capture_world_checkpoint(world, None),
-        extraction_seal_primitive: runtime_geometry.extraction_seal_primitive,
         players,
         enemies,
         projectiles,
@@ -303,10 +300,11 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV1>
 }
 
 pub fn build_cavern_run_delta(
-    base: &CavernRunSnapshotV1,
-    current: &CavernRunSnapshotV1,
-) -> CavernRunDeltaV1 {
-    CavernRunDeltaV1 {
+    base: &CavernRunSnapshotV2,
+    current: &CavernRunSnapshotV2,
+) -> CavernRunDeltaV2 {
+    CavernRunDeltaV2 {
+        wire_version: 2,
         run_id: (base.run_id != current.run_id).then_some(current.run_id),
         seed: current.seed,
         phase: (base.phase != current.phase).then_some(current.phase),
@@ -332,9 +330,6 @@ pub fn build_cavern_run_delta(
         world_checkpoint: (base.world_checkpoint != current.world_checkpoint)
             .then_some(current.world_checkpoint.clone())
             .flatten(),
-        extraction_seal_primitive: (base.extraction_seal_primitive
-            != current.extraction_seal_primitive)
-            .then_some(current.extraction_seal_primitive),
         players: (base.players != current.players).then_some(current.players.clone()),
         enemies: (base.enemies != current.enemies).then_some(current.enemies.clone()),
         projectiles: (base.projectiles != current.projectiles)
@@ -346,10 +341,11 @@ pub fn build_cavern_run_delta(
 }
 
 pub fn apply_cavern_run_delta(
-    base: &CavernRunSnapshotV1,
-    delta: &CavernRunDeltaV1,
-) -> CavernRunSnapshotV1 {
-    CavernRunSnapshotV1 {
+    base: &CavernRunSnapshotV2,
+    delta: &CavernRunDeltaV2,
+) -> CavernRunSnapshotV2 {
+    CavernRunSnapshotV2 {
+        wire_version: delta.wire_version,
         run_id: delta.run_id.unwrap_or(base.run_id),
         seed: delta.seed,
         phase: delta.phase.unwrap_or(base.phase),
@@ -378,9 +374,6 @@ pub fn apply_cavern_run_delta(
             .world_checkpoint
             .clone()
             .or_else(|| base.world_checkpoint.clone()),
-        extraction_seal_primitive: delta
-            .extraction_seal_primitive
-            .unwrap_or(base.extraction_seal_primitive),
         players: delta
             .players
             .clone()
@@ -425,72 +418,79 @@ pub(crate) fn capture_world_checkpoint(
     world: &World,
     connection_id: Option<ConnectionId>,
 ) -> Option<CavernWorldCheckpointV1> {
-    let world_revision = world
+    let fallback_world_revision = world
         .resource::<WorldAuthorityState>()
         .map(|state| state.world_revision)
         .unwrap_or(WorldRevision::default());
-
-    let mut next_op_id = WorldOpId(0);
-    let mut op_windows = Vec::<OpWindowDelta>::new();
-    if let Ok(op_log) = world.resource::<WorldOperationLog>() {
-        next_op_id = WorldOpId(op_log.next_op_id);
-        if let (Some(first), Some(last)) = (op_log.operations.first(), op_log.operations.last()) {
-            op_windows.push(OpWindowDelta {
-                start_exclusive: WorldOpId(first.op_id.0.saturating_sub(1)),
-                end_inclusive: last.op_id,
-                operations: op_log.operations.clone(),
-            });
-        }
-    }
-
-    let mut chunk_headers = Vec::<ChunkHeaderDelta>::new();
-    let mut residency_hints = Vec::<ChunkResidencyHint>::new();
-    if let Ok(chunk_runtime) = world.resource::<WorldChunkRuntimeMapResource>() {
-        for record in chunk_runtime.by_chunk_id.values() {
-            chunk_headers.push(ChunkHeaderDelta {
-                chunk_id: record.chunk_id,
-                chunk_revision: record.chunk_revision,
-                chunk_generation: record.chunk_generation,
-                checksum: 0,
-                flags: if record.gameplay_locked { 1 } else { 0 },
-            });
-            residency_hints.push(ChunkResidencyHint {
-                chunk_id: record.chunk_id,
-                relevant_to_client: true,
-                gameplay_locked: record.gameplay_locked,
-            });
-        }
-    }
-
-    let mut chunk_contents = Vec::<ChunkContentDelta>::new();
-    if let Ok(store) = world.resource::<WorldSdfChunkStoreResource>() {
-        for payload in store.chunks.values() {
-            if let Ok(full_payload) = postcard::to_allocvec(payload) {
-                chunk_contents.push(ChunkContentDelta {
-                    chunk_id: payload.chunk_id,
-                    chunk_revision: payload.chunk_revision,
-                    page_deltas: Vec::new(),
-                    full_payload: Some(full_payload),
-                });
-            }
-        }
-    }
+    let (
+        world_revision,
+        next_op_id,
+        mut chunk_headers,
+        mut chunk_contents,
+        mut op_windows,
+        mut residency_hints,
+    ) = if let Ok(replication) = world.resource::<WorldReplicationStateResource>() {
+        (
+            replication.world_revision,
+            replication.next_op_id,
+            replication
+                .pending_header_deltas
+                .values()
+                .cloned()
+                .collect::<Vec<ChunkHeaderDelta>>(),
+            replication
+                .pending_content_deltas
+                .values()
+                .cloned()
+                .collect::<Vec<ChunkContentDelta>>(),
+            replication.pending_op_windows.clone(),
+            replication
+                .pending_residency_hints
+                .values()
+                .cloned()
+                .collect::<Vec<ChunkResidencyHint>>(),
+        )
+    } else {
+        (
+            fallback_world_revision,
+            WorldOpId(0),
+            Vec::<ChunkHeaderDelta>::new(),
+            Vec::<ChunkContentDelta>::new(),
+            Vec::<OpWindowDelta>::new(),
+            Vec::<ChunkResidencyHint>::new(),
+        )
+    };
 
     let mut chunk_sync_cursor = None::<ChunkSyncCursor>;
     if let Some(connection_id) = connection_id
         && let Ok(streaming_interest) = world.resource::<WorldStreamingInterestResource>()
         && let Some(interest) = streaming_interest.per_connection.get(&connection_id)
     {
-        chunk_sync_cursor = Some(interest.last_sent_cursor);
+        if !interest.needs_full_resync {
+            chunk_sync_cursor = Some(interest.last_ack_cursor);
+        }
         let relevant = interest
             .relevant_chunks
             .union(&interest.gameplay_locked_chunks)
             .copied()
             .collect::<BTreeSet<_>>();
-        if !relevant.is_empty() {
+        if relevant.is_empty() {
+            chunk_headers.clear();
+            chunk_contents.clear();
+            residency_hints.clear();
+            op_windows.clear();
+        } else {
             chunk_headers.retain(|entry| relevant.contains(&entry.chunk_id));
             chunk_contents.retain(|entry| relevant.contains(&entry.chunk_id));
             residency_hints.retain(|entry| relevant.contains(&entry.chunk_id));
+            if let Ok(partition) = world.resource::<WorldPartitionConfig>() {
+                filter_op_windows_for_relevant_chunks(
+                    &mut op_windows,
+                    &relevant,
+                    &partition,
+                    partition.quantization_scale(),
+                );
+            }
         }
     }
 
@@ -515,4 +515,43 @@ pub(crate) fn capture_world_checkpoint(
         op_windows,
         residency_hints,
     })
+}
+
+fn filter_op_windows_for_relevant_chunks(
+    op_windows: &mut Vec<OpWindowDelta>,
+    relevant_chunks: &BTreeSet<engine::plugins::world::ids::ChunkId>,
+    partition: &WorldPartitionConfig,
+    fixed_point_scale: i32,
+) {
+    if relevant_chunks.is_empty() {
+        return;
+    }
+
+    for window in op_windows.iter_mut() {
+        window.operations.retain(|operation| {
+            operation_touches_relevant_chunks(
+                operation,
+                relevant_chunks,
+                partition,
+                fixed_point_scale,
+            )
+        });
+    }
+    op_windows.retain(|window| !window.operations.is_empty());
+}
+
+fn operation_touches_relevant_chunks(
+    operation: &WorldOperationRecord,
+    relevant_chunks: &BTreeSet<engine::plugins::world::ids::ChunkId>,
+    partition: &WorldPartitionConfig,
+    fixed_point_scale: i32,
+) -> bool {
+    touched_chunks_from_quantized_bounds(
+        partition,
+        operation.affected_bounds_q,
+        operation.planet_id,
+        fixed_point_scale,
+    )
+    .iter()
+    .any(|chunk_id| relevant_chunks.contains(chunk_id))
 }

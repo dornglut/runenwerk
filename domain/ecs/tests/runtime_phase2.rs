@@ -178,6 +178,7 @@ fn runtime_reports_extraction_errors_cleanly() {
 fn scheduler_conflict_model_respects_reads_writes_and_events() {
     fn read_frame_a(_frame: Res<Frame>) {}
     fn read_frame_b(_frame: Res<Frame>) {}
+    fn read_frame_view(_frame: ResView<Frame>) {}
     fn write_frame(_frame: ResMut<Frame>) {}
     fn read_events_a(_events: EventReader<DamageEvent>) {}
     fn read_events_b(_events: EventReader<DamageEvent>) {}
@@ -193,11 +194,27 @@ fn scheduler_conflict_model_respects_reads_writes_and_events() {
     assert_eq!(read_plan.stages.len(), 1);
     assert_eq!(read_plan.stages[0].system_indices.len(), 2);
 
+    let mut read_alias_runtime = Runtime::new();
+    read_alias_runtime.add_systems::<Update, _, _>(&mut world, (read_frame_a, read_frame_view));
+    let read_alias_plan = read_alias_runtime.plan_for::<Update>().unwrap().clone();
+    assert!(read_alias_plan.conflicts.is_empty());
+    assert_eq!(read_alias_plan.stages.len(), 1);
+    assert_eq!(read_alias_plan.stages[0].system_indices.len(), 2);
+
     let mut read_write_runtime = Runtime::new();
     read_write_runtime.add_systems::<Update, _, _>(&mut world, (read_frame_a, write_frame));
     let read_write_plan = read_write_runtime.plan_for::<Update>().unwrap().clone();
     assert_eq!(read_write_plan.conflicts.len(), 1);
     assert!(read_write_plan.stages.len() >= 2);
+
+    let mut read_view_write_runtime = Runtime::new();
+    read_view_write_runtime.add_systems::<Update, _, _>(&mut world, (read_frame_view, write_frame));
+    let read_view_write_plan = read_view_write_runtime
+        .plan_for::<Update>()
+        .unwrap()
+        .clone();
+    assert_eq!(read_view_write_plan.conflicts.len(), 1);
+    assert!(read_view_write_plan.stages.len() >= 2);
 
     let mut event_read_runtime = Runtime::new();
     event_read_runtime.add_systems::<Update, _, _>(&mut world, (read_events_a, read_events_b));
@@ -210,6 +227,23 @@ fn scheduler_conflict_model_respects_reads_writes_and_events() {
     event_write_runtime.add_systems::<Update, _, _>(&mut world, (read_events_a, write_events));
     let event_write_plan = event_write_runtime.plan_for::<Update>().unwrap().clone();
     assert_eq!(event_write_plan.conflicts.len(), 1);
+}
+
+#[test]
+fn res_view_provides_read_only_resource_access() {
+    fn mirror_frame_into_score(frame: ResView<Frame>, mut score: ResMut<Score>) {
+        score.0 = frame.0;
+    }
+
+    let mut world = World::new();
+    world.insert_resource(Frame(42));
+    world.insert_resource(Score(0));
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, mirror_frame_into_score);
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<Frame>().unwrap().0, 42);
+    assert_eq!(world.resource::<Score>().unwrap().0, 42);
 }
 
 #[test]

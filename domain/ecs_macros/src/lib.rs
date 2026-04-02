@@ -14,6 +14,18 @@ pub fn component_derive(input: TokenStream) -> TokenStream {
     })
 }
 
+#[proc_macro_derive(StatefulComponent)]
+pub fn stateful_component_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    let generics = input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    TokenStream::from(quote! {
+        impl #impl_generics ::ecs::StatefulComponent for #name #ty_generics #where_clause {}
+    })
+}
+
 #[proc_macro_derive(Resource)]
 pub fn resource_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

@@ -1,8 +1,9 @@
 // Owner: ecs World - Internal Mutation and Change Tracking
-use super::events_and_indexes::{
-    ComponentChangeKind, ComponentChangeRecord, ComponentMeta, EventObserverNotification,
-    ObserverTrigger, ResourceChangeKind, ResourceChangeRecord,
+use super::change_tracking::{
+    ComponentChangeKind, ComponentChangeRecord, ComponentMeta, RemovedComponentRecord,
+    ResourceChangeKind, ResourceChangeRecord,
 };
+use super::event_channels::{EventObserverNotification, ObserverTrigger};
 use super::world_struct::World;
 use crate::component::Component;
 use crate::entity::Entity;
@@ -114,7 +115,7 @@ impl World {
             .remove_entity(entity, &mut self.entity_locations);
     }
 
-    fn has_component_by_type_id(&self, entity: Entity, type_id: TypeId) -> bool {
+    pub(super) fn has_component_by_type_id(&self, entity: Entity, type_id: TypeId) -> bool {
         let Some(location) = self.entity_locations.get(entity) else {
             return false;
         };
@@ -210,6 +211,31 @@ impl World {
             component_name,
             kind,
         });
+        if matches!(kind, ComponentChangeKind::Removed) {
+            self.removed_component_records
+                .entry(component_type)
+                .or_default()
+                .push(RemovedComponentRecord {
+                    tick: self.change_tick,
+                    entity,
+                });
+        }
+    }
+
+    pub(crate) fn begin_stage_command_flush(&mut self) {
+        self.removed_component_records.clear();
+    }
+
+    pub(crate) fn removed_component_records_current_window(
+        &self,
+        component_type: TypeId,
+        out: &mut Vec<(Entity, u64)>,
+    ) {
+        out.clear();
+        let Some(records) = self.removed_component_records.get(&component_type) else {
+            return;
+        };
+        out.extend(records.iter().map(|record| (record.entity, record.tick)));
     }
 
     pub(crate) fn archetype_component<T: Component>(&self, entity: Entity) -> Option<&T> {
@@ -308,6 +334,12 @@ impl World {
             if index_key.component_type == component_type {
                 index.mark_dirty();
             }
+        }
+    }
+
+    pub(super) fn remove_entity_from_spatial_indexes(&mut self, entity: Entity) {
+        for index in self.spatial_indexes.values_mut() {
+            index.remove(entity);
         }
     }
 }

@@ -12,8 +12,6 @@ impl ecs::Component for crate::domain::gameplay::run::ExtractionState {}
 impl ecs::Component for crate::domain::gameplay::spawn::SessionSpawnPolicy {}
 impl ecs::Component for crate::domain::world::worldgen::CavernLayout {}
 impl ecs::Component for crate::domain::world::geometry_graph::CavernTopology {}
-impl ecs::Component for crate::domain::world::geometry_graph::CavernGeometryGraph {}
-impl ecs::Component for crate::domain::world::collision_field::CavernCollisionField {}
 impl ecs::Component for crate::domain::loot::LootTableRegistry {}
 impl ecs::Component for crate::domain::gameplay::encounter::RoomEncounterRegistry {}
 impl ecs::Component for crate::domain::gameplay::camera::CavernCameraState {}
@@ -28,7 +26,6 @@ impl ecs::Component for crate::domain::gameplay::player_control::CavernPredictio
 impl ecs::Component for crate::domain::gameplay::runtime::CavernServerControlMap {}
 impl ecs::Component for crate::domain::gameplay::runtime::CavernServerAppliedInputTickMap {}
 impl ecs::Component for crate::domain::gameplay::runtime::CavernPlayerOwnershipState {}
-impl ecs::Component for crate::domain::gameplay::runtime::CavernGeometryRuntimeState {}
 impl ecs::Component for crate::domain::render_sdf::CavernSdfWorldFrame {}
 impl ecs::Component for crate::domain::material_runtime::CavernMaterialQualityConfig {}
 impl ecs::Component for crate::domain::material_runtime::CavernMaterialRegistry {}

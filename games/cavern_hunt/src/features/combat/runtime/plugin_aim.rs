@@ -1,4 +1,5 @@
 use super::*;
+use engine::plugins::world::WorldRuntimeSet;
 
 // Owner: Cavern Hunt Combat Plugin - Plugin Wiring and Local Aim
 pub struct CavernHuntCombatPlugin;
@@ -8,7 +9,10 @@ impl Plugin for CavernHuntCombatPlugin {
         app.add_systems(PreUpdate, update_local_aim_system.in_set(CoreSet::Input));
         app.add_systems(
             FixedUpdate,
-            fixed_step_combat_system.in_set(CoreSet::Simulation),
+            fixed_step_combat_system
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::BuildIntegrate)
+                .before(CoreSet::Replication),
         );
     }
 }

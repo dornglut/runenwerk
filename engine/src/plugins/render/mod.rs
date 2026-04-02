@@ -45,7 +45,7 @@ pub use frame::{
     PreparedShaderSnapshot, PreparedStateTypeInfo, PreparedSurfaceInfo,
     PreparedUiFeatureContribution, PreparedViewFrame, PreparedWindFieldContribution,
     PreparedWindFieldFeatureContribution, PreparedWorldChunkContribution,
-    PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
+    PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
 };
 pub use graph::{
     CompiledBindGroupPlan, CompiledBindingEntry, CompiledBuiltinImport,

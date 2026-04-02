@@ -12,5 +12,6 @@ pub mod sdf;
 pub mod streaming;
 
 pub use plugin::{
-    WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeState,
+    WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeSet,
+    WorldRuntimeState,
 };

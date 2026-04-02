@@ -6,15 +6,23 @@ use crate::{
     RoomEncounterState, Transform2, Velocity2, WeaponState, is_active_player_entity,
 };
 use anyhow::Result;
+use engine::plugins::world::WorldRuntimeSet;
 use engine::prelude::{
-    App, AuthorityRole, Entity, FixedUpdate, Plugin, SimulationProfileConfig, World, WorldMut,
+    App, AuthorityRole, CoreSet, Entity, FixedUpdate, Plugin, SimulationProfileConfig,
+    SystemConfigExt, World, WorldMut,
 };
 
 pub struct CavernHuntAiPlugin;
 
 impl Plugin for CavernHuntAiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, enemy_ai_system);
+        app.add_systems(
+            FixedUpdate,
+            enemy_ai_system
+                .in_set(CoreSet::Simulation)
+                .after(WorldRuntimeSet::BuildIntegrate)
+                .before(CoreSet::Replication),
+        );
     }
 }
 

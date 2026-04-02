@@ -5,6 +5,7 @@ use engine_net::{AuthorityRole, SimulationProfile, SimulationProfileConfig};
 
 use crate::app::App;
 use crate::plugin::Plugin;
+use crate::plugins::world::plugin::{WorldRuntimeConfig, world_runtime_mode_for_authority};
 
 use super::config::{NetPluginConfig, NetRole};
 use super::resources::{
@@ -76,10 +77,13 @@ where
 }
 
 fn set_simulation_authority(app: &mut App, authority: AuthorityRole) {
-    if let Ok(mut config) = app.world_mut().resource_mut::<SimulationProfileConfig>() {
+    if let Ok(config) = app.world_mut().resource_mut::<SimulationProfileConfig>() {
         config.authority = authority;
         if matches!(config.profile, SimulationProfile::LocalSinglePlayer) {
             config.profile = SimulationProfile::DedicatedAuthority;
         }
+    }
+    if let Ok(runtime_config) = app.world_mut().resource_mut::<WorldRuntimeConfig>() {
+        runtime_config.mode = world_runtime_mode_for_authority(authority);
     }
 }

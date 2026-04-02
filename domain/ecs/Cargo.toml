@@ -10,11 +10,13 @@ telemetry = ["scheduler/telemetry"]
 [dependencies]
 anyhow = "1.0.100"
 ecs_macros = { path = "../ecs_macros" }
+geometry = { path = "../geometry" }
 scheduler = { path = "../scheduler" }
 thiserror = "2.0.18"
 
 [dev-dependencies]
 criterion = "0.5.1"
+glam = "0.31.0"
 
 [[bench]]
 name = "phase35"
@@ -31,4 +33,3 @@ harness = false
 [[bench]]
 name = "phase6"
 harness = false
-

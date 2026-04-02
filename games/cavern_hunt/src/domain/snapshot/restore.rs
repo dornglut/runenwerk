@@ -27,8 +27,14 @@ use std::collections::BTreeMap;
 // Owner: Cavern Hunt Snapshot Domain - Restore and Entity Reset
 pub fn restore_cavern_run_snapshot(
     world: &mut World,
-    snapshot: &CavernRunSnapshotV1,
+    snapshot: &CavernRunSnapshotV2,
 ) -> Result<()> {
+    anyhow::ensure!(
+        snapshot.wire_version == 2,
+        "unsupported cavern snapshot version: {} (expected V2)",
+        snapshot.wire_version
+    );
+
     let current_connection_id = world
         .resource::<NetworkSessionStatus>()
         .ok()
@@ -66,23 +72,6 @@ pub fn restore_cavern_run_snapshot(
         })
         .unwrap_or_else(|| CavernTopology::from_layout(&layout, snapshot.seed));
     world.insert_resource(topology.clone());
-    let geometry = CavernGeometryGraph::from_topology(&topology);
-    let geometry_changed = world
-        .resource::<CavernGeometryGraph>()
-        .map(|previous| previous != &geometry)
-        .unwrap_or(true);
-    world.insert_resource(geometry.clone());
-    if geometry_changed {
-        world.insert_resource(CavernCollisionField::from_graph(&geometry));
-    } else if let Ok(mut field) = world.resource_mut::<CavernCollisionField>() {
-        field.sync_revision(&geometry);
-    } else {
-        world.insert_resource(CavernCollisionField::from_graph(&geometry));
-    }
-    world.insert_resource(CavernGeometryRuntimeState {
-        extraction_seal_primitive: snapshot.extraction_seal_primitive,
-        edit_events: Vec::new(),
-    });
     world.insert_resource(CavernRunState {
         run_id: snapshot.run_id,
         seed: snapshot.seed,
@@ -469,6 +458,8 @@ fn restore_world_checkpoint(
     }
 
     let mut replication = WorldReplicationStateResource::default();
+    replication.world_revision = checkpoint.world_revision;
+    replication.next_op_id = checkpoint.next_op_id;
     replication.pending_header_deltas = checkpoint
         .chunk_headers
         .iter()
@@ -482,6 +473,12 @@ fn restore_world_checkpoint(
         .map(|value| (value.chunk_id, value))
         .collect();
     replication.pending_op_windows = checkpoint.op_windows.clone();
+    replication.pending_residency_hints = checkpoint
+        .residency_hints
+        .iter()
+        .cloned()
+        .map(|value| (value.chunk_id, value))
+        .collect();
 
     world.insert_resource(WorldAuthorityState {
         world_revision: checkpoint.world_revision,

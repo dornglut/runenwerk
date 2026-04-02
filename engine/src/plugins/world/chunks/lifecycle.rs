@@ -57,14 +57,23 @@ pub fn advance_chunk_lifecycle_system(
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
     mut dirty: ResMut<WorldDirtyChunkMapResource>,
 ) {
+    let dirty_ids = dirty.by_chunk.keys().copied().collect::<Vec<_>>();
+    for chunk_id in dirty_ids {
+        chunks.ensure_chunk(chunk_id);
+    }
+
     let ids = chunks.by_chunk_id.keys().copied().collect::<Vec<_>>();
     for chunk_id in ids {
         let Some(record) = chunks.by_chunk_id.get_mut(&chunk_id) else {
             continue;
         };
         if let Some(reasons) = dirty.take_reasons(&chunk_id) {
-            record.dirty_reasons = reasons;
-            record.lifecycle = ChunkLifecycleState::Dirty;
+            record.dirty_reasons.merge_from(reasons);
+            if record.pending_build_generation.is_none()
+                && !matches!(record.lifecycle, ChunkLifecycleState::Rebuilding)
+            {
+                record.lifecycle = ChunkLifecycleState::Dirty;
+            }
         }
         if matches!(record.lifecycle, ChunkLifecycleState::Loading) {
             record.lifecycle = ChunkLifecycleState::Ready;

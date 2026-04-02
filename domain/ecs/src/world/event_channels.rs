@@ -1,9 +1,6 @@
-// Owner: ecs World - Event and Component Index Types
-use super::world_struct::World;
-use crate::component::Component;
+// Owner: ecs World - Event Channel Types
 use crate::entity::Entity;
 use std::any::{Any, TypeId, type_name};
-use std::collections::BTreeMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OverflowPolicy {
@@ -77,43 +74,6 @@ pub struct EventObserverNotification {
     pub event_count: usize,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum ComponentChangeKind {
-    Added,
-    Modified,
-    Removed,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentChangeRecord {
-    pub tick: u64,
-    pub entity: Entity,
-    pub component_type: TypeId,
-    pub component_name: &'static str,
-    pub kind: ComponentChangeKind,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum ResourceChangeKind {
-    Inserted,
-    Modified,
-    Removed,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResourceChangeRecord {
-    pub tick: u64,
-    pub resource_type: TypeId,
-    pub resource_name: &'static str,
-    pub kind: ResourceChangeKind,
-}
-
-#[derive(Debug)]
-pub(super) struct ComponentMeta {
-    pub(super) _id: u32,
-    pub(super) name: &'static str,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct EventObserver {
     pub(super) observer_id: String,
@@ -127,6 +87,8 @@ pub(super) struct EventChannelStorage {
     events: Box<dyn Any>,
     len_fn: fn(&Box<dyn Any>) -> usize,
     clear_fn: fn(&mut Box<dyn Any>) -> usize,
+    pub(super) start_sequence: u64,
+    pub(super) next_sequence: u64,
     pub(super) config: EventChannelConfig,
     pub(super) emitted: u64,
     pub(super) drained: u64,
@@ -156,6 +118,8 @@ impl EventChannelStorage {
             events: Box::new(Vec::<T>::new()),
             len_fn: len_for::<T>,
             clear_fn: clear_for::<T>,
+            start_sequence: 0,
+            next_sequence: 0,
             config: EventChannelConfig::default(),
             emitted: 0,
             drained: 0,
@@ -191,93 +155,23 @@ impl EventChannelStorage {
     }
 
     pub(super) fn clear_any(&mut self) -> usize {
-        (self.clear_fn)(&mut self.events)
-    }
-}
-
-pub(super) const DEFAULT_COMPONENT_INDEX_NAME: &str = "__default";
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(super) struct ComponentIndexKey {
-    pub(super) component_type: TypeId,
-    key_type: TypeId,
-    name: String,
-}
-
-impl ComponentIndexKey {
-    pub(super) fn new(component_type: TypeId, key_type: TypeId, name: impl Into<String>) -> Self {
-        let mut name = name.into();
-        name = name.trim().to_string();
-        if name.is_empty() {
-            name = DEFAULT_COMPONENT_INDEX_NAME.to_string();
-        }
-        Self {
-            component_type,
-            key_type,
-            name,
-        }
-    }
-}
-
-pub(super) trait ComponentIndexStorage {
-    fn mark_dirty(&mut self);
-    fn rebuild(&mut self, world: &World);
-    fn as_any(&self) -> &dyn Any;
-}
-
-pub(super) struct ComponentSecondaryIndex<T: Component, K: Ord + Clone + 'static> {
-    entries: BTreeMap<K, Vec<Entity>>,
-    extractor: fn(&T) -> K,
-    dirty: bool,
-}
-
-impl<T: Component, K: Ord + Clone + 'static> ComponentSecondaryIndex<T, K> {
-    pub(super) fn new(extractor: fn(&T) -> K) -> Self {
-        Self {
-            entries: BTreeMap::new(),
-            extractor,
-            dirty: true,
-        }
+        let removed = (self.clear_fn)(&mut self.events);
+        self.advance_sequence_for_removed(removed);
+        removed
     }
 
-    pub(super) fn entities_for(&self, key: &K) -> Vec<Entity> {
-        self.entries.get(key).cloned().unwrap_or_default()
+    pub(super) fn events_ref_since<T: 'static>(&self, sequence: u64) -> &[T] {
+        let events = self.events_ref::<T>();
+        let clamped_sequence = sequence.max(self.start_sequence).min(self.next_sequence);
+        let offset = (clamped_sequence.saturating_sub(self.start_sequence)) as usize;
+        &events[offset..]
     }
 
-    pub(super) fn first_entity_for(&self, key: &K) -> Option<Entity> {
-        self.entries
-            .get(key)
-            .and_then(|entities| entities.first())
-            .copied()
-    }
-}
-
-impl<T: Component, K: Ord + Clone + 'static> ComponentIndexStorage
-    for ComponentSecondaryIndex<T, K>
-{
-    fn mark_dirty(&mut self) {
-        self.dirty = true;
-    }
-
-    fn rebuild(&mut self, world: &World) {
-        if !self.dirty {
-            return;
-        }
-
-        self.entries.clear();
-        let mut entities = Vec::new();
-        world.matching_entities_into(&[TypeId::of::<T>()], &[], &mut entities);
-        for entity in entities {
-            let Some(component) = world.get::<T>(entity) else {
-                continue;
-            };
-            let key = (self.extractor)(component);
-            self.entries.entry(key).or_default().push(entity);
-        }
-        self.dirty = false;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
+    pub(super) fn advance_sequence_for_removed(&mut self, removed: usize) {
+        let removed = removed as u64;
+        self.start_sequence = self
+            .start_sequence
+            .saturating_add(removed)
+            .min(self.next_sequence);
     }
 }

@@ -8,22 +8,26 @@ description: Engine-agnostic guide for deferred ecs commands.
 Commands are deferred structural mutations applied at stage boundaries.
 
 ## Purpose
-- Insert, remove, or modify components safely during system execution.
-- Preserve deterministic execution order.
-- Enable atomic batch operations for multiple mutations.
+
+- Queue structural world mutations safely during system execution.
+- Preserve deterministic mutation order across systems in a stage.
+- Avoid query/structure aliasing during a running stage.
 
 ## Key Concepts
-- Commands – Queued operations applied after system run.
-- DeferredCommand – Structural changes delayed until stage flush.
-- BatchCommands – Apply multiple operations atomically.
-- ConditionalCommands – Apply only if query conditions hold.
 
-## Usage Examples
-- Spawning entities with a bundle of components.
-- Inserting components into existing entities.
-- Removing components safely without conflicting with queries.
+- `Commands`: per-system deferred command queue.
+- `DeferredCommand<T>`: typed command trait.
+- `BatchCommands`: grouped command list applied in deterministic order.
+- `Runtime` stage flush: queued commands become visible only after stage completion.
 
-## Invariants & Rules
-- Commands are visible only after stage flush.
-- Multiple systems may queue commands simultaneously; ordering is deterministic.
-- Integration with engine adapters may expose commands to runtime tooling.
+## API Notes
+
+- Helpers: `spawn`, `despawn`, `insert`, `remove`, `queue`, `defer`, `batch`.
+- `commands.apply(world)` runs queued commands immediately when using manual world commands.
+- Runtime-managed `Commands` params are scope-bound to the system execution.
+
+## Invariants
+
+- Deferred structural changes are visible only after stage flush.
+- Command queues from failed schedule runs are discarded.
+- Batch command order is deterministic and preserved.

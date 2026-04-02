@@ -2,10 +2,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use engine::prelude::SimulationTick;
-use serde::{Deserialize, Serialize};
 
 use crate::CavernControlState;
-use crate::world::{GeometryEditEvent, GeometryPrimitiveId};
 
 #[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
 pub struct CavernServerControlMap {
@@ -33,10 +31,4 @@ impl CavernPlayerOwnershipState {
         self.by_connection_id
             .retain(|connection_id, _| active_connections.contains(connection_id));
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ecs::Resource)]
-pub struct CavernGeometryRuntimeState {
-    pub extraction_seal_primitive: Option<GeometryPrimitiveId>,
-    pub edit_events: Vec<GeometryEditEvent>,
 }

@@ -6,6 +6,7 @@ const WORLD_CORE_RS: &str = include_str!("../src/world/world_core_impl.rs");
 fn prelude_remains_gameplay_focused() {
     assert!(PRELUDE_RS.contains("Query"));
     assert!(PRELUDE_RS.contains("Res"));
+    assert!(PRELUDE_RS.contains("ResView"));
     assert!(PRELUDE_RS.contains("ResMut"));
     assert!(PRELUDE_RS.contains("Commands"));
     assert!(PRELUDE_RS.contains("Runtime"));

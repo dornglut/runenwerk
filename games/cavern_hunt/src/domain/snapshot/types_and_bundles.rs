@@ -135,8 +135,9 @@ pub struct CavernWorldCheckpointV1 {
     pub residency_hints: Vec<ChunkResidencyHint>,
 }
 
+// Legacy decode-only contract kept private so runtime can emit explicit V1 unsupported errors.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
-pub struct CavernRunSnapshotV1 {
+pub(crate) struct CavernRunSnapshotV1 {
     pub run_id: u64,
     pub seed: CavernSeed,
     pub phase: CavernRunPhase,
@@ -160,8 +161,9 @@ pub struct CavernRunSnapshotV1 {
     pub extraction_zones: Vec<CavernExtractionSnapshotV1>,
 }
 
+// Legacy decode-only contract kept private so runtime can emit explicit V1 unsupported errors.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
-pub struct CavernRunDeltaV1 {
+pub(crate) struct CavernRunDeltaV1 {
     pub run_id: Option<u64>,
     pub seed: CavernSeed,
     pub phase: Option<CavernRunPhase>,
@@ -178,6 +180,56 @@ pub struct CavernRunDeltaV1 {
     #[serde(default)]
     pub world_checkpoint: Option<CavernWorldCheckpointV1>,
     pub extraction_seal_primitive: Option<Option<GeometryPrimitiveId>>,
+    pub players: Option<Vec<CavernPlayerSnapshotV1>>,
+    pub enemies: Option<Vec<CavernEnemySnapshotV1>>,
+    pub projectiles: Option<Vec<CavernProjectileSnapshotV1>>,
+    pub pickups: Option<Vec<CavernPickupSnapshotV1>>,
+    pub extraction_zones: Option<Vec<CavernExtractionSnapshotV1>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
+pub struct CavernRunSnapshotV2 {
+    pub wire_version: u16,
+    pub run_id: u64,
+    pub seed: CavernSeed,
+    pub phase: CavernRunPhase,
+    pub elite_defeated: bool,
+    pub extraction_active: bool,
+    pub extraction_started_at_tick: Option<SimulationTick>,
+    pub party_alive_count: u8,
+    pub enemy_kills: u32,
+    pub objective: CavernObjectiveState,
+    pub extraction: ExtractionState,
+    pub encounters: Vec<RoomEncounterSnapshotV1>,
+    pub layout: CavernLayoutSnapshotV1,
+    pub topology: Option<CavernTopologySnapshotV1>,
+    #[serde(default)]
+    pub world_checkpoint: Option<CavernWorldCheckpointV1>,
+    pub players: Vec<CavernPlayerSnapshotV1>,
+    pub enemies: Vec<CavernEnemySnapshotV1>,
+    pub projectiles: Vec<CavernProjectileSnapshotV1>,
+    pub pickups: Vec<CavernPickupSnapshotV1>,
+    pub extraction_zones: Vec<CavernExtractionSnapshotV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
+pub struct CavernRunDeltaV2 {
+    pub wire_version: u16,
+    pub run_id: Option<u64>,
+    pub seed: CavernSeed,
+    pub phase: Option<CavernRunPhase>,
+    pub elite_defeated: Option<bool>,
+    pub extraction_active: Option<bool>,
+    pub extraction_started_at_tick: Option<Option<SimulationTick>>,
+    pub party_alive_count: Option<u8>,
+    pub enemy_kills: Option<u32>,
+    pub objective: Option<CavernObjectiveState>,
+    pub extraction: Option<ExtractionState>,
+    pub encounters: Option<Vec<RoomEncounterSnapshotV1>>,
+    pub layout: Option<CavernLayoutSnapshotV1>,
+    pub topology: Option<CavernTopologySnapshotV1>,
+    #[serde(default)]
+    pub world_checkpoint: Option<CavernWorldCheckpointV1>,
     pub players: Option<Vec<CavernPlayerSnapshotV1>>,
     pub enemies: Option<Vec<CavernEnemySnapshotV1>>,
     pub projectiles: Option<Vec<CavernProjectileSnapshotV1>>,
@@ -226,7 +278,7 @@ pub struct CavernRunStatePatch {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernKeyframeEvent {
     pub cursor: ReplicationCursor,
-    pub snapshot: CavernRunSnapshotV1,
+    pub snapshot: CavernRunSnapshotV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]

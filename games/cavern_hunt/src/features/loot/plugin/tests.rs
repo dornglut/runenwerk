@@ -5,6 +5,8 @@ use crate::{
     CavernMetaProfile, CavernRunConfig, CavernRunState, Health, InventoryRunState,
     LootTableRegistry, PickupKind, SpawnDirector,
 };
+use engine::plugins::world::edits::log::WorldOperationLog;
+use engine::plugins::world::edits::operation::WorldOperation;
 use engine::prelude::{Entity, SimulationRng, SimulationSeed, World};
 
 #[test]
@@ -32,21 +34,14 @@ fn elite_death_activates_extraction() {
     let run_state = world.resource::<CavernRunState>().unwrap();
     assert!(run_state.elite_defeated);
     assert!(run_state.extraction_active);
-    let geometry = world.resource::<crate::CavernGeometryGraph>().unwrap();
-    let runtime = world
-        .resource::<crate::CavernGeometryRuntimeState>()
-        .unwrap();
-    let seal_id = runtime
-        .extraction_seal_primitive
-        .expect("extraction seal primitive should be tracked");
-    let seal = geometry
-        .primitive(seal_id)
-        .expect("extraction seal primitive should still exist");
-    assert!(!seal.enabled);
-    assert!(runtime.edit_events.iter().any(|event| matches!(
-        event.edit.kind,
-        crate::GeometryEditKind::DisablePrimitive(id) if id == seal_id
-    )));
+    let op_log = world.resource::<WorldOperationLog>().unwrap();
+    assert!(
+        op_log
+            .operations
+            .iter()
+            .any(|record| matches!(record.operation, WorldOperation::CsgSubtract { .. })),
+        "elite objective completion should submit a world-authoritative seal removal operation"
+    );
 }
 
 #[test]

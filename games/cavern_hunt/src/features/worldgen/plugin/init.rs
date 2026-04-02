@@ -1,13 +1,8 @@
 use super::enemy_spawn::spawn_enemy;
 use super::*;
-use engine::plugins::world::WorldAuthorityState;
-use engine::plugins::world::chunks::dirty::{ChunkDirtyReason, WorldDirtyChunkMapResource};
-use engine::plugins::world::chunks::partition::WorldPartitionConfig;
-use engine::plugins::world::edits::log::WorldOperationLog;
-use engine::plugins::world::edits::operation::{
-    WorldOperation, WorldOperationRecord, quantize_aabb,
-};
-use engine::plugins::world::ids::{ChunkCoord3, ChunkId, PlanetId, WorldOpId, WorldRevision};
+use engine::plugins::world::edits::operation::{WorldOperation, quantize_aabb};
+use engine::plugins::world::edits::{WorldEditIngressMeta, submit_world_operation};
+use engine::plugins::world::ids::PlanetId;
 use engine::prelude::SimulationTick;
 
 pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool) -> Result<()> {
@@ -17,14 +12,9 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
         .unwrap_or_else(|_| CavernRunConfig::default());
     let layout = CavernLayout::generate(config.seed, &config);
     let topology = CavernTopology::from_layout(&layout, config.seed);
-    let geometry_graph = CavernGeometryGraph::from_topology(&topology);
-    let collision_field = CavernCollisionField::from_graph(&geometry_graph);
     world.insert_resource(layout.clone());
     world.insert_resource(topology);
-    world.insert_resource(geometry_graph);
-    world.insert_resource(collision_field);
-    world.insert_resource(CavernGeometryRuntimeState::default());
-    seed_world_plugin_from_initial_graph(world);
+    seed_world_plugin_from_initial_topology(world);
 
     let mut run_state = CavernRunState::default();
     run_state.seed = config.seed;
@@ -160,27 +150,13 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
                 room_id: extraction_room.id,
             },
         ));
-        let seal_id = world
-            .resource::<CavernGeometryGraph>()
-            .ok()
-            .map(|graph| graph.next_primitive_id());
         let seal_edit = GeometryEdit {
-            kind: GeometryEditKind::AddBlocker(GeometryPrimitiveShape3::Cylinder {
-                center: [
-                    extraction_room.center[0],
-                    CAVERN_GAMEPLAY_HEIGHT,
-                    extraction_room.center[1],
-                ],
-                radius: 1.95,
-                half_height: 2.7,
-            }),
+            kind: GeometryEditKind::AddBlocker(extraction_seal_shape(
+                extraction_room.center[0],
+                extraction_room.center[1],
+            )),
         };
         let _ = apply_runtime_geometry_edit(world, &seal_edit);
-        if let (Some(seal_id), Ok(mut runtime)) =
-            (seal_id, world.resource_mut::<CavernGeometryRuntimeState>())
-        {
-            runtime.extraction_seal_primitive = Some(seal_id);
-        }
     }
 
     if let Ok(mut camera) = world.resource_mut::<CavernCameraState>() {
@@ -193,21 +169,25 @@ pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool)
     Ok(())
 }
 
-fn seed_world_plugin_from_initial_graph(world: &mut World) {
-    let (bounds, fixed_point_scale, base_world_revision) = {
+pub(crate) fn extraction_seal_shape(x: f32, y: f32) -> GeometryPrimitiveShape3 {
+    GeometryPrimitiveShape3::Cylinder {
+        center: [x, CAVERN_GAMEPLAY_HEIGHT, y],
+        radius: 1.95,
+        half_height: 2.7,
+    }
+}
+
+fn seed_world_plugin_from_initial_topology(world: &mut World) {
+    let (bounds, fixed_point_scale) = {
         let bounds = world
-            .resource::<CavernGeometryGraph>()
-            .map(|graph| graph.bounds)
+            .resource::<CavernTopology>()
+            .map(|topology| topology.world_bounds)
             .unwrap_or_default();
         let fixed_point_scale = world
-            .resource::<engine::plugins::world::WorldRuntimeConfig>()
-            .map(|config| config.fixed_point_scale)
+            .resource::<engine::plugins::world::chunks::partition::WorldPartitionConfig>()
+            .map(|config| config.quantization_scale())
             .unwrap_or(1024);
-        let base_world_revision = world
-            .resource::<WorldAuthorityState>()
-            .map(|value| value.world_revision)
-            .unwrap_or(WorldRevision::default());
-        (bounds, fixed_point_scale, base_world_revision)
+        (bounds, fixed_point_scale)
     };
 
     let server_tick = world
@@ -215,52 +195,26 @@ fn seed_world_plugin_from_initial_graph(world: &mut World) {
         .copied()
         .unwrap_or_default();
 
-    if let Ok(mut op_log) = world.resource_mut::<WorldOperationLog>() {
-        let _ = op_log.append(WorldOperationRecord {
-            op_id: WorldOpId(0),
-            base_world_revision,
-            operation: WorldOperation::Stamp {
-                stamp_id: "cavern_hunt.initial_seed".to_string(),
-                anchor_q: engine::plugins::world::edits::operation::quantize_position(
-                    [
-                        (bounds.min[0] + bounds.max[0]) * 0.5,
-                        (bounds.min[1] + bounds.max[1]) * 0.5,
-                        (bounds.min[2] + bounds.max[2]) * 0.5,
-                    ],
-                    fixed_point_scale,
-                ),
-                payload: format!("seed_bounds:{:?}:{:?}", bounds.min, bounds.max).into_bytes(),
-            },
-            affected_bounds_q: quantize_aabb(bounds.min, bounds.max, fixed_point_scale),
+    let _ = submit_world_operation(
+        world,
+        WorldOperation::Stamp {
+            stamp_id: "cavern_hunt.initial_seed".to_string(),
+            anchor_q: engine::plugins::world::edits::operation::quantize_position(
+                [
+                    (bounds.min[0] + bounds.max[0]) * 0.5,
+                    (bounds.min[1] + bounds.max[1]) * 0.5,
+                    (bounds.min[2] + bounds.max[2]) * 0.5,
+                ],
+                fixed_point_scale,
+            ),
+            payload: format!("seed_bounds:{:?}:{:?}", bounds.min, bounds.max).into_bytes(),
+        },
+        quantize_aabb(bounds.min, bounds.max, fixed_point_scale),
+        WorldEditIngressMeta {
+            planet_id: PlanetId(0),
             deterministic_seed: 0,
             server_tick,
             author_connection_id: None,
-        });
-    }
-
-    let chunk_range = world
-        .resource::<WorldPartitionConfig>()
-        .ok()
-        .map(|partition| {
-            (
-                partition.chunk_coord_from_planet_local_position(bounds.min),
-                partition.chunk_coord_from_planet_local_position(bounds.max),
-            )
-        });
-
-    if let (Some((min, max)), Ok(mut dirty)) = (
-        chunk_range,
-        world.resource_mut::<WorldDirtyChunkMapResource>(),
-    ) {
-        for z in min.z..=max.z {
-            for y in min.y..=max.y {
-                for x in min.x..=max.x {
-                    dirty.mark_dirty(
-                        ChunkId::new(PlanetId(0), ChunkCoord3 { x, y, z }),
-                        ChunkDirtyReason::Geometry,
-                    );
-                }
-            }
-        }
-    }
+        },
+    );
 }

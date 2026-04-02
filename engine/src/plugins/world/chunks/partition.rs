@@ -4,6 +4,7 @@ use super::super::ids::{ChunkCoord3, ChunkId, PlanetId, RegionCoord3, RegionId};
 pub struct WorldPartitionConfig {
     pub chunk_edge_meters: f32,
     pub region_chunk_dims: [u32; 3],
+    pub fixed_point_scale: i32,
 }
 
 impl Default for WorldPartitionConfig {
@@ -11,11 +12,16 @@ impl Default for WorldPartitionConfig {
         Self {
             chunk_edge_meters: 32.0,
             region_chunk_dims: [8, 8, 8],
+            fixed_point_scale: 1024,
         }
     }
 }
 
 impl WorldPartitionConfig {
+    pub fn quantization_scale(&self) -> i32 {
+        self.fixed_point_scale.max(1)
+    }
+
     pub fn chunk_coord_from_planet_local_position(&self, position_meters: [f32; 3]) -> ChunkCoord3 {
         let edge = self.chunk_edge_meters.max(1.0);
         ChunkCoord3 {

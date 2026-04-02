@@ -3,9 +3,12 @@ use std::io;
 use ecs::World;
 use engine_net::replication::ReplicationDriver;
 
+use crate::domain::snapshot::types_and_bundles::{
+    CavernRunDeltaV1, CavernRunDeltaV2, CavernRunSnapshotV1, CavernRunSnapshotV2,
+};
 use crate::{
-    CavernCommandEnvelope, CavernRunDeltaV1, CavernRunSnapshotV1, apply_cavern_run_delta,
-    build_cavern_run_delta, capture_cavern_run_snapshot, capture_world_checkpoint,
+    CavernCommandEnvelope, apply_cavern_run_delta, build_cavern_run_delta,
+    capture_cavern_run_snapshot, capture_world_checkpoint,
 };
 
 pub struct CavernReplicationDriver;
@@ -15,8 +18,8 @@ pub(super) fn into_driver_error(context: &'static str, error: anyhow::Error) -> 
 }
 
 impl ReplicationDriver for CavernReplicationDriver {
-    type Snapshot = CavernRunSnapshotV1;
-    type Delta = CavernRunDeltaV1;
+    type Snapshot = CavernRunSnapshotV2;
+    type Delta = CavernRunDeltaV2;
     type Input = CavernCommandEnvelope;
     type Error = io::Error;
 
@@ -42,6 +45,58 @@ impl ReplicationDriver for CavernReplicationDriver {
 
     fn apply_delta_to_snapshot(base: &Self::Snapshot, delta: &Self::Delta) -> Self::Snapshot {
         apply_cavern_run_delta(base, delta)
+    }
+
+    fn decode_snapshot(bytes: &[u8]) -> Result<Self::Snapshot, Self::Error> {
+        match postcard::from_bytes::<CavernRunSnapshotV2>(bytes) {
+            Ok(snapshot) => {
+                if snapshot.wire_version != 2 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "unsupported cavern snapshot version: {} (expected V2)",
+                            snapshot.wire_version
+                        ),
+                    ));
+                }
+                Ok(snapshot)
+            }
+            Err(v2_error) => {
+                if postcard::from_bytes::<CavernRunSnapshotV1>(bytes).is_ok() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "unsupported cavern snapshot version: V1 (expected V2)",
+                    ));
+                }
+                Err(Self::map_codec_error(v2_error))
+            }
+        }
+    }
+
+    fn decode_delta(bytes: &[u8]) -> Result<Self::Delta, Self::Error> {
+        match postcard::from_bytes::<CavernRunDeltaV2>(bytes) {
+            Ok(delta) => {
+                if delta.wire_version != 2 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "unsupported cavern delta version: {} (expected V2)",
+                            delta.wire_version
+                        ),
+                    ));
+                }
+                Ok(delta)
+            }
+            Err(v2_error) => {
+                if postcard::from_bytes::<CavernRunDeltaV1>(bytes).is_ok() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "unsupported cavern delta version: V1 (expected V2)",
+                    ));
+                }
+                Err(Self::map_codec_error(v2_error))
+            }
+        }
     }
 
     fn map_codec_error(error: postcard::Error) -> Self::Error {
