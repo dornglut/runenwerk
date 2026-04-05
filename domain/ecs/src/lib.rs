@@ -12,11 +12,20 @@ mod storage;
 pub mod system;
 pub mod telemetry;
 mod world;
-
+pub mod reflect;
+pub use reflect::*;
 pub use bundle::Bundle;
 pub use commands::{BatchCommands, Commands, DeferredCommand};
 pub use component::{Component, ComponentState, Resource, StatefulComponent};
-pub use ecs_macros::{Bundle, Component, Resource, StatefulComponent};
+pub use ecs_macros::{
+    Bundle,
+    Component,
+    Reflect,
+    ReflectComponent,
+    ReflectResource,
+    Resource,
+    StatefulComponent,
+};
 pub use entity::{Entity, EntityAllocator};
 pub use errors::{CommandError, EntityError, QueryError, ResourceError, SpatialIndexError};
 pub use query::{

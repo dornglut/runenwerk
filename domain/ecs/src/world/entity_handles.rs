@@ -1,5 +1,5 @@
 // Owner: ecs World - Borrow Wrappers and Entity Views
-use super::world_struct::World;
+use super::world::World;
 use crate::bundle::Bundle;
 use crate::component::Component;
 use crate::entity::Entity;
@@ -20,6 +20,14 @@ impl<'a, T> Deref for Mut<'a, T> {
 
 impl<'a, T> DerefMut for Mut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.value
+    }
+}
+
+impl<'a, T> Mut<'a, T> {
+    /// File: domain/ecs/src/world/entity_handles.rs
+    /// Method: into_inner
+    pub fn into_inner(self) -> &'a mut T {
         self.value
     }
 }

@@ -1,0 +1,196 @@
+//! File: domain/ecs/src/reflect/value.rs
+//! Purpose: Dynamic reflected value access.
+
+use crate::reflect::{FieldInfo, Reflect, StructInfo, TypeInfo};
+
+#[derive(Clone, Copy)]
+pub struct ReflectValueRef<'a> {
+	pub type_info: &'static TypeInfo,
+	pub value: &'a dyn std::any::Any,
+}
+
+pub struct ReflectValueMut<'a> {
+	pub type_info: &'static TypeInfo,
+	pub value: &'a mut dyn std::any::Any,
+}
+
+impl<'a> core::fmt::Debug for ReflectValueRef<'a> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("ReflectValueRef")
+			.field("type_info", &self.type_info)
+			.finish()
+	}
+}
+
+impl<'a> core::fmt::Debug for ReflectValueMut<'a> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("ReflectValueMut")
+			.field("type_info", &self.type_info)
+			.finish()
+	}
+}
+
+impl<'a> ReflectValueRef<'a> {
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: new
+	pub fn new<T>(value: &'a T) -> Self
+	where
+		T: Reflect,
+	{
+		Self {
+			type_info: T::type_info(),
+			value,
+		}
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: type_info
+	pub fn type_info(&self) -> &'static TypeInfo {
+		self.type_info
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: as_any
+	pub fn as_any(&self) -> &'a dyn std::any::Any {
+		self.value
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: downcast_ref
+	pub fn downcast_ref<T: 'static>(&self) -> Option<&'a T> {
+		self.value.downcast_ref::<T>()
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: struct_ref
+	pub fn struct_ref(&self) -> Option<StructValueRef<'a>> {
+		self.type_info.struct_info().map(|info| StructValueRef {
+			info,
+			owner: self.value,
+		})
+	}
+}
+
+impl<'a> ReflectValueMut<'a> {
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: new
+	pub fn new<T>(value: &'a mut T) -> Self
+	where
+		T: Reflect,
+	{
+		Self {
+			type_info: T::type_info(),
+			value,
+		}
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: type_info
+	pub fn type_info(&self) -> &'static TypeInfo {
+		self.type_info
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: as_any
+	pub fn as_any(&self) -> &dyn std::any::Any {
+		self.value
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: as_any_mut
+	pub fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+		self.value
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: downcast_ref
+	pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+		self.value.downcast_ref::<T>()
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: downcast_mut
+	pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
+		self.value.downcast_mut::<T>()
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: struct_mut
+	pub fn struct_mut(self) -> Option<StructValueMut<'a>> {
+		self.type_info.struct_info().map(|info| StructValueMut {
+			info,
+			owner: self.value,
+		})
+	}
+}
+
+#[derive(Clone, Copy)]
+pub struct StructValueRef<'a> {
+	pub info: &'static StructInfo,
+	owner: &'a dyn std::any::Any,
+}
+
+pub struct StructValueMut<'a> {
+	pub info: &'static StructInfo,
+	owner: &'a mut dyn std::any::Any,
+}
+
+impl<'a> core::fmt::Debug for StructValueRef<'a> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("StructValueRef")
+			.field("field_count", &self.info.field_count())
+			.finish()
+	}
+}
+
+impl<'a> core::fmt::Debug for StructValueMut<'a> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("StructValueMut")
+			.field("field_count", &self.info.field_count())
+			.finish()
+	}
+}
+
+impl<'a> StructValueRef<'a> {
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: fields
+	pub fn fields(&self) -> &'static [FieldInfo] {
+		self.info.fields
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: field
+	pub fn field(&self, name: &str) -> Option<ReflectValueRef<'a>> {
+		let field = self.info.field_named(name)?;
+		(field.get_ref)(self.owner)
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: field_at
+	pub fn field_at(&self, index: usize) -> Option<ReflectValueRef<'a>> {
+		let field = self.info.field_at(index)?;
+		(field.get_ref)(self.owner)
+	}
+}
+
+impl<'a> StructValueMut<'a> {
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: fields
+	pub fn fields(&self) -> &'static [FieldInfo] {
+		self.info.fields
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: field_mut
+	pub fn field_mut(&mut self, name: &str) -> Option<ReflectValueMut<'_>> {
+		let field = self.info.field_named(name)?;
+		(field.get_mut)(self.owner)
+	}
+
+	/// File: domain/ecs/src/reflect/value.rs
+	/// Method: field_at_mut
+	pub fn field_at_mut(&mut self, index: usize) -> Option<ReflectValueMut<'_>> {
+		let field = self.info.field_at(index)?;
+		(field.get_mut)(self.owner)
+	}
+}

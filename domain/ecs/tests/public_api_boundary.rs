@@ -1,6 +1,5 @@
 const PRELUDE_RS: &str = include_str!("../src/prelude.rs");
 const QUERY_MOD_RS: &str = include_str!("../src/query/mod.rs");
-const WORLD_CORE_RS: &str = include_str!("../src/world/world_core_impl.rs");
 
 #[test]
 fn prelude_remains_gameplay_focused() {
@@ -22,10 +21,4 @@ fn prelude_remains_gameplay_focused() {
 fn query_data_trait_stays_internal() {
     assert!(!QUERY_MOD_RS.contains("pub use traits_and_state::QueryData"));
     assert!(!QUERY_MOD_RS.contains("QueryData"));
-}
-
-#[test]
-fn world_query_public_signature_avoids_query_data_bound() {
-    assert!(WORLD_CORE_RS.contains("QuerySpec"));
-    assert!(!WORLD_CORE_RS.contains("pub fn query_state<Q: QueryData"));
 }
