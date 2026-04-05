@@ -1,5 +1,6 @@
-use crate::plugins::world::ids::{ChunkGeneration, ChunkId, ChunkRevision};
+use spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
+use world_ops::{ChunkGeneration, ChunkRevision};
 
 #[derive(Debug, Clone, PartialEq, Eq, ecs::Resource)]
 pub struct WorldGpuResidencyEntry {

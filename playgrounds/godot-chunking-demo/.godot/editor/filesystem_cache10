@@ -1,0 +1,11 @@
+63f7b34db8d8cdea90c76aacccf841ec
+::res://::1775297882
+icon.svg::CompressedTexture2D::4712670537459914775::1775296518::1775296521::1::::<><><>0<>0<>c6037948403f9e7e7a25a711fc05c4f6<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
+RunenwerkChunking.gdextension::GDExtension::2318628255012677186::1775297779::0::1::::<><><>0<>0<><>::
+::res://scenes/::1775296898
+::res://scenes/Main/::1775297503
+main.gd::GDScript::3567032114014514355::1775297503::0::1::::<>Node3D<><>0<>0<><>::
+main.tscn::PackedScene::4706013788662002909::1775297503::0::1::::<><><>0<>0<><>::uid://bq25q6ojf211p::::res://scenes/Main/main.gd<>uid://cutn8cp77yyns::::res://scenes/Player/player.tscn
+::res://scenes/Player/::1775297142
+player.gd::GDScript::6293091603398866422::1775297019::0::1::::<>CharacterBody3D<><>0<>0<><>::
+player.tscn::PackedScene::6216689799295245484::1775297142::0::1::::<><><>0<>0<><>::uid://cvwokf70ana8m::::res://scenes/Player/player.gd

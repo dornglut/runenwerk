@@ -5,7 +5,7 @@ use super::change_tracking::{
 use super::component_indexes::{ComponentIndexKey, ComponentIndexStorage};
 use super::event_channels::{EventChannelStorage, EventObserver, EventObserverNotification};
 use crate::entity::{Entity, EntityAllocator};
-use crate::spatial::SpatialIndexStorage;
+use crate::indexing::SpatialIndexStorage;
 use crate::storage::{ArchetypeRegistry, EntityLocationMap};
 use std::any::{Any, TypeId};
 use std::cell::RefCell;

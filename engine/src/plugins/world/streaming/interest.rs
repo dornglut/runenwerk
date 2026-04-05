@@ -1,9 +1,10 @@
+use super::super::adapters::resources::RegionInvalidationJournalResource;
 use super::super::chunks::lifecycle::WorldChunkRuntimeMapResource;
-use super::super::edits::region_journal::WorldRegionInvalidationJournalResource;
-use super::super::ids::{ChunkId, ChunkSyncCursor};
 use crate::runtime::WorldMut;
 use engine_net::{ConnectionId, ServerSessionState};
+use spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
+use world_ops::SyncCursor;
 
 const MAX_PENDING_CURSOR_MARKERS: usize = 256;
 
@@ -17,13 +18,13 @@ pub struct PendingStreamingSnapshot {
 pub struct ConnectionChunkInterest {
     pub relevant_chunks: BTreeSet<ChunkId>,
     pub gameplay_locked_chunks: BTreeSet<ChunkId>,
-    pub last_sent_cursor: ChunkSyncCursor,
-    pub last_ack_cursor: ChunkSyncCursor,
+    pub last_sent_cursor: SyncCursor,
+    pub last_ack_cursor: SyncCursor,
     pub needs_full_resync: bool,
     pub acked_region_sequence: u64,
     pub prepared_region_sequence: u64,
     pub prepared_full_resync_payload: bool,
-    pub pending_cursor_markers: BTreeMap<ChunkSyncCursor, PendingStreamingSnapshot>,
+    pub pending_cursor_markers: BTreeMap<SyncCursor, PendingStreamingSnapshot>,
 }
 
 impl Default for ConnectionChunkInterest {
@@ -31,8 +32,8 @@ impl Default for ConnectionChunkInterest {
         Self {
             relevant_chunks: BTreeSet::new(),
             gameplay_locked_chunks: BTreeSet::new(),
-            last_sent_cursor: ChunkSyncCursor::default(),
-            last_ack_cursor: ChunkSyncCursor::default(),
+            last_sent_cursor: SyncCursor::default(),
+            last_ack_cursor: SyncCursor::default(),
             needs_full_resync: true,
             acked_region_sequence: 0,
             prepared_region_sequence: 0,
@@ -58,7 +59,7 @@ impl WorldStreamingInterestResource {
     pub fn mark_snapshot_sent(
         &mut self,
         connection_id: ConnectionId,
-        cursor: ChunkSyncCursor,
+        cursor: SyncCursor,
         sent_full_snapshot: bool,
     ) {
         let interest = self.interest_for_connection_mut(connection_id);
@@ -87,7 +88,7 @@ impl WorldStreamingInterestResource {
     pub fn mark_snapshot_acknowledged(
         &mut self,
         connection_id: ConnectionId,
-        cursor: ChunkSyncCursor,
+        cursor: SyncCursor,
     ) {
         let interest = self.interest_for_connection_mut(connection_id);
         if cursor.0 < interest.last_ack_cursor.0 {
@@ -147,7 +148,7 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
             (BTreeSet::new(), BTreeSet::new())
         };
     let (journal_min_sequence, journal_max_sequence, journal_records) =
-        if let Ok(journal) = world.resource::<WorldRegionInvalidationJournalResource>() {
+        if let Ok(journal) = world.resource::<RegionInvalidationJournalResource>() {
             let min_sequence = journal.recent_records.front().map(|record| record.sequence);
             let max_sequence = journal.recent_records.back().map(|record| record.sequence);
             let records = journal

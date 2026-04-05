@@ -63,12 +63,12 @@ fn snapshot_wire_schema_is_world_checkpoint_driven() {
         );
     }
     for required in [
-        "pub struct CavernRunSnapshotV2",
-        "pub struct CavernRunDeltaV2",
-        "type Snapshot = CavernRunSnapshotV2",
-        "type Delta = CavernRunDeltaV2",
-        "unsupported cavern snapshot version: V1",
-        "unsupported cavern delta version: V1",
+        "pub struct CavernRunSnapshotV3",
+        "pub struct CavernRunDeltaV3",
+        "type Snapshot = CavernRunSnapshotV3",
+        "type Delta = CavernRunDeltaV3",
+        "unsupported cavern snapshot version: V1 (expected V3)",
+        "unsupported cavern delta version: V1 (expected V3)",
     ] {
         assert!(
             snapshot_types.contains(required) || net_driver.contains(required),
@@ -174,7 +174,7 @@ fn world_checkpoint_capture_reads_world_replication_state() {
     let capture = read("src/domain/snapshot/capture_and_delta.rs");
 
     assert!(
-        capture.contains("resource::<WorldReplicationStateResource>()"),
+        capture.contains("resource::<ReplicationStateResource>()"),
         "world checkpoint capture should consume world-owned replication state resource"
     );
     for forbidden in [

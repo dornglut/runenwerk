@@ -29,6 +29,9 @@ tokio = { version = "1.48.0", features = ["sync"] }
 
 ecs = { path = "../domain/ecs" }
 scheduler = { path = "../domain/scheduler" }
+spatial = { path = "../domain/spatial" }
+world_ops = { path = "../domain/world_ops" }
+world_sdf = { path = "../domain/world_sdf" }
 engine_render_macros = { path = "../engine_render_macros" }
 engine_replay = { path = "../net/engine_history" }
 engine_net = { path = "../net/engine_net" }

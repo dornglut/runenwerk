@@ -1,0 +1,8 @@
+[package]
+name = "spatial_index"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+geometry = { path = "../geometry" }
+glam = "0.31.1"

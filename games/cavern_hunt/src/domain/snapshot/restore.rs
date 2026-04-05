@@ -6,32 +6,32 @@ use crate::*;
 use anyhow::Result;
 use ecs::World;
 use engine::plugins::net::NetworkSessionStatus;
+use engine::plugins::world::adapters::resources::{
+    BuildQueueResource, OperationLogResource, PartitionConfigResource, ReplicationStateResource,
+    SdfChunkStoreResource,
+};
 use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
-use engine::plugins::world::ids::{BuildGeneration, ChunkGeneration};
-use engine::plugins::world::sdf::storage::{SdfChunkPayload, WorldSdfChunkStoreResource};
-use engine::plugins::world::streaming::replication::WorldReplicationStateResource;
 use engine::plugins::world::{
     WorldAuthorityState, WorldRuntimeState,
-    build::queue::WorldBuildQueueResource,
     chunks::{
-        dirty::WorldDirtyChunkMapResource,
+        DirtyChunkMapResource,
         lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord},
-        partition::WorldPartitionConfig,
     },
-    edits::log::WorldOperationLog,
 };
 use engine::prelude::Entity;
 use engine_net::SimulationTick;
 use std::collections::BTreeMap;
+use world_ops::{BuildGeneration, ChunkGeneration};
+use world_sdf::SdfChunkPayload;
 
 // Owner: Cavern Hunt Snapshot Domain - Restore and Entity Reset
 pub fn restore_cavern_run_snapshot(
     world: &mut World,
-    snapshot: &CavernRunSnapshotV2,
+    snapshot: &CavernRunSnapshotV3,
 ) -> Result<()> {
     anyhow::ensure!(
-        snapshot.wire_version == 2,
-        "unsupported cavern snapshot version: {} (expected V2)",
+        snapshot.wire_version == 3,
+        "unsupported cavern snapshot version: {} (expected V3)",
         snapshot.wire_version
     );
 
@@ -334,27 +334,27 @@ fn restore_world_checkpoint(
     if world.resource::<WorldChunkRuntimeMapResource>().is_err() {
         world.insert_resource(WorldChunkRuntimeMapResource::default());
     }
-    if world.resource::<WorldSdfChunkStoreResource>().is_err() {
-        world.insert_resource(WorldSdfChunkStoreResource::default());
+    if world.resource::<SdfChunkStoreResource>().is_err() {
+        world.insert_resource(SdfChunkStoreResource::default());
     }
-    if world.resource::<WorldOperationLog>().is_err() {
-        world.insert_resource(WorldOperationLog::default());
+    if world.resource::<OperationLogResource>().is_err() {
+        world.insert_resource(OperationLogResource::default());
     }
-    if world.resource::<WorldReplicationStateResource>().is_err() {
-        world.insert_resource(WorldReplicationStateResource::default());
+    if world.resource::<ReplicationStateResource>().is_err() {
+        world.insert_resource(ReplicationStateResource::default());
     }
-    if world.resource::<WorldDirtyChunkMapResource>().is_err() {
-        world.insert_resource(WorldDirtyChunkMapResource::default());
+    if world.resource::<DirtyChunkMapResource>().is_err() {
+        world.insert_resource(DirtyChunkMapResource::default());
     }
-    if world.resource::<WorldBuildQueueResource>().is_err() {
-        world.insert_resource(WorldBuildQueueResource::default());
+    if world.resource::<BuildQueueResource>().is_err() {
+        world.insert_resource(BuildQueueResource::default());
     }
     if world.resource::<WorldDebugMetricsResource>().is_err() {
         world.insert_resource(WorldDebugMetricsResource::default());
     }
 
     let partition = world
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .map(|value| value.clone())
         .unwrap_or_default();
 
@@ -383,7 +383,7 @@ fn restore_world_checkpoint(
         );
     }
 
-    let mut op_log = WorldOperationLog::default();
+    let mut op_log = OperationLogResource::default();
     let mut by_op_id = BTreeMap::new();
     for window in &checkpoint.op_windows {
         for record in &window.operations {
@@ -391,7 +391,8 @@ fn restore_world_checkpoint(
         }
     }
     for record in by_op_id.into_values() {
-        op_log.by_id.insert(record.op_id, op_log.operations.len());
+        let next_index = op_log.operations.len();
+        op_log.by_id.insert(record.op_id, next_index);
         op_log.operations.push(record);
     }
     let last_seen_op = op_log
@@ -402,7 +403,7 @@ fn restore_world_checkpoint(
     let checkpoint_next_op = checkpoint.next_op_id.0.max(last_seen_op.saturating_add(1));
     op_log.next_op_id = checkpoint_next_op;
 
-    let mut sdf_store = WorldSdfChunkStoreResource::default();
+    let mut sdf_store = SdfChunkStoreResource::default();
     for delta in &checkpoint.chunk_contents {
         let payload = if let Some(full_payload) = &delta.full_payload {
             let mut decoded: SdfChunkPayload =
@@ -457,7 +458,7 @@ fn restore_world_checkpoint(
             });
     }
 
-    let mut replication = WorldReplicationStateResource::default();
+    let mut replication = ReplicationStateResource::default();
     replication.world_revision = checkpoint.world_revision;
     replication.next_op_id = checkpoint.next_op_id;
     replication.pending_header_deltas = checkpoint
@@ -487,8 +488,8 @@ fn restore_world_checkpoint(
     world.insert_resource(sdf_store);
     world.insert_resource(op_log.clone());
     world.insert_resource(replication);
-    world.insert_resource(WorldDirtyChunkMapResource::default());
-    world.insert_resource(WorldBuildQueueResource::default());
+    world.insert_resource(DirtyChunkMapResource::default());
+    world.insert_resource(BuildQueueResource::default());
 
     if let Ok(mut metrics) = world.resource_mut::<WorldDebugMetricsResource>() {
         metrics.op_log_count = op_log.operations.len() as u64;

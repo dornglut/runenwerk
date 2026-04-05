@@ -1,5 +1,4 @@
 use super::*;
-use crate::plugins::world::ids::ChunkSyncCursor;
 use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use crate::{SessionRuntimeState, WorldMut};
 use anyhow::Context;
@@ -8,6 +7,7 @@ use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDrive
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig};
 use tokio::sync::mpsc::error::TryRecvError;
+use world_ops::SyncCursor;
 
 // engine/src/plugins/net/runtime_io.rs
 
@@ -434,7 +434,7 @@ where
                 world.resource_mut::<WorldStreamingInterestResource>()
             {
                 streaming_interest
-                    .mark_snapshot_acknowledged(connection_id, ChunkSyncCursor(ack.cursor.0));
+                    .mark_snapshot_acknowledged(connection_id, SyncCursor(ack.cursor.0));
             }
         }
 

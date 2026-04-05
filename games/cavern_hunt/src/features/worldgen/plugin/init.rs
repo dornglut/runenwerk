@@ -1,9 +1,10 @@
 use super::enemy_spawn::spawn_enemy;
 use super::*;
-use engine::plugins::world::edits::operation::{WorldOperation, quantize_aabb};
+use engine::plugins::world::adapters::resources::PartitionConfigResource;
 use engine::plugins::world::edits::{WorldEditIngressMeta, submit_world_operation};
-use engine::plugins::world::ids::PlanetId;
 use engine::prelude::SimulationTick;
+use spatial::WorldId;
+use world_ops::{Operation, WorldTick, quantize_aabb, quantize_position};
 
 pub(crate) fn initialize_run_world(world: &mut World, assign_local_player: bool) -> Result<()> {
     let config = world
@@ -184,7 +185,7 @@ fn seed_world_plugin_from_initial_topology(world: &mut World) {
             .map(|topology| topology.world_bounds)
             .unwrap_or_default();
         let fixed_point_scale = world
-            .resource::<engine::plugins::world::chunks::partition::WorldPartitionConfig>()
+            .resource::<PartitionConfigResource>()
             .map(|config| config.quantization_scale())
             .unwrap_or(1024);
         (bounds, fixed_point_scale)
@@ -197,9 +198,9 @@ fn seed_world_plugin_from_initial_topology(world: &mut World) {
 
     let _ = submit_world_operation(
         world,
-        WorldOperation::Stamp {
+        Operation::Stamp {
             stamp_id: "cavern_hunt.initial_seed".to_string(),
-            anchor_q: engine::plugins::world::edits::operation::quantize_position(
+            anchor_q: quantize_position(
                 [
                     (bounds.min[0] + bounds.max[0]) * 0.5,
                     (bounds.min[1] + bounds.max[1]) * 0.5,
@@ -211,9 +212,9 @@ fn seed_world_plugin_from_initial_topology(world: &mut World) {
         },
         quantize_aabb(bounds.min, bounds.max, fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 0,
-            server_tick,
+            server_tick: WorldTick(server_tick.0),
             author_connection_id: None,
         },
     );

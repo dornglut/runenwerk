@@ -18,24 +18,22 @@ use super::debug::metrics::WorldDebugMetricsResource;
 use super::prepare::contributions::prepare_world_feature_contributions_system;
 use super::streaming::replication::rebuild_world_replication_state_system;
 use super::{
-    build::{graph::WorldBuildGraphResource, queue::WorldBuildQueueResource},
-    caves::{
-        lighting_scope::WorldCaveLightingScopeResource, portals::WorldCavePortalGraphResource,
-        sectors::WorldCaveSectorResource,
+    adapters::resources::{
+        BuildGraphResource, BuildQueueResource, CameraRelativeFrameResource,
+        CaveLightingScopeResource, CavePortalGraphResource, CaveSectorResource,
+        CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource,
+        PlanetFrameResource, RegionInvalidationJournalResource, ReplicationStateResource,
+        SdfChunkStoreResource,
     },
     chunks::{
-        dirty::WorldDirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource,
-        partition::WorldPartitionConfig,
+        lifecycle::WorldChunkRuntimeMapResource, DirtyChunkMapResource,
     },
-    edits::{log::WorldOperationLog, region_journal::WorldRegionInvalidationJournalResource},
-    frames::planet_frame::{CameraRelativeFrameResource, PlanetFrameResource},
-    queries::{collision::WorldCollisionQueryServiceResource, nav::WorldNavSummaryResource},
-    sdf::storage::WorldSdfChunkStoreResource,
+    queries::nav::WorldNavSummaryResource,
     streaming::{
         interest::{WorldStreamingInterestResource, sync_world_streaming_interest_system},
-        replication::WorldReplicationStateResource,
     },
 };
+use world_ops::WorldRevision;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub enum WorldRuntimeMode {
@@ -64,7 +62,7 @@ impl Default for WorldRuntimeConfig {
 
 #[derive(Debug, Copy, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct WorldAuthorityState {
-    pub world_revision: super::ids::revisions::WorldRevision,
+    pub world_revision: WorldRevision,
 }
 
 #[derive(Debug, Copy, Clone, Default, ecs::Component, ecs::Resource)]
@@ -135,26 +133,26 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldRuntimeConfig>();
         app.init_resource::<WorldRuntimeState>();
         app.init_resource::<WorldAuthorityState>();
-        app.init_resource::<WorldPartitionConfig>();
+        app.init_resource::<PartitionConfigResource>();
         app.init_resource::<PlanetFrameResource>();
         app.init_resource::<CameraRelativeFrameResource>();
         app.init_resource::<WorldChunkRuntimeMapResource>();
-        app.init_resource::<WorldDirtyChunkMapResource>();
+        app.init_resource::<DirtyChunkMapResource>();
         app.init_resource::<WorldRenderCacheInvalidationQueueResource>();
-        app.init_resource::<WorldSdfChunkStoreResource>();
-        app.init_resource::<WorldOperationLog>();
-        app.init_resource::<WorldRegionInvalidationJournalResource>();
-        app.init_resource::<WorldBuildGraphResource>();
-        app.init_resource::<WorldBuildQueueResource>();
+        app.init_resource::<SdfChunkStoreResource>();
+        app.init_resource::<OperationLogResource>();
+        app.init_resource::<RegionInvalidationJournalResource>();
+        app.init_resource::<BuildGraphResource>();
+        app.init_resource::<BuildQueueResource>();
         app.init_resource::<super::build::jobs::WorldBuildJobRuntimeResource>();
         app.init_resource::<super::build::integration::WorldCompletedBuildQueueResource>();
-        app.init_resource::<WorldCollisionQueryServiceResource>();
+        app.init_resource::<CollisionQueryServiceResource>();
         app.init_resource::<WorldNavSummaryResource>();
         app.init_resource::<WorldStreamingInterestResource>();
-        app.init_resource::<WorldReplicationStateResource>();
-        app.init_resource::<WorldCaveSectorResource>();
-        app.init_resource::<WorldCavePortalGraphResource>();
-        app.init_resource::<WorldCaveLightingScopeResource>();
+        app.init_resource::<ReplicationStateResource>();
+        app.init_resource::<CaveSectorResource>();
+        app.init_resource::<CavePortalGraphResource>();
+        app.init_resource::<CaveLightingScopeResource>();
         app.init_resource::<WorldDebugMetricsResource>();
 
         let authority = app

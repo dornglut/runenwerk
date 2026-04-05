@@ -1,7 +1,8 @@
-use super::super::ids::{BuildGeneration, ChunkGeneration, ChunkId, ChunkRevision};
-use super::dirty::{ChunkDirtyReasonSet, WorldDirtyChunkMapResource};
+use super::DirtyChunkMapResource;
 use crate::runtime::{ResMut, WorldMut};
+use spatial::ChunkId;
 use std::collections::BTreeMap;
+use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReasonSet};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub enum ChunkLifecycleState {
@@ -20,7 +21,7 @@ pub struct WorldChunkRuntimeRecord {
     pub chunk_revision: ChunkRevision,
     pub chunk_generation: ChunkGeneration,
     pub build_generation: BuildGeneration,
-    pub dirty_reasons: ChunkDirtyReasonSet,
+    pub dirty_reasons: DirtyReasonSet,
     pub pending_build_generation: Option<BuildGeneration>,
     pub gameplay_locked: bool,
 }
@@ -33,7 +34,7 @@ impl WorldChunkRuntimeRecord {
             chunk_revision: ChunkRevision::default(),
             chunk_generation: ChunkGeneration::default(),
             build_generation: BuildGeneration::default(),
-            dirty_reasons: ChunkDirtyReasonSet::default(),
+            dirty_reasons: DirtyReasonSet::default(),
             pending_build_generation: None,
             gameplay_locked: false,
         }
@@ -55,7 +56,7 @@ impl WorldChunkRuntimeMapResource {
 
 pub fn advance_chunk_lifecycle_system(
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
-    mut dirty: ResMut<WorldDirtyChunkMapResource>,
+    mut dirty: ResMut<DirtyChunkMapResource>,
 ) {
     let dirty_ids = dirty.by_chunk.keys().copied().collect::<Vec<_>>();
     for chunk_id in dirty_ids {

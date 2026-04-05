@@ -1,21 +1,13 @@
-use engine::plugins::world::chunks::dirty::{ChunkDirtyReason, WorldDirtyChunkMapResource};
+use engine::plugins::world::adapters::resources::{
+    OperationLogResource, PartitionConfigResource, SdfChunkStoreResource,
+};
+use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::lifecycle::{
     ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord,
 };
-use engine::plugins::world::chunks::partition::WorldPartitionConfig;
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
-use engine::plugins::world::edits::log::WorldOperationLog;
-use engine::plugins::world::edits::operation::{
-    WorldBrushShape, WorldOperation, quantize_aabb, quantize_position,
-};
-use engine::plugins::world::ids::{
-    BuildGeneration, ChunkCoord3, ChunkGeneration, ChunkId, ChunkRevision, PlanetId,
-};
 use engine::plugins::world::plugin::{
     WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeState,
-};
-use engine::plugins::world::sdf::storage::{
-    RegionSdfSummary, SdfChunkPayload, WorldSdfChunkStoreResource,
 };
 use engine::plugins::world::{
     build::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource},
@@ -23,19 +15,25 @@ use engine::plugins::world::{
 };
 use engine::prelude::{App, AuthorityRole};
 use engine_sim::SimulationTick;
+use spatial::{ChunkCoord3, ChunkId, WorldId};
+use world_ops::{
+    BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
+    WorldTick, quantize_aabb, quantize_position,
+};
+use world_sdf::{RegionSdfSummary, SdfChunkPayload};
 
 #[test]
 fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
         let dirty = app
             .world_mut()
-            .resource_mut::<WorldDirtyChunkMapResource>()
+            .resource_mut::<DirtyChunkMapResource>()
             .expect("world dirty map should be available");
-        dirty.mark_dirty(chunk_id, ChunkDirtyReason::Geometry);
+        dirty.mark_dirty(chunk_id, DirtyReason::Geometry);
     }
 
     let app = app
@@ -53,7 +51,7 @@ fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
 
     let sdf_store = app
         .world()
-        .resource::<WorldSdfChunkStoreResource>()
+        .resource::<SdfChunkStoreResource>()
         .expect("sdf store should be available");
     assert!(
         sdf_store.chunks.contains_key(&chunk_id),
@@ -84,8 +82,8 @@ fn ingress_rejects_operations_in_client_replica_mode() {
 
     let op_id = submit_world_operation(
         app.world_mut(),
-        WorldOperation::CsgAdd {
-            brush: WorldBrushShape::Sphere {
+        Operation::CsgAdd {
+            brush: BrushShape::Sphere {
                 center_q: quantize_position([0.0, 0.0, 0.0], 1024),
                 radius_q: 256,
             },
@@ -93,9 +91,9 @@ fn ingress_rejects_operations_in_client_replica_mode() {
         },
         quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 404,
-            server_tick: SimulationTick(1),
+            server_tick: WorldTick(1),
             author_connection_id: Some(99),
         },
     );
@@ -106,7 +104,7 @@ fn ingress_rejects_operations_in_client_replica_mode() {
 
     let op_log = app
         .world()
-        .resource::<WorldOperationLog>()
+        .resource::<OperationLogResource>()
         .expect("world operation log should exist");
     assert!(
         op_log.operations.is_empty(),
@@ -114,7 +112,7 @@ fn ingress_rejects_operations_in_client_replica_mode() {
     );
     let dirty = app
         .world()
-        .resource::<WorldDirtyChunkMapResource>()
+        .resource::<DirtyChunkMapResource>()
         .expect("dirty map should exist");
     assert!(
         dirty.by_chunk.is_empty(),
@@ -170,23 +168,23 @@ fn ingress_invalidation_uses_partition_quantization_scale() {
     {
         let mut partition = app
             .world_mut()
-            .resource_mut::<WorldPartitionConfig>()
+            .resource_mut::<PartitionConfigResource>()
             .expect("world partition config should be available");
         partition.fixed_point_scale = 1;
     }
 
     let op_id = submit_world_operation(
         app.world_mut(),
-        WorldOperation::Stamp {
+        Operation::Stamp {
             stamp_id: "tests.partition-scale-ingress".to_string(),
             anchor_q: Default::default(),
             payload: vec![1, 2, 3],
         },
         quantize_aabb([40.0, 0.0, 0.0], [40.0, 0.0, 0.0], 1),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 77,
-            server_tick: SimulationTick(1),
+            server_tick: WorldTick(1),
             author_connection_id: None,
         },
     );
@@ -194,9 +192,9 @@ fn ingress_invalidation_uses_partition_quantization_scale() {
 
     let dirty = app
         .world()
-        .resource::<WorldDirtyChunkMapResource>()
+        .resource::<DirtyChunkMapResource>()
         .expect("world dirty map should be available");
-    let expected_chunk = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
+    let expected_chunk = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
     assert!(
         dirty.by_chunk.contains_key(&expected_chunk),
         "ingress invalidation must dequantize bounds using world partition quantization scale"
@@ -208,13 +206,13 @@ fn world_revision_advances_only_for_integrated_outputs() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 1, y: 1, z: 1 });
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 1, z: 1 });
     {
         let dirty = app
             .world_mut()
-            .resource_mut::<WorldDirtyChunkMapResource>()
+            .resource_mut::<DirtyChunkMapResource>()
             .expect("world dirty map should be available");
-        dirty.mark_dirty(chunk_id, ChunkDirtyReason::Geometry);
+        dirty.mark_dirty(chunk_id, DirtyReason::Geometry);
     }
 
     let mut app = app
@@ -310,7 +308,7 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 3, y: 2, z: -1 });
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 3, y: 2, z: -1 });
     {
         let mut runtime_chunks = app
             .world_mut()
@@ -333,9 +331,9 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
     {
         let dirty = app
             .world_mut()
-            .resource_mut::<WorldDirtyChunkMapResource>()
+            .resource_mut::<DirtyChunkMapResource>()
             .expect("world dirty map should be available");
-        dirty.mark_dirty(chunk_id, ChunkDirtyReason::Geometry);
+        dirty.mark_dirty(chunk_id, DirtyReason::Geometry);
     }
     {
         let mut completed = app
@@ -389,16 +387,16 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
 
     let op_id = submit_world_operation(
         app.world_mut(),
-        WorldOperation::Stamp {
+        Operation::Stamp {
             stamp_id: "tests.stamp-authority".to_string(),
             anchor_q: Default::default(),
             payload: vec![9, 9, 9],
         },
         quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 101,
-            server_tick: SimulationTick(1),
+            server_tick: WorldTick(1),
             author_connection_id: None,
         },
     );
@@ -412,9 +410,9 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
         .expect("stamp operation should build and integrate");
     let store = app
         .world()
-        .resource::<WorldSdfChunkStoreResource>()
+        .resource::<SdfChunkStoreResource>()
         .expect("sdf store should exist after integration");
-    let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3::default());
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3::default());
     let payload = store
         .chunks
         .get(&chunk_id)
@@ -441,8 +439,8 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
 
     let add_op = submit_world_operation(
         app.world_mut(),
-        WorldOperation::CsgAdd {
-            brush: WorldBrushShape::Sphere {
+        Operation::CsgAdd {
+            brush: BrushShape::Sphere {
                 center_q: Default::default(),
                 radius_q: 128,
             },
@@ -450,9 +448,9 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
         },
         quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 201,
-            server_tick: SimulationTick(1),
+            server_tick: WorldTick(1),
             author_connection_id: None,
         },
     );
@@ -464,16 +462,16 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
 
     let edit_op = submit_world_operation(
         app.world_mut(),
-        WorldOperation::MaterialFieldEdit {
+        Operation::MaterialFieldEdit {
             bounds_q: quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
             channel_mask: 0b0100,
             payload: vec![1],
         },
         quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1024),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 202,
-            server_tick: SimulationTick(2),
+            server_tick: WorldTick(2),
             author_connection_id: None,
         },
     );
@@ -484,9 +482,9 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
         .expect("material field edit should rebuild payload without topology loss");
     let store = app
         .world()
-        .resource::<WorldSdfChunkStoreResource>()
+        .resource::<SdfChunkStoreResource>()
         .expect("sdf store should exist");
-    let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3::default());
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3::default());
     let payload = store
         .chunks
         .get(&chunk_id)
@@ -513,7 +511,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 6, y: 0, z: -2 });
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 6, y: 0, z: -2 });
     {
         let mut runtime_chunks = app
             .world_mut()
@@ -592,8 +590,8 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: -4, y: 1, z: 3 });
-    let wrong_chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: -3, y: 1, z: 3 });
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: -4, y: 1, z: 3 });
+    let wrong_chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: -3, y: 1, z: 3 });
     {
         let mut runtime_chunks = app
             .world_mut()
@@ -646,7 +644,7 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
     );
     let store = app
         .world()
-        .resource::<WorldSdfChunkStoreResource>()
+        .resource::<SdfChunkStoreResource>()
         .expect("sdf store should exist");
     assert!(
         !store.chunks.contains_key(&chunk_id),

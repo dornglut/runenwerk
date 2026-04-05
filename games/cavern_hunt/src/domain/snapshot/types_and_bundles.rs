@@ -1,11 +1,11 @@
 use crate::*;
-use engine::plugins::world::ids::{ChunkSyncCursor, WorldOpId, WorldRevision};
-use engine::plugins::world::streaming::replication::{
-    ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
-};
 use engine::prelude::Bundle;
 use engine::prelude::SimulationTick;
 use serde::{Deserialize, Serialize};
+use world_ops::{
+    ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
+    OperationId, SyncCursor, WorldRevision,
+};
 
 // Owner: Cavern Hunt Snapshot Domain - Types and Spawn Bundles
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
@@ -122,9 +122,9 @@ pub struct CavernTopologySnapshotV1 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, ecs::Resource)]
 pub struct CavernWorldCheckpointV1 {
     pub world_revision: WorldRevision,
-    pub next_op_id: WorldOpId,
+    pub next_op_id: OperationId,
     #[serde(default)]
-    pub chunk_sync_cursor: Option<ChunkSyncCursor>,
+    pub chunk_sync_cursor: Option<SyncCursor>,
     #[serde(default)]
     pub chunk_headers: Vec<ChunkHeaderDelta>,
     #[serde(default)]
@@ -188,7 +188,7 @@ pub(crate) struct CavernRunDeltaV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
-pub struct CavernRunSnapshotV2 {
+pub struct CavernRunSnapshotV3 {
     pub wire_version: u16,
     pub run_id: u64,
     pub seed: CavernSeed,
@@ -213,7 +213,7 @@ pub struct CavernRunSnapshotV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
-pub struct CavernRunDeltaV2 {
+pub struct CavernRunDeltaV3 {
     pub wire_version: u16,
     pub run_id: Option<u64>,
     pub seed: CavernSeed,
@@ -278,7 +278,7 @@ pub struct CavernRunStatePatch {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]
 pub struct CavernKeyframeEvent {
     pub cursor: ReplicationCursor,
-    pub snapshot: CavernRunSnapshotV2,
+    pub snapshot: CavernRunSnapshotV3,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ecs::Resource)]

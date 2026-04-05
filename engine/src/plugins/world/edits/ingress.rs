@@ -1,30 +1,31 @@
-use super::super::chunks::dirty::WorldDirtyChunkMapResource;
-use super::super::chunks::partition::WorldPartitionConfig;
+use super::super::adapters::resources::{
+    OperationLogResource, PartitionConfigResource, RegionInvalidationJournalResource,
+};
+use super::super::chunks::DirtyChunkMapResource;
 use super::super::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::super::ids::{PlanetId, WorldOpId};
 use super::super::{WorldAuthorityState, WorldRuntimeConfig, WorldRuntimeMode};
-use super::invalidation::invalidate_dirty_chunks_from_quantized_bounds;
-use super::log::WorldOperationLog;
-use super::operation::{QuantizedAabb, WorldOperation, WorldOperationRecord};
-use super::region_journal::WorldRegionInvalidationJournalResource;
 use ecs::World;
-use engine_sim::SimulationTick;
+use spatial::WorldId;
+use world_ops::{
+    Operation, OperationId, OperationRecord, QuantizedAabb, WorldTick,
+    mark_dirty_chunks_from_quantized_bounds,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct WorldEditIngressMeta {
-    pub planet_id: PlanetId,
+    pub planet_id: WorldId,
     pub deterministic_seed: u64,
-    pub server_tick: SimulationTick,
+    pub server_tick: WorldTick,
     pub author_connection_id: Option<u64>,
 }
 
 impl Default for WorldEditIngressMeta {
     fn default() -> Self {
         Self {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 0,
-            server_tick: SimulationTick::default(),
+            server_tick: WorldTick::default(),
             author_connection_id: None,
         }
     }
@@ -32,10 +33,10 @@ impl Default for WorldEditIngressMeta {
 
 pub fn submit_world_operation(
     world: &mut World,
-    operation: WorldOperation,
+    operation: Operation,
     affected_bounds_q: QuantizedAabb,
     meta: WorldEditIngressMeta,
-) -> Option<WorldOpId> {
+) -> Option<OperationId> {
     if !world_runtime_is_authoritative(world) {
         return None;
     }
@@ -46,9 +47,9 @@ pub fn submit_world_operation(
         .unwrap_or_default();
 
     let op_id = {
-        let op_log = world.resource_mut::<WorldOperationLog>().ok()?;
-        op_log.append(WorldOperationRecord {
-            op_id: WorldOpId(0),
+        let op_log = world.resource_mut::<OperationLogResource>().ok()?;
+        op_log.append(OperationRecord {
+            op_id: OperationId(0),
             base_world_revision,
             planet_id: meta.planet_id,
             operation,
@@ -59,11 +60,11 @@ pub fn submit_world_operation(
         })
     };
 
-    let partition = world.resource::<WorldPartitionConfig>().ok()?.clone();
+    let partition = world.resource::<PartitionConfigResource>().ok()?.clone();
     let fixed_point_scale = partition.quantization_scale();
     let touched_chunks = {
-        let dirty = world.resource_mut::<WorldDirtyChunkMapResource>().ok()?;
-        invalidate_dirty_chunks_from_quantized_bounds(
+        let dirty = world.resource_mut::<DirtyChunkMapResource>().ok()?;
+        mark_dirty_chunks_from_quantized_bounds(
             dirty,
             &partition,
             affected_bounds_q,
@@ -76,12 +77,12 @@ pub fn submit_world_operation(
     if let Ok(queue) = world.resource_mut::<WorldRenderCacheInvalidationQueueResource>() {
         queue.enqueue_ingress_bounds(&partition, touched_chunks.clone());
     }
-    if let Ok(journal) = world.resource_mut::<WorldRegionInvalidationJournalResource>() {
+    if let Ok(journal) = world.resource_mut::<RegionInvalidationJournalResource>() {
         journal.append_ingress_record(&partition, touched_chunks, base_world_revision, op_id);
     }
 
     let op_count = world
-        .resource::<WorldOperationLog>()
+        .resource::<OperationLogResource>()
         .map(|op_log| op_log.operations.len() as u64)
         .ok();
     if let (Some(op_count), Ok(metrics)) =

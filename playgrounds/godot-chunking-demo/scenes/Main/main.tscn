@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://b8bvmhvo8help"]
+
+[ext_resource type="Script" uid="uid://bq25q6ojf211p" path="res://scenes/Main/main.gd" id="1_gol0p"]
+[ext_resource type="PackedScene" uid="uid://cutn8cp77yyns" path="res://scenes/Player/player.tscn" id="2_br8qb"]
+
+[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_gol0p"]
+
+[sub_resource type="Sky" id="Sky_br8qb"]
+sky_material = SubResource("PhysicalSkyMaterial_gol0p")
+
+[sub_resource type="Environment" id="Environment_px18m"]
+background_mode = 2
+sky = SubResource("Sky_br8qb")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 3
+ssr_enabled = true
+ssao_enabled = true
+ssil_enabled = true
+sdfgi_enabled = true
+glow_enabled = true
+adjustment_enabled = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gol0p"]
+albedo_color = Color(0, 0.57581216, 0.29716244, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_br8qb"]
+material = SubResource("StandardMaterial3D_gol0p")
+size = Vector2(50, 50)
+
+[node name="Main" type="Node3D" unique_id=1091579178]
+script = ExtResource("1_gol0p")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1877413917]
+environment = SubResource("Environment_px18m")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1674907166]
+transform = Transform3D(1, 0, 0, 0, -0.23768589, 0.9713421, 0, -0.9713421, -0.23768589, 0, 0, 0)
+shadow_enabled = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=609878586]
+mesh = SubResource("PlaneMesh_br8qb")
+
+[node name="Player" parent="." unique_id=815062029 instance=ExtResource("2_br8qb")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2392132, 0)

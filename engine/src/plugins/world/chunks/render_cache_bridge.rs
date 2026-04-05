@@ -1,7 +1,6 @@
-use super::super::ids::{ChunkCoord3, ChunkId, PlanetId, RegionId};
-use super::partition::WorldPartitionConfig;
 use crate::plugins::render::features::world::runtime_cache::WorldRuntimeCacheResource;
 use crate::runtime::WorldMut;
+use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId, RegionId};
 use std::collections::{BTreeSet, VecDeque};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -12,7 +11,7 @@ pub enum WorldRenderInvalidationSource {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct WorldRenderChunkBounds {
-    pub planet_id: PlanetId,
+    pub planet_id: WorldId,
     pub min: ChunkCoord3,
     pub max: ChunkCoord3,
 }
@@ -64,9 +63,9 @@ pub struct WorldRenderCacheInvalidationQueueResource {
 
 impl WorldRenderCacheInvalidationQueueResource {
     pub fn enqueue_ingress_bounds(
-        &mut self,
-        partition: &WorldPartitionConfig,
-        touched_chunks: BTreeSet<ChunkId>,
+	    &mut self,
+	    partition: &GridPartitionConfig,
+	    touched_chunks: BTreeSet<ChunkId>,
     ) {
         let Some(chunk_bounds) = WorldRenderChunkBounds::from_chunk_ids(&touched_chunks) else {
             return;
@@ -86,9 +85,9 @@ impl WorldRenderCacheInvalidationQueueResource {
     }
 
     pub fn enqueue_integrated_chunk(
-        &mut self,
-        partition: &WorldPartitionConfig,
-        chunk_id: ChunkId,
+	    &mut self,
+	    partition: &GridPartitionConfig,
+	    chunk_id: ChunkId,
     ) {
         let mut chunk_ids = BTreeSet::new();
         chunk_ids.insert(chunk_id);

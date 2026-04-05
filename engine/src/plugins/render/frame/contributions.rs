@@ -5,7 +5,7 @@ use crate::plugins::render::features::{
     UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use crate::plugins::ui::domain::UiDrawList;
-use crate::plugins::world::ids::ChunkId;
+use spatial::ChunkId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default)]

@@ -2,21 +2,19 @@ use crate::*;
 use anyhow::Result;
 use ecs::{Entity, World};
 use engine::plugins::world::WorldAuthorityState;
-use engine::plugins::world::chunks::partition::WorldPartitionConfig;
-use engine::plugins::world::edits::invalidation::touched_chunks_from_quantized_bounds;
-use engine::plugins::world::edits::operation::WorldOperationRecord;
-use engine::plugins::world::ids::{ChunkSyncCursor, WorldOpId, WorldRevision};
+use engine::plugins::world::adapters::resources::{PartitionConfigResource, ReplicationStateResource};
 use engine::plugins::world::streaming::interest::WorldStreamingInterestResource;
-use engine::plugins::world::streaming::replication::{
-    ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
-    WorldReplicationStateResource,
-};
 use engine::prelude::SimulationTick;
 use engine_net::ConnectionId;
+use ::spatial::{ChunkId, GridPartitionConfig};
 use std::collections::BTreeSet;
+use world_ops::{
+    ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
+    OperationId, OperationRecord, SyncCursor, WorldRevision, touched_chunks_from_quantized_bounds,
+};
 
 // Owner: Cavern Hunt Snapshot Domain - Capture and Delta Builders
-pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV2> {
+pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV3> {
     let layout = world.resource::<CavernLayout>()?.clone();
     let run_state = world.resource::<CavernRunState>()?.clone();
     let topology = world
@@ -272,8 +270,8 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV2>
     pickups.sort_by(|a, b| a.x.total_cmp(&b.x).then_with(|| a.y.total_cmp(&b.y)));
     extraction_zones.sort_by(|a, b| a.x.total_cmp(&b.x).then_with(|| a.y.total_cmp(&b.y)));
 
-    Ok(CavernRunSnapshotV2 {
-        wire_version: 2,
+    Ok(CavernRunSnapshotV3 {
+        wire_version: 3,
         run_id: run_state.run_id,
         seed: run_state.seed,
         phase: run_state.phase,
@@ -300,11 +298,11 @@ pub fn capture_cavern_run_snapshot(world: &World) -> Result<CavernRunSnapshotV2>
 }
 
 pub fn build_cavern_run_delta(
-    base: &CavernRunSnapshotV2,
-    current: &CavernRunSnapshotV2,
-) -> CavernRunDeltaV2 {
-    CavernRunDeltaV2 {
-        wire_version: 2,
+    base: &CavernRunSnapshotV3,
+    current: &CavernRunSnapshotV3,
+) -> CavernRunDeltaV3 {
+    CavernRunDeltaV3 {
+        wire_version: 3,
         run_id: (base.run_id != current.run_id).then_some(current.run_id),
         seed: current.seed,
         phase: (base.phase != current.phase).then_some(current.phase),
@@ -341,10 +339,10 @@ pub fn build_cavern_run_delta(
 }
 
 pub fn apply_cavern_run_delta(
-    base: &CavernRunSnapshotV2,
-    delta: &CavernRunDeltaV2,
-) -> CavernRunSnapshotV2 {
-    CavernRunSnapshotV2 {
+    base: &CavernRunSnapshotV3,
+    delta: &CavernRunDeltaV3,
+) -> CavernRunSnapshotV3 {
+    CavernRunSnapshotV3 {
         wire_version: delta.wire_version,
         run_id: delta.run_id.unwrap_or(base.run_id),
         seed: delta.seed,
@@ -429,7 +427,7 @@ pub(crate) fn capture_world_checkpoint(
         mut chunk_contents,
         mut op_windows,
         mut residency_hints,
-    ) = if let Ok(replication) = world.resource::<WorldReplicationStateResource>() {
+    ) = if let Ok(replication) = world.resource::<ReplicationStateResource>() {
         (
             replication.world_revision,
             replication.next_op_id,
@@ -453,7 +451,7 @@ pub(crate) fn capture_world_checkpoint(
     } else {
         (
             fallback_world_revision,
-            WorldOpId(0),
+            OperationId(0),
             Vec::<ChunkHeaderDelta>::new(),
             Vec::<ChunkContentDelta>::new(),
             Vec::<OpWindowDelta>::new(),
@@ -461,7 +459,7 @@ pub(crate) fn capture_world_checkpoint(
         )
     };
 
-    let mut chunk_sync_cursor = None::<ChunkSyncCursor>;
+    let mut chunk_sync_cursor = None::<SyncCursor>;
     if let Some(connection_id) = connection_id
         && let Ok(streaming_interest) = world.resource::<WorldStreamingInterestResource>()
         && let Some(interest) = streaming_interest.per_connection.get(&connection_id)
@@ -483,7 +481,7 @@ pub(crate) fn capture_world_checkpoint(
             chunk_headers.retain(|entry| relevant.contains(&entry.chunk_id));
             chunk_contents.retain(|entry| relevant.contains(&entry.chunk_id));
             residency_hints.retain(|entry| relevant.contains(&entry.chunk_id));
-            if let Ok(partition) = world.resource::<WorldPartitionConfig>() {
+            if let Ok(partition) = world.resource::<PartitionConfigResource>() {
                 filter_op_windows_for_relevant_chunks(
                     &mut op_windows,
                     &relevant,
@@ -518,10 +516,10 @@ pub(crate) fn capture_world_checkpoint(
 }
 
 fn filter_op_windows_for_relevant_chunks(
-    op_windows: &mut Vec<OpWindowDelta>,
-    relevant_chunks: &BTreeSet<engine::plugins::world::ids::ChunkId>,
-    partition: &WorldPartitionConfig,
-    fixed_point_scale: i32,
+	op_windows: &mut Vec<OpWindowDelta>,
+	relevant_chunks: &BTreeSet<ChunkId>,
+	partition: &GridPartitionConfig,
+	fixed_point_scale: i32,
 ) {
     if relevant_chunks.is_empty() {
         return;
@@ -541,10 +539,10 @@ fn filter_op_windows_for_relevant_chunks(
 }
 
 fn operation_touches_relevant_chunks(
-    operation: &WorldOperationRecord,
-    relevant_chunks: &BTreeSet<engine::plugins::world::ids::ChunkId>,
-    partition: &WorldPartitionConfig,
-    fixed_point_scale: i32,
+	operation: &OperationRecord,
+	relevant_chunks: &BTreeSet<ChunkId>,
+	partition: &GridPartitionConfig,
+	fixed_point_scale: i32,
 ) -> bool {
     touched_chunks_from_quantized_bounds(
         partition,

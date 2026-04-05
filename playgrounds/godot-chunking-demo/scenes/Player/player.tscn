@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://cutn8cp77yyns"]
+
+[ext_resource type="Script" uid="uid://cvwokf70ana8m" path="res://scenes/Player/player.gd" id="1_cyojo"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_cyojo"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1kbk7"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_gqjuk"]
+material = SubResource("StandardMaterial3D_1kbk7")
+
+[node name="Player" type="CharacterBody3D" unique_id=815062029]
+script = ExtResource("1_cyojo")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1905684741]
+shape = SubResource("CapsuleShape3D_cyojo")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=549494845]
+gi_mode = 2
+mesh = SubResource("CapsuleMesh_gqjuk")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="." unique_id=1247850147]
+transform = Transform3D(1, 0, 0, 0, 0.90814316, 0.41865975, 0, -0.41865975, 0.90814316, 0, 0, 0)
+spring_length = 10.0
+
+[node name="Camera3D" type="Camera3D" parent="SpringArm3D" unique_id=142927837]
+current = true

@@ -1,21 +1,22 @@
-use super::super::chunks::dirty::ChunkDirtyReasonSet;
+use super::super::adapters::resources::{
+    BuildGraphResource, BuildQueueResource, OperationLogResource, PartitionConfigResource,
+};
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
-use super::super::chunks::partition::WorldPartitionConfig;
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::super::edits::invalidation::touched_chunks_from_quantized_bounds;
-use super::super::edits::log::WorldOperationLog;
-use super::super::edits::operation::{WorldOperation, WorldOperationRecord};
-use super::super::ids::{BuildGeneration, ChunkGeneration, ChunkId, ChunkRevision, WorldOpId};
-use super::super::sdf::storage::{
+use super::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource};
+use crate::runtime::{Res, ResMut};
+use spatial::{ChunkId, GridPartitionConfig};
+use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
+use world_ops::{
+    BuildGeneration, BuildGraphNode, BuildGraphPhase, BuildQueueClass, BuildQueueItem,
+    ChunkGeneration, ChunkRevision, DirtyReasonSet, Operation, OperationId, OperationLog,
+    OperationRecord, touched_chunks_from_quantized_bounds,
+};
+use world_sdf::{
     RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload,
     SdfPageCoord3, SdfPageRecord,
 };
-use super::graph::{WorldBuildGraphNode, WorldBuildGraphPhase, WorldBuildGraphResource};
-use super::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource};
-use super::queue::{WorldBuildQueueClass, WorldBuildQueueItem, WorldBuildQueueResource};
-use crate::runtime::{Res, ResMut};
-use std::collections::BTreeMap;
-use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
 pub enum WorldBuildStaleness {
@@ -52,12 +53,12 @@ impl Default for WorldBuildJobRuntimeResource {
 
 pub fn dispatch_world_build_jobs_system(
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
-    mut queue: ResMut<WorldBuildQueueResource>,
-    mut graph: ResMut<WorldBuildGraphResource>,
+    mut queue: ResMut<BuildQueueResource>,
+    mut graph: ResMut<BuildGraphResource>,
     mut runtime: ResMut<WorldBuildJobRuntimeResource>,
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
-    partition: Res<WorldPartitionConfig>,
-    op_log: Res<WorldOperationLog>,
+    partition: Res<PartitionConfigResource>,
+    op_log: Res<OperationLogResource>,
 ) {
     queue_dirty_chunks(&chunks, &mut queue, &mut runtime);
 
@@ -79,7 +80,7 @@ pub fn dispatch_world_build_jobs_system(
         let target_build_generation = BuildGeneration(record.build_generation.0.saturating_add(1));
         // Dirty reasons are consumed by this build generation. Any new dirty reasons that arrive
         // while rebuilding will be merged back by lifecycle and trigger follow-up rebuilds.
-        record.dirty_reasons = ChunkDirtyReasonSet::default();
+        record.dirty_reasons = DirtyReasonSet::default();
         record.pending_build_generation = Some(target_build_generation);
         record.lifecycle = ChunkLifecycleState::Rebuilding;
 
@@ -112,7 +113,7 @@ pub fn dispatch_world_build_jobs_system(
 }
 
 pub fn sync_world_build_debug_metrics_system(
-    queue: Res<WorldBuildQueueResource>,
+    queue: Res<BuildQueueResource>,
     runtime: Res<WorldBuildJobRuntimeResource>,
     mut debug: ResMut<WorldDebugMetricsResource>,
 ) {
@@ -125,7 +126,7 @@ pub fn sync_world_build_debug_metrics_system(
 
 fn queue_dirty_chunks(
     chunks: &WorldChunkRuntimeMapResource,
-    queue: &mut WorldBuildQueueResource,
+    queue: &mut BuildQueueResource,
     runtime: &mut WorldBuildJobRuntimeResource,
 ) {
     for record in chunks.by_chunk_id.values() {
@@ -136,13 +137,13 @@ fn queue_dirty_chunks(
             continue;
         }
         let queue_class = if record.gameplay_locked {
-            WorldBuildQueueClass::Interactive
+            BuildQueueClass::Interactive
         } else {
-            WorldBuildQueueClass::Background
+            BuildQueueClass::Background
         };
         let priority_score =
             build_priority_score(record.chunk_id, queue_class, record.gameplay_locked);
-        queue.enqueue(WorldBuildQueueItem {
+        queue.enqueue(BuildQueueItem {
             chunk_id: record.chunk_id,
             queue_class,
             priority_score,
@@ -154,12 +155,12 @@ fn queue_dirty_chunks(
 
 fn build_priority_score(
     chunk_id: ChunkId,
-    class: WorldBuildQueueClass,
+    class: BuildQueueClass,
     gameplay_locked: bool,
 ) -> i64 {
     let base = match class {
-        WorldBuildQueueClass::Interactive => 1_000_i64,
-        WorldBuildQueueClass::Background => 100_i64,
+        BuildQueueClass::Interactive => 1_000_i64,
+        BuildQueueClass::Background => 100_i64,
     };
     let lock_bonus = if gameplay_locked { 500 } else { 0 };
     let coord_hash = (chunk_id.coord.x as i64).wrapping_mul(73856093)
@@ -170,21 +171,21 @@ fn build_priority_score(
 }
 
 fn push_phase_nodes(
-    graph: &mut WorldBuildGraphResource,
+    graph: &mut BuildGraphResource,
     chunk_id: ChunkId,
     target_chunk_revision: ChunkRevision,
     target_build_generation: BuildGeneration,
 ) {
     let phases = [
-        WorldBuildGraphPhase::DirtyPlan,
-        WorldBuildGraphPhase::OpWindowResolve,
-        WorldBuildGraphPhase::SdfFieldBuild,
-        WorldBuildGraphPhase::SummaryBuild,
-        WorldBuildGraphPhase::DerivedRenderBuild,
-        WorldBuildGraphPhase::Publish,
+        BuildGraphPhase::DirtyPlan,
+        BuildGraphPhase::OpWindowResolve,
+        BuildGraphPhase::SdfFieldBuild,
+        BuildGraphPhase::SummaryBuild,
+        BuildGraphPhase::DerivedRenderBuild,
+        BuildGraphPhase::Publish,
     ];
     for phase in phases {
-        graph.nodes.push(WorldBuildGraphNode {
+        graph.nodes.push(BuildGraphNode {
             chunk_id,
             phase,
             target_chunk_revision,
@@ -194,12 +195,12 @@ fn push_phase_nodes(
 }
 
 fn build_chunk_payload_from_op_window(
-    chunk_id: ChunkId,
-    target_chunk_revision: ChunkRevision,
-    target_build_generation: BuildGeneration,
-    partition: &WorldPartitionConfig,
-    op_log: &WorldOperationLog,
-    fixed_point_scale: i32,
+	chunk_id: ChunkId,
+	target_chunk_revision: ChunkRevision,
+	target_build_generation: BuildGeneration,
+	partition: &GridPartitionConfig,
+	op_log: &OperationLog,
+	fixed_point_scale: i32,
 ) -> SdfChunkPayload {
     let affecting_ops =
         operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale.max(1));
@@ -249,11 +250,11 @@ fn build_chunk_payload_from_op_window(
 }
 
 fn operations_affecting_chunk<'a>(
-    op_log: &'a WorldOperationLog,
-    partition: &WorldPartitionConfig,
-    chunk_id: ChunkId,
-    fixed_point_scale: i32,
-) -> Vec<&'a WorldOperationRecord> {
+	op_log: &'a OperationLog,
+	partition: &GridPartitionConfig,
+	chunk_id: ChunkId,
+	fixed_point_scale: i32,
+) -> Vec<&'a OperationRecord> {
     op_log
         .operations
         .iter()
@@ -272,35 +273,35 @@ fn operations_affecting_chunk<'a>(
         .collect()
 }
 
-fn chunk_solid_state_from_operations(records: &[&WorldOperationRecord]) -> (bool, WorldOpId, u16) {
+fn chunk_solid_state_from_operations(records: &[&OperationRecord]) -> (bool, OperationId, u16) {
     let mut solid_payload = false;
     let mut material_channel_mask = 0_u16;
-    let mut last_op_id = WorldOpId::default();
+    let mut last_op_id = OperationId::default();
 
     for record in records {
         last_op_id = record.op_id;
         match &record.operation {
-            WorldOperation::CsgAdd {
+            Operation::CsgAdd {
                 material_channel, ..
             } => {
                 solid_payload = true;
                 material_channel_mask |= material_channel_bit(*material_channel);
             }
-            WorldOperation::Stamp { .. } => {
+            Operation::Stamp { .. } => {
                 solid_payload = true;
                 material_channel_mask |= 1;
             }
-            WorldOperation::StructurePlace { .. } => {
+            Operation::StructurePlace { .. } => {
                 solid_payload = true;
                 material_channel_mask |= 1;
             }
-            WorldOperation::CsgSubtract { .. } | WorldOperation::StructureRemove { .. } => {
+            Operation::CsgSubtract { .. } | Operation::StructureRemove { .. } => {
                 solid_payload = false;
             }
-            WorldOperation::MaterialFieldEdit { channel_mask, .. } => {
+            Operation::MaterialFieldEdit { channel_mask, .. } => {
                 material_channel_mask |= *channel_mask;
             }
-            WorldOperation::Smooth { .. } | WorldOperation::DensityFieldDeform { .. } => {}
+            Operation::Smooth { .. } | Operation::DensityFieldDeform { .. } => {}
         }
     }
 
@@ -317,7 +318,7 @@ fn material_channel_bit(material_channel: u16) -> u16 {
         .unwrap_or(1)
 }
 
-fn operation_signature(record: &WorldOperationRecord) -> u64 {
+fn operation_signature(record: &OperationRecord) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     record.op_id.0.hash(&mut hasher);
     record.base_world_revision.0.hash(&mut hasher);

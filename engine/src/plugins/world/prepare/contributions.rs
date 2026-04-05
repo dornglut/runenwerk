@@ -1,8 +1,8 @@
-use super::super::caves::sectors::WorldCaveSectorResource;
+use super::super::adapters::resources::{
+    CaveSectorResource, OperationLogResource, RegionInvalidationJournalResource,
+};
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::super::edits::log::WorldOperationLog;
-use super::super::edits::region_journal::WorldRegionInvalidationJournalResource;
 use super::super::plugin::WorldAuthorityState;
 use super::super::streaming::interest::WorldStreamingInterestResource;
 use crate::plugins::render::features::{
@@ -61,7 +61,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         }
     }
 
-    if let Ok(log) = world.resource::<WorldOperationLog>() {
+    if let Ok(log) = world.resource::<OperationLogResource>() {
         op_log_count = log.operations.len() as u64;
     }
 
@@ -79,7 +79,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
     }
 
     let (visible_sector_ids, scoped_light_volume_count) =
-        if let Ok(caves) = world.resource::<WorldCaveSectorResource>() {
+        if let Ok(caves) = world.resource::<CaveSectorResource>() {
             (
                 caves.visible_sectors.iter().map(|value| value.0).collect(),
                 caves.visible_sectors.len() as u32,
@@ -188,7 +188,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         };
 
     let region_journal_snapshot_values =
-        if let Ok(journal) = world.resource::<WorldRegionInvalidationJournalResource>() {
+        if let Ok(journal) = world.resource::<RegionInvalidationJournalResource>() {
             Some((
                 journal
                     .recent_records

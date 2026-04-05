@@ -4,18 +4,61 @@ members = [
     "domain/ecs",
     "domain/ecs_macros",
     "domain/geometry",
+    "domain/spatial",
+    "domain/spatial_index",
+    "domain/chunking",
     "domain/sdf",
-  "engine_render_macros",
-  "net/engine_net",
-  "net/engine_net_macros",
-  "net/engine_net_quic",
-  "net/engine_sim",
-  "net/engine_history",
+    "domain/world_ops",
+    "domain/world_sdf",
     "domain/scheduler",
-  "engine",
-  "games/cavern_hunt",
-  "apps/grotto_online",
-  "apps/grotto_fleet_control",
-  "apps/grotto_server",
-  "apps/grotto_client"
+
+    "domain/ui/ui_math",
+    "domain/ui/ui_input",
+    "domain/ui/ui_core",
+    "domain/ui/ui_layout",
+    "domain/ui/ui_text",
+    "domain/ui/ui_theme",
+
+    "domain/editor/editor_core",
+    "domain/editor/editor_ui",
+    "domain/editor/editor_viewport",
+    "domain/editor/editor_scene",
+    "domain/editor/editor_inspector",
+    "domain/editor/editor_assets",
+    "domain/editor/editor_tools",
+
+    "engine",
+    "engine_render_macros",
+
+    "net/engine_net",
+    "net/engine_net_macros",
+    "net/engine_net_quic",
+    "net/engine_sim",
+    "net/engine_history",
+
+    "games/cavern_hunt",
+
+    "apps/grotto_online",
+    "apps/grotto_fleet_control",
+    "apps/grotto_server",
+    "apps/grotto_client",
+    "apps/runenwerk_editor",
+
+    "adapters/godot_chunking_addon",
 ]
+
+[workspace.dependencies]
+ui_math = { path = "domain/ui/ui_math" }
+ui_input = { path = "domain/ui/ui_input" }
+ui_core = { path = "domain/ui/ui_core" }
+ui_layout = { path = "domain/ui/ui_layout" }
+ui_text = { path = "domain/ui/ui_text" }
+ui_theme = { path = "domain/ui/ui_theme" }
+
+editor_core = { path = "domain/editor/editor_core" }
+editor_ui = { path = "domain/editor/editor_ui" }
+editor_viewport = { path = "domain/editor/editor_viewport" }
+editor_scene = { path = "domain/editor/editor_scene" }
+editor_inspector = { path = "domain/editor/editor_inspector" }
+editor_assets = { path = "domain/editor/editor_assets" }
+editor_tools = { path = "domain/editor/editor_tools" }

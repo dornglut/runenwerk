@@ -1,11 +1,11 @@
 use super::*;
 use crate::WorldMut;
-use crate::plugins::world::ids::ChunkSyncCursor;
 use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use ecs::World;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
+use world_ops::SyncCursor;
 
 // engine/src/plugins/net/prediction.rs
 
@@ -61,7 +61,7 @@ where
         .unwrap_or_default();
 
     let mut outbound = Vec::<OutboundServerMessage>::new();
-    let mut world_streaming_updates = Vec::<(ConnectionId, ChunkSyncCursor, bool)>::new();
+    let mut world_streaming_updates = Vec::<(ConnectionId, SyncCursor, bool)>::new();
     if !active_connections.is_empty() {
         let mut snapshots_for_connections = Vec::<(ConnectionId, TDriver::Snapshot)>::new();
         for connection_id in &active_connections {
@@ -159,7 +159,7 @@ where
                     checkpoint.needs_full_resync = false;
                 }
             }
-            world_streaming_updates.push((connection_id, ChunkSyncCursor(cursor.0), send_full));
+            world_streaming_updates.push((connection_id, SyncCursor(cursor.0), send_full));
 
             outbound.push(OutboundServerMessage::ToConnection {
                 connection_id,

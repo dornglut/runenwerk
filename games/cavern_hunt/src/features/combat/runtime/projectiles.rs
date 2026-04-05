@@ -1,11 +1,10 @@
 use super::*;
-use engine::plugins::world::chunks::partition::WorldPartitionConfig;
-use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
-use engine::plugins::world::ids::PlanetId;
-use engine::plugins::world::queries::collision::{
-    SphereSweepQuery, WorldCollisionQueryServiceResource, WorldCollisionSweepOutcome,
+use engine::plugins::world::adapters::resources::{
+    CollisionQueryServiceResource, PartitionConfigResource, SdfChunkStoreResource,
 };
-use engine::plugins::world::sdf::storage::WorldSdfChunkStoreResource;
+use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
+use spatial::WorldId;
+use world_sdf::{CollisionSweepOutcome, SphereSweep};
 
 // Owner: Cavern Hunt Combat Plugin - Projectiles and Spatial Helpers
 pub(super) fn step_projectiles(world: &mut World, dt: f32, mode: ProjectileStepMode) -> Result<()> {
@@ -253,20 +252,20 @@ fn sweep_world_collision_authoritative(
     let end_world = [end[0], CAVERN_GAMEPLAY_HEIGHT, end[1]];
     let outcome = {
         let service = world
-            .resource::<WorldCollisionQueryServiceResource>()
+            .resource::<CollisionQueryServiceResource>()
             .ok()?;
-        let partition = world.resource::<WorldPartitionConfig>().ok()?;
-        let store = world.resource::<WorldSdfChunkStoreResource>().ok()?;
-        let query = SphereSweepQuery {
+        let partition = world.resource::<PartitionConfigResource>().ok()?;
+        let store = world.resource::<SdfChunkStoreResource>().ok()?;
+        let query = SphereSweep {
             start: start_world,
             end: end_world,
             radius,
         };
-        service.sweep_sphere_authoritative(partition, store, PlanetId(0), query)
+        service.sweep_sphere_authoritative(partition, store, WorldId(0), query)
     };
     if let Ok(mut metrics) = world.resource_mut::<WorldDebugMetricsResource>() {
         metrics.collision_queries = metrics.collision_queries.saturating_add(1);
-        if matches!(outcome, WorldCollisionSweepOutcome::MissingPayload { .. }) {
+        if matches!(outcome, CollisionSweepOutcome::MissingPayload { .. }) {
             metrics.collision_authority_misses =
                 metrics.collision_authority_misses.saturating_add(1);
         }
@@ -274,6 +273,6 @@ fn sweep_world_collision_authoritative(
 
     Some(matches!(
         outcome,
-        WorldCollisionSweepOutcome::MissingPayload { .. } | WorldCollisionSweepOutcome::Hit(_)
+        CollisionSweepOutcome::MissingPayload { .. } | CollisionSweepOutcome::Hit(_)
     ))
 }

@@ -36,10 +36,10 @@ pub enum QueryError {
 pub enum SpatialIndexError {
     #[error(transparent)]
     Entity(#[from] EntityError),
-    #[error("spatial index {name:?} does not exist")]
+    #[error("indexing index {name:?} does not exist")]
     MissingIndex { name: String },
-    #[error("spatial hash cell size must be finite and > 0 (got {cell_size})")]
+    #[error("indexing hash cell size must be finite and > 0 (got {cell_size})")]
     InvalidCellSize { cell_size: f32 },
-    #[error("spatial bounds are invalid")]
+    #[error("indexing bounds are invalid")]
     InvalidBounds,
 }

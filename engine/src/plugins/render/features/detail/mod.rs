@@ -1,4 +1,4 @@
-use crate::plugins::world::ids::ChunkId;
+use spatial::ChunkId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, ecs::Resource)]

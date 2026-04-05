@@ -1,5 +1,5 @@
-use super::super::ids::ChunkId;
 use serde::{Deserialize, Serialize};
+use spatial::ChunkId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]

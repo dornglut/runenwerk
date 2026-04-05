@@ -1,11 +1,10 @@
 use super::*;
 use crate::GeometryBounds3;
-use engine::plugins::world::edits::operation::{
-    WorldBrushShape, WorldOperation, quantize_aabb, quantize_position,
-};
+use engine::plugins::world::adapters::resources::PartitionConfigResource;
 use engine::plugins::world::edits::{WorldEditIngressMeta, submit_world_operation};
-use engine::plugins::world::ids::PlanetId;
 use engine::prelude::SimulationTick;
+use spatial::WorldId;
+use world_ops::{BrushShape, Operation, WorldTick, quantize_aabb, quantize_position};
 
 pub(crate) fn apply_runtime_geometry_edit(
     world: &mut World,
@@ -23,7 +22,7 @@ fn mirror_edit_into_world_op_log(
     bounds: GeometryBounds3,
 ) -> bool {
     let fixed_point_scale = world
-        .resource::<engine::plugins::world::chunks::partition::WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .map(|config| config.quantization_scale())
         .unwrap_or(1024);
 
@@ -41,9 +40,9 @@ fn mirror_edit_into_world_op_log(
         operation,
         affected_bounds_q,
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: hash_edit_for_seed(edit),
-            server_tick,
+            server_tick: WorldTick(server_tick.0),
             author_connection_id: None,
         },
     )
@@ -65,13 +64,13 @@ fn affected_bounds_from_edit(edit: &GeometryEdit) -> Option<GeometryBounds3> {
 fn map_geometry_edit_to_world_operation(
     edit: &GeometryEdit,
     fixed_point_scale: i32,
-) -> Option<WorldOperation> {
+) -> Option<Operation> {
     match &edit.kind {
-        GeometryEditKind::AddBlocker(shape) => Some(WorldOperation::CsgAdd {
+        GeometryEditKind::AddBlocker(shape) => Some(Operation::CsgAdd {
             brush: shape_to_world_brush(shape, fixed_point_scale),
             material_channel: 1,
         }),
-        GeometryEditKind::RemoveBlocker(shape) => Some(WorldOperation::CsgSubtract {
+        GeometryEditKind::RemoveBlocker(shape) => Some(Operation::CsgSubtract {
             brush: shape_to_world_brush(shape, fixed_point_scale),
         }),
         GeometryEditKind::RemovePrimitive(_)
@@ -84,13 +83,13 @@ fn map_geometry_edit_to_world_operation(
 fn shape_to_world_brush(
     shape: &GeometryPrimitiveShape3,
     fixed_point_scale: i32,
-) -> WorldBrushShape {
+) -> BrushShape {
     match shape {
-        GeometryPrimitiveShape3::Sphere { center, radius } => WorldBrushShape::Sphere {
+        GeometryPrimitiveShape3::Sphere { center, radius } => BrushShape::Sphere {
             center_q: quantize_position(*center, fixed_point_scale),
             radius_q: (*radius * fixed_point_scale.max(1) as f32).round() as i32,
         },
-        GeometryPrimitiveShape3::Capsule { start, end, radius } => WorldBrushShape::Capsule {
+        GeometryPrimitiveShape3::Capsule { start, end, radius } => BrushShape::Capsule {
             start_q: quantize_position(*start, fixed_point_scale),
             end_q: quantize_position(*end, fixed_point_scale),
             radius_q: (*radius * fixed_point_scale.max(1) as f32).round() as i32,
@@ -98,7 +97,7 @@ fn shape_to_world_brush(
         GeometryPrimitiveShape3::TunnelSplineCapsuleChain { points, radius } => {
             let start_pos = points.first().copied().unwrap_or([0.0, 0.0, 0.0]);
             let end_pos = points.last().copied().unwrap_or([0.0, 0.0, 0.0]);
-            WorldBrushShape::Capsule {
+            BrushShape::Capsule {
                 start_q: quantize_position(start_pos, fixed_point_scale),
                 end_q: quantize_position(end_pos, fixed_point_scale),
                 radius_q: (*radius * fixed_point_scale.max(1) as f32).round() as i32,
@@ -116,7 +115,7 @@ fn shape_to_world_brush(
             center,
             half_extents,
             ..
-        } => WorldBrushShape::Box {
+        } => BrushShape::Box {
             center_q: quantize_position(*center, fixed_point_scale),
             half_extents_q: quantize_position(*half_extents, fixed_point_scale),
         },
@@ -124,7 +123,7 @@ fn shape_to_world_brush(
             center,
             radius,
             half_height,
-        } => WorldBrushShape::Cylinder {
+        } => BrushShape::Cylinder {
             center_q: quantize_position(*center, fixed_point_scale),
             radius_q: (*radius * fixed_point_scale.max(1) as f32).round() as i32,
             half_height_q: (*half_height * fixed_point_scale.max(1) as f32).round() as i32,

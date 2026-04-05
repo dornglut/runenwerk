@@ -1,5 +1,5 @@
-use crate::plugins::world::caves::sectors::CaveSectorId;
 use std::collections::BTreeSet;
+use world_sdf::CaveSectorId;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct CaveRenderVisibilityResource {

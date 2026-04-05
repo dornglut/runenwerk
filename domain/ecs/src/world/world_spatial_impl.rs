@@ -2,7 +2,7 @@
 use super::world_struct::World;
 use crate::entity::Entity;
 use crate::errors::SpatialIndexError;
-use crate::spatial::{DEFAULT_SPATIAL_INDEX_NAME, SpatialHashConfig, SpatialHashIndex};
+use crate::indexing::{DEFAULT_SPATIAL_INDEX_NAME, SpatialHashConfig, SpatialHashIndex};
 use geometry::Aabb3;
 
 fn normalized_index_name(name: impl Into<String>) -> String {

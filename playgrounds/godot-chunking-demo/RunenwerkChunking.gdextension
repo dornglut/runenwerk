@@ -1,0 +1,8 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.2
+reloadable = true
+
+[libraries]
+macos.debug = "res://../../adapters/godot_chunking_addon/target/debug/libgodot_chunking_addon.dylib"
+macos.release = "res://../../adapters/godot_chunking_addon/target/release/libgodot_chunking_addon.dylib"

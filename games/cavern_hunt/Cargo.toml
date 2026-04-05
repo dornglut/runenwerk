@@ -9,6 +9,9 @@ bytemuck = { version = "1.24.0", features = ["derive"] }
 ecs = { path = "../../domain/ecs" }
 engine = { path = "../../engine" }
 engine_net = { path = "../../net/engine_net" }
+spatial = { path = "../../domain/spatial" }
+world_ops = { path = "../../domain/world_ops" }
+world_sdf = { path = "../../domain/world_sdf" }
 postcard = { version = "1.1.3", features = ["alloc"] }
 ron = "0.11.0"
 serde = { version = "1.0.228", features = ["derive"] }

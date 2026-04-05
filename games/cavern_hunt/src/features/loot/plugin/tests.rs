@@ -5,9 +5,9 @@ use crate::{
     CavernMetaProfile, CavernRunConfig, CavernRunState, Health, InventoryRunState,
     LootTableRegistry, PickupKind, SpawnDirector,
 };
-use engine::plugins::world::edits::log::WorldOperationLog;
-use engine::plugins::world::edits::operation::WorldOperation;
+use engine::plugins::world::adapters::resources::OperationLogResource;
 use engine::prelude::{Entity, SimulationRng, SimulationSeed, World};
+use world_ops::Operation;
 
 #[test]
 fn elite_death_activates_extraction() {
@@ -19,6 +19,7 @@ fn elite_death_activates_extraction() {
     world.insert_resource(CavernMetaProfile::default());
     world.insert_resource(crate::LocalPlayerRef::default());
     world.insert_resource(crate::CavernCameraState::default());
+    world.insert_resource(OperationLogResource::default());
     world.insert_resource(SimulationRng::from_seed(SimulationSeed(7)));
     worldgen::initialize_run_world(&mut world, true).unwrap();
 
@@ -34,12 +35,12 @@ fn elite_death_activates_extraction() {
     let run_state = world.resource::<CavernRunState>().unwrap();
     assert!(run_state.elite_defeated);
     assert!(run_state.extraction_active);
-    let op_log = world.resource::<WorldOperationLog>().unwrap();
+    let op_log = world.resource::<OperationLogResource>().unwrap();
     assert!(
         op_log
             .operations
             .iter()
-            .any(|record| matches!(record.operation, WorldOperation::CsgSubtract { .. })),
+            .any(|record| matches!(record.operation, Operation::CsgSubtract { .. })),
         "elite objective completion should submit a world-authoritative seal removal operation"
     );
 }
@@ -54,6 +55,7 @@ fn scrap_pickup_adds_to_inventory() {
     world.insert_resource(CavernMetaProfile::default());
     world.insert_resource(crate::LocalPlayerRef::default());
     world.insert_resource(crate::CavernCameraState::default());
+    world.insert_resource(OperationLogResource::default());
     world.insert_resource(SimulationRng::from_seed(SimulationSeed(9)));
     worldgen::initialize_run_world(&mut world, true).unwrap();
     let player = world

@@ -1,7 +1,7 @@
 use engine::prelude::Component;
 use serde::{Deserialize, Serialize};
 
-// src/domain/gameplay/components/spatial.rs
+// src/domain/gameplay/components/indexing.rs
 
 #[derive(Debug, Copy, Clone, PartialEq, Component, ecs::Resource, Serialize, Deserialize)]
 pub struct Transform2 {

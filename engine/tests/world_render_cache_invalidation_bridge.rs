@@ -1,26 +1,24 @@
 use engine::plugins::render::features::world::runtime_cache::WorldRuntimeCacheResource;
-use engine::plugins::world::chunks::dirty::{ChunkDirtyReason, WorldDirtyChunkMapResource};
-use engine::plugins::world::chunks::partition::WorldPartitionConfig;
+use engine::plugins::world::adapters::resources::PartitionConfigResource;
+use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::render_cache_bridge::{
     WorldRenderCacheInvalidationQueueResource, WorldRenderInvalidationSource,
 };
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
-use engine::plugins::world::edits::operation::{WorldOperation, quantize_aabb, quantize_position};
-use engine::plugins::world::ids::{ChunkCoord3, ChunkId, PlanetId};
 use engine::plugins::world::plugin::WorldPlugin;
 use engine::prelude::{App, SimulationTick};
+use spatial::{ChunkCoord3, ChunkId, WorldId};
+use world_ops::{DirtyReason, Operation, QuantizedAabb, WorldTick, quantize_aabb, quantize_position};
 
-fn test_stamp_operation(fixed_point_scale: i32) -> WorldOperation {
-    WorldOperation::Stamp {
+fn test_stamp_operation(fixed_point_scale: i32) -> Operation {
+    Operation::Stamp {
         stamp_id: "tests.world.render-cache-bridge".to_string(),
         anchor_q: quantize_position([0.5, 0.5, 0.5], fixed_point_scale),
         payload: vec![1, 2, 3, 4],
     }
 }
 
-fn default_bounds_q(
-    fixed_point_scale: i32,
-) -> engine::plugins::world::edits::operation::QuantizedAabb {
+fn default_bounds_q(fixed_point_scale: i32) -> QuantizedAabb {
     quantize_aabb([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], fixed_point_scale)
 }
 
@@ -33,7 +31,7 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
 
     let fixed_point_scale = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist")
         .quantization_scale();
     let op_id = submit_world_operation(
@@ -41,9 +39,9 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
         test_stamp_operation(fixed_point_scale),
         default_bounds_q(fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 7,
-            server_tick: SimulationTick(1),
+            server_tick: WorldTick(1),
             author_connection_id: Some(42),
         },
     );
@@ -57,7 +55,7 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let expected = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     assert!(
         runtime_cache.stale_chunks.contains(&expected),
         "expected ingress invalidation to mark target chunk stale"
@@ -73,7 +71,7 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
 
     let fixed_point_scale = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist")
         .quantization_scale();
     let bounds_q = default_bounds_q(fixed_point_scale);
@@ -83,9 +81,9 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
             test_stamp_operation(fixed_point_scale),
             bounds_q,
             WorldEditIngressMeta {
-                planet_id: PlanetId(0),
+                planet_id: WorldId(0),
                 deterministic_seed: seed,
-                server_tick: SimulationTick(seed),
+                server_tick: WorldTick(seed),
                 author_connection_id: None,
             },
         );
@@ -100,7 +98,7 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let expected = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     assert_eq!(
         runtime_cache.stale_chunks.len(),
         1,
@@ -118,7 +116,7 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
 
     let fixed_point_scale = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist")
         .quantization_scale();
     let op_id = submit_world_operation(
@@ -126,9 +124,9 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
         test_stamp_operation(fixed_point_scale),
         quantize_aabb([0.0, 0.0, 0.0], [40.0, 1.0, 1.0], fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 99,
-            server_tick: SimulationTick(3),
+            server_tick: WorldTick(3),
             author_connection_id: None,
         },
     );
@@ -142,8 +140,8 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let chunk_a = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
-    let chunk_b = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
+    let chunk_a = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let chunk_b = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 0, z: 0 });
     assert!(
         runtime_cache.stale_chunks.contains(&chunk_a),
         "expected lower bound chunk to be marked stale"
@@ -161,13 +159,13 @@ fn integrated_build_output_marks_chunk_stale() {
     app.world_mut()
         .insert_resource(WorldRuntimeCacheResource::default());
 
-    let target = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
+    let target = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
         let dirty = app
             .world_mut()
-            .resource_mut::<WorldDirtyChunkMapResource>()
+            .resource_mut::<DirtyChunkMapResource>()
             .expect("world dirty map should exist");
-        dirty.mark_dirty(target, ChunkDirtyReason::Geometry);
+        dirty.mark_dirty(target, DirtyReason::Geometry);
     }
 
     let app = app
@@ -191,7 +189,7 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
 
     let fixed_point_scale = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist")
         .quantization_scale();
     let op_id = submit_world_operation(
@@ -199,9 +197,9 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
         test_stamp_operation(fixed_point_scale),
         default_bounds_q(fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 77,
-            server_tick: SimulationTick(2),
+            server_tick: WorldTick(2),
             author_connection_id: None,
         },
     );
@@ -215,7 +213,7 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
         .world()
         .resource::<WorldRenderCacheInvalidationQueueResource>()
         .expect("render-cache invalidation queue should exist");
-    let expected = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let record = queue
         .pending_records
         .front()
@@ -240,7 +238,7 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
     );
     let partition = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist");
     let expected_region = partition.region_id_from_chunk_id(expected);
     assert!(
@@ -256,7 +254,7 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
 
     let fixed_point_scale = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist")
         .quantization_scale();
     let op_id = submit_world_operation(
@@ -264,9 +262,9 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
         test_stamp_operation(fixed_point_scale),
         default_bounds_q(fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 121,
-            server_tick: SimulationTick(4),
+            server_tick: WorldTick(4),
             author_connection_id: None,
         },
     );
@@ -301,7 +299,7 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
         .world()
         .resource::<WorldRuntimeCacheResource>()
         .expect("world runtime cache should exist");
-    let expected = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     assert!(
         runtime_cache.stale_chunks.contains(&expected),
         "restored render cache should receive stale mark from queued invalidation records"
@@ -321,13 +319,13 @@ fn integrated_build_without_render_cache_enqueues_build_sourced_record() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
 
-    let target = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
+    let target = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: -1, z: 4 });
     {
         let dirty = app
             .world_mut()
-            .resource_mut::<WorldDirtyChunkMapResource>()
+            .resource_mut::<DirtyChunkMapResource>()
             .expect("world dirty map should exist");
-        dirty.mark_dirty(target, ChunkDirtyReason::Geometry);
+        dirty.mark_dirty(target, DirtyReason::Geometry);
     }
 
     let app = app
@@ -352,7 +350,7 @@ fn integrated_build_without_render_cache_enqueues_build_sourced_record() {
     );
     let partition = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist");
     let expected_region = partition.region_id_from_chunk_id(target);
     assert!(

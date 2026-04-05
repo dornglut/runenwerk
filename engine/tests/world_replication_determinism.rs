@@ -4,43 +4,39 @@ use engine::net::prelude::{
     SnapshotCursor,
 };
 use engine::plugins::net::{NetworkServerInbox, update_connection_closed};
-use engine::plugins::world::chunks::dirty::WorldDirtyChunkMapResource;
-use engine::plugins::world::chunks::partition::WorldPartitionConfig;
+use engine::plugins::world::adapters::resources::{
+    PartitionConfigResource, ReplicationStateResource,
+};
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
-use engine::plugins::world::edits::invalidation::invalidate_dirty_chunks_from_op_log;
-use engine::plugins::world::edits::log::WorldOperationLog;
-use engine::plugins::world::edits::operation::{
-    WorldBrushShape, WorldOperation, WorldOperationRecord, quantize_aabb, quantize_position,
-};
-use engine::plugins::world::edits::replay::{WorldReplayWindow, operations_for_replay_window};
-use engine::plugins::world::ids::{
-    ChunkCoord3, ChunkId, ChunkSyncCursor, PlanetId, WorldOpId, WorldRevision,
-};
 use engine::plugins::world::plugin::{WorldAuthorityState, WorldPlugin};
 use engine::plugins::world::streaming::interest::WorldStreamingInterestResource;
-use engine::plugins::world::streaming::replication::{
-    RegionInvalidationDelta, WorldReplicationStateResource,
-};
 use engine::prelude::App;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use serde::{Deserialize, Serialize};
+use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use std::io;
+use world_ops::{
+    BrushShape, DirtyChunkMap, Operation, OperationId, OperationLog, OperationRecord,
+    RegionInvalidationDelta, ReplayWindow, SyncCursor, WorldRevision, WorldTick,
+    mark_dirty_chunks_from_operation_log, operations_for_replay_window, quantize_aabb,
+    quantize_position,
+};
 
-fn build_test_log() -> WorldOperationLog {
-    let mut log = WorldOperationLog::default();
+fn build_test_log() -> OperationLog {
+    let mut log = OperationLog::default();
     let operations = [
-        WorldOperation::CsgSubtract {
-            brush: WorldBrushShape::Sphere {
+        Operation::CsgSubtract {
+            brush: BrushShape::Sphere {
                 center_q: quantize_position([2.0, 0.0, -1.0], 1024),
                 radius_q: 1536,
             },
         },
-        WorldOperation::Smooth {
+        Operation::Smooth {
             bounds_q: quantize_aabb([-6.0, -2.0, -6.0], [6.0, 2.0, 6.0], 1024),
             kernel_radius_q: 512,
             strength_q: 192,
         },
-        WorldOperation::MaterialFieldEdit {
+        Operation::MaterialFieldEdit {
             bounds_q: quantize_aabb([-4.0, -1.0, -4.0], [4.0, 1.0, 4.0], 1024),
             channel_mask: 0b0011,
             payload: vec![1, 2, 3, 4],
@@ -49,21 +45,21 @@ fn build_test_log() -> WorldOperationLog {
 
     for operation in operations {
         let bounds_q = match &operation {
-            WorldOperation::CsgSubtract { .. } => {
+            Operation::CsgSubtract { .. } => {
                 quantize_aabb([-3.0, -3.0, -3.0], [3.0, 3.0, 3.0], 1024)
             }
-            WorldOperation::Smooth { bounds_q, .. } => *bounds_q,
-            WorldOperation::MaterialFieldEdit { bounds_q, .. } => *bounds_q,
+            Operation::Smooth { bounds_q, .. } => *bounds_q,
+            Operation::MaterialFieldEdit { bounds_q, .. } => *bounds_q,
             _ => quantize_aabb([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], 1024),
         };
-        let _ = log.append(WorldOperationRecord {
-            op_id: WorldOpId(0),
+        let _ = log.append(OperationRecord {
+            op_id: OperationId(0),
             base_world_revision: WorldRevision(1),
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             operation,
             affected_bounds_q: bounds_q,
             deterministic_seed: 1337,
-            server_tick: SimulationTick(12),
+            server_tick: WorldTick(12),
             author_connection_id: Some(7),
         });
     }
@@ -162,20 +158,20 @@ fn op_log_replay_and_invalidation_are_deterministic() {
     let log_a = build_test_log();
     let log_b = build_test_log();
 
-    let replay_window = WorldReplayWindow {
-        applied_op_exclusive: WorldOpId(0),
-        target_op_inclusive: WorldOpId(3),
+    let replay_window = ReplayWindow {
+        applied_op_exclusive: OperationId(0),
+        target_op_inclusive: OperationId(3),
     };
 
     let replay_a = operations_for_replay_window(&log_a, replay_window);
     let replay_b = operations_for_replay_window(&log_b, replay_window);
     assert_eq!(replay_a, replay_b, "replay output must be deterministic");
 
-    let partition = WorldPartitionConfig::default();
-    let mut dirty_a = WorldDirtyChunkMapResource::default();
-    let mut dirty_b = WorldDirtyChunkMapResource::default();
-    invalidate_dirty_chunks_from_op_log(&mut dirty_a, &partition, &log_a, 1024);
-    invalidate_dirty_chunks_from_op_log(&mut dirty_b, &partition, &log_b, 1024);
+    let partition = GridPartitionConfig::default();
+    let mut dirty_a = DirtyChunkMap::default();
+    let mut dirty_b = DirtyChunkMap::default();
+    mark_dirty_chunks_from_operation_log(&mut dirty_a, &partition, &log_a, 1024);
+    mark_dirty_chunks_from_operation_log(&mut dirty_b, &partition, &log_b, 1024);
     assert_eq!(
         dirty_a.by_chunk, dirty_b.by_chunk,
         "dirty invalidation set must be deterministic for identical op logs"
@@ -189,21 +185,21 @@ fn world_replication_state_is_built_from_world_runtime() {
 
     let fixed_point_scale = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist")
         .quantization_scale();
     let op_id = submit_world_operation(
         app.world_mut(),
-        WorldOperation::Stamp {
+        Operation::Stamp {
             stamp_id: "tests.world.replication-runtime".to_string(),
             anchor_q: quantize_position([1.0, 1.0, 1.0], fixed_point_scale),
             payload: vec![9, 8, 7, 6],
         },
         quantize_aabb([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 99,
-            server_tick: SimulationTick(5),
+            server_tick: WorldTick(5),
             author_connection_id: Some(7),
         },
     );
@@ -215,7 +211,7 @@ fn world_replication_state_is_built_from_world_runtime() {
 
     let replication = app
         .world()
-        .resource::<WorldReplicationStateResource>()
+        .resource::<ReplicationStateResource>()
         .expect("world replication state should exist");
     let authority = app
         .world()
@@ -260,9 +256,9 @@ fn world_replication_state_is_built_from_world_runtime() {
     );
     let partition = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist");
-    let expected_chunk = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let expected_chunk = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
     let expected_region = partition.region_id_from_chunk_id(expected_chunk);
     assert!(
         replication
@@ -288,7 +284,7 @@ fn world_region_invalidation_projection_is_deterministic() {
         app.add_plugin(WorldPlugin);
         let fixed_point_scale = app
             .world()
-            .resource::<WorldPartitionConfig>()
+            .resource::<PartitionConfigResource>()
             .expect("world partition config should exist")
             .quantization_scale();
         let operations = [
@@ -304,16 +300,16 @@ fn world_region_invalidation_projection_is_deterministic() {
         for (bounds_q, seed) in operations {
             let op_id = submit_world_operation(
                 app.world_mut(),
-                WorldOperation::Stamp {
+                Operation::Stamp {
                     stamp_id: "tests.world.region-journal".to_string(),
                     anchor_q: quantize_position([0.0, 0.0, 0.0], fixed_point_scale),
                     payload: vec![5, 4, 3, 2],
                 },
                 bounds_q,
                 WorldEditIngressMeta {
-                    planet_id: PlanetId(0),
+                    planet_id: WorldId(0),
                     deterministic_seed: seed,
-                    server_tick: SimulationTick(seed),
+                    server_tick: WorldTick(seed),
                     author_connection_id: Some(seed),
                 },
             );
@@ -324,7 +320,7 @@ fn world_region_invalidation_projection_is_deterministic() {
             .run_for_ticks(1)
             .expect("world tick should publish replication projection");
         app.world()
-            .resource::<WorldReplicationStateResource>()
+            .resource::<ReplicationStateResource>()
             .expect("replication resource should exist")
             .pending_region_invalidations
             .clone()
@@ -357,21 +353,21 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
 
     let fixed_point_scale = app
         .world()
-        .resource::<WorldPartitionConfig>()
+        .resource::<PartitionConfigResource>()
         .expect("world partition config should exist")
         .quantization_scale();
     let _ = submit_world_operation(
         app.world_mut(),
-        WorldOperation::Stamp {
+        Operation::Stamp {
             stamp_id: "tests.world.streaming-interest".to_string(),
             anchor_q: quantize_position([2.0, 0.0, -2.0], fixed_point_scale),
             payload: vec![4, 3, 2, 1],
         },
         quantize_aabb([-1.0, -1.0, -1.0], [3.0, 1.0, 3.0], fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 17,
-            server_tick: SimulationTick(9),
+            server_tick: WorldTick(9),
             author_connection_id: Some(connection_id.0),
         },
     );
@@ -395,12 +391,12 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         );
         assert_eq!(
             per_connection.last_sent_cursor,
-            ChunkSyncCursor(1),
+            SyncCursor(1),
             "streaming cursor should advance after first replicated snapshot"
         );
         assert_eq!(
             per_connection.last_ack_cursor,
-            ChunkSyncCursor(0),
+            SyncCursor(0),
             "ack cursor should remain at zero before client acknowledgment"
         );
         assert!(
@@ -436,7 +432,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         .run_for_ticks(next_tick)
         .expect("ack tick should update world streaming cursor state");
 
-    let second_chunk = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 2, y: 0, z: 0 });
+    let second_chunk = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: 0, z: 0 });
     {
         let interest = app
             .world()
@@ -448,23 +444,23 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
             .expect("active connection should have streaming interest");
         assert_eq!(
             per_connection.last_ack_cursor,
-            ChunkSyncCursor(1),
+            SyncCursor(1),
             "server ack processing should advance per-connection ack cursor"
         );
     }
 
     let _ = submit_world_operation(
         app.world_mut(),
-        WorldOperation::Stamp {
+        Operation::Stamp {
             stamp_id: "tests.world.streaming-interest.region-delta".to_string(),
             anchor_q: quantize_position([80.0, 0.0, 0.0], fixed_point_scale),
             payload: vec![8, 8, 8, 8],
         },
         quantize_aabb([80.0, 0.0, 0.0], [80.0, 0.0, 0.0], fixed_point_scale),
         WorldEditIngressMeta {
-            planet_id: PlanetId(0),
+            planet_id: WorldId(0),
             deterministic_seed: 18,
-            server_tick: SimulationTick(10),
+            server_tick: WorldTick(10),
             author_connection_id: Some(connection_id.0),
         },
     );
@@ -489,7 +485,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
             .expect("active connection should have streaming interest");
         assert_eq!(
             per_connection.last_ack_cursor,
-            ChunkSyncCursor(1),
+            SyncCursor(1),
             "server ack processing should advance per-connection ack cursor"
         );
         assert!(

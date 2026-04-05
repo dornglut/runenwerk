@@ -12,18 +12,18 @@ mod tests {
         EnemyKind, LocalPlayerRef, LootTableRegistry, PlayerActive, PlayerCompanion, SpawnDirector,
         Transform2,
     };
-    use engine::plugins::world::chunks::partition::WorldPartitionConfig;
-    use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
-    use engine::plugins::world::ids::{
-        ChunkCoord3, ChunkGeneration, ChunkId, ChunkRevision, PlanetId,
+    use engine::plugins::world::adapters::resources::{
+        CollisionQueryServiceResource, PartitionConfigResource, SdfChunkStoreResource,
     };
-    use engine::plugins::world::queries::collision::WorldCollisionQueryServiceResource;
-    use engine::plugins::world::sdf::storage::{SdfChunkPayload, WorldSdfChunkStoreResource};
+    use engine::plugins::world::debug::metrics::WorldDebugMetricsResource;
     use engine::prelude::{
         AuthorityRole, InputState, SimulationProfile, SimulationProfileConfig, Time, WindowState,
         World,
     };
     use engine::state::SessionRuntimeState;
+    use spatial::{ChunkCoord3, ChunkId, WorldId};
+    use world_ops::{ChunkGeneration, ChunkRevision};
+    use world_sdf::SdfChunkPayload;
 
     #[test]
     fn local_aim_updates_from_mouse_projection() {
@@ -208,9 +208,9 @@ mod tests {
     #[test]
     fn authoritative_move_blocks_without_chunk_payload() {
         let mut world = World::new();
-        world.insert_resource(WorldCollisionQueryServiceResource);
-        world.insert_resource(WorldPartitionConfig::default());
-        world.insert_resource(WorldSdfChunkStoreResource::default());
+        world.insert_resource(CollisionQueryServiceResource::default());
+        world.insert_resource(PartitionConfigResource::default());
+        world.insert_resource(SdfChunkStoreResource::default());
         world.insert_resource(WorldDebugMetricsResource::default());
 
         let next = constrained_move_with_world(&mut world, [4.0, 3.0], [1.0, 0.0], 0.25);
@@ -225,11 +225,11 @@ mod tests {
     #[test]
     fn authoritative_move_allows_clear_chunk_payload() {
         let mut world = World::new();
-        let partition = WorldPartitionConfig::default();
+        let partition = PartitionConfigResource::default();
         let end = [5.0, CAVERN_GAMEPLAY_HEIGHT, 3.0];
-        let chunk_id = partition.chunk_id_from_position(PlanetId(0), end);
+        let chunk_id = partition.chunk_id_from_position(WorldId(0), end);
 
-        let mut store = WorldSdfChunkStoreResource::default();
+        let mut store = SdfChunkStoreResource::default();
         store.chunks.insert(
             chunk_id,
             SdfChunkPayload {
@@ -242,7 +242,7 @@ mod tests {
             },
         );
 
-        world.insert_resource(WorldCollisionQueryServiceResource);
+        world.insert_resource(CollisionQueryServiceResource::default());
         world.insert_resource(partition);
         world.insert_resource(store);
         world.insert_resource(WorldDebugMetricsResource::default());
@@ -259,13 +259,13 @@ mod tests {
     #[test]
     fn authoritative_move_blocks_when_sweep_crosses_missing_intermediate_chunk_payload() {
         let mut world = World::new();
-        let partition = WorldPartitionConfig {
+        let partition = PartitionConfigResource(::spatial::GridPartitionConfig {
             chunk_edge_meters: 1.0,
             region_chunk_dims: [8, 8, 8],
             fixed_point_scale: 1024,
-        };
-        let planet_id = PlanetId(0);
-        let mut store = WorldSdfChunkStoreResource::default();
+        });
+        let planet_id = WorldId(0);
+        let mut store = SdfChunkStoreResource::default();
 
         let start_chunk = ChunkId::new(planet_id, ChunkCoord3 { x: 0, y: 2, z: 0 });
         let end_chunk = ChunkId::new(planet_id, ChunkCoord3 { x: 2, y: 2, z: 0 });
@@ -283,7 +283,7 @@ mod tests {
             );
         }
 
-        world.insert_resource(WorldCollisionQueryServiceResource);
+        world.insert_resource(CollisionQueryServiceResource::default());
         world.insert_resource(partition);
         world.insert_resource(store);
         world.insert_resource(WorldDebugMetricsResource::default());

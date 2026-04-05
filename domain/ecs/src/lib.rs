@@ -7,7 +7,7 @@ mod entity;
 mod errors;
 pub mod prelude;
 pub mod query;
-mod spatial;
+mod indexing;
 mod storage;
 pub mod system;
 pub mod telemetry;
@@ -23,7 +23,7 @@ pub use query::{
     Added, Changed, Orphaned, Query, QueryAccess, QueryOrphaned, QueryOrphanedState, QueryState,
     QueryTypeAccess, With, Without,
 };
-pub use spatial::{DEFAULT_SPATIAL_INDEX_NAME, SpatialHashConfig, SpatialHashIndex, SpatialIndex};
+pub use indexing::{DEFAULT_SPATIAL_INDEX_NAME, SpatialHashConfig, SpatialHashIndex, SpatialIndex};
 pub use system::{
     ConfiguredSystem, EventChannel, EventReader, EventWriter, IntoSystem, IntoSystemConfigs,
     IntoSystemSetKey, Res, ResMut, ResView, Runtime, SystemConfigExt, SystemParam,

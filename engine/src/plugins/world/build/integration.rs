@@ -1,14 +1,16 @@
+use super::super::adapters::resources::{
+    PartitionConfigResource, RegionInvalidationJournalResource, SdfChunkStoreResource,
+};
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
-use super::super::chunks::partition::WorldPartitionConfig;
 use super::super::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::super::edits::region_journal::WorldRegionInvalidationJournalResource;
-use super::super::ids::{BuildGeneration, ChunkGeneration, ChunkId, ChunkRevision};
 use super::super::plugin::{WorldAuthorityState, WorldRuntimeState};
-use super::super::sdf::storage::{RegionSdfSummary, SdfChunkPayload, WorldSdfChunkStoreResource};
 use super::jobs::WorldBuildStaleness;
 use crate::runtime::{Res, ResMut};
+use spatial::ChunkId;
 use std::collections::VecDeque;
+use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision};
+use world_sdf::{RegionSdfSummary, SdfChunkPayload};
 
 #[derive(Debug, Clone, ecs::Resource)]
 pub struct WorldCompletedBuildOutput {
@@ -28,12 +30,12 @@ pub struct WorldCompletedBuildQueueResource {
 pub fn integrate_completed_build_outputs_system(
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
-    mut sdf_store: ResMut<WorldSdfChunkStoreResource>,
-    partition: Res<WorldPartitionConfig>,
+    mut sdf_store: ResMut<SdfChunkStoreResource>,
+    partition: Res<PartitionConfigResource>,
     mut runtime: ResMut<WorldRuntimeState>,
     mut authority: ResMut<WorldAuthorityState>,
     mut render_cache_invalidation: ResMut<WorldRenderCacheInvalidationQueueResource>,
-    mut region_invalidation_journal: ResMut<WorldRegionInvalidationJournalResource>,
+    mut region_invalidation_journal: ResMut<RegionInvalidationJournalResource>,
 ) {
     let mut integrated = 0_u64;
     let mut dropped = 0_u64;

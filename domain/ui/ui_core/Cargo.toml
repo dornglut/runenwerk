@@ -1,0 +1,9 @@
+[package]
+name = "ui_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ui_math.workspace = true
+ui_input.workspace = true
+ui_layout.workspace = true

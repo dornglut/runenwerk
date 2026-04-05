@@ -13,28 +13,25 @@ mod tests {
     };
     use engine::plugins::InputState;
     use engine::plugins::net::NetworkSessionStatus;
+    use engine::plugins::world::adapters::resources::{
+        OperationLogResource, PartitionConfigResource, ReplicationStateResource,
+        SdfChunkStoreResource,
+    };
     use engine::plugins::world::WorldAuthorityState;
-    use engine::plugins::world::chunks::partition::WorldPartitionConfig;
-    use engine::plugins::world::edits::log::WorldOperationLog;
-    use engine::plugins::world::edits::operation::{
-        QuantizedAabb, WorldOperation, WorldOperationRecord, quantize_aabb,
-    };
-    use engine::plugins::world::ids::{
-        ChunkCoord3, ChunkGeneration, ChunkId, ChunkRevision, ChunkSyncCursor, PlanetId, WorldOpId,
-        WorldRevision,
-    };
-    use engine::plugins::world::sdf::storage::{SdfChunkPayload, WorldSdfChunkStoreResource};
     use engine::plugins::world::streaming::interest::{
         ConnectionChunkInterest, WorldStreamingInterestResource,
-    };
-    use engine::plugins::world::streaming::replication::{
-        ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta,
-        WorldReplicationStateResource,
     };
     use engine::prelude::*;
     use engine_net::ConnectionId;
     use engine_net::replication::ReplicationDriver;
+    use ::spatial::{ChunkCoord3, ChunkId, WorldId};
     use std::collections::{BTreeMap, BTreeSet};
+    use world_ops::{
+        ChunkContentDelta, ChunkGeneration, ChunkHeaderDelta, ChunkResidencyHint, ChunkRevision,
+        Operation, OperationId, OperationRecord, OpWindowDelta, QuantizedAabb, SyncCursor,
+        WorldRevision, quantize_aabb,
+    };
+    use world_sdf::SdfChunkPayload;
 
     fn seeded_world() -> World {
         let mut world = World::new();
@@ -54,7 +51,7 @@ mod tests {
         world
     }
 
-    fn legacy_snapshot_v1_from_v2(snapshot: &crate::CavernRunSnapshotV2) -> CavernRunSnapshotV1 {
+    fn legacy_snapshot_v1_from_v2(snapshot: &crate::CavernRunSnapshotV3) -> CavernRunSnapshotV1 {
         CavernRunSnapshotV1 {
             run_id: snapshot.run_id,
             seed: snapshot.seed,
@@ -79,7 +76,7 @@ mod tests {
         }
     }
 
-    fn legacy_delta_v1_from_v2(delta: &crate::CavernRunDeltaV2) -> CavernRunDeltaV1 {
+    fn legacy_delta_v1_from_v2(delta: &crate::CavernRunDeltaV3) -> CavernRunDeltaV1 {
         CavernRunDeltaV1 {
             run_id: delta.run_id,
             seed: delta.seed,
@@ -244,71 +241,70 @@ mod tests {
     #[test]
     fn capture_and_restore_round_trips_world_checkpoint_payloads() {
         let mut source = seeded_world();
-        let chunk_id = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 3, y: -1, z: 2 });
+        let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 3, y: -1, z: 2 });
 
         source.insert_resource(WorldAuthorityState {
             world_revision: WorldRevision(77),
         });
-        source.insert_resource(WorldReplicationStateResource {
-            world_revision: WorldRevision(77),
-            next_op_id: WorldOpId(2),
-            pending_header_deltas: BTreeMap::from([(
+        let mut replication = ReplicationStateResource::default();
+        replication.world_revision = WorldRevision(77);
+        replication.next_op_id = OperationId(2);
+        replication.pending_header_deltas = BTreeMap::from([(
+            chunk_id,
+            ChunkHeaderDelta {
                 chunk_id,
-                ChunkHeaderDelta {
-                    chunk_id,
-                    chunk_revision: ChunkRevision(9),
-                    chunk_generation: ChunkGeneration(4),
-                    checksum: 0xBEEF,
-                    flags: 1,
-                },
-            )]),
-            pending_content_deltas: BTreeMap::from([(
+                chunk_revision: ChunkRevision(9),
+                chunk_generation: ChunkGeneration(4),
+                checksum: 0xBEEF,
+                flags: 1,
+            },
+        )]);
+        replication.pending_content_deltas = BTreeMap::from([(
+            chunk_id,
+            ChunkContentDelta {
                 chunk_id,
-                ChunkContentDelta {
-                    chunk_id,
-                    chunk_revision: ChunkRevision(9),
-                    page_deltas: Vec::new(),
-                    full_payload: Some(
-                        postcard::to_allocvec(&SdfChunkPayload {
-                            chunk_id,
-                            chunk_revision: ChunkRevision(9),
-                            chunk_generation: ChunkGeneration(4),
-                            page_table: Default::default(),
-                            hierarchy_revision: 4,
-                            checksum: 0xBEEF,
-                        })
-                        .expect("checkpoint payload should serialize"),
-                    ),
+                chunk_revision: ChunkRevision(9),
+                page_deltas: Vec::new(),
+                full_payload: Some(
+                    postcard::to_allocvec(&SdfChunkPayload {
+                        chunk_id,
+                        chunk_revision: ChunkRevision(9),
+                        chunk_generation: ChunkGeneration(4),
+                        page_table: Default::default(),
+                        hierarchy_revision: 4,
+                        checksum: 0xBEEF,
+                    })
+                    .expect("checkpoint payload should serialize"),
+                ),
+            },
+        )]);
+        replication.pending_op_windows = vec![OpWindowDelta {
+            start_exclusive: OperationId(0),
+            end_inclusive: OperationId(1),
+            operations: vec![OperationRecord {
+                op_id: OperationId(1),
+                base_world_revision: WorldRevision(76),
+                planet_id: WorldId(0),
+                operation: Operation::Stamp {
+                    stamp_id: "checkpoint-test".to_string(),
+                    anchor_q: Default::default(),
+                    payload: vec![1, 2, 3],
                 },
-            )]),
-            pending_op_windows: vec![OpWindowDelta {
-                start_exclusive: WorldOpId(0),
-                end_inclusive: WorldOpId(1),
-                operations: vec![WorldOperationRecord {
-                    op_id: WorldOpId(1),
-                    base_world_revision: WorldRevision(76),
-                    planet_id: PlanetId(0),
-                    operation: WorldOperation::Stamp {
-                        stamp_id: "checkpoint-test".to_string(),
-                        anchor_q: Default::default(),
-                        payload: vec![1, 2, 3],
-                    },
-                    affected_bounds_q: QuantizedAabb::default(),
-                    deterministic_seed: 7,
-                    server_tick: SimulationTick(123),
-                    author_connection_id: Some(44),
-                }],
+                affected_bounds_q: QuantizedAabb::default(),
+                deterministic_seed: 7,
+                server_tick: world_ops::WorldTick(123),
+                author_connection_id: Some(44),
             }],
-            pending_residency_hints: BTreeMap::from([(
+        }];
+        replication.pending_residency_hints = BTreeMap::from([(
+            chunk_id,
+            ChunkResidencyHint {
                 chunk_id,
-                ChunkResidencyHint {
-                    chunk_id,
-                    relevant_to_client: true,
-                    gameplay_locked: true,
-                },
-            )]),
-            pending_region_invalidations: Vec::new(),
-        });
+                relevant_to_client: true,
+                gameplay_locked: true,
+            },
+        )]);
+        source.insert_resource(replication);
 
         let snapshot = capture_cavern_run_snapshot(&source).unwrap();
         let checkpoint = snapshot
@@ -327,157 +323,156 @@ mod tests {
         let restored_authority = restored.resource::<WorldAuthorityState>().unwrap();
         assert_eq!(restored_authority.world_revision, WorldRevision(77));
 
-        let restored_ops = restored.resource::<WorldOperationLog>().unwrap();
+        let restored_ops = restored.resource::<OperationLogResource>().unwrap();
         assert_eq!(restored_ops.operations.len(), 1);
         assert_eq!(restored_ops.next_op_id, 2);
 
-        let restored_store = restored.resource::<WorldSdfChunkStoreResource>().unwrap();
+        let restored_store = restored.resource::<SdfChunkStoreResource>().unwrap();
         assert!(restored_store.chunks.contains_key(&chunk_id));
     }
 
     #[test]
     fn world_checkpoint_uses_world_interest_cursor_and_chunk_filtering() {
         let mut world = seeded_world();
-        let chunk_a = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 1, y: 0, z: 1 });
-        let chunk_b = ChunkId::new(PlanetId(0), ChunkCoord3 { x: 2, y: 0, z: 2 });
+        let chunk_a = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 0, z: 1 });
+        let chunk_b = ChunkId::new(WorldId(0), ChunkCoord3 { x: 2, y: 0, z: 2 });
         let connection_id = ConnectionId(88);
-        let partition = WorldPartitionConfig::default();
+        let partition = PartitionConfigResource::default();
         let fixed_point_scale = partition.quantization_scale();
         world.insert_resource(partition);
 
-        world.insert_resource(WorldReplicationStateResource {
-            world_revision: WorldRevision(9),
-            next_op_id: WorldOpId(4),
-            pending_header_deltas: BTreeMap::from([
-                (
-                    chunk_a,
-                    ChunkHeaderDelta {
-                        chunk_id: chunk_a,
-                        chunk_revision: ChunkRevision(2),
-                        chunk_generation: ChunkGeneration(2),
-                        checksum: 101,
-                        flags: 0,
+        let mut replication = ReplicationStateResource::default();
+        replication.world_revision = WorldRevision(9);
+        replication.next_op_id = OperationId(4);
+        replication.pending_header_deltas = BTreeMap::from([
+            (
+                chunk_a,
+                ChunkHeaderDelta {
+                    chunk_id: chunk_a,
+                    chunk_revision: ChunkRevision(2),
+                    chunk_generation: ChunkGeneration(2),
+                    checksum: 101,
+                    flags: 0,
+                },
+            ),
+            (
+                chunk_b,
+                ChunkHeaderDelta {
+                    chunk_id: chunk_b,
+                    chunk_revision: ChunkRevision(3),
+                    chunk_generation: ChunkGeneration(3),
+                    checksum: 202,
+                    flags: 0,
+                },
+            ),
+        ]);
+        replication.pending_content_deltas = BTreeMap::from([
+            (
+                chunk_a,
+                ChunkContentDelta {
+                    chunk_id: chunk_a,
+                    chunk_revision: ChunkRevision(2),
+                    page_deltas: Vec::new(),
+                    full_payload: Some(vec![1, 2]),
+                },
+            ),
+            (
+                chunk_b,
+                ChunkContentDelta {
+                    chunk_id: chunk_b,
+                    chunk_revision: ChunkRevision(3),
+                    page_deltas: Vec::new(),
+                    full_payload: Some(vec![3, 4]),
+                },
+            ),
+        ]);
+        replication.pending_op_windows = vec![OpWindowDelta {
+            start_exclusive: OperationId(0),
+            end_inclusive: OperationId(3),
+            operations: vec![
+                OperationRecord {
+                    op_id: OperationId(1),
+                    base_world_revision: WorldRevision(8),
+                    planet_id: WorldId(0),
+                    operation: Operation::Stamp {
+                        stamp_id: "interest-op-a".to_string(),
+                        anchor_q: Default::default(),
+                        payload: vec![1],
                     },
-                ),
-                (
-                    chunk_b,
-                    ChunkHeaderDelta {
-                        chunk_id: chunk_b,
-                        chunk_revision: ChunkRevision(3),
-                        chunk_generation: ChunkGeneration(3),
-                        checksum: 202,
-                        flags: 0,
+                    affected_bounds_q: quantize_aabb(
+                        [33.0, 0.0, 33.0],
+                        [40.0, 1.0, 40.0],
+                        fixed_point_scale,
+                    ),
+                    deterministic_seed: 1,
+                    server_tick: world_ops::WorldTick(1),
+                    author_connection_id: Some(connection_id.0),
+                },
+                OperationRecord {
+                    op_id: OperationId(2),
+                    base_world_revision: WorldRevision(8),
+                    planet_id: WorldId(0),
+                    operation: Operation::Stamp {
+                        stamp_id: "interest-op-b".to_string(),
+                        anchor_q: Default::default(),
+                        payload: vec![2],
                     },
-                ),
-            ]),
-            pending_content_deltas: BTreeMap::from([
-                (
-                    chunk_a,
-                    ChunkContentDelta {
-                        chunk_id: chunk_a,
-                        chunk_revision: ChunkRevision(2),
-                        page_deltas: Vec::new(),
-                        full_payload: Some(vec![1, 2]),
+                    affected_bounds_q: quantize_aabb(
+                        [65.0, 0.0, 65.0],
+                        [70.0, 1.0, 70.0],
+                        fixed_point_scale,
+                    ),
+                    deterministic_seed: 2,
+                    server_tick: world_ops::WorldTick(2),
+                    author_connection_id: Some(connection_id.0),
+                },
+                OperationRecord {
+                    op_id: OperationId(3),
+                    base_world_revision: WorldRevision(8),
+                    planet_id: WorldId(1),
+                    operation: Operation::Stamp {
+                        stamp_id: "interest-op-other-planet".to_string(),
+                        anchor_q: Default::default(),
+                        payload: vec![3],
                     },
-                ),
-                (
-                    chunk_b,
-                    ChunkContentDelta {
-                        chunk_id: chunk_b,
-                        chunk_revision: ChunkRevision(3),
-                        page_deltas: Vec::new(),
-                        full_payload: Some(vec![3, 4]),
-                    },
-                ),
-            ]),
-            pending_op_windows: vec![OpWindowDelta {
-                start_exclusive: WorldOpId(0),
-                end_inclusive: WorldOpId(3),
-                operations: vec![
-                    WorldOperationRecord {
-                        op_id: WorldOpId(1),
-                        base_world_revision: WorldRevision(8),
-                        planet_id: PlanetId(0),
-                        operation: WorldOperation::Stamp {
-                            stamp_id: "interest-op-a".to_string(),
-                            anchor_q: Default::default(),
-                            payload: vec![1],
-                        },
-                        affected_bounds_q: quantize_aabb(
-                            [33.0, 0.0, 33.0],
-                            [40.0, 1.0, 40.0],
-                            fixed_point_scale,
-                        ),
-                        deterministic_seed: 1,
-                        server_tick: SimulationTick(1),
-                        author_connection_id: Some(connection_id.0),
-                    },
-                    WorldOperationRecord {
-                        op_id: WorldOpId(2),
-                        base_world_revision: WorldRevision(8),
-                        planet_id: PlanetId(0),
-                        operation: WorldOperation::Stamp {
-                            stamp_id: "interest-op-b".to_string(),
-                            anchor_q: Default::default(),
-                            payload: vec![2],
-                        },
-                        affected_bounds_q: quantize_aabb(
-                            [65.0, 0.0, 65.0],
-                            [70.0, 1.0, 70.0],
-                            fixed_point_scale,
-                        ),
-                        deterministic_seed: 2,
-                        server_tick: SimulationTick(2),
-                        author_connection_id: Some(connection_id.0),
-                    },
-                    WorldOperationRecord {
-                        op_id: WorldOpId(3),
-                        base_world_revision: WorldRevision(8),
-                        planet_id: PlanetId(1),
-                        operation: WorldOperation::Stamp {
-                            stamp_id: "interest-op-other-planet".to_string(),
-                            anchor_q: Default::default(),
-                            payload: vec![3],
-                        },
-                        affected_bounds_q: quantize_aabb(
-                            [33.0, 0.0, 33.0],
-                            [40.0, 1.0, 40.0],
-                            fixed_point_scale,
-                        ),
-                        deterministic_seed: 3,
-                        server_tick: SimulationTick(3),
-                        author_connection_id: Some(connection_id.0),
-                    },
-                ],
-            }],
-            pending_residency_hints: BTreeMap::from([
-                (
-                    chunk_a,
-                    ChunkResidencyHint {
-                        chunk_id: chunk_a,
-                        relevant_to_client: true,
-                        gameplay_locked: false,
-                    },
-                ),
-                (
-                    chunk_b,
-                    ChunkResidencyHint {
-                        chunk_id: chunk_b,
-                        relevant_to_client: true,
-                        gameplay_locked: true,
-                    },
-                ),
-            ]),
-            pending_region_invalidations: Vec::new(),
-        });
+                    affected_bounds_q: quantize_aabb(
+                        [33.0, 0.0, 33.0],
+                        [40.0, 1.0, 40.0],
+                        fixed_point_scale,
+                    ),
+                    deterministic_seed: 3,
+                    server_tick: world_ops::WorldTick(3),
+                    author_connection_id: Some(connection_id.0),
+                },
+            ],
+        }];
+        replication.pending_residency_hints = BTreeMap::from([
+            (
+                chunk_a,
+                ChunkResidencyHint {
+                    chunk_id: chunk_a,
+                    relevant_to_client: true,
+                    gameplay_locked: false,
+                },
+            ),
+            (
+                chunk_b,
+                ChunkResidencyHint {
+                    chunk_id: chunk_b,
+                    relevant_to_client: true,
+                    gameplay_locked: true,
+                },
+            ),
+        ]);
+        world.insert_resource(replication);
         world.insert_resource(WorldStreamingInterestResource {
             per_connection: BTreeMap::from([(
                 connection_id,
                 ConnectionChunkInterest {
                     relevant_chunks: BTreeSet::from([chunk_a]),
                     gameplay_locked_chunks: BTreeSet::new(),
-                    last_sent_cursor: ChunkSyncCursor(7),
-                    last_ack_cursor: ChunkSyncCursor(7),
+                    last_sent_cursor: SyncCursor(7),
+                    last_ack_cursor: SyncCursor(7),
                     needs_full_resync: true,
                     ..ConnectionChunkInterest::default()
                 },
@@ -508,7 +503,7 @@ mod tests {
         );
         assert_eq!(
             checkpoint_needing_resync.op_windows[0].operations[0].op_id,
-            WorldOpId(1)
+            OperationId(1)
         );
 
         world.insert_resource(WorldStreamingInterestResource {
@@ -517,8 +512,8 @@ mod tests {
                 ConnectionChunkInterest {
                     relevant_chunks: BTreeSet::from([chunk_a]),
                     gameplay_locked_chunks: BTreeSet::new(),
-                    last_sent_cursor: ChunkSyncCursor(7),
-                    last_ack_cursor: ChunkSyncCursor(7),
+                    last_sent_cursor: SyncCursor(7),
+                    last_ack_cursor: SyncCursor(7),
                     needs_full_resync: false,
                     ..ConnectionChunkInterest::default()
                 },
@@ -528,7 +523,7 @@ mod tests {
             .expect("checkpoint should serialize with incremental cursor when resync is clear");
         assert_eq!(
             checkpoint_with_cursor.chunk_sync_cursor,
-            Some(ChunkSyncCursor(7))
+            Some(SyncCursor(7))
         );
         assert_eq!(checkpoint_with_cursor.chunk_headers.len(), 1);
         assert_eq!(checkpoint_with_cursor.chunk_headers[0].chunk_id, chunk_a);
@@ -536,7 +531,7 @@ mod tests {
         assert_eq!(checkpoint_with_cursor.op_windows[0].operations.len(), 1);
         assert_eq!(
             checkpoint_with_cursor.op_windows[0].operations[0].op_id,
-            WorldOpId(1)
+            OperationId(1)
         );
 
         world.insert_resource(WorldStreamingInterestResource {
@@ -545,8 +540,8 @@ mod tests {
                 ConnectionChunkInterest {
                     relevant_chunks: BTreeSet::new(),
                     gameplay_locked_chunks: BTreeSet::new(),
-                    last_sent_cursor: ChunkSyncCursor(8),
-                    last_ack_cursor: ChunkSyncCursor(8),
+                    last_sent_cursor: SyncCursor(8),
+                    last_ack_cursor: SyncCursor(8),
                     needs_full_resync: false,
                     ..ConnectionChunkInterest::default()
                 },
@@ -557,7 +552,7 @@ mod tests {
                 .expect("checkpoint should serialize even when no chunks are relevant");
         assert_eq!(
             checkpoint_without_relevant_chunks.chunk_sync_cursor,
-            Some(ChunkSyncCursor(8)),
+            Some(SyncCursor(8)),
             "incremental checkpoint should keep acknowledged cursor baseline"
         );
         assert!(
@@ -583,8 +578,23 @@ mod tests {
     #[test]
     fn replication_driver_rejects_legacy_v1_snapshot_and_delta_payloads() {
         let world = seeded_world();
-        let snapshot_v2 = capture_cavern_run_snapshot(&world).expect("snapshot capture succeeds");
-        let legacy_snapshot_v1 = legacy_snapshot_v1_from_v2(&snapshot_v2);
+        let snapshot_v3 = capture_cavern_run_snapshot(&world).expect("snapshot capture succeeds");
+
+        let mut legacy_snapshot_v2 = snapshot_v3.clone();
+        legacy_snapshot_v2.wire_version = 2;
+        let legacy_snapshot_v2_bytes =
+            postcard::to_allocvec(&legacy_snapshot_v2).expect("legacy v2 snapshot encodes");
+        let snapshot_v2_err =
+            crate::CavernReplicationDriver::decode_snapshot(&legacy_snapshot_v2_bytes)
+                .unwrap_err();
+        assert!(
+            snapshot_v2_err
+                .to_string()
+                .contains("unsupported cavern snapshot version: 2 (expected V3)"),
+            "legacy v2 snapshot payloads should fail with explicit unsupported-version error"
+        );
+
+        let legacy_snapshot_v1 = legacy_snapshot_v1_from_v2(&snapshot_v3);
         let snapshot_bytes =
             postcard::to_allocvec(&legacy_snapshot_v1).expect("legacy snapshot encodes");
         let snapshot_err =
@@ -596,8 +606,22 @@ mod tests {
             "legacy snapshot payloads should fail with explicit unsupported-version error"
         );
 
-        let delta_v2 = build_cavern_run_delta(&snapshot_v2, &snapshot_v2);
-        let legacy_delta_v1 = legacy_delta_v1_from_v2(&delta_v2);
+        let delta_v3 = build_cavern_run_delta(&snapshot_v3, &snapshot_v3);
+
+        let mut legacy_delta_v2 = delta_v3.clone();
+        legacy_delta_v2.wire_version = 2;
+        let legacy_delta_v2_bytes =
+            postcard::to_allocvec(&legacy_delta_v2).expect("legacy v2 delta encodes");
+        let delta_v2_err = crate::CavernReplicationDriver::decode_delta(&legacy_delta_v2_bytes)
+            .unwrap_err();
+        assert!(
+            delta_v2_err
+                .to_string()
+                .contains("unsupported cavern delta version: 2 (expected V3)"),
+            "legacy v2 delta payloads should fail with explicit unsupported-version error"
+        );
+
+        let legacy_delta_v1 = legacy_delta_v1_from_v2(&delta_v3);
         let delta_bytes = postcard::to_allocvec(&legacy_delta_v1).expect("legacy delta encodes");
         let delta_err = crate::CavernReplicationDriver::decode_delta(&delta_bytes).unwrap_err();
         assert!(

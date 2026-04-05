@@ -62,7 +62,8 @@ render/
 3. Choose the owning subsystem inside that crate.
 4. Add the file/module there.
 
-Domain is for agnostic logic that is reusable.
+Domain is for agnostic logic that is reusable and does not depend on ecs or engine.
+Domain logic should be reusable in my custom engine bevy and Godot.
 Engine is glue for the logic in Domain.
 
 ## Code Discovery
