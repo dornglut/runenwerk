@@ -2,8 +2,7 @@
 //! Purpose: Command execution and history integration.
 
 use crate::{
-	Command, CommandContext, CommandMetadata, CommandOutcome, HistoryEntry, HistoryStack,
-	TransactionMetadata,
+	Command, CommandMetadata, CommandOutcome, HistoryEntry, HistoryStack, TransactionMetadata,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +29,7 @@ pub struct CommandExecutor;
 
 impl CommandExecutor {
 	pub fn execute_command<C>(
-		ctx: &mut C::Context,
+		ctx: &mut C::Context<'_>,
 		command: &mut C,
 	) -> Result<Option<ExecutedCommand>, C::Error>
 	where
@@ -45,7 +44,7 @@ impl CommandExecutor {
 	}
 
 	pub fn execute_transaction<C>(
-		ctx: &mut C::Context,
+		ctx: &mut C::Context<'_>,
 		transaction: TransactionMetadata,
 		commands: &mut [C],
 	) -> Result<ExecutedTransaction, C::Error>

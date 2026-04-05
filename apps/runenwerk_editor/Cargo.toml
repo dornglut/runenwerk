@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+editor_core.workspace = true
+editor_scene.workspace = true
+editor_inspector.workspace = true
+editor_ui.workspace = true
+editor_viewport.workspace = true
+editor_assets.workspace = true
+editor_tools.workspace = true
+ecs.workspace = true
+scene.workspace = true
+glam.workspace = true

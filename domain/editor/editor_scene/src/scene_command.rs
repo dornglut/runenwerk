@@ -1,9 +1,10 @@
 //! File: domain/editor/editor_scene/src/scene_command.rs
 //! Purpose: Scene authoring command intents.
 
-use editor_core::{ComponentTypeId, EntityId};
+use editor_core::{ComponentTypeId, EntityId, ResourceTypeId};
+use editor_inspector::{InspectorEditValue, InspectorPath};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SceneCommandIntent {
 	CreateEntity {
 		parent: Option<EntityId>,
@@ -26,5 +27,20 @@ pub enum SceneCommandIntent {
 	RemoveComponent {
 		entity: EntityId,
 		component_type: ComponentTypeId,
+	},
+	EditComponentField {
+		entity: EntityId,
+		component_type: ComponentTypeId,
+		path: InspectorPath,
+		value: InspectorEditValue,
+	},
+	EditResourceField {
+		resource_type: ResourceTypeId,
+		path: InspectorPath,
+		value: InspectorEditValue,
+	},
+	RenameEntity {
+		entity: EntityId,
+		new_display_name: String,
 	},
 }

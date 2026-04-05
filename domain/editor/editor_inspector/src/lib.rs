@@ -1,16 +1,17 @@
-//! File: domain/editor/editor_inspector/src/lib.rs
-//! Crate: editor_inspector
-
 pub mod adapter;
-pub mod field;
+pub mod bridge;
+pub mod editing;
+pub mod model;
 pub mod resolution;
-pub mod section;
+pub mod session;
 pub mod target;
 pub mod validation;
 
 pub use adapter::*;
-pub use field::*;
+pub use bridge::*;
+pub use editing::*;
+pub use model::*;
 pub use resolution::*;
-pub use section::*;
+pub use session::*;
 pub use target::*;
 pub use validation::*;

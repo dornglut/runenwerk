@@ -1,0 +1,43 @@
+use editor_core::EntityId;
+use scene::Vec3Value;
+
+use crate::editor_panels::TranslateAxis;
+use crate::editor_runtime::{EditorToolRuntimeState, TransformPreviewSession, TransformToolKind};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ViewportToolState {
+	pub hovered_entity: Option<EntityId>,
+	pub active_preview: Option<ViewportPreviewState>,
+	pub active_translate_axis: Option<TranslateAxis>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ViewportPreviewState {
+	pub entity: EntityId,
+	pub tool: TransformToolKind,
+	pub translation_delta: Vec3Value,
+}
+
+impl ViewportToolState {
+	/// File: apps/runenwerk_editor/src/editor_panels/viewport_tool_state.rs
+	/// Method: from_runtime
+	pub fn from_runtime(runtime: &EditorToolRuntimeState) -> Self {
+		Self {
+			hovered_entity: runtime.hovered_entity(),
+			active_preview: runtime.preview().map(ViewportPreviewState::from_session),
+			active_translate_axis: runtime.translate_axis(),
+		}
+	}
+}
+
+impl ViewportPreviewState {
+	/// File: apps/runenwerk_editor/src/editor_panels/viewport_tool_state.rs
+	/// Method: from_session
+	pub fn from_session(session: &TransformPreviewSession) -> Self {
+		Self {
+			entity: session.entity,
+			tool: session.tool,
+			translation_delta: session.translation_delta,
+		}
+	}
+}

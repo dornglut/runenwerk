@@ -3,6 +3,14 @@
 
 use crate::{InspectTarget, InspectorSection};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InspectorAdapterError {
+	UnsupportedTarget,
+	TargetNotFound,
+	TypeNotRegistered,
+	ValueNotAvailable,
+}
+
 pub trait InspectorAdapter {
 	type Error;
 

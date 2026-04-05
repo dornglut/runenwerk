@@ -45,12 +45,21 @@ pub trait CommandContext {
 }
 
 pub trait Command: Send + Sync {
-	type Context: CommandContext;
 	type Error;
+
+	type Context<'a>: CommandContext<Error = Self::Error>
+	where
+		Self: 'a;
 
 	fn metadata(&self) -> &CommandMetadata;
 
-	fn apply(&mut self, ctx: &mut Self::Context) -> Result<CommandOutcome, Self::Error>;
+	fn apply<'a>(
+		&mut self,
+		ctx: &mut Self::Context<'a>,
+	) -> Result<CommandOutcome, Self::Error>;
 
-	fn undo(&mut self, ctx: &mut Self::Context) -> Result<CommandOutcome, Self::Error>;
+	fn undo<'a>(
+		&mut self,
+		ctx: &mut Self::Context<'a>,
+	) -> Result<CommandOutcome, Self::Error>;
 }

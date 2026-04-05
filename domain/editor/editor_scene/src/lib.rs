@@ -3,16 +3,12 @@
 
 pub mod bridge;
 pub mod command;
-pub mod component;
-pub mod entity;
-pub mod hierarchy;
-pub mod resource;
+pub mod commands;
+pub mod model;
 pub mod scene_command;
 
 pub use bridge::*;
 pub use command::*;
-pub use component::*;
-pub use entity::*;
-pub use hierarchy::*;
-pub use resource::*;
+pub use commands::*;
+pub use model::*;
 pub use scene_command::*;

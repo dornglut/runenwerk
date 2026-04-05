@@ -8,3 +8,4 @@ editor_core.workspace = true
 editor_ui.workspace = true
 ui_text.workspace = true
 ui_theme.workspace = true
+ecs.workspace = true

@@ -11,6 +11,7 @@ members = [
     "domain/world_ops",
     "domain/world_sdf",
     "domain/scheduler",
+    "domain/scene",
 
     "domain/ui/ui_math",
     "domain/ui/ui_input",
@@ -44,10 +45,14 @@ members = [
     "apps/grotto_client",
     "apps/runenwerk_editor",
 
-    "adapters/godot_chunking_addon",
+    "adapters/godot_chunking_addon", "domain/scene",
 ]
 
 [workspace.dependencies]
+glam = "0.32.1"
+
+scene = { path = "domain/scene" }
+
 ui_math = { path = "domain/ui/ui_math" }
 ui_input = { path = "domain/ui/ui_input" }
 ui_core = { path = "domain/ui/ui_core" }
@@ -62,3 +67,5 @@ editor_scene = { path = "domain/editor/editor_scene" }
 editor_inspector = { path = "domain/editor/editor_inspector" }
 editor_assets = { path = "domain/editor/editor_assets" }
 editor_tools = { path = "domain/editor/editor_tools" }
+
+ecs = { path = "domain/ecs" }
