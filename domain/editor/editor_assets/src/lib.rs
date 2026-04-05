@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! File: domain/editor/editor_assets/src/lib.rs
+//! Crate: editor_assets
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod asset;
+pub mod browser;
+pub mod dependency;
+pub mod folder;
+pub mod import;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use asset::*;
+pub use browser::*;
+pub use dependency::*;
+pub use folder::*;
+pub use import::*;

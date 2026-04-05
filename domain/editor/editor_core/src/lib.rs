@@ -1,14 +1,22 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! File: domain/editor/editor_core/src/lib.rs
+//! Crate: editor_core
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod command;
+pub mod document;
+pub mod executor;
+pub mod history;
+pub mod selection;
+pub mod session;
+pub mod tool;
+pub mod transaction;
+pub mod transaction_builder;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use command::*;
+pub use document::*;
+pub use executor::*;
+pub use history::*;
+pub use selection::*;
+pub use session::*;
+pub use tool::*;
+pub use transaction::*;
+pub use transaction_builder::*;

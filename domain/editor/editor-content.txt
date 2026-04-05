@@ -6,25 +6,197 @@
      4	edition = "2024"
      5	
      6	[dependencies]
-
+     7	editor_core.workspace = true
+     8	editor_inspector.workspace = true
 ===== END FILE: ./editor_assets/Cargo.toml =====
 
-===== FILE: ./editor_assets/src/lib.rs =====
-     1	pub fn add(left: u64, right: u64) -> u64 {
-     2	    left + right
-     3	}
+===== FILE: ./editor_assets/src/asset.rs =====
+     1	//! File: domain/editor/editor_assets/src/asset.rs
+     2	
+     3	use editor_core::AssetId;
      4	
-     5	#[cfg(test)]
-     6	mod tests {
-     7	    use super::*;
-     8	
-     9	    #[test]
-    10	    fn it_works() {
-    11	        let result = add(2, 2);
-    12	        assert_eq!(result, 4);
-    13	    }
-    14	}
+     5	#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+     6	pub enum AssetKind {
+     7		Scene,
+     8		Material,
+     9		Shader,
+    10		Texture,
+    11		Mesh,
+    12		Audio,
+    13		Animation,
+    14		Rig,
+    15		SdfModel,
+    16		Graph,
+    17		Custom(&'static str),
+    18	}
+    19	
+    20	#[derive(Debug, Clone, PartialEq, Eq)]
+    21	pub struct AssetDescriptor {
+    22		pub id: AssetId,
+    23		pub kind: AssetKind,
+    24		pub display_name: String,
+    25		pub path: String,
+    26		pub is_dirty: bool,
+    27	}
+    28	
+    29	impl AssetDescriptor {
+    30		pub fn new(
+    31			id: AssetId,
+    32			kind: AssetKind,
+    33			display_name: impl Into<String>,
+    34			path: impl Into<String>,
+    35		) -> Self {
+    36			Self {
+    37				id,
+    38				kind,
+    39				display_name: display_name.into(),
+    40				path: path.into(),
+    41				is_dirty: false,
+    42			}
+    43		}
+    44	
+    45		pub fn with_dirty(mut self, is_dirty: bool) -> Self {
+    46			self.is_dirty = is_dirty;
+    47			self
+    48		}
+    49	}
+===== END FILE: ./editor_assets/src/asset.rs =====
 
+===== FILE: ./editor_assets/src/browser.rs =====
+     1	//! File: domain/editor/editor_assets/src/browser.rs
+     2	
+     3	use editor_core::AssetId;
+     4	
+     5	#[derive(Debug, Clone, PartialEq, Eq)]
+     6	pub struct AssetBrowserQuery {
+     7		pub text: String,
+     8		pub kind_filter: Option<String>,
+     9		pub folder_path: Option<String>,
+    10	}
+    11	
+    12	impl AssetBrowserQuery {
+    13		pub fn new() -> Self {
+    14			Self {
+    15				text: String::new(),
+    16				kind_filter: None,
+    17				folder_path: None,
+    18			}
+    19		}
+    20	}
+    21	
+    22	#[derive(Debug, Clone, PartialEq, Eq)]
+    23	pub struct AssetBrowserSelection {
+    24		pub primary: Option<AssetId>,
+    25		pub selected: Vec<AssetId>,
+    26	}
+    27	
+    28	impl AssetBrowserSelection {
+    29		pub fn new() -> Self {
+    30			Self {
+    31				primary: None,
+    32				selected: Vec::new(),
+    33			}
+    34		}
+    35	}
+===== END FILE: ./editor_assets/src/browser.rs =====
+
+===== FILE: ./editor_assets/src/dependency.rs =====
+     1	//! File: domain/editor/editor_assets/src/dependency.rs
+     2	
+     3	use editor_core::AssetId;
+     4	
+     5	#[derive(Debug, Clone, PartialEq, Eq)]
+     6	pub struct AssetDependency {
+     7		pub from: AssetId,
+     8		pub to: AssetId,
+     9		pub relation: String,
+    10	}
+    11	
+    12	impl AssetDependency {
+    13		pub fn new(from: AssetId, to: AssetId, relation: impl Into<String>) -> Self {
+    14			Self {
+    15				from,
+    16				to,
+    17				relation: relation.into(),
+    18			}
+    19		}
+    20	}
+===== END FILE: ./editor_assets/src/dependency.rs =====
+
+===== FILE: ./editor_assets/src/folder.rs =====
+     1	//! File: domain/editor/editor_assets/src/folder.rs
+     2	
+     3	#[derive(Debug, Clone, PartialEq, Eq)]
+     4	pub struct AssetFolder {
+     5		pub path: String,
+     6		pub display_name: String,
+     7		pub children: Vec<String>,
+     8	}
+     9	
+    10	impl AssetFolder {
+    11		pub fn new(path: impl Into<String>, display_name: impl Into<String>) -> Self {
+    12			Self {
+    13				path: path.into(),
+    14				display_name: display_name.into(),
+    15				children: Vec::new(),
+    16			}
+    17		}
+    18	
+    19		pub fn with_children(mut self, children: Vec<String>) -> Self {
+    20			self.children = children;
+    21			self
+    22		}
+    23	}
+===== END FILE: ./editor_assets/src/folder.rs =====
+
+===== FILE: ./editor_assets/src/import.rs =====
+     1	//! File: domain/editor/editor_assets/src/import.rs
+     2	
+     3	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+     4	pub enum ImportStatus {
+     5		Pending,
+     6		Imported,
+     7		Failed,
+     8	}
+     9	
+    10	#[derive(Debug, Clone, PartialEq, Eq)]
+    11	pub struct ImportRecord {
+    12		pub source_path: String,
+    13		pub status: ImportStatus,
+    14		pub message: Option<String>,
+    15	}
+    16	
+    17	impl ImportRecord {
+    18		pub fn new(source_path: impl Into<String>, status: ImportStatus) -> Self {
+    19			Self {
+    20				source_path: source_path.into(),
+    21				status,
+    22				message: None,
+    23			}
+    24		}
+    25	
+    26		pub fn with_message(mut self, message: impl Into<String>) -> Self {
+    27			self.message = Some(message.into());
+    28			self
+    29		}
+    30	}
+===== END FILE: ./editor_assets/src/import.rs =====
+
+===== FILE: ./editor_assets/src/lib.rs =====
+     1	//! File: domain/editor/editor_assets/src/lib.rs
+     2	//! Crate: editor_assets
+     3	
+     4	pub mod asset;
+     5	pub mod browser;
+     6	pub mod dependency;
+     7	pub mod folder;
+     8	pub mod import;
+     9	
+    10	pub use asset::*;
+    11	pub use browser::*;
+    12	pub use dependency::*;
+    13	pub use folder::*;
+    14	pub use import::*;
 ===== END FILE: ./editor_assets/src/lib.rs =====
 
 ===== FILE: ./editor_core/Cargo.toml =====
@@ -34,26 +206,643 @@
      4	edition = "2024"
      5	
      6	[dependencies]
-
+     7	ui_input.workspace = true
+     8	ui_math.workspace = true
 ===== END FILE: ./editor_core/Cargo.toml =====
 
-===== FILE: ./editor_core/src/lib.rs =====
-     1	pub fn add(left: u64, right: u64) -> u64 {
-     2	    left + right
-     3	}
-     4	
-     5	#[cfg(test)]
-     6	mod tests {
-     7	    use super::*;
-     8	
-     9	    #[test]
-    10	    fn it_works() {
-    11	        let result = add(2, 2);
-    12	        assert_eq!(result, 4);
-    13	    }
-    14	}
+===== FILE: ./editor_core/src/command.rs =====
+     1	//! File: domain/editor/editor_core/src/command.rs
+     2	//! Purpose: Core editor command contracts for deterministic mutation pipelines.
+     3	
+     4	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     5	pub struct CommandId(pub u64);
+     6	
+     7	#[derive(Debug, Clone, PartialEq, Eq)]
+     8	pub struct CommandMetadata {
+     9		pub id: CommandId,
+    10		pub label: String,
+    11		pub merge_key: Option<String>,
+    12	}
+    13	
+    14	impl CommandMetadata {
+    15		pub fn new(id: CommandId, label: impl Into<String>) -> Self {
+    16			Self {
+    17				id,
+    18				label: label.into(),
+    19				merge_key: None,
+    20			}
+    21		}
+    22	
+    23		pub fn with_merge_key(mut self, merge_key: impl Into<String>) -> Self {
+    24			self.merge_key = Some(merge_key.into());
+    25			self
+    26		}
+    27	}
+    28	
+    29	#[derive(Debug, Clone, PartialEq, Eq)]
+    30	pub enum CommandOutcome {
+    31		NoOp,
+    32		Applied,
+    33	}
+    34	
+    35	pub trait CommandContext {
+    36		type Error;
+    37	
+    38		fn mark_document_dirty(
+    39			&mut self,
+    40			_document_id: crate::DocumentId,
+    41			_is_dirty: bool,
+    42		) -> Result<(), Self::Error> {
+    43			Ok(())
+    44		}
+    45	}
+    46	
+    47	pub trait Command: Send + Sync {
+    48		type Context: CommandContext;
+    49		type Error;
+    50	
+    51		fn metadata(&self) -> &CommandMetadata;
+    52	
+    53		fn apply(&mut self, ctx: &mut Self::Context) -> Result<CommandOutcome, Self::Error>;
+    54	
+    55		fn undo(&mut self, ctx: &mut Self::Context) -> Result<CommandOutcome, Self::Error>;
+    56	}
+===== END FILE: ./editor_core/src/command.rs =====
 
+===== FILE: ./editor_core/src/document.rs =====
+     1	//! File: domain/editor/editor_core/src/document.rs
+     2	//! Purpose: Editor document identity and document kind contracts.
+     3	
+     4	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     5	pub struct DocumentId(pub u64);
+     6	
+     7	#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+     8	pub enum DocumentKind {
+     9		Scene,
+    10		Asset,
+    11		Resource,
+    12		Tool,
+    13		Custom(&'static str),
+    14	}
+    15	
+    16	#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    17	pub struct DocumentDescriptor {
+    18		pub id: DocumentId,
+    19		pub kind: DocumentKind,
+    20		pub display_name: String,
+    21		pub is_dirty: bool,
+    22	}
+    23	
+    24	impl DocumentDescriptor {
+    25		pub fn new(id: DocumentId, kind: DocumentKind, display_name: impl Into<String>) -> Self {
+    26			Self {
+    27				id,
+    28				kind,
+    29				display_name: display_name.into(),
+    30				is_dirty: false,
+    31			}
+    32		}
+    33	
+    34		pub fn with_dirty(mut self, is_dirty: bool) -> Self {
+    35			self.is_dirty = is_dirty;
+    36			self
+    37		}
+    38	}
+===== END FILE: ./editor_core/src/document.rs =====
+
+===== FILE: ./editor_core/src/executor.rs =====
+     1	//! File: domain/editor/editor_core/src/executor.rs
+     2	//! Purpose: Command execution and history integration.
+     3	
+     4	use crate::{
+     5		Command, CommandContext, CommandMetadata, CommandOutcome, HistoryEntry, HistoryStack,
+     6		TransactionMetadata,
+     7	};
+     8	
+     9	#[derive(Debug, Clone, PartialEq, Eq)]
+    10	pub struct ExecutedCommand {
+    11		pub metadata: CommandMetadata,
+    12	}
+    13	
+    14	#[derive(Debug, Clone, PartialEq, Eq)]
+    15	pub struct ExecutedTransaction {
+    16		pub transaction: TransactionMetadata,
+    17		pub commands: Vec<ExecutedCommand>,
+    18	}
+    19	
+    20	impl ExecutedTransaction {
+    21		pub fn into_history_entry(self) -> HistoryEntry {
+    22			HistoryEntry::new(
+    23				self.transaction,
+    24				self.commands.into_iter().map(|cmd| cmd.metadata).collect(),
+    25			)
+    26		}
+    27	}
+    28	
+    29	pub struct CommandExecutor;
+    30	
+    31	impl CommandExecutor {
+    32		pub fn execute_command<C>(
+    33			ctx: &mut C::Context,
+    34			command: &mut C,
+    35		) -> Result<Option<ExecutedCommand>, C::Error>
+    36		where
+    37			C: Command,
+    38		{
+    39			match command.apply(ctx)? {
+    40				CommandOutcome::NoOp => Ok(None),
+    41				CommandOutcome::Applied => Ok(Some(ExecutedCommand {
+    42					metadata: command.metadata().clone(),
+    43				})),
+    44			}
+    45		}
+    46	
+    47		pub fn execute_transaction<C>(
+    48			ctx: &mut C::Context,
+    49			transaction: TransactionMetadata,
+    50			commands: &mut [C],
+    51		) -> Result<ExecutedTransaction, C::Error>
+    52		where
+    53			C: Command,
+    54		{
+    55			let mut executed = Vec::new();
+    56	
+    57			for command in commands {
+    58				if let Some(entry) = Self::execute_command(ctx, command)? {
+    59					executed.push(entry);
+    60				}
+    61			}
+    62	
+    63			Ok(ExecutedTransaction {
+    64				transaction,
+    65				commands: executed,
+    66			})
+    67		}
+    68	
+    69		pub fn push_history(
+    70			history: &mut HistoryStack,
+    71			transaction: ExecutedTransaction,
+    72		) {
+    73			if transaction.commands.is_empty() {
+    74				return;
+    75			}
+    76	
+    77			history.push_applied(transaction.into_history_entry());
+    78		}
+    79	}
+===== END FILE: ./editor_core/src/executor.rs =====
+
+===== FILE: ./editor_core/src/history.rs =====
+     1	//! File: domain/editor/editor_core/src/history.rs
+     2	//! Purpose: Undo/redo history state and history entry metadata.
+     3	
+     4	use crate::{CommandMetadata, TransactionMetadata};
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct HistoryEntry {
+     8		pub transaction: TransactionMetadata,
+     9		pub commands: Vec<CommandMetadata>,
+    10	}
+    11	
+    12	impl HistoryEntry {
+    13		pub fn new(transaction: TransactionMetadata, commands: Vec<CommandMetadata>) -> Self {
+    14			Self {
+    15				transaction,
+    16				commands,
+    17			}
+    18		}
+    19	}
+    20	
+    21	#[derive(Debug, Default, Clone, PartialEq, Eq)]
+    22	pub struct HistoryStack {
+    23		undo: Vec<HistoryEntry>,
+    24		redo: Vec<HistoryEntry>,
+    25	}
+    26	
+    27	impl HistoryStack {
+    28		pub fn new() -> Self {
+    29			Self::default()
+    30		}
+    31	
+    32		pub fn undo_len(&self) -> usize {
+    33			self.undo.len()
+    34		}
+    35	
+    36		pub fn redo_len(&self) -> usize {
+    37			self.redo.len()
+    38		}
+    39	
+    40		pub fn can_undo(&self) -> bool {
+    41			!self.undo.is_empty()
+    42		}
+    43	
+    44		pub fn can_redo(&self) -> bool {
+    45			!self.redo.is_empty()
+    46		}
+    47	
+    48		pub fn push_applied(&mut self, entry: HistoryEntry) {
+    49			self.undo.push(entry);
+    50			self.redo.clear();
+    51		}
+    52	
+    53		pub fn pop_undo(&mut self) -> Option<HistoryEntry> {
+    54			self.undo.pop()
+    55		}
+    56	
+    57		pub fn push_redo(&mut self, entry: HistoryEntry) {
+    58			self.redo.push(entry);
+    59		}
+    60	
+    61		pub fn pop_redo(&mut self) -> Option<HistoryEntry> {
+    62			self.redo.pop()
+    63		}
+    64	
+    65		pub fn peek_undo(&self) -> Option<&HistoryEntry> {
+    66			self.undo.last()
+    67		}
+    68	
+    69		pub fn peek_redo(&self) -> Option<&HistoryEntry> {
+    70			self.redo.last()
+    71		}
+    72	
+    73		pub fn clear(&mut self) {
+    74			self.undo.clear();
+    75			self.redo.clear();
+    76		}
+    77	}
+===== END FILE: ./editor_core/src/history.rs =====
+
+===== FILE: ./editor_core/src/lib.rs =====
+     1	//! File: domain/editor/editor_core/src/lib.rs
+     2	//! Crate: editor_core
+     3	
+     4	pub mod command;
+     5	pub mod document;
+     6	pub mod executor;
+     7	pub mod history;
+     8	pub mod selection;
+     9	pub mod session;
+    10	pub mod tool;
+    11	pub mod transaction;
+    12	pub mod transaction_builder;
+    13	
+    14	pub use command::*;
+    15	pub use document::*;
+    16	pub use executor::*;
+    17	pub use history::*;
+    18	pub use selection::*;
+    19	pub use session::*;
+    20	pub use tool::*;
+    21	pub use transaction::*;
+    22	pub use transaction_builder::*;
 ===== END FILE: ./editor_core/src/lib.rs =====
+
+===== FILE: ./editor_core/src/selection.rs =====
+     1	//! File: domain/editor/editor_core/src/selection.rs
+     2	//! Purpose: Editor selection model that can represent scene, resource,
+     3	//! component, and asset targets without coupling editor_core to ECS internals.
+     4	
+     5	use std::collections::BTreeSet;
+     6	
+     7	use crate::DocumentId;
+     8	
+     9	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    10	pub struct EntityId(pub u64);
+    11	
+    12	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    13	pub struct ComponentTypeId(pub u64);
+    14	
+    15	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    16	pub struct ResourceTypeId(pub u64);
+    17	
+    18	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    19	pub struct AssetId(pub u64);
+    20	
+    21	#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    22	pub enum SelectionTarget {
+    23		Document(DocumentId),
+    24		Entity(EntityId),
+    25		Component {
+    26			entity: EntityId,
+    27			component_type: ComponentTypeId,
+    28		},
+    29		Resource(ResourceTypeId),
+    30		Asset(AssetId),
+    31		Custom {
+    32			domain: &'static str,
+    33			id: u64,
+    34		},
+    35	}
+    36	
+    37	#[derive(Debug, Clone, Default, PartialEq, Eq)]
+    38	pub struct SelectionSet {
+    39		items: BTreeSet<SelectionTarget>,
+    40		primary: Option<SelectionTarget>,
+    41	}
+    42	
+    43	impl SelectionSet {
+    44		pub fn new() -> Self {
+    45			Self::default()
+    46		}
+    47	
+    48		pub fn is_empty(&self) -> bool {
+    49			self.items.is_empty()
+    50		}
+    51	
+    52		pub fn len(&self) -> usize {
+    53			self.items.len()
+    54		}
+    55	
+    56		pub fn primary(&self) -> Option<&SelectionTarget> {
+    57			self.primary.as_ref()
+    58		}
+    59	
+    60		pub fn contains(&self, target: &SelectionTarget) -> bool {
+    61			self.items.contains(target)
+    62		}
+    63	
+    64		pub fn iter(&self) -> impl Iterator<Item = &SelectionTarget> {
+    65			self.items.iter()
+    66		}
+    67	
+    68		pub fn clear(&mut self) {
+    69			self.items.clear();
+    70			self.primary = None;
+    71		}
+    72	
+    73		pub fn set_single(&mut self, target: SelectionTarget) {
+    74			self.items.clear();
+    75			self.items.insert(target.clone());
+    76			self.primary = Some(target);
+    77		}
+    78	
+    79		pub fn add(&mut self, target: SelectionTarget) {
+    80			let was_empty = self.items.is_empty();
+    81			self.items.insert(target.clone());
+    82	
+    83			if was_empty || self.primary.is_none() {
+    84				self.primary = Some(target);
+    85			}
+    86		}
+    87	
+    88		pub fn remove(&mut self, target: &SelectionTarget) -> bool {
+    89			let removed = self.items.remove(target);
+    90	
+    91			if removed && self.primary.as_ref() == Some(target) {
+    92				self.primary = self.items.iter().next().cloned();
+    93			}
+    94	
+    95			removed
+    96		}
+    97	
+    98		pub fn set_primary(&mut self, target: &SelectionTarget) -> Result<(), &'static str> {
+    99			if !self.items.contains(target) {
+   100				return Err("cannot set primary selection to a target not in the selection set");
+   101			}
+   102	
+   103			self.primary = Some(target.clone());
+   104			Ok(())
+   105		}
+   106	}
+===== END FILE: ./editor_core/src/selection.rs =====
+
+===== FILE: ./editor_core/src/session.rs =====
+     1	//! File: domain/editor/editor_core/src/session.rs
+     2	//! Purpose: Root editor session state.
+     3	
+     4	use std::collections::BTreeMap;
+     5	
+     6	use crate::{DocumentDescriptor, DocumentId, HistoryStack, SelectionSet, ToolId};
+     7	
+     8	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+     9	pub enum EditorMode {
+    10		Edit,
+    11		Play,
+    12		Simulate,
+    13	}
+    14	
+    15	#[derive(Debug, Default)]
+    16	pub struct EditorSession {
+    17		documents: BTreeMap<DocumentId, DocumentDescriptor>,
+    18		active_document: Option<DocumentId>,
+    19		active_tool: Option<ToolId>,
+    20		mode: EditorMode,
+    21		selection: SelectionSet,
+    22		history: HistoryStack,
+    23	}
+    24	
+    25	impl Default for EditorMode {
+    26		fn default() -> Self {
+    27			Self::Edit
+    28		}
+    29	}
+    30	
+    31	impl EditorSession {
+    32		pub fn new() -> Self {
+    33			Self::default()
+    34		}
+    35	
+    36		pub fn mode(&self) -> EditorMode {
+    37			self.mode
+    38		}
+    39	
+    40		pub fn set_mode(&mut self, mode: EditorMode) {
+    41			self.mode = mode;
+    42		}
+    43	
+    44		pub fn active_document(&self) -> Option<DocumentId> {
+    45			self.active_document
+    46		}
+    47	
+    48		pub fn set_active_document(&mut self, document_id: Option<DocumentId>) {
+    49			self.active_document = document_id;
+    50		}
+    51	
+    52		pub fn active_tool(&self) -> Option<ToolId> {
+    53			self.active_tool
+    54		}
+    55	
+    56		pub fn set_active_tool(&mut self, tool_id: Option<ToolId>) {
+    57			self.active_tool = tool_id;
+    58		}
+    59	
+    60		pub fn documents(&self) -> impl Iterator<Item = &DocumentDescriptor> {
+    61			self.documents.values()
+    62		}
+    63	
+    64		pub fn document(&self, document_id: DocumentId) -> Option<&DocumentDescriptor> {
+    65			self.documents.get(&document_id)
+    66		}
+    67	
+    68		pub fn document_mut(&mut self, document_id: DocumentId) -> Option<&mut DocumentDescriptor> {
+    69			self.documents.get_mut(&document_id)
+    70		}
+    71	
+    72		pub fn upsert_document(&mut self, descriptor: DocumentDescriptor) -> Option<DocumentDescriptor> {
+    73			self.documents.insert(descriptor.id, descriptor)
+    74		}
+    75	
+    76		pub fn remove_document(&mut self, document_id: DocumentId) -> Option<DocumentDescriptor> {
+    77			if self.active_document == Some(document_id) {
+    78				self.active_document = None;
+    79			}
+    80	
+    81			self.documents.remove(&document_id)
+    82		}
+    83	
+    84		pub fn selection(&self) -> &SelectionSet {
+    85			&self.selection
+    86		}
+    87	
+    88		pub fn selection_mut(&mut self) -> &mut SelectionSet {
+    89			&mut self.selection
+    90		}
+    91	
+    92		pub fn history(&self) -> &HistoryStack {
+    93			&self.history
+    94		}
+    95	
+    96		pub fn history_mut(&mut self) -> &mut HistoryStack {
+    97			&mut self.history
+    98		}
+    99	
+   100		pub fn clear_selection(&mut self) {
+   101			self.selection.clear();
+   102		}
+   103	
+   104		pub fn select_single(&mut self, target: crate::SelectionTarget) {
+   105			self.selection.set_single(target);
+   106		}
+   107	
+   108		pub fn add_selection(&mut self, target: crate::SelectionTarget) {
+   109			self.selection.add(target);
+   110		}
+   111	
+   112		pub fn set_document_dirty(
+   113			&mut self,
+   114			document_id: crate::DocumentId,
+   115			is_dirty: bool,
+   116		) -> Result<(), &'static str> {
+   117			let document = self
+   118				.documents
+   119				.get_mut(&document_id)
+   120				.ok_or("document not found")?;
+   121	
+   122			document.is_dirty = is_dirty;
+   123			Ok(())
+   124		}
+   125	}
+   126	
+   127	impl crate::CommandContext for EditorSession {
+   128		type Error = &'static str;
+   129	
+   130		fn mark_document_dirty(
+   131			&mut self,
+   132			document_id: crate::DocumentId,
+   133			is_dirty: bool,
+   134		) -> Result<(), Self::Error> {
+   135			self.set_document_dirty(document_id, is_dirty)
+   136		}
+   137	}
+===== END FILE: ./editor_core/src/session.rs =====
+
+===== FILE: ./editor_core/src/tool.rs =====
+     1	//! File: domain/editor/editor_core/src/tool.rs
+     2	//! Purpose: Tool identity and tool descriptor contracts.
+     3	
+     4	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     5	pub struct ToolId(pub u64);
+     6	
+     7	#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+     8	pub struct ToolDescriptor {
+     9		pub id: ToolId,
+    10		pub stable_name: &'static str,
+    11		pub display_name: String,
+    12	}
+    13	
+    14	impl ToolDescriptor {
+    15		pub fn new(id: ToolId, stable_name: &'static str, display_name: impl Into<String>) -> Self {
+    16			Self {
+    17				id,
+    18				stable_name,
+    19				display_name: display_name.into(),
+    20			}
+    21		}
+    22	}
+===== END FILE: ./editor_core/src/tool.rs =====
+
+===== FILE: ./editor_core/src/transaction.rs =====
+     1	//! File: domain/editor/editor_core/src/transaction.rs
+     2	//! Purpose: Grouped editor mutation contracts.
+     3	
+     4	use crate::CommandMetadata;
+     5	
+     6	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     7	pub struct TransactionId(pub u64);
+     8	
+     9	#[derive(Debug, Clone, PartialEq, Eq)]
+    10	pub struct TransactionMetadata {
+    11		pub id: TransactionId,
+    12		pub label: String,
+    13	}
+    14	
+    15	impl TransactionMetadata {
+    16		pub fn new(id: TransactionId, label: impl Into<String>) -> Self {
+    17			Self {
+    18				id,
+    19				label: label.into(),
+    20			}
+    21		}
+    22	}
+    23	
+    24	pub trait Transaction {
+    25		fn metadata(&self) -> &TransactionMetadata;
+    26	
+    27		fn command_metadata(&self) -> &[CommandMetadata];
+    28	}
+===== END FILE: ./editor_core/src/transaction.rs =====
+
+===== FILE: ./editor_core/src/transaction_builder.rs =====
+     1	//! File: domain/editor/editor_core/src/transaction_builder.rs
+     2	//! Purpose: Lightweight transaction assembly before execution/history storage.
+     3	
+     4	use crate::{CommandMetadata, TransactionId, TransactionMetadata};
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct TransactionBuilder {
+     8		metadata: TransactionMetadata,
+     9		commands: Vec<CommandMetadata>,
+    10	}
+    11	
+    12	impl TransactionBuilder {
+    13		pub fn new(id: TransactionId, label: impl Into<String>) -> Self {
+    14			Self {
+    15				metadata: TransactionMetadata::new(id, label),
+    16				commands: Vec::new(),
+    17			}
+    18		}
+    19	
+    20		pub fn metadata(&self) -> &TransactionMetadata {
+    21			&self.metadata
+    22		}
+    23	
+    24		pub fn command_metadata(&self) -> &[CommandMetadata] {
+    25			&self.commands
+    26		}
+    27	
+    28		pub fn push_command(&mut self, metadata: CommandMetadata) {
+    29			self.commands.push(metadata);
+    30		}
+    31	
+    32		pub fn is_empty(&self) -> bool {
+    33			self.commands.is_empty()
+    34		}
+    35	
+    36		pub fn into_parts(self) -> (TransactionMetadata, Vec<CommandMetadata>) {
+    37			(self.metadata, self.commands)
+    38		}
+    39	}
+===== END FILE: ./editor_core/src/transaction_builder.rs =====
 
 ===== FILE: ./editor_inspector/Cargo.toml =====
      1	[package]
@@ -62,26 +851,238 @@
      4	edition = "2024"
      5	
      6	[dependencies]
-
+     7	editor_core.workspace = true
+     8	editor_ui.workspace = true
+     9	ui_text.workspace = true
+    10	ui_theme.workspace = true
 ===== END FILE: ./editor_inspector/Cargo.toml =====
 
-===== FILE: ./editor_inspector/src/lib.rs =====
-     1	pub fn add(left: u64, right: u64) -> u64 {
-     2	    left + right
-     3	}
-     4	
-     5	#[cfg(test)]
-     6	mod tests {
-     7	    use super::*;
+===== FILE: ./editor_inspector/src/adapter.rs =====
+     1	//! File: domain/editor/editor_inspector/src/adapter.rs
+     2	//! Purpose: Adapter contracts for generating inspector sections from domain targets.
+     3	
+     4	use crate::{InspectTarget, InspectorSection};
+     5	
+     6	pub trait InspectorAdapter {
+     7		type Error;
      8	
-     9	    #[test]
-    10	    fn it_works() {
-    11	        let result = add(2, 2);
-    12	        assert_eq!(result, 4);
-    13	    }
-    14	}
+     9		fn supports(&self, target: &InspectTarget) -> bool;
+    10	
+    11		fn build_sections(&self, target: &InspectTarget) -> Result<Vec<InspectorSection>, Self::Error>;
+    12	}
+===== END FILE: ./editor_inspector/src/adapter.rs =====
 
+===== FILE: ./editor_inspector/src/field.rs =====
+     1	//! File: domain/editor/editor_inspector/src/field.rs
+     2	//! Purpose: Generic inspector field surface for generated and custom inspectors.
+     3	
+     4	use crate::ValidationMessage;
+     5	
+     6	#[derive(Debug, Clone, PartialEq)]
+     7	pub enum InspectorValue {
+     8		Bool(bool),
+     9		Integer(i64),
+    10		Float(f64),
+    11		Text(String),
+    12		Enum {
+    13			current: String,
+    14			options: Vec<String>,
+    15		},
+    16		ReadOnlyText(String),
+    17	}
+    18	
+    19	#[derive(Debug, Clone, PartialEq)]
+    20	pub struct InspectorField {
+    21		pub stable_name: String,
+    22		pub display_name: String,
+    23		pub value: InspectorValue,
+    24		pub is_read_only: bool,
+    25		pub validation: Vec<ValidationMessage>,
+    26	}
+    27	
+    28	impl InspectorField {
+    29		pub fn new(
+    30			stable_name: impl Into<String>,
+    31			display_name: impl Into<String>,
+    32			value: InspectorValue,
+    33		) -> Self {
+    34			Self {
+    35				stable_name: stable_name.into(),
+    36				display_name: display_name.into(),
+    37				value,
+    38				is_read_only: false,
+    39				validation: Vec::new(),
+    40			}
+    41		}
+    42	
+    43		pub fn read_only(mut self, is_read_only: bool) -> Self {
+    44			self.is_read_only = is_read_only;
+    45			self
+    46		}
+    47	
+    48		pub fn with_validation(mut self, message: ValidationMessage) -> Self {
+    49			self.validation.push(message);
+    50			self
+    51		}
+    52	}
+===== END FILE: ./editor_inspector/src/field.rs =====
+
+===== FILE: ./editor_inspector/src/lib.rs =====
+     1	//! File: domain/editor/editor_inspector/src/lib.rs
+     2	//! Crate: editor_inspector
+     3	
+     4	pub mod adapter;
+     5	pub mod field;
+     6	pub mod resolution;
+     7	pub mod section;
+     8	pub mod target;
+     9	pub mod validation;
+    10	
+    11	pub use adapter::*;
+    12	pub use field::*;
+    13	pub use resolution::*;
+    14	pub use section::*;
+    15	pub use target::*;
+    16	pub use validation::*;
 ===== END FILE: ./editor_inspector/src/lib.rs =====
+
+===== FILE: ./editor_inspector/src/resolution.rs =====
+     1	//! File: domain/editor/editor_inspector/src/resolution.rs
+     2	//! Purpose: Resolve inspector targets from editor selection state.
+     3	
+     4	use editor_core::SelectionSet;
+     5	
+     6	use crate::InspectTarget;
+     7	
+     8	pub fn resolve_primary_inspect_target(selection: &SelectionSet) -> Option<InspectTarget> {
+     9		selection.primary().map(InspectTarget::from)
+    10	}
+    11	
+    12	pub fn resolve_all_inspect_targets(selection: &SelectionSet) -> Vec<InspectTarget> {
+    13		selection.iter().map(InspectTarget::from).collect()
+    14	}
+===== END FILE: ./editor_inspector/src/resolution.rs =====
+
+===== FILE: ./editor_inspector/src/section.rs =====
+     1	//! File: domain/editor/editor_inspector/src/section.rs
+     2	//! Purpose: Inspector section/grouping model.
+     3	
+     4	use crate::InspectorField;
+     5	
+     6	#[derive(Debug, Clone, PartialEq)]
+     7	pub struct InspectorSection {
+     8		pub stable_name: String,
+     9		pub display_name: String,
+    10		pub fields: Vec<InspectorField>,
+    11	}
+    12	
+    13	impl InspectorSection {
+    14		pub fn new(
+    15			stable_name: impl Into<String>,
+    16			display_name: impl Into<String>,
+    17		) -> Self {
+    18			Self {
+    19				stable_name: stable_name.into(),
+    20				display_name: display_name.into(),
+    21				fields: Vec::new(),
+    22			}
+    23		}
+    24	
+    25		pub fn with_field(mut self, field: InspectorField) -> Self {
+    26			self.fields.push(field);
+    27			self
+    28		}
+    29	}
+===== END FILE: ./editor_inspector/src/section.rs =====
+
+===== FILE: ./editor_inspector/src/target.rs =====
+     1	//! File: domain/editor/editor_inspector/src/target.rs
+     2	//! Purpose: Inspector target surface for editor-owned and external domain state.
+     3	
+     4	use editor_core::{AssetId, ComponentTypeId, DocumentId, EntityId, ResourceTypeId, SelectionTarget};
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+     7	pub enum InspectTarget {
+     8		Document(DocumentId),
+     9		Entity(EntityId),
+    10		Component {
+    11			entity: EntityId,
+    12			component_type: ComponentTypeId,
+    13		},
+    14		Resource(ResourceTypeId),
+    15		Asset(AssetId),
+    16		Query {
+    17			stable_name: String,
+    18		},
+    19		Custom {
+    20			domain: &'static str,
+    21			id: u64,
+    22		},
+    23	}
+    24	
+    25	impl From<&SelectionTarget> for InspectTarget {
+    26		fn from(value: &SelectionTarget) -> Self {
+    27			match value {
+    28				SelectionTarget::Document(id) => Self::Document(*id),
+    29				SelectionTarget::Entity(id) => Self::Entity(*id),
+    30				SelectionTarget::Component {
+    31					entity,
+    32					component_type,
+    33				} => Self::Component {
+    34					entity: *entity,
+    35					component_type: *component_type,
+    36				},
+    37				SelectionTarget::Resource(id) => Self::Resource(*id),
+    38				SelectionTarget::Asset(id) => Self::Asset(*id),
+    39				SelectionTarget::Custom { domain, id } => Self::Custom {
+    40					domain,
+    41					id: *id,
+    42				},
+    43			}
+    44		}
+    45	}
+===== END FILE: ./editor_inspector/src/target.rs =====
+
+===== FILE: ./editor_inspector/src/validation.rs =====
+     1	//! File: domain/editor/editor_inspector/src/validation.rs
+     2	//! Purpose: Validation messages surfaced by inspector adapters and field editing.
+     3	
+     4	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+     5	pub enum ValidationSeverity {
+     6		Info,
+     7		Warning,
+     8		Error,
+     9	}
+    10	
+    11	#[derive(Debug, Clone, PartialEq, Eq)]
+    12	pub struct ValidationMessage {
+    13		pub severity: ValidationSeverity,
+    14		pub text: String,
+    15	}
+    16	
+    17	impl ValidationMessage {
+    18		pub fn info(text: impl Into<String>) -> Self {
+    19			Self {
+    20				severity: ValidationSeverity::Info,
+    21				text: text.into(),
+    22			}
+    23		}
+    24	
+    25		pub fn warning(text: impl Into<String>) -> Self {
+    26			Self {
+    27				severity: ValidationSeverity::Warning,
+    28				text: text.into(),
+    29			}
+    30		}
+    31	
+    32		pub fn error(text: impl Into<String>) -> Self {
+    33			Self {
+    34				severity: ValidationSeverity::Error,
+    35				text: text.into(),
+    36			}
+    37		}
+    38	}
+===== END FILE: ./editor_inspector/src/validation.rs =====
 
 ===== FILE: ./editor_scene/Cargo.toml =====
      1	[package]
@@ -90,26 +1091,251 @@
      4	edition = "2024"
      5	
      6	[dependencies]
-
+     7	editor_core.workspace = true
+     8	editor_inspector.workspace = true
 ===== END FILE: ./editor_scene/Cargo.toml =====
 
-===== FILE: ./editor_scene/src/lib.rs =====
-     1	pub fn add(left: u64, right: u64) -> u64 {
-     2	    left + right
-     3	}
-     4	
-     5	#[cfg(test)]
-     6	mod tests {
-     7	    use super::*;
-     8	
-     9	    #[test]
-    10	    fn it_works() {
-    11	        let result = add(2, 2);
-    12	        assert_eq!(result, 4);
-    13	    }
-    14	}
+===== FILE: ./editor_scene/src/bridge.rs =====
+     1	//! File: domain/editor/editor_scene/src/bridge.rs
+     2	//! Purpose: Convert scene authoring intents into executable editor commands.
+     3	
+     4	use editor_core::CommandId;
+     5	
+     6	use crate::{SceneCommandIntent, SceneEditorCommand};
+     7	
+     8	pub fn scene_intent_label(intent: &SceneCommandIntent) -> String {
+     9		match intent {
+    10			SceneCommandIntent::CreateEntity { .. } => "Create Entity".to_string(),
+    11			SceneCommandIntent::DeleteEntity { .. } => "Delete Entity".to_string(),
+    12			SceneCommandIntent::DuplicateEntity { .. } => "Duplicate Entity".to_string(),
+    13			SceneCommandIntent::ReparentEntity { .. } => "Reparent Entity".to_string(),
+    14			SceneCommandIntent::AddComponent { .. } => "Add Component".to_string(),
+    15			SceneCommandIntent::RemoveComponent { .. } => "Remove Component".to_string(),
+    16		}
+    17	}
+    18	
+    19	pub fn scene_intent_to_command(
+    20		id: CommandId,
+    21		intent: SceneCommandIntent,
+    22	) -> SceneEditorCommand {
+    23		let label = scene_intent_label(&intent);
+    24		SceneEditorCommand::new(id, label, intent)
+    25	}
+===== END FILE: ./editor_scene/src/bridge.rs =====
 
+===== FILE: ./editor_scene/src/command.rs =====
+     1	//! File: domain/editor/editor_scene/src/command.rs
+     2	//! Purpose: Executable scene command placeholders built from scene intents.
+     3	
+     4	use editor_core::{
+     5		Command, CommandContext, CommandId, CommandMetadata, CommandOutcome,
+     6	};
+     7	
+     8	use crate::SceneCommandIntent;
+     9	
+    10	#[derive(Debug, Clone, PartialEq, Eq)]
+    11	pub struct SceneEditorCommand {
+    12		metadata: CommandMetadata,
+    13		pub intent: SceneCommandIntent,
+    14	}
+    15	
+    16	impl SceneEditorCommand {
+    17		pub fn new(
+    18			id: CommandId,
+    19			label: impl Into<String>,
+    20			intent: SceneCommandIntent,
+    21		) -> Self {
+    22			Self {
+    23				metadata: CommandMetadata::new(id, label),
+    24				intent,
+    25			}
+    26		}
+    27	}
+    28	
+    29	impl Command for SceneEditorCommand {
+    30		type Context = editor_core::EditorSession;
+    31		type Error = &'static str;
+    32	
+    33		fn metadata(&self) -> &CommandMetadata {
+    34			&self.metadata
+    35		}
+    36	
+    37		fn apply(&mut self, _ctx: &mut Self::Context) -> Result<CommandOutcome, Self::Error> {
+    38			Ok(CommandOutcome::Applied)
+    39		}
+    40	
+    41		fn undo(&mut self, _ctx: &mut Self::Context) -> Result<CommandOutcome, Self::Error> {
+    42			Ok(CommandOutcome::Applied)
+    43		}
+    44	}
+===== END FILE: ./editor_scene/src/command.rs =====
+
+===== FILE: ./editor_scene/src/component.rs =====
+     1	//! File: domain/editor/editor_scene/src/component.rs
+     2	//! Purpose: Component authoring targets and descriptors.
+     3	
+     4	use editor_core::{ComponentTypeId, EntityId};
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct SceneComponentDescriptor {
+     8		pub entity: EntityId,
+     9		pub component_type: ComponentTypeId,
+    10		pub display_name: String,
+    11	}
+    12	
+    13	impl SceneComponentDescriptor {
+    14		pub fn new(
+    15			entity: EntityId,
+    16			component_type: ComponentTypeId,
+    17			display_name: impl Into<String>,
+    18		) -> Self {
+    19			Self {
+    20				entity,
+    21				component_type,
+    22				display_name: display_name.into(),
+    23			}
+    24		}
+    25	}
+===== END FILE: ./editor_scene/src/component.rs =====
+
+===== FILE: ./editor_scene/src/entity.rs =====
+     1	//! File: domain/editor/editor_scene/src/entity.rs
+     2	//! Purpose: Scene entity authoring targets and descriptors.
+     3	
+     4	use editor_core::EntityId;
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct SceneEntityDescriptor {
+     8		pub id: EntityId,
+     9		pub display_name: String,
+    10		pub parent: Option<EntityId>,
+    11	}
+    12	
+    13	impl SceneEntityDescriptor {
+    14		pub fn new(id: EntityId, display_name: impl Into<String>) -> Self {
+    15			Self {
+    16				id,
+    17				display_name: display_name.into(),
+    18				parent: None,
+    19			}
+    20		}
+    21	
+    22		pub fn with_parent(mut self, parent: Option<EntityId>) -> Self {
+    23			self.parent = parent;
+    24			self
+    25		}
+    26	}
+===== END FILE: ./editor_scene/src/entity.rs =====
+
+===== FILE: ./editor_scene/src/hierarchy.rs =====
+     1	//! File: domain/editor/editor_scene/src/hierarchy.rs
+     2	//! Purpose: Scene hierarchy model for outliner/tree authoring.
+     3	
+     4	use editor_core::EntityId;
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct HierarchyNode {
+     8		pub entity: EntityId,
+     9		pub parent: Option<EntityId>,
+    10		pub children: Vec<EntityId>,
+    11	}
+    12	
+    13	impl HierarchyNode {
+    14		pub fn new(entity: EntityId) -> Self {
+    15			Self {
+    16				entity,
+    17				parent: None,
+    18				children: Vec::new(),
+    19			}
+    20		}
+    21	
+    22		pub fn with_parent(mut self, parent: Option<EntityId>) -> Self {
+    23			self.parent = parent;
+    24			self
+    25		}
+    26	
+    27		pub fn with_children(mut self, children: Vec<EntityId>) -> Self {
+    28			self.children = children;
+    29			self
+    30		}
+    31	}
+===== END FILE: ./editor_scene/src/hierarchy.rs =====
+
+===== FILE: ./editor_scene/src/lib.rs =====
+     1	//! File: domain/editor/editor_scene/src/lib.rs
+     2	//! Crate: editor_scene
+     3	
+     4	pub mod bridge;
+     5	pub mod command;
+     6	pub mod component;
+     7	pub mod entity;
+     8	pub mod hierarchy;
+     9	pub mod resource;
+    10	pub mod scene_command;
+    11	
+    12	pub use bridge::*;
+    13	pub use command::*;
+    14	pub use component::*;
+    15	pub use entity::*;
+    16	pub use hierarchy::*;
+    17	pub use resource::*;
+    18	pub use scene_command::*;
 ===== END FILE: ./editor_scene/src/lib.rs =====
+
+===== FILE: ./editor_scene/src/resource.rs =====
+     1	//! File: domain/editor/editor_scene/src/resource.rs
+     2	//! Purpose: Resource authoring targets and descriptors.
+     3	
+     4	use editor_core::ResourceTypeId;
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct SceneResourceDescriptor {
+     8		pub resource_type: ResourceTypeId,
+     9		pub display_name: String,
+    10	}
+    11	
+    12	impl SceneResourceDescriptor {
+    13		pub fn new(resource_type: ResourceTypeId, display_name: impl Into<String>) -> Self {
+    14			Self {
+    15				resource_type,
+    16				display_name: display_name.into(),
+    17			}
+    18		}
+    19	}
+===== END FILE: ./editor_scene/src/resource.rs =====
+
+===== FILE: ./editor_scene/src/scene_command.rs =====
+     1	//! File: domain/editor/editor_scene/src/scene_command.rs
+     2	//! Purpose: Scene authoring command intents.
+     3	
+     4	use editor_core::{ComponentTypeId, EntityId};
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub enum SceneCommandIntent {
+     8		CreateEntity {
+     9			parent: Option<EntityId>,
+    10			display_name: String,
+    11		},
+    12		DeleteEntity {
+    13			entity: EntityId,
+    14		},
+    15		DuplicateEntity {
+    16			entity: EntityId,
+    17		},
+    18		ReparentEntity {
+    19			entity: EntityId,
+    20			new_parent: Option<EntityId>,
+    21		},
+    22		AddComponent {
+    23			entity: EntityId,
+    24			component_type: ComponentTypeId,
+    25		},
+    26		RemoveComponent {
+    27			entity: EntityId,
+    28			component_type: ComponentTypeId,
+    29		},
+    30	}
+===== END FILE: ./editor_scene/src/scene_command.rs =====
 
 ===== FILE: ./editor_tools/Cargo.toml =====
      1	[package]
@@ -118,26 +1344,241 @@
      4	edition = "2024"
      5	
      6	[dependencies]
-
+     7	editor_core.workspace = true
+     8	editor_scene.workspace = true
+     9	editor_viewport.workspace = true
+    10	ui_input.workspace = true
+    11	ui_math.workspace = true
 ===== END FILE: ./editor_tools/Cargo.toml =====
 
-===== FILE: ./editor_tools/src/lib.rs =====
-     1	pub fn add(left: u64, right: u64) -> u64 {
-     2	    left + right
-     3	}
-     4	
-     5	#[cfg(test)]
-     6	mod tests {
-     7	    use super::*;
-     8	
-     9	    #[test]
-    10	    fn it_works() {
-    11	        let result = add(2, 2);
-    12	        assert_eq!(result, 4);
-    13	    }
-    14	}
+===== FILE: ./editor_tools/src/behavior.rs =====
+     1	//! File: domain/editor/editor_tools/src/behavior.rs
+     2	//! Purpose: Tool lifecycle and input handling contracts.
+     3	
+     4	use crate::{ToolContext, ToolInputEvent, ToolResult};
+     5	
+     6	pub trait ToolBehavior: Send + Sync {
+     7		fn on_activate(&mut self, _ctx: &ToolContext<'_>) -> ToolResult {
+     8			ToolResult::none()
+     9		}
+    10	
+    11		fn on_deactivate(&mut self, _ctx: &ToolContext<'_>) -> ToolResult {
+    12			ToolResult::none()
+    13		}
+    14	
+    15		fn handle_input(
+    16			&mut self,
+    17			ctx: &ToolContext<'_>,
+    18			event: &ToolInputEvent,
+    19		) -> ToolResult;
+    20	
+    21		fn update(&mut self, _ctx: &ToolContext<'_>) -> ToolResult {
+    22			ToolResult::none()
+    23		}
+    24	}
+===== END FILE: ./editor_tools/src/behavior.rs =====
 
+===== FILE: ./editor_tools/src/bridge.rs =====
+     1	//! File: domain/editor/editor_tools/src/bridge.rs
+     2	//! Purpose: Convert tool results into editor-facing actions.
+     3	
+     4	use editor_core::SelectionTarget;
+     5	
+     6	use crate::{ToolIntent, ToolResult};
+     7	
+     8	#[derive(Debug, Clone, PartialEq)]
+     9	pub enum ToolAction {
+    10		SelectSingle(SelectionTarget),
+    11		ClearSelection,
+    12		Scene(editor_scene::SceneCommandIntent),
+    13		HoverEntity(Option<editor_core::EntityId>),
+    14		BeginPreview,
+    15		UpdatePreview,
+    16		CommitPreview,
+    17		CancelPreview,
+    18	}
+    19	
+    20	pub fn collect_tool_actions(result: ToolResult) -> Vec<ToolAction> {
+    21		result
+    22			.intents
+    23			.into_iter()
+    24			.map(|intent| match intent {
+    25				ToolIntent::Scene(scene) => ToolAction::Scene(scene),
+    26				ToolIntent::SelectEntity(entity) => {
+    27					ToolAction::SelectSingle(SelectionTarget::Entity(entity))
+    28				}
+    29				ToolIntent::ClearSelection => ToolAction::ClearSelection,
+    30				ToolIntent::SetHoverEntity(entity) => ToolAction::HoverEntity(entity),
+    31				ToolIntent::BeginPreview => ToolAction::BeginPreview,
+    32				ToolIntent::UpdatePreview => ToolAction::UpdatePreview,
+    33				ToolIntent::CommitPreview => ToolAction::CommitPreview,
+    34				ToolIntent::CancelPreview => ToolAction::CancelPreview,
+    35			})
+    36			.collect()
+    37	}
+===== END FILE: ./editor_tools/src/bridge.rs =====
+
+===== FILE: ./editor_tools/src/context.rs =====
+     1	//! File: domain/editor/editor_tools/src/context.rs
+     2	
+     3	use editor_core::{EditorSession, ToolId};
+     4	use editor_viewport::{SnapSettings, ViewportHitResult, ViewportId};
+     5	
+     6	pub struct ToolContext<'a> {
+     7		pub session: &'a EditorSession,
+     8		pub active_tool: ToolId,
+     9		pub viewport_id: ViewportId,
+    10		pub last_hit: Option<&'a ViewportHitResult>,
+    11		pub snap: SnapSettings,
+    12	}
+===== END FILE: ./editor_tools/src/context.rs =====
+
+===== FILE: ./editor_tools/src/dispatcher.rs =====
+     1	//! File: domain/editor/editor_tools/src/dispatcher.rs
+     2	//! Purpose: Apply tool behavior to inputs and collect tool results.
+     3	
+     4	use crate::{ToolBehavior, ToolContext, ToolInputEvent, ToolResult};
+     5	
+     6	pub struct ToolDispatcher;
+     7	
+     8	impl ToolDispatcher {
+     9		pub fn activate(
+    10			tool: &mut dyn ToolBehavior,
+    11			ctx: &ToolContext<'_>,
+    12		) -> ToolResult {
+    13			tool.on_activate(ctx)
+    14		}
+    15	
+    16		pub fn deactivate(
+    17			tool: &mut dyn ToolBehavior,
+    18			ctx: &ToolContext<'_>,
+    19		) -> ToolResult {
+    20			tool.on_deactivate(ctx)
+    21		}
+    22	
+    23		pub fn dispatch_input(
+    24			tool: &mut dyn ToolBehavior,
+    25			ctx: &ToolContext<'_>,
+    26			event: &ToolInputEvent,
+    27		) -> ToolResult {
+    28			tool.handle_input(ctx, event)
+    29		}
+    30	
+    31		pub fn update(
+    32			tool: &mut dyn ToolBehavior,
+    33			ctx: &ToolContext<'_>,
+    34		) -> ToolResult {
+    35			tool.update(ctx)
+    36		}
+    37	}
+===== END FILE: ./editor_tools/src/dispatcher.rs =====
+
+===== FILE: ./editor_tools/src/input.rs =====
+     1	//! File: domain/editor/editor_tools/src/input.rs
+     2	
+     3	use ui_input::{KeyboardEvent, PointerEvent};
+     4	
+     5	#[derive(Debug, Clone, PartialEq)]
+     6	pub enum ToolInputEvent {
+     7		Pointer(PointerEvent),
+     8		Keyboard(KeyboardEvent),
+     9		Cancel,
+    10		Confirm,
+    11	}
+===== END FILE: ./editor_tools/src/input.rs =====
+
+===== FILE: ./editor_tools/src/intent.rs =====
+     1	//! File: domain/editor/editor_tools/src/intent.rs
+     2	
+     3	use editor_core::EntityId;
+     4	use editor_scene::SceneCommandIntent;
+     5	
+     6	#[derive(Debug, Clone, PartialEq)]
+     7	pub enum ToolIntent {
+     8		Scene(SceneCommandIntent),
+     9		SelectEntity(EntityId),
+    10		ClearSelection,
+    11		SetHoverEntity(Option<EntityId>),
+    12		BeginPreview,
+    13		UpdatePreview,
+    14		CommitPreview,
+    15		CancelPreview,
+    16	}
+===== END FILE: ./editor_tools/src/intent.rs =====
+
+===== FILE: ./editor_tools/src/lib.rs =====
+     1	//! File: domain/editor/editor_tools/src/lib.rs
+     2	//! Crate: editor_tools
+     3	
+     4	pub mod behavior;
+     5	pub mod context;
+     6	pub mod input;
+     7	pub mod intent;
+     8	pub mod result;
+     9	pub mod tool;
+    10	pub mod dispatcher;
+    11	
+    12	pub use dispatcher::*;
+    13	pub mod bridge;
+    14	
+    15	pub use bridge::*;
+    16	
+    17	pub use behavior::*;
+    18	pub use context::*;
+    19	pub use input::*;
+    20	pub use intent::*;
+    21	pub use result::*;
+    22	pub use tool::*;
 ===== END FILE: ./editor_tools/src/lib.rs =====
+
+===== FILE: ./editor_tools/src/result.rs =====
+     1	//! File: domain/editor/editor_tools/src/result.rs
+     2	
+     3	use crate::ToolIntent;
+     4	
+     5	#[derive(Debug, Clone, PartialEq)]
+     6	pub struct ToolResult {
+     7		pub intents: Vec<ToolIntent>,
+     8		pub keep_active: bool,
+     9	}
+    10	
+    11	impl ToolResult {
+    12		pub fn none() -> Self {
+    13			Self {
+    14				intents: Vec::new(),
+    15				keep_active: true,
+    16			}
+    17		}
+    18	
+    19		pub fn with_intent(mut self, intent: ToolIntent) -> Self {
+    20			self.intents.push(intent);
+    21			self
+    22		}
+    23	}
+===== END FILE: ./editor_tools/src/result.rs =====
+
+===== FILE: ./editor_tools/src/tool.rs =====
+     1	//! File: domain/editor/editor_tools/src/tool.rs
+     2	
+     3	use editor_core::ToolId;
+     4	
+     5	#[derive(Debug, Clone, PartialEq, Eq)]
+     6	pub struct EditorToolDescriptor {
+     7		pub id: ToolId,
+     8		pub stable_name: &'static str,
+     9		pub display_name: String,
+    10	}
+    11	
+    12	impl EditorToolDescriptor {
+    13		pub fn new(id: ToolId, stable_name: &'static str, display_name: impl Into<String>) -> Self {
+    14			Self {
+    15				id,
+    16				stable_name,
+    17				display_name: display_name.into(),
+    18			}
+    19		}
+    20	}
+===== END FILE: ./editor_tools/src/tool.rs =====
 
 ===== FILE: ./editor_ui/Cargo.toml =====
      1	[package]
@@ -146,26 +1587,231 @@
      4	edition = "2024"
      5	
      6	[dependencies]
-
+     7	editor_core.workspace = true
+     8	ui_core.workspace = true
+     9	ui_layout.workspace = true
+    10	ui_theme.workspace = true
+    11	ui_text.workspace = true
+    12	ui_input.workspace = true
+    13	ui_math.workspace = true
 ===== END FILE: ./editor_ui/Cargo.toml =====
 
-===== FILE: ./editor_ui/src/lib.rs =====
-     1	pub fn add(left: u64, right: u64) -> u64 {
-     2	    left + right
-     3	}
-     4	
-     5	#[cfg(test)]
-     6	mod tests {
-     7	    use super::*;
-     8	
-     9	    #[test]
-    10	    fn it_works() {
-    11	        let result = add(2, 2);
-    12	        assert_eq!(result, 4);
-    13	    }
-    14	}
+===== FILE: ./editor_ui/src/dock.rs =====
+     1	//! File: domain/editor/editor_ui/src/dock.rs
+     2	//! Purpose: Dock tree identity and split/tab dock model.
+     3	
+     4	use crate::TabId;
+     5	use ui_math::Axis;
+     6	
+     7	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     8	pub struct DockNodeId(pub u64);
+     9	
+    10	#[derive(Debug, Clone, PartialEq)]
+    11	pub enum DockNode {
+    12		Split {
+    13			id: DockNodeId,
+    14			axis: Axis,
+    15			ratio: f32,
+    16			first: DockNodeId,
+    17			second: DockNodeId,
+    18		},
+    19		Tabs {
+    20			id: DockNodeId,
+    21			tabs: Vec<TabId>,
+    22			active_tab: Option<TabId>,
+    23		},
+    24	}
+    25	
+    26	impl DockNode {
+    27		pub fn id(&self) -> DockNodeId {
+    28			match self {
+    29				DockNode::Split { id, .. } | DockNode::Tabs { id, .. } => *id,
+    30			}
+    31		}
+    32	}
+===== END FILE: ./editor_ui/src/dock.rs =====
 
+===== FILE: ./editor_ui/src/lib.rs =====
+     1	//! File: domain/editor/editor_ui/src/lib.rs
+     2	//! Crate: editor_ui
+     3	
+     4	pub mod dock;
+     5	pub mod panel;
+     6	pub mod shortcut;
+     7	pub mod tab;
+     8	pub mod workspace;
+     9	
+    10	pub use dock::*;
+    11	pub use panel::*;
+    12	pub use shortcut::*;
+    13	pub use tab::*;
+    14	pub use workspace::*;
 ===== END FILE: ./editor_ui/src/lib.rs =====
+
+===== FILE: ./editor_ui/src/panel.rs =====
+     1	//! File: domain/editor/editor_ui/src/panel.rs
+     2	//! Purpose: Panel identity, descriptors, and panel registry contracts.
+     3	
+     4	use std::collections::BTreeMap;
+     5	
+     6	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     7	pub struct PanelId(pub u64);
+     8	
+     9	#[derive(Debug, Clone, PartialEq, Eq)]
+    10	pub enum PanelKind {
+    11		SceneHierarchy,
+    12		Inspector,
+    13		ContentBrowser,
+    14		Viewport,
+    15		Console,
+    16		Custom(&'static str),
+    17	}
+    18	
+    19	#[derive(Debug, Clone, PartialEq, Eq)]
+    20	pub struct PanelDescriptor {
+    21		pub id: PanelId,
+    22		pub kind: PanelKind,
+    23		pub stable_name: &'static str,
+    24		pub display_name: String,
+    25		pub is_closable: bool,
+    26	}
+    27	
+    28	impl PanelDescriptor {
+    29		pub fn new(
+    30			id: PanelId,
+    31			kind: PanelKind,
+    32			stable_name: &'static str,
+    33			display_name: impl Into<String>,
+    34		) -> Self {
+    35			Self {
+    36				id,
+    37				kind,
+    38				stable_name,
+    39				display_name: display_name.into(),
+    40				is_closable: true,
+    41			}
+    42		}
+    43	
+    44		pub fn with_closable(mut self, is_closable: bool) -> Self {
+    45			self.is_closable = is_closable;
+    46			self
+    47		}
+    48	}
+    49	
+    50	#[derive(Debug, Default)]
+    51	pub struct PanelRegistry {
+    52		panels: BTreeMap<PanelId, PanelDescriptor>,
+    53	}
+    54	
+    55	impl PanelRegistry {
+    56		pub fn new() -> Self {
+    57			Self::default()
+    58		}
+    59	
+    60		pub fn register(&mut self, descriptor: PanelDescriptor) -> Option<PanelDescriptor> {
+    61			self.panels.insert(descriptor.id, descriptor)
+    62		}
+    63	
+    64		pub fn get(&self, id: PanelId) -> Option<&PanelDescriptor> {
+    65			self.panels.get(&id)
+    66		}
+    67	
+    68		pub fn iter(&self) -> impl Iterator<Item = &PanelDescriptor> {
+    69			self.panels.values()
+    70		}
+    71	}
+===== END FILE: ./editor_ui/src/panel.rs =====
+
+===== FILE: ./editor_ui/src/shortcut.rs =====
+     1	//! File: domain/editor/editor_ui/src/shortcut.rs
+     2	//! Purpose: Editor UI shortcut bindings to editor commands/tools.
+     3	
+     4	use editor_core::{CommandId, ToolId};
+     5	use ui_input::Shortcut;
+     6	
+     7	#[derive(Debug, Clone, PartialEq, Eq)]
+     8	pub enum ShortcutAction {
+     9		RunCommand(CommandId),
+    10		ActivateTool(ToolId),
+    11	}
+    12	
+    13	#[derive(Debug, Clone, PartialEq, Eq)]
+    14	pub struct ShortcutBinding {
+    15		pub shortcut: Shortcut,
+    16		pub action: ShortcutAction,
+    17	}
+    18	
+    19	impl ShortcutBinding {
+    20		pub fn new(shortcut: Shortcut, action: ShortcutAction) -> Self {
+    21			Self { shortcut, action }
+    22		}
+    23	}
+===== END FILE: ./editor_ui/src/shortcut.rs =====
+
+===== FILE: ./editor_ui/src/tab.rs =====
+     1	//! File: domain/editor/editor_ui/src/tab.rs
+     2	//! Purpose: Tab identity and tab-to-panel association.
+     3	
+     4	use crate::PanelId;
+     5	
+     6	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     7	pub struct TabId(pub u64);
+     8	
+     9	#[derive(Debug, Clone, PartialEq, Eq)]
+    10	pub struct TabDescriptor {
+    11		pub id: TabId,
+    12		pub panel_id: PanelId,
+    13		pub title: String,
+    14		pub is_dirty: bool,
+    15	}
+    16	
+    17	impl TabDescriptor {
+    18		pub fn new(id: TabId, panel_id: PanelId, title: impl Into<String>) -> Self {
+    19			Self {
+    20				id,
+    21				panel_id,
+    22				title: title.into(),
+    23				is_dirty: false,
+    24			}
+    25		}
+    26	
+    27		pub fn with_dirty(mut self, is_dirty: bool) -> Self {
+    28			self.is_dirty = is_dirty;
+    29			self
+    30		}
+    31	}
+===== END FILE: ./editor_ui/src/tab.rs =====
+
+===== FILE: ./editor_ui/src/workspace.rs =====
+     1	//! File: domain/editor/editor_ui/src/workspace.rs
+     2	//! Purpose: Workspace identity and top-level workspace layout model.
+     3	
+     4	use crate::{DockNodeId, PanelId, TabId};
+     5	
+     6	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     7	pub struct WorkspaceId(pub u64);
+     8	
+     9	#[derive(Debug, Clone, PartialEq, Eq)]
+    10	pub struct WorkspaceLayout {
+    11		pub id: WorkspaceId,
+    12		pub display_name: String,
+    13		pub root_dock: Option<DockNodeId>,
+    14		pub open_panels: Vec<PanelId>,
+    15		pub open_tabs: Vec<TabId>,
+    16	}
+    17	
+    18	impl WorkspaceLayout {
+    19		pub fn new(id: WorkspaceId, display_name: impl Into<String>) -> Self {
+    20			Self {
+    21				id,
+    22				display_name: display_name.into(),
+    23				root_dock: None,
+    24				open_panels: Vec::new(),
+    25				open_tabs: Vec::new(),
+    26			}
+    27		}
+    28	}
+===== END FILE: ./editor_ui/src/workspace.rs =====
 
 ===== FILE: ./editor_viewport/Cargo.toml =====
      1	[package]
@@ -174,23 +1820,146 @@
      4	edition = "2024"
      5	
      6	[dependencies]
-
+     7	editor_core.workspace = true
+     8	editor_scene.workspace = true
+     9	ui_math.workspace = true
+    10	ui_input.workspace = true
 ===== END FILE: ./editor_viewport/Cargo.toml =====
 
-===== FILE: ./editor_viewport/src/lib.rs =====
-     1	pub fn add(left: u64, right: u64) -> u64 {
-     2	    left + right
-     3	}
+===== FILE: ./editor_viewport/src/camera.rs =====
+     1	//! File: domain/editor/editor_viewport/src/camera.rs
+     2	
+     3	use ui_math::{UiPoint, UiVector};
      4	
-     5	#[cfg(test)]
-     6	mod tests {
-     7	    use super::*;
-     8	
-     9	    #[test]
-    10	    fn it_works() {
-    11	        let result = add(2, 2);
-    12	        assert_eq!(result, 4);
-    13	    }
-    14	}
+     5	#[derive(Debug, Clone, Copy, PartialEq)]
+     6	pub enum ViewportProjection {
+     7		Perspective,
+     8		Orthographic,
+     9	}
+    10	
+    11	#[derive(Debug, Clone, PartialEq)]
+    12	pub struct EditorCameraState {
+    13		pub projection: ViewportProjection,
+    14		pub orbit_target: [f32; 3],
+    15		pub distance: f32,
+    16		pub yaw_radians: f32,
+    17		pub pitch_radians: f32,
+    18		pub viewport_origin: UiPoint,
+    19		pub viewport_size: ui_math::UiSize,
+    20		pub pan_delta: UiVector,
+    21	}
+    22	
+    23	impl Default for EditorCameraState {
+    24		fn default() -> Self {
+    25			Self {
+    26				projection: ViewportProjection::Perspective,
+    27				orbit_target: [0.0, 0.0, 0.0],
+    28				distance: 5.0,
+    29				yaw_radians: 0.0,
+    30				pitch_radians: 0.0,
+    31				viewport_origin: UiPoint::ZERO,
+    32				viewport_size: ui_math::UiSize::ZERO,
+    33				pan_delta: UiVector::ZERO,
+    34			}
+    35		}
+    36	}
+===== END FILE: ./editor_viewport/src/camera.rs =====
 
+===== FILE: ./editor_viewport/src/hit.rs =====
+     1	//! File: domain/editor/editor_viewport/src/hit.rs
+     2	
+     3	use editor_core::{ComponentTypeId, EntityId};
+     4	
+     5	#[derive(Debug, Clone, PartialEq, Eq)]
+     6	pub enum ViewportHitTarget {
+     7		Entity(EntityId),
+     8		ComponentHandle {
+     9			entity: EntityId,
+    10			component_type: ComponentTypeId,
+    11		},
+    12		GizmoAxis(&'static str),
+    13		Grid,
+    14		None,
+    15	}
+    16	
+    17	#[derive(Debug, Clone, PartialEq)]
+    18	pub struct ViewportHitResult {
+    19		pub target: ViewportHitTarget,
+    20		pub distance: f32,
+    21	}
+===== END FILE: ./editor_viewport/src/hit.rs =====
+
+===== FILE: ./editor_viewport/src/lib.rs =====
+     1	//! File: domain/editor/editor_viewport/src/lib.rs
+     2	//! Crate: editor_viewport
+     3	
+     4	pub mod camera;
+     5	pub mod hit;
+     6	pub mod overlay;
+     7	pub mod snap;
+     8	pub mod viewport;
+     9	
+    10	pub use camera::*;
+    11	pub use hit::*;
+    12	pub use overlay::*;
+    13	pub use snap::*;
+    14	pub use viewport::*;
 ===== END FILE: ./editor_viewport/src/lib.rs =====
+
+===== FILE: ./editor_viewport/src/overlay.rs =====
+     1	//! File: domain/editor/editor_viewport/src/overlay.rs
+     2	
+     3	#[derive(Debug, Clone, PartialEq, Eq)]
+     4	pub enum ViewportOverlay {
+     5		Grid,
+     6		OriginAxes,
+     7		Bounds,
+     8		SelectionOutline,
+     9		DebugText(String),
+    10	}
+===== END FILE: ./editor_viewport/src/overlay.rs =====
+
+===== FILE: ./editor_viewport/src/snap.rs =====
+     1	//! File: domain/editor/editor_viewport/src/snap.rs
+     2	
+     3	#[derive(Debug, Clone, Copy, PartialEq)]
+     4	pub struct SnapSettings {
+     5		pub translate_step: f32,
+     6		pub rotate_degrees: f32,
+     7		pub scale_step: f32,
+     8		pub enabled: bool,
+     9	}
+    10	
+    11	impl Default for SnapSettings {
+    12		fn default() -> Self {
+    13			Self {
+    14				translate_step: 0.5,
+    15				rotate_degrees: 15.0,
+    16				scale_step: 0.1,
+    17				enabled: false,
+    18			}
+    19		}
+    20	}
+===== END FILE: ./editor_viewport/src/snap.rs =====
+
+===== FILE: ./editor_viewport/src/viewport.rs =====
+     1	//! File: domain/editor/editor_viewport/src/viewport.rs
+     2	
+     3	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+     4	pub struct ViewportId(pub u64);
+     5	
+     6	#[derive(Debug, Clone, PartialEq, Eq)]
+     7	pub struct ViewportDescriptor {
+     8		pub id: ViewportId,
+     9		pub display_name: String,
+    10	}
+    11	
+    12	impl ViewportDescriptor {
+    13		pub fn new(id: ViewportId, display_name: impl Into<String>) -> Self {
+    14			Self {
+    15				id,
+    16				display_name: display_name.into(),
+    17			}
+    18		}
+    19	}
+===== END FILE: ./editor_viewport/src/viewport.rs =====

@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! File: domain/editor/editor_viewport/src/lib.rs
+//! Crate: editor_viewport
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod camera;
+pub mod hit;
+pub mod overlay;
+pub mod snap;
+pub mod viewport;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use camera::*;
+pub use hit::*;
+pub use overlay::*;
+pub use snap::*;
+pub use viewport::*;

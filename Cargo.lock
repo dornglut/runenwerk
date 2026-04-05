@@ -799,30 +799,70 @@ dependencies = [
 [[package]]
 name = "editor_assets"
 version = "0.1.0"
+dependencies = [
+ "editor_core",
+ "editor_inspector",
+]
 
 [[package]]
 name = "editor_core"
 version = "0.1.0"
+dependencies = [
+ "ui_input",
+ "ui_math",
+]
 
 [[package]]
 name = "editor_inspector"
 version = "0.1.0"
+dependencies = [
+ "editor_core",
+ "editor_ui",
+ "ui_text",
+ "ui_theme",
+]
 
 [[package]]
 name = "editor_scene"
 version = "0.1.0"
+dependencies = [
+ "editor_core",
+ "editor_inspector",
+]
 
 [[package]]
 name = "editor_tools"
 version = "0.1.0"
+dependencies = [
+ "editor_core",
+ "editor_scene",
+ "editor_viewport",
+ "ui_input",
+ "ui_math",
+]
 
 [[package]]
 name = "editor_ui"
 version = "0.1.0"
+dependencies = [
+ "editor_core",
+ "ui_core",
+ "ui_input",
+ "ui_layout",
+ "ui_math",
+ "ui_text",
+ "ui_theme",
+]
 
 [[package]]
 name = "editor_viewport"
 version = "0.1.0"
+dependencies = [
+ "editor_core",
+ "editor_scene",
+ "ui_input",
+ "ui_math",
+]
 
 [[package]]
 name = "either"

@@ -1,14 +1,16 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! File: domain/editor/editor_inspector/src/lib.rs
+//! Crate: editor_inspector
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod adapter;
+pub mod field;
+pub mod resolution;
+pub mod section;
+pub mod target;
+pub mod validation;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use adapter::*;
+pub use field::*;
+pub use resolution::*;
+pub use section::*;
+pub use target::*;
+pub use validation::*;

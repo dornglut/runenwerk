@@ -1,14 +1,22 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! File: domain/editor/editor_tools/src/lib.rs
+//! Crate: editor_tools
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod behavior;
+pub mod context;
+pub mod input;
+pub mod intent;
+pub mod result;
+pub mod tool;
+pub mod dispatcher;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use dispatcher::*;
+pub mod bridge;
+
+pub use bridge::*;
+
+pub use behavior::*;
+pub use context::*;
+pub use input::*;
+pub use intent::*;
+pub use result::*;
+pub use tool::*;

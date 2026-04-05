@@ -1,0 +1,121 @@
+
+===== FILE: ./Cargo.toml =====
+     1	[package]
+     2	name = "ecs_macros"
+     3	version = "0.1.0"
+     4	edition = "2024"
+     5	
+     6	[lib]
+     7	proc-macro = true
+     8	
+     9	[dependencies]
+    10	proc-macro2 = "1.0"
+    11	quote = "1.0"
+    12	syn = { version = "2.0", features = ["full"] }
+    13	
+
+===== END FILE: ./Cargo.toml =====
+
+===== FILE: ./src/lib.rs =====
+     1	use proc_macro::TokenStream;
+     2	use quote::quote;
+     3	use syn::{Data, DeriveInput, Fields, parse_macro_input};
+     4	
+     5	#[proc_macro_derive(Component)]
+     6	pub fn component_derive(input: TokenStream) -> TokenStream {
+     7	    let input = parse_macro_input!(input as DeriveInput);
+     8	    let name = input.ident;
+     9	    let generics = input.generics;
+    10	    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    11	
+    12	    TokenStream::from(quote! {
+    13	        impl #impl_generics ::ecs::Component for #name #ty_generics #where_clause {}
+    14	    })
+    15	}
+    16	
+    17	#[proc_macro_derive(StatefulComponent)]
+    18	pub fn stateful_component_derive(input: TokenStream) -> TokenStream {
+    19	    let input = parse_macro_input!(input as DeriveInput);
+    20	    let name = input.ident;
+    21	    let generics = input.generics;
+    22	    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    23	
+    24	    TokenStream::from(quote! {
+    25	        impl #impl_generics ::ecs::StatefulComponent for #name #ty_generics #where_clause {}
+    26	    })
+    27	}
+    28	
+    29	#[proc_macro_derive(Resource)]
+    30	pub fn resource_derive(input: TokenStream) -> TokenStream {
+    31	    let input = parse_macro_input!(input as DeriveInput);
+    32	    let name = input.ident;
+    33	    let generics = input.generics;
+    34	    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    35	
+    36	    TokenStream::from(quote! {
+    37	        impl #impl_generics ::ecs::Resource for #name #ty_generics #where_clause {}
+    38	    })
+    39	}
+    40	
+    41	#[proc_macro_derive(Bundle)]
+    42	pub fn bundle_derive(input: TokenStream) -> TokenStream {
+    43	    let input = parse_macro_input!(input as DeriveInput);
+    44	    let name = input.ident;
+    45	    let generics = input.generics;
+    46	    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    47	
+    48	    let Data::Struct(data) = input.data else {
+    49	        return TokenStream::from(quote! {
+    50	            compile_error!("Bundle derive only supports structs");
+    51	        });
+    52	    };
+    53	
+    54	    let Fields::Named(fields) = data.fields else {
+    55	        return TokenStream::from(quote! {
+    56	            compile_error!("Bundle derive only supports structs with named fields");
+    57	        });
+    58	    };
+    59	
+    60	    let registrations = fields.named.iter().map(|field| {
+    61	        let ty = &field.ty;
+    62	        quote! {
+    63	            world.__register_component::<#ty>();
+    64	        }
+    65	    });
+    66	
+    67	    let inserts = fields.named.iter().map(|field| {
+    68	        let field_name = field.ident.as_ref().expect("named field");
+    69	        quote! {
+    70	            world.__insert_component(entity, self.#field_name)?;
+    71	        }
+    72	    });
+    73	
+    74	    let removals = fields.named.iter().map(|field| {
+    75	        let field_name = field.ident.as_ref().expect("named field");
+    76	        let ty = &field.ty;
+    77	        quote! {
+    78	            #field_name: world.__remove_component::<#ty>(entity)?
+    79	        }
+    80	    });
+    81	
+    82	    TokenStream::from(quote! {
+    83	        impl #impl_generics ::ecs::Bundle for #name #ty_generics #where_clause {
+    84	            fn register(world: &mut ::ecs::World) {
+    85	                #(#registrations)*
+    86	            }
+    87	
+    88	            fn insert(self, world: &mut ::ecs::World, entity: ::ecs::Entity) -> Result<(), ::ecs::EntityError> {
+    89	                #(#inserts)*
+    90	                Ok(())
+    91	            }
+    92	
+    93	            fn remove(world: &mut ::ecs::World, entity: ::ecs::Entity) -> Result<Self, ::ecs::EntityError> {
+    94	                Ok(Self {
+    95	                    #(#removals,)*
+    96	                })
+    97	            }
+    98	        }
+    99	    })
+   100	}
+
+===== END FILE: ./src/lib.rs =====
