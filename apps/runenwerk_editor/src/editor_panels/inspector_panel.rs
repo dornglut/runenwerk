@@ -6,8 +6,7 @@ use editor_scene::SceneComponentDescriptor;
 
 use crate::editor_panels::{build_widget_fields, InspectorWidgetField};
 use crate::editor_runtime::{
-	build_component_inspector_sections, execute_scene_command_and_push_history,
-	select_single_component, EditorInspectorUiState, InspectorFieldDraft,
+	build_component_inspector_sections, EditorInspectorUiState, InspectorFieldDraft,
 	RunenwerkEditorRuntime,
 };
 
@@ -27,8 +26,6 @@ pub struct InspectorAvailableComponentItem {
 }
 
 impl InspectorComponentItem {
-	/// File: apps/runenwerk_editor/src/editor_panels/inspector_panel.rs
-	/// Method: from_descriptor
 	pub fn from_descriptor(
 		descriptor: SceneComponentDescriptor,
 		is_selected: bool,
@@ -124,8 +121,6 @@ pub struct InspectorPanelCommandResult {
 pub struct InspectorPanelPresenter;
 
 impl InspectorPanelPresenter {
-	/// File: apps/runenwerk_editor/src/editor_panels/inspector_panel.rs
-	/// Method: build_view_model
 	pub fn build_view_model(
 		runtime: &RunenwerkEditorRuntime,
 		ui_state: &EditorInspectorUiState,
@@ -248,125 +243,8 @@ impl InspectorPanelPresenter {
 			None => InspectorPanelViewModel::Empty,
 		}
 	}
-
-	/// File: apps/runenwerk_editor/src/editor_panels/inspector_panel.rs
-	/// Method: dispatch
-	pub fn dispatch(
-		runtime: &mut RunenwerkEditorRuntime,
-		ui_state: &mut EditorInspectorUiState,
-		command: InspectorPanelCommand,
-	) -> Result<InspectorPanelCommandResult, &'static str> {
-		match command {
-			InspectorPanelCommand::SelectComponent {
-				entity,
-				component_type,
-			} => {
-				select_single_component(runtime, entity, component_type)?;
-				ui_state.clear_draft();
-				ui_state.clear_focus();
-			}
-			InspectorPanelCommand::AddComponentToEntity {
-				entity,
-				component_type,
-			} => {
-				let command_id = runtime.allocate_command_id();
-				let transaction_id = runtime.allocate_transaction_id();
-
-				let _ = execute_scene_command_and_push_history(
-					runtime,
-					editor_scene::scene_intent_to_command(
-						command_id,
-						editor_scene::SceneCommandIntent::AddComponent {
-							entity,
-							component_type,
-						},
-					),
-					"Add Component",
-					transaction_id,
-				)?;
-
-				ui_state.clear_draft();
-				ui_state.clear_focus();
-			}
-			InspectorPanelCommand::RemoveComponentFromEntity {
-				entity,
-				component_type,
-			} => {
-				let command_id = runtime.allocate_command_id();
-				let transaction_id = runtime.allocate_transaction_id();
-
-				let _ = execute_scene_command_and_push_history(
-					runtime,
-					editor_scene::scene_intent_to_command(
-						command_id,
-						editor_scene::SceneCommandIntent::RemoveComponent {
-							entity,
-							component_type,
-						},
-					),
-					"Remove Component",
-					transaction_id,
-				)?;
-
-				ui_state.clear_draft();
-				ui_state.clear_focus();
-			}
-			InspectorPanelCommand::EditComponentField {
-				entity,
-				component_type,
-				path,
-				value,
-			} => {
-				commit_component_field_edit(
-					runtime,
-					entity,
-					component_type,
-					path,
-					value,
-				)?;
-				ui_state.clear_draft();
-				ui_state.clear_focus();
-			}
-			InspectorPanelCommand::BeginEditComponentField {
-				entity,
-				component_type,
-				path,
-				value,
-			} => {
-				ui_state.begin_field_edit(entity, component_type, path, value);
-			}
-			InspectorPanelCommand::UpdateDraftComponentField { value } => {
-				ui_state.update_field_draft(value)?;
-			}
-			InspectorPanelCommand::CommitDraftComponentField => {
-				let draft = ui_state
-					.take_active_draft()
-					.ok_or("no active inspector field draft")?;
-
-				commit_component_field_edit(
-					runtime,
-					draft.entity,
-					draft.component_type,
-					draft.path,
-					draft.value,
-				)?;
-			}
-			InspectorPanelCommand::CancelDraftComponentField => {
-				ui_state.cancel_field_draft();
-			}
-			InspectorPanelCommand::ToggleSectionExpanded { key } => {
-				ui_state.toggle_expanded(key);
-			}
-		}
-
-		Ok(InspectorPanelCommandResult {
-			view_model: Self::build_view_model(runtime, ui_state),
-		})
-	}
 }
 
-/// File: apps/runenwerk_editor/src/editor_panels/inspector_panel.rs
-/// Method: flatten_editable_fields
 pub fn flatten_editable_fields(
 	sections: &[InspectorSection],
 ) -> Vec<InspectorEditableField> {
@@ -418,40 +296,6 @@ fn is_supported_edit_value(
 	)
 }
 
-/// File: apps/runenwerk_editor/src/editor_panels/inspector_panel.rs
-/// Method: commit_component_field_edit
-fn commit_component_field_edit(
-	runtime: &mut RunenwerkEditorRuntime,
-	entity: EntityId,
-	component_type: ComponentTypeId,
-	path: InspectorPath,
-	value: InspectorEditValue,
-) -> Result<(), &'static str> {
-	let command_id = runtime.allocate_command_id();
-	let transaction_id = runtime.allocate_transaction_id();
-
-	let result = execute_scene_command_and_push_history(
-		runtime,
-		editor_scene::scene_intent_to_command(
-			command_id,
-			editor_scene::SceneCommandIntent::EditComponentField {
-				entity,
-				component_type,
-				path,
-				value,
-			},
-		),
-		"Edit Component Field",
-		transaction_id,
-	)?;
-
-	if result.is_none() {
-		return Ok(());
-	}
-
-	Ok(())
-}
-
 fn _is_component_selected(
 	runtime: &RunenwerkEditorRuntime,
 	entity: EntityId,
@@ -466,8 +310,6 @@ fn _is_component_selected(
 	)
 }
 
-/// File: apps/runenwerk_editor/src/editor_panels/inspector_panel.rs
-/// Method: inspector_section_key
 fn inspector_section_key(
 	entity: EntityId,
 	component_type: ComponentTypeId,

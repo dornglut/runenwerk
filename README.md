@@ -20,3 +20,21 @@ printf "\n===== END FILE: %s =====\n" "$1"
 
 echo "Wrote $out"
 ```
+
+```pws
+out="./$(basename "$PWD")-content.txt"
+
+find . \
+\( -path './target' -o -path './node_modules' -o -path './.git' -o -path './dist' -o -path './build' -o -path '*/tests' \) -prune -o \
+\( -name '*.rs' -o -name 'Cargo.toml' -o -name '*.md' \) \
+-type f ! -name '*.txt' ! -name '*test*.rs' -print0 \
+| sort -z \
+| xargs -0 -I{} sh -c '
+printf "\n===== FILE: %s =====\n" "$1"
+nl -ba "$1"
+printf "\n===== END FILE: %s =====\n" "$1"
+' sh {} \
+> "$out"
+
+echo "Wrote $out"
+```

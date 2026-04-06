@@ -2,9 +2,9 @@ use std::fs;
 use std::path::PathBuf;
 
 const FIXED_SIMULATION_FILES: &[&str] = &[
-    "src/features/combat/plugin.rs",
-    "src/features/ai/plugin.rs",
-    "src/features/loot/plugin/run_state.rs",
+    "src/editor_features/combat/plugin.rs",
+    "src/editor_features/ai/plugin.rs",
+    "src/editor_features/loot/plugin/run_state.rs",
 ];
 
 const FORBIDDEN_FRAME_DELTA_PATTERNS: &[&str] = &[
@@ -15,7 +15,7 @@ const FORBIDDEN_FRAME_DELTA_PATTERNS: &[&str] = &[
 
 const FIXED_WORLD_ORDERING_FILES: &[(&str, &[&str])] = &[
     (
-        "src/features/combat/runtime/plugin_aim.rs",
+        "src/editor_features/combat/runtime/plugin_aim.rs",
         &[
             "in_set(CoreSet::Simulation)",
             "after(WorldRuntimeSet::BuildIntegrate)",
@@ -23,7 +23,7 @@ const FIXED_WORLD_ORDERING_FILES: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "src/features/ai/plugin.rs",
+        "src/editor_features/ai/plugin.rs",
         &[
             "in_set(CoreSet::Simulation)",
             "after(WorldRuntimeSet::BuildIntegrate)",
@@ -31,7 +31,7 @@ const FIXED_WORLD_ORDERING_FILES: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "src/features/loot/plugin/mod.rs",
+        "src/editor_features/loot/plugin/mod.rs",
         &[
             "in_set(CoreSet::Simulation)",
             "after(WorldRuntimeSet::BuildIntegrate)",

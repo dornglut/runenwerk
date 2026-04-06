@@ -1,8 +1,8 @@
 use editor_core::EntityId;
 use scene::Vec3Value;
 
-use crate::editor_panels::TranslateAxis;
 use crate::editor_runtime::{EditorToolRuntimeState, TransformPreviewSession, TransformToolKind};
+use crate::editor_tools_state::TranslateAxis;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ViewportToolState {

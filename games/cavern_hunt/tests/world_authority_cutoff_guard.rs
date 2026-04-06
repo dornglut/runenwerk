@@ -7,9 +7,9 @@ fn read(path: &str) -> String {
 
 #[test]
 fn gameplay_runtime_no_longer_falls_back_to_legacy_geometry_collision_authority() {
-    let projectiles = read("src/features/combat/runtime/projectiles.rs");
-    let movement = read("src/features/combat/runtime/movement_fire.rs");
-    let ai = read("src/features/ai/plugin.rs");
+    let projectiles = read("src/editor_features/combat/runtime/projectiles.rs");
+    let movement = read("src/editor_features/combat/runtime/movement_fire.rs");
+    let ai = read("src/editor_features/ai/plugin.rs");
 
     for forbidden in [
         "constrained_move_legacy",
@@ -87,9 +87,9 @@ fn runtime_wiring_keeps_frame_builder_adapter_without_legacy_geometry_authority(
     let plugin_wiring = read("src/app/runtime/plugin_wiring.rs");
     let setup_and_slots = read("src/app/runtime/setup_and_slots.rs");
     let world_frame_builder =
-        read("src/features/render_sdf/runtime/world_frame_and_geometry/world_frame.rs");
-    let render_plugin = read("src/features/render_sdf/plugin.rs");
-    let geometry_projection = read("src/features/render_sdf/runtime/world_frame_and_geometry/geometry_projection.rs");
+        read("src/editor_features/render_sdf/runtime/world_frame_and_geometry/world_frame.rs");
+    let render_plugin = read("src/editor_features/render_sdf/plugin.rs");
+    let geometry_projection = read("src/editor_features/render_sdf/runtime/world_frame_and_geometry/geometry_projection.rs");
 
     for required in [
         "init_resource::<CavernSdfWorldFrame>()",
@@ -132,8 +132,8 @@ fn runtime_wiring_keeps_frame_builder_adapter_without_legacy_geometry_authority(
 
 #[test]
 fn world_edit_paths_use_central_ingress_without_direct_dirty_map_mutation() {
-    let worldgen_init = read("src/features/worldgen/plugin/init.rs");
-    let geometry_edits = read("src/features/worldgen/plugin/geometry_edits.rs");
+    let worldgen_init = read("src/editor_features/worldgen/plugin/init.rs");
+    let geometry_edits = read("src/editor_features/worldgen/plugin/geometry_edits.rs");
 
     assert!(
         !worldgen_init.contains("resource::<CavernGeometryGraph>()"),
@@ -191,7 +191,7 @@ fn world_checkpoint_capture_reads_world_replication_state() {
 
 #[test]
 fn materials_gi_scaffold_reads_world_authority_revision_only() {
-    let materials = read("src/features/materials/plugin.rs");
+    let materials = read("src/editor_features/materials/plugin.rs");
 
     assert!(
         materials.contains("resource::<WorldAuthorityState>()"),
