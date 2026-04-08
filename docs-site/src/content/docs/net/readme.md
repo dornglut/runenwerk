@@ -153,3 +153,11 @@ ownership-oriented submodules.
 - Current architecture sketch: [architecture.puml](architecture.puml)
 - Target architecture sketch: [architecture-target.puml](architecture-target.puml)
 - Goals and pinned direction: [GOALS.md](goals.md)
+
+## ECS Runtime Audit Docs
+
+Current repository-grounded ECS/runtime/multiplayer audit and sequencing docs:
+
+- Feature inventory: [ecs-runtime-feature-inventory.md](ecs-runtime-feature-inventory.md)
+- Capability gap cross-check: [ecs-runtime-gap-summary.md](ecs-runtime-gap-summary.md)
+- Prioritized implementation roadmap: [ecs-runtime-prioritized-roadmap.md](ecs-runtime-prioritized-roadmap.md)

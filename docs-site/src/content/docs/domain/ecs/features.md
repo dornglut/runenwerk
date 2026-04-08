@@ -49,3 +49,12 @@ description: Current capability map for the ecs crate.
 Current ECS priorities are core runtime correctness, deterministic scheduling/flush semantics, and maintainable module boundaries (`world`, `commands`, `spatial`, `query`, `system`).
 
 Editor-facing reflection, network replication derives, and history/undo primitives are intentionally out of scope for this phase.
+
+## Related Runtime Audit
+
+For the current ECS + multiplayer runtime capability audit and prioritized sequencing,
+see:
+
+- [../../net/ecs-runtime-feature-inventory.md](../../net/ecs-runtime-feature-inventory.md)
+- [../../net/ecs-runtime-gap-summary.md](../../net/ecs-runtime-gap-summary.md)
+- [../../net/ecs-runtime-prioritized-roadmap.md](../../net/ecs-runtime-prioritized-roadmap.md)

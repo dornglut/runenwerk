@@ -31,3 +31,22 @@ Events are typed signals exchanged between systems through world-managed channel
 - `FrameTransient` channels are cleared at end-of-frame processing.
 - Overflow policy is enforced per channel (`DropOldest`, `DropNewest`, `Panic`).
 - Observer notifications are generated only on configured trigger boundaries.
+
+## Current Constraints
+
+The current event channel model is intentionally lightweight and currently combines
+multiple messaging roles that should be separated for long-term multiplayer/runtime
+stability:
+
+- broadcast-style fan-out notifications,
+- queue-like destructive workflows,
+- runtime/network bridge traffic.
+
+Also note that `finish_event_frame()` is currently a world-level API and must be
+called by the runtime lifecycle to enforce frame cleanup boundaries.
+
+For current repository-grounded status and the planned redesign sequence, see:
+
+- [../../net/ecs-runtime-feature-inventory.md](../../net/ecs-runtime-feature-inventory.md)
+- [../../net/ecs-runtime-gap-summary.md](../../net/ecs-runtime-gap-summary.md)
+- [../../net/ecs-runtime-prioritized-roadmap.md](../../net/ecs-runtime-prioritized-roadmap.md)
