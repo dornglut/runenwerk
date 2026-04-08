@@ -259,13 +259,13 @@ fn operations_affecting_chunk<'a>(
         .operations
         .iter()
         .filter(|record| {
-            if record.planet_id != chunk_id.planet_id {
+            if record.planet_id != chunk_id.world_id {
                 return false;
             }
             touched_chunks_from_quantized_bounds(
                 partition,
                 record.affected_bounds_q,
-                chunk_id.planet_id,
+                chunk_id.world_id,
                 fixed_point_scale,
             )
             .contains(&chunk_id)

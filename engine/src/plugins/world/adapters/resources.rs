@@ -1,4 +1,4 @@
-use spatial::{CameraRelativeFrame, GridPartitionConfig, PlanetFrame};
+use spatial::*;
 use std::ops::{Deref, DerefMut};
 use world_ops::{BuildGraph, BuildQueue, DirtyChunkMap, OperationLog, RegionInvalidationJournal, ReplicationState};
 use world_sdf::{
@@ -27,7 +27,7 @@ macro_rules! resource_wrapper {
 }
 
 resource_wrapper!(PartitionConfigResource, GridPartitionConfig);
-resource_wrapper!(PlanetFrameResource, PlanetFrame);
+resource_wrapper!(WorldFrameResource, WorldFrame);
 resource_wrapper!(CameraRelativeFrameResource, CameraRelativeFrame);
 resource_wrapper!(DirtyChunkMapResource, DirtyChunkMap);
 resource_wrapper!(SdfChunkStoreResource, SdfChunkStore);

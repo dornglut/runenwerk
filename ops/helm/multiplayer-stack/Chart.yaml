@@ -1,6 +1,0 @@
-apiVersion: v2
-name: multiplayer-stack
-description: Local Kubernetes full-stack demo for Axiom operator control of Grotto servers
-type: application
-version: 0.1.0
-appVersion: "0.1.0"

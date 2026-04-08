@@ -53,7 +53,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
             detail_cells.push(PreparedDetailCellContribution {
                 cell_id: format!(
                     "detail.cell.{}:{}:{}:{}",
-                    chunk_id.planet_id.0, chunk_id.coord.x, chunk_id.coord.y, chunk_id.coord.z
+                    chunk_id.world_id.0, chunk_id.coord.x, chunk_id.coord.y, chunk_id.coord.z
                 ),
                 chunk_id,
                 instance_count: if record.gameplay_locked { 128 } else { 32 },

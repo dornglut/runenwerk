@@ -19,7 +19,7 @@ pub struct WorldRenderChunkBounds {
 impl WorldRenderChunkBounds {
     fn from_chunk_id(chunk_id: ChunkId) -> Self {
         Self {
-            planet_id: chunk_id.planet_id,
+            planet_id: chunk_id.world_id,
             min: chunk_id.coord,
             max: chunk_id.coord,
         }
@@ -41,7 +41,7 @@ impl WorldRenderChunkBounds {
         }
 
         Some(Self {
-            planet_id: first.planet_id,
+            planet_id: first.world_id,
             min,
             max,
         })

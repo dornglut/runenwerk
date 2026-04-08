@@ -3,7 +3,7 @@ use crate::storage::{
 };
 use serde::{Deserialize, Serialize};
 use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
-
+use spatial::WorldLocalPosition;
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CollisionSample {
     pub chunk_id: ChunkId,
@@ -49,7 +49,10 @@ impl CollisionQueryService {
         planet_id: WorldId,
         world_position: [f32; 3],
     ) -> CollisionReadiness {
-        let chunk_id = partition.chunk_id_from_position(planet_id, world_position);
+        let chunk_id = partition.chunk_id_from_position(
+            planet_id,
+            WorldLocalPosition { meters: world_position },
+        );
         if store.chunks.contains_key(&chunk_id) {
             CollisionReadiness::Ready
         } else {
@@ -92,8 +95,10 @@ impl CollisionQueryService {
         planet_id: WorldId,
         world_position: [f32; 3],
     ) -> Option<CollisionSample> {
-        let chunk_id = partition.chunk_id_from_position(planet_id, world_position);
-        let payload = store.chunks.get(&chunk_id)?;
+        let chunk_id = partition.chunk_id_from_position(
+            planet_id,
+            WorldLocalPosition { meters: world_position },
+        );        let payload = store.chunks.get(&chunk_id)?;
         let summary_distance =
             sample_payload_signed_distance(partition, payload, chunk_id, world_position);
         Some(CollisionSample {
@@ -136,7 +141,10 @@ impl CollisionQueryService {
         let start_sample = self
             .sample_signed_distance(partition, store, planet_id, query.start)
             .unwrap_or(CollisionSample {
-                chunk_id: partition.chunk_id_from_position(planet_id, query.start),
+                chunk_id: partition.chunk_id_from_position(
+                    planet_id,
+                    WorldLocalPosition { meters: query.start },
+                ),
                 distance: -1.0,
             });
         if start_sample.distance <= query.radius.max(0.0) {
@@ -162,7 +170,10 @@ impl CollisionQueryService {
             let hit_sample = self
                 .sample_signed_distance(partition, store, planet_id, hit_position)
                 .unwrap_or(CollisionSample {
-                    chunk_id: partition.chunk_id_from_position(planet_id, hit_position),
+                    chunk_id: partition.chunk_id_from_position(
+                        planet_id,
+                        WorldLocalPosition { meters: hit_position },
+                    ),
                     distance: -1.0,
                 });
             return CollisionSweepOutcome::Hit(CollisionHit {
@@ -207,8 +218,12 @@ fn required_chunks_for_sweep(
         query.start[1].max(query.end[1]) + extent,
         query.start[2].max(query.end[2]) + extent,
     ];
-    let min_chunk = partition.chunk_coord_from_planet_local_position(min_world);
-    let max_chunk = partition.chunk_coord_from_planet_local_position(max_world);
+    let min_chunk = partition.chunk_coord_from_world_local_position(WorldLocalPosition {
+        meters: min_world,
+    });
+    let max_chunk = partition.chunk_coord_from_world_local_position(WorldLocalPosition {
+        meters: max_world,
+    });
     enumerate_chunks_inclusive(planet_id, min_chunk, max_chunk)
 }
 

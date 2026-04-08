@@ -21,8 +21,7 @@ use super::{
     adapters::resources::{
         BuildGraphResource, BuildQueueResource, CameraRelativeFrameResource,
         CaveLightingScopeResource, CavePortalGraphResource, CaveSectorResource,
-        CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource,
-        PlanetFrameResource, RegionInvalidationJournalResource, ReplicationStateResource,
+        CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource, RegionInvalidationJournalResource, ReplicationStateResource,
         SdfChunkStoreResource,
     },
     chunks::{
@@ -34,6 +33,7 @@ use super::{
     },
 };
 use world_ops::WorldRevision;
+use crate::plugins::adapters::WorldFrameResource;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub enum WorldRuntimeMode {
@@ -134,7 +134,7 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldRuntimeState>();
         app.init_resource::<WorldAuthorityState>();
         app.init_resource::<PartitionConfigResource>();
-        app.init_resource::<PlanetFrameResource>();
+        app.init_resource::<WorldFrameResource>();
         app.init_resource::<CameraRelativeFrameResource>();
         app.init_resource::<WorldChunkRuntimeMapResource>();
         app.init_resource::<DirtyChunkMapResource>();
