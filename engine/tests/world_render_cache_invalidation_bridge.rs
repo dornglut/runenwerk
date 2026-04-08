@@ -8,7 +8,9 @@ use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_
 use engine::plugins::world::plugin::WorldPlugin;
 use engine::prelude::{App, SimulationTick};
 use spatial::{ChunkCoord3, ChunkId, WorldId};
-use world_ops::{DirtyReason, Operation, QuantizedAabb, WorldTick, quantize_aabb, quantize_position};
+use world_ops::{
+    DirtyReason, Operation, QuantizedAabb, WorldTick, quantize_aabb, quantize_position,
+};
 
 fn test_stamp_operation(fixed_point_scale: i32) -> Operation {
     Operation::Stamp {

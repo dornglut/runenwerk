@@ -4,122 +4,119 @@ use editor_core::{ComponentTypeId, EntityId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewportHitTarget {
-	Entity(EntityId),
-	ComponentHandle {
-		entity: EntityId,
-		component_type: ComponentTypeId,
-	},
-	GizmoAxis(&'static str),
-	Grid,
-	None,
+    Entity(EntityId),
+    ComponentHandle {
+        entity: EntityId,
+        component_type: ComponentTypeId,
+    },
+    GizmoAxis(&'static str),
+    Grid,
+    None,
 }
 
 impl ViewportHitTarget {
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: entity
-	pub fn entity(entity: EntityId) -> Self {
-		Self::Entity(entity)
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: entity
+    pub fn entity(entity: EntityId) -> Self {
+        Self::Entity(entity)
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: component_handle
-	pub fn component_handle(
-		entity: EntityId,
-		component_type: ComponentTypeId,
-	) -> Self {
-		Self::ComponentHandle {
-			entity,
-			component_type,
-		}
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: component_handle
+    pub fn component_handle(entity: EntityId, component_type: ComponentTypeId) -> Self {
+        Self::ComponentHandle {
+            entity,
+            component_type,
+        }
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: gizmo_axis
-	pub fn gizmo_axis(axis: &'static str) -> Self {
-		Self::GizmoAxis(axis)
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: gizmo_axis
+    pub fn gizmo_axis(axis: &'static str) -> Self {
+        Self::GizmoAxis(axis)
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: grid
-	pub fn grid() -> Self {
-		Self::Grid
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: grid
+    pub fn grid() -> Self {
+        Self::Grid
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: none
-	pub fn none() -> Self {
-		Self::None
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: none
+    pub fn none() -> Self {
+        Self::None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ViewportHitResult {
-	pub target: ViewportHitTarget,
-	pub distance: f32,
+    pub target: ViewportHitTarget,
+    pub distance: f32,
 }
 
 impl ViewportHitResult {
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: new
-	pub fn new(target: ViewportHitTarget, distance: f32) -> Self {
-		Self { target, distance }
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: new
+    pub fn new(target: ViewportHitTarget, distance: f32) -> Self {
+        Self { target, distance }
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: entity
-	pub fn entity(entity: EntityId, distance: f32) -> Self {
-		Self::new(ViewportHitTarget::entity(entity), distance)
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: entity
+    pub fn entity(entity: EntityId, distance: f32) -> Self {
+        Self::new(ViewportHitTarget::entity(entity), distance)
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: component_handle
-	pub fn component_handle(
-		entity: EntityId,
-		component_type: ComponentTypeId,
-		distance: f32,
-	) -> Self {
-		Self::new(
-			ViewportHitTarget::component_handle(entity, component_type),
-			distance,
-		)
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: component_handle
+    pub fn component_handle(
+        entity: EntityId,
+        component_type: ComponentTypeId,
+        distance: f32,
+    ) -> Self {
+        Self::new(
+            ViewportHitTarget::component_handle(entity, component_type),
+            distance,
+        )
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: gizmo_axis
-	pub fn gizmo_axis(axis: &'static str, distance: f32) -> Self {
-		Self::new(ViewportHitTarget::gizmo_axis(axis), distance)
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: gizmo_axis
+    pub fn gizmo_axis(axis: &'static str, distance: f32) -> Self {
+        Self::new(ViewportHitTarget::gizmo_axis(axis), distance)
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: grid
-	pub fn grid(distance: f32) -> Self {
-		Self::new(ViewportHitTarget::grid(), distance)
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: grid
+    pub fn grid(distance: f32) -> Self {
+        Self::new(ViewportHitTarget::grid(), distance)
+    }
 
-	/// File: domain/editor/editor_viewport/src/hit.rs
-	/// Method: none
-	pub fn none() -> Self {
-		Self::new(ViewportHitTarget::none(), f32::INFINITY)
-	}
+    /// File: domain/editor/editor_viewport/src/hit.rs
+    /// Method: none
+    pub fn none() -> Self {
+        Self::new(ViewportHitTarget::none(), f32::INFINITY)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+    use super::*;
 
-	#[test]
-	fn builds_entity_hit_result() {
-		let hit = ViewportHitResult::entity(EntityId(1), 2.5);
+    #[test]
+    fn builds_entity_hit_result() {
+        let hit = ViewportHitResult::entity(EntityId(1), 2.5);
 
-		assert_eq!(hit.target, ViewportHitTarget::Entity(EntityId(1)));
-		assert_eq!(hit.distance, 2.5);
-	}
+        assert_eq!(hit.target, ViewportHitTarget::Entity(EntityId(1)));
+        assert_eq!(hit.distance, 2.5);
+    }
 
-	#[test]
-	fn builds_none_hit_with_infinite_distance() {
-		let hit = ViewportHitResult::none();
+    #[test]
+    fn builds_none_hit_with_infinite_distance() {
+        let hit = ViewportHitResult::none();
 
-		assert_eq!(hit.target, ViewportHitTarget::None);
-		assert!(hit.distance.is_infinite());
-	}
+        assert_eq!(hit.target, ViewportHitTarget::None);
+        assert!(hit.distance.is_infinite());
+    }
 }

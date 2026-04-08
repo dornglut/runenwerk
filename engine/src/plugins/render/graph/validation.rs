@@ -37,7 +37,7 @@ pub fn validate_flow_graph(
             issues.push(format!("duplicate resource id '{}'", resource_id));
         }
         if let RenderResourceDescriptor::StorageBuffer(value) = resource
-          && value.element_count == 0
+            && value.element_count == 0
         {
             issues.push(format!(
                 "storage_buffer '{}' declares zero elements; element_count must be greater than zero",
@@ -57,15 +57,15 @@ pub fn validate_flow_graph(
     }
 
     let pass_lookup: BTreeMap<_, _> = graph
-      .passes
-      .passes
-      .iter()
-      .map(|pass| (pass.id.as_str().to_string(), pass))
-      .collect();
+        .passes
+        .passes
+        .iter()
+        .map(|pass| (pass.id.as_str().to_string(), pass))
+        .collect();
 
     for pass in &graph.passes.passes {
         if let Some(feature_id) = pass.feature_id.as_ref()
-          && feature_id.trim().is_empty()
+            && feature_id.trim().is_empty()
         {
             issues.push(format!(
                 "pass '{}' declares empty feature id; use for_feature(\"feature.id\") with non-empty id",
@@ -118,8 +118,8 @@ pub fn validate_flow_graph(
         }
 
         if let Some(dispatch) = &pass.compute_dispatch
-          && let crate::plugins::render::api::ComputeDispatchDescriptor::State(binding) = dispatch
-          && !graph.resources.has_state_resource(binding.state_type_id())
+            && let crate::plugins::render::api::ComputeDispatchDescriptor::State(binding) = dispatch
+            && !graph.resources.has_state_resource(binding.state_type_id())
         {
             issues.push(format!(
                 "pass '{}' uses dispatch_from_state for resource '{}' but with_state::<...>() was not declared",
@@ -130,12 +130,12 @@ pub fn validate_flow_graph(
     }
 
     let present_pass_ids = graph
-      .passes
-      .passes
-      .iter()
-      .filter(|pass| matches!(pass.kind, RenderPassKind::Present))
-      .map(|pass| pass.id.as_str().to_string())
-      .collect::<Vec<_>>();
+        .passes
+        .passes
+        .iter()
+        .filter(|pass| matches!(pass.kind, RenderPassKind::Present))
+        .map(|pass| pass.id.as_str().to_string())
+        .collect::<Vec<_>>();
     if present_pass_ids.len() > 1 {
         issues.push(format!(
             "flow declares {} present passes ({}); exactly zero or one present pass is allowed",
@@ -148,12 +148,12 @@ pub fn validate_flow_graph(
     if present_pass_ids.len() == 1 {
         let present_id = &present_pass_ids[0];
         let dependent_passes = graph
-          .passes
-          .passes
-          .iter()
-          .filter(|pass| pass.depends_on.iter().any(|dep| dep.as_str() == present_id))
-          .map(|pass| pass.id.as_str().to_string())
-          .collect::<Vec<_>>();
+            .passes
+            .passes
+            .iter()
+            .filter(|pass| pass.depends_on.iter().any(|dep| dep.as_str() == present_id))
+            .map(|pass| pass.id.as_str().to_string())
+            .collect::<Vec<_>>();
         if !dependent_passes.is_empty() {
             issues.push(format!(
                 "present pass '{}' must be terminal but is a dependency for ({})",
@@ -192,9 +192,9 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                 ));
             }
             if !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
                 issues.push(format!(
                     "compute pass '{}' cannot declare vertex/index/instance/indirect buffers",
@@ -208,8 +208,8 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                 ));
             }
             if let Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(dims)) =
-              &pass.compute_dispatch
-              && (dims[0] == 0 || dims[1] == 0 || dims[2] == 0)
+                &pass.compute_dispatch
+                && (dims[0] == 0 || dims[1] == 0 || dims[2] == 0)
             {
                 issues.push(format!(
                     "compute pass '{}' declares invalid dispatch_workgroups({}, {}, {})",
@@ -240,9 +240,9 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                 ));
             }
             if !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
                 issues.push(format!(
                     "fullscreen pass '{}' cannot declare vertex/index/instance/indirect buffers",
@@ -275,17 +275,17 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                 ));
             }
             if pass.shader.is_some()
-              || pass.workgroup_size.is_some()
-              || pass.compute_dispatch.is_some()
-              || pass.clear_color.is_some()
-              || pass.depth_target.is_some()
-              || !pass.uniform_bindings.is_empty()
-              || !pass.sampled_textures.is_empty()
-              || !pass.write_textures.is_empty()
-              || !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || pass.workgroup_size.is_some()
+                || pass.compute_dispatch.is_some()
+                || pass.clear_color.is_some()
+                || pass.depth_target.is_some()
+                || !pass.uniform_bindings.is_empty()
+                || !pass.sampled_textures.is_empty()
+                || !pass.write_textures.is_empty()
+                || !pass.vertex_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
                 issues.push(format!(
                     "copy pass '{}' only supports reads/writes/depends_on",
@@ -307,17 +307,17 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<String>) {
                 ));
             }
             if pass.shader.is_some()
-              || pass.workgroup_size.is_some()
-              || pass.compute_dispatch.is_some()
-              || pass.clear_color.is_some()
-              || pass.depth_target.is_some()
-              || !pass.uniform_bindings.is_empty()
-              || !pass.sampled_textures.is_empty()
-              || !pass.write_textures.is_empty()
-              || !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || pass.workgroup_size.is_some()
+                || pass.compute_dispatch.is_some()
+                || pass.clear_color.is_some()
+                || pass.depth_target.is_some()
+                || !pass.uniform_bindings.is_empty()
+                || !pass.sampled_textures.is_empty()
+                || !pass.write_textures.is_empty()
+                || !pass.vertex_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
                 issues.push(format!(
                     "present pass '{}' only supports reads/depends_on",
@@ -637,12 +637,12 @@ fn topological_sort(passes: &[RenderPassNode], issues: &mut Vec<String>) -> Vec<
 
     if order.len() != passes.len() {
         let cycle_nodes = indegree
-          .iter()
-          .enumerate()
-          .filter(|(_, degree)| **degree > 0)
-          .map(|(index, _)| passes[index].id.as_str().to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
+            .iter()
+            .enumerate()
+            .filter(|(_, degree)| **degree > 0)
+            .map(|(index, _)| passes[index].id.as_str().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         issues.push(format!("pass dependency cycle detected: {}", cycle_nodes));
     }
 
@@ -653,13 +653,13 @@ fn pass_resource_refs(
     pass: &RenderPassNode,
 ) -> impl Iterator<Item = &crate::plugins::render::RenderResourceId> {
     pass.reads
-      .iter()
-      .chain(pass.writes.iter())
-      .chain(pass.sampled_textures.iter())
-      .chain(pass.write_textures.iter())
-      .chain(pass.vertex_buffers.iter())
-      .chain(pass.index_buffers.iter())
-      .chain(pass.instance_buffers.iter())
-      .chain(pass.indirect_buffers.iter())
-      .chain(pass.depth_target.iter())
+        .iter()
+        .chain(pass.writes.iter())
+        .chain(pass.sampled_textures.iter())
+        .chain(pass.write_textures.iter())
+        .chain(pass.vertex_buffers.iter())
+        .chain(pass.index_buffers.iter())
+        .chain(pass.instance_buffers.iter())
+        .chain(pass.indirect_buffers.iter())
+        .chain(pass.depth_target.iter())
 }

@@ -1,14 +1,16 @@
+use crate::editor_panels::ViewportToolState;
+use editor_core::EntityId;
 use editor_shell::ViewportViewModel;
 
-use crate::editor_host::HostViewportFrameState;
-
 pub fn build_viewport_view_model(
-	frame: &HostViewportFrameState,
+    selected_entity: Option<EntityId>,
+    drag_in_progress: bool,
+    tool_state: ViewportToolState,
 ) -> ViewportViewModel {
-	ViewportViewModel {
-		selected_entity: frame.selected_entity,
-		hovered_entity: frame.hovered_entity,
-		drag_in_progress: frame.drag_in_progress,
-		preview_active: frame.active_preview.is_some(),
-	}
+    ViewportViewModel {
+        selected_entity,
+        hovered_entity: tool_state.hovered_entity,
+        drag_in_progress,
+        preview_active: tool_state.active_preview.is_some(),
+    }
 }

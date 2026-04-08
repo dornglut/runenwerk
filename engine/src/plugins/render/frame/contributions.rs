@@ -24,12 +24,12 @@ impl PreparedFrameContributions {
 
     pub fn insert_missing(&mut self, id: RenderFeatureId, fallback_policy: FeatureFallbackPolicy) {
         self.by_feature
-          .entry(id)
-          .or_insert_with(|| PreparedFeatureContribution {
-              status: FeatureContributionStatus::Missing,
-              fallback_policy,
-              payload: PreparedFeaturePayload::Empty,
-          });
+            .entry(id)
+            .or_insert_with(|| PreparedFeatureContribution {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy,
+                payload: PreparedFeaturePayload::Empty,
+            });
     }
 
     pub fn insert_ui(
@@ -197,36 +197,38 @@ impl PreparedFrameContributions {
     }
 
     pub fn ui(&self) -> Option<&PreparedUiFrameContribution> {
-        let contribution = self.by_feature.get(&RenderFeatureId::new(UI_RENDER_FEATURE_ID))?;
+        let contribution = self
+            .by_feature
+            .get(&RenderFeatureId::new(UI_RENDER_FEATURE_ID))?;
         match contribution.payload {
             PreparedFeaturePayload::Ui(ref value)
-            if !matches!(
+                if !matches!(
                     contribution.status,
                     FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
                 ) =>
-                {
-                    Some(value)
-                }
+            {
+                Some(value)
+            }
             _ => None,
         }
     }
 
     pub fn scene_route_labels(&self) -> Option<(&str, &str)> {
         let contribution = self
-          .by_feature
-          .get(&RenderFeatureId::new(SCENE_ROUTE_RENDER_FEATURE_ID))?;
+            .by_feature
+            .get(&RenderFeatureId::new(SCENE_ROUTE_RENDER_FEATURE_ID))?;
         match contribution.payload {
             PreparedFeaturePayload::SceneRoute(ref value)
-            if !matches!(
+                if !matches!(
                     contribution.status,
                     FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
                 ) =>
-                {
-                    Some((
-                        value.world_scene_label.as_str(),
-                        value.overlay_scene_label.as_str(),
-                    ))
-                }
+            {
+                Some((
+                    value.world_scene_label.as_str(),
+                    value.overlay_scene_label.as_str(),
+                ))
+            }
             _ => None,
         }
     }

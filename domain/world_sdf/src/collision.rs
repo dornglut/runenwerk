@@ -2,8 +2,8 @@ use crate::storage::{
     SDF_PAGE_EDGE_BRICKS, SdfBrickRecord, SdfChunkPayload, SdfChunkStore, SdfPageCoord3,
 };
 use serde::{Deserialize, Serialize};
-use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use spatial::WorldLocalPosition;
+use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CollisionSample {
     pub chunk_id: ChunkId,
@@ -51,7 +51,9 @@ impl CollisionQueryService {
     ) -> CollisionReadiness {
         let chunk_id = partition.chunk_id_from_position(
             planet_id,
-            WorldLocalPosition { meters: world_position },
+            WorldLocalPosition {
+                meters: world_position,
+            },
         );
         if store.chunks.contains_key(&chunk_id) {
             CollisionReadiness::Ready
@@ -97,8 +99,11 @@ impl CollisionQueryService {
     ) -> Option<CollisionSample> {
         let chunk_id = partition.chunk_id_from_position(
             planet_id,
-            WorldLocalPosition { meters: world_position },
-        );        let payload = store.chunks.get(&chunk_id)?;
+            WorldLocalPosition {
+                meters: world_position,
+            },
+        );
+        let payload = store.chunks.get(&chunk_id)?;
         let summary_distance =
             sample_payload_signed_distance(partition, payload, chunk_id, world_position);
         Some(CollisionSample {
@@ -143,7 +148,9 @@ impl CollisionQueryService {
             .unwrap_or(CollisionSample {
                 chunk_id: partition.chunk_id_from_position(
                     planet_id,
-                    WorldLocalPosition { meters: query.start },
+                    WorldLocalPosition {
+                        meters: query.start,
+                    },
                 ),
                 distance: -1.0,
             });
@@ -164,22 +171,32 @@ impl CollisionQueryService {
                 continue;
             }
 
-            let hit_t =
-                refine_collision_hit_t(self, partition, store, planet_id, &query, clear_t, test_t, 8);
+            let hit_t = refine_collision_hit_t(
+                self, partition, store, planet_id, &query, clear_t, test_t, 8,
+            );
             let hit_position = lerp3(query.start, query.end, hit_t);
             let hit_sample = self
                 .sample_signed_distance(partition, store, planet_id, hit_position)
                 .unwrap_or(CollisionSample {
                     chunk_id: partition.chunk_id_from_position(
                         planet_id,
-                        WorldLocalPosition { meters: hit_position },
+                        WorldLocalPosition {
+                            meters: hit_position,
+                        },
                     ),
                     distance: -1.0,
                 });
             return CollisionSweepOutcome::Hit(CollisionHit {
                 chunk_id: hit_sample.chunk_id,
                 hit_position,
-                normal: estimate_hit_normal(self, partition, store, planet_id, &query, hit_position),
+                normal: estimate_hit_normal(
+                    self,
+                    partition,
+                    store,
+                    planet_id,
+                    &query,
+                    hit_position,
+                ),
                 distance: hit_sample.distance,
             });
         }
@@ -189,13 +206,17 @@ impl CollisionQueryService {
 }
 
 fn chunk_payload_has_occupied_voxels(payload: &SdfChunkPayload) -> bool {
-    payload
-        .page_table
-        .values()
-        .any(|page| page.bricks.values().any(|brick| brick.metadata.occupancy_mask != 0))
+    payload.page_table.values().any(|page| {
+        page.bricks
+            .values()
+            .any(|brick| brick.metadata.occupancy_mask != 0)
+    })
 }
 
-fn first_missing_payload_chunk(store: &SdfChunkStore, required_chunks: &[ChunkId]) -> Option<ChunkId> {
+fn first_missing_payload_chunk(
+    store: &SdfChunkStore,
+    required_chunks: &[ChunkId],
+) -> Option<ChunkId> {
     required_chunks
         .iter()
         .copied()
@@ -218,16 +239,18 @@ fn required_chunks_for_sweep(
         query.start[1].max(query.end[1]) + extent,
         query.start[2].max(query.end[2]) + extent,
     ];
-    let min_chunk = partition.chunk_coord_from_world_local_position(WorldLocalPosition {
-        meters: min_world,
-    });
-    let max_chunk = partition.chunk_coord_from_world_local_position(WorldLocalPosition {
-        meters: max_world,
-    });
+    let min_chunk =
+        partition.chunk_coord_from_world_local_position(WorldLocalPosition { meters: min_world });
+    let max_chunk =
+        partition.chunk_coord_from_world_local_position(WorldLocalPosition { meters: max_world });
     enumerate_chunks_inclusive(planet_id, min_chunk, max_chunk)
 }
 
-fn enumerate_chunks_inclusive(planet_id: WorldId, min: ChunkCoord3, max: ChunkCoord3) -> Vec<ChunkId> {
+fn enumerate_chunks_inclusive(
+    planet_id: WorldId,
+    min: ChunkCoord3,
+    max: ChunkCoord3,
+) -> Vec<ChunkId> {
     let mut chunks = Vec::new();
     for z in min.z..=max.z {
         for y in min.y..=max.y {
@@ -291,9 +314,12 @@ fn payload_brick_lookup(
         (max_page.z - min_page.z + 1).max(1) as i32,
     ];
 
-    let (page_offset_x, brick_x, local_x) = quantize_payload_axis(local_clamped[0], edge, page_span[0]);
-    let (page_offset_y, brick_y, local_y) = quantize_payload_axis(local_clamped[1], edge, page_span[1]);
-    let (page_offset_z, brick_z, local_z) = quantize_payload_axis(local_clamped[2], edge, page_span[2]);
+    let (page_offset_x, brick_x, local_x) =
+        quantize_payload_axis(local_clamped[0], edge, page_span[0]);
+    let (page_offset_y, brick_y, local_y) =
+        quantize_payload_axis(local_clamped[1], edge, page_span[1]);
+    let (page_offset_z, brick_z, local_z) =
+        quantize_payload_axis(local_clamped[2], edge, page_span[2]);
 
     Some((
         SdfPageCoord3 {
@@ -337,7 +363,8 @@ fn payload_page_bounds(payload: &SdfChunkPayload) -> Option<(SdfPageCoord3, SdfP
 
 fn sample_brick_signed_distance(brick: &SdfBrickRecord, local_in_brick: [f32; 3]) -> f32 {
     let occupancy_sign = occupancy_sign_from_mask(brick.metadata.occupancy_mask, local_in_brick);
-    sample_sign_from_brick_samples(&brick.samples.distances, local_in_brick).unwrap_or(occupancy_sign)
+    sample_sign_from_brick_samples(&brick.samples.distances, local_in_brick)
+        .unwrap_or(occupancy_sign)
 }
 
 fn occupancy_sign_from_mask(mask: u8, local_in_brick: [f32; 3]) -> f32 {
@@ -807,8 +834,12 @@ mod tests {
             .insert(clear_chunk0, clear_payload(clear_chunk0));
         let chunk2 = ChunkId::new(planet_id, ChunkCoord3 { x: 2, y: 0, z: 0 });
         missing_store.chunks.insert(chunk2, clear_payload(chunk2));
-        let missing_outcome =
-            service.sweep_sphere_authoritative(&partition, &missing_store, planet_id, missing_query);
+        let missing_outcome = service.sweep_sphere_authoritative(
+            &partition,
+            &missing_store,
+            planet_id,
+            missing_query,
+        );
         assert_eq!(
             missing_outcome,
             CollisionSweepOutcome::MissingPayload {

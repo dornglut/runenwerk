@@ -1,8 +1,8 @@
 use super::backend::BackendResourceAllocatorResource;
 use super::composition::{RenderFlowRegistryResource, sync_render_flow_registry_system};
 use super::features::{
-    PreparedCaveFeatureResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
-    PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
+    EditorPickingResultResource, PreparedCaveFeatureResource, PreparedDeformationFeatureResource,
+    PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedProceduralWorldFeatureResource, PreparedUiFrameResource,
     PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureRegistryResource,
     UiFrameSubmissionRegistryResource, prepare_ui_feature_resource_system,
@@ -37,6 +37,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderFeatureRegistryResource>();
         app.init_resource::<PreparedUiFrameResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
+        app.init_resource::<EditorPickingResultResource>();
         app.init_resource::<PreparedDrawFeatureResource>();
         app.init_resource::<PreparedWorldFeatureResource>();
         app.init_resource::<PreparedCaveFeatureResource>();

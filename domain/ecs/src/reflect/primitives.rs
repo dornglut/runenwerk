@@ -4,7 +4,7 @@
 use std::sync::OnceLock;
 
 use crate::reflect::{
-	Reflect, ReflectClassification, ReflectShape, TypeInfo, allocate_reflect_type_id,
+    Reflect, ReflectClassification, ReflectShape, TypeInfo, allocate_reflect_type_id,
 };
 
 macro_rules! impl_primitive_reflect {

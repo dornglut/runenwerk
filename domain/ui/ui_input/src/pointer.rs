@@ -8,18 +8,18 @@ pub type PointerDelta = UiVector;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PointerButton {
-	Primary,
-	Secondary,
-	Middle,
-	Other(u16),
+    Primary,
+    Secondary,
+    Middle,
+    Other(u16),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PointerEventKind {
-	Move,
-	Down,
-	Up,
-	Enter,
-	Leave,
-	Scroll,
+    Move,
+    Down,
+    Up,
+    Enter,
+    Leave,
+    Scroll,
 }

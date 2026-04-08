@@ -1,6 +1,6 @@
 use super::*;
-use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::PreparedUiFrameContribution;
+use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use std::hash::{Hash, Hasher};
 
 impl Renderer {

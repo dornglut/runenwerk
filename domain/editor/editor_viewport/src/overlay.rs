@@ -2,9 +2,9 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewportOverlay {
-	Grid,
-	OriginAxes,
-	Bounds,
-	SelectionOutline,
-	DebugText(String),
+    Grid,
+    OriginAxes,
+    Bounds,
+    SelectionOutline,
+    DebugText(String),
 }

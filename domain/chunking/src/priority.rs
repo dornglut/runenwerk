@@ -1,4 +1,4 @@
 pub enum ChunkLoadOrder {
-	NearestFirst,
-	FarthestFirst,
+    NearestFirst,
+    FarthestFirst,
 }

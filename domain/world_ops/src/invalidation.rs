@@ -40,14 +40,10 @@ pub fn touched_chunks_from_quantized_bounds(
     planet_id: WorldId,
     fixed_point_scale: i32,
 ) -> BTreeSet<ChunkId> {
-    let min = partition.chunk_coord_from_world_local_meters(dequantize_position(
-        bounds_q.min,
-        fixed_point_scale,
-    ));
-    let max = partition.chunk_coord_from_world_local_meters(dequantize_position(
-        bounds_q.max,
-        fixed_point_scale,
-    ));
+    let min = partition
+        .chunk_coord_from_world_local_meters(dequantize_position(bounds_q.min, fixed_point_scale));
+    let max = partition
+        .chunk_coord_from_world_local_meters(dequantize_position(bounds_q.max, fixed_point_scale));
     let mut touched = BTreeSet::new();
     for z in min.z..=max.z {
         for y in min.y..=max.y {

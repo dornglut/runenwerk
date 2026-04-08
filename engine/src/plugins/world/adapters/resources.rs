@@ -1,6 +1,9 @@
 use spatial::*;
 use std::ops::{Deref, DerefMut};
-use world_ops::{BuildGraph, BuildQueue, DirtyChunkMap, OperationLog, RegionInvalidationJournal, ReplicationState};
+use world_ops::{
+    BuildGraph, BuildQueue, DirtyChunkMap, OperationLog, RegionInvalidationJournal,
+    ReplicationState,
+};
 use world_sdf::{
     CaveLightingScope, CavePortalGraph, CaveSectorStore, CollisionQueryService, SdfChunkStore,
 };

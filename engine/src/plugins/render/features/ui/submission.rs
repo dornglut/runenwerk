@@ -185,12 +185,10 @@ mod tests {
         let mut registry = UiFrameSubmissionRegistryResource::default();
 
         registry.replace(
-            UiFrameSubmission::new("editor.shell")
-                .with_order(UiFrameSubmissionOrder::new(10, 0)),
+            UiFrameSubmission::new("editor.shell").with_order(UiFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
-            UiFrameSubmission::new("editor.shell")
-                .with_order(UiFrameSubmissionOrder::new(20, 0)),
+            UiFrameSubmission::new("editor.shell").with_order(UiFrameSubmissionOrder::new(20, 0)),
         );
 
         assert_eq!(registry.submission_count(), 1);

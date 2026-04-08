@@ -15,7 +15,6 @@ members = [
 
     "domain/ui/ui_math",
     "domain/ui/ui_input",
-    "domain/ui/ui_runtime",
     "domain/ui/ui_layout",
     "domain/ui/ui_text",
     "domain/ui/ui_theme",
@@ -25,8 +24,7 @@ members = [
     "domain/editor/editor_viewport",
     "domain/editor/editor_scene",
     "domain/editor/editor_inspector",
-    "domain/editor/editor_assets",
-    "domain/editor/editor_tools",
+    "domain/editor/editor_persistence",
 
     "engine",
     "engine_render_macros",
@@ -39,7 +37,7 @@ members = [
 
     "apps/runenwerk_editor",
 
-    "adapters/godot_chunking_addon", "domain/scene", "domain/ui/ui_runtime", "domain/ui/ui_render_data", "domain/editor/editor_shell",
+    "adapters/godot_chunking_addon", "domain/scene", "domain/ui/ui_render_data", "domain/editor/editor_shell",
 ]
 
 [workspace.dependencies]
@@ -49,7 +47,6 @@ scene = { path = "domain/scene" }
 
 ui_math = { path = "domain/ui/ui_math" }
 ui_input = { path = "domain/ui/ui_input" }
-ui_runtime = { path = "domain/ui/ui_runtime" }
 ui_layout = { path = "domain/ui/ui_layout" }
 ui_text = { path = "domain/ui/ui_text" }
 ui_theme = { path = "domain/ui/ui_theme" }
@@ -60,7 +57,6 @@ editor_shell = { path = "domain/editor/editor_shell" }
 editor_viewport = { path = "domain/editor/editor_viewport" }
 editor_scene = { path = "domain/editor/editor_scene" }
 editor_inspector = { path = "domain/editor/editor_inspector" }
-editor_assets = { path = "domain/editor/editor_assets" }
-editor_tools = { path = "domain/editor/editor_tools" }
+editor_persistence = { path = "domain/editor/editor_persistence" }
 
 ecs = { path = "domain/ecs" }

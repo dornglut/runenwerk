@@ -3,8 +3,8 @@
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TypographyScale {
-	pub body: f32,
-	pub body_small: f32,
-	pub heading: f32,
-	pub monospace: f32,
+    pub body: f32,
+    pub body_small: f32,
+    pub heading: f32,
+    pub monospace: f32,
 }

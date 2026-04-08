@@ -7,11 +7,6 @@ use crate::UiSortKey;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipPrimitive {
-	Push {
-		rect: UiRect,
-		sort_key: UiSortKey,
-	},
-	Pop {
-		sort_key: UiSortKey,
-	},
+    Push { rect: UiRect, sort_key: UiSortKey },
+    Pop { sort_key: UiSortKey },
 }

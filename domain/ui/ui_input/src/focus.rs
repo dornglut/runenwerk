@@ -6,17 +6,17 @@ pub struct FocusTargetId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusChange {
-	None,
-	Set(FocusTargetId),
-	Clear,
+    None,
+    Set(FocusTargetId),
+    Clear,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusDirection {
-	Next,
-	Previous,
-	Up,
-	Down,
-	Left,
-	Right,
+    Next,
+    Previous,
+    Up,
+    Down,
+    Left,
+    Right,
 }

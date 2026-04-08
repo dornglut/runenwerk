@@ -8,21 +8,21 @@ pub struct TransactionId(pub u64);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionMetadata {
-	pub id: TransactionId,
-	pub label: String,
+    pub id: TransactionId,
+    pub label: String,
 }
 
 impl TransactionMetadata {
-	pub fn new(id: TransactionId, label: impl Into<String>) -> Self {
-		Self {
-			id,
-			label: label.into(),
-		}
-	}
+    pub fn new(id: TransactionId, label: impl Into<String>) -> Self {
+        Self {
+            id,
+            label: label.into(),
+        }
+    }
 }
 
 pub trait Transaction {
-	fn metadata(&self) -> &TransactionMetadata;
+    fn metadata(&self) -> &TransactionMetadata;
 
-	fn command_metadata(&self) -> &[CommandMetadata];
+    fn command_metadata(&self) -> &[CommandMetadata];
 }

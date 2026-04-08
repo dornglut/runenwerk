@@ -3,18 +3,15 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UiDrawKey {
-	pub material_id: u64,
-	pub texture_id: Option<u64>,
+    pub material_id: u64,
+    pub texture_id: Option<u64>,
 }
 
 impl UiDrawKey {
-	pub const fn new(
-		material_id: u64,
-		texture_id: Option<u64>,
-	) -> Self {
-		Self {
-			material_id,
-			texture_id,
-		}
-	}
+    pub const fn new(material_id: u64, texture_id: Option<u64>) -> Self {
+        Self {
+            material_id,
+            texture_id,
+        }
+    }
 }

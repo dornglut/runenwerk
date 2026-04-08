@@ -5,11 +5,11 @@ use ui_math::UiRect;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ArrangedRect {
-	pub rect: UiRect,
+    pub rect: UiRect,
 }
 
 impl ArrangedRect {
-	pub fn new(rect: UiRect) -> Self {
-		Self { rect }
-	}
+    pub fn new(rect: UiRect) -> Self {
+        Self { rect }
+    }
 }

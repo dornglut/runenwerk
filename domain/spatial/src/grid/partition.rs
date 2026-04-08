@@ -55,14 +55,13 @@ impl GridPartitionConfig {
         world_id: WorldId,
         position: WorldLocalPosition,
     ) -> ChunkId {
-        ChunkId::new(world_id, self.chunk_coord_from_world_local_position(position))
+        ChunkId::new(
+            world_id,
+            self.chunk_coord_from_world_local_position(position),
+        )
     }
 
-    pub fn chunk_id_from_meters(
-        &self,
-        world_id: WorldId,
-        position_meters: [f32; 3],
-    ) -> ChunkId {
+    pub fn chunk_id_from_meters(&self, world_id: WorldId, position_meters: [f32; 3]) -> ChunkId {
         self.chunk_id_from_position(world_id, WorldLocalPosition::new(position_meters))
     }
 
@@ -126,12 +125,10 @@ mod tests {
         };
 
         let world = WorldId(3);
-        let chunk_a = partition.chunk_id_from_position(
-            world,
-            WorldLocalPosition::new([9.999, 0.0, -0.001]),
-        );
+        let chunk_a =
+            partition.chunk_id_from_position(world, WorldLocalPosition::new([9.999, 0.0, -0.001]));
         let chunk_b =
-          partition.chunk_id_from_position(world, WorldLocalPosition::new([10.0, 0.0, 0.0]));
+            partition.chunk_id_from_position(world, WorldLocalPosition::new([10.0, 0.0, 0.0]));
 
         assert_eq!(chunk_a.coord.x, 0);
         assert_eq!(chunk_b.coord.x, 1);

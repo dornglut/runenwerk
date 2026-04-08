@@ -1,8 +1,8 @@
 pub mod shared;
 
-mod scene_editing;
-mod outliner;
 mod inspector;
-mod viewport;
+mod outliner;
+mod scene_editing;
 mod tool_actions;
 mod transform_tools;
+mod viewport;

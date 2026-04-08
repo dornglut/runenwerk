@@ -17,8 +17,8 @@ use engine::prelude::{App, AuthorityRole};
 use engine_sim::SimulationTick;
 use spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
-    BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
-    WorldTick, quantize_aabb, quantize_position,
+    BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation, WorldTick,
+    quantize_aabb, quantize_position,
 };
 use world_sdf::{RegionSdfSummary, SdfChunkPayload};
 

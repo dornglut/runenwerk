@@ -3,7 +3,7 @@
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RadiusScale {
-	pub sm: f32,
-	pub md: f32,
-	pub lg: f32,
+    pub sm: f32,
+    pub md: f32,
+    pub lg: f32,
 }

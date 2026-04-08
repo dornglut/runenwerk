@@ -38,32 +38,32 @@ impl ComputePassBuilder {
 
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
         self.pass
-          .uniform_bindings
-          .push(PassParamBinding::uniform_state(
-              uniform.id().clone(),
-              projection,
-          ));
+            .uniform_bindings
+            .push(PassParamBinding::uniform_state(
+                uniform.id().clone(),
+                projection,
+            ));
         self
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         self.pass
-          .uniform_bindings
-          .push(PassParamBinding::uniform_state(
-              handle.id().clone(),
-              projection,
-          ));
+            .uniform_bindings
+            .push(PassParamBinding::uniform_state(
+                handle.id().clone(),
+                projection,
+            ));
         self
     }
 
@@ -77,14 +77,14 @@ impl ComputePassBuilder {
     pub fn bind_ping_pong_storage(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
         let (a_id, b_id) = self
-          .flow
-          .ping_pong_storage_ids(name.as_str())
-          .unwrap_or_else(|| {
-              (
-                  RenderResourceId::new(format!("{name}.a")),
-                  RenderResourceId::new(format!("{name}.b")),
-              )
-          });
+            .flow
+            .ping_pong_storage_ids(name.as_str())
+            .unwrap_or_else(|| {
+                (
+                    RenderResourceId::new(format!("{name}.a")),
+                    RenderResourceId::new(format!("{name}.b")),
+                )
+            });
         push_unique_resource(&mut self.pass.reads, a_id.clone());
         push_unique_resource(&mut self.pass.reads, b_id.clone());
         push_unique_resource(&mut self.pass.writes, a_id);
@@ -99,7 +99,7 @@ impl ComputePassBuilder {
 
     pub fn dispatch_from_state<S>(mut self, projection: fn(&S) -> [u32; 3]) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
     {
         self.pass.compute_dispatch = Some(ComputeDispatchDescriptor::State(
             ComputeDispatchBinding::state(projection),
@@ -156,48 +156,48 @@ impl FullscreenPassBuilder {
 
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
         self.pass
-          .uniform_bindings
-          .push(PassParamBinding::uniform_state(
-              uniform.id().clone(),
-              projection,
-          ));
+            .uniform_bindings
+            .push(PassParamBinding::uniform_state(
+                uniform.id().clone(),
+                projection,
+            ));
         self
     }
 
     pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
         let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
         self.pass
-          .uniform_bindings
-          .push(PassParamBinding::uniform_state_with_surface(
-              uniform.id().clone(),
-              projection,
-          ));
+            .uniform_bindings
+            .push(PassParamBinding::uniform_state_with_surface(
+                uniform.id().clone(),
+                projection,
+            ));
         self
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         self.pass
-          .uniform_bindings
-          .push(PassParamBinding::uniform_state(
-              handle.id().clone(),
-              projection,
-          ));
+            .uniform_bindings
+            .push(PassParamBinding::uniform_state(
+                handle.id().clone(),
+                projection,
+            ));
         self
     }
 
@@ -207,16 +207,16 @@ impl FullscreenPassBuilder {
         projection: F,
     ) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
         self.pass
-          .uniform_bindings
-          .push(PassParamBinding::uniform_state_with_surface(
-              handle.id().clone(),
-              projection,
-          ));
+            .uniform_bindings
+            .push(PassParamBinding::uniform_state_with_surface(
+                handle.id().clone(),
+                projection,
+            ));
         self
     }
 
@@ -228,14 +228,14 @@ impl FullscreenPassBuilder {
     pub fn bind_ping_pong_storage(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
         let (a_id, b_id) = self
-          .flow
-          .ping_pong_storage_ids(name.as_str())
-          .unwrap_or_else(|| {
-              (
-                  RenderResourceId::new(format!("{name}.a")),
-                  RenderResourceId::new(format!("{name}.b")),
-              )
-          });
+            .flow
+            .ping_pong_storage_ids(name.as_str())
+            .unwrap_or_else(|| {
+                (
+                    RenderResourceId::new(format!("{name}.a")),
+                    RenderResourceId::new(format!("{name}.b")),
+                )
+            });
         push_unique_resource(&mut self.pass.reads, a_id);
         push_unique_resource(&mut self.pass.reads, b_id);
         self

@@ -3,5 +3,5 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct TextCursor {
-	pub char_index: usize,
+    pub char_index: usize,
 }

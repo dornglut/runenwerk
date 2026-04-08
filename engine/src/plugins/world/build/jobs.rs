@@ -153,11 +153,7 @@ fn queue_dirty_chunks(
     }
 }
 
-fn build_priority_score(
-    chunk_id: ChunkId,
-    class: BuildQueueClass,
-    gameplay_locked: bool,
-) -> i64 {
+fn build_priority_score(chunk_id: ChunkId, class: BuildQueueClass, gameplay_locked: bool) -> i64 {
     let base = match class {
         BuildQueueClass::Interactive => 1_000_i64,
         BuildQueueClass::Background => 100_i64,
@@ -195,12 +191,12 @@ fn push_phase_nodes(
 }
 
 fn build_chunk_payload_from_op_window(
-	chunk_id: ChunkId,
-	target_chunk_revision: ChunkRevision,
-	target_build_generation: BuildGeneration,
-	partition: &GridPartitionConfig,
-	op_log: &OperationLog,
-	fixed_point_scale: i32,
+    chunk_id: ChunkId,
+    target_chunk_revision: ChunkRevision,
+    target_build_generation: BuildGeneration,
+    partition: &GridPartitionConfig,
+    op_log: &OperationLog,
+    fixed_point_scale: i32,
 ) -> SdfChunkPayload {
     let affecting_ops =
         operations_affecting_chunk(op_log, partition, chunk_id, fixed_point_scale.max(1));
@@ -250,10 +246,10 @@ fn build_chunk_payload_from_op_window(
 }
 
 fn operations_affecting_chunk<'a>(
-	op_log: &'a OperationLog,
-	partition: &GridPartitionConfig,
-	chunk_id: ChunkId,
-	fixed_point_scale: i32,
+    op_log: &'a OperationLog,
+    partition: &GridPartitionConfig,
+    chunk_id: ChunkId,
+    fixed_point_scale: i32,
 ) -> Vec<&'a OperationRecord> {
     op_log
         .operations

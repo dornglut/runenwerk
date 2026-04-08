@@ -3,26 +3,26 @@ use geometry::Aabb3;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct AabbQuery {
-	pub bounds: Aabb3,
+    pub bounds: Aabb3,
 }
 
 impl AabbQuery {
-	pub fn new(bounds: Aabb3) -> Self {
-		Self { bounds }
-	}
+    pub fn new(bounds: Aabb3) -> Self {
+        Self { bounds }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueryResult<K: SpatialKey> {
-	pub keys: Vec<K>,
+    pub keys: Vec<K>,
 }
 
 impl<K: SpatialKey> QueryResult<K> {
-	pub fn new(keys: Vec<K>) -> Self {
-		Self { keys }
-	}
+    pub fn new(keys: Vec<K>) -> Self {
+        Self { keys }
+    }
 
-	pub fn into_keys(self) -> Vec<K> {
-		self.keys
-	}
+    pub fn into_keys(self) -> Vec<K> {
+        self.keys
+    }
 }

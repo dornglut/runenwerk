@@ -38,11 +38,11 @@ impl Default for RegionInvalidationJournal {
 
 impl RegionInvalidationJournal {
     pub fn append_ingress_record(
-	    &mut self,
-	    partition: &GridPartitionConfig,
-	    touched_chunks: BTreeSet<ChunkId>,
-	    world_revision: WorldRevision,
-	    op_id: OperationId,
+        &mut self,
+        partition: &GridPartitionConfig,
+        touched_chunks: BTreeSet<ChunkId>,
+        world_revision: WorldRevision,
+        op_id: OperationId,
     ) {
         if touched_chunks.is_empty() {
             return;
@@ -64,10 +64,10 @@ impl RegionInvalidationJournal {
     }
 
     pub fn append_integration_record(
-	    &mut self,
-	    partition: &GridPartitionConfig,
-	    chunk_id: ChunkId,
-	    world_revision: WorldRevision,
+        &mut self,
+        partition: &GridPartitionConfig,
+        chunk_id: ChunkId,
+        world_revision: WorldRevision,
     ) {
         let mut chunk_ids = BTreeSet::new();
         chunk_ids.insert(chunk_id);

@@ -21,19 +21,15 @@ use super::{
     adapters::resources::{
         BuildGraphResource, BuildQueueResource, CameraRelativeFrameResource,
         CaveLightingScopeResource, CavePortalGraphResource, CaveSectorResource,
-        CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource, RegionInvalidationJournalResource, ReplicationStateResource,
-        SdfChunkStoreResource,
+        CollisionQueryServiceResource, OperationLogResource, PartitionConfigResource,
+        RegionInvalidationJournalResource, ReplicationStateResource, SdfChunkStoreResource,
     },
-    chunks::{
-        lifecycle::WorldChunkRuntimeMapResource, DirtyChunkMapResource,
-    },
+    chunks::{DirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource},
     queries::nav::WorldNavSummaryResource,
-    streaming::{
-        interest::{WorldStreamingInterestResource, sync_world_streaming_interest_system},
-    },
+    streaming::interest::{WorldStreamingInterestResource, sync_world_streaming_interest_system},
 };
-use world_ops::WorldRevision;
 use crate::plugins::adapters::WorldFrameResource;
+use world_ops::WorldRevision;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub enum WorldRuntimeMode {

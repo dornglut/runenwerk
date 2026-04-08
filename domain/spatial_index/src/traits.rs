@@ -2,27 +2,27 @@ use crate::{AabbQuery, QueryResult, SpatialEntry, SpatialIndexError, SpatialKey}
 use geometry::Aabb3;
 
 pub trait SpatialIndex<K: SpatialKey> {
-	fn contains(&self, key: K) -> bool;
+    fn contains(&self, key: K) -> bool;
 
-	fn bounds(&self, key: K) -> Option<Aabb3>;
+    fn bounds(&self, key: K) -> Option<Aabb3>;
 
-	fn query_aabb(&self, query: AabbQuery) -> Result<QueryResult<K>, SpatialIndexError>;
+    fn query_aabb(&self, query: AabbQuery) -> Result<QueryResult<K>, SpatialIndexError>;
 
-	fn len(&self) -> usize;
+    fn len(&self) -> usize;
 
-	fn is_empty(&self) -> bool {
-		self.len() == 0
-	}
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 pub trait MutableSpatialIndex<K: SpatialKey>: SpatialIndex<K> {
-	fn insert(&mut self, entry: SpatialEntry<K>) -> Result<(), SpatialIndexError>;
+    fn insert(&mut self, entry: SpatialEntry<K>) -> Result<(), SpatialIndexError>;
 
-	fn update(&mut self, entry: SpatialEntry<K>) -> Result<(), SpatialIndexError>;
+    fn update(&mut self, entry: SpatialEntry<K>) -> Result<(), SpatialIndexError>;
 
-	fn upsert(&mut self, entry: SpatialEntry<K>) -> Result<(), SpatialIndexError>;
+    fn upsert(&mut self, entry: SpatialEntry<K>) -> Result<(), SpatialIndexError>;
 
-	fn remove(&mut self, key: K) -> bool;
+    fn remove(&mut self, key: K) -> bool;
 
-	fn clear(&mut self);
+    fn clear(&mut self);
 }

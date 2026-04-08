@@ -85,11 +85,7 @@ impl WorldStreamingInterestResource {
         }
     }
 
-    pub fn mark_snapshot_acknowledged(
-        &mut self,
-        connection_id: ConnectionId,
-        cursor: SyncCursor,
-    ) {
+    pub fn mark_snapshot_acknowledged(&mut self, connection_id: ConnectionId, cursor: SyncCursor) {
         let interest = self.interest_for_connection_mut(connection_id);
         if cursor.0 < interest.last_ack_cursor.0 {
             return;

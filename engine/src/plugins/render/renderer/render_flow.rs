@@ -1,7 +1,6 @@
 use super::*;
 use crate::plugins::render::RenderResourceDescriptor;
-use crate::plugins::render::api::{ SURFACE_COLOR_RESOURCE_ID, SURFACE_DEPTH_RESOURCE_ID,
-};
+use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_ID, SURFACE_DEPTH_RESOURCE_ID};
 use crate::plugins::render::backend::ensure_compiled_pass_is_supported;
 use crate::plugins::render::frame::{PreparedFlowInputs, PreparedRenderFrame};
 use crate::plugins::render::graph::{

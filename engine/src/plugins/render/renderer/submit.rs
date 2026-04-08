@@ -1,8 +1,8 @@
 use crate::plugins::inspect::{RenderDebugTimingsState, RenderRuntimeResourceInspectorState};
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::*;
-use crate::plugins::scene::*;
 use crate::plugins::scene::ui::UiRenderShaderConfig;
+use crate::plugins::scene::*;
 use crate::plugins::time::domain::Time;
 use crate::runtime::{Res, ResMut, WorldMut};
 use crate::state::{DebugMetricsState, StartupState, UiOverlayState};
@@ -45,7 +45,10 @@ pub(crate) fn collect_runtime_ui_frame_submissions_system(mut world: WorldMut) {
                 .ok()
                 .map(|config| config.rect_shader_asset_id.trim().to_string())
                 .filter(|id| !id.is_empty());
-            (manager.overlay_runtime.ui.frame.clone(), rect_shader_asset_id)
+            (
+                manager.overlay_runtime.ui.frame.clone(),
+                rect_shader_asset_id,
+            )
         });
 
     match scene_submission {

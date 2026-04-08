@@ -5,16 +5,16 @@ use crate::{InspectTarget, InspectorSection};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InspectorAdapterError {
-	UnsupportedTarget,
-	TargetNotFound,
-	TypeNotRegistered,
-	ValueNotAvailable,
+    UnsupportedTarget,
+    TargetNotFound,
+    TypeNotRegistered,
+    ValueNotAvailable,
 }
 
 pub trait InspectorAdapter {
-	type Error;
+    type Error;
 
-	fn supports(&self, target: &InspectTarget) -> bool;
+    fn supports(&self, target: &InspectTarget) -> bool;
 
-	fn build_sections(&self, target: &InspectTarget) -> Result<Vec<InspectorSection>, Self::Error>;
+    fn build_sections(&self, target: &InspectTarget) -> Result<Vec<InspectorSection>, Self::Error>;
 }

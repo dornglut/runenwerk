@@ -40,9 +40,9 @@ fn builtin_ui_composite_requires_canonical_read_write_contract() {
 
     let err = validate_flow_graph(&graph).expect_err("flow must enforce UI composite contract");
     assert!(
-        err.issues
-            .iter()
-            .any(|issue| issue.contains("must not declare reads(...); UI input comes from PreparedRenderFrame::ui()")),
+        err.issues.iter().any(|issue| issue.contains(
+            "must not declare reads(...); UI input comes from PreparedRenderFrame::ui()"
+        )),
         "expected canonical UI reads contract issue, got {:?}",
         err.issues
     );

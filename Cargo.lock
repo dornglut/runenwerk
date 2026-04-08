@@ -748,14 +748,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "editor_assets"
-version = "0.1.0"
-dependencies = [
- "editor_core",
- "editor_inspector",
-]
-
-[[package]]
 name = "editor_core"
 version = "0.1.0"
 dependencies = [
@@ -774,6 +766,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "editor_persistence"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+]
+
+[[package]]
 name = "editor_scene"
 version = "0.1.0"
 dependencies = [
@@ -789,21 +789,12 @@ dependencies = [
  "editor_inspector",
  "editor_scene",
  "editor_viewport",
+ "ui_input",
+ "ui_layout",
  "ui_math",
- "ui_runtime",
+ "ui_render_data",
  "ui_text",
  "ui_theme",
-]
-
-[[package]]
-name = "editor_tools"
-version = "0.1.0"
-dependencies = [
- "editor_core",
- "editor_scene",
- "editor_viewport",
- "ui_input",
- "ui_math",
 ]
 
 [[package]]
@@ -2576,21 +2567,22 @@ dependencies = [
 name = "runenwerk_editor"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ecs",
- "editor_assets",
  "editor_core",
  "editor_inspector",
+ "editor_persistence",
  "editor_scene",
  "editor_shell",
- "editor_tools",
  "editor_viewport",
+ "engine",
  "glam 0.32.1",
  "scene",
  "ui_input",
  "ui_math",
  "ui_render_data",
- "ui_runtime",
  "ui_theme",
+ "winit",
 ]
 
 [[package]]
@@ -3447,18 +3439,6 @@ version = "0.1.0"
 dependencies = [
  "ui_math",
  "ui_text",
-]
-
-[[package]]
-name = "ui_runtime"
-version = "0.1.0"
-dependencies = [
- "ui_input",
- "ui_layout",
- "ui_math",
- "ui_render_data",
- "ui_text",
- "ui_theme",
 ]
 
 [[package]]

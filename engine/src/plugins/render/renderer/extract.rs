@@ -28,7 +28,8 @@ impl Renderer {
                             let _ = clip_stack.pop();
                         }
                         UiPrimitive::Rect(rect) => {
-                            if let Some(entry) = flattened_rect(rect, current_clip(&clip_stack), None)
+                            if let Some(entry) =
+                                flattened_rect(rect, current_clip(&clip_stack), None)
                             {
                                 instances.push(entry);
                             }
@@ -41,7 +42,8 @@ impl Renderer {
                             }
                         }
                         UiPrimitive::Image(image) => {
-                            if let Some(entry) = flattened_image(image, current_clip(&clip_stack), None)
+                            if let Some(entry) =
+                                flattened_image(image, current_clip(&clip_stack), None)
                             {
                                 instances.push(entry);
                             }
@@ -105,7 +107,12 @@ fn flattened_border(
     let clip = effective_clip(stack_clip, local_clip, border.rect)?;
     flattened_rect_raw(
         border.rect,
-        [border.paint.r, border.paint.g, border.paint.b, border.paint.a],
+        [
+            border.paint.r,
+            border.paint.g,
+            border.paint.b,
+            border.paint.a,
+        ],
         border.radius,
         clip,
     )

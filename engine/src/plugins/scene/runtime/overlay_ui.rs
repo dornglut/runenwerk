@@ -2,11 +2,11 @@ use super::template_flow::{
     SceneTemplateButtonSlot, SceneTemplateButtonSpec, SceneTemplateFlowResource,
     SceneTemplateSceneSpec,
 };
-use crate::plugins::time::domain::Time;
 use crate::plugins::scene::ui::{
     ConsoleUiRuntimeState, UiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
     reload_console_template_if_changed,
 };
+use crate::plugins::time::domain::Time;
 use crate::plugins::{InputState, SceneManager};
 use ui_math::{UiPoint, UiRect, UiSize};
 use ui_render_data::{
@@ -290,8 +290,8 @@ fn apply_runtime_layout(world: &mut ecs::World, ui: &mut ConsoleUiRuntimeState) 
     let logs_h = (panel_h - inner_padding * 3.0 - input_height - footer_offset).max(1.0);
 
     let input_y = logs_y + logs_h + inner_padding;
-    let target_input_width =
-        (logs_w - button_width - input_button_gap).clamp(MIN_INPUT_WIDTH, logs_w.max(MIN_INPUT_WIDTH));
+    let target_input_width = (logs_w - button_width - input_button_gap)
+        .clamp(MIN_INPUT_WIDTH, logs_w.max(MIN_INPUT_WIDTH));
     let final_button_width = (logs_w - target_input_width - input_button_gap).max(1.0);
 
     set_transform(
@@ -407,14 +407,24 @@ fn push_panel_primitives(
     push_rect(
         layer,
         primitive_order,
-        UiRect::new(transform.x, transform.y, transform.w.max(0.0), transform.h.max(0.0)),
+        UiRect::new(
+            transform.x,
+            transform.y,
+            transform.w.max(0.0),
+            transform.h.max(0.0),
+        ),
         style.bg_color,
         style.radius.max(0.0),
     );
     push_border(
         layer,
         primitive_order,
-        UiRect::new(transform.x, transform.y, transform.w.max(0.0), transform.h.max(0.0)),
+        UiRect::new(
+            transform.x,
+            transform.y,
+            transform.w.max(0.0),
+            transform.h.max(0.0),
+        ),
         style.border_color,
         style.border_width.max(0.0),
         style.radius.max(0.0),
@@ -439,7 +449,12 @@ fn push_text_block_primitives(
         return;
     };
 
-    let rect = UiRect::new(transform.x, transform.y, transform.w.max(0.0), transform.h.max(0.0));
+    let rect = UiRect::new(
+        transform.x,
+        transform.y,
+        transform.w.max(0.0),
+        transform.h.max(0.0),
+    );
 
     if let Some(style) = world.get::<UiStyle>(entity) {
         push_rect(

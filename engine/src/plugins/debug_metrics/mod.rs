@@ -4,7 +4,9 @@ use crate::plugins::InputState;
 use crate::plugins::render::inspect::WorldRuntimeInspectorSnapshot;
 use crate::plugins::time::domain::Time;
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup};
-use crate::state::{DebugMetricsState, SceneRuntimeState, StartupPhase, StartupState, UiOverlayState};
+use crate::state::{
+    DebugMetricsState, SceneRuntimeState, StartupPhase, StartupState, UiOverlayState,
+};
 use ui_math::{UiPoint, UiRect, UiSize};
 use ui_render_data::{
     ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId,
@@ -209,12 +211,7 @@ fn push_rect(
     )));
 }
 
-fn estimate_glyph_run(
-    text: &str,
-    x: f32,
-    y: f32,
-    font_size: f32,
-) -> GlyphRun {
+fn estimate_glyph_run(text: &str, x: f32, y: f32, font_size: f32) -> GlyphRun {
     let advance = font_size.max(1.0) * 0.55;
     let baseline_y = y + font_size.max(1.0);
     let glyphs = text

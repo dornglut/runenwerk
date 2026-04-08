@@ -15,8 +15,7 @@ pub use change_tracking::{
 };
 pub use entity_handles::{EntityMut, EntityRef, Mut};
 pub use events::{
-    EntityDespawnedEvent, EntitySpawnedEvent, EventChannelConfig, EventChannelStats,
-    EventLifetime, EventObserverNotification, EventTracingPolicy, ObserverTrigger,
-    OverflowPolicy,
+    EntityDespawnedEvent, EntitySpawnedEvent, EventChannelConfig, EventChannelStats, EventLifetime,
+    EventObserverNotification, EventTracingPolicy, ObserverTrigger, OverflowPolicy,
 };
 pub use world::World;

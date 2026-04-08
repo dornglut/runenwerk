@@ -5,8 +5,8 @@ use crate::{InspectorViewModel, OutlinerViewModel, ToolbarViewModel, ViewportVie
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EditorShellViewModel {
-	pub toolbar: ToolbarViewModel,
-	pub outliner: OutlinerViewModel,
-	pub viewport: ViewportViewModel,
-	pub inspector: InspectorViewModel,
+    pub toolbar: ToolbarViewModel,
+    pub outliner: OutlinerViewModel,
+    pub viewport: ViewportViewModel,
+    pub inspector: InspectorViewModel,
 }

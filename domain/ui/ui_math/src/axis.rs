@@ -3,12 +3,12 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Axis {
-	Horizontal,
-	Vertical,
+    Horizontal,
+    Vertical,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AxisDirection {
-	Positive,
-	Negative,
+    Positive,
+    Negative,
 }

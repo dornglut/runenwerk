@@ -7,17 +7,7 @@ pub const SDF_BRICK_EDGE_SAMPLES: usize = 8;
 pub const SDF_PAGE_EDGE_BRICKS: usize = 4;
 
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Default,
-    Serialize,
-    Deserialize,
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]
 pub struct SdfPageCoord3 {
     pub x: i16,

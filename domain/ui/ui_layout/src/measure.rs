@@ -5,11 +5,11 @@ use ui_math::UiSize;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MeasuredSize {
-	pub size: UiSize,
+    pub size: UiSize,
 }
 
 impl MeasuredSize {
-	pub fn new(size: UiSize) -> Self {
-		Self { size }
-	}
+    pub fn new(size: UiSize) -> Self {
+        Self { size }
+    }
 }

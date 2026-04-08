@@ -3,9 +3,9 @@
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpacingScale {
-	pub xs: f32,
-	pub sm: f32,
-	pub md: f32,
-	pub lg: f32,
-	pub xl: f32,
+    pub xs: f32,
+    pub sm: f32,
+    pub md: f32,
+    pub lg: f32,
+    pub xl: f32,
 }

@@ -117,11 +117,7 @@ mod tests {
     fn quantization_rounds_to_fixed_scale() {
         assert_eq!(
             quantize_position([1.25, -2.25, 0.0], 4),
-            QuantizedVec3 {
-                x: 5,
-                y: -9,
-                z: 0
-            }
+            QuantizedVec3 { x: 5, y: -9, z: 0 }
         );
     }
 }

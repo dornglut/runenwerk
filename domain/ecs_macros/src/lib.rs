@@ -118,10 +118,7 @@ pub fn bundle_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Reflect)]
 pub fn reflect_derive(input: TokenStream) -> TokenStream {
     let ecs = ecs_crate_path();
-    expand_reflect(
-        input,
-        quote!(#ecs::reflect::ReflectClassification::Plain),
-    )
+    expand_reflect(input, quote!(#ecs::reflect::ReflectClassification::Plain))
 }
 
 #[proc_macro_derive(ReflectComponent)]

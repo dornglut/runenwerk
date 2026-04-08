@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum SpatialIndexError {
-	InvalidBounds,
-	InvalidCellSize { cell_size: f32 },
+    InvalidBounds,
+    InvalidCellSize { cell_size: f32 },
 }

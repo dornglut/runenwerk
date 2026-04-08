@@ -3,9 +3,9 @@ pub mod diff;
 pub mod focus;
 pub mod policy;
 pub mod prelude;
+pub mod priority;
 pub mod set;
 pub mod streamer;
-pub mod priority;
 
 pub use config::ChunkStreamingConfig;
 pub use diff::ChunkSetDiff;

@@ -3,36 +3,36 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValidationSeverity {
-	Info,
-	Warning,
-	Error,
+    Info,
+    Warning,
+    Error,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationMessage {
-	pub severity: ValidationSeverity,
-	pub text: String,
+    pub severity: ValidationSeverity,
+    pub text: String,
 }
 
 impl ValidationMessage {
-	pub fn info(text: impl Into<String>) -> Self {
-		Self {
-			severity: ValidationSeverity::Info,
-			text: text.into(),
-		}
-	}
+    pub fn info(text: impl Into<String>) -> Self {
+        Self {
+            severity: ValidationSeverity::Info,
+            text: text.into(),
+        }
+    }
 
-	pub fn warning(text: impl Into<String>) -> Self {
-		Self {
-			severity: ValidationSeverity::Warning,
-			text: text.into(),
-		}
-	}
+    pub fn warning(text: impl Into<String>) -> Self {
+        Self {
+            severity: ValidationSeverity::Warning,
+            text: text.into(),
+        }
+    }
 
-	pub fn error(text: impl Into<String>) -> Self {
-		Self {
-			severity: ValidationSeverity::Error,
-			text: text.into(),
-		}
-	}
+    pub fn error(text: impl Into<String>) -> Self {
+        Self {
+            severity: ValidationSeverity::Error,
+            text: text.into(),
+        }
+    }
 }

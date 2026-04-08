@@ -5,13 +5,13 @@ use editor_core::ToolId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolbarButtonViewModel {
-	pub id: ToolId,
-	pub stable_name: &'static str,
-	pub label: String,
-	pub is_active: bool,
+    pub id: ToolId,
+    pub stable_name: &'static str,
+    pub label: String,
+    pub is_active: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ToolbarViewModel {
-	pub buttons: Vec<ToolbarButtonViewModel>,
+    pub buttons: Vec<ToolbarButtonViewModel>,
 }

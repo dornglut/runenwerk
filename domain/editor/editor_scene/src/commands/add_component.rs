@@ -7,41 +7,41 @@ use crate::{SceneCommandContext, SceneComponentSnapshot};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddComponentCommand {
-	pub entity: EntityId,
-	pub component_type: ComponentTypeId,
-	removed_snapshot: Option<SceneComponentSnapshot>,
+    pub entity: EntityId,
+    pub component_type: ComponentTypeId,
+    removed_snapshot: Option<SceneComponentSnapshot>,
 }
 
 impl AddComponentCommand {
-	/// File: domain/editor/editor_scene/src/commands/add_component.rs
-	/// Method: new
-	pub fn new(entity: EntityId, component_type: ComponentTypeId) -> Self {
-		Self {
-			entity,
-			component_type,
-			removed_snapshot: None,
-		}
-	}
+    /// File: domain/editor/editor_scene/src/commands/add_component.rs
+    /// Method: new
+    pub fn new(entity: EntityId, component_type: ComponentTypeId) -> Self {
+        Self {
+            entity,
+            component_type,
+            removed_snapshot: None,
+        }
+    }
 
-	/// File: domain/editor/editor_scene/src/commands/add_component.rs
-	/// Method: apply
-	pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
-		if let Some(snapshot) = self.removed_snapshot.take() {
-			ctx.runtime_mut().restore_component(snapshot)?;
-			return Ok(());
-		}
+    /// File: domain/editor/editor_scene/src/commands/add_component.rs
+    /// Method: apply
+    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+        if let Some(snapshot) = self.removed_snapshot.take() {
+            ctx.runtime_mut().restore_component(snapshot)?;
+            return Ok(());
+        }
 
-		ctx.runtime_mut()
-			.add_component(self.entity, self.component_type)
-	}
+        ctx.runtime_mut()
+            .add_component(self.entity, self.component_type)
+    }
 
-	/// File: domain/editor/editor_scene/src/commands/add_component.rs
-	/// Method: undo
-	pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
-		let snapshot = ctx
-			.runtime_mut()
-			.remove_component(self.entity, self.component_type)?;
-		self.removed_snapshot = Some(snapshot);
-		Ok(())
-	}
+    /// File: domain/editor/editor_scene/src/commands/add_component.rs
+    /// Method: undo
+    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+        let snapshot = ctx
+            .runtime_mut()
+            .remove_component(self.entity, self.component_type)?;
+        self.removed_snapshot = Some(snapshot);
+        Ok(())
+    }
 }
