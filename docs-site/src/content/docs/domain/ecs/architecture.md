@@ -103,7 +103,7 @@ Core mechanics:
 - drain path updates channel counters
 - frame-finalization handles `FrameTransient` cleanup
 - observer triggers emit on configured boundaries
-- `EventChannel<T>` param state tracks per-system read cursor (`iter_new`)
+- `BroadcastReader<T>` param state tracks per-system read cursor (`iter_new`)
 
 ## 8. Secondary and Spatial Index Internals
 

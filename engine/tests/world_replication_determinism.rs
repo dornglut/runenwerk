@@ -3,7 +3,7 @@ use engine::net::prelude::{
     Ack, ClientMessage, ConnectionId, NetPlugin, NetRole, ServerSessionState, SessionPhase,
     SnapshotCursor,
 };
-use engine::plugins::net::{NetworkServerInbox, update_connection_closed};
+use engine::plugins::net::{enqueue_server_inbox_from, update_connection_closed};
 use engine::plugins::world::adapters::resources::{
     PartitionConfigResource, ReplicationStateResource,
 };
@@ -409,19 +409,15 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         );
     }
 
-    {
-        let mut inbox = app
-            .world_mut()
-            .resource_mut::<NetworkServerInbox>()
-            .expect("server inbox should exist");
-        inbox.push_from(
-            Some(connection_id),
-            ClientMessage::Ack(Ack {
-                cursor: SnapshotCursor(1),
-                last_received_tick: SimulationTick(9),
-            }),
-        );
-    }
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(connection_id),
+        ClientMessage::Ack(Ack {
+            cursor: SnapshotCursor(1),
+            last_received_tick: SimulationTick(9),
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
     let next_tick = app
         .world()
         .resource::<SimulationTick>()

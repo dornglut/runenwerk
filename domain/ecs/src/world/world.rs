@@ -3,7 +3,12 @@ use super::change_tracking::{
     ComponentChangeRecord, ComponentMeta, RemovedComponentRecord, ResourceChangeRecord,
 };
 use super::component_indexes::{ComponentIndexKey, ComponentIndexStorage};
-use super::events::types::{EventChannelStorage, EventObserver, EventObserverNotification};
+use super::messaging::broadcast::{
+    BroadcastObserver, BroadcastObserverNotification, BroadcastStreamStorage,
+};
+use super::messaging::finalization::MessagingFinalizationCounters;
+use super::messaging::input_stream::InputStreamStorage;
+use super::messaging::queue::QueueStorage;
 use crate::entity::{Entity, EntityAllocator};
 use crate::indexing::SpatialIndexStorage;
 use crate::storage::{ArchetypeRegistry, EntityLocationMap};
@@ -24,9 +29,13 @@ pub struct World {
     pub(super) next_component_id: u32,
     pub(super) resources: HashMap<TypeId, Box<dyn Any>>,
 
-    pub(super) event_channels: HashMap<TypeId, EventChannelStorage>,
-    pub(super) event_observers: HashMap<String, EventObserver>,
-    pub(super) event_observer_notifications: Vec<EventObserverNotification>,
+    pub(super) broadcast_streams: HashMap<TypeId, BroadcastStreamStorage>,
+    pub(super) broadcast_observers: HashMap<String, BroadcastObserver>,
+    pub(super) broadcast_observer_notifications: Vec<BroadcastObserverNotification>,
+    pub(super) queues: HashMap<TypeId, QueueStorage>,
+    pub(super) input_streams: HashMap<TypeId, InputStreamStorage>,
+    pub(super) current_input_tick: u64,
+    pub(super) messaging_finalization_counters: MessagingFinalizationCounters,
 
     pub(super) component_indexes:
         RefCell<HashMap<ComponentIndexKey, Box<dyn ComponentIndexStorage>>>,
@@ -56,9 +65,13 @@ impl World {
             next_component_id: 0,
             resources: HashMap::new(),
 
-            event_channels: HashMap::new(),
-            event_observers: HashMap::new(),
-            event_observer_notifications: Vec::new(),
+            broadcast_streams: HashMap::new(),
+            broadcast_observers: HashMap::new(),
+            broadcast_observer_notifications: Vec::new(),
+            queues: HashMap::new(),
+            input_streams: HashMap::new(),
+            current_input_tick: 0,
+            messaging_finalization_counters: MessagingFinalizationCounters::default(),
 
             component_indexes: RefCell::new(HashMap::new()),
             spatial_indexes: HashMap::new(),

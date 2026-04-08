@@ -1,26 +1,152 @@
 use super::*;
 use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SessionRuntimeState, SystemConfigExt};
+use ecs::{QueueConfig, QueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::SimulationTick;
 use std::collections::BTreeMap;
-use std::mem;
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 
 // engine/src/plugins/net/resources.rs
 
 const NETWORK_MESSAGE_QUEUE_CAPACITY: usize = 4_096;
 
-fn push_bounded<T>(queue: &mut Vec<T>, message: T, queue_name: &str) {
-    if queue.len() >= NETWORK_MESSAGE_QUEUE_CAPACITY {
-        queue.remove(0);
+fn configure_network_message_queues(world: &mut World) {
+    let config = QueueConfig {
+        capacity: Some(NETWORK_MESSAGE_QUEUE_CAPACITY),
+    };
+    world.configure_queue::<ServerMessage>(config);
+    world.configure_queue::<InboundClientMessage>(config);
+    world.configure_queue::<ClientMessage>(config);
+    world.configure_queue::<OutboundServerMessage>(config);
+}
+
+fn enqueue_queue_with_backpressure<T: 'static>(
+    world: &mut World,
+    queue_name: &'static str,
+    message: T,
+) -> Result<(), QueueEnqueueError> {
+    let result = world.queue_enqueue(message);
+    if let Err(QueueEnqueueError::Backpressure { capacity, .. }) = &result {
         tracing::warn!(
             queue = queue_name,
-            capacity = NETWORK_MESSAGE_QUEUE_CAPACITY,
-            "network queue overflow; dropping oldest message"
+            capacity = *capacity,
+            "network queue backpressure; dropping newest message"
         );
     }
-    queue.push(message);
+    result
+}
+
+pub fn enqueue_client_inbox(
+    world: &mut World,
+    message: ServerMessage,
+) -> Result<(), QueueEnqueueError> {
+    enqueue_queue_with_backpressure(world, "NetworkClientInbox", message)
+}
+
+pub fn client_inbox_len(world: &World) -> usize {
+    world.queue_pending_count::<ServerMessage>()
+}
+
+pub fn client_inbox_is_empty(world: &World) -> bool {
+    client_inbox_len(world) == 0
+}
+
+pub fn drain_client_inbox(world: &mut World) -> Vec<ServerMessage> {
+    world.queue_drain::<ServerMessage>()
+}
+
+pub fn enqueue_server_inbox(
+    world: &mut World,
+    message: ClientMessage,
+) -> Result<(), QueueEnqueueError> {
+    enqueue_server_inbox_from(world, None, message)
+}
+
+pub fn enqueue_server_inbox_from(
+    world: &mut World,
+    connection_id: Option<ConnectionId>,
+    message: ClientMessage,
+) -> Result<(), QueueEnqueueError> {
+    enqueue_queue_with_backpressure(
+        world,
+        "NetworkServerInbox",
+        InboundClientMessage {
+            connection_id,
+            message,
+        },
+    )
+}
+
+pub fn server_inbox_len(world: &World) -> usize {
+    world.queue_pending_count::<InboundClientMessage>()
+}
+
+pub fn server_inbox_is_empty(world: &World) -> bool {
+    server_inbox_len(world) == 0
+}
+
+pub fn drain_server_inbox(world: &mut World) -> Vec<InboundClientMessage> {
+    world.queue_drain::<InboundClientMessage>()
+}
+
+pub fn enqueue_client_outbox(
+    world: &mut World,
+    message: ClientMessage,
+) -> Result<(), QueueEnqueueError> {
+    enqueue_queue_with_backpressure(world, "NetworkClientOutbox", message)
+}
+
+pub fn client_outbox_len(world: &World) -> usize {
+    world.queue_pending_count::<ClientMessage>()
+}
+
+pub fn client_outbox_is_empty(world: &World) -> bool {
+    client_outbox_len(world) == 0
+}
+
+pub fn drain_client_outbox(world: &mut World) -> Vec<ClientMessage> {
+    world.queue_drain::<ClientMessage>()
+}
+
+pub fn enqueue_server_outbox(
+    world: &mut World,
+    message: OutboundServerMessage,
+) -> Result<(), QueueEnqueueError> {
+    enqueue_queue_with_backpressure(world, "NetworkServerOutbox", message)
+}
+
+pub fn enqueue_server_outbox_broadcast(
+    world: &mut World,
+    message: ServerMessage,
+) -> Result<(), QueueEnqueueError> {
+    enqueue_server_outbox(world, OutboundServerMessage::Broadcast(message))
+}
+
+pub fn enqueue_server_outbox_to(
+    world: &mut World,
+    connection_id: ConnectionId,
+    message: ServerMessage,
+) -> Result<(), QueueEnqueueError> {
+    enqueue_server_outbox(
+        world,
+        OutboundServerMessage::ToConnection {
+            connection_id,
+            message,
+        },
+    )
+}
+
+pub fn server_outbox_len(world: &World) -> usize {
+    world.queue_pending_count::<OutboundServerMessage>()
+}
+
+pub fn server_outbox_is_empty(world: &World) -> bool {
+    server_outbox_len(world) == 0
+}
+
+pub fn drain_server_outbox(world: &mut World) -> Vec<OutboundServerMessage> {
+    world.queue_drain::<OutboundServerMessage>()
 }
 
 pub(crate) fn configure_runtime_bridge<TDriver>(app: &mut App)
@@ -44,6 +170,7 @@ where
 }
 
 pub(crate) fn configure_client_role(app: &mut App) {
+    configure_network_message_queues(app.world_mut());
     app.init_resource::<NetworkClientInbox>();
     app.init_resource::<NetworkClientOutbox>();
     app.init_resource::<NetworkInboundQueue>();
@@ -59,6 +186,7 @@ pub(crate) fn configure_client_role(app: &mut App) {
 }
 
 pub(crate) fn configure_server_role(app: &mut App) {
+    configure_network_message_queues(app.world_mut());
     app.init_resource::<NetworkServerInbox>();
     app.init_resource::<NetworkServerOutbox>();
     app.init_resource::<NetworkInboundQueue>();
@@ -107,84 +235,13 @@ where
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
-pub struct NetworkClientInbox {
-    messages: Vec<ServerMessage>,
-}
-
-impl NetworkClientInbox {
-    pub fn push(&mut self, message: ServerMessage) {
-        push_bounded(&mut self.messages, message, "NetworkClientInbox");
-    }
-
-    pub fn len(&self) -> usize {
-        self.messages.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.messages.is_empty()
-    }
-
-    pub fn drain(&mut self) -> Vec<ServerMessage> {
-        mem::take(&mut self.messages)
-    }
-}
+pub struct NetworkClientInbox;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
-pub struct NetworkServerInbox {
-    messages: Vec<InboundClientMessage>,
-}
-
-impl NetworkServerInbox {
-    pub fn push(&mut self, message: ClientMessage) {
-        self.push_from(None, message);
-    }
-
-    pub fn push_from(&mut self, connection_id: Option<ConnectionId>, message: ClientMessage) {
-        push_bounded(
-            &mut self.messages,
-            InboundClientMessage {
-                connection_id,
-                message,
-            },
-            "NetworkServerInbox",
-        );
-    }
-
-    pub fn len(&self) -> usize {
-        self.messages.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.messages.is_empty()
-    }
-
-    pub fn drain(&mut self) -> Vec<InboundClientMessage> {
-        mem::take(&mut self.messages)
-    }
-}
+pub struct NetworkServerInbox;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
-pub struct NetworkClientOutbox {
-    messages: Vec<ClientMessage>,
-}
-
-impl NetworkClientOutbox {
-    pub fn push(&mut self, message: ClientMessage) {
-        push_bounded(&mut self.messages, message, "NetworkClientOutbox");
-    }
-
-    pub fn len(&self) -> usize {
-        self.messages.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.messages.is_empty()
-    }
-
-    pub fn drain(&mut self) -> Vec<ClientMessage> {
-        mem::take(&mut self.messages)
-    }
-}
+pub struct NetworkClientOutbox;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutboundServerMessage {
@@ -196,46 +253,7 @@ pub enum OutboundServerMessage {
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
-pub struct NetworkServerOutbox {
-    messages: Vec<OutboundServerMessage>,
-}
-
-impl NetworkServerOutbox {
-    pub fn push(&mut self, message: ServerMessage) {
-        self.push_broadcast(message);
-    }
-
-    pub fn push_broadcast(&mut self, message: ServerMessage) {
-        push_bounded(
-            &mut self.messages,
-            OutboundServerMessage::Broadcast(message),
-            "NetworkServerOutbox",
-        );
-    }
-
-    pub fn push_to(&mut self, connection_id: ConnectionId, message: ServerMessage) {
-        push_bounded(
-            &mut self.messages,
-            OutboundServerMessage::ToConnection {
-                connection_id,
-                message,
-            },
-            "NetworkServerOutbox",
-        );
-    }
-
-    pub fn len(&self) -> usize {
-        self.messages.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.messages.is_empty()
-    }
-
-    pub fn drain(&mut self) -> Vec<OutboundServerMessage> {
-        mem::take(&mut self.messages)
-    }
-}
+pub struct NetworkServerOutbox;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct NetworkInboundQueue {
@@ -256,22 +274,14 @@ impl NetworkInboundQueue {
     }
 
     pub fn push_client(&mut self, connection_id: Option<ConnectionId>, message: ClientMessage) {
-        push_bounded(
-            &mut self.client_messages,
-            InboundClientMessage {
-                connection_id,
-                message,
-            },
-            "NetworkInboundQueue.client_messages",
-        );
+        self.client_messages.push(InboundClientMessage {
+            connection_id,
+            message,
+        });
     }
 
     pub fn push_server(&mut self, message: ServerMessage) {
-        push_bounded(
-            &mut self.server_messages,
-            message,
-            "NetworkInboundQueue.server_messages",
-        );
+        self.server_messages.push(message);
     }
 
     pub fn client_messages(&self) -> &[InboundClientMessage] {
@@ -296,19 +306,11 @@ impl NetworkOutboundQueue {
     }
 
     pub fn push_client(&mut self, message: ClientMessage) {
-        push_bounded(
-            &mut self.client_messages,
-            message,
-            "NetworkOutboundQueue.client_messages",
-        );
+        self.client_messages.push(message);
     }
 
     pub fn push_server(&mut self, message: OutboundServerMessage) {
-        push_bounded(
-            &mut self.server_messages,
-            message,
-            "NetworkOutboundQueue.server_messages",
-        );
+        self.server_messages.push(message);
     }
 
     pub fn client_messages(&self) -> &[ClientMessage] {

@@ -49,5 +49,42 @@ pub(crate) fn run_frame(world: &mut World, scheduler: &mut Runtime) -> Result<()
     scheduler.run_schedule::<RenderPrepare>(world)?;
     scheduler.run_schedule::<RenderSubmit>(world)?;
     scheduler.run_schedule::<FrameEnd>(world)?;
+    world.finalize_frame_boundary();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::time::domain::Time;
+    use crate::runtime::fixed_time::{
+        CatchupBudget, FixedTimeConfig, FixedTimeState, SimulationTick,
+    };
+    use anyhow::anyhow;
+
+    #[test]
+    fn frame_finalization_is_skipped_when_frame_end_schedule_fails() {
+        fn fail_frame_end() -> anyhow::Result<()> {
+            Err(anyhow!("frame end failure"))
+        }
+
+        let mut world = World::new();
+        let mut time = Time::default();
+        time.delta_seconds = 0.0;
+        world.insert_resource(time);
+        world.insert_resource(FixedTimeConfig::default());
+        world.insert_resource(CatchupBudget::default());
+        world.insert_resource(FixedTimeState::default());
+        world.insert_resource(SimulationTick(0));
+
+        let mut runtime = Runtime::new();
+        runtime.add_systems::<FrameEnd, _, _>(&mut world, fail_frame_end);
+
+        let err = run_frame(&mut world, &mut runtime).expect_err("frame should fail");
+        assert!(format!("{err:#}").contains("frame end failure"));
+
+        let counters = world.messaging_finalization_counters();
+        assert_eq!(counters.frame_boundaries, 0);
+        assert_eq!(counters.tick_boundaries, 0);
+    }
 }

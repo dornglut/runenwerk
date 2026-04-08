@@ -3,20 +3,22 @@
 fn network_client_plugin_drains_server_messages_and_flushes_client_messages() {
     let mut app = App::headless();
     app.add_plugin(NetworkClientPlugin);
-    app.world_mut()
-        .resource_mut::<NetworkClientInbox>()
-        .unwrap()
-        .push(ServerMessage::Hello(Hello {
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    app.world_mut()
-        .resource_mut::<NetworkClientOutbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+        }),
+    )
+    .expect("client inbox enqueue should succeed");
+    enqueue_client_outbox(
+        app.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
+        }),
+    )
+    .expect("client outbox enqueue should succeed");
 
     let app = app
         .run_for_frames(1)
@@ -26,36 +28,30 @@ fn network_client_plugin_drains_server_messages_and_flushes_client_messages() {
     assert_eq!(diagnostics.processed_server_messages_last_frame, 1);
     assert_eq!(diagnostics.flushed_client_messages_last_frame, 1);
     assert_eq!(diagnostics.flush_count, 1);
-    assert!(
-        app.world()
-            .resource::<NetworkClientInbox>()
-            .unwrap()
-            .is_empty()
-    );
-    assert_eq!(
-        app.world().resource::<NetworkClientOutbox>().unwrap().len(),
-        0
-    );
+    assert!(client_inbox_is_empty(app.world()));
+    assert_eq!(client_outbox_len(app.world()), 0);
 }
 
 #[test]
 fn network_server_plugin_drains_client_messages_and_flushes_server_messages() {
     let mut app = App::headless();
     app.add_plugin(NetworkServerPlugin);
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    app.world_mut()
-        .resource_mut::<NetworkServerOutbox>()
-        .unwrap()
-        .push(ServerMessage::Hello(Hello {
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_outbox_broadcast(
+        app.world_mut(),
+        ServerMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
+        }),
+    )
+    .expect("server outbox enqueue should succeed");
 
     let app = app
         .run_for_frames(1)
@@ -65,16 +61,8 @@ fn network_server_plugin_drains_client_messages_and_flushes_server_messages() {
     assert_eq!(diagnostics.processed_client_messages_last_frame, 1);
     assert!(diagnostics.flushed_server_messages_last_frame >= 2);
     assert_eq!(diagnostics.flush_count, 1);
-    assert!(
-        app.world()
-            .resource::<NetworkServerInbox>()
-            .unwrap()
-            .is_empty()
-    );
-    assert_eq!(
-        app.world().resource::<NetworkServerOutbox>().unwrap().len(),
-        0
-    );
+    assert!(server_inbox_is_empty(app.world()));
+    assert_eq!(server_outbox_len(app.world()), 0);
 }
 
 #[test]
@@ -125,14 +113,9 @@ fn client_bootstrap_session_queues_join_handshake() {
             },
         )
     };
-    {
-        let mut outbox = app
-            .world_mut()
-            .resource_mut::<NetworkClientOutbox>()
-            .unwrap();
-        for message in messages {
-            outbox.push(message);
-        }
+    for message in messages {
+        enqueue_client_outbox(app.world_mut(), message)
+            .expect("client outbox enqueue should succeed");
     }
 
     let app = app
@@ -153,21 +136,23 @@ fn server_plugin_accepts_valid_join_requests() {
         protocol: ProtocolVersion::new(1, 1, 1),
         tick_rate_hz: 60,
     });
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::JoinRequest(engine_net::JoinRequest {
             protocol: ProtocolVersion::new(1, 1, 1),
             server_id: "srv-local".to_string(),
             ticket: "ticket-1".to_string(),
-        }));
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
 
     let app = app
         .run_for_frames(1)
@@ -188,17 +173,17 @@ fn server_plugin_accepts_valid_join_requests() {
 fn client_plugin_marks_session_active_on_join_accept() {
     let mut app = App::headless();
     app.add_plugin(NetworkClientPlugin);
-    app.world_mut()
-        .resource_mut::<NetworkClientInbox>()
-        .unwrap()
-        .push(ServerMessage::Hello(Hello {
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    app.world_mut()
-        .resource_mut::<NetworkClientInbox>()
-        .unwrap()
-        .push(ServerMessage::JoinAccepted(engine_net::JoinAccepted {
+        }),
+    )
+    .expect("client inbox enqueue should succeed");
+    enqueue_client_inbox(
+        app.world_mut(),
+        ServerMessage::JoinAccepted(engine_net::JoinAccepted {
             connection_id: 7,
             tick_rate_hz: 60,
             join_state: engine_net::AuthoritativeJoinState {
@@ -208,7 +193,9 @@ fn client_plugin_marks_session_active_on_join_accept() {
                 ai_fill_target: 4,
                 settings_json: Some("{\"difficulty\":\"normal\"}".to_string()),
             },
-        }));
+        }),
+    )
+    .expect("client inbox enqueue should succeed");
 
     let app = app
         .run_for_frames(1)

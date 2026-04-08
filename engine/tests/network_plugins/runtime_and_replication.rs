@@ -74,21 +74,23 @@ fn server_replication_emits_scene_snapshot_payloads() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugins((ScenePlugin, NetworkServerPlugin));
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::JoinRequest(engine_net::JoinRequest {
             protocol: ProtocolVersion::new(1, 1, 1),
             server_id: "srv-local".to_string(),
             ticket: "ticket-1".to_string(),
-        }));
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
 
     let app = app
         .run_for_frames(1)
@@ -119,23 +121,23 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
     let mut server = App::headless();
     server.add_plugins(default_plugins());
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
-    server
-        .world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+    enqueue_server_inbox(
+        server.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    server
-        .world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_inbox(
+        server.world_mut(),
+        ClientMessage::JoinRequest(engine_net::JoinRequest {
             protocol: ProtocolVersion::new(1, 1, 1),
             server_id: "srv-local".to_string(),
             ticket: "ticket-1".to_string(),
-        }));
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
     let server = server
         .run_for_frames(1)
         .expect("server join frame should run");
@@ -187,11 +189,11 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
         1
     );
 
-    client
-        .world_mut()
-        .resource_mut::<NetworkClientInbox>()
-        .unwrap()
-        .push(ServerMessage::Snapshot(authoritative_snapshot));
+    enqueue_client_inbox(
+        client.world_mut(),
+        ServerMessage::Snapshot(authoritative_snapshot),
+    )
+    .expect("client inbox enqueue should succeed");
     let client = client
         .run_for_frames(1)
         .expect("client receive frame should run");

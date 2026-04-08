@@ -1,5 +1,6 @@
 use crate::query::QueryAccess;
 use crate::{Commands, ResourceError, World};
+use scheduler::system::ParamSlotDescriptor;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,6 +21,14 @@ pub trait SystemParam<'w>: Sized {
 
     fn init_state(world: &mut World) -> Result<Self::State, SystemParamError>;
     fn access(state: &Self::State) -> QueryAccess;
+    fn slot_descriptor() -> ParamSlotDescriptor {
+        let type_name = std::any::type_name::<Self>();
+        ParamSlotDescriptor {
+            kind: "unknown",
+            label: type_name,
+            type_name,
+        }
+    }
 
     /// `State` must be lifetime-independent for all `'w` implementations of the same
     /// parameter type. Runtime state caching relies on this invariant.

@@ -5,23 +5,23 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     server.add_plugins(default_plugins());
     server.add_plugins((ScenePlugin, NetworkServerPlugin));
 
-    server
-        .world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+    enqueue_server_inbox(
+        server.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    server
-        .world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_inbox(
+        server.world_mut(),
+        ClientMessage::JoinRequest(engine_net::JoinRequest {
             protocol: ProtocolVersion::new(1, 1, 1),
             server_id: "srv-local".to_string(),
             ticket: "ticket-1".to_string(),
-        }));
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
     let server = server.run_for_frames(1).expect("join handshake should run");
 
     let server = server
@@ -43,17 +43,15 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .expect("server should emit a full snapshot for connection 1");
 
     let mut server = server;
-    server
-        .world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push_from(
-            Some(ConnectionId(1)),
-            ClientMessage::Ack(Ack {
-                cursor: full_snapshot.cursor,
-                last_received_tick: full_snapshot.tick,
-            }),
-        );
+    enqueue_server_inbox_from(
+        server.world_mut(),
+        Some(ConnectionId(1)),
+        ClientMessage::Ack(Ack {
+            cursor: full_snapshot.cursor,
+            last_received_tick: full_snapshot.tick,
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
     server
         .world_mut()
         .resource_mut::<PlayerCommandBuffer>()
@@ -97,20 +95,14 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     client.add_plugins(default_plugins());
     client.add_plugins((ScenePlugin, NetworkClientPlugin));
 
-    client
-        .world_mut()
-        .resource_mut::<NetworkClientInbox>()
-        .unwrap()
-        .push(ServerMessage::Snapshot(full_snapshot));
+    enqueue_client_inbox(client.world_mut(), ServerMessage::Snapshot(full_snapshot))
+        .expect("client inbox enqueue should succeed");
     let mut client = client
         .run_for_frames(1)
         .expect("client should accept the full snapshot");
 
-    client
-        .world_mut()
-        .resource_mut::<NetworkClientInbox>()
-        .unwrap()
-        .push(ServerMessage::DeltaSnapshot(delta_snapshot));
+    enqueue_client_inbox(client.world_mut(), ServerMessage::DeltaSnapshot(delta_snapshot))
+        .expect("client inbox enqueue should succeed");
     let client = client
         .run_for_frames(1)
         .expect("client should apply the delta snapshot");
@@ -141,51 +133,54 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
         tick_rate_hz: 60,
     });
 
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::JoinRequest(engine_net::JoinRequest {
             protocol: ProtocolVersion::new(1, 1, 1),
             server_id: "srv-local".to_string(),
             ticket: "ticket-1".to_string(),
-        }));
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
     let app = app.run_for_frames(1).expect("first join should run");
     let mut app = app.run_for_ticks(1).expect("first replication tick should run");
 
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push_from(
-            Some(ConnectionId(1)),
-            ClientMessage::Ack(Ack {
-                cursor: SnapshotCursor(1),
-                last_received_tick: SimulationTick(1),
-            }),
-        );
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(ConnectionId(1)),
+        ClientMessage::Ack(Ack {
+            cursor: SnapshotCursor(1),
+            last_received_tick: SimulationTick(1),
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
     let mut app = app.run_for_frames(1).expect("ack frame should run");
 
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::Hello(Hello {
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::Hello(Hello {
             protocol: ProtocolVersion::new(1, 1, 1),
             transport: TransportKind::Quic,
-        }));
-    app.world_mut()
-        .resource_mut::<NetworkServerInbox>()
-        .unwrap()
-        .push(ClientMessage::JoinRequest(engine_net::JoinRequest {
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_inbox(
+        app.world_mut(),
+        ClientMessage::JoinRequest(engine_net::JoinRequest {
             protocol: ProtocolVersion::new(1, 1, 1),
             server_id: "srv-local".to_string(),
             ticket: "ticket-2".to_string(),
-        }));
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
     let app = app.run_for_frames(1).expect("second join should run");
 
     let session = app.world().resource::<engine_net::ServerSessionState>().unwrap();

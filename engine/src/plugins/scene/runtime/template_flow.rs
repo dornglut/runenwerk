@@ -320,7 +320,7 @@ fn publish_scene_template_event(
     manager
         .overlay_runtime
         .world
-        .emit_event(SceneTemplateUiEvent {
+        .publish_broadcast(SceneTemplateUiEvent {
             name: name.to_string(),
             scene_id: scene_id.to_string(),
             button: button.map(|value| value.to_string()),

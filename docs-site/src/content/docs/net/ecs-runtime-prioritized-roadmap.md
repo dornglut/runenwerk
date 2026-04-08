@@ -57,7 +57,7 @@ Checklist:
 
 - [ ] ensure frame finalization always executes exactly once per frame from runtime lifecycle.
 - [ ] add explicit tick finalization boundary/hook for fixed-step phases.
-- [ ] remove dependence on manual `world.finish_event_frame()` calls in gameplay/editor flows.
+- [ ] remove dependence on manual `world.finalize_frame_boundary()` calls in gameplay/editor flows.
 
 ### F3. Strengthen stable identity surfaces for runtime introspection
 

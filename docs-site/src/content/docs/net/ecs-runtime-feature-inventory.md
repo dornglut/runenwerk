@@ -48,7 +48,7 @@ Audit coverage spans:
 | Typed world event channels | Implemented | `domain/ecs/src/world/events/dispatch.rs` | `emit/read/drain/clear` APIs are present. |
 | Bounded/unbounded channels + overflow policies | Implemented | `domain/ecs/src/world/events/types.rs` | Capacity `Option<usize>`, overflow `DropOldest/DropNewest/Panic`. |
 | Channel lifetimes | Partial | `domain/ecs/src/world/events/types.rs` | Supports `FrameTransient`, `Manual`, `Persistent`; no tick-scoped lifetime. |
-| Unread-per-consumer cursors | Implemented | `domain/ecs/src/system/params.rs` (`EventChannelState`, `iter_new`) | Cursor tracked in runtime-owned system param state. |
+| Unread-per-consumer cursors | Implemented | `domain/ecs/src/system/params.rs` (`BroadcastReaderState`, `iter_new`) | Cursor tracked in runtime-owned system param state. |
 | Cursor clamping across retention cleanup | Implemented | `domain/ecs/src/world/events/types.rs` (`events_ref_since`) | Cursor clamps to `[start_sequence, next_sequence]`. |
 | Observer notifications + stats | Implemented | `domain/ecs/src/world/events/dispatch.rs` | `observe_events`, trigger notifications, `event_channel_stats`. |
 | End-of-frame cleanup hook | Partial | `domain/ecs/src/world/events/dispatch.rs` (`finish_event_frame`) | Exists on `World`, but not called by engine runtime frame lifecycle by default. |

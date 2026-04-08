@@ -3,7 +3,7 @@ use crate::bundle::Bundle;
 use crate::entity::Entity;
 use crate::errors::EntityError;
 use crate::world::change_tracking::ComponentChangeKind;
-use crate::world::events::{EntityDespawnedEvent, EntitySpawnedEvent};
+use crate::world::messaging::{EntityDespawnedEvent, EntitySpawnedEvent};
 use crate::world::world::World;
 
 impl World {
@@ -19,7 +19,7 @@ impl World {
         bundle
             .insert(self, entity)
             .expect("bundle insert should succeed for new entity");
-        self.emit_event(EntitySpawnedEvent { entity });
+        self.publish_broadcast(EntitySpawnedEvent { entity });
         entity
     }
 
@@ -56,7 +56,7 @@ impl World {
             );
         }
 
-        self.emit_event(EntityDespawnedEvent { entity });
+        self.publish_broadcast(EntityDespawnedEvent { entity });
         Ok(())
     }
 

@@ -66,7 +66,7 @@ mod tests {
             "path-based shader lookup should carry loaded revisions"
         );
 
-        let events = registry.drain_events();
+        let events = registry.drain_messages();
         assert!(
             events
                 .iter()

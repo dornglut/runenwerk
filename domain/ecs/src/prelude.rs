@@ -1,6 +1,7 @@
 pub use crate::{
-    Added, BatchCommands, Bundle, Changed, Commands, Component, ComponentState, DeferredCommand,
-    Entity, EventChannel, EventReader, EventWriter, IntoSystem, IntoSystemConfigs,
-    IntoSystemSetKey, Orphaned, Query, QueryOrphaned, Res, ResMut, ResView, Resource, Runtime,
+    Added, BatchCommands, BroadcastReader, BroadcastWriter, Bundle, Changed, Commands, Component,
+    ComponentState, DeferredCommand, Entity, InputStreamDrainer, InputStreamReader,
+    InputStreamWriter, IntoSystem, IntoSystemConfigs, IntoSystemSetKey, Orphaned, Query,
+    QueryOrphaned, QueueDrainer, QueueReader, QueueWriter, Res, ResMut, ResView, Resource, Runtime,
     StatefulComponent, SystemConfigExt, With, Without, World,
 };

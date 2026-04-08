@@ -1,7 +1,7 @@
 use ecs::prelude::*;
 use ecs::{
-    EventChannelConfig, EventLifetime, EventTracingPolicy, OverflowPolicy, QueryAccess,
-    SystemParam, SystemParamError,
+    BroadcastLifetime, BroadcastOverflowPolicy, BroadcastStreamConfig, BroadcastTracingPolicy,
+    QueryAccess, SystemParam, SystemParamError,
 };
 use scheduler::ScheduleLabel;
 use scheduler::access::ConflictKind;
@@ -160,10 +160,10 @@ fn runtime_honors_in_set_before_and_after_ordering() {
 
 #[test]
 fn scheduler_event_conflict_matrix_includes_write_write() {
-    fn read_a(_events: EventReader<DamageEvent>) {}
-    fn read_b(_events: EventReader<DamageEvent>) {}
-    fn write_a(_events: EventWriter<DamageEvent>) {}
-    fn write_b(_events: EventWriter<DamageEvent>) {}
+    fn read_a(_events: BroadcastReader<DamageEvent>) {}
+    fn read_b(_events: BroadcastReader<DamageEvent>) {}
+    fn write_a(_events: BroadcastWriter<DamageEvent>) {}
+    fn write_b(_events: BroadcastWriter<DamageEvent>) {}
 
     let mut world = World::new();
 
@@ -193,6 +193,133 @@ fn scheduler_event_conflict_matrix_includes_write_write() {
         ConflictKind::WriteWrite
     );
     assert!(write_write_plan.stages.len() >= 2);
+}
+
+#[test]
+fn scheduler_queue_and_input_stream_conflicts_include_drain_modes() {
+    fn queue_read(_queue: QueueReader<DamageEvent>) {}
+    fn queue_write(_queue: QueueWriter<DamageEvent>) {}
+    fn queue_drain(_queue: QueueDrainer<DamageEvent>) {}
+    fn input_read(_stream: InputStreamReader<DamageEvent>) {}
+    fn input_drain(_stream: InputStreamDrainer<DamageEvent>) {}
+
+    let mut world = World::new();
+
+    let mut queue_read_drain_runtime = Runtime::new();
+    queue_read_drain_runtime.add_systems::<Update, _, _>(&mut world, (queue_read, queue_drain));
+    let queue_read_drain_plan = queue_read_drain_runtime
+        .plan_for::<Update>()
+        .unwrap()
+        .clone();
+    assert_eq!(queue_read_drain_plan.conflicts.len(), 1);
+    assert_eq!(
+        queue_read_drain_plan.conflicts[0].conflict.kind,
+        ConflictKind::ReadDrain
+    );
+
+    let mut queue_write_drain_runtime = Runtime::new();
+    queue_write_drain_runtime.add_systems::<Update, _, _>(&mut world, (queue_write, queue_drain));
+    let queue_write_drain_plan = queue_write_drain_runtime
+        .plan_for::<Update>()
+        .unwrap()
+        .clone();
+    assert_eq!(queue_write_drain_plan.conflicts.len(), 1);
+    assert_eq!(
+        queue_write_drain_plan.conflicts[0].conflict.kind,
+        ConflictKind::WriteDrain
+    );
+
+    let mut input_read_drain_runtime = Runtime::new();
+    input_read_drain_runtime.add_systems::<Update, _, _>(&mut world, (input_read, input_drain));
+    let input_read_drain_plan = input_read_drain_runtime
+        .plan_for::<Update>()
+        .unwrap()
+        .clone();
+    assert_eq!(input_read_drain_plan.conflicts.len(), 1);
+    assert_eq!(
+        input_read_drain_plan.conflicts[0].conflict.kind,
+        ConflictKind::ReadDrain
+    );
+}
+
+#[test]
+fn mixed_intent_params_in_single_system_are_rejected() {
+    fn invalid_mixed_intent(
+        _reader: QueueReader<DamageEvent>,
+        _drainer: QueueDrainer<DamageEvent>,
+    ) {
+    }
+
+    let mut world = World::new();
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, invalid_mixed_intent);
+
+    let err = runtime
+        .run_schedule::<Update>(&mut world)
+        .expect_err("mixed queue reader/drainer system should fail registration");
+    let message = format!("{err:#}");
+    assert!(message.contains("conflicting param access"), "{message}");
+}
+
+#[test]
+fn duplicate_write_intents_in_single_system_are_allowed() {
+    fn duplicate_writers(_first: QueueWriter<DamageEvent>, _second: QueueWriter<DamageEvent>) {}
+
+    let mut world = World::new();
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, duplicate_writers);
+
+    runtime
+        .run_schedule::<Update>(&mut world)
+        .expect("duplicate write intents for the same queue should be deduped");
+}
+
+#[test]
+fn system_ids_and_param_slot_ids_are_stable_and_skip_failed_registration() {
+    fn valid_a(_step: Res<Step>) {}
+    fn invalid(_reader: QueueReader<DamageEvent>, _drainer: QueueDrainer<DamageEvent>) {}
+    fn valid_b(_step: Res<Step>, _events: BroadcastReader<DamageEvent>) {}
+
+    let mut world = World::new();
+    world.insert_resource(Step(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, (valid_a, invalid, valid_b));
+
+    let ids: Vec<u64> = runtime
+        .scheduler()
+        .systems()
+        .iter()
+        .map(|system| system.id().as_raw())
+        .collect();
+    assert_eq!(
+        ids,
+        vec![0, 1],
+        "failed registration must not consume system IDs"
+    );
+
+    let plan = runtime.plan_for::<Update>().unwrap().clone();
+    let planned_ids: Vec<u64> = plan
+        .stages
+        .iter()
+        .flat_map(|stage| stage.system_ids.iter().map(|id| id.as_raw()))
+        .collect();
+    assert_eq!(planned_ids, vec![0, 1]);
+
+    let first_id = runtime.scheduler().systems()[0].id();
+    let first_slots = runtime.param_slots_for_system(first_id).unwrap();
+    assert_eq!(first_slots.len(), 1);
+    assert_eq!(first_slots[0].id.system_id.as_raw(), first_id.as_raw());
+    assert_eq!(first_slots[0].id.slot_index, 0);
+    assert_eq!(first_slots[0].kind, "res");
+
+    let second_id = runtime.scheduler().systems()[1].id();
+    let second_slots = runtime.param_slots_for_system(second_id).unwrap();
+    assert_eq!(second_slots.len(), 2);
+    assert_eq!(second_slots[0].id.slot_index, 0);
+    assert_eq!(second_slots[1].id.slot_index, 1);
+    assert_eq!(second_slots[0].kind, "res");
+    assert_eq!(second_slots[1].kind, "broadcast_reader");
 }
 
 #[test]
@@ -762,7 +889,7 @@ fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
         mut step: ResMut<Step>,
         target: Res<TargetEntity>,
         mut commands: Commands,
-        mut writer: EventWriter<DamageEvent>,
+        mut writer: BroadcastWriter<DamageEvent>,
     ) {
         step.0 = step.0.saturating_add(1);
         for offset in 0..4 {
@@ -778,7 +905,7 @@ fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
     }
 
     fn observe_events_and_presence(
-        reader: EventReader<DamageEvent>,
+        reader: BroadcastReader<DamageEvent>,
         mut query: Query<&Toggle>,
         mut events: ResMut<EventHistory>,
         mut presence: ResMut<PresenceHistory>,
@@ -788,11 +915,11 @@ fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
     }
 
     let mut world = World::new();
-    world.configure_event_channel::<DamageEvent>(EventChannelConfig {
+    world.configure_broadcast_stream::<DamageEvent>(BroadcastStreamConfig {
         capacity: None,
-        overflow: OverflowPolicy::DropOldest,
-        lifetime: EventLifetime::FrameTransient,
-        tracing: EventTracingPolicy::Disabled,
+        overflow: BroadcastOverflowPolicy::DropOldest,
+        lifetime: BroadcastLifetime::FrameTransient,
+        tracing: BroadcastTracingPolicy::Disabled,
     });
     let target = world.spawn((Marker(0), Toggle));
     world.insert_resource(TargetEntity(target));
@@ -811,7 +938,7 @@ fn event_heavy_mixed_workload_with_structural_churn_remains_stable() {
 
     for _ in 0..4 {
         runtime.run_schedule::<Update>(&mut world).unwrap();
-        world.finish_event_frame();
+        world.finalize_frame_boundary();
     }
 
     assert_eq!(
@@ -883,15 +1010,15 @@ fn deferred_commands_keep_secondary_indexes_correct_after_apply() {
 
 #[test]
 fn event_channel_iter_new_reads_only_unseen_events_across_runs() {
-    fn produce_once(mut step: ResMut<Step>, mut writer: EventWriter<DamageEvent>) {
+    fn produce_once(mut step: ResMut<Step>, mut writer: BroadcastWriter<DamageEvent>) {
         if step.0 == 0 {
             writer.send(DamageEvent(7));
         }
         step.0 = step.0.saturating_add(1);
     }
 
-    fn consume_unread(mut channel: EventChannel<DamageEvent>, mut history: ResMut<EventHistory>) {
-        history.0.push(channel.iter_new().count());
+    fn consume_unread(mut reader: BroadcastReader<DamageEvent>, mut history: ResMut<EventHistory>) {
+        history.0.push(reader.iter_new().count());
     }
 
     let mut world = World::new();
@@ -909,26 +1036,26 @@ fn event_channel_iter_new_reads_only_unseen_events_across_runs() {
     runtime.run_schedule::<Update>(&mut world).unwrap();
 
     assert_eq!(world.resource::<EventHistory>().unwrap().0, vec![1, 0]);
-    assert_eq!(world.event_count::<DamageEvent>(), 1);
+    assert_eq!(world.broadcast_pending_count::<DamageEvent>(), 1);
 }
 
 #[test]
 fn event_channel_iter_new_survives_drop_oldest_overflow() {
-    fn emit_each_run(mut step: ResMut<Step>, mut writer: EventWriter<DamageEvent>) {
+    fn emit_each_run(mut step: ResMut<Step>, mut writer: BroadcastWriter<DamageEvent>) {
         step.0 = step.0.saturating_add(1);
         writer.send(DamageEvent(step.0));
     }
 
-    fn consume_unread(mut channel: EventChannel<DamageEvent>, mut history: ResMut<EventHistory>) {
-        history.0.push(channel.iter_new().count());
+    fn consume_unread(mut reader: BroadcastReader<DamageEvent>, mut history: ResMut<EventHistory>) {
+        history.0.push(reader.iter_new().count());
     }
 
     let mut world = World::new();
-    world.configure_event_channel::<DamageEvent>(EventChannelConfig {
+    world.configure_broadcast_stream::<DamageEvent>(BroadcastStreamConfig {
         capacity: Some(1),
-        overflow: OverflowPolicy::DropOldest,
-        lifetime: EventLifetime::Manual,
-        tracing: EventTracingPolicy::Disabled,
+        overflow: BroadcastOverflowPolicy::DropOldest,
+        lifetime: BroadcastLifetime::Manual,
+        tracing: BroadcastTracingPolicy::Disabled,
     });
     world.insert_resource(Step(0));
     world.insert_resource(EventHistory(Vec::new()));
@@ -945,6 +1072,6 @@ fn event_channel_iter_new_survives_drop_oldest_overflow() {
     runtime.run_schedule::<Update>(&mut world).unwrap();
 
     assert_eq!(world.resource::<EventHistory>().unwrap().0, vec![1, 1, 1]);
-    assert_eq!(world.event_count::<DamageEvent>(), 1);
-    assert_eq!(world.read_events::<DamageEvent>(), &[DamageEvent(3)]);
+    assert_eq!(world.broadcast_pending_count::<DamageEvent>(), 1);
+    assert_eq!(world.read_broadcast::<DamageEvent>(), &[DamageEvent(3)]);
 }

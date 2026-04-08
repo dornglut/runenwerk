@@ -63,8 +63,8 @@ fn runtime_executes_1_2_and_8_param_systems() {
         mut frame: ResMut<Frame>,
         mut score: ResMut<Score>,
         mut commands: Commands,
-        reader: EventReader<DamageEvent>,
-        mut writer: EventWriter<SpawnEvent>,
+        reader: BroadcastReader<DamageEvent>,
+        mut writer: BroadcastWriter<SpawnEvent>,
         bonus: Res<Bonus>,
     ) {
         for (position, velocity) in query.iter() {
@@ -83,8 +83,8 @@ fn runtime_executes_1_2_and_8_param_systems() {
     world.insert_resource(Score(0));
     world.insert_resource(DeltaTime(0.5));
     world.insert_resource(Bonus(1.0));
-    world.emit_event(DamageEvent(3));
-    world.emit_event(DamageEvent(4));
+    world.publish_broadcast(DamageEvent(3));
+    world.publish_broadcast(DamageEvent(4));
 
     let mut runtime = Runtime::new();
     runtime.add_systems::<Update, _, _>(&mut world, (bump_frame, integrate_positions, full_tick));
@@ -98,7 +98,7 @@ fn runtime_executes_1_2_and_8_param_systems() {
     assert_eq!(positions, vec![5.0, 4.0]);
     assert_eq!(world.resource::<Frame>().unwrap().0, 11);
     assert_eq!(world.resource::<Score>().unwrap().0, 7);
-    assert_eq!(world.event_count::<SpawnEvent>(), 1);
+    assert_eq!(world.broadcast_pending_count::<SpawnEvent>(), 1);
     assert_eq!(world.query_state::<&Marker, ()>().iter(&world).count(), 1);
 }
 
@@ -180,9 +180,9 @@ fn scheduler_conflict_model_respects_reads_writes_and_events() {
     fn read_frame_b(_frame: Res<Frame>) {}
     fn read_frame_view(_frame: ResView<Frame>) {}
     fn write_frame(_frame: ResMut<Frame>) {}
-    fn read_events_a(_events: EventReader<DamageEvent>) {}
-    fn read_events_b(_events: EventReader<DamageEvent>) {}
-    fn write_events(_events: EventWriter<DamageEvent>) {}
+    fn read_events_a(_events: BroadcastReader<DamageEvent>) {}
+    fn read_events_b(_events: BroadcastReader<DamageEvent>) {}
+    fn write_events(_events: BroadcastWriter<DamageEvent>) {}
 
     let mut world = World::new();
     world.insert_resource(Frame(0));

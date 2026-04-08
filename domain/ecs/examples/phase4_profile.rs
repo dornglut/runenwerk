@@ -160,14 +160,14 @@ fn w3_despawn(mut commands: Commands, mut query: Query<(Entity, &ChurnTag)>) {
     }
 }
 
-fn w4_write_events(mut writer: EventWriter<BenchEvent>) {
+fn w4_write_events(mut writer: BroadcastWriter<BenchEvent>) {
     for i in 0..256_u32 {
         writer.send(BenchEvent(i));
     }
 }
 
-fn w4_read_events(
-    reader: EventReader<BenchEvent>,
+fn w4_read_broadcast(
+    reader: BroadcastReader<BenchEvent>,
     mut query: Query<&Position>,
     mut stats: ResMut<EventStats>,
 ) {
@@ -492,10 +492,10 @@ fn main() {
             ));
         }
         let mut runtime = Runtime::new();
-        runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_events));
+        runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_broadcast));
         for _ in 0..20 {
             runtime.run_schedule::<W4>(&mut world).expect("w4 run");
-            world.clear_events::<BenchEvent>();
+            world.clear_broadcast_admin::<BenchEvent>();
         }
     }
     let after_w4 = telemetry::snapshot();

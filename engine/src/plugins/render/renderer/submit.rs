@@ -100,7 +100,7 @@ pub(crate) fn frame_render_prepare_system(
     };
 
     let _ = shader_registry.poll_updates();
-    let shader_reload_messages = shader_registry.drain_event_lines();
+    let shader_reload_messages = shader_registry.drain_message_lines();
     if !shader_reload_messages.is_empty() {
         for msg in shader_reload_messages {
             manager

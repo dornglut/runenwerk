@@ -1,8 +1,8 @@
 use ecs::prelude::*;
 use ecs::{
-    ComponentChangeKind, EntityDespawnedEvent, EntitySpawnedEvent, EventChannelConfig,
-    EventLifetime, EventTracingPolicy, ObserverTrigger, OverflowPolicy, QueryTypeAccess,
-    ResourceChangeKind, SpatialHashConfig, SystemParam,
+    BroadcastLifetime, BroadcastObserverTrigger, BroadcastOverflowPolicy, BroadcastStreamConfig,
+    BroadcastTracingPolicy, ComponentChangeKind, EntityDespawnedEvent, EntitySpawnedEvent,
+    QueryTypeAccess, QueueConfig, ResourceChangeKind, SpatialHashConfig, SystemParam,
 };
 use geometry::Aabb3;
 use glam::Vec3;
@@ -342,73 +342,109 @@ fn secondary_index_helpers_and_component_change_logs_work() {
 #[test]
 fn event_channels_support_emit_drain_and_frame_transient_cleanup() {
     let mut world = World::new();
-    world.configure_event_channel::<TickEvent>(EventChannelConfig {
+    world.configure_broadcast_stream::<TickEvent>(BroadcastStreamConfig {
         capacity: Some(1),
-        overflow: OverflowPolicy::DropOldest,
-        lifetime: EventLifetime::FrameTransient,
-        tracing: EventTracingPolicy::Disabled,
+        overflow: BroadcastOverflowPolicy::DropOldest,
+        lifetime: BroadcastLifetime::FrameTransient,
+        tracing: BroadcastTracingPolicy::Disabled,
     });
 
-    world.emit_event(TickEvent);
-    world.emit_event(TickEvent);
-    assert_eq!(world.event_count::<TickEvent>(), 1);
+    world.publish_broadcast(TickEvent);
+    world.publish_broadcast(TickEvent);
+    assert_eq!(world.broadcast_pending_count::<TickEvent>(), 1);
 
-    let stats = world.event_channel_stats::<TickEvent>().unwrap();
+    let stats = world.broadcast_stats::<TickEvent>().unwrap();
     assert_eq!(stats.emitted, 2);
     assert_eq!(stats.dropped, 1);
 
-    world.finish_event_frame();
-    assert_eq!(world.event_count::<TickEvent>(), 0);
+    world.finalize_frame_boundary();
+    assert_eq!(world.broadcast_pending_count::<TickEvent>(), 0);
 }
 
 #[test]
 fn event_observers_and_drain_helpers_work() {
     let mut world = World::new();
-    assert!(!world.has_event_channel::<TickEvent>());
-    assert!(world.ensure_event_channel::<TickEvent>());
-    assert!(!world.ensure_event_channel::<TickEvent>());
-    assert!(world.has_event_channel::<TickEvent>());
+    assert!(!world.has_broadcast_stream::<TickEvent>());
+    assert!(world.ensure_broadcast_stream::<TickEvent>());
+    assert!(!world.ensure_broadcast_stream::<TickEvent>());
+    assert!(world.has_broadcast_stream::<TickEvent>());
 
-    assert!(world.observe_events::<TickEvent>("tick_emit", ObserverTrigger::OnEmit));
-    assert!(world.observe_events::<TickEvent>("tick_drain", ObserverTrigger::OnDrain));
-    assert!(world.observe_events::<TickEvent>("tick_frame", ObserverTrigger::EndOfFrame));
+    assert!(world.observe_broadcast::<TickEvent>("tick_emit", BroadcastObserverTrigger::OnPublish));
+    assert!(world.observe_broadcast::<TickEvent>("tick_drain", BroadcastObserverTrigger::OnDrain));
+    assert!(
+        world.observe_broadcast::<TickEvent>("tick_frame", BroadcastObserverTrigger::EndOfFrame)
+    );
 
-    world.emit_event(TickEvent);
-    world.emit_event(TickEvent);
-    let mapped = world.drain_events_map::<TickEvent, _, _>(|_| "tick");
+    world.publish_broadcast(TickEvent);
+    world.publish_broadcast(TickEvent);
+    let mapped = world.drain_broadcast_map::<TickEvent, _, _>(|_| "tick");
     assert_eq!(mapped, vec!["tick", "tick"]);
 
-    world.emit_event(DamageEvent(1));
-    world.emit_event(DamageEvent(2));
-    let filtered = world.drain_events_filter::<DamageEvent, _>(|event| event.0 % 2 == 0);
+    world.publish_broadcast(DamageEvent(1));
+    world.publish_broadcast(DamageEvent(2));
+    let filtered = world.drain_broadcast_filter::<DamageEvent, _>(|event| event.0 % 2 == 0);
     assert_eq!(filtered, vec![DamageEvent(2)]);
 
-    world.emit_event(TickEvent);
-    world.finish_event_frame();
+    world.publish_broadcast(TickEvent);
+    world.finalize_frame_boundary();
 
-    assert_eq!(world.event_observer_invocations("tick_emit"), Some(3));
-    assert_eq!(world.event_observer_invocations("tick_drain"), Some(1));
-    assert_eq!(world.event_observer_invocations("tick_frame"), Some(1));
+    assert_eq!(world.broadcast_observer_invocations("tick_emit"), Some(3));
+    assert_eq!(world.broadcast_observer_invocations("tick_drain"), Some(1));
+    assert_eq!(world.broadcast_observer_invocations("tick_frame"), Some(1));
 
-    let notifications = world.drain_event_observer_notifications();
+    let notifications = world.drain_broadcast_observer_notifications();
     assert!(notifications.iter().any(|notification| {
         notification.observer_id == "tick_emit"
-            && notification.trigger == ObserverTrigger::OnEmit
-            && notification.event_count == 1
+            && notification.trigger == BroadcastObserverTrigger::OnPublish
+            && notification.message_count == 1
     }));
     assert!(notifications.iter().any(|notification| {
         notification.observer_id == "tick_drain"
-            && notification.trigger == ObserverTrigger::OnDrain
-            && notification.event_count == 2
+            && notification.trigger == BroadcastObserverTrigger::OnDrain
+            && notification.message_count == 2
     }));
     assert!(notifications.iter().any(|notification| {
         notification.observer_id == "tick_frame"
-            && notification.trigger == ObserverTrigger::EndOfFrame
-            && notification.event_count == 1
+            && notification.trigger == BroadcastObserverTrigger::EndOfFrame
+            && notification.message_count == 1
     }));
 
-    assert!(world.remove_event_observer("tick_frame"));
-    assert!(!world.remove_event_observer("tick_frame"));
+    assert!(world.remove_broadcast_observer("tick_frame"));
+    assert!(!world.remove_broadcast_observer("tick_frame"));
+}
+
+#[test]
+fn queue_backpressure_rejects_without_mutating_queue_state() {
+    let mut world = World::new();
+    world.configure_queue::<u32>(QueueConfig { capacity: Some(1) });
+
+    assert!(world.queue_enqueue(1_u32).is_ok());
+    assert!(world.queue_enqueue(2_u32).is_err());
+
+    assert_eq!(world.queue_pending_count::<u32>(), 1);
+    assert_eq!(world.queue_drain::<u32>(), vec![1]);
+
+    let stats = world.queue_stats::<u32>().unwrap();
+    assert_eq!(stats.enqueued, 1);
+    assert_eq!(stats.rejected, 1);
+    assert_eq!(stats.drained, 1);
+    assert_eq!(stats.pending, 0);
+}
+
+#[test]
+fn input_stream_preserves_tick_order_and_tick_finalization_cleans_old_ticks() {
+    let mut world = World::new();
+
+    world.push_input_for_tick(10, 1_u32).unwrap();
+    world.push_input_for_tick(10, 2_u32).unwrap();
+    world.push_input_for_tick(11, 3_u32).unwrap();
+
+    assert_eq!(world.read_input_tick::<u32>(10), &[1, 2]);
+    assert_eq!(world.read_input_tick::<u32>(11), &[3]);
+
+    world.finalize_tick_boundary(10);
+    assert!(world.read_input_tick::<u32>(10).is_empty());
+    assert_eq!(world.read_input_tick::<u32>(11), &[3]);
 }
 
 #[test]
@@ -791,7 +827,7 @@ fn insert_remove_and_despawn_keep_change_logs_and_lifecycle_events_in_sync() {
     let start = world.current_change_tick();
     let entity = world.spawn(Player);
 
-    let spawned = world.drain_events::<EntitySpawnedEvent>();
+    let spawned = world.drain_broadcast_admin::<EntitySpawnedEvent>();
     assert_eq!(spawned.len(), 1);
     assert_eq!(spawned[0].entity, entity);
 
@@ -800,7 +836,7 @@ fn insert_remove_and_despawn_keep_change_logs_and_lifecycle_events_in_sync() {
     world.insert(entity, Health(20)).unwrap();
     world.despawn(entity).unwrap();
 
-    let despawned = world.drain_events::<EntityDespawnedEvent>();
+    let despawned = world.drain_broadcast_admin::<EntityDespawnedEvent>();
     assert_eq!(despawned.len(), 1);
     assert_eq!(despawned[0].entity, entity);
 
@@ -1128,23 +1164,17 @@ fn world_for_param_access_checks() {
     let commands_access = <Commands as SystemParam<'static>>::access(&());
     assert!(commands_access.deferred_structural_mutation());
 
-    let reader_access = <EventReader<TickEvent> as SystemParam<'static>>::access(&());
+    let reader_state =
+        <BroadcastReader<TickEvent> as SystemParam<'static>>::init_state(&mut world).unwrap();
+    let reader_access = <BroadcastReader<TickEvent> as SystemParam<'static>>::access(&reader_state);
     assert!(contains_type(
-        reader_access.resource_reads(),
+        reader_access.broadcast_reads(),
         TypeId::of::<TickEvent>()
     ));
 
-    let writer_access = <EventWriter<TickEvent> as SystemParam<'static>>::access(&());
+    let writer_access = <BroadcastWriter<TickEvent> as SystemParam<'static>>::access(&());
     assert!(contains_type(
-        writer_access.resource_writes(),
-        TypeId::of::<TickEvent>()
-    ));
-
-    let channel_state =
-        <EventChannel<TickEvent> as SystemParam<'static>>::init_state(&mut world).unwrap();
-    let channel_access = <EventChannel<TickEvent> as SystemParam<'static>>::access(&channel_state);
-    assert!(contains_type(
-        channel_access.resource_writes(),
+        writer_access.broadcast_writes(),
         TypeId::of::<TickEvent>()
     ));
 }

@@ -57,7 +57,7 @@ impl Plugin for Phase6RuntimeBenchPlugin {
             }
         }
 
-        app.add_systems(Update, (movement, emit_events, read_events));
+        app.add_systems(Update, (movement, emit_events, read_broadcast));
     }
 }
 
@@ -68,13 +68,13 @@ fn movement(mut query: Query<(&mut Position, &Velocity), (With<Simulated>, Witho
     }
 }
 
-fn emit_events(mut writer: EventWriter<PerfEvent>) {
+fn emit_events(mut writer: BroadcastWriter<PerfEvent>) {
     for i in 0..256_u32 {
         writer.send(PerfEvent(i));
     }
 }
 
-fn read_events(reader: EventReader<PerfEvent>, mut frame: ResMut<FrameAccumulator>) {
+fn read_broadcast(reader: BroadcastReader<PerfEvent>, mut frame: ResMut<FrameAccumulator>) {
     let sum = reader
         .iter()
         .fold(0_u64, |acc, event| acc.wrapping_add(event.0 as u64));
@@ -98,7 +98,7 @@ fn workload_engine_runtime(c: &mut Criterion) {
                         .take()
                         .expect("bench app state should always be available");
                     app = app.run_for_frames(1).expect("frame should run");
-                    app.world_mut().clear_events::<PerfEvent>();
+                    app.world_mut().clear_broadcast_admin::<PerfEvent>();
                     let frame = black_box(
                         app.world()
                             .resource::<FrameAccumulator>()

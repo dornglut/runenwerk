@@ -24,15 +24,15 @@ description: Current capability map for the ecs crate.
 |  | Query history / undo-oriented query APIs | ❌ | Not part of current ECS scope. |
 | **System Params** | `Res<T>`, `ResMut<T>`, `ResView<T>` | ✅ | `ResView<T>` is a semantic alias for read-only resource access. |
 |  | `Commands` param | ✅ | Deferred structural mutation param with runtime scope protection. |
-|  | `EventReader<T>`, `EventWriter<T>` | ✅ | Typed read/write event params are implemented. |
-|  | `EventChannel<T>` param (`iter_all`, `iter_new`, `send`) | ✅ | Per-system cursor state for incremental event reads. |
+|  | `BroadcastReader<T>`, `BroadcastWriter<T>` | ✅ | Typed read/write event params are implemented. |
+|  | `BroadcastReader<T>` param (`iter_all`, `iter_new`, `send`) | ✅ | Per-system cursor state for incremental event reads. |
 | **Commands / Runtime** | `Commands` queue + `apply` | ✅ | Deferred commands are collected and flushed at stage boundary. |
 |  | `DeferredCommand<T>` | ✅ | Typed deferred command trait is available. |
 |  | `BatchCommands` | ✅ | Ordered batched mutations are implemented. |
 |  | Stage-failure command isolation | ✅ | Commands from failed runs are discarded, not replayed on later runs. |
 |  | Conditional command DSL (`ConditionalCommands`) | ❌ | No dedicated conditional command primitive. |
-| **Events / Reactivity** | World events (`emit_event`, `read_events`, `drain_events`, `clear_events`) | ✅ | Typed event channels with world APIs are implemented. |
-|  | Channel config (`EventChannelConfig`) | ✅ | Capacity, overflow, lifetime, tracing policy are supported. |
+| **Events / Reactivity** | World events (`publish_broadcast`, `read_broadcast`, `drain_broadcast_admin`, `clear_broadcast_admin`) | ✅ | Typed event channels with world APIs are implemented. |
+|  | Channel config (`BroadcastStreamConfig`) | ✅ | Capacity, overflow, lifetime, tracing policy are supported. |
 |  | Event observers (`observe_events`, triggers, notifications) | ✅ | `OnEmit`, `OnDrain`, `EndOfFrame` observer triggers are available. |
 |  | Drain helpers (`drain_events_map`, `drain_events_filter`) | ✅ | Helper transforms for consumed events are available. |
 |  | Event history buffers / replay store | ❌ | No first-class retained event history abstraction. |

@@ -35,6 +35,14 @@ pub struct QueryAccess {
     component_writes: Vec<QueryTypeAccess>,
     resource_reads: Vec<QueryTypeAccess>,
     resource_writes: Vec<QueryTypeAccess>,
+    broadcast_reads: Vec<QueryTypeAccess>,
+    broadcast_writes: Vec<QueryTypeAccess>,
+    queue_reads: Vec<QueryTypeAccess>,
+    queue_writes: Vec<QueryTypeAccess>,
+    queue_drains: Vec<QueryTypeAccess>,
+    input_stream_reads: Vec<QueryTypeAccess>,
+    input_stream_writes: Vec<QueryTypeAccess>,
+    input_stream_drains: Vec<QueryTypeAccess>,
     deferred_structural_mutation: bool,
 }
 
@@ -67,6 +75,38 @@ impl QueryAccess {
 
     pub fn deferred_structural_mutation(&self) -> bool {
         self.deferred_structural_mutation
+    }
+
+    pub fn broadcast_reads(&self) -> &[QueryTypeAccess] {
+        &self.broadcast_reads
+    }
+
+    pub fn broadcast_writes(&self) -> &[QueryTypeAccess] {
+        &self.broadcast_writes
+    }
+
+    pub fn queue_reads(&self) -> &[QueryTypeAccess] {
+        &self.queue_reads
+    }
+
+    pub fn queue_writes(&self) -> &[QueryTypeAccess] {
+        &self.queue_writes
+    }
+
+    pub fn queue_drains(&self) -> &[QueryTypeAccess] {
+        &self.queue_drains
+    }
+
+    pub fn input_stream_reads(&self) -> &[QueryTypeAccess] {
+        &self.input_stream_reads
+    }
+
+    pub fn input_stream_writes(&self) -> &[QueryTypeAccess] {
+        &self.input_stream_writes
+    }
+
+    pub fn input_stream_drains(&self) -> &[QueryTypeAccess] {
+        &self.input_stream_drains
     }
 
     pub(crate) fn add_component_read<T: Component>(&mut self) {
@@ -104,12 +144,42 @@ impl QueryAccess {
         );
     }
 
-    pub(crate) fn add_resource_read_named<T: 'static>(&mut self, name: &'static str) {
-        push_unique_access(&mut self.resource_reads, QueryTypeAccess::of::<T>(name));
+    pub(crate) fn add_broadcast_read_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(&mut self.broadcast_reads, QueryTypeAccess::of::<T>(name));
     }
 
-    pub(crate) fn add_resource_write_named<T: 'static>(&mut self, name: &'static str) {
-        push_unique_access(&mut self.resource_writes, QueryTypeAccess::of::<T>(name));
+    pub(crate) fn add_broadcast_write_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(&mut self.broadcast_writes, QueryTypeAccess::of::<T>(name));
+    }
+
+    pub(crate) fn add_queue_read_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(&mut self.queue_reads, QueryTypeAccess::of::<T>(name));
+    }
+
+    pub(crate) fn add_queue_write_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(&mut self.queue_writes, QueryTypeAccess::of::<T>(name));
+    }
+
+    pub(crate) fn add_queue_drain_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(&mut self.queue_drains, QueryTypeAccess::of::<T>(name));
+    }
+
+    pub(crate) fn add_input_stream_read_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(&mut self.input_stream_reads, QueryTypeAccess::of::<T>(name));
+    }
+
+    pub(crate) fn add_input_stream_write_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(
+            &mut self.input_stream_writes,
+            QueryTypeAccess::of::<T>(name),
+        );
+    }
+
+    pub(crate) fn add_input_stream_drain_named<T: 'static>(&mut self, name: &'static str) {
+        push_unique_access(
+            &mut self.input_stream_drains,
+            QueryTypeAccess::of::<T>(name),
+        );
     }
 
     pub(crate) fn set_deferred_structural_mutation(&mut self) {

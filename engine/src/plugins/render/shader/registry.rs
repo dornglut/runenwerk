@@ -246,17 +246,17 @@ impl ShaderRegistryResource {
         lines
     }
 
-    pub fn read_events(&self) -> &[ShaderRegistryEvent] {
+    pub fn read_messages(&self) -> &[ShaderRegistryEvent] {
         &self.events
     }
 
-    pub fn drain_events(&mut self) -> Vec<ShaderRegistryEvent> {
+    pub fn drain_messages(&mut self) -> Vec<ShaderRegistryEvent> {
         std::mem::take(&mut self.events)
     }
 
-    pub fn drain_event_lines(&mut self) -> Vec<String> {
+    pub fn drain_message_lines(&mut self) -> Vec<String> {
         let watch_enabled = self.watch_enabled();
-        self.drain_events()
+        self.drain_messages()
             .into_iter()
             .map(|event| {
                 ReloadStatusPayload::new(
@@ -275,7 +275,7 @@ impl ShaderRegistryResource {
             .collect()
     }
 
-    pub fn finish_event_frame(&mut self) {
+    pub fn finalize_frame_boundary(&mut self) {
         self.events.clear();
     }
 

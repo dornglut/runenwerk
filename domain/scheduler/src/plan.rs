@@ -1,6 +1,6 @@
 use crate::access::AccessConflict;
 use crate::label::{ScheduleKey, ScheduleLabel, SystemSetKey};
-use crate::system::RegisteredSystem;
+use crate::system::{RegisteredSystem, SystemId};
 use crate::telemetry;
 use anyhow::{Context, Result, anyhow};
 use std::collections::{BTreeSet, VecDeque};
@@ -8,7 +8,9 @@ use std::time::Instant;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionConflict {
+    pub first_system_id: SystemId,
     pub first_system: String,
+    pub second_system_id: SystemId,
     pub second_system: String,
     pub conflict: AccessConflict,
 }
@@ -17,6 +19,7 @@ pub struct ExecutionConflict {
 pub struct ExecutionStage {
     pub index: usize,
     pub system_indices: Vec<usize>,
+    pub system_ids: Vec<SystemId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +33,7 @@ pub struct ExecutionScheduler<C> {
     systems: Vec<RegisteredSystem<C>>,
     plans: Vec<ExecutionPlan>,
     dirty: bool,
+    next_system_id: u64,
 }
 
 impl<C> Default for ExecutionScheduler<C> {
@@ -44,10 +48,14 @@ impl<C> ExecutionScheduler<C> {
             systems: Vec::new(),
             plans: Vec::new(),
             dirty: true,
+            next_system_id: 0,
         }
     }
 
-    pub fn add_system(&mut self, system: RegisteredSystem<C>) -> usize {
+    pub fn add_system(&mut self, mut system: RegisteredSystem<C>) -> usize {
+        let system_id = SystemId::from_raw(self.next_system_id);
+        self.next_system_id = self.next_system_id.saturating_add(1);
+        system.assign_id(system_id);
         let index = self.systems.len();
         self.systems.push(system);
         self.dirty = true;
@@ -199,9 +207,12 @@ impl<C> ExecutionScheduler<C> {
             }
 
             let mut stage_system_indices = Vec::with_capacity(stage_positions.len());
+            let mut stage_system_ids = Vec::with_capacity(stage_positions.len());
             for position in &stage_positions {
                 ready_set.remove(position);
-                stage_system_indices.push(scheduled_indices[*position]);
+                let system_index = scheduled_indices[*position];
+                stage_system_indices.push(system_index);
+                stage_system_ids.push(self.systems[system_index].id());
             }
 
             scheduled_count = scheduled_count.saturating_add(stage_system_indices.len());
@@ -218,6 +229,7 @@ impl<C> ExecutionScheduler<C> {
             stages.push(ExecutionStage {
                 index: stage_index,
                 system_indices: stage_system_indices,
+                system_ids: stage_system_ids,
             });
             stage_index = stage_index.saturating_add(1);
         }
@@ -237,7 +249,9 @@ impl<C> ExecutionScheduler<C> {
                 conflict_check_count = conflict_check_count.saturating_add(1);
                 for conflict in left.access().conflicts_with(right.access()) {
                     conflicts.push(ExecutionConflict {
+                        first_system_id: left.id(),
                         first_system: left.name().to_string(),
+                        second_system_id: right.id(),
                         second_system: right.name().to_string(),
                         conflict,
                     });

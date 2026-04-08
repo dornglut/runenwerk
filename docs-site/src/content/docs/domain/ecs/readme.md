@@ -12,7 +12,7 @@ description: "Documentation for ECS crate."
 - `World`: entities/components/resources, event channels, component indexes, spatial indexes
 - Query runtime: `Query`, `QueryState`, `QueryOrphaned`
 - Runtime and scheduling bridge: `Runtime`, `IntoSystem`, set ordering (`in_set`, `before`, `after`)
-- System params: `Res`, `ResMut`, `ResView`, `Commands`, `EventReader`, `EventWriter`, `EventChannel`
+- System params: `Res`, `ResMut`, `ResView`, `Commands`, `BroadcastReader`, `BroadcastWriter`, `BroadcastReader`
 - Deferred mutation primitives: `Commands`, `DeferredCommand`, `BatchCommands`
 - Stateful tracking: `StatefulComponent`, `component_state`, `mark_stateful_changed`
 

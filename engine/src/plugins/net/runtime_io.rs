@@ -1,8 +1,9 @@
 use super::*;
 use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
+use crate::runtime::{QueueDrainer, QueueWriter};
 use crate::{SessionRuntimeState, WorldMut};
 use anyhow::Context;
-use ecs::World;
+use ecs::{QueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig};
@@ -18,7 +19,27 @@ where
     anyhow::Error::new(error).context(context)
 }
 
-pub fn network_runtime_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
+fn enqueue_queue_writer_with_backpressure<T: 'static>(
+    writer: &mut QueueWriter<T>,
+    queue_name: &'static str,
+    message: T,
+) -> Result<(), QueueEnqueueError> {
+    let result = writer.enqueue(message);
+    if let Err(QueueEnqueueError::Backpressure { capacity, .. }) = &result {
+        tracing::warn!(
+            queue = queue_name,
+            capacity = *capacity,
+            "network queue backpressure; dropping newest message"
+        );
+    }
+    result
+}
+
+pub fn network_runtime_receive_system<TDriver>(
+    mut world: WorldMut,
+    mut client_inbox: QueueWriter<ServerMessage>,
+    mut server_inbox: QueueWriter<InboundClientMessage>,
+) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
@@ -62,16 +83,27 @@ where
                 if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
                     inbound.push_client(connection_id, message.clone());
                 }
-                if let Ok(mut inbox) = world.resource_mut::<NetworkServerInbox>() {
-                    inbox.push_from(connection_id, message);
+                if let Err(error) = enqueue_queue_writer_with_backpressure(
+                    &mut server_inbox,
+                    "NetworkServerInbox",
+                    InboundClientMessage {
+                        connection_id,
+                        message,
+                    },
+                ) {
+                    tracing::warn!(error = ?error, "failed to enqueue server inbox message");
                 }
             }
             SessionRuntimeEvent::ServerMessage(message) => {
                 if let Ok(mut inbound) = world.resource_mut::<NetworkInboundQueue>() {
                     inbound.push_server(message.clone());
                 }
-                if let Ok(mut inbox) = world.resource_mut::<NetworkClientInbox>() {
-                    inbox.push(message);
+                if let Err(error) = enqueue_queue_writer_with_backpressure(
+                    &mut client_inbox,
+                    "NetworkClientInbox",
+                    message,
+                ) {
+                    tracing::warn!(error = ?error, "failed to enqueue client inbox message");
                 }
             }
             SessionRuntimeEvent::Phase(phase) => {
@@ -220,30 +252,25 @@ where
     Ok(())
 }
 
-pub fn client_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
+pub fn client_receive_system<TDriver>(
+    mut world: WorldMut,
+    mut client_inbox: QueueDrainer<ServerMessage>,
+    mut client_outbox: QueueWriter<ClientMessage>,
+) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + SnapshotApplyDriver + InputDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
     TDriver::Input: Clone + PartialEq,
 {
-    let Some(len) = world
-        .resource::<NetworkClientInbox>()
-        .ok()
-        .map(|inbox| inbox.len())
-    else {
+    let messages = client_inbox.drain();
+    if messages.is_empty() {
         return Ok(());
-    };
+    }
+
+    let len = messages.len();
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.processed_server_messages_last_frame = len;
     }
-
-    let Some(messages) = world
-        .resource_mut::<NetworkClientInbox>()
-        .ok()
-        .map(|mut inbox| inbox.drain())
-    else {
-        return Ok(());
-    };
 
     for message in messages {
         let previous_phase = world
@@ -292,11 +319,15 @@ where
 
                 match result {
                     Ok(corrected) => {
-                        if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
-                            outbox.push(ClientMessage::Ack(Ack {
+                        if let Err(error) = enqueue_queue_writer_with_backpressure(
+                            &mut client_outbox,
+                            "NetworkClientOutbox",
+                            ClientMessage::Ack(Ack {
                                 cursor: snapshot.cursor,
                                 last_received_tick: snapshot.tick,
-                            }));
+                            }),
+                        ) {
+                            tracing::warn!(error = ?error, "failed to enqueue snapshot ack");
                         }
                         if corrected
                             && let Ok(mut diagnostics) =
@@ -333,11 +364,18 @@ where
 
                 match result {
                     Ok(corrected) => {
-                        if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
-                            outbox.push(ClientMessage::Ack(Ack {
+                        if let Err(error) = enqueue_queue_writer_with_backpressure(
+                            &mut client_outbox,
+                            "NetworkClientOutbox",
+                            ClientMessage::Ack(Ack {
                                 cursor: snapshot.cursor,
                                 last_received_tick: snapshot.tick,
-                            }));
+                            }),
+                        ) {
+                            tracing::warn!(
+                                error = ?error,
+                                "failed to enqueue delta snapshot ack"
+                            );
                         }
                         if corrected
                             && let Ok(mut diagnostics) =
@@ -381,7 +419,11 @@ where
     Ok(())
 }
 
-pub fn server_receive_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
+pub fn server_receive_system<TDriver>(
+    mut world: WorldMut,
+    mut server_inbox: QueueDrainer<InboundClientMessage>,
+    mut server_outbox: QueueWriter<OutboundServerMessage>,
+) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
@@ -397,24 +439,15 @@ where
         session.config = config;
     }
 
-    let Some(len) = world
-        .resource::<NetworkServerInbox>()
-        .ok()
-        .map(|inbox| inbox.len())
-    else {
+    let messages = server_inbox.drain();
+    if messages.is_empty() {
         return Ok(());
-    };
+    }
+
+    let len = messages.len();
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.processed_client_messages_last_frame = len;
     }
-
-    let Some(messages) = world
-        .resource_mut::<NetworkServerInbox>()
-        .ok()
-        .map(|mut inbox| inbox.drain())
-    else {
-        return Ok(());
-    };
 
     for incoming in messages {
         let connection_id = incoming.connection_id;
@@ -458,14 +491,23 @@ where
             handle_client_message(&mut session, &message)
         };
 
-        if let Ok(mut outbox) = world.resource_mut::<NetworkServerOutbox>() {
-            for response in responses {
-                if let Some(connection_id) = connection_id {
-                    outbox.push_to(connection_id, response);
-                } else {
-                    outbox.push_broadcast(response);
+        for response in responses {
+            let outbound = if let Some(connection_id) = connection_id {
+                OutboundServerMessage::ToConnection {
+                    connection_id,
+                    message: response,
                 }
-            }
+            } else {
+                OutboundServerMessage::Broadcast(response)
+            };
+            let enqueue_result = enqueue_queue_writer_with_backpressure(
+                &mut server_outbox,
+                "NetworkServerOutbox",
+                outbound,
+            );
+            if let Err(error) = enqueue_result {
+                tracing::warn!(error = ?error, "failed to enqueue server response");
+            };
         }
 
         let (phase, connection_count) = world
@@ -535,29 +577,22 @@ fn clear_session_runtime_state(world: &mut World) {
     }
 }
 
-pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let Some(len) = world
-        .resource::<NetworkClientOutbox>()
-        .ok()
-        .map(|outbox| outbox.len())
-    else {
+pub fn client_flush_system(
+    mut world: WorldMut,
+    mut client_outbox: QueueDrainer<ClientMessage>,
+) -> anyhow::Result<()> {
+    let messages = client_outbox.drain();
+    if messages.is_empty() {
         return Ok(());
-    };
+    }
 
+    let len = messages.len();
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.flushed_client_messages_last_frame = len;
         if len > 0 {
             diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
         }
     }
-
-    let Some(messages) = world
-        .resource_mut::<NetworkClientOutbox>()
-        .ok()
-        .map(|mut outbox| outbox.drain())
-    else {
-        return Ok(());
-    };
 
     if let Ok(mut queue) = world.resource_mut::<NetworkOutboundQueue>() {
         queue.clear();
@@ -588,29 +623,22 @@ pub fn client_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn server_flush_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let Some(len) = world
-        .resource::<NetworkServerOutbox>()
-        .ok()
-        .map(|outbox| outbox.len())
-    else {
+pub fn server_flush_system(
+    mut world: WorldMut,
+    mut server_outbox: QueueDrainer<OutboundServerMessage>,
+) -> anyhow::Result<()> {
+    let messages = server_outbox.drain();
+    if messages.is_empty() {
         return Ok(());
-    };
+    }
 
+    let len = messages.len();
     if let Ok(mut diagnostics) = world.resource_mut::<NetworkDiagnostics>() {
         diagnostics.flushed_server_messages_last_frame = len;
         if len > 0 {
             diagnostics.flush_count = diagnostics.flush_count.saturating_add(1);
         }
     }
-
-    let Some(messages) = world
-        .resource_mut::<NetworkServerOutbox>()
-        .ok()
-        .map(|mut outbox| outbox.drain())
-    else {
-        return Ok(());
-    };
 
     if let Ok(mut queue) = world.resource_mut::<NetworkOutboundQueue>() {
         queue.clear();

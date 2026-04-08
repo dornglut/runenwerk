@@ -251,14 +251,14 @@ fn w3_despawn(mut commands: Commands, mut query: Query<(Entity, &ChurnTag)>) {
     }
 }
 
-fn w4_write_events(mut writer: EventWriter<BenchEvent>) {
+fn w4_write_events(mut writer: BroadcastWriter<BenchEvent>) {
     for i in 0..256_u32 {
         writer.send(BenchEvent(i));
     }
 }
 
-fn w4_read_events(
-    reader: EventReader<BenchEvent>,
+fn w4_read_broadcast(
+    reader: BroadcastReader<BenchEvent>,
     mut query: Query<&Position>,
     mut stats: ResMut<EventStats>,
 ) {
@@ -621,7 +621,7 @@ fn main() {
             ));
         }
         let mut runtime = Runtime::new();
-        runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_events));
+        runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_broadcast));
         let _ = runtime.plan_for::<W4>().expect("w4 plan should exist");
         let setup_elapsed = setup_start.elapsed();
 
@@ -631,14 +631,14 @@ fn main() {
             .expect("w4 warmup run");
         // Clearing the event channel between runs is intentional here: this workload models
         // per-frame transient event consumption where backlog carryover would skew read/write cost.
-        world.clear_events::<BenchEvent>();
+        world.clear_broadcast_admin::<BenchEvent>();
 
         let before = telemetry::snapshot();
         let run_start = Instant::now();
         for _ in 0..20 {
             runtime.run_schedule::<W4>(&mut world).expect("w4 run");
             // This workload intentionally uses explicit clear-based event lifecycle cleanup.
-            world.clear_events::<BenchEvent>();
+            world.clear_broadcast_admin::<BenchEvent>();
         }
         let run_elapsed = run_start.elapsed();
         let after = telemetry::snapshot();

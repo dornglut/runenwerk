@@ -348,14 +348,14 @@ fn workload_w3(c: &mut Criterion) {
     group.finish();
 }
 
-fn w4_write_events(mut writer: EventWriter<BenchEvent>) {
+fn w4_write_events(mut writer: BroadcastWriter<BenchEvent>) {
     for i in 0..256_u32 {
         writer.send(BenchEvent(i));
     }
 }
 
-fn w4_read_events(
-    reader: EventReader<BenchEvent>,
+fn w4_read_broadcast(
+    reader: BroadcastReader<BenchEvent>,
     mut query: Query<&Position>,
     mut stats: ResMut<EventStats>,
 ) {
@@ -383,7 +383,7 @@ fn build_runtime_for_w4(entity_count: usize) -> (World, Runtime) {
     }
 
     let mut runtime = Runtime::new();
-    runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_events));
+    runtime.add_systems::<W4, _, _>(&mut world, (w4_write_events, w4_read_broadcast));
     (world, runtime)
 }
 
@@ -395,7 +395,7 @@ fn workload_w4(c: &mut Criterion) {
             runtime
                 .run_schedule::<W4>(&mut world)
                 .expect("w4 schedule should run");
-            world.clear_events::<BenchEvent>();
+            world.clear_broadcast_admin::<BenchEvent>();
             black_box(world.resource::<EventStats>().expect("event stats").0)
         });
     });

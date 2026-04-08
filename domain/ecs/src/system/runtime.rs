@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow};
 use scheduler::access::{AccessKey, SystemAccess};
 use scheduler::label::{ScheduleLabel, SystemSet, SystemSetKey};
 use scheduler::plan::{ExecutionPlan, ExecutionScheduler};
-use scheduler::system::RegisteredSystem;
+use scheduler::system::{ParamSlotDescriptor, RegisteredSystem, SystemId};
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -14,6 +14,20 @@ use crate::telemetry;
 use crate::{Commands, World};
 
 type DeferredCommands = Rc<RefCell<Vec<Commands>>>;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ParamSlotId {
+    pub system_id: SystemId,
+    pub slot_index: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParamSlotMetadata {
+    pub id: ParamSlotId,
+    pub kind: &'static str,
+    pub label: &'static str,
+    pub type_name: &'static str,
+}
 
 pub trait SystemOutput {
     fn into_result(self) -> Result<()>;
@@ -281,6 +295,7 @@ trait SystemParamState: Sized {
 
     fn init_state(world: &mut World) -> std::result::Result<Self::State, SystemParamError>;
     fn access(state: &Self::State) -> QueryAccess;
+    fn slot_descriptor() -> ParamSlotDescriptor;
 
     unsafe fn extract<'w>(
         state: &'w mut Self::State,
@@ -303,6 +318,10 @@ where
         <T as SystemParam<'static>>::access(state)
     }
 
+    fn slot_descriptor() -> ParamSlotDescriptor {
+        <T as SystemParam<'static>>::slot_descriptor()
+    }
+
     unsafe fn extract<'w>(
         state: &'w mut Self::State,
         world: *mut World,
@@ -318,21 +337,23 @@ where
 fn merge_access(system_name: &str, access_parts: &[SystemAccess]) -> Result<SystemAccess> {
     let mut merged = SystemAccess::new();
     for access in access_parts {
-        let conflicts = merged.conflicts_with(access);
-        if let Some(conflict) = conflicts.first() {
-            return Err(anyhow!(
-                "system '{}' has conflicting param access to '{}' ({:?})",
-                system_name,
-                conflict.key.name(),
-                conflict.kind
-            ));
-        }
         for read in access.reads() {
             merged.add_read(*read);
         }
         for write in access.writes() {
             merged.add_write(*write);
         }
+        for drain in access.drains() {
+            merged.add_drain(*drain);
+        }
+    }
+    if let Err(conflict) = merged.validate_internal() {
+        return Err(anyhow!(
+            "system '{}' has conflicting param access to '{}' ({:?})",
+            system_name,
+            conflict.key.name(),
+            conflict.kind
+        ));
     }
     Ok(merged)
 }
@@ -363,10 +384,15 @@ macro_rules! impl_into_system {
                     )*
                 ];
                 let access = merge_access(&system_name, &access_parts)?;
+                let param_slots = vec![
+                    $(
+                        <$param as SystemParamState>::slot_descriptor(),
+                    )*
+                ];
                 let mut func = self;
                 let deferred_commands_ref = deferred_commands.clone();
 
-                RegisteredSystem::new::<L>(system_name, access, move |world| {
+                let mut registered = RegisteredSystem::new::<L>(system_name, access, move |world| {
                     let mut commands = Commands::new_external_owner();
                     $(
                         let $param = unsafe {
@@ -383,7 +409,9 @@ macro_rules! impl_into_system {
                         deferred_commands_ref.borrow_mut().push(staged_commands);
                     }
                     result
-                })
+                })?;
+                registered.set_param_slots(param_slots);
+                Ok(registered)
             }
         }
     };
@@ -449,6 +477,31 @@ impl Runtime {
 
     pub fn scheduler(&mut self) -> &mut ExecutionScheduler<World> {
         &mut self.scheduler
+    }
+
+    pub fn param_slots_for_system(&self, system_id: SystemId) -> Option<Vec<ParamSlotMetadata>> {
+        let system = self
+            .scheduler
+            .systems()
+            .iter()
+            .find(|system| system.id() == system_id)?;
+
+        Some(
+            system
+                .param_slots()
+                .iter()
+                .enumerate()
+                .map(|(slot_index, slot)| ParamSlotMetadata {
+                    id: ParamSlotId {
+                        system_id,
+                        slot_index,
+                    },
+                    kind: slot.kind,
+                    label: slot.label,
+                    type_name: slot.type_name,
+                })
+                .collect(),
+        )
     }
 
     pub fn run_schedule<L: ScheduleLabel>(&mut self, world: &mut World) -> Result<()> {
@@ -531,6 +584,36 @@ fn query_access_to_system_access(access: QueryAccess) -> SystemAccess {
     }
     for write in access.resource_writes() {
         system_access.add_write(AccessKey::resource_by_id(write.type_id(), write.name()));
+    }
+    for read in access.broadcast_reads() {
+        system_access.add_read(AccessKey::broadcast_stream_by_id(
+            read.type_id(),
+            read.name(),
+        ));
+    }
+    for write in access.broadcast_writes() {
+        system_access.add_write(AccessKey::broadcast_stream_by_id(
+            write.type_id(),
+            write.name(),
+        ));
+    }
+    for read in access.queue_reads() {
+        system_access.add_read(AccessKey::queue_by_id(read.type_id(), read.name()));
+    }
+    for write in access.queue_writes() {
+        system_access.add_write(AccessKey::queue_by_id(write.type_id(), write.name()));
+    }
+    for drain in access.queue_drains() {
+        system_access.add_drain(AccessKey::queue_by_id(drain.type_id(), drain.name()));
+    }
+    for read in access.input_stream_reads() {
+        system_access.add_read(AccessKey::input_stream_by_id(read.type_id(), read.name()));
+    }
+    for write in access.input_stream_writes() {
+        system_access.add_write(AccessKey::input_stream_by_id(write.type_id(), write.name()));
+    }
+    for drain in access.input_stream_drains() {
+        system_access.add_drain(AccessKey::input_stream_by_id(drain.type_id(), drain.name()));
     }
     if access.deferred_structural_mutation() {
         system_access.add_write(AccessKey::structural("world_structure"));

@@ -23,3 +23,10 @@ pub(crate) fn scene_overlay_update_system(
     publish_scene_state(manager, &mut scene_state, &mut gameplay, &mut overlay);
     Ok(())
 }
+
+pub(crate) fn finalize_overlay_messaging_frame_system(mut scene_resource: ResMut<SceneResource>) {
+    let Some(manager) = scene_resource.manager.as_mut() else {
+        return;
+    };
+    manager.overlay_runtime.world.finalize_frame_boundary();
+}

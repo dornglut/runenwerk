@@ -4,6 +4,9 @@ use engine::plugins::net::{
     NetworkDiagnostics, NetworkOutboundQueue, NetworkRuntimeHandle, NetworkServerInbox,
     NetworkServerOutbox, NetworkSessionStatus, OutboundServerMessage, PredictionDiagnostics,
     PredictionState as NetPredictionState, ReplicationDiagnostics, ServerSnapshotReplicationState,
+    client_inbox_is_empty, client_outbox_len, enqueue_client_inbox, enqueue_client_outbox,
+    enqueue_server_inbox, enqueue_server_inbox_from, enqueue_server_outbox_broadcast,
+    server_inbox_is_empty, server_outbox_len,
 };
 use engine::plugins::{ScenePlugin, default_plugins};
 use engine::prelude::*;

@@ -17,7 +17,7 @@ This folder stores the final Phase 6 measurement set, including required command
 - C4: broad double-mutable query (`Query<(&mut Position, &mut Velocity)>`)
 - W2: gameplay mixed workload (`With` / `Without` / `Changed` / `Added`)
 - W3: structural churn (`Commands`, spawn/insert/remove/despawn)
-- W4: event-heavy workload (`EventReader` / `EventWriter` + query)
+- W4: event-heavy workload (`BroadcastReader` / `BroadcastWriter` + query)
 - W5: scheduler stress (plan + stage execution)
 - Engine scenario: headless runtime mixed-frame workload
 

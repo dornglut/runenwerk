@@ -279,24 +279,24 @@ assert_eq!(world.resource::<Frame>().unwrap().0, 1);
 
 World APIs:
 
-- `emit_event<T>(event)`
-- `read_events<T>()`
-- `drain_events<T>()`
-- `clear_events<T>()`
+- `publish_broadcast<T>(event)`
+- `read_broadcast<T>()`
+- `drain_broadcast_admin<T>()`
+- `clear_broadcast_admin<T>()`
 - `event_count<T>()`
 
 System params:
 
-- `EventReader<T>::iter()`
-- `EventWriter<T>::send(event)`
+- `BroadcastReader<T>::iter()`
+- `BroadcastWriter<T>::send(event)`
 
 ```rust
 use ecs::prelude::*;
 
 let mut world = World::new();
-world.emit_event(1_u32);
-assert_eq!(world.read_events::<u32>(), &[1]);
-assert_eq!(world.drain_events::<u32>(), vec![1]);
+world.publish_broadcast(1_u32);
+assert_eq!(world.read_broadcast::<u32>(), &[1]);
+assert_eq!(world.drain_broadcast_admin::<u32>(), vec![1]);
 ```
 
 ## 12. Change Tracking Basics

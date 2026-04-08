@@ -1,15 +1,19 @@
 use std::any::TypeId;
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AccessDomain {
     Component,
     OrphanedComponent,
     Resource,
+    BroadcastStream,
+    Queue,
+    InputStream,
     Structural,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone)]
 pub struct AccessKey {
     domain: AccessDomain,
     type_id: Option<TypeId>,
@@ -53,6 +57,42 @@ impl AccessKey {
         }
     }
 
+    pub fn broadcast_stream<T: 'static>(name: &'static str) -> Self {
+        Self::broadcast_stream_by_id(TypeId::of::<T>(), name)
+    }
+
+    pub fn broadcast_stream_by_id(type_id: TypeId, name: &'static str) -> Self {
+        Self {
+            domain: AccessDomain::BroadcastStream,
+            type_id: Some(type_id),
+            name,
+        }
+    }
+
+    pub fn queue<T: 'static>(name: &'static str) -> Self {
+        Self::queue_by_id(TypeId::of::<T>(), name)
+    }
+
+    pub fn queue_by_id(type_id: TypeId, name: &'static str) -> Self {
+        Self {
+            domain: AccessDomain::Queue,
+            type_id: Some(type_id),
+            name,
+        }
+    }
+
+    pub fn input_stream<T: 'static>(name: &'static str) -> Self {
+        Self::input_stream_by_id(TypeId::of::<T>(), name)
+    }
+
+    pub fn input_stream_by_id(type_id: TypeId, name: &'static str) -> Self {
+        Self {
+            domain: AccessDomain::InputStream,
+            type_id: Some(type_id),
+            name,
+        }
+    }
+
     pub fn structural(name: &'static str) -> Self {
         Self {
             domain: AccessDomain::Structural,
@@ -74,10 +114,38 @@ impl AccessKey {
     }
 }
 
+impl PartialEq for AccessKey {
+    fn eq(&self, other: &Self) -> bool {
+        if self.domain != other.domain {
+            return false;
+        }
+
+        match self.domain {
+            AccessDomain::Structural => self.name == other.name,
+            _ => self.type_id == other.type_id,
+        }
+    }
+}
+
+impl Eq for AccessKey {}
+
+impl Hash for AccessKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.domain.hash(state);
+        match self.domain {
+            AccessDomain::Structural => self.name.hash(state),
+            _ => self.type_id.hash(state),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConflictKind {
     ReadWrite,
     WriteWrite,
+    ReadDrain,
+    WriteDrain,
+    DrainDrain,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +158,7 @@ pub struct AccessConflict {
 pub struct SystemAccess {
     reads: HashSet<AccessKey>,
     writes: HashSet<AccessKey>,
+    drains: HashSet<AccessKey>,
 }
 
 impl SystemAccess {
@@ -105,12 +174,20 @@ impl SystemAccess {
         &self.writes
     }
 
+    pub fn drains(&self) -> &HashSet<AccessKey> {
+        &self.drains
+    }
+
     pub fn add_read(&mut self, key: AccessKey) {
         self.reads.insert(key);
     }
 
     pub fn add_write(&mut self, key: AccessKey) {
         self.writes.insert(key);
+    }
+
+    pub fn add_drain(&mut self, key: AccessKey) {
+        self.drains.insert(key);
     }
 
     pub fn with_read(mut self, key: AccessKey) -> Self {
@@ -120,6 +197,11 @@ impl SystemAccess {
 
     pub fn with_write(mut self, key: AccessKey) -> Self {
         self.add_write(key);
+        self
+    }
+
+    pub fn with_drain(mut self, key: AccessKey) -> Self {
+        self.add_drain(key);
         self
     }
 
@@ -152,6 +234,41 @@ impl SystemAccess {
             });
         }
 
+        for key in self.reads.intersection(&other.drains) {
+            conflicts.push(AccessConflict {
+                key: *key,
+                kind: ConflictKind::ReadDrain,
+            });
+        }
+
+        for key in self.drains.intersection(&other.reads) {
+            conflicts.push(AccessConflict {
+                key: *key,
+                kind: ConflictKind::ReadDrain,
+            });
+        }
+
+        for key in self.writes.intersection(&other.drains) {
+            conflicts.push(AccessConflict {
+                key: *key,
+                kind: ConflictKind::WriteDrain,
+            });
+        }
+
+        for key in self.drains.intersection(&other.writes) {
+            conflicts.push(AccessConflict {
+                key: *key,
+                kind: ConflictKind::WriteDrain,
+            });
+        }
+
+        for key in self.drains.intersection(&other.drains) {
+            conflicts.push(AccessConflict {
+                key: *key,
+                kind: ConflictKind::DrainDrain,
+            });
+        }
+
         conflicts
     }
 
@@ -160,6 +277,18 @@ impl SystemAccess {
             return Err(AccessConflict {
                 key: *key,
                 kind: ConflictKind::ReadWrite,
+            });
+        }
+        for key in self.reads.intersection(&self.drains) {
+            return Err(AccessConflict {
+                key: *key,
+                kind: ConflictKind::ReadDrain,
+            });
+        }
+        for key in self.writes.intersection(&self.drains) {
+            return Err(AccessConflict {
+                key: *key,
+                kind: ConflictKind::WriteDrain,
             });
         }
         Ok(())

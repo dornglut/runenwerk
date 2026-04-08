@@ -511,3 +511,45 @@ fn app_tracks_scene_registrations_without_legacy_runtime() {
     assert!(catalog.handle("main_menu_2").is_some());
     assert!(catalog.handle("main_menu_3").is_some());
 }
+
+#[test]
+fn runtime_finalization_counts_match_fixed_tick_runs() {
+    let app = App::headless()
+        .run_for_ticks(3)
+        .expect("fixed tick run should succeed");
+
+    let counters = app.world().messaging_finalization_counters();
+    assert_eq!(counters.tick_boundaries, 3);
+    assert_eq!(counters.frame_boundaries, 3);
+}
+
+struct ZeroDeltaPlugin;
+
+impl Plugin for ZeroDeltaPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(FixedTimeConfig {
+            step_seconds: 1.0 / 60.0,
+        });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 4,
+        });
+        app.add_systems(PreUpdate, force_zero_delta_for_finalization_check);
+    }
+}
+
+fn force_zero_delta_for_finalization_check(mut time: ResMut<Time>) {
+    (*time).delta_seconds = 0.0;
+}
+
+#[test]
+fn runtime_finalization_skips_tick_boundary_when_no_fixed_steps_run() {
+    let mut app = App::headless();
+    app.add_plugin(ZeroDeltaPlugin);
+    let app = app
+        .run_for_frames(2)
+        .expect("zero-delta frames should run without fixed updates");
+
+    let counters = app.world().messaging_finalization_counters();
+    assert_eq!(counters.frame_boundaries, 2);
+    assert_eq!(counters.tick_boundaries, 0);
+}

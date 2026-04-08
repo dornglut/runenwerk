@@ -200,3 +200,130 @@ fn scheduler_records_conflicts_but_stays_serial() {
     scheduler.run_schedule::<Update>(&mut ctx).unwrap();
     assert_eq!(ctx, vec!["first", "second"]);
 }
+
+#[test]
+fn same_system_mixed_intents_on_queue_are_rejected() {
+    let queue_key = AccessKey::queue::<u32>("queue");
+
+    let result = RegisteredSystem::new::<Update>(
+        "invalid_mixed_intent",
+        SystemAccess::new()
+            .with_read(queue_key)
+            .with_drain(queue_key),
+        |_ctx: &mut Vec<String>| Ok(()),
+    );
+    let err = match result {
+        Ok(_) => panic!("mixed read+drain intent should fail validation"),
+        Err(err) => err,
+    };
+
+    let message = format!("{err:#}");
+    assert!(message.contains("conflicting access"), "{message}");
+}
+
+#[test]
+fn conflict_matrix_covers_broadcast_queue_and_input_stream_domains() {
+    fn kind(left: SystemAccess, right: SystemAccess) -> Option<scheduler::ConflictKind> {
+        left.conflicts_with(&right)
+            .first()
+            .map(|conflict| conflict.kind)
+    }
+
+    let broadcast = AccessKey::broadcast_stream::<u32>("broadcast");
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_read(broadcast),
+            SystemAccess::new().with_read(broadcast),
+        ),
+        None
+    );
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_read(broadcast),
+            SystemAccess::new().with_write(broadcast),
+        ),
+        Some(scheduler::ConflictKind::ReadWrite)
+    );
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_write(broadcast),
+            SystemAccess::new().with_write(broadcast),
+        ),
+        Some(scheduler::ConflictKind::WriteWrite)
+    );
+
+    let queue = AccessKey::queue::<u32>("queue");
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_read(queue),
+            SystemAccess::new().with_drain(queue),
+        ),
+        Some(scheduler::ConflictKind::ReadDrain)
+    );
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_write(queue),
+            SystemAccess::new().with_drain(queue),
+        ),
+        Some(scheduler::ConflictKind::WriteDrain)
+    );
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_drain(queue),
+            SystemAccess::new().with_drain(queue),
+        ),
+        Some(scheduler::ConflictKind::DrainDrain)
+    );
+
+    let input = AccessKey::input_stream::<u32>("input_stream");
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_read(input),
+            SystemAccess::new().with_write(input),
+        ),
+        Some(scheduler::ConflictKind::ReadWrite)
+    );
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_read(input),
+            SystemAccess::new().with_drain(input),
+        ),
+        Some(scheduler::ConflictKind::ReadDrain)
+    );
+    assert_eq!(
+        kind(
+            SystemAccess::new().with_write(input),
+            SystemAccess::new().with_drain(input),
+        ),
+        Some(scheduler::ConflictKind::WriteDrain)
+    );
+}
+
+#[test]
+fn scheduler_assigns_monotonic_ids_and_surfaces_them_in_plans() {
+    let mut scheduler = ExecutionScheduler::<Vec<String>>::new();
+
+    scheduler.add_system(
+        RegisteredSystem::new::<Update>("a", SystemAccess::new(), |_ctx: &mut Vec<String>| Ok(()))
+            .unwrap(),
+    );
+    scheduler.add_system(
+        RegisteredSystem::new::<Update>("b", SystemAccess::new(), |_ctx: &mut Vec<String>| Ok(()))
+            .unwrap(),
+    );
+
+    let ids: Vec<u64> = scheduler
+        .systems()
+        .iter()
+        .map(|system| system.id().as_raw())
+        .collect();
+    assert_eq!(ids, vec![0, 1]);
+
+    let plan = scheduler.plan_for::<Update>().unwrap();
+    let stage_ids: Vec<u64> = plan
+        .stages
+        .iter()
+        .flat_map(|stage| stage.system_ids.iter().map(|id| id.as_raw()))
+        .collect();
+    assert_eq!(stage_ids, vec![0, 1]);
+}

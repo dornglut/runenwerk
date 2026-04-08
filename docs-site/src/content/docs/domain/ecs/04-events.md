@@ -15,16 +15,16 @@ Events are typed signals exchanged between systems through world-managed channel
 
 ## Key Concepts
 
-- World APIs: `emit_event<T>`, `read_events<T>`, `drain_events<T>`, `clear_events<T>`.
-- Param APIs: `EventReader<T>`, `EventWriter<T>`, `EventChannel<T>`.
-- Channel config: `EventChannelConfig` (`capacity`, `overflow`, `lifetime`, `tracing`).
+- World APIs: `publish_broadcast<T>`, `read_broadcast<T>`, `drain_broadcast_admin<T>`, `clear_broadcast_admin<T>`.
+- Param APIs: `BroadcastReader<T>`, `BroadcastWriter<T>`, `BroadcastReader<T>`.
+- Channel config: `BroadcastStreamConfig` (`capacity`, `overflow`, `lifetime`, `tracing`).
 - Observers: `observe_events` with `ObserverTrigger::{OnEmit, OnDrain, EndOfFrame}`.
 
 ## API Notes
 
-- `EventChannel<T>::iter_all()` reads all pending events.
-- `EventChannel<T>::iter_new()` reads only unseen events for that system param state.
-- `finish_event_frame()` applies frame-lifetime cleanup and end-of-frame observer triggers.
+- `BroadcastReader<T>::iter_all()` reads all pending events.
+- `BroadcastReader<T>::iter_new()` reads only unseen events for that system param state.
+- `finalize_frame_boundary()` applies frame-lifetime cleanup and end-of-frame observer triggers.
 
 ## Invariants
 
@@ -42,7 +42,7 @@ stability:
 - queue-like destructive workflows,
 - runtime/network bridge traffic.
 
-Also note that `finish_event_frame()` is currently a world-level API and must be
+Also note that `finalize_frame_boundary()` is currently a world-level API and must be
 called by the runtime lifecycle to enforce frame cleanup boundaries.
 
 For current repository-grounded status and the planned redesign sequence, see:

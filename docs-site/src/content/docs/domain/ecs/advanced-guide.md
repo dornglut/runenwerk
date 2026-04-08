@@ -73,32 +73,32 @@ let _plan = runtime.plan_for::<Update>().unwrap().clone();
 
 ## 3. Advanced Event Channels
 
-`EventChannelConfig` controls queue semantics per event type:
+`BroadcastStreamConfig` controls queue semantics per event type:
 
 - `capacity: Option<usize>`
-- `overflow: OverflowPolicy` (`DropOldest`, `DropNewest`, `Panic`)
-- `lifetime: EventLifetime` (`Persistent`, `FrameTransient`)
-- `tracing: EventTracingPolicy`
+- `overflow: BroadcastOverflowPolicy` (`DropOldest`, `DropNewest`, `Panic`)
+- `lifetime: BroadcastLifetime` (`Persistent`, `FrameTransient`)
+- `tracing: BroadcastTracingPolicy`
 
 ```rust
-use ecs::{EventChannelConfig, EventLifetime, EventTracingPolicy, OverflowPolicy, World};
+use ecs::{BroadcastStreamConfig, BroadcastLifetime, BroadcastTracingPolicy, BroadcastOverflowPolicy, World};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct TickEvent;
 
 let mut world = World::new();
-world.configure_event_channel::<TickEvent>(EventChannelConfig {
+world.configure_broadcast_stream::<TickEvent>(BroadcastStreamConfig {
     capacity: Some(1),
-    overflow: OverflowPolicy::DropOldest,
-    lifetime: EventLifetime::FrameTransient,
-    tracing: EventTracingPolicy::Disabled,
+    overflow: BroadcastOverflowPolicy::DropOldest,
+    lifetime: BroadcastLifetime::FrameTransient,
+    tracing: BroadcastTracingPolicy::Disabled,
 });
 ```
 
 Pitfalls:
 
 - `capacity = Some(0)` drops all events (or panics if overflow policy is `Panic`).
-- `FrameTransient` requires `finish_event_frame()` to clear pending events at frame end.
+- `FrameTransient` requires `finalize_frame_boundary()` to clear pending events at frame end.
 
 ## 4. Event Observers and Notifications
 

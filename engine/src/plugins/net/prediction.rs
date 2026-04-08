@@ -1,7 +1,8 @@
 use super::*;
 use crate::WorldMut;
 use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
-use ecs::World;
+use crate::runtime::QueueWriter;
+use ecs::{QueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
@@ -13,7 +14,26 @@ const FULL_SNAPSHOT_INTERVAL_TICKS: u64 = 30;
 const MAX_SERVER_SNAPSHOT_HISTORY: usize = 256;
 const MAX_CLIENT_SNAPSHOT_HISTORY: usize = 256;
 
-pub fn replication_step_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
+fn enqueue_queue_writer_with_backpressure<T: 'static>(
+    writer: &mut QueueWriter<T>,
+    queue_name: &'static str,
+    message: T,
+) -> Result<(), QueueEnqueueError> {
+    let result = writer.enqueue(message);
+    if let Err(QueueEnqueueError::Backpressure { capacity, .. }) = &result {
+        tracing::warn!(
+            queue = queue_name,
+            capacity = *capacity,
+            "network queue backpressure; dropping newest message"
+        );
+    }
+    result
+}
+
+pub fn replication_step_system<TDriver>(
+    mut world: WorldMut,
+    mut server_outbox: QueueWriter<OutboundServerMessage>,
+) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + Send + Sync + 'static,
     TDriver::Snapshot: Clone + PartialEq,
@@ -182,15 +202,14 @@ where
         }
     }
 
-    if let Ok(mut outbox) = world.resource_mut::<NetworkServerOutbox>() {
-        for message in &outbound {
-            match message {
-                OutboundServerMessage::ToConnection {
-                    connection_id,
-                    message,
-                } => outbox.push_to(*connection_id, message.clone()),
-                OutboundServerMessage::Broadcast(message) => outbox.push_broadcast(message.clone()),
-            }
+    for message in &outbound {
+        let enqueue_result = enqueue_queue_writer_with_backpressure(
+            &mut server_outbox,
+            "NetworkServerOutbox",
+            message.clone(),
+        );
+        if let Err(error) = enqueue_result {
+            tracing::warn!(error = ?error, "failed to enqueue replication server outbox message");
         }
     }
 
@@ -204,7 +223,10 @@ where
     Ok(())
 }
 
-pub fn prediction_step_system<TDriver>(mut world: WorldMut) -> anyhow::Result<()>
+pub fn prediction_step_system<TDriver>(
+    mut world: WorldMut,
+    mut client_outbox: QueueWriter<ClientMessage>,
+) -> anyhow::Result<()>
 where
     TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
     TDriver::Input: Clone + PartialEq,
@@ -239,8 +261,12 @@ where
         let payload = TDriver::encode_input(&commands)
             .map_err(|e| map_driver_error::<TDriver>(e, "encode input"))?;
 
-        if let Ok(mut outbox) = world.resource_mut::<NetworkClientOutbox>() {
-            outbox.push(ClientMessage::InputFrame(InputFrame { tick, payload }));
+        if let Err(error) = enqueue_queue_writer_with_backpressure(
+            &mut client_outbox,
+            "NetworkClientOutbox",
+            ClientMessage::InputFrame(InputFrame { tick, payload }),
+        ) {
+            tracing::warn!(error = ?error, "failed to enqueue local input frame");
         }
 
         if let Ok(mut prediction) = world.resource_mut::<PredictionState<TDriver::Input>>() {

@@ -4,12 +4,38 @@ use anyhow::Result;
 
 pub type RunnableSystemFn<C> = Box<dyn FnMut(&mut C) -> Result<()>>;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SystemId(u64);
+
+impl SystemId {
+    pub const fn unassigned() -> Self {
+        Self(u64::MAX)
+    }
+
+    pub const fn from_raw(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn as_raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParamSlotDescriptor {
+    pub kind: &'static str,
+    pub label: &'static str,
+    pub type_name: &'static str,
+}
+
 pub struct RegisteredSystem<C> {
+    id: SystemId,
     name: String,
     label: ScheduleKey,
     sets: Vec<SystemSetKey>,
     before_sets: Vec<SystemSetKey>,
     after_sets: Vec<SystemSetKey>,
+    param_slots: Vec<ParamSlotDescriptor>,
     access: SystemAccess,
     run: RunnableSystemFn<C>,
 }
@@ -29,11 +55,13 @@ impl<C> RegisteredSystem<C> {
             .map_err(|conflict| internal_access_error(&name, &conflict))?;
 
         Ok(Self {
+            id: SystemId::unassigned(),
             name,
             label: L::key(),
             sets: Vec::new(),
             before_sets: Vec::new(),
             after_sets: Vec::new(),
+            param_slots: Vec::new(),
             access,
             run: Box::new(run),
         })
@@ -79,6 +107,10 @@ impl<C> RegisteredSystem<C> {
         &self.name
     }
 
+    pub fn id(&self) -> SystemId {
+        self.id
+    }
+
     pub fn label(&self) -> ScheduleKey {
         self.label
     }
@@ -99,8 +131,20 @@ impl<C> RegisteredSystem<C> {
         &self.access
     }
 
+    pub fn set_param_slots(&mut self, param_slots: Vec<ParamSlotDescriptor>) {
+        self.param_slots = param_slots;
+    }
+
+    pub fn param_slots(&self) -> &[ParamSlotDescriptor] {
+        &self.param_slots
+    }
+
     pub fn run(&mut self, ctx: &mut C) -> Result<()> {
         (self.run)(ctx)
+    }
+
+    pub(crate) fn assign_id(&mut self, id: SystemId) {
+        self.id = id;
     }
 }
 
