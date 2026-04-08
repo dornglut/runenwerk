@@ -51,7 +51,7 @@ Active runtime accepts typed import semantics only:
 
 - surface color
 - surface depth
-- builtin UI draw list
+- builtin UI frame contribution
 - history categories (typed texture/buffer)
 
 Generic external imports remain compatibility constructors and are rejected in active runtime validation.

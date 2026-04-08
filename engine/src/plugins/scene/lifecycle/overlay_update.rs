@@ -1,6 +1,6 @@
 use super::super::runtime::{
     SceneTemplateFlowResource, apply_overlay_messages, publish_scene_state,
-    rebuild_overlay_draw_list,
+    rebuild_overlay_ui_frame,
 };
 use crate::plugins::SceneResource;
 use crate::runtime::ResMut;
@@ -19,7 +19,7 @@ pub(crate) fn scene_overlay_update_system(
     };
 
     apply_overlay_messages(manager);
-    rebuild_overlay_draw_list(manager, &scene_templates)?;
+    rebuild_overlay_ui_frame(manager, &scene_templates)?;
     publish_scene_state(manager, &mut scene_state, &mut gameplay, &mut overlay);
     Ok(())
 }

@@ -1,4 +1,7 @@
-use super::{PreparedFrameContext, PreparedFrameContributions, PreparedViewFrame};
+use super::{
+    PreparedFrameContext, PreparedFrameContributions, PreparedUiFrameContribution,
+    PreparedViewFrame,
+};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -9,30 +12,42 @@ pub struct PreparedRenderFrameResource {
 }
 
 impl PreparedRenderFrameResource {
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: publish
     pub fn publish(&mut self, frame: PreparedRenderFrame) {
         self.next_frame_index = frame.context.frame_index.saturating_add(1);
         self.next_prepare_epoch = frame.context.prepare_epoch.saturating_add(1);
         self.frame = Some(frame);
     }
 
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: clear
     pub fn clear(&mut self) {
         self.frame = None;
     }
 
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: frame
     pub fn frame(&self) -> Option<&PreparedRenderFrame> {
         self.frame.as_ref()
     }
 
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: take
     pub fn take(&mut self) -> Option<PreparedRenderFrame> {
         self.frame.take()
     }
 
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: allocate_frame_index
     pub fn allocate_frame_index(&mut self) -> u64 {
         let frame_index = self.next_frame_index;
         self.next_frame_index = self.next_frame_index.saturating_add(1);
         frame_index
     }
 
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: allocate_prepare_epoch
     pub fn allocate_prepare_epoch(&mut self) -> u64 {
         let prepare_epoch = self.next_prepare_epoch;
         self.next_prepare_epoch = self.next_prepare_epoch.saturating_add(1);
@@ -51,22 +66,26 @@ pub struct PreparedRenderFrame {
 }
 
 impl PreparedRenderFrame {
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: flow_inputs
     pub fn flow_inputs(&self, flow_id: &str) -> Option<&PreparedFlowInputs> {
         self.flows.get(flow_id)
     }
 
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: main_view
     pub fn main_view(&self) -> Option<&PreparedViewFrame> {
         self.views.first()
     }
 
-    pub fn ui_draw_list(&self) -> Option<&crate::plugins::ui::domain::UiDrawList> {
-        self.contributions.ui_draw_list()
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: ui
+    pub fn ui(&self) -> Option<&PreparedUiFrameContribution> {
+        self.contributions.ui()
     }
 
-    pub fn ui_rect_shader_asset_id(&self) -> Option<&str> {
-        self.contributions.ui_rect_shader_asset_id()
-    }
-
+    /// File: engine/src/plugins/render/frame/packet.rs
+    /// Method: scene_route_labels
     pub fn scene_route_labels(&self) -> Option<(&str, &str)> {
         self.contributions.scene_route_labels()
     }
@@ -131,10 +150,10 @@ mod tests {
         resource.publish(dummy_frame(4));
         assert_eq!(
             resource
-                .frame()
-                .expect("frame should be present after publish")
-                .context
-                .frame_index,
+              .frame()
+              .expect("frame should be present after publish")
+              .context
+              .frame_index,
             4
         );
         assert_eq!(resource.allocate_frame_index(), 5);

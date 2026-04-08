@@ -7,7 +7,6 @@ impl Renderer {
             rect_pass: None,
             rect_pass_format: None,
             rect_pass_shader_revision: 0,
-            text_renderer: None,
             text_renderer_format: None,
             flow_runtime_cache: std::collections::BTreeMap::new(),
             flow_pipeline_cache: super::pipeline_cache::FlowPipelineArtifactCache::default(),
@@ -173,21 +172,6 @@ impl Renderer {
         Some((x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32))
     }
 
-    pub(super) fn ensure_text_renderer(
-        &mut self,
-        device: &Device,
-        queue: &Queue,
-        format: TextureFormat,
-    ) {
-        if self.text_renderer.is_some() && self.text_renderer_format == Some(format) {
-            return;
-        }
-
-        let provider = FileFontProvider;
-        self.text_renderer = Some(TextRenderer::new(device, queue, format, &provider));
-        self.text_renderer_format = Some(format);
-    }
-
     pub(super) fn encode_ui_pass(
         &self,
         encoder: &mut CommandEncoder,
@@ -214,25 +198,21 @@ impl Renderer {
             occlusion_query_set: None,
         });
 
-        if let Some(instance_buffer) = prepared.rect_instance_buffer.as_ref() {
-            pass.set_pipeline(&rect_pass.pipeline);
-            pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
-            pass.set_vertex_buffer(0, instance_buffer.slice(..));
-            pass.draw(0..6, 0..prepared.rect_instances as u32);
+        if prepared.rect_batches.is_empty() {
+            return;
         }
 
-        if let Some(text_renderer) = self.text_renderer.as_ref() {
-            let full_scissor = Self::full_scissor(prepared.surface_size.0, prepared.surface_size.1);
+        pass.set_pipeline(&rect_pass.pipeline);
+        pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
+        for batch in &prepared.rect_batches {
             pass.set_scissor_rect(
-                full_scissor.0,
-                full_scissor.1,
-                full_scissor.2,
-                full_scissor.3,
+                batch.scissor.0,
+                batch.scissor.1,
+                batch.scissor.2,
+                batch.scissor.3,
             );
-            for (text_buffer, text_count, scissor) in &prepared.text_draws {
-                pass.set_scissor_rect(scissor.0, scissor.1, scissor.2, scissor.3);
-                text_renderer.encode_draw(&mut pass, text_buffer, *text_count);
-            }
+            pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
+            pass.draw(0..6, 0..batch.instance_count);
         }
     }
 }

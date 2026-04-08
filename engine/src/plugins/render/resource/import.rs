@@ -4,7 +4,6 @@ use crate::plugins::render::api::RenderResourceId;
 pub enum ImportedTextureSemantic {
     SurfaceColor,
     SurfaceDepth,
-    BuiltinUiDrawList,
     HistoryTexture,
     External,
 }
@@ -18,7 +17,6 @@ impl ImportedTextureSemantic {
         match self {
             Self::SurfaceColor => "surface_color",
             Self::SurfaceDepth => "surface_depth",
-            Self::BuiltinUiDrawList => "builtin_ui_draw_list",
             Self::HistoryTexture => "history_texture",
             Self::External => "external",
         }

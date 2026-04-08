@@ -102,31 +102,8 @@ pub(crate) fn scene_transition_system(
         }
 
         let result = manager.apply_pending()?;
-        if result.world_changed {
-            manager.overlay_runtime.ui.editor.status = format!(
-                "editor: world scene switched to {}",
-                manager.world.active.label()
-            );
-        }
-        if result.overlay_changed {
-            let active = manager.active_overlay();
-            let path = manager
-                .registry
-                .ui_template_path(active)
-                .unwrap_or("<none>");
-            manager.overlay_runtime.ui.editor.status = format!(
-                "editor: overlay scene switched to {} ({}) [stack={}]",
-                active.label(),
-                path,
-                manager.overlays.len()
-            );
-        }
-        if result.world_pause_changed {
-            manager.overlay_runtime.ui.editor.status = if manager.world.paused {
-                "editor: world scene paused".to_string()
-            } else {
-                "editor: world scene resumed".to_string()
-            };
+        if result.world_changed || result.overlay_changed || result.world_pause_changed {
+            manager.overlay_runtime.ui.layout_dirty = true;
         }
 
         flush_lifecycle_status(manager);

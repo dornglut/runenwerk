@@ -32,7 +32,6 @@ pub enum FrameResourceDescriptor {
     WorldParams,
     WorldAgents,
     MeshData,
-    UiDrawList,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -77,7 +76,7 @@ mod tests {
     (
       name: "debug_pass",
       kind: render,
-      reads: [ui_draw_list],
+      reads: [world_color],
       writes: [surface_color],
       depends_on: ["ui_composite"],
     ),

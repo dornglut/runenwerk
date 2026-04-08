@@ -3,6 +3,7 @@ use ecs::Component;
 use engine_net::AuthoritativeJoinState;
 use std::collections::HashMap;
 use std::path::Path;
+use ui_render_data::UiFrame;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SceneRegistration {
@@ -333,37 +334,11 @@ impl Default for SceneRuntimeState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum OverlayDrawCmd {
-    Rect {
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        color: [f32; 4],
-        radius: f32,
-    },
-    Text {
-        x: f32,
-        y: f32,
-        content: String,
-        color: [f32; 4],
-        size: f32,
-        clip: Option<[f32; 4]>,
-    },
-}
-
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct OverlayDrawList {
-    pub commands: Vec<OverlayDrawCmd>,
-}
-
 #[derive(Debug, Clone, PartialEq, Component, ecs::Resource)]
 pub struct UiOverlayState {
     pub screen_size: (f32, f32),
     pub scale: f32,
-    pub draw_list: OverlayDrawList,
-    pub debug_draw_list: OverlayDrawList,
+    pub debug_frame: UiFrame,
 }
 
 impl Default for UiOverlayState {
@@ -371,8 +346,7 @@ impl Default for UiOverlayState {
         Self {
             screen_size: (1280.0, 720.0),
             scale: 1.0,
-            draw_list: OverlayDrawList::default(),
-            debug_draw_list: OverlayDrawList::default(),
+            debug_frame: UiFrame::default(),
         }
     }
 }

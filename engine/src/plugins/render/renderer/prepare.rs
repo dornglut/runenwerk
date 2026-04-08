@@ -1,5 +1,6 @@
 use super::*;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
+use crate::plugins::render::PreparedUiFrameContribution;
 use std::hash::{Hash, Hasher};
 
 impl Renderer {
@@ -7,22 +8,48 @@ impl Renderer {
         &self,
         device: &Device,
         queue: &Queue,
-        draw_list: &UiDrawList,
+        contribution: &PreparedUiFrameContribution,
         surface_width: f32,
         surface_height: f32,
     ) -> UiPreparedDraws {
         let surface_width_u32 = surface_width.max(1.0).round() as u32;
         let surface_height_u32 = surface_height.max(1.0).round() as u32;
-        let instances = Self::extract_rect_instances(draw_list);
-        let rect_instance_buffer = if instances.is_empty() {
-            None
-        } else {
-            Some(device.create_buffer_init(&util::BufferInitDescriptor {
-                label: Some("engine_ui_rect_instances"),
-                contents: bytemuck::cast_slice(&instances),
-                usage: BufferUsages::VERTEX,
-            }))
-        };
+        let flattened_instances = contribution
+            .submissions
+            .iter()
+            .flat_map(|submission| Self::extract_rect_instances(&submission.frame))
+            .collect::<Vec<_>>();
+        let mut batches_by_scissor = BTreeMap::<(u32, u32, u32, u32), Vec<RectInstanceRaw>>::new();
+        for instance in flattened_instances {
+            let scissor = instance
+                .clip
+                .map(|clip| Self::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
+                .unwrap_or_else(|| Some(Self::full_scissor(surface_width_u32, surface_height_u32)));
+            if let Some(scissor) = scissor {
+                batches_by_scissor
+                    .entry(scissor)
+                    .or_default()
+                    .push(instance.raw);
+            }
+        }
+        let rect_batches = batches_by_scissor
+            .into_iter()
+            .filter_map(|(scissor, instances)| {
+                if instances.is_empty() {
+                    return None;
+                }
+                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("engine_ui_rect_batch_instances"),
+                    contents: bytemuck::cast_slice(&instances),
+                    usage: BufferUsages::VERTEX,
+                });
+                Some(UiRectBatch {
+                    scissor,
+                    instance_count: instances.len() as u32,
+                    instance_buffer,
+                })
+            })
+            .collect::<Vec<_>>();
 
         if let Some(rect_pass) = self.rect_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -32,39 +59,8 @@ impl Renderer {
             queue.write_buffer(&rect_pass.screen_buffer, 0, bytemuck::bytes_of(&screen));
         }
 
-        if let Some(text_renderer) = self.text_renderer.as_ref() {
-            text_renderer.write_screen_uniform(queue, surface_width, surface_height);
-        }
-
-        let text_draws = if let Some(text_renderer) = self.text_renderer.as_ref() {
-            let full_scissor = Self::full_scissor(surface_width_u32, surface_height_u32);
-            let mut draws = Vec::new();
-            for cmd in &draw_list.commands {
-                let UiDrawCmd::Text { clip, .. } = cmd else {
-                    continue;
-                };
-                let scissor = clip
-                    .and_then(|clip| {
-                        Self::clip_to_scissor(clip, surface_width_u32, surface_height_u32)
-                    })
-                    .unwrap_or(full_scissor);
-                let single = UiDrawList {
-                    commands: vec![cmd.clone()],
-                };
-                if let Some((buffer, count)) = text_renderer.build_instance_buffer(device, &single)
-                {
-                    draws.push((buffer, count, scissor));
-                }
-            }
-            draws
-        } else {
-            Vec::new()
-        };
-
         UiPreparedDraws {
-            rect_instances: instances.len(),
-            rect_instance_buffer,
-            text_draws,
+            rect_batches,
             surface_size: (surface_width_u32, surface_height_u32),
         }
     }
@@ -84,8 +80,8 @@ impl Renderer {
         let (surface_width_u32, surface_height_u32) = view.target_size_px;
         let surface_width = surface_width_u32.max(1) as f32;
         let surface_height = surface_height_u32.max(1) as f32;
-        let empty_draw_list = UiDrawList::default();
-        let draw_list = prepared_frame.ui_draw_list().unwrap_or(&empty_draw_list);
+        let empty_ui = PreparedUiFrameContribution::default();
+        let ui = prepared_frame.ui().unwrap_or(&empty_ui);
 
         let mut feature_gates = BTreeMap::<String, FeatureExecutionGate>::new();
         let mut feature_runtime_signatures = BTreeMap::<String, u64>::new();
@@ -117,12 +113,11 @@ impl Renderer {
             .unwrap_or(0);
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
-        self.ensure_text_renderer(device, queue, surface_format);
         let surface_size = (surface_width_u32.max(1), surface_height_u32.max(1));
         let prepare_ui_start = Instant::now();
         let prepared_ui_current = {
             let _span = tracing::info_span!("renderer.prepare_ui_draws").entered();
-            self.prepare_ui_draws(device, queue, draw_list, surface_width, surface_height)
+            self.prepare_ui_draws(device, queue, ui, surface_width, surface_height)
         };
         let prepared_ui = self.resolve_ui_prepared_with_gate(prepared_ui_current, ui_gate);
         prepare_timings.prepare_ui_ms = prepare_ui_start.elapsed().as_secs_f32() * 1000.0;
@@ -187,8 +182,16 @@ fn hash_prepared_feature_contribution(
         }
         crate::plugins::render::PreparedFeaturePayload::Ui(value) => {
             "ui".hash(&mut hasher);
-            value.draw_list.commands.len().hash(&mut hasher);
-            value.rect_shader_asset_id.hash(&mut hasher);
+            value.submissions.len().hash(&mut hasher);
+
+            for submission in &value.submissions {
+                submission.producer_id.hash(&mut hasher);
+                submission.route.hash(&mut hasher);
+                submission.layer.hash(&mut hasher);
+                submission.priority.hash(&mut hasher);
+                submission.rect_shader_asset_id.hash(&mut hasher);
+                submission.primitive_count_hint().hash(&mut hasher);
+            }
         }
         crate::plugins::render::PreparedFeaturePayload::SceneRoute(value) => {
             "scene_route".hash(&mut hasher);

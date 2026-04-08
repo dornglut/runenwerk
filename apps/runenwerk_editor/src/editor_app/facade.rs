@@ -11,6 +11,12 @@ use crate::editor_panels::{
 	OutlinerPanelPresenter, OutlinerPanelState, ViewportPanelCommand,
 	ViewportPanelPresenter, ViewportPanelState, ViewportToolState,
 };
+use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState};
+use ui_input::UiInputEvent;
+use ui_math::UiRect;
+use ui_render_data::UiFrame;
+use ui_runtime::UiInputOutcome;
+use ui_theme::ThemeTokens;
 
 impl RunenwerkEditorApp {
 	pub fn outliner_state(&self) -> OutlinerPanelState {
@@ -85,5 +91,24 @@ impl RunenwerkEditorApp {
 		self.dispatch_viewport_interaction_command(
 			ViewportInteractionCommand::CancelInteraction,
 		)
+	}
+
+	pub fn build_shell_frame(
+		&self,
+		shell_state: &mut RunenwerkEditorShellState,
+		bounds: UiRect,
+		theme: &ThemeTokens,
+	) -> UiFrame {
+		RunenwerkEditorShellController::build_frame(self, shell_state, bounds, theme)
+	}
+
+	pub fn dispatch_shell_input(
+		&mut self,
+		shell_state: &mut RunenwerkEditorShellState,
+		bounds: UiRect,
+		theme: &ThemeTokens,
+		event: &UiInputEvent,
+	) -> Result<UiInputOutcome, &'static str> {
+		RunenwerkEditorShellController::dispatch_input(self, shell_state, bounds, theme, event)
 	}
 }

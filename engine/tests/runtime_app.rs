@@ -499,9 +499,9 @@ fn runtime_lifecycle_runs_startup_then_canonical_frame_order() {
 #[test]
 fn app_tracks_scene_registrations_without_legacy_runtime() {
     let mut app = App::headless();
-    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
-    app.add_scene_template("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
-    app.add_scene_template("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
+    app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
+    app.add_scene_template("engine/tests/fixtures/scene_templates/main_menu.ron");
+    app.add_scene_template("engine/tests/fixtures/scene_templates/main_menu.ron");
 
     assert_eq!(app.registered_scene_count(), 3);
 

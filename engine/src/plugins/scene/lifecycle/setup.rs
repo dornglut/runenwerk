@@ -2,7 +2,7 @@ use super::super::runtime::{
     SceneTemplateFlowResource, publish_scene_state, sync_overlay_viewport,
     sync_world_scene_context_from_session,
 };
-use crate::plugins::ui::domain::UiPresentationMode;
+use crate::plugins::scene::ui::UiPresentationMode;
 use crate::plugins::{SceneManager, SceneResource};
 use crate::runtime::{Res, ResMut, WindowState};
 use crate::{

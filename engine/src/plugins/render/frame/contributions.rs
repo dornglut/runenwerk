@@ -1,10 +1,10 @@
 use crate::plugins::render::features::{
     CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
     FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
-    PROCEDURAL_WORLD_RENDER_FEATURE_ID, RenderFeatureId, SCENE_ROUTE_RENDER_FEATURE_ID,
-    UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
+    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedUiFrameContribution, RenderFeatureId,
+    SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID,
+    WORLD_DRAW_RENDER_FEATURE_ID,
 };
-use crate::plugins::ui::domain::UiDrawList;
 use spatial::ChunkId;
 use std::collections::BTreeMap;
 
@@ -24,18 +24,17 @@ impl PreparedFrameContributions {
 
     pub fn insert_missing(&mut self, id: RenderFeatureId, fallback_policy: FeatureFallbackPolicy) {
         self.by_feature
-            .entry(id)
-            .or_insert_with(|| PreparedFeatureContribution {
-                status: FeatureContributionStatus::Missing,
-                fallback_policy,
-                payload: PreparedFeaturePayload::Empty,
-            });
+          .entry(id)
+          .or_insert_with(|| PreparedFeatureContribution {
+              status: FeatureContributionStatus::Missing,
+              fallback_policy,
+              payload: PreparedFeaturePayload::Empty,
+          });
     }
 
     pub fn insert_ui(
         &mut self,
-        draw_list: UiDrawList,
-        rect_shader_asset_id: Option<String>,
+        payload: PreparedUiFrameContribution,
         status: FeatureContributionStatus,
         fallback_policy: FeatureFallbackPolicy,
     ) {
@@ -44,10 +43,7 @@ impl PreparedFrameContributions {
             PreparedFeatureContribution {
                 status,
                 fallback_policy,
-                payload: PreparedFeaturePayload::Ui(PreparedUiFeatureContribution {
-                    draw_list,
-                    rect_shader_asset_id,
-                }),
+                payload: PreparedFeaturePayload::Ui(payload),
             },
         );
     }
@@ -200,60 +196,37 @@ impl PreparedFrameContributions {
         );
     }
 
-    pub fn ui_contribution(&self) -> Option<&PreparedFeatureContribution> {
-        self.by_feature
-            .get(&RenderFeatureId::new(UI_RENDER_FEATURE_ID))
-    }
-
-    pub fn scene_route_contribution(&self) -> Option<&PreparedFeatureContribution> {
-        self.by_feature
-            .get(&RenderFeatureId::new(SCENE_ROUTE_RENDER_FEATURE_ID))
-    }
-
-    pub fn ui_draw_list(&self) -> Option<&UiDrawList> {
-        let contribution = self.ui_contribution()?;
+    pub fn ui(&self) -> Option<&PreparedUiFrameContribution> {
+        let contribution = self.by_feature.get(&RenderFeatureId::new(UI_RENDER_FEATURE_ID))?;
         match contribution.payload {
             PreparedFeaturePayload::Ui(ref value)
-                if !matches!(
+            if !matches!(
                     contribution.status,
                     FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
                 ) =>
-            {
-                Some(&value.draw_list)
-            }
-            _ => None,
-        }
-    }
-
-    pub fn ui_rect_shader_asset_id(&self) -> Option<&str> {
-        let contribution = self.ui_contribution()?;
-        match contribution.payload {
-            PreparedFeaturePayload::Ui(ref value)
-                if !matches!(
-                    contribution.status,
-                    FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
-                ) =>
-            {
-                value.rect_shader_asset_id.as_deref()
-            }
+                {
+                    Some(value)
+                }
             _ => None,
         }
     }
 
     pub fn scene_route_labels(&self) -> Option<(&str, &str)> {
-        let contribution = self.scene_route_contribution()?;
+        let contribution = self
+          .by_feature
+          .get(&RenderFeatureId::new(SCENE_ROUTE_RENDER_FEATURE_ID))?;
         match contribution.payload {
             PreparedFeaturePayload::SceneRoute(ref value)
-                if !matches!(
+            if !matches!(
                     contribution.status,
                     FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
                 ) =>
-            {
-                Some((
-                    value.world_scene_label.as_str(),
-                    value.overlay_scene_label.as_str(),
-                ))
-            }
+                {
+                    Some((
+                        value.world_scene_label.as_str(),
+                        value.overlay_scene_label.as_str(),
+                    ))
+                }
             _ => None,
         }
     }
@@ -309,7 +282,7 @@ impl Default for PreparedFeatureGate {
 pub enum PreparedFeaturePayload {
     #[default]
     Empty,
-    Ui(PreparedUiFeatureContribution),
+    Ui(PreparedUiFrameContribution),
     SceneRoute(PreparedSceneRouteContribution),
     Draw(PreparedDrawFeatureContribution),
     World(PreparedWorldFeatureContribution),
@@ -319,12 +292,6 @@ pub enum PreparedFeaturePayload {
     WindFields(PreparedWindFieldFeatureContribution),
     Material(PreparedMaterialFeatureContribution),
     Deformation(PreparedDeformationFeatureContribution),
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PreparedUiFeatureContribution {
-    pub draw_list: UiDrawList,
-    pub rect_shader_asset_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]

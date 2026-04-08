@@ -1,5 +1,4 @@
 use crate::plugins::InputState;
-use crate::plugins::ui::domain::UiDrawCmd;
 // Owner: Engine Scene Plugin - Tests
 use super::super::domain::{QuestState, WorldToOverlayMessage};
 use super::super::{
@@ -7,6 +6,7 @@ use super::super::{
     capture_scene_simulation_snapshot, format_world_message, switch_scene_by_id,
 };
 use crate::prelude::*;
+use ui_render_data::UiPrimitive;
 use winit::event::{ElementState, MouseButton};
 
 #[test]
@@ -171,9 +171,9 @@ fn scene_simulation_delta_round_trips_back_to_the_current_snapshot() {
 }
 
 #[test]
-fn scene_registered_apps_publish_overlay_draw_list_with_buttons() {
+fn scene_registered_apps_publish_overlay_frame_with_buttons() {
     let mut app = App::headless();
-    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
+    app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
     app.add_plugin(ScenePlugin);
 
     let app = app.run_for_frames(1).expect("scene plugin should run");
@@ -190,40 +190,57 @@ fn scene_registered_apps_publish_overlay_draw_list_with_buttons() {
         manager.overlay_visible(),
         "overlay should auto-show for scene catalog apps"
     );
-    let commands = &manager.overlay_runtime.ui.draw_list.commands;
+    let frame = &manager.overlay_runtime.ui.frame;
+    assert!(!frame.is_empty(), "overlay frame should not be empty");
+    let primitives = frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .collect::<Vec<_>>();
     assert!(
-        !commands.is_empty(),
-        "overlay draw list should not be empty"
-    );
-    assert!(
-        commands
+        primitives
             .iter()
-            .any(|cmd| matches!(cmd, UiDrawCmd::Rect { .. })),
-        "overlay draw list should include rect commands"
+            .any(|primitive| matches!(primitive, UiPrimitive::Rect(_))),
+        "overlay frame should include rect primitives"
     );
     assert!(
-        commands
+        primitives
             .iter()
-            .any(|cmd| matches!(cmd, UiDrawCmd::Text { .. })),
-        "overlay draw list should include text commands"
+            .any(|primitive| matches!(primitive, UiPrimitive::GlyphRun(_))),
+        "overlay frame should include glyph-run primitives"
     );
     assert!(
-        commands.iter().any(|cmd| {
+        primitives.iter().any(|primitive| {
             matches!(
-                cmd,
-                UiDrawCmd::Text { content, .. } if content.contains("Start") || content.contains("Settings")
+                primitive,
+                UiPrimitive::GlyphRun(run)
+                    if run
+                        .glyph_run
+                        .glyphs
+                        .iter()
+                        .map(|glyph| glyph.ch)
+                        .collect::<String>()
+                        .contains("Start")
+                        || run
+                            .glyph_run
+                            .glyphs
+                            .iter()
+                            .map(|glyph| glyph.ch)
+                            .collect::<String>()
+                            .contains("Settings")
             )
         }),
-        "overlay draw list should include scene-template button labels"
+        "overlay frame should include scene-template button labels"
     );
 }
 
 #[test]
 fn scene_template_buttons_switch_scene_on_click() {
     let mut app = App::headless();
-    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/main_menu.ron");
-    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/settings_menu.ron");
-    app.add_scene("engine/examples/scene_manager_ui/assets/scenes/game_scene.ron");
+    app.add_scene("engine/tests/fixtures/scene_templates/main_menu.ron");
+    app.add_scene("engine/tests/fixtures/scene_templates/settings_menu.ron");
+    app.add_scene("engine/tests/fixtures/scene_templates/game_scene.ron");
     app.add_plugin(ScenePlugin);
 
     let mut app = app.run_for_frames(1).expect("scene plugin should run");
@@ -240,7 +257,7 @@ fn scene_template_buttons_switch_scene_on_click() {
         let transform = manager
             .overlay_runtime
             .world
-            .get::<crate::plugins::ui::domain::UiTransform>(
+            .get::<crate::plugins::scene::ui::UiTransform>(
                 manager.overlay_runtime.ui.confirm_button,
             )
             .expect("secondary button transform should exist");

@@ -1,7 +1,7 @@
 use crate::SceneCatalog;
 use crate::plugins::SceneManager;
 use crate::plugins::scene::domain::SceneTemplateUiEvent;
-use crate::plugins::ui::domain::{UiStyle, UiStyleTemplate, UiTextTemplate};
+use crate::plugins::scene::ui::{UiStyle, UiStyleTemplate, UiTextTemplate};
 use anyhow::{Context, anyhow};
 use serde::Deserialize;
 use serde::de::Deserializer;
@@ -300,7 +300,6 @@ impl SceneTemplateFlowResource {
             let is_gameplay_scene = active == "game_scene";
             manager.world.paused = !is_gameplay_scene;
             manager.set_active_overlay_visible(true);
-            manager.overlay_runtime.ui.editor.status = format!("editor: active scene {active}");
         }
 
         Ok(())
@@ -318,7 +317,6 @@ fn publish_scene_template_event(
         .channels
         .overlay_console_lines
         .push(format!("[scene-event] {name}"));
-    manager.overlay_runtime.ui.editor.status = format!("editor: event {name}");
     manager
         .overlay_runtime
         .world
@@ -617,10 +615,10 @@ fn resolve_relative_component_path(base_dir: &Path, component_path: &str) -> Pat
 
 fn apply_style_patch(style: &mut UiStyle, patch: &UiStyleTemplate) {
     if let Some(color) = patch.bg_color {
-        style.bg_color = [color.0, color.1, color.2, color.3];
+        style.bg_color = color;
     }
     if let Some(color) = patch.border_color {
-        style.border_color = [color.0, color.1, color.2, color.3];
+        style.border_color = color;
     }
     if let Some(width) = patch.border_width {
         style.border_width = width.max(0.0);
@@ -632,7 +630,7 @@ fn apply_style_patch(style: &mut UiStyle, patch: &UiStyleTemplate) {
 
 fn apply_text_patch(style: &mut SceneTemplateTextStyle, patch: &UiTextTemplate) {
     if let Some(color) = patch.color {
-        style.color = [color.0, color.1, color.2, color.3];
+        style.color = color;
     }
     if let Some(size) = patch.size {
         style.size = size.max(1.0);

@@ -4,7 +4,6 @@ use crate::plugins::render::frame::PreparedRenderFrame;
 use crate::plugins::render::graph::CompiledRenderFlowPlan;
 use crate::plugins::render::inspect::{PassTimingSample, RuntimeResourceInspectionEntry};
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
-use crate::plugins::ui::domain::{FileFontProvider, TextRenderer, UiDrawCmd, UiDrawList};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use std::collections::BTreeMap;
@@ -181,12 +180,18 @@ impl MeshPrepareHotPath {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct RectInstanceRaw {
     rect: [f32; 4],
     color: [f32; 4],
     radius: f32,
     _pad: [f32; 3],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FlattenedUiRectInstance {
+    raw: RectInstanceRaw,
+    clip: Option<[f32; 4]>,
 }
 
 #[repr(C)]
@@ -203,11 +208,16 @@ struct RectPass {
     screen_bind_group: BindGroup,
 }
 
+#[derive(Debug, Clone)]
+struct UiRectBatch {
+    scissor: (u32, u32, u32, u32),
+    instance_count: u32,
+    instance_buffer: Buffer,
+}
+
 #[derive(Debug, Clone, Default)]
 struct UiPreparedDraws {
-    rect_instances: usize,
-    rect_instance_buffer: Option<Buffer>,
-    text_draws: Vec<(Buffer, u32, (u32, u32, u32, u32))>,
+    rect_batches: Vec<UiRectBatch>,
     surface_size: (u32, u32),
 }
 
@@ -243,7 +253,6 @@ pub struct Renderer {
     rect_pass: Option<RectPass>,
     rect_pass_format: Option<TextureFormat>,
     rect_pass_shader_revision: u64,
-    text_renderer: Option<TextRenderer>,
     text_renderer_format: Option<TextureFormat>,
     flow_runtime_cache: BTreeMap<String, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
@@ -317,6 +326,7 @@ mod setup;
 
 pub mod frame_bindings;
 pub mod submit;
+pub use frame_bindings::RenderFrameDataRegistry;
 
 #[cfg(test)]
 mod tests {

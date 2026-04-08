@@ -1,0 +1,8 @@
+[package]
+name = "ui_render_data"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ui_math.workspace = true
+ui_text.workspace = true

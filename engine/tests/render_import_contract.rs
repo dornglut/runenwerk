@@ -28,24 +28,22 @@ fn external_imported_texture_is_rejected_in_active_runtime_path() {
 #[test]
 fn builtin_ui_composite_requires_canonical_read_write_contract() {
     let mut graph = RenderFlowGraph::new("import.contract.ui");
-    graph.add_resource(RenderResourceDescriptor::imported_ui_draw_list(
-        "ui.draw_list",
-    ));
     graph.add_resource(RenderResourceDescriptor::imported_surface_color(
         "surface.color",
     ));
+    graph.add_resource(RenderResourceDescriptor::color_target("ui.output"));
 
     let mut pass = RenderPassNode::new("ui.composite", RenderPassKind::BuiltinUiComposite);
     pass.reads.push(RenderResourceId::new("surface.color"));
-    pass.writes.push(RenderResourceId::new("ui.draw_list"));
+    pass.writes.push(RenderResourceId::new("ui.output"));
     graph.add_pass(pass);
 
     let err = validate_flow_graph(&graph).expect_err("flow must enforce UI composite contract");
     assert!(
         err.issues
             .iter()
-            .any(|issue| issue.contains("must read exactly 'ui.draw_list'")),
-        "expected canonical UI read contract issue, got {:?}",
+            .any(|issue| issue.contains("must not declare reads(...); UI input comes from PreparedRenderFrame::ui()")),
+        "expected canonical UI reads contract issue, got {:?}",
         err.issues
     );
     assert!(

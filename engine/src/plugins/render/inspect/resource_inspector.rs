@@ -91,7 +91,6 @@ pub fn resource_kind_name(
             match value.semantic {
                 ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
                 ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
-                ImportedTextureSemantic::BuiltinUiDrawList => "imported_texture(ui_draw_list)",
                 ImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
                 ImportedTextureSemantic::External => "imported_texture(external)",
             }

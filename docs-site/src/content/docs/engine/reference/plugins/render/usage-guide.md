@@ -64,7 +64,7 @@ Feature fallback policy is resolved in prepare (`Ready | Stale | Disabled | Miss
 - feature/domain contributions (`PreparedFrameContributions`)
 - shader revision snapshot (`PreparedShaderSnapshot`)
 
-Phase-1 UI note:
+UI note:
 
-- UI currently travels as `PreparedFeaturePayload::Ui` carrying an owned `UiDrawList`.
-- Long-term direction is extracted backend-neutral prepared UI input.
+- UI travels as `PreparedFeaturePayload::Ui` carrying `PreparedUiFrameContribution`.
+- Each submission carries an owned `UiFrame` payload with ordered route/layer/priority metadata.

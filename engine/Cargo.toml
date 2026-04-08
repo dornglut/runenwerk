@@ -32,6 +32,9 @@ scheduler = { path = "../domain/scheduler" }
 spatial = { path = "../domain/spatial" }
 world_ops = { path = "../domain/world_ops" }
 world_sdf = { path = "../domain/world_sdf" }
+ui_math = { path = "../domain/ui/ui_math" }
+ui_render_data = { path = "../domain/ui/ui_render_data" }
+ui_text = { path = "../domain/ui/ui_text" }
 engine_render_macros = { path = "../engine_render_macros" }
 engine_replay = { path = "../net/engine_history" }
 engine_net = { path = "../net/engine_net" }
@@ -41,10 +44,6 @@ crossbeam-channel = "0.5.15"
 [dev-dependencies]
 criterion = "0.5.1"
 trybuild = "1.0.114"
-
-[[example]]
-name = "scene_manager_ui"
-path = "examples/scene_manager_ui/main.rs"
 
 [[example]]
 name = "game_of_life_sdf"

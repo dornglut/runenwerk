@@ -13,9 +13,7 @@ pub mod scene;
 pub mod scheduler_diagnostics;
 pub(crate) mod shared;
 pub mod time;
-pub mod ui;
 pub mod world;
-
 pub use debug_metrics::*;
 pub use fixed_step::*;
 pub use grid::*;
@@ -25,7 +23,6 @@ pub use replay::*;
 pub use scene::*;
 pub use scheduler_diagnostics::*;
 pub use time::*;
-pub use ui::*;
 pub use world::*;
 
 use crate::plugin::Plugin;

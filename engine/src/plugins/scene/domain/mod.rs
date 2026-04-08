@@ -1,4 +1,4 @@
-use crate::plugins::ui::domain::{
+use crate::plugins::scene::ui::{
     ConsoleUiRuntimeState, initialize_console_ui, load_console_template,
 };
 use anyhow::Result;
@@ -491,7 +491,7 @@ mod tests {
         assert!(
             runtime
                 .world
-                .get::<crate::plugins::ui::domain::UiNode>(runtime.ui.root)
+                .get::<crate::plugins::scene::ui::UiNode>(runtime.ui.root)
                 .is_some()
         );
     }

@@ -29,7 +29,6 @@ pub fn inspect_texture_resources(flow: &RenderFlow) -> Vec<TextureResourceView> 
                 RenderResourceDescriptor::ImportedTexture(value) => Some(match value.semantic {
                     ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
                     ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
-                    ImportedTextureSemantic::BuiltinUiDrawList => "imported_texture(ui_draw_list)",
                     ImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
                     ImportedTextureSemantic::External => "imported_texture(external)",
                 }),

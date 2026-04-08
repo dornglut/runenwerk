@@ -2,7 +2,7 @@ use engine::plugins::ScenePlugin;
 use engine::prelude::*;
 
 #[test]
-fn ui_plugins_populate_overlay_draw_list_when_overlay_is_visible() {
+fn ui_plugins_populate_overlay_state_when_overlay_is_visible() {
     let mut app = App::headless();
     app.add_plugin(ScenePlugin);
     app.world_mut()

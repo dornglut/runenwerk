@@ -1,0 +1,14 @@
+[package]
+name = "editor_shell"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+editor_core.workspace = true
+editor_inspector.workspace = true
+editor_scene.workspace = true
+editor_viewport.workspace = true
+ui_runtime.workspace = true
+ui_theme.workspace = true
+ui_text.workspace = true
+ui_math.workspace = true

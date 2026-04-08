@@ -6,6 +6,7 @@ pub mod replay;
 pub mod runtime;
 pub mod snapshot;
 pub mod types;
+pub mod ui;
 
 pub use plugin::*;
 pub(crate) use replay::*;

@@ -1,4 +1,4 @@
-//! File: domain/ui/ui_math/src/point.rs
+//! File: domain/ui/ui_math/src/pointer
 //! Purpose: Shared 2D point type.
 
 use crate::UiVector;

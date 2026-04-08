@@ -223,13 +223,6 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn imported_ui_draw_list(id: impl Into<RenderResourceId>) -> Self {
-        Self::ImportedTexture(ImportedTextureDescriptor {
-            id: id.into(),
-            semantic: ImportedTextureSemantic::BuiltinUiDrawList,
-        })
-    }
-
     pub fn imported_history_texture(id: impl Into<RenderResourceId>) -> Self {
         Self::ImportedTexture(ImportedTextureDescriptor {
             id: id.into(),

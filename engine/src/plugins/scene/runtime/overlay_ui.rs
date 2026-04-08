@@ -1,18 +1,25 @@
-use super::template_flow::{SceneTemplateButtonSlot, SceneTemplateFlowResource};
-use crate::plugins::SceneManager;
-use crate::plugins::input::InputState;
-use crate::plugins::ui::domain::{
-    UiDrawCmd, UiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
+use super::template_flow::{
+    SceneTemplateButtonSlot, SceneTemplateButtonSpec, SceneTemplateFlowResource,
+    SceneTemplateSceneSpec,
+};
+use crate::plugins::time::domain::Time;
+use crate::plugins::scene::ui::{
+    ConsoleUiRuntimeState, UiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
     reload_console_template_if_changed,
 };
-use crate::prelude::Time;
+use crate::plugins::{InputState, SceneManager};
+use ui_math::{UiPoint, UiRect, UiSize};
+use ui_render_data::{
+    BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer,
+    UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
+};
+use ui_text::{FontId, GlyphRun, PositionedGlyph};
 
 const TEXT_PADDING_X: f32 = 10.0;
 const TEXT_PADDING_Y: f32 = 8.0;
 const MIN_INPUT_WIDTH: f32 = 120.0;
 
-// Owner: Engine Scene Plugin - Overlay UI Composition
-pub(crate) fn rebuild_overlay_draw_list(
+pub(crate) fn rebuild_overlay_ui_frame(
     manager: &mut SceneManager,
     scene_templates: &SceneTemplateFlowResource,
 ) -> anyhow::Result<()> {
@@ -36,22 +43,71 @@ pub(crate) fn rebuild_overlay_draw_list(
     apply_runtime_layout(world, ui);
 
     if !overlay_visible {
-        ui.draw_list.commands.clear();
+        ui.frame = UiFrame::default();
         return Ok(());
     }
 
-    let mut commands = Vec::new();
-    push_panel_commands(world, ui.root, &mut commands);
+    let mut layer = UiLayer::new(UiLayerId(0));
+    let mut primitive_order = 0u32;
+    push_panel_primitives(world, ui.root, &mut layer, &mut primitive_order);
     if template_mode {
-        push_text_block_commands(world, ui.scrollback, false, false, &mut commands);
-        push_text_block_commands(world, ui.input, false, true, &mut commands);
-        push_text_block_commands(world, ui.confirm_button, false, true, &mut commands);
+        push_text_block_primitives(
+            world,
+            ui.scrollback,
+            false,
+            false,
+            &mut layer,
+            &mut primitive_order,
+        );
+        push_text_block_primitives(
+            world,
+            ui.input,
+            false,
+            true,
+            &mut layer,
+            &mut primitive_order,
+        );
+        push_text_block_primitives(
+            world,
+            ui.confirm_button,
+            false,
+            true,
+            &mut layer,
+            &mut primitive_order,
+        );
     } else {
-        push_text_block_commands(world, ui.scrollback, true, false, &mut commands);
-        push_text_block_commands(world, ui.input, true, false, &mut commands);
-        push_text_block_commands(world, ui.confirm_button, false, true, &mut commands);
+        push_text_block_primitives(
+            world,
+            ui.scrollback,
+            true,
+            false,
+            &mut layer,
+            &mut primitive_order,
+        );
+        push_text_block_primitives(
+            world,
+            ui.input,
+            true,
+            false,
+            &mut layer,
+            &mut primitive_order,
+        );
+        push_text_block_primitives(
+            world,
+            ui.confirm_button,
+            false,
+            true,
+            &mut layer,
+            &mut primitive_order,
+        );
     }
-    ui.draw_list.commands = commands;
+
+    let surface_size = UiSize::new(ui.screen_size.0.max(1.0), ui.screen_size.1.max(1.0));
+    ui.frame = UiFrame::with_surfaces(vec![UiSurface::with_layers(
+        UiSurfaceId(0),
+        surface_size,
+        vec![layer],
+    )]);
     Ok(())
 }
 
@@ -117,7 +173,7 @@ fn hold_trigger_name(slot: SceneTemplateButtonSlot) -> &'static str {
 
 fn hit_test_button_slot(
     world: &ecs::World,
-    ui: &crate::plugins::ui::domain::ConsoleUiRuntimeState,
+    ui: &ConsoleUiRuntimeState,
     pointer: (f32, f32),
 ) -> Option<SceneTemplateButtonSlot> {
     if contains_point(world, ui.confirm_button, pointer) {
@@ -147,8 +203,8 @@ fn contains_point(world: &ecs::World, entity: ecs::Entity, pointer: (f32, f32)) 
 
 fn apply_scene_template_visuals(
     world: &mut ecs::World,
-    ui: &mut crate::plugins::ui::domain::ConsoleUiRuntimeState,
-    scene: &crate::plugins::scene::runtime::SceneTemplateSceneSpec,
+    ui: &mut ConsoleUiRuntimeState,
+    scene: &SceneTemplateSceneSpec,
 ) {
     ui.presentation_mode = UiPresentationMode::CenteredDemo;
     ui.layout_dirty = true;
@@ -179,7 +235,7 @@ fn apply_scene_template_visuals(
 fn apply_template_button(
     world: &mut ecs::World,
     entity: ecs::Entity,
-    button: Option<&crate::plugins::scene::runtime::SceneTemplateButtonSpec>,
+    button: Option<&SceneTemplateButtonSpec>,
 ) {
     if let Ok(mut entity_ref) = world.entity_mut(entity) {
         if let Some(mut node) = entity_ref.get_mut::<UiNode>() {
@@ -198,10 +254,7 @@ fn apply_template_button(
     }
 }
 
-fn apply_runtime_layout(
-    world: &mut ecs::World,
-    ui: &mut crate::plugins::ui::domain::ConsoleUiRuntimeState,
-) {
+fn apply_runtime_layout(world: &mut ecs::World, ui: &mut ConsoleUiRuntimeState) {
     if !ui.layout_dirty {
         return;
     }
@@ -237,8 +290,8 @@ fn apply_runtime_layout(
     let logs_h = (panel_h - inner_padding * 3.0 - input_height - footer_offset).max(1.0);
 
     let input_y = logs_y + logs_h + inner_padding;
-    let target_input_width = (logs_w - button_width - input_button_gap)
-        .clamp(MIN_INPUT_WIDTH, logs_w.max(MIN_INPUT_WIDTH));
+    let target_input_width =
+        (logs_w - button_width - input_button_gap).clamp(MIN_INPUT_WIDTH, logs_w.max(MIN_INPUT_WIDTH));
     let final_button_width = (logs_w - target_input_width - input_button_gap).max(1.0);
 
     set_transform(
@@ -293,10 +346,7 @@ fn set_transform(world: &mut ecs::World, entity: ecs::Entity, transform: UiTrans
     }
 }
 
-fn sync_runtime_text(
-    world: &mut ecs::World,
-    ui: &mut crate::plugins::ui::domain::ConsoleUiRuntimeState,
-) {
+fn sync_runtime_text(world: &mut ecs::World, ui: &mut ConsoleUiRuntimeState) {
     if ui.log_lines.is_empty() {
         ui.log_lines.push("[world] scene overlay ready".to_string());
     }
@@ -335,7 +385,12 @@ fn sync_runtime_text(
     }
 }
 
-fn push_panel_commands(world: &ecs::World, entity: ecs::Entity, commands: &mut Vec<UiDrawCmd>) {
+fn push_panel_primitives(
+    world: &ecs::World,
+    entity: ecs::Entity,
+    layer: &mut UiLayer,
+    primitive_order: &mut u32,
+) {
     let Some(node) = world.get::<UiNode>(entity) else {
         return;
     };
@@ -345,24 +400,34 @@ fn push_panel_commands(world: &ecs::World, entity: ecs::Entity, commands: &mut V
     let Some(transform) = world.get::<UiTransform>(entity) else {
         return;
     };
-    if let Some(style) = world.get::<UiStyle>(entity) {
-        commands.push(UiDrawCmd::Rect {
-            x: transform.x,
-            y: transform.y,
-            w: transform.w.max(0.0),
-            h: transform.h.max(0.0),
-            color: style.bg_color,
-            radius: style.radius.max(0.0),
-        });
-    }
+    let Some(style) = world.get::<UiStyle>(entity) else {
+        return;
+    };
+
+    push_rect(
+        layer,
+        primitive_order,
+        UiRect::new(transform.x, transform.y, transform.w.max(0.0), transform.h.max(0.0)),
+        style.bg_color,
+        style.radius.max(0.0),
+    );
+    push_border(
+        layer,
+        primitive_order,
+        UiRect::new(transform.x, transform.y, transform.w.max(0.0), transform.h.max(0.0)),
+        style.border_color,
+        style.border_width.max(0.0),
+        style.radius.max(0.0),
+    );
 }
 
-fn push_text_block_commands(
+fn push_text_block_primitives(
     world: &ecs::World,
     entity: ecs::Entity,
     clip_text: bool,
     center_text: bool,
-    commands: &mut Vec<UiDrawCmd>,
+    layer: &mut UiLayer,
+    primitive_order: &mut u32,
 ) {
     let Some(node) = world.get::<UiNode>(entity) else {
         return;
@@ -374,37 +439,135 @@ fn push_text_block_commands(
         return;
     };
 
+    let rect = UiRect::new(transform.x, transform.y, transform.w.max(0.0), transform.h.max(0.0));
+
     if let Some(style) = world.get::<UiStyle>(entity) {
-        commands.push(UiDrawCmd::Rect {
-            x: transform.x,
-            y: transform.y,
-            w: transform.w.max(0.0),
-            h: transform.h.max(0.0),
-            color: style.bg_color,
-            radius: style.radius.max(0.0),
-        });
+        push_rect(
+            layer,
+            primitive_order,
+            rect,
+            style.bg_color,
+            style.radius.max(0.0),
+        );
+        push_border(
+            layer,
+            primitive_order,
+            rect,
+            style.border_color,
+            style.border_width.max(0.0),
+            style.radius.max(0.0),
+        );
     }
 
     let Some(text) = world.get::<UiText>(entity) else {
         return;
     };
 
-    let (x, y) = if center_text {
-        let approx_text_w = text.content.chars().count() as f32 * text.size.max(1.0) * 0.55;
-        let centered_x = transform.x + (transform.w - approx_text_w).max(0.0) * 0.5;
-        let centered_y = transform.y + (transform.h - text.size.max(1.0)).max(0.0) * 0.5;
-        (centered_x, centered_y)
-    } else {
-        (transform.x + TEXT_PADDING_X, transform.y + TEXT_PADDING_Y)
-    };
+    let clip_rect = clip_text.then_some(rect);
+    if let Some(clip) = clip_rect {
+        layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+            rect: clip,
+            sort_key: next_sort_key(primitive_order),
+        }));
+    }
 
-    let clip = clip_text.then_some([transform.x, transform.y, transform.w, transform.h]);
-    commands.push(UiDrawCmd::Text {
-        x,
-        y,
-        content: text.content.clone(),
-        color: text.color,
-        size: text.size.max(1.0),
-        clip,
-    });
+    let line_height = (text.size.max(1.0) * 1.25).max(1.0);
+    for (index, line) in text.content.split('\n').enumerate() {
+        let y = transform.y + TEXT_PADDING_Y + line_height * index as f32;
+        let x = if center_text {
+            let approx_text_w = line.chars().count() as f32 * text.size.max(1.0) * 0.55;
+            transform.x + (transform.w - approx_text_w).max(0.0) * 0.5
+        } else {
+            transform.x + TEXT_PADDING_X
+        };
+        let glyph_run = estimate_glyph_run(line, x, y, text.size.max(1.0));
+        layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
+            glyph_run,
+            clip_rect,
+            UiPaint::rgba(text.color[0], text.color[1], text.color[2], text.color[3]),
+            default_draw_key(),
+            next_sort_key(primitive_order),
+        )));
+    }
+
+    if clip_rect.is_some() {
+        layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
+            sort_key: next_sort_key(primitive_order),
+        }));
+    }
+}
+
+fn estimate_glyph_run(line: &str, x: f32, y: f32, font_size: f32) -> GlyphRun {
+    let advance = font_size.max(1.0) * 0.55;
+    let baseline_y = y + font_size.max(1.0);
+    let glyphs = line
+        .chars()
+        .enumerate()
+        .map(|(index, ch)| PositionedGlyph {
+            ch,
+            origin: UiPoint::new(x + advance * index as f32, baseline_y),
+            advance,
+        })
+        .collect::<Vec<_>>();
+
+    GlyphRun {
+        font_id: FontId(0),
+        font_size,
+        glyphs,
+        size: UiSize::new(advance * line.chars().count() as f32, font_size * 1.25),
+    }
+}
+
+fn push_rect(
+    layer: &mut UiLayer,
+    primitive_order: &mut u32,
+    rect: UiRect,
+    color: [f32; 4],
+    radius: f32,
+) {
+    if color[3] <= f32::EPSILON || rect.width <= f32::EPSILON || rect.height <= f32::EPSILON {
+        return;
+    }
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        rect,
+        radius,
+        UiPaint::rgba(color[0], color[1], color[2], color[3]),
+        default_draw_key(),
+        next_sort_key(primitive_order),
+    )));
+}
+
+fn push_border(
+    layer: &mut UiLayer,
+    primitive_order: &mut u32,
+    rect: UiRect,
+    color: [f32; 4],
+    width: f32,
+    radius: f32,
+) {
+    if color[3] <= f32::EPSILON
+        || width <= f32::EPSILON
+        || rect.width <= f32::EPSILON
+        || rect.height <= f32::EPSILON
+    {
+        return;
+    }
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        rect,
+        radius,
+        width,
+        UiPaint::rgba(color[0], color[1], color[2], color[3]),
+        default_draw_key(),
+        next_sort_key(primitive_order),
+    )));
+}
+
+fn default_draw_key() -> UiDrawKey {
+    UiDrawKey::new(0, None)
+}
+
+fn next_sort_key(primitive_order: &mut u32) -> UiSortKey {
+    let key = UiSortKey::new(0, 0, *primitive_order);
+    *primitive_order = primitive_order.saturating_add(1);
+    key
 }

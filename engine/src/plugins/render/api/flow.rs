@@ -12,7 +12,6 @@ use std::collections::BTreeMap;
 
 pub const SURFACE_COLOR_RESOURCE_ID: &str = "surface.color";
 pub const SURFACE_DEPTH_RESOURCE_ID: &str = "surface.depth";
-pub const BUILTIN_UI_DRAW_LIST_RESOURCE_ID: &str = "ui.draw_list";
 
 #[derive(Debug, Clone)]
 struct PingPongStorageRegistration {
@@ -36,7 +35,7 @@ impl RenderFlow {
 
     pub fn with_state<T>(mut self) -> Self
     where
-        T: ecs::Resource + 'static,
+      T: ecs::Resource + 'static,
     {
         self.graph.resources.add_state_resource::<T>();
         self
@@ -56,10 +55,7 @@ impl RenderFlow {
         self
     }
 
-    pub fn with_builtin_ui(mut self) -> Self {
-        self.upsert_resource(RenderResourceDescriptor::imported_ui_draw_list(
-            BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
-        ));
+    pub fn with_builtin_ui(self) -> Self {
         self
     }
 
@@ -69,7 +65,7 @@ impl RenderFlow {
         len: u64,
     ) -> (Self, StorageArrayHandle<T>)
     where
-        T: GpuParams + 'static,
+      T: GpuParams + 'static,
     {
         let id = RenderResourceId::new(name.into());
         self.upsert_resource(RenderResourceDescriptor::storage_buffer_array::<T>(
@@ -81,7 +77,7 @@ impl RenderFlow {
 
     pub fn double_buffer_storage_array<T>(mut self, name: impl Into<String>, len: u64) -> Self
     where
-        T: GpuParams + 'static,
+      T: GpuParams + 'static,
     {
         let base = name.into();
         let a_id = RenderResourceId::new(format!("{base}.a"));
@@ -97,7 +93,7 @@ impl RenderFlow {
         ));
 
         self.ping_pong_storage
-            .insert(base.clone(), PingPongStorageRegistration { a_id, b_id });
+          .insert(base.clone(), PingPongStorageRegistration { a_id, b_id });
         self
     }
 
@@ -107,14 +103,14 @@ impl RenderFlow {
         len: u64,
     ) -> (Self, DoubleBufferHandle<T>)
     where
-        T: GpuParams + 'static,
+      T: GpuParams + 'static,
     {
         let base = name.into();
         let flow = self.double_buffer_storage_array::<T>(base.clone(), len);
         let pair = flow
-            .ping_pong_storage
-            .get(base.as_str())
-            .expect("double buffer registration should exist");
+          .ping_pong_storage
+          .get(base.as_str())
+          .expect("double buffer registration should exist");
         let handle = DoubleBufferHandle::new(
             base,
             StorageArrayHandle::new(pair.a_id.clone()),
@@ -137,8 +133,8 @@ impl RenderFlow {
 
     pub fn validate(self) -> anyhow::Result<Self> {
         self.validation_report()
-            .map_err(anyhow::Error::new)
-            .map(|_| self)
+          .map_err(anyhow::Error::new)
+          .map(|_| self)
     }
 
     pub fn validation_report(&self) -> Result<FlowValidationReport, RenderFlowValidationError> {
@@ -201,18 +197,18 @@ impl RenderFlow {
         pass_id: &RenderPassId,
     ) -> UniformHandle<U>
     where
-        U: GpuParams + 'static,
+      U: GpuParams + 'static,
     {
         let mut index = 0usize;
         loop {
             let candidate =
-                RenderResourceId::new(format!("{}.uniform.{}", pass_id.as_str(), index));
+              RenderResourceId::new(format!("{}.uniform.{}", pass_id.as_str(), index));
             if self
-                .graph
-                .resources
-                .resources
-                .iter()
-                .all(|resource| resource.id() != &candidate)
+              .graph
+              .resources
+              .resources
+              .iter()
+              .all(|resource| resource.id() != &candidate)
             {
                 self.upsert_resource(RenderResourceDescriptor::uniform_buffer::<U>(
                     candidate.clone(),
@@ -228,8 +224,8 @@ impl RenderFlow {
         name: &str,
     ) -> Option<(RenderResourceId, RenderResourceId)> {
         self.ping_pong_storage
-            .get(name)
-            .map(|pair| (pair.a_id.clone(), pair.b_id.clone()))
+          .get(name)
+          .map(|pair| (pair.a_id.clone(), pair.b_id.clone()))
     }
 
     pub(crate) fn ensure_surface_color_resource(&mut self) {
@@ -238,20 +234,14 @@ impl RenderFlow {
         ));
     }
 
-    pub(crate) fn ensure_builtin_ui_resource(&mut self) {
-        self.upsert_resource(RenderResourceDescriptor::imported_ui_draw_list(
-            BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
-        ));
-    }
-
     fn upsert_resource(&mut self, descriptor: RenderResourceDescriptor) {
         let id = descriptor.id().clone();
         if self
-            .graph
-            .resources
-            .resources
-            .iter()
-            .all(|existing| existing.id() != &id)
+          .graph
+          .resources
+          .resources
+          .iter()
+          .all(|existing| existing.id() != &id)
         {
             self.graph.add_resource(descriptor);
         }

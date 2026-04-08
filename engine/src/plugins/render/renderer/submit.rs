@@ -1,33 +1,11 @@
-use crate::plugins::render::composition::RenderFlowRegistryResource;
-use crate::plugins::render::features::{
-    CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
-    FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
-    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedCaveFeatureResource,
-    PreparedDeformationFeatureResource, PreparedDetailFeatureResource, PreparedDrawFeatureResource,
-    PreparedMaterialFeatureResource, PreparedProceduralWorldFeatureResource,
-    PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureId,
-    RenderFeatureRegistryResource, SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID,
-    WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
-};
-use crate::plugins::render::frame::{
-    PreparedFlowInputs, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
-    PreparedRenderFrameResource, PreparedShaderSnapshot, PreparedStateTypeInfo,
-    PreparedSurfaceInfo, PreparedViewFrame,
-};
-use crate::plugins::render::inspect::{
-    RenderDebugTimingsState, RenderRuntimeResourceInspectorState,
-};
-use crate::plugins::render::pipelines::{PipelineCacheResource, PipelineCacheStats};
-use crate::plugins::render::renderer::Gfx;
-use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
-use crate::plugins::render::{
-    CompiledPassExecutionPlan, CompiledRenderFlowPlan, ComputeDispatchDescriptor, RenderPassKind,
-};
-use crate::plugins::scene::SceneResource;
+use crate::plugins::inspect::{RenderDebugTimingsState, RenderRuntimeResourceInspectorState};
+use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
+use crate::plugins::render::*;
+use crate::plugins::scene::*;
+use crate::plugins::scene::ui::UiRenderShaderConfig;
 use crate::plugins::time::domain::Time;
-use crate::plugins::ui::domain::UiRenderShaderConfig;
 use crate::runtime::{Res, ResMut, WorldMut};
-use crate::state::{DebugMetricsState, StartupState};
+use crate::state::{DebugMetricsState, StartupState, UiOverlayState};
 use anyhow::anyhow;
 use scheduler::set_slow_node_logging_enabled;
 use std::any::{Any, TypeId};
@@ -36,6 +14,8 @@ use wgpu::SurfaceError;
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
 const MESH_HOT_PATH_LOG_THRESHOLD_MS: f32 = 8.0;
+const SCENE_OVERLAY_UI_PRODUCER_ID: &str = "scene.overlay";
+const DEBUG_METRICS_UI_PRODUCER_ID: &str = "debug.metrics";
 
 fn render_timing_logging_enabled() -> bool {
     std::env::var("GROTTO_RENDER_TIMING_LOG")
@@ -46,6 +26,60 @@ fn render_timing_logging_enabled() -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+pub(crate) fn collect_runtime_ui_frame_submissions_system(mut world: WorldMut) {
+    let Some(mut submissions) = world.remove_resource::<UiFrameSubmissionRegistryResource>() else {
+        return;
+    };
+
+    let scene_submission = world
+        .resource::<SceneResource>()
+        .ok()
+        .and_then(|scene_resource| scene_resource.manager.as_ref())
+        .map(|manager| {
+            let rect_shader_asset_id = manager
+                .overlay_runtime
+                .world
+                .resource::<UiRenderShaderConfig>()
+                .ok()
+                .map(|config| config.rect_shader_asset_id.trim().to_string())
+                .filter(|id| !id.is_empty());
+            (manager.overlay_runtime.ui.frame.clone(), rect_shader_asset_id)
+        });
+
+    match scene_submission {
+        Some((frame, rect_shader_asset_id)) if !frame.is_empty() => {
+            submissions.replace(
+                UiFrameSubmission::new(SCENE_OVERLAY_UI_PRODUCER_ID)
+                    .with_route(UiFrameRoute::Screen)
+                    .with_order(UiFrameSubmissionOrder::new(0, 0))
+                    .with_frame(frame)
+                    .with_rect_shader_asset_id(rect_shader_asset_id),
+            );
+        }
+        _ => {
+            submissions.remove(&UiFrameProducerId::new(SCENE_OVERLAY_UI_PRODUCER_ID));
+        }
+    }
+
+    let debug_frame = world
+        .resource::<UiOverlayState>()
+        .ok()
+        .map(|overlay| overlay.debug_frame.clone())
+        .unwrap_or_default();
+    if debug_frame.is_empty() {
+        submissions.remove(&UiFrameProducerId::new(DEBUG_METRICS_UI_PRODUCER_ID));
+    } else {
+        submissions.replace(
+            UiFrameSubmission::new(DEBUG_METRICS_UI_PRODUCER_ID)
+                .with_route(UiFrameRoute::Screen)
+                .with_order(UiFrameSubmissionOrder::new(100, 0))
+                .with_frame(debug_frame),
+        );
+    }
+
+    world.insert_resource(submissions);
 }
 
 pub(crate) fn frame_render_prepare_system(
@@ -78,14 +112,6 @@ pub(crate) fn frame_render_prepare_system(
         );
         manager.overlay_runtime.ui.log_scroll_lines_from_bottom = 0;
     }
-
-    let ui_rect_shader_id = manager
-        .overlay_runtime
-        .world
-        .resource::<UiRenderShaderConfig>()
-        .ok()
-        .map(|config| config.rect_shader_asset_id.trim().to_string())
-        .filter(|id| !id.is_empty());
 
     let target_size = {
         let (window_w, window_h) = manager.overlay_runtime.ui.screen_size;
@@ -131,8 +157,6 @@ pub(crate) fn frame_render_prepare_system(
         &world,
         manager.world.active.label().to_string(),
         manager.active_overlay().label().to_string(),
-        manager.overlay_runtime.ui.draw_list.clone(),
-        ui_rect_shader_id,
         &execution_feature_ids,
     );
 
@@ -237,7 +261,8 @@ pub(crate) fn frame_render_submit_system(
         let compiled_flows = flow_registry.compiled_flows();
 
         let ui_rect_shader: Option<ShaderHandle> = prepared_frame
-            .ui_rect_shader_asset_id()
+            .ui()
+            .and_then(|ui| ui.first_rect_shader_asset_id())
             .and_then(|id| shader_registry.handle(id));
 
         gfx.render(
@@ -394,8 +419,6 @@ fn build_frame_feature_contributions(
     world: &ecs::World,
     world_scene_label: String,
     overlay_scene_label: String,
-    draw_list: crate::plugins::ui::domain::UiDrawList,
-    ui_rect_shader_id: Option<String>,
     execution_feature_ids: &[RenderFeatureId],
 ) -> PreparedFrameContributions {
     let mut contributions = PreparedFrameContributions::default();
@@ -412,17 +435,14 @@ fn build_frame_feature_contributions(
         scene_policy,
     );
 
-    let ui_policy = feature_policy(
-        world,
-        RenderFeatureId::new(UI_RENDER_FEATURE_ID),
-        FeatureFallbackPolicy::SkipFeaturePasses,
-    );
-    contributions.insert_ui(
-        draw_list,
-        ui_rect_shader_id,
-        FeatureContributionStatus::Ready,
-        ui_policy,
-    );
+    if let Ok(resource) = world.resource::<PreparedUiFrameResource>() {
+        let ui_policy = feature_policy(
+            world,
+            RenderFeatureId::new(UI_RENDER_FEATURE_ID),
+            resource.fallback_policy,
+        );
+        contributions.insert_ui(resource.payload.clone(), resource.status, ui_policy);
+    }
 
     if let Ok(resource) = world.resource::<PreparedWorldFeatureResource>() {
         let world_policy = feature_policy(
@@ -807,8 +827,6 @@ mod tests {
             &world,
             "world".to_string(),
             "overlay".to_string(),
-            crate::plugins::ui::domain::UiDrawList::default(),
-            None,
             &[],
         );
 
@@ -849,8 +867,6 @@ mod tests {
             &world,
             "world".to_string(),
             "overlay".to_string(),
-            crate::plugins::ui::domain::UiDrawList::default(),
-            None,
             &execution_feature_ids,
         );
 

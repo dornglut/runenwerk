@@ -1,7 +1,6 @@
 use super::*;
 use crate::plugins::render::RenderResourceDescriptor;
-use crate::plugins::render::api::{
-    BUILTIN_UI_DRAW_LIST_RESOURCE_ID, SURFACE_COLOR_RESOURCE_ID, SURFACE_DEPTH_RESOURCE_ID,
+use crate::plugins::render::api::{ SURFACE_COLOR_RESOURCE_ID, SURFACE_DEPTH_RESOURCE_ID,
 };
 use crate::plugins::render::backend::ensure_compiled_pass_is_supported;
 use crate::plugins::render::frame::{PreparedFlowInputs, PreparedRenderFrame};
@@ -358,16 +357,6 @@ impl FlowRuntimeResources {
                     "pass '{}' references imported builtin resource '{}' but surface-depth imports are not available in runtime execution yet; use flow-owned depth targets",
                     pass_id,
                     SURFACE_DEPTH_RESOURCE_ID
-                )
-            }
-            CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::BuiltinUiDrawList) => {
-                bail!(
-                    "pass '{}' uses '{}' imported builtin resource '{}' as {}; only '{}' is valid in UI composite execution",
-                    pass_id,
-                    BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
-                    BUILTIN_UI_DRAW_LIST_RESOURCE_ID,
-                    role,
-                    BUILTIN_UI_DRAW_LIST_RESOURCE_ID
                 )
             }
         }

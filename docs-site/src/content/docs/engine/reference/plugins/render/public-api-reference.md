@@ -83,8 +83,8 @@ Contract:
 
 Current UI note:
 
-- Phase 1 uses `PreparedFeaturePayload::Ui` carrying an owned `UiDrawList` clone.
-- The target direction is backend-neutral extracted UI prepared input.
+- UI uses `PreparedFeaturePayload::Ui` carrying `PreparedUiFrameContribution`.
+- Submissions carry owned `UiFrame` payloads plus ordering metadata.
 
 ## Feature Contribution APIs
 
@@ -175,7 +175,6 @@ Typed imported-resource contract:
 - Prefer typed imports:
   - `RenderResourceDescriptor::imported_surface_color`
   - `RenderResourceDescriptor::imported_surface_depth`
-  - `RenderResourceDescriptor::imported_ui_draw_list`
   - `RenderResourceDescriptor::imported_history_texture`
   - `RenderResourceDescriptor::imported_history_buffer`
 - `imported_texture` / `imported_buffer` remain compatibility constructors and compile to `External` semantics.

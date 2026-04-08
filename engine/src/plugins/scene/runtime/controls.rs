@@ -1,4 +1,4 @@
-use super::messaging::normalize_scene_label_alias;
+use super::normalize_scene_label_alias;
 use crate::WindowState;
 use crate::plugins::{SceneManager, SceneResource};
 use crate::prelude::domain::{SceneCommand, SceneId, SceneLayer};

@@ -1,12 +1,15 @@
 mod editor_app;
 mod editor_features;
+mod editor_host;
 mod editor_panels;
 mod editor_runtime;
 mod editor_tools_state;
+mod shell;
+mod editor_render;
 
+use crate::editor_app::RunenwerkEditorApp;
 use editor_panels::OutlinerPanelCommand;
 use editor_scene::SceneCommandIntent;
-use crate::editor_app::RunenwerkEditorApp;
 
 fn main() {
     let mut app = RunenwerkEditorApp::new();
