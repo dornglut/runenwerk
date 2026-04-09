@@ -85,7 +85,7 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
             tick.0
         };
 
-        world.set_current_input_tick(tick_value);
+        world.set_current_buffer_tick(tick_value);
 
         scheduler.run_schedule::<FixedUpdate>(world)?;
         world.finalize_tick_boundary(tick_value);

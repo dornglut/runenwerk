@@ -7,9 +7,9 @@ description: "Implemented vs partial vs missing capability audit for ECS/runtime
 
 This document maps the requested capability model to the current repository state.
 
-Audit date: 2026-04-08.
+Audit date: 2026-04-09.
 
-Terminology alignment update: 2026-04-09 (`Queue*` -> `WorkQueue*` in ECS runtime code; design-doc `TickBuffer*` currently maps to code `InputStream*`).
+Terminology alignment update: 2026-04-09 (`Queue*` -> `WorkQueue*` and legacy tick-buffer names -> `TickBuffer*` in ECS runtime code).
 
 Status labels:
 
@@ -31,13 +31,13 @@ Status labels:
 - `Implemented` tick finalization hooks (`fixed_step_executor` calls `world.finalize_tick_boundary` per simulated tick).
 - `Implemented` frame finalization hooks (`run_frame` calls `world.finalize_frame_boundary` after `FrameEnd`).
 - `Partial` configurable schedule barriers (set ordering exists; explicit barrier primitives do not).
-- `Implemented` conflict-aware scheduling for non-component resources and messaging primitives (resource, broadcast, work-queue, input-stream domains with read/write/drain conflict modes).
+- `Implemented` conflict-aware scheduling for non-component resources and messaging primitives (resource, broadcast, work-queue, tick-buffer domains with read/write/drain conflict modes).
 
 ## 2) Messaging model split
 
 - `Implemented` broadcast streams for fan-out notifications (`Broadcast*` in ECS world messaging).
 - `Implemented` destructive work queues for single-owner workflows (`WorkQueue*` in ECS world messaging).
-- `Implemented` typed input streams for per-tick command/input flow (`InputStream*` registry in ECS world messaging).
+- `Implemented` typed tick buffers for per-tick command/input flow (`TickBuffer*` registry in ECS world messaging).
 - `Implemented` observer/diagnostic hooks for messaging streams (`observe_broadcast`, `messaging_diagnostics_snapshot`).
 - `Missing` explicit gameplay messaging vs runtime/transport messaging split in ECS core.
 - `Missing` explicit local messaging vs replicated/network-visible messaging split.
@@ -81,23 +81,23 @@ Status labels:
 - `Missing` optional queue aging/expiry policies.
 - `Implemented` queue debug inspection APIs (`work_queue_iter`, `work_queue_peek`, stats/diagnostics).
 
-## 5) Input stream features
+## 5) Tick buffer features
 
-- `Implemented` typed input registration/configuration API (`ensure_input_stream`, `configure_input_stream`).
-- `Implemented` per-tick input buffering.
+- `Implemented` typed tick-buffer registration/configuration API (`ensure_tick_buffer`, `configure_tick_buffer`).
+- `Implemented` per-tick tick-buffer buffering.
 - `Implemented` local input producer API (`InputDriver::take_local_input`).
-- `Implemented` simulation-facing typed input view params (`InputStreamReader`, `InputStreamDrainer`).
+- `Implemented` simulation-facing typed tick-buffer view params (`TickBufferReader`, `TickBufferDrainer`).
 - `Implemented` authoritative remote input ingestion.
-- `Implemented` deterministic insertion order within a tick + global per-stream sequence metadata.
+- `Implemented` deterministic insertion order within a tick + global per-buffer sequence metadata.
 - `Partial` ownership-aware routing (connection-aware ingestion; no entity ownership router).
 - `Implemented` pending predicted input storage.
 - `Implemented` replay of pending local input after correction.
 - `Partial` input acknowledgement support hooks (snapshot ack exists; no dedicated input-ack channel semantics).
-- `Implemented` per-stream diagnostics (`InputStreamStats`, `InputStreamDiagnosticsSnapshot`).
+- `Implemented` per-buffer diagnostics (`TickBufferStats`, `TickBufferDiagnosticsSnapshot`).
 - `Partial` input history windows (pending predicted history only).
 - `Implemented` optional input deduplication hooks.
-- `Implemented` optional input sequence metadata (`InputMessageMeta.sequence` + stream key).
-- `Implemented` multiple registered input stream types.
+- `Implemented` optional input sequence metadata (`TickBufferMeta.sequence` + buffer key).
+- `Implemented` multiple registered tick-buffer types.
 
 ## 6) Replication-facing ECS metadata
 
@@ -174,9 +174,9 @@ Status labels:
 
 ## 11) Observability and diagnostics
 
-- `Implemented` per-stream stats (broadcast/work-queue/input-stream messaging diagnostics).
+- `Implemented` per-stream stats (broadcast/work-queue/tick-buffer messaging diagnostics).
 - `Implemented` per-work-queue stats.
-- `Implemented` per-input-stream stats.
+- `Implemented` per-tick-buffer stats.
 - `Partial` overflow/drop counters.
 - `Missing` consumer lag metrics.
 - `Implemented` schedule/tick timing metrics.
@@ -236,10 +236,11 @@ Current codebase alignment is good here:
 
 ## Major Gap Conclusion
 
-The highest-impact remaining gap is semantic alignment and generalization depth, not primitive availability:
+The highest-impact remaining gap is no longer naming convergence; that work is complete.
 
-1. the design term `TickBuffer<T>` still maps to code `InputStream<T>`,
-2. `InputStream*` surfaces remain input-domain-shaped (`InputMessageSource`, `current_input_tick`, `mark_input_stream_*`),
-3. `WorkQueue*` extensibility (priority, aging, custom policies) is still intentionally minimal.
+Current primary gap focus:
 
-The current substrate already has world-owned messaging primitives and runtime-owned frame/tick finalization; the next step is targeted generalization and vocabulary convergence rather than another broad messaging-system redesign.
+1. `WorkQueue*` extensibility (priority, aging, custom policies) is still intentionally minimal,
+2. richer consumer-lag/inspection diagnostics remain partial in several runtime layers.
+
+The current substrate now has world-owned messaging primitives with aligned naming (`Broadcast*`, `WorkQueue*`, `TickBuffer*`) and runtime-owned frame/tick finalization.

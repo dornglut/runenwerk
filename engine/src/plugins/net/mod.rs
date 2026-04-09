@@ -2,6 +2,7 @@ pub mod commands;
 pub mod config;
 pub mod diagnostics;
 pub mod events;
+pub mod metadata;
 pub mod plugin;
 pub mod prediction;
 pub mod resources;
@@ -10,8 +11,8 @@ pub mod schedules;
 
 pub use commands::*;
 pub use config::*;
-pub use diagnostics::*;
 pub use events::*;
+pub use metadata::*;
 pub use plugin::*;
 pub use prediction::*;
 pub use resources::*;

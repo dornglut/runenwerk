@@ -11,8 +11,6 @@ pub struct SceneComponentDescriptor {
 }
 
 impl SceneComponentDescriptor {
-    /// File: domain/editor/editor_scene/src/model/component.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         component_type: ComponentTypeId,
@@ -34,8 +32,6 @@ pub struct SceneComponentSnapshot {
 }
 
 impl SceneComponentSnapshot {
-    /// File: domain/editor/editor_scene/src/model/component.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         component_type: ComponentTypeId,

@@ -19,8 +19,6 @@ pub struct ViewportPreviewState {
 }
 
 impl ViewportToolState {
-    /// File: apps/runenwerk_editor/src/editor_panels/viewport_tool_state.rs
-    /// Method: from_runtime
     pub fn from_runtime(runtime: &EditorToolRuntimeState) -> Self {
         Self {
             hovered_entity: runtime.hovered_entity(),
@@ -31,8 +29,6 @@ impl ViewportToolState {
 }
 
 impl ViewportPreviewState {
-    /// File: apps/runenwerk_editor/src/editor_panels/viewport_tool_state.rs
-    /// Method: from_session
     pub fn from_session(session: &TransformPreviewSession) -> Self {
         Self {
             entity: session.entity,

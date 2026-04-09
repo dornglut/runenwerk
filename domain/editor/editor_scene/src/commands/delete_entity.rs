@@ -12,8 +12,6 @@ pub struct DeleteEntityCommand {
 }
 
 impl DeleteEntityCommand {
-    /// File: domain/editor/editor_scene/src/commands/delete_entity.rs
-    /// Method: new
     pub fn new(entity: EntityId) -> Self {
         Self {
             entity,
@@ -21,16 +19,12 @@ impl DeleteEntityCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/delete_entity.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let deleted = ctx.runtime_mut().delete_entity(self.entity)?;
         self.deleted = Some(deleted);
         Ok(())
     }
 
-    /// File: domain/editor/editor_scene/src/commands/delete_entity.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let Some(snapshot) = self.deleted.clone() else {
             return Ok(());

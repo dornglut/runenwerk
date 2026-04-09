@@ -5,28 +5,20 @@ use crate::world::world::World;
 use std::any::TypeId;
 
 impl World {
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: component_type_info
     pub fn component_type_info(&self, type_id: TypeId) -> Option<&'static TypeInfo> {
         self.reflected_component_types
             .get(&type_id)
             .map(|registration| registration.type_info)
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: has_registered_component_type
     pub fn has_registered_component_type(&self, type_id: TypeId) -> bool {
         self.component_type_registry.contains_key(&type_id)
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: registered_component_type_ids
     pub fn registered_component_type_ids(&self) -> Vec<TypeId> {
         self.component_type_registry.keys().copied().collect()
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: entity_component_type_ids
     pub fn entity_component_type_ids(&self, entity: Entity) -> Vec<TypeId> {
         let Some(location) = self.entity_locations.get(entity) else {
             return Vec::new();
@@ -38,8 +30,6 @@ impl World {
             .unwrap_or_default()
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: entity_registered_component_types
     pub fn entity_registered_component_types(&self, entity: Entity) -> Vec<&'static TypeInfo> {
         self.entity_component_type_ids(entity)
             .into_iter()
@@ -47,8 +37,6 @@ impl World {
             .collect()
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: reflected_component_value_ref
     pub fn reflected_component_value_ref(
         &self,
         entity: Entity,
@@ -58,8 +46,6 @@ impl World {
         (registration.value_ref)(self, entity)
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: reflected_component_value_mut
     pub fn reflected_component_value_mut(
         &mut self,
         entity: Entity,
@@ -69,14 +55,10 @@ impl World {
         (registration.value_mut)(self, entity)
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: entity_has_component_type
     pub fn entity_has_component_type(&self, entity: Entity, type_id: TypeId) -> bool {
         self.entity_component_type_ids(entity).contains(&type_id)
     }
 
-    /// File: domain/ecs/src/world/component/introspection.rs
-    /// Method: entity_component_count
     pub fn entity_component_count(&self, entity: Entity) -> usize {
         self.entity_component_type_ids(entity).len()
     }

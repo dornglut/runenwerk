@@ -16,7 +16,9 @@ use super::chunks::render_cache_bridge::{
 };
 use super::debug::metrics::WorldDebugMetricsResource;
 use super::prepare::contributions::prepare_world_feature_contributions_system;
-use super::streaming::replication::rebuild_world_replication_state_system;
+use super::streaming::replication::{
+    WorldReplicationExtractionCursor, rebuild_world_replication_state_system,
+};
 use super::{
     adapters::resources::{
         BuildGraphResource, BuildQueueResource, CameraRelativeFrameResource,
@@ -146,6 +148,7 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldNavSummaryResource>();
         app.init_resource::<WorldStreamingInterestResource>();
         app.init_resource::<ReplicationStateResource>();
+        app.init_resource::<WorldReplicationExtractionCursor>();
         app.init_resource::<CaveSectorResource>();
         app.init_resource::<CavePortalGraphResource>();
         app.init_resource::<CaveLightingScopeResource>();

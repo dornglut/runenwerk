@@ -13,8 +13,6 @@ pub struct RenameEntityCommand {
 }
 
 impl RenameEntityCommand {
-    /// File: domain/editor/editor_scene/src/commands/rename_entity.rs
-    /// Method: new
     pub fn new(entity: EntityId, new_display_name: impl Into<String>) -> Self {
         Self {
             entity,
@@ -23,8 +21,6 @@ impl RenameEntityCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/rename_entity.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let previous = ctx
             .runtime_mut()
@@ -37,8 +33,6 @@ impl RenameEntityCommand {
         Ok(())
     }
 
-    /// File: domain/editor/editor_scene/src/commands/rename_entity.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let Some(previous_display_name) = self.previous_display_name.as_deref() else {
             return Ok(());

@@ -2,7 +2,7 @@ use ecs::prelude::*;
 use ecs::{
     BroadcastLifetime, BroadcastObserverTrigger, BroadcastOverflowPolicy, BroadcastStreamConfig,
     BroadcastTracingPolicy, ComponentChangeKind, EntityDespawnedEvent, EntitySpawnedEvent,
-    QueryTypeAccess, QueueConfig, ResourceChangeKind, SpatialHashConfig, SystemParam,
+    QueryTypeAccess, ResourceChangeKind, SpatialHashConfig, SystemParam, WorkQueueConfig,
 };
 use geometry::Aabb3;
 use glam::Vec3;
@@ -416,15 +416,15 @@ fn event_observers_and_drain_helpers_work() {
 #[test]
 fn queue_backpressure_rejects_without_mutating_queue_state() {
     let mut world = World::new();
-    world.configure_queue::<u32>(QueueConfig { capacity: Some(1) });
+    world.configure_work_queue::<u32>(WorkQueueConfig { capacity: Some(1) });
 
-    assert!(world.queue_enqueue(1_u32).is_ok());
-    assert!(world.queue_enqueue(2_u32).is_err());
+    assert!(world.work_queue_enqueue(1_u32).is_ok());
+    assert!(world.work_queue_enqueue(2_u32).is_err());
 
-    assert_eq!(world.queue_pending_count::<u32>(), 1);
-    assert_eq!(world.queue_drain::<u32>(), vec![1]);
+    assert_eq!(world.work_queue_pending_count::<u32>(), 1);
+    assert_eq!(world.work_queue_drain::<u32>(), vec![1]);
 
-    let stats = world.queue_stats::<u32>().unwrap();
+    let stats = world.work_queue_stats::<u32>().unwrap();
     assert_eq!(stats.enqueued, 1);
     assert_eq!(stats.rejected, 1);
     assert_eq!(stats.drained, 1);
@@ -432,19 +432,25 @@ fn queue_backpressure_rejects_without_mutating_queue_state() {
 }
 
 #[test]
-fn input_stream_preserves_tick_order_and_tick_finalization_cleans_old_ticks() {
+fn tick_buffer_preserves_tick_order_and_tick_finalization_cleans_old_ticks() {
     let mut world = World::new();
 
-    world.push_input_for_tick(10, 1_u32).unwrap();
-    world.push_input_for_tick(10, 2_u32).unwrap();
-    world.push_input_for_tick(11, 3_u32).unwrap();
+    world
+        .push_buffer_message_for_tick(10, ecs::TickBufferProvenance::UNSPECIFIED, 1_u32)
+        .unwrap();
+    world
+        .push_buffer_message_for_tick(10, ecs::TickBufferProvenance::UNSPECIFIED, 2_u32)
+        .unwrap();
+    world
+        .push_buffer_message_for_tick(11, ecs::TickBufferProvenance::UNSPECIFIED, 3_u32)
+        .unwrap();
 
-    assert_eq!(world.read_input_tick::<u32>(10), &[1, 2]);
-    assert_eq!(world.read_input_tick::<u32>(11), &[3]);
+    assert_eq!(world.buffer_messages_at_tick::<u32>(10), &[1, 2]);
+    assert_eq!(world.buffer_messages_at_tick::<u32>(11), &[3]);
 
     world.finalize_tick_boundary(10);
-    assert!(world.read_input_tick::<u32>(10).is_empty());
-    assert_eq!(world.read_input_tick::<u32>(11), &[3]);
+    assert!(world.buffer_messages_at_tick::<u32>(10).is_empty());
+    assert_eq!(world.buffer_messages_at_tick::<u32>(11), &[3]);
 }
 
 #[test]

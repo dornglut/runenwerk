@@ -1,6 +1,9 @@
 use super::*;
 use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SessionRuntimeState, SystemConfigExt};
-use ecs::{QueueConfig, QueueEnqueueError, World};
+use ecs::{
+    ControllerId, ControllerRole, OwnershipTarget, TickBufferConfig, TickBufferProvenance,
+    WorkQueueConfig, WorkQueueEnqueueError, World,
+};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::SimulationTick;
@@ -10,26 +13,28 @@ use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 // engine/src/plugins/net/resources.rs
 
 const NETWORK_MESSAGE_QUEUE_CAPACITY: usize = 4_096;
+const TICK_BUFFER_PROVENANCE_DOMAIN_SERVER: u32 = 1;
+const TICK_BUFFER_PROVENANCE_DOMAIN_CONTROLLER: u32 = 2;
 
 fn configure_network_message_queues(world: &mut World) {
-    let config = QueueConfig {
+    let config = WorkQueueConfig {
         capacity: Some(NETWORK_MESSAGE_QUEUE_CAPACITY),
     };
-    world.configure_queue::<ServerMessage>(config);
-    world.configure_queue::<InboundClientMessage>(config);
-    world.configure_queue::<ClientMessage>(config);
-    world.configure_queue::<OutboundServerMessage>(config);
+    world.configure_work_queue::<ServerMessage>(config);
+    world.configure_work_queue::<InboundClientMessage>(config);
+    world.configure_work_queue::<ClientMessage>(config);
+    world.configure_work_queue::<OutboundServerMessage>(config);
 }
 
-fn enqueue_queue_with_backpressure<T: 'static>(
+fn enqueue_work_queue_with_backpressure<T: 'static>(
     world: &mut World,
-    queue_name: &'static str,
+    work_queue_name: &'static str,
     message: T,
-) -> Result<(), QueueEnqueueError> {
-    let result = world.queue_enqueue(message);
-    if let Err(QueueEnqueueError::Backpressure { capacity, .. }) = &result {
+) -> Result<(), WorkQueueEnqueueError> {
+    let result = world.work_queue_enqueue(message);
+    if let Err(WorkQueueEnqueueError::Backpressure { capacity, .. }) = &result {
         tracing::warn!(
-            queue = queue_name,
+            work_queue = work_queue_name,
             capacity = *capacity,
             "network queue backpressure; dropping newest message"
         );
@@ -40,12 +45,12 @@ fn enqueue_queue_with_backpressure<T: 'static>(
 pub fn enqueue_client_inbox(
     world: &mut World,
     message: ServerMessage,
-) -> Result<(), QueueEnqueueError> {
-    enqueue_queue_with_backpressure(world, "NetworkClientInbox", message)
+) -> Result<(), WorkQueueEnqueueError> {
+    enqueue_work_queue_with_backpressure(world, "NetworkClientInbox", message)
 }
 
 pub fn client_inbox_len(world: &World) -> usize {
-    world.queue_pending_count::<ServerMessage>()
+    world.work_queue_pending_count::<ServerMessage>()
 }
 
 pub fn client_inbox_is_empty(world: &World) -> bool {
@@ -53,13 +58,13 @@ pub fn client_inbox_is_empty(world: &World) -> bool {
 }
 
 pub fn drain_client_inbox(world: &mut World) -> Vec<ServerMessage> {
-    world.queue_drain::<ServerMessage>()
+    world.work_queue_drain::<ServerMessage>()
 }
 
 pub fn enqueue_server_inbox(
     world: &mut World,
     message: ClientMessage,
-) -> Result<(), QueueEnqueueError> {
+) -> Result<(), WorkQueueEnqueueError> {
     enqueue_server_inbox_from(world, None, message)
 }
 
@@ -67,8 +72,8 @@ pub fn enqueue_server_inbox_from(
     world: &mut World,
     connection_id: Option<ConnectionId>,
     message: ClientMessage,
-) -> Result<(), QueueEnqueueError> {
-    enqueue_queue_with_backpressure(
+) -> Result<(), WorkQueueEnqueueError> {
+    enqueue_work_queue_with_backpressure(
         world,
         "NetworkServerInbox",
         InboundClientMessage {
@@ -79,7 +84,7 @@ pub fn enqueue_server_inbox_from(
 }
 
 pub fn server_inbox_len(world: &World) -> usize {
-    world.queue_pending_count::<InboundClientMessage>()
+    world.work_queue_pending_count::<InboundClientMessage>()
 }
 
 pub fn server_inbox_is_empty(world: &World) -> bool {
@@ -87,18 +92,18 @@ pub fn server_inbox_is_empty(world: &World) -> bool {
 }
 
 pub fn drain_server_inbox(world: &mut World) -> Vec<InboundClientMessage> {
-    world.queue_drain::<InboundClientMessage>()
+    world.work_queue_drain::<InboundClientMessage>()
 }
 
 pub fn enqueue_client_outbox(
     world: &mut World,
     message: ClientMessage,
-) -> Result<(), QueueEnqueueError> {
-    enqueue_queue_with_backpressure(world, "NetworkClientOutbox", message)
+) -> Result<(), WorkQueueEnqueueError> {
+    enqueue_work_queue_with_backpressure(world, "NetworkClientOutbox", message)
 }
 
 pub fn client_outbox_len(world: &World) -> usize {
-    world.queue_pending_count::<ClientMessage>()
+    world.work_queue_pending_count::<ClientMessage>()
 }
 
 pub fn client_outbox_is_empty(world: &World) -> bool {
@@ -106,20 +111,20 @@ pub fn client_outbox_is_empty(world: &World) -> bool {
 }
 
 pub fn drain_client_outbox(world: &mut World) -> Vec<ClientMessage> {
-    world.queue_drain::<ClientMessage>()
+    world.work_queue_drain::<ClientMessage>()
 }
 
 pub fn enqueue_server_outbox(
     world: &mut World,
     message: OutboundServerMessage,
-) -> Result<(), QueueEnqueueError> {
-    enqueue_queue_with_backpressure(world, "NetworkServerOutbox", message)
+) -> Result<(), WorkQueueEnqueueError> {
+    enqueue_work_queue_with_backpressure(world, "NetworkServerOutbox", message)
 }
 
 pub fn enqueue_server_outbox_broadcast(
     world: &mut World,
     message: ServerMessage,
-) -> Result<(), QueueEnqueueError> {
+) -> Result<(), WorkQueueEnqueueError> {
     enqueue_server_outbox(world, OutboundServerMessage::Broadcast(message))
 }
 
@@ -127,7 +132,7 @@ pub fn enqueue_server_outbox_to(
     world: &mut World,
     connection_id: ConnectionId,
     message: ServerMessage,
-) -> Result<(), QueueEnqueueError> {
+) -> Result<(), WorkQueueEnqueueError> {
     enqueue_server_outbox(
         world,
         OutboundServerMessage::ToConnection {
@@ -138,7 +143,7 @@ pub fn enqueue_server_outbox_to(
 }
 
 pub fn server_outbox_len(world: &World) -> usize {
-    world.queue_pending_count::<OutboundServerMessage>()
+    world.work_queue_pending_count::<OutboundServerMessage>()
 }
 
 pub fn server_outbox_is_empty(world: &World) -> bool {
@@ -146,7 +151,72 @@ pub fn server_outbox_is_empty(world: &World) -> bool {
 }
 
 pub fn drain_server_outbox(world: &mut World) -> Vec<OutboundServerMessage> {
-    world.queue_drain::<OutboundServerMessage>()
+    world.work_queue_drain::<OutboundServerMessage>()
+}
+
+pub fn ensure_controller_for_connection(
+    world: &mut World,
+    connection_id: ConnectionId,
+    role: ControllerRole,
+) -> ControllerId {
+    if let Ok(routing) = world.resource::<NetworkControllerRouting>()
+        && let Some(controller) = routing.by_connection.get(&connection_id).copied()
+    {
+        world.set_controller_role(controller, role);
+        return controller;
+    }
+
+    let controller = world.create_controller(role);
+    if let Ok(routing) = world.resource_mut::<NetworkControllerRouting>() {
+        routing.by_connection.insert(connection_id, controller);
+        routing.by_controller.insert(controller, connection_id);
+    }
+    controller
+}
+
+pub fn controller_for_connection(
+    world: &World,
+    connection_id: ConnectionId,
+) -> Option<ControllerId> {
+    world
+        .resource::<NetworkControllerRouting>()
+        .ok()
+        .and_then(|routing| routing.by_connection.get(&connection_id).copied())
+}
+
+pub fn server_tick_buffer_provenance() -> TickBufferProvenance {
+    TickBufferProvenance::new(TICK_BUFFER_PROVENANCE_DOMAIN_SERVER, 1)
+}
+
+pub fn controller_tick_buffer_provenance(controller: ControllerId) -> TickBufferProvenance {
+    TickBufferProvenance::new(
+        TICK_BUFFER_PROVENANCE_DOMAIN_CONTROLLER,
+        controller.as_raw(),
+    )
+}
+
+pub fn remove_controller_for_connection(
+    world: &mut World,
+    connection_id: ConnectionId,
+) -> Option<ControllerId> {
+    let mut removed = None;
+    if let Ok(routing) = world.resource_mut::<NetworkControllerRouting>()
+        && let Some(controller) = routing.by_connection.remove(&connection_id)
+    {
+        routing.by_controller.remove(&controller);
+        removed = Some(controller);
+    }
+    removed
+}
+
+pub fn route_connection_targets(
+    world: &World,
+    connection_id: ConnectionId,
+) -> Vec<OwnershipTarget> {
+    let Some(controller) = controller_for_connection(world, connection_id) else {
+        return Vec::new();
+    };
+    world.route_controller_targets(controller)
 }
 
 pub(crate) fn configure_runtime_bridge<TDriver>(app: &mut App)
@@ -181,6 +251,8 @@ pub(crate) fn configure_client_role(app: &mut App) {
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
     app.init_resource::<ClientSessionState>();
+    app.init_resource::<NetworkControllerRouting>();
+    app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetworkDiagnostics>();
     app.add_systems(FrameEnd, client_flush_system.in_set(CoreSet::FrameEnd));
 }
@@ -198,6 +270,8 @@ pub(crate) fn configure_server_role(app: &mut App) {
     app.init_resource::<RoundTripMetrics>();
     app.init_resource::<ServerSessionConfig>();
     app.init_resource::<ServerSessionState>();
+    app.init_resource::<NetworkControllerRouting>();
+    app.init_resource::<NetworkReplicationMetadata>();
     app.init_resource::<NetworkDiagnostics>();
     app.add_systems(FrameEnd, server_flush_system.in_set(CoreSet::FrameEnd));
 }
@@ -224,6 +298,11 @@ where
     TDriver: ReplicationDriver + InputDriver + Send + Sync + 'static,
     TDriver::Input: Clone + PartialEq + 'static,
 {
+    app.world_mut()
+        .configure_tick_buffer::<TDriver::Input>(TickBufferConfig {
+            capacity: Some(NETWORK_MESSAGE_QUEUE_CAPACITY),
+            retain_finalized_ticks: false,
+        });
     app.init_resource::<PredictionState<TDriver::Input>>();
     app.init_resource::<PredictionDiagnostics>();
     app.add_systems(
@@ -362,6 +441,12 @@ pub struct NetworkSessionStatus {
     pub last_error: Option<String>,
     pub connected: bool,
     pub reconnect_attempt: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
+pub struct NetworkControllerRouting {
+    pub by_connection: BTreeMap<ConnectionId, ControllerId>,
+    pub by_controller: BTreeMap<ControllerId, ConnectionId>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
@@ -516,11 +601,14 @@ pub struct ReplicationDiagnostics {
     pub last_snapshot_cursor: u64,
     pub emitted_snapshots: u64,
     pub applied_snapshots: u64,
+    pub acked: u64,
+    pub lagged: u64,
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct PredictionDiagnostics {
     pub fixed_steps_observed: u64,
     pub commands_applied: u64,
-    pub corrections_applied: u64,
+    pub replayed: u64,
+    pub corrected: u64,
 }

@@ -29,8 +29,6 @@ pub struct ChunkStreamingNode {
 
 #[godot_api]
 impl INode for ChunkStreamingNode {
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: init
     fn init(base: Base<Node>) -> Self {
         Self {
             base,
@@ -47,8 +45,6 @@ impl INode for ChunkStreamingNode {
         }
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: ready
     fn ready(&mut self) {
         self.rebuild_streamer();
     }
@@ -65,23 +61,17 @@ impl ChunkStreamingNode {
     #[signal]
     fn active_chunk_count_changed(count: i64);
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: set_chunk_edge_meters
     #[func]
     pub fn set_chunk_edge_meters(&mut self, value: f32) {
         self.chunk_edge_meters = value.max(1.0);
         self.rebuild_streamer();
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: get_chunk_edge_meters
     #[func]
     pub fn get_chunk_edge_meters(&self) -> f32 {
         self.chunk_edge_meters
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: set_region_chunk_dims
     #[func]
     pub fn set_region_chunk_dims(&mut self, x: i32, y: i32, z: i32) {
         self.region_dim_x = x.max(1) as u32;
@@ -90,16 +80,12 @@ impl ChunkStreamingNode {
         self.rebuild_streamer();
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: set_fixed_point_scale
     #[func]
     pub fn set_fixed_point_scale(&mut self, value: i32) {
         self.fixed_point_scale = value.max(1);
         self.rebuild_streamer();
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: set_load_radii
     #[func]
     pub fn set_load_radii(
         &mut self,
@@ -115,8 +101,6 @@ impl ChunkStreamingNode {
         self.rebuild_streamer();
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: set_planar_xz_mode
     #[func]
     pub fn set_planar_xz_mode(&mut self) {
         if let Some(streamer) = &mut self.streamer {
@@ -126,8 +110,6 @@ impl ChunkStreamingNode {
         }
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: set_volume_3d_mode
     #[func]
     pub fn set_volume_3d_mode(&mut self) {
         if let Some(streamer) = &mut self.streamer {
@@ -137,8 +119,6 @@ impl ChunkStreamingNode {
         }
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: clear_active_chunks
     #[func]
     pub fn clear_active_chunks(&mut self) {
         if let Some(streamer) = &mut self.streamer {
@@ -147,8 +127,6 @@ impl ChunkStreamingNode {
         }
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: active_chunk_count
     #[func]
     pub fn active_chunk_count(&self) -> i64 {
         self.streamer
@@ -157,8 +135,6 @@ impl ChunkStreamingNode {
             .unwrap_or(0)
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: update_focus_from_vector3
     #[func]
     pub fn update_focus_from_vector3(&mut self, position: Vector3) {
         let (entered, exited, active_count) = {
@@ -189,8 +165,6 @@ impl ChunkStreamingNode {
             .emit(active_count);
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: describe_config
     #[func]
     pub fn describe_config(&self) -> Dictionary<Variant, Variant> {
         let mut dict = Dictionary::<Variant, Variant>::new();
@@ -212,8 +186,6 @@ impl ChunkStreamingNode {
         dict
     }
 
-    /// File: adapters/godot_chunking_addon/src/chunk_streaming_node.rs
-    /// Method: rebuild_streamer
     fn rebuild_streamer(&mut self) {
         let partition = GridPartitionConfig {
             chunk_edge_meters: self.chunk_edge_meters.max(1.0),

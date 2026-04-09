@@ -34,8 +34,6 @@ pub enum InspectorEditError {
 }
 
 impl InspectorEditValue {
-    /// File: domain/editor/editor_inspector/src/editing.rs
-    /// Method: type_name
     pub fn type_name(&self) -> &'static str {
         match self {
             Self::Bool(_) => "bool",
@@ -46,8 +44,6 @@ impl InspectorEditValue {
     }
 }
 
-/// File: domain/editor/editor_inspector/src/editing.rs
-/// Method: set_component_field_value
 pub fn set_component_field_value<B>(
     world: &mut ecs::World,
     bridge: &B,
@@ -74,8 +70,6 @@ where
     set_value_at_path(reflected, path.segments(), &value)
 }
 
-/// File: domain/editor/editor_inspector/src/editing.rs
-/// Method: set_resource_field_value
 pub fn set_resource_field_value<B>(
     world: &mut ecs::World,
     bridge: &B,

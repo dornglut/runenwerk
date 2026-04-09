@@ -29,8 +29,6 @@ pub struct SceneEditorCommand {
 }
 
 impl SceneEditorCommand {
-    /// File: domain/editor/editor_scene/src/command.rs
-    /// Method: from_intent
     pub fn from_intent(
         id: CommandId,
         label: impl Into<String>,
@@ -89,8 +87,6 @@ impl SceneEditorCommand {
         Self { metadata, kind }
     }
 
-    /// File: domain/editor/editor_scene/src/command.rs
-    /// Method: new_edit_component_field
     pub fn new_edit_component_field(
         id: CommandId,
         label: impl Into<String>,

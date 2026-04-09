@@ -5,12 +5,12 @@ description: "Current implemented ECS/runtime/network foundations relevant to mu
 
 # ECS Runtime Feature Inventory (April 2026)
 
-This inventory reflects the code currently in the repository (audit date: 2026-04-08).
+This inventory reflects the code currently in the repository (audit date: 2026-04-09).
 
 Terminology alignment update (2026-04-09):
 
 - ECS runtime queue surfaces use `WorkQueue*` naming.
-- Design-doc `TickBuffer*` currently maps to code `InputStream*` (rename deferred until input-specific API surfaces are generalized).
+- ECS runtime tick-buffer surfaces use `TickBuffer*` naming.
 
 Status labels used in this document:
 
@@ -101,9 +101,9 @@ Audit coverage spans:
 
 | Capability | Status | Evidence | Why It Matters |
 | --- | --- | --- | --- |
-| Runtime messaging split exists, but tick-buffer vocabulary is not yet aligned | Partial | `domain/ecs/src/world/messaging/broadcast.rs`, `domain/ecs/src/world/messaging/work_queue.rs`, `domain/ecs/src/world/messaging/input_stream.rs` | Broadcast/work-queue/tick-buffer-like semantics are split in core; `InputStream*` naming still carries input-domain leakage relative to design `TickBuffer*` vocabulary. |
+| Runtime messaging split exists with aligned primitive vocabulary | Implemented | `domain/ecs/src/world/messaging/broadcast.rs`, `domain/ecs/src/world/messaging/work_queue.rs`, `domain/ecs/src/world/messaging/tick_buffer.rs` | Broadcast/work-queue/tick-buffer semantics are split in core ECS runtime with final naming alignment. |
 | WorkQueue primitive has core ECS storage but minimal policy surface | Partial | `domain/ecs/src/world/messaging/work_queue.rs` | Reusable core primitive exists (`VecDeque`, capacity/backpressure, stats/diagnostics), but no pluggable overflow/priority/aging policies yet. |
-| InputStream pipeline is typed and registry-backed, but still input-shaped | Partial | `domain/ecs/src/world/messaging/input_stream.rs`, `engine/src/plugins/net/prediction.rs` | Supports typed registration, per-tick buffering, dedup, sequence metadata, and diagnostics; still uses input-domain naming/metadata instead of generic `TickBuffer` vocabulary. |
+| TickBuffer pipeline is typed and registry-backed with neutral provenance | Implemented | `domain/ecs/src/world/messaging/tick_buffer.rs`, `engine/src/plugins/net/prediction.rs`, `engine/src/plugins/net/runtime_io.rs` | Supports typed registration, per-tick buffering, dedup, sequence metadata, and opaque provenance in ECS core; net/prediction map domain-specific meaning externally. |
 | Ownership registry exists, but typed input-to-owned-target routing is still plugin policy | Partial | `domain/ecs/src/world/ownership/*.rs`, `engine/src/plugins/net/runtime_io.rs` | ECS owns controller/entity/resource ownership and routing queries; per-target input dispatch policy is still integration-layer logic. |
 | Broadcast retention policy surface remains narrow | Partial | `domain/ecs/src/world/messaging/broadcast.rs` | Current lifetime modes are useful but there is no tick-scoped lifetime or custom retention policy extension point yet. |
 
@@ -123,6 +123,6 @@ The repository already has a strong deterministic runtime base, world-owned mess
 
 The largest foundational gap before scaling editor work is not “add more editor features”; it is finishing generic runtime messaging boundaries:
 
-- keep broadcast streams vs destructive work queues vs typed input streams semantically distinct,
+- keep broadcast streams vs destructive work queues vs typed tick buffers semantically distinct,
 - make lifecycle/finalization runtime-owned (not manual),
 - continue standardizing ownership routing and change extraction contracts for replication/editor sync.

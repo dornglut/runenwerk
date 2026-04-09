@@ -19,26 +19,18 @@ pub struct SceneDocumentState {
 }
 
 impl SceneDocumentState {
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: new
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: contains
     pub fn contains(&self, entity: EntityId) -> bool {
         self.entities.contains_key(&entity)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: entity_ids
     pub fn entity_ids(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.entities.keys().copied()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: entity_snapshot
     pub fn entity_snapshot(&self, entity: EntityId) -> Option<SceneEntitySnapshot> {
         let record = self.entities.get(&entity)?;
         Some(SceneEntitySnapshot::new(
@@ -48,22 +40,16 @@ impl SceneDocumentState {
         ))
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: entity_display_name
     pub fn entity_display_name(&self, entity: EntityId) -> Option<&str> {
         self.entities
             .get(&entity)
             .map(|record| record.display_name.as_str())
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: parent_of
     pub fn parent_of(&self, entity: EntityId) -> Option<Option<EntityId>> {
         self.entities.get(&entity).map(|record| record.parent)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: children_of
     pub fn children_of(&self, parent: Option<EntityId>) -> Vec<EntityId> {
         self.entities
             .iter()
@@ -71,16 +57,12 @@ impl SceneDocumentState {
             .collect()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: has_children
     pub fn has_children(&self, entity: EntityId) -> bool {
         self.entities
             .values()
             .any(|record| record.parent == Some(entity))
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: register_entity
     pub fn register_entity(
         &mut self,
         entity: EntityId,
@@ -103,22 +85,16 @@ impl SceneDocumentState {
         Ok(())
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: restore_entity
     pub fn restore_entity(&mut self, snapshot: SceneEntitySnapshot) -> Result<(), &'static str> {
         self.register_entity(snapshot.id, snapshot.display_name, snapshot.parent)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: unregister_entity
     pub fn unregister_entity(&mut self, entity: EntityId) -> Option<SceneEntitySnapshot> {
         self.entities
             .remove(&entity)
             .map(|record| SceneEntitySnapshot::new(entity, record.display_name, record.parent))
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: rename_entity
     pub fn rename_entity(
         &mut self,
         entity: EntityId,
@@ -133,8 +109,6 @@ impl SceneDocumentState {
         Ok(previous)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: would_create_cycle
     pub fn would_create_cycle(&self, entity: EntityId, candidate_parent: EntityId) -> bool {
         let mut current = Some(candidate_parent);
 
@@ -149,8 +123,6 @@ impl SceneDocumentState {
         false
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: validate_reparent
     pub fn validate_reparent(
         &self,
         entity: EntityId,
@@ -179,8 +151,6 @@ impl SceneDocumentState {
         Ok(())
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: reparent_entity
     pub fn reparent_entity(
         &mut self,
         entity: EntityId,
@@ -197,14 +167,10 @@ impl SceneDocumentState {
         Ok(previous_parent)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: all_entity_views
     pub fn all_entity_views(&self) -> Vec<SceneEntityView> {
         all_entity_views(self)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/document/mod.rs
-    /// Method: hierarchy_snapshot
     pub fn hierarchy_snapshot(&self) -> HierarchySnapshot {
         build_hierarchy_snapshot(self)
     }

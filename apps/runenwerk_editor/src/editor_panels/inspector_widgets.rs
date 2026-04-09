@@ -22,8 +22,6 @@ pub struct InspectorWidgetField {
 }
 
 impl InspectorWidgetField {
-    /// File: apps/runenwerk_editor/src/editor_panels/inspector_widgets.rs
-    /// Method: from_editable_field
     pub fn from_editable_field(
         field: InspectorEditableField,
         active_draft: Option<&InspectorFieldDraft>,
@@ -48,8 +46,6 @@ impl InspectorWidgetField {
     }
 }
 
-/// File: apps/runenwerk_editor/src/editor_panels/inspector_widgets.rs
-/// Method: build_widget_fields
 pub fn build_widget_fields(
     sections: &[InspectorSection],
     active_draft: Option<&InspectorFieldDraft>,
@@ -61,8 +57,6 @@ pub fn build_widget_fields(
         .collect()
 }
 
-/// File: apps/runenwerk_editor/src/editor_panels/inspector_widgets.rs
-/// Method: widget_kind_from_value
 fn widget_kind_from_value(value: &InspectorValue) -> InspectorWidgetKind {
     match value {
         InspectorValue::Bool(_) => InspectorWidgetKind::Checkbox,

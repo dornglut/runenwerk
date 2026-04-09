@@ -4,6 +4,7 @@ use crate::entity::Entity;
 use crate::errors::EntityError;
 use crate::storage::ArchetypeExecutionBinding;
 use crate::telemetry;
+use crate::world::change_tracking::ComponentTypeKey;
 use crate::world::entity_handles::Mut;
 use crate::world::world::World;
 use std::any::{TypeId, type_name};
@@ -154,6 +155,25 @@ impl World {
             .collect()
     }
 
+    pub fn component_type_key<T: Component>(&self) -> Option<ComponentTypeKey> {
+        self.component_type_registry
+            .get(&TypeId::of::<T>())
+            .map(|meta| meta.id)
+    }
+
+    pub fn component_type_key_by_id(&self, type_id: TypeId) -> Option<ComponentTypeKey> {
+        self.component_type_registry
+            .get(&type_id)
+            .map(|meta| meta.id)
+    }
+
+    pub fn component_type_name_by_key(&self, key: ComponentTypeKey) -> Option<&'static str> {
+        self.component_type_registry
+            .values()
+            .find(|meta| meta.id == key)
+            .map(|meta| meta.name)
+    }
+
     pub(crate) fn has_component_by_type_id(&self, entity: Entity, type_id: TypeId) -> bool {
         let Some(location) = self.entity_locations.get(entity) else {
             return false;
@@ -230,12 +250,19 @@ impl World {
         kind: crate::world::change_tracking::ComponentChangeKind,
     ) {
         self.mark_component_type_changed_by_id(component_type);
+        let component_key = self
+            .component_type_registry
+            .get(&component_type)
+            .map(|meta| meta.id)
+            .unwrap_or_default();
 
         self.component_change_log
             .push(crate::world::change_tracking::ComponentChangeRecord {
                 tick: self.change_tick,
+                frame: self.current_frame_index,
                 entity,
                 component_type,
+                component_key,
                 component_name,
                 kind,
             });

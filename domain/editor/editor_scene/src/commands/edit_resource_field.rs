@@ -15,8 +15,6 @@ pub struct EditResourceFieldCommand {
 }
 
 impl EditResourceFieldCommand {
-    /// File: domain/editor/editor_scene/src/commands/edit_resource_field.rs
-    /// Method: new
     pub fn new(
         resource_type: ResourceTypeId,
         path: InspectorPath,
@@ -30,8 +28,6 @@ impl EditResourceFieldCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/edit_resource_field.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         if self.previous_value.is_none() {
             let value = ctx
@@ -46,8 +42,6 @@ impl EditResourceFieldCommand {
             .map_err(map_edit_error)
     }
 
-    /// File: domain/editor/editor_scene/src/commands/edit_resource_field.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let Some(previous_value) = self.previous_value.clone() else {
             return Ok(());

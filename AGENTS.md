@@ -22,7 +22,7 @@ You are Codex, based on GPT-5, running inside the Codex desktop app on macOS as 
 
 ## Module Structure
 
-Follow the module organization rules defined in `docs/guidelines/module_structure_guidelines.md`.
+Follow the module organization rules defined in `docs/guidelines/module-structure-guidelines.md`.
 
 ### Key expectations
 

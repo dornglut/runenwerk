@@ -20,16 +20,12 @@ pub enum ViewportPanelCommand {
 pub struct ViewportPanelPresenter;
 
 impl ViewportPanelPresenter {
-    /// File: apps/runenwerk_editor/src/editor_panels/viewport_panel.rs
-    /// Method: build_state
     pub fn build_state(runtime: &RunenwerkEditorRuntime) -> ViewportPanelState {
         ViewportPanelState {
             selected_entity: runtime.selected_entity(),
         }
     }
 
-    /// File: apps/runenwerk_editor/src/editor_panels/viewport_panel.rs
-    /// Method: dispatch
     pub fn dispatch(
         runtime: &mut RunenwerkEditorRuntime,
         command: ViewportPanelCommand,
@@ -50,8 +46,6 @@ impl ViewportPanelPresenter {
     }
 }
 
-/// File: apps/runenwerk_editor/src/editor_panels/viewport_panel.rs
-/// Method: apply_viewport_hit_selection
 fn apply_viewport_hit_selection(
     runtime: &mut RunenwerkEditorRuntime,
     hit: &ViewportHitResult,

@@ -12,8 +12,6 @@ pub struct OutlinerItem {
 }
 
 impl OutlinerItem {
-    /// File: apps/runenwerk_editor/src/editor_runtime/outliner/model.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         display_name: impl Into<String>,
@@ -37,8 +35,6 @@ pub struct OutlinerTree {
 }
 
 impl OutlinerTree {
-    /// File: apps/runenwerk_editor/src/editor_runtime/outliner/model.rs
-    /// Method: flatten
     pub fn flatten(&self) -> Vec<OutlinerRow> {
         let mut rows = Vec::new();
 
@@ -60,8 +56,6 @@ pub struct OutlinerRow {
 }
 
 impl OutlinerRow {
-    /// File: apps/runenwerk_editor/src/editor_runtime/outliner/model.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         display_name: impl Into<String>,
@@ -79,8 +73,6 @@ impl OutlinerRow {
     }
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/outliner/model.rs
-/// Method: outliner_tree_from_hierarchy_snapshot
 pub fn outliner_tree_from_hierarchy_snapshot(snapshot: &HierarchySnapshot) -> OutlinerTree {
     OutlinerTree {
         roots: snapshot
@@ -91,8 +83,6 @@ pub fn outliner_tree_from_hierarchy_snapshot(snapshot: &HierarchySnapshot) -> Ou
     }
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/outliner/model.rs
-/// Method: map_hierarchy_item
 fn map_hierarchy_item(item: &HierarchyItem, depth: usize) -> OutlinerItem {
     OutlinerItem::new(
         item.entity,
@@ -106,8 +96,6 @@ fn map_hierarchy_item(item: &HierarchyItem, depth: usize) -> OutlinerItem {
     )
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/outliner/model.rs
-/// Method: flatten_item
 fn flatten_item(item: &OutlinerItem, rows: &mut Vec<OutlinerRow>) {
     rows.push(OutlinerRow::new(
         item.entity,

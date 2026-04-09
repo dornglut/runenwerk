@@ -6,7 +6,7 @@ use crate::query::{
     Query, QueryAccess, QueryFilter, QueryOrphaned, QueryOrphanedState, QuerySpec, QueryState,
 };
 use crate::telemetry;
-use crate::world::messaging::{InputStreamPushError, QueueEnqueueError};
+use crate::world::messaging::{TickBufferProvenance, TickBufferPushError, WorkQueueEnqueueError};
 use scheduler::system::ParamSlotDescriptor;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -153,12 +153,12 @@ impl<T: 'static> BroadcastWriter<T> {
     }
 }
 
-pub struct QueueReader<T: 'static> {
+pub struct WorkQueueReader<T: 'static> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static> QueueReader<T> {
+impl<T: 'static> WorkQueueReader<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -168,12 +168,12 @@ impl<T: 'static> QueueReader<T> {
 
     pub fn iter(&self) -> Box<dyn Iterator<Item = &T> + '_> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_ref().queue_iter::<T>() }
+        unsafe { self.world.as_ref().work_queue_iter::<T>() }
     }
 
     pub fn len(&self) -> usize {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_ref().queue_pending_count::<T>() }
+        unsafe { self.world.as_ref().work_queue_pending_count::<T>() }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -182,16 +182,16 @@ impl<T: 'static> QueueReader<T> {
 
     pub fn peek(&self) -> Option<&T> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_ref().queue_peek::<T>() }
+        unsafe { self.world.as_ref().work_queue_peek::<T>() }
     }
 }
 
-pub struct QueueWriter<T: 'static> {
+pub struct WorkQueueWriter<T: 'static> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static> QueueWriter<T> {
+impl<T: 'static> WorkQueueWriter<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -199,18 +199,18 @@ impl<T: 'static> QueueWriter<T> {
         }
     }
 
-    pub fn enqueue(&mut self, message: T) -> Result<(), QueueEnqueueError> {
+    pub fn enqueue(&mut self, message: T) -> Result<(), WorkQueueEnqueueError> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_mut().queue_enqueue(message) }
+        unsafe { self.world.as_mut().work_queue_enqueue(message) }
     }
 }
 
-pub struct QueueDrainer<T: 'static> {
+pub struct WorkQueueDrainer<T: 'static> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static> QueueDrainer<T> {
+impl<T: 'static> WorkQueueDrainer<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -220,21 +220,21 @@ impl<T: 'static> QueueDrainer<T> {
 
     pub fn drain(&mut self) -> Vec<T> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_mut().queue_drain::<T>() }
+        unsafe { self.world.as_mut().work_queue_drain::<T>() }
     }
 
     pub fn clear(&mut self) -> usize {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_mut().clear_queue::<T>() }
+        unsafe { self.world.as_mut().clear_work_queue::<T>() }
     }
 }
 
-pub struct InputStreamReader<T: 'static> {
+pub struct TickBufferReader<T: 'static> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static> InputStreamReader<T> {
+impl<T: 'static> TickBufferReader<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -249,7 +249,7 @@ impl<T: 'static> InputStreamReader<T> {
     pub fn iter_current(&self) -> std::slice::Iter<'_, T> {
         let start = Instant::now();
         // Safety: extraction guarantees a live world pointer during system execution.
-        let inputs = unsafe { self.world.as_ref().read_input_current_tick::<T>() };
+        let inputs = unsafe { self.world.as_ref().current_buffer_messages::<T>() };
         telemetry::record_event_reader(start.elapsed().as_nanos() as u64, inputs.len() as u64);
         inputs.iter()
     }
@@ -257,18 +257,18 @@ impl<T: 'static> InputStreamReader<T> {
     pub fn iter_tick(&self, tick: u64) -> std::slice::Iter<'_, T> {
         let start = Instant::now();
         // Safety: extraction guarantees a live world pointer during system execution.
-        let inputs = unsafe { self.world.as_ref().read_input_tick::<T>(tick) };
+        let inputs = unsafe { self.world.as_ref().buffer_messages_at_tick::<T>(tick) };
         telemetry::record_event_reader(start.elapsed().as_nanos() as u64, inputs.len() as u64);
         inputs.iter()
     }
 }
 
-pub struct InputStreamWriter<T: 'static> {
+pub struct TickBufferWriter<T: 'static> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static> InputStreamWriter<T> {
+impl<T: 'static> TickBufferWriter<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -276,23 +276,33 @@ impl<T: 'static> InputStreamWriter<T> {
         }
     }
 
-    pub fn push_for_tick(&mut self, tick: u64, input: T) -> Result<(), InputStreamPushError> {
+    pub fn push_for_tick(&mut self, tick: u64, input: T) -> Result<(), TickBufferPushError> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_mut().push_input_for_tick::<T>(tick, input) }
+        unsafe {
+            self.world
+                .as_mut()
+                .push_buffer_message_for_tick::<T>(tick, TickBufferProvenance::UNSPECIFIED, input)
+                .map(|_| ())
+        }
     }
 
-    pub fn push_current(&mut self, input: T) -> Result<(), InputStreamPushError> {
+    pub fn push_current(&mut self, input: T) -> Result<(), TickBufferPushError> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_mut().push_input_for_current_tick::<T>(input) }
+        unsafe {
+            self.world
+                .as_mut()
+                .push_buffer_message_for_current_tick::<T>(TickBufferProvenance::UNSPECIFIED, input)
+                .map(|_| ())
+        }
     }
 }
 
-pub struct InputStreamDrainer<T: 'static> {
+pub struct TickBufferDrainer<T: 'static> {
     world: NonNull<World>,
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static> InputStreamDrainer<T> {
+impl<T: 'static> TickBufferDrainer<T> {
     pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world: NonNull::new(world).expect("world pointer must not be null"),
@@ -302,12 +312,12 @@ impl<T: 'static> InputStreamDrainer<T> {
 
     pub fn drain_tick(&mut self, tick: u64) -> Vec<T> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_mut().drain_input_tick::<T>(tick) }
+        unsafe { self.world.as_mut().drain_buffer_messages_at_tick::<T>(tick) }
     }
 
     pub fn drain_current(&mut self) -> Vec<T> {
         // Safety: extraction guarantees a live world pointer during system execution.
-        unsafe { self.world.as_mut().drain_input_current_tick::<T>() }
+        unsafe { self.world.as_mut().drain_current_buffer_messages::<T>() }
     }
 }
 
@@ -529,7 +539,7 @@ impl<'w, T: 'static> SystemParam<'w> for BroadcastWriter<T> {
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for QueueReader<T> {
+impl<'w, T: 'static> SystemParam<'w> for WorkQueueReader<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -538,14 +548,14 @@ impl<'w, T: 'static> SystemParam<'w> for QueueReader<T> {
 
     fn access(_state: &Self::State) -> QueryAccess {
         let mut access = QueryAccess::default();
-        access.add_queue_read_named::<T>(std::any::type_name::<T>());
+        access.add_work_queue_read_named::<T>(std::any::type_name::<T>());
         access
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
         ParamSlotDescriptor {
-            kind: "queue_reader",
-            label: "QueueReader",
+            kind: "work_queue_reader",
+            label: "WorkQueueReader",
             type_name: std::any::type_name::<Self>(),
         }
     }
@@ -555,11 +565,11 @@ impl<'w, T: 'static> SystemParam<'w> for QueueReader<T> {
         world: *mut World,
         _commands: *mut Commands,
     ) -> Result<Self, SystemParamError> {
-        Ok(QueueReader::new(world))
+        Ok(WorkQueueReader::new(world))
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for QueueWriter<T> {
+impl<'w, T: 'static> SystemParam<'w> for WorkQueueWriter<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -568,14 +578,14 @@ impl<'w, T: 'static> SystemParam<'w> for QueueWriter<T> {
 
     fn access(_state: &Self::State) -> QueryAccess {
         let mut access = QueryAccess::default();
-        access.add_queue_write_named::<T>(std::any::type_name::<T>());
+        access.add_work_queue_write_named::<T>(std::any::type_name::<T>());
         access
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
         ParamSlotDescriptor {
-            kind: "queue_writer",
-            label: "QueueWriter",
+            kind: "work_queue_writer",
+            label: "WorkQueueWriter",
             type_name: std::any::type_name::<Self>(),
         }
     }
@@ -585,11 +595,11 @@ impl<'w, T: 'static> SystemParam<'w> for QueueWriter<T> {
         world: *mut World,
         _commands: *mut Commands,
     ) -> Result<Self, SystemParamError> {
-        Ok(QueueWriter::new(world))
+        Ok(WorkQueueWriter::new(world))
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for QueueDrainer<T> {
+impl<'w, T: 'static> SystemParam<'w> for WorkQueueDrainer<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -598,14 +608,14 @@ impl<'w, T: 'static> SystemParam<'w> for QueueDrainer<T> {
 
     fn access(_state: &Self::State) -> QueryAccess {
         let mut access = QueryAccess::default();
-        access.add_queue_drain_named::<T>(std::any::type_name::<T>());
+        access.add_work_queue_drain_named::<T>(std::any::type_name::<T>());
         access
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
         ParamSlotDescriptor {
-            kind: "queue_drainer",
-            label: "QueueDrainer",
+            kind: "work_queue_drainer",
+            label: "WorkQueueDrainer",
             type_name: std::any::type_name::<Self>(),
         }
     }
@@ -615,11 +625,11 @@ impl<'w, T: 'static> SystemParam<'w> for QueueDrainer<T> {
         world: *mut World,
         _commands: *mut Commands,
     ) -> Result<Self, SystemParamError> {
-        Ok(QueueDrainer::new(world))
+        Ok(WorkQueueDrainer::new(world))
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for InputStreamReader<T> {
+impl<'w, T: 'static> SystemParam<'w> for TickBufferReader<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -628,14 +638,14 @@ impl<'w, T: 'static> SystemParam<'w> for InputStreamReader<T> {
 
     fn access(_state: &Self::State) -> QueryAccess {
         let mut access = QueryAccess::default();
-        access.add_input_stream_read_named::<T>(std::any::type_name::<T>());
+        access.add_tick_buffer_read_named::<T>(std::any::type_name::<T>());
         access
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
         ParamSlotDescriptor {
-            kind: "input_stream_reader",
-            label: "InputStreamReader",
+            kind: "tick_buffer_reader",
+            label: "TickBufferReader",
             type_name: std::any::type_name::<Self>(),
         }
     }
@@ -645,11 +655,11 @@ impl<'w, T: 'static> SystemParam<'w> for InputStreamReader<T> {
         world: *mut World,
         _commands: *mut Commands,
     ) -> Result<Self, SystemParamError> {
-        Ok(InputStreamReader::new(world))
+        Ok(TickBufferReader::new(world))
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for InputStreamWriter<T> {
+impl<'w, T: 'static> SystemParam<'w> for TickBufferWriter<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -658,14 +668,14 @@ impl<'w, T: 'static> SystemParam<'w> for InputStreamWriter<T> {
 
     fn access(_state: &Self::State) -> QueryAccess {
         let mut access = QueryAccess::default();
-        access.add_input_stream_write_named::<T>(std::any::type_name::<T>());
+        access.add_tick_buffer_write_named::<T>(std::any::type_name::<T>());
         access
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
         ParamSlotDescriptor {
-            kind: "input_stream_writer",
-            label: "InputStreamWriter",
+            kind: "tick_buffer_writer",
+            label: "TickBufferWriter",
             type_name: std::any::type_name::<Self>(),
         }
     }
@@ -675,11 +685,11 @@ impl<'w, T: 'static> SystemParam<'w> for InputStreamWriter<T> {
         world: *mut World,
         _commands: *mut Commands,
     ) -> Result<Self, SystemParamError> {
-        Ok(InputStreamWriter::new(world))
+        Ok(TickBufferWriter::new(world))
     }
 }
 
-impl<'w, T: 'static> SystemParam<'w> for InputStreamDrainer<T> {
+impl<'w, T: 'static> SystemParam<'w> for TickBufferDrainer<T> {
     type State = ();
 
     fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
@@ -688,14 +698,14 @@ impl<'w, T: 'static> SystemParam<'w> for InputStreamDrainer<T> {
 
     fn access(_state: &Self::State) -> QueryAccess {
         let mut access = QueryAccess::default();
-        access.add_input_stream_drain_named::<T>(std::any::type_name::<T>());
+        access.add_tick_buffer_drain_named::<T>(std::any::type_name::<T>());
         access
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
         ParamSlotDescriptor {
-            kind: "input_stream_drainer",
-            label: "InputStreamDrainer",
+            kind: "tick_buffer_drainer",
+            label: "TickBufferDrainer",
             type_name: std::any::type_name::<Self>(),
         }
     }
@@ -705,6 +715,6 @@ impl<'w, T: 'static> SystemParam<'w> for InputStreamDrainer<T> {
         world: *mut World,
         _commands: *mut Commands,
     ) -> Result<Self, SystemParamError> {
-        Ok(InputStreamDrainer::new(world))
+        Ok(TickBufferDrainer::new(world))
     }
 }

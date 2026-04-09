@@ -5,8 +5,6 @@ use editor_core::CommandId;
 
 use crate::{SceneCommandIntent, SceneEditorCommand};
 
-/// File: domain/editor/editor_scene/src/bridge/command_builder.rs
-/// Method: scene_intent_label
 pub fn scene_intent_label(intent: &SceneCommandIntent) -> String {
     match intent {
         SceneCommandIntent::CreateEntity { .. } => "Create Entity".to_string(),
@@ -20,8 +18,6 @@ pub fn scene_intent_label(intent: &SceneCommandIntent) -> String {
     }
 }
 
-/// File: domain/editor/editor_scene/src/bridge/command_builder.rs
-/// Method: scene_intent_to_command
 pub fn scene_intent_to_command(id: CommandId, intent: SceneCommandIntent) -> SceneEditorCommand {
     let label = scene_intent_label(&intent);
     SceneEditorCommand::from_intent(id, label, intent)

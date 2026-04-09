@@ -16,8 +16,6 @@ pub struct ReflectedResourceRegistration {
 }
 
 impl ReflectedResourceRegistration {
-    /// File: domain/ecs/src/reflect/resource_registration.rs
-    /// Method: new
     pub const fn new(
         type_info: &'static TypeInfo,
         value_ref: ResourceValueRefAccessor,

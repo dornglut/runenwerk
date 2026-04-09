@@ -196,17 +196,18 @@ fn scheduler_event_conflict_matrix_includes_write_write() {
 }
 
 #[test]
-fn scheduler_queue_and_input_stream_conflicts_include_drain_modes() {
-    fn queue_read(_queue: QueueReader<DamageEvent>) {}
-    fn queue_write(_queue: QueueWriter<DamageEvent>) {}
-    fn queue_drain(_queue: QueueDrainer<DamageEvent>) {}
-    fn input_read(_stream: InputStreamReader<DamageEvent>) {}
-    fn input_drain(_stream: InputStreamDrainer<DamageEvent>) {}
+fn scheduler_queue_and_tick_buffer_conflicts_include_drain_modes() {
+    fn queue_read(_queue: WorkQueueReader<DamageEvent>) {}
+    fn queue_write(_queue: WorkQueueWriter<DamageEvent>) {}
+    fn work_queue_drain(_queue: WorkQueueDrainer<DamageEvent>) {}
+    fn input_read(_stream: TickBufferReader<DamageEvent>) {}
+    fn input_drain(_stream: TickBufferDrainer<DamageEvent>) {}
 
     let mut world = World::new();
 
     let mut queue_read_drain_runtime = Runtime::new();
-    queue_read_drain_runtime.add_systems::<Update, _, _>(&mut world, (queue_read, queue_drain));
+    queue_read_drain_runtime
+        .add_systems::<Update, _, _>(&mut world, (queue_read, work_queue_drain));
     let queue_read_drain_plan = queue_read_drain_runtime
         .plan_for::<Update>()
         .unwrap()
@@ -218,7 +219,8 @@ fn scheduler_queue_and_input_stream_conflicts_include_drain_modes() {
     );
 
     let mut queue_write_drain_runtime = Runtime::new();
-    queue_write_drain_runtime.add_systems::<Update, _, _>(&mut world, (queue_write, queue_drain));
+    queue_write_drain_runtime
+        .add_systems::<Update, _, _>(&mut world, (queue_write, work_queue_drain));
     let queue_write_drain_plan = queue_write_drain_runtime
         .plan_for::<Update>()
         .unwrap()
@@ -245,8 +247,8 @@ fn scheduler_queue_and_input_stream_conflicts_include_drain_modes() {
 #[test]
 fn mixed_intent_params_in_single_system_are_rejected() {
     fn invalid_mixed_intent(
-        _reader: QueueReader<DamageEvent>,
-        _drainer: QueueDrainer<DamageEvent>,
+        _reader: WorkQueueReader<DamageEvent>,
+        _drainer: WorkQueueDrainer<DamageEvent>,
     ) {
     }
 
@@ -263,7 +265,11 @@ fn mixed_intent_params_in_single_system_are_rejected() {
 
 #[test]
 fn duplicate_write_intents_in_single_system_are_allowed() {
-    fn duplicate_writers(_first: QueueWriter<DamageEvent>, _second: QueueWriter<DamageEvent>) {}
+    fn duplicate_writers(
+        _first: WorkQueueWriter<DamageEvent>,
+        _second: WorkQueueWriter<DamageEvent>,
+    ) {
+    }
 
     let mut world = World::new();
     let mut runtime = Runtime::new();
@@ -277,7 +283,7 @@ fn duplicate_write_intents_in_single_system_are_allowed() {
 #[test]
 fn system_ids_and_param_slot_ids_are_stable_and_skip_failed_registration() {
     fn valid_a(_step: Res<Step>) {}
-    fn invalid(_reader: QueueReader<DamageEvent>, _drainer: QueueDrainer<DamageEvent>) {}
+    fn invalid(_reader: WorkQueueReader<DamageEvent>, _drainer: WorkQueueDrainer<DamageEvent>) {}
     fn valid_b(_step: Res<Step>, _events: BroadcastReader<DamageEvent>) {}
 
     let mut world = World::new();

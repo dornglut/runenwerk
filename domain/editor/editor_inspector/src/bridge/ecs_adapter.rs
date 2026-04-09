@@ -17,14 +17,10 @@ impl<'a, B> EcsInspectorAdapter<'a, B>
 where
     B: EcsInspectorBridge,
 {
-    /// File: domain/editor/editor_inspector/src/bridge/ecs_adapter.rs
-    /// Method: new
     pub fn new(world: &'a ecs::World, bridge: &'a B) -> Self {
         Self { world, bridge }
     }
 
-    /// File: domain/editor/editor_inspector/src/bridge/ecs_adapter.rs
-    /// Method: build_component_sections
     fn build_component_sections(
         &self,
         entity_id: EntityId,
@@ -63,8 +59,6 @@ where
         ])
     }
 
-    /// File: domain/editor/editor_inspector/src/bridge/ecs_adapter.rs
-    /// Method: build_resource_sections
     fn build_resource_sections(
         &self,
         resource_type: ResourceTypeId,
@@ -123,8 +117,6 @@ where
     }
 }
 
-/// File: domain/editor/editor_inspector/src/bridge/ecs_adapter.rs
-/// Method: build_reflect_field
 fn build_reflect_field(
     stable_name: impl Into<String>,
     display_name: impl Into<String>,
@@ -141,8 +133,6 @@ fn build_reflect_field(
     build_leaf_field(stable_name, display_name, path, value)
 }
 
-/// File: domain/editor/editor_inspector/src/bridge/ecs_adapter.rs
-/// Method: build_struct_field
 fn build_struct_field(
     stable_name: String,
     display_name: String,
@@ -174,8 +164,6 @@ fn build_struct_field(
     field
 }
 
-/// File: domain/editor/editor_inspector/src/bridge/ecs_adapter.rs
-/// Method: build_leaf_field
 fn build_leaf_field(
     stable_name: String,
     display_name: String,

@@ -63,6 +63,14 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
         .expect("ack processing frame should run")
         .run_for_ticks(2)
         .expect("second server replication tick should run");
+    assert_eq!(
+        server
+            .world()
+            .resource::<ReplicationDiagnostics>()
+            .unwrap()
+            .acked,
+        1
+    );
 
     let outbound = server.world().resource::<NetworkOutboundQueue>().unwrap();
     let delta_snapshot = outbound
@@ -120,6 +128,37 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
     assert!(outbound.client_messages().iter().any(
         |message| matches!(message, ClientMessage::Ack(ack) if ack.cursor == SnapshotCursor(2))
     ));
+}
+
+#[test]
+fn server_tracks_lagged_input_frames_in_replication_diagnostics() {
+    let mut app = App::headless();
+    app.add_plugins(default_plugins());
+    app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    app.world_mut().set_current_buffer_tick(5);
+
+    let payload =
+        TestReplicationDriver::encode_input(&[ClientCommandEnvelope::Move(MoveCommand {
+            x: 0.0,
+            y: 1.0,
+        })])
+        .expect("input payload should encode");
+
+    enqueue_server_inbox_from(
+        app.world_mut(),
+        Some(ConnectionId(1)),
+        ClientMessage::InputFrame(InputFrame {
+            tick: SimulationTick(4),
+            payload,
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+
+    let app = app
+        .run_for_frames(1)
+        .expect("server lagged input frame should run");
+    let diagnostics = app.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(diagnostics.lagged, 1);
 }
 
 #[test]

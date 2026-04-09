@@ -363,7 +363,7 @@ Examples:
     UnreliableSequenced
     InputStream
 
-`InputStream` in this section is the transport-lane identifier (`TransportLane::InputStream`), not the ECS runtime `InputStream<T>`/design `TickBuffer<T>` primitive name.
+`InputStream` in this section is the transport-lane identifier (`TransportLane::InputStream`), not the ECS runtime `TickBuffer<T>` primitive name.
 
 Profiles determine which lane is used.
 

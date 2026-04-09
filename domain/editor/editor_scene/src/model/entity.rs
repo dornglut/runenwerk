@@ -11,8 +11,6 @@ pub struct SceneEntityDescriptor {
 }
 
 impl SceneEntityDescriptor {
-    /// File: domain/editor/editor_scene/src/model/entity.rs
-    /// Method: new
     pub fn new(id: EntityId, display_name: impl Into<String>) -> Self {
         Self {
             id,
@@ -21,8 +19,6 @@ impl SceneEntityDescriptor {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/model/entity.rs
-    /// Method: with_parent
     pub fn with_parent(mut self, parent: Option<EntityId>) -> Self {
         self.parent = parent;
         self
@@ -37,8 +33,6 @@ pub struct SceneEntitySnapshot {
 }
 
 impl SceneEntitySnapshot {
-    /// File: domain/editor/editor_scene/src/model/entity.rs
-    /// Method: new
     pub fn new(id: EntityId, display_name: impl Into<String>, parent: Option<EntityId>) -> Self {
         Self {
             id,

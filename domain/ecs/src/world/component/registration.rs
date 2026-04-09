@@ -21,7 +21,7 @@ impl World {
                 let id = self.next_component_id;
                 self.next_component_id = self.next_component_id.saturating_add(1);
                 crate::world::change_tracking::ComponentMeta {
-                    _id: id,
+                    id: crate::world::change_tracking::ComponentTypeKey(id),
                     name: T::component_name(),
                 }
             });

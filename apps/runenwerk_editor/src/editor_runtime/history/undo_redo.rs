@@ -3,8 +3,6 @@ use editor_scene::SceneCommandContext;
 
 use crate::editor_runtime::{RunenwerkEditorRuntime, StoredSceneTransaction};
 
-/// File: apps/runenwerk_editor/src/editor_runtime/history/undo_redo.rs
-/// Method: undo_last_scene_transaction
 pub fn undo_last_scene_transaction(
     runtime: &mut RunenwerkEditorRuntime,
 ) -> Result<Option<HistoryEntry>, &'static str> {
@@ -38,8 +36,6 @@ pub fn undo_last_scene_transaction(
     Ok(Some(history_entry))
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/history/undo_redo.rs
-/// Method: redo_last_scene_transaction
 pub fn redo_last_scene_transaction(
     runtime: &mut RunenwerkEditorRuntime,
 ) -> Result<Option<HistoryEntry>, &'static str> {

@@ -6,26 +6,18 @@ pub struct Vec3Value {
 }
 
 impl Vec3Value {
-    /// File: domain/scene/src/transform.rs
-    /// Method: new
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: zero
     pub fn zero() -> Self {
         Self::new(0.0, 0.0, 0.0)
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: one
     pub fn one() -> Self {
         Self::new(1.0, 1.0, 1.0)
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: translated
     pub fn translated(mut self, dx: f32, dy: f32, dz: f32) -> Self {
         self.x += dx;
         self.y += dy;
@@ -33,14 +25,10 @@ impl Vec3Value {
         self
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: to_glam
     pub fn to_glam(self) -> glam::Vec3 {
         glam::Vec3::new(self.x, self.y, self.z)
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: from_glam
     pub fn from_glam(value: glam::Vec3) -> Self {
         Self::new(value.x, value.y, value.z)
     }
@@ -55,26 +43,18 @@ pub struct QuatValue {
 }
 
 impl QuatValue {
-    /// File: domain/scene/src/transform.rs
-    /// Method: new
     pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self { x, y, z, w }
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: identity
     pub fn identity() -> Self {
         Self::new(0.0, 0.0, 0.0, 1.0)
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: to_glam
     pub fn to_glam(self) -> glam::Quat {
         glam::Quat::from_xyzw(self.x, self.y, self.z, self.w)
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: from_glam
     pub fn from_glam(value: glam::Quat) -> Self {
         Self::new(value.x, value.y, value.z, value.w)
     }
@@ -94,8 +74,6 @@ pub struct LocalTransform {
 }
 
 impl LocalTransform {
-    /// File: domain/scene/src/transform.rs
-    /// Method: new
     pub fn new(translation: Vec3Value, rotation: QuatValue, scale: Vec3Value) -> Self {
         Self {
             translation,
@@ -104,8 +82,6 @@ impl LocalTransform {
         }
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: from_translation
     pub fn from_translation(translation: Vec3Value) -> Self {
         Self {
             translation,
@@ -113,8 +89,6 @@ impl LocalTransform {
         }
     }
 
-    /// File: domain/scene/src/transform.rs
-    /// Method: translated
     pub fn translated(mut self, dx: f32, dy: f32, dz: f32) -> Self {
         self.translation = self.translation.translated(dx, dy, dz);
         self
@@ -139,8 +113,6 @@ pub struct WorldTransform {
 }
 
 impl WorldTransform {
-    /// File: domain/scene/src/transform.rs
-    /// Method: new
     pub fn new(translation: Vec3Value, rotation: QuatValue, scale: Vec3Value) -> Self {
         Self {
             translation,

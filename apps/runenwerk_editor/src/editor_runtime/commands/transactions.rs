@@ -9,8 +9,6 @@ pub struct ExecutedSceneTransaction {
     pub commands: Vec<editor_core::CommandMetadata>,
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/commands/transactions.rs
-/// Method: execute_scene_transaction
 pub fn execute_scene_transaction(
     runtime: &mut RunenwerkEditorRuntime,
     transaction_id: TransactionId,
@@ -35,8 +33,6 @@ pub fn execute_scene_transaction(
     })
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/commands/transactions.rs
-/// Method: execute_scene_transaction_and_push_history
 pub fn execute_scene_transaction_and_push_history(
     runtime: &mut RunenwerkEditorRuntime,
     transaction_id: TransactionId,
