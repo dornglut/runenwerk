@@ -1,5 +1,5 @@
 use ecs::{
-    ChangeExtractionFilter, ChangeExtractionWindow, ComponentTypeKey, ControllerId, OwnerState,
+    ChangeExtractionFilter, ChangeExtractionWindow, ComponentTypeKey, OwnerId, OwnerState,
     ResourceTypeKey, StructuralDeltaBatch,
 };
 use std::collections::BTreeSet;
@@ -8,20 +8,20 @@ use std::collections::BTreeSet;
 pub struct ReplicationExtractionFilter {
     pub component_keys: Option<BTreeSet<ComponentTypeKey>>,
     pub resource_keys: Option<BTreeSet<ResourceTypeKey>>,
-    pub include_no_owner: bool,
-    pub include_server_owned: bool,
-    pub allowed_controllers: Option<BTreeSet<ControllerId>>,
+    pub include_unowned: bool,
+    pub include_world_owned: bool,
+    pub allowed_owners: Option<BTreeSet<OwnerId>>,
 }
 
 impl ReplicationExtractionFilter {
     pub fn allows_owner(&self, owner: OwnerState) -> bool {
         match owner {
-            OwnerState::NoOwner => self.include_no_owner,
-            OwnerState::ServerOwned => self.include_server_owned,
-            OwnerState::ControllerOwned(controller) => self
-                .allowed_controllers
+            OwnerState::Unowned => self.include_unowned,
+            OwnerState::WorldOwned => self.include_world_owned,
+            OwnerState::OwnedBy(owner_id) => self
+                .allowed_owners
                 .as_ref()
-                .is_none_or(|controllers| controllers.contains(&controller)),
+                .is_none_or(|owners| owners.contains(&owner_id)),
         }
     }
 }

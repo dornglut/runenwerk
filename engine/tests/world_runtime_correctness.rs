@@ -17,7 +17,7 @@ use engine::prelude::{App, AuthorityRole};
 use engine_sim::SimulationTick;
 use spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
-    BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation, WorldTick,
+    BrushShape, BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason, Operation,
     quantize_aabb, quantize_position,
 };
 use world_sdf::{RegionSdfSummary, SdfChunkPayload};
@@ -77,7 +77,7 @@ fn ingress_rejects_operations_in_client_replica_mode() {
             .world_mut()
             .resource_mut::<WorldRuntimeConfig>()
             .expect("world runtime config should exist");
-        world_runtime.mode = WorldRuntimeMode::ClientReplica;
+        world_runtime.mode = WorldRuntimeMode::ReadOnly;
     }
 
     let op_id = submit_world_operation(
@@ -93,8 +93,6 @@ fn ingress_rejects_operations_in_client_replica_mode() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 404,
-            server_tick: WorldTick(1),
-            author_connection_id: Some(99),
         },
     );
     assert!(
@@ -132,7 +130,7 @@ fn world_runtime_mode_tracks_authority_role() {
         .mode;
     assert_eq!(
         initial_mode,
-        WorldRuntimeMode::ServerAuthoritative,
+        WorldRuntimeMode::Writable,
         "local default authority should initialize world runtime in authoritative mode"
     );
 
@@ -144,7 +142,7 @@ fn world_runtime_mode_tracks_authority_role() {
         .mode;
     assert_eq!(
         client_mode,
-        WorldRuntimeMode::ClientReplica,
+        WorldRuntimeMode::ReadOnly,
         "set_authority_role(Client) should immediately switch world runtime mode"
     );
 
@@ -156,7 +154,7 @@ fn world_runtime_mode_tracks_authority_role() {
         .mode;
     assert_eq!(
         server_mode,
-        WorldRuntimeMode::ServerAuthoritative,
+        WorldRuntimeMode::Writable,
         "set_authority_role(Server) should switch world runtime mode back to authoritative"
     );
 }
@@ -184,8 +182,6 @@ fn ingress_invalidation_uses_partition_quantization_scale() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 77,
-            server_tick: WorldTick(1),
-            author_connection_id: None,
         },
     );
     assert!(op_id.is_some(), "world ingress should append operation");
@@ -396,8 +392,6 @@ fn stamp_operation_produces_authoritative_chunk_payload() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 101,
-            server_tick: WorldTick(1),
-            author_connection_id: None,
         },
     );
     assert!(
@@ -450,8 +444,6 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 201,
-            server_tick: WorldTick(1),
-            author_connection_id: None,
         },
     );
     assert!(add_op.is_some(), "add operation should be accepted");
@@ -471,8 +463,6 @@ fn material_field_edit_preserves_existing_chunk_solidity() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 202,
-            server_tick: WorldTick(2),
-            author_connection_id: None,
         },
     );
     assert!(edit_op.is_some(), "material field edit should be accepted");

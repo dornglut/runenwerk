@@ -4,12 +4,12 @@ use engine::net::prelude::{
     SnapshotCursor,
 };
 use engine::plugins::net::{enqueue_server_inbox_from, update_connection_closed};
+use engine::plugins::net::NetStreamingStateResource;
 use engine::plugins::world::adapters::resources::{
     PartitionConfigResource, ReplicationStateResource,
 };
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::{WorldAuthorityState, WorldPlugin};
-use engine::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use engine::prelude::App;
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ use spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use std::io;
 use world_ops::{
     BrushShape, DirtyChunkMap, Operation, OperationId, OperationLog, OperationRecord,
-    RegionInvalidationDelta, ReplayWindow, SyncCursor, WorldRevision, WorldTick,
+    RegionInvalidationDelta, ReplayWindow, SyncCursor, WorldRevision,
     mark_dirty_chunks_from_operation_log, operations_for_replay_window, quantize_aabb,
     quantize_position,
 };
@@ -59,8 +59,6 @@ fn build_test_log() -> OperationLog {
             operation,
             affected_bounds_q: bounds_q,
             deterministic_seed: 1337,
-            server_tick: WorldTick(12),
-            author_connection_id: Some(7),
         });
     }
     log
@@ -199,8 +197,6 @@ fn world_replication_state_is_built_from_world_runtime() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 99,
-            server_tick: WorldTick(5),
-            author_connection_id: Some(7),
         },
     );
     assert!(op_id.is_some(), "world ingress should append operation");
@@ -309,8 +305,6 @@ fn world_region_invalidation_projection_is_deterministic() {
                 WorldEditIngressMeta {
                     planet_id: WorldId(0),
                     deterministic_seed: seed,
-                    server_tick: WorldTick(seed),
-                    author_connection_id: Some(seed),
                 },
             );
             assert!(op_id.is_some(), "ingress op should append to journal");
@@ -367,8 +361,6 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 17,
-            server_tick: WorldTick(9),
-            author_connection_id: Some(connection_id.0),
         },
     );
 
@@ -379,7 +371,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     {
         let interest = app
             .world()
-            .resource::<WorldStreamingInterestResource>()
+            .resource::<NetStreamingStateResource>()
             .expect("world streaming interest should exist");
         let per_connection = interest
             .per_connection
@@ -432,7 +424,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     {
         let interest = app
             .world()
-            .resource::<WorldStreamingInterestResource>()
+            .resource::<NetStreamingStateResource>()
             .expect("world streaming interest should exist");
         let per_connection = interest
             .per_connection
@@ -456,8 +448,6 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 18,
-            server_tick: WorldTick(10),
-            author_connection_id: Some(connection_id.0),
         },
     );
     let next_tick = app
@@ -473,7 +463,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
     {
         let interest = app
             .world()
-            .resource::<WorldStreamingInterestResource>()
+            .resource::<NetStreamingStateResource>()
             .expect("world streaming interest should exist");
         let per_connection = interest
             .per_connection
@@ -498,7 +488,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
 
     let interest = app
         .world()
-        .resource::<WorldStreamingInterestResource>()
+        .resource::<NetStreamingStateResource>()
         .expect("world streaming interest should exist");
     assert!(
         !interest.per_connection.contains_key(&connection_id),

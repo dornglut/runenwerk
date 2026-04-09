@@ -1,19 +1,19 @@
 use super::super::{
-    SceneEntityDeltaV1, SceneEntitySnapshotV1, SceneSimulationDeltaV1, SceneSimulationSnapshotV1,
-    SceneWorldContextDeltaV1, SceneWorldContextSnapshotV1,
+    SceneEntityDeltaV2, SceneEntitySnapshotV2, SceneSimulationDeltaV2, SceneSimulationSnapshotV2,
+    SceneWorldContextDeltaV2, SceneWorldContextSnapshotV2,
 };
 
 pub(crate) fn build_scene_simulation_delta(
-    base: &SceneSimulationSnapshotV1,
-    current: &SceneSimulationSnapshotV1,
-) -> SceneSimulationDeltaV1 {
+    base: &SceneSimulationSnapshotV2,
+    current: &SceneSimulationSnapshotV2,
+) -> SceneSimulationDeltaV2 {
     let base_ctx = &base.context;
     let current_ctx = &current.context;
     let base_entities = &base.entities;
     let current_entities = &current.entities;
 
-    SceneSimulationDeltaV1 {
-        context: SceneWorldContextDeltaV1 {
+    SceneSimulationDeltaV2 {
+        context: SceneWorldContextDeltaV2 {
             world: (base_ctx.world != current_ctx.world).then_some(current_ctx.world),
             overlays: (base_ctx.overlays != current_ctx.overlays)
                 .then_some(current_ctx.overlays.clone()),
@@ -52,23 +52,8 @@ pub(crate) fn build_scene_simulation_delta(
                 .then_some(current_ctx.frame_count),
             enemy_kills: (base_ctx.enemy_kills != current_ctx.enemy_kills)
                 .then_some(current_ctx.enemy_kills),
-            session_admitted: (base_ctx.session_admitted != current_ctx.session_admitted)
-                .then_some(current_ctx.session_admitted),
-            session_lobby_id: (base_ctx.session_lobby_id != current_ctx.session_lobby_id)
-                .then_some(current_ctx.session_lobby_id.clone()),
-            session_roster_player_codes: (base_ctx.session_roster_player_codes
-                != current_ctx.session_roster_player_codes)
-                .then_some(current_ctx.session_roster_player_codes.clone()),
-            session_max_players: (base_ctx.session_max_players != current_ctx.session_max_players)
-                .then_some(current_ctx.session_max_players),
-            session_ai_fill_target: (base_ctx.session_ai_fill_target
-                != current_ctx.session_ai_fill_target)
-                .then_some(current_ctx.session_ai_fill_target),
-            session_settings_json: (base_ctx.session_settings_json
-                != current_ctx.session_settings_json)
-                .then_some(current_ctx.session_settings_json.clone()),
         },
-        entities: SceneEntityDeltaV1 {
+        entities: SceneEntityDeltaV2 {
             frame_counter: (base_entities.frame_counter != current_entities.frame_counter)
                 .then_some(current_entities.frame_counter),
             debug_position: (base_entities.debug_position != current_entities.debug_position)
@@ -80,11 +65,11 @@ pub(crate) fn build_scene_simulation_delta(
 }
 
 pub(crate) fn apply_scene_simulation_delta(
-    base: &SceneSimulationSnapshotV1,
-    delta: &SceneSimulationDeltaV1,
-) -> SceneSimulationSnapshotV1 {
-    SceneSimulationSnapshotV1 {
-        context: SceneWorldContextSnapshotV1 {
+    base: &SceneSimulationSnapshotV2,
+    delta: &SceneSimulationDeltaV2,
+) -> SceneSimulationSnapshotV2 {
+    SceneSimulationSnapshotV2 {
+        context: SceneWorldContextSnapshotV2 {
             world: delta.context.world.unwrap_or(base.context.world),
             overlays: delta
                 .context
@@ -155,35 +140,8 @@ pub(crate) fn apply_scene_simulation_delta(
                 .context
                 .enemy_kills
                 .unwrap_or(base.context.enemy_kills),
-            session_admitted: delta
-                .context
-                .session_admitted
-                .unwrap_or(base.context.session_admitted),
-            session_lobby_id: delta
-                .context
-                .session_lobby_id
-                .clone()
-                .unwrap_or_else(|| base.context.session_lobby_id.clone()),
-            session_roster_player_codes: delta
-                .context
-                .session_roster_player_codes
-                .clone()
-                .unwrap_or_else(|| base.context.session_roster_player_codes.clone()),
-            session_max_players: delta
-                .context
-                .session_max_players
-                .unwrap_or(base.context.session_max_players),
-            session_ai_fill_target: delta
-                .context
-                .session_ai_fill_target
-                .unwrap_or(base.context.session_ai_fill_target),
-            session_settings_json: delta
-                .context
-                .session_settings_json
-                .clone()
-                .unwrap_or_else(|| base.context.session_settings_json.clone()),
         },
-        entities: SceneEntitySnapshotV1 {
+        entities: SceneEntitySnapshotV2 {
             frame_counter: delta
                 .entities
                 .frame_counter

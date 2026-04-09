@@ -1,6 +1,6 @@
 use crate::plugins::SceneManager;
 use crate::prelude::domain::{SceneId, SceneSlot, build_overlay_runtime};
-use crate::{GameplayRuntimeConfig, SceneRuntimeState, SessionRuntimeState, UiOverlayState};
+use crate::{GameplayRuntimeConfig, SceneRuntimeState, UiOverlayState};
 use anyhow::Result;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -39,7 +39,6 @@ pub(crate) fn snapshot_public_scene_state(
     SceneRuntimeState,
     GameplayRuntimeConfig,
     UiOverlayState,
-    SessionRuntimeState,
 ) {
     let gameplay = GameplayRuntimeConfig {
         chunk_size: manager.world_runtime.ctx.gameplay_config.chunk_size,
@@ -59,19 +58,7 @@ pub(crate) fn snapshot_public_scene_state(
         scale: manager.overlay_runtime.ui.scale,
         ..UiOverlayState::default()
     };
-    let session = SessionRuntimeState {
-        admitted: manager.world_runtime.ctx.session_admitted,
-        lobby_id: manager.world_runtime.ctx.session_lobby_id.clone(),
-        roster_player_codes: manager
-            .world_runtime
-            .ctx
-            .session_roster_player_codes
-            .clone(),
-        max_players: manager.world_runtime.ctx.session_max_players,
-        ai_fill_target: manager.world_runtime.ctx.session_ai_fill_target,
-        settings_json: manager.world_runtime.ctx.session_settings_json.clone(),
-    };
-    (scene_state, gameplay, overlay, session)
+    (scene_state, gameplay, overlay)
 }
 
 pub(crate) fn system_time_to_millis(value: Option<SystemTime>) -> Option<u64> {

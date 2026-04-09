@@ -213,7 +213,7 @@ fn client_plugin_marks_session_active_on_join_accept() {
     );
     let session = app
         .world()
-        .resource::<engine::SessionRuntimeState>()
+        .resource::<engine::plugins::net::NetSessionView>()
         .unwrap();
     assert!(session.admitted);
     assert_eq!(session.lobby_id.as_deref(), Some("lobby-1"));

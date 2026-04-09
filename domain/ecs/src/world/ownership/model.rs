@@ -1,9 +1,9 @@
 use crate::entity::Entity;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ControllerId(u64);
+pub struct OwnerId(u64);
 
-impl ControllerId {
+impl OwnerId {
     pub const fn from_raw(value: u64) -> Self {
         Self(value)
     }
@@ -14,16 +14,16 @@ impl ControllerId {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum ControllerRole {
-    Controller,
-    Spectator,
+pub enum OwnerRole {
+    Active,
+    Observer,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum OwnerState {
-    NoOwner,
-    ServerOwned,
-    ControllerOwned(ControllerId),
+    Unowned,
+    WorldOwned,
+    OwnedBy(OwnerId),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -2,13 +2,13 @@ use super::super::SceneManager;
 use super::super::domain::{SceneChannels, build_world_scene_runtime};
 use super::super::runtime::rebuild_overlay_stack;
 use super::super::snapshot::capture_scene_simulation_snapshot;
-use super::codec::{SceneReplayCommandFrame, SceneSimulationCodec};
+use super::codec::{SceneReplayInputFrameV2, SceneSimulationCodec};
 use anyhow::Result;
 use engine_sim::{SimulationCodec, SimulationHash};
 
 pub(crate) fn replay_scene_frame(
     manager: &mut SceneManager,
-    frame: &SceneReplayCommandFrame,
+    frame: &SceneReplayInputFrameV2,
 ) -> Result<SimulationHash> {
     if manager.world != frame.world {
         manager.world = frame.world;
@@ -34,12 +34,6 @@ pub(crate) fn replay_scene_frame(
     ctx.camera_distance = frame.camera_distance;
     ctx.delta_seconds = frame.delta_seconds;
     ctx.fixed_step_seconds = frame.fixed_step_seconds;
-    ctx.session_admitted = frame.session_admitted;
-    ctx.session_lobby_id = frame.session_lobby_id.clone();
-    ctx.session_roster_player_codes = frame.session_roster_player_codes.clone();
-    ctx.session_max_players = frame.session_max_players;
-    ctx.session_ai_fill_target = frame.session_ai_fill_target;
-    ctx.session_settings_json = frame.session_settings_json.clone();
     ctx.outbound_notifications.clear();
 
     if manager.world.visible && !manager.world.paused {

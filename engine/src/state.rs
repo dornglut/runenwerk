@@ -1,6 +1,5 @@
 use crate::plugins::render::renderer::GfxFrameTimings;
 use ecs::Component;
-use engine_net::AuthoritativeJoinState;
 use std::collections::HashMap;
 use std::path::Path;
 use ui_render_data::UiFrame;
@@ -262,52 +261,6 @@ impl Default for GameplayRuntimeConfig {
             chunk_load_radius: 2,
             infinite_world: true,
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Component, ecs::Resource)]
-pub struct SessionRuntimeState {
-    pub admitted: bool,
-    pub lobby_id: Option<String>,
-    pub roster_player_codes: Vec<String>,
-    pub max_players: u8,
-    pub ai_fill_target: u8,
-    pub settings_json: Option<String>,
-}
-
-impl Default for SessionRuntimeState {
-    fn default() -> Self {
-        Self {
-            admitted: false,
-            lobby_id: None,
-            roster_player_codes: Vec::new(),
-            max_players: 1,
-            ai_fill_target: 1,
-            settings_json: None,
-        }
-    }
-}
-
-impl SessionRuntimeState {
-    pub fn clear(&mut self) {
-        *self = Self::default();
-    }
-
-    pub fn apply_authoritative_join(&mut self, join: &AuthoritativeJoinState) {
-        let roster_size = join.roster_player_codes.len().clamp(1, u8::MAX as usize) as u8;
-        let max_players = join.max_players.max(roster_size).max(1);
-        let ai_fill_target = if join.ai_fill_target == 0 {
-            max_players
-        } else {
-            join.ai_fill_target.clamp(roster_size, max_players)
-        };
-
-        self.admitted = true;
-        self.lobby_id = join.lobby_id.clone();
-        self.roster_player_codes = join.roster_player_codes.clone();
-        self.max_players = max_players;
-        self.ai_fill_target = ai_fill_target;
-        self.settings_json = join.settings_json.clone();
     }
 }
 

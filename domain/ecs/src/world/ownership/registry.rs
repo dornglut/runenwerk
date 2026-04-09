@@ -1,5 +1,5 @@
 use super::model::{
-    ControllerId, ControllerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord,
+    OwnerId, OwnerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord,
     ResourceOwnerKey, ResourceOwnershipDescriptor,
 };
 use crate::component::Resource;
@@ -10,37 +10,37 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Debug, Default)]
 pub(crate) struct OwnershipRegistry {
-    next_controller_id: u64,
+    next_owner_id: u64,
     next_resource_key: u64,
     next_transfer_sequence: u64,
-    controller_roles: BTreeMap<ControllerId, ControllerRole>,
+    owner_roles: BTreeMap<OwnerId, OwnerRole>,
     entity_owner: BTreeMap<Entity, OwnerState>,
     resource_owner_by_key: BTreeMap<ResourceOwnerKey, OwnerState>,
     resource_key_by_type: HashMap<TypeId, ResourceOwnerKey>,
     resource_name_by_key: BTreeMap<ResourceOwnerKey, &'static str>,
-    targets_by_controller: BTreeMap<ControllerId, BTreeSet<OwnershipTarget>>,
+    targets_by_owner: BTreeMap<OwnerId, BTreeSet<OwnershipTarget>>,
     transfer_log: Vec<OwnershipTransferRecord>,
 }
 
 impl OwnershipRegistry {
-    pub(super) fn create_controller(&mut self, role: ControllerRole) -> ControllerId {
-        self.next_controller_id = self.next_controller_id.saturating_add(1);
-        let id = ControllerId::from_raw(self.next_controller_id);
-        self.controller_roles.insert(id, role);
-        self.targets_by_controller.entry(id).or_default();
+    pub(super) fn create_owner(&mut self, role: OwnerRole) -> OwnerId {
+        self.next_owner_id = self.next_owner_id.saturating_add(1);
+        let id = OwnerId::from_raw(self.next_owner_id);
+        self.owner_roles.insert(id, role);
+        self.targets_by_owner.entry(id).or_default();
         id
     }
 
-    pub(super) fn controller_role(&self, controller: ControllerId) -> Option<ControllerRole> {
-        self.controller_roles.get(&controller).copied()
+    pub(super) fn owner_role(&self, owner: OwnerId) -> Option<OwnerRole> {
+        self.owner_roles.get(&owner).copied()
     }
 
-    pub(super) fn set_controller_role(
+    pub(super) fn set_owner_role(
         &mut self,
-        controller: ControllerId,
-        role: ControllerRole,
+        owner: OwnerId,
+        role: OwnerRole,
     ) -> bool {
-        match self.controller_roles.get_mut(&controller) {
+        match self.owner_roles.get_mut(&owner) {
             Some(current) => {
                 if *current == role {
                     false
@@ -50,8 +50,8 @@ impl OwnershipRegistry {
                 }
             }
             None => {
-                self.controller_roles.insert(controller, role);
-                self.targets_by_controller.entry(controller).or_default();
+                self.owner_roles.insert(owner, role);
+                self.targets_by_owner.entry(owner).or_default();
                 true
             }
         }
@@ -89,14 +89,14 @@ impl OwnershipRegistry {
         self.entity_owner
             .get(&entity)
             .copied()
-            .unwrap_or(OwnerState::NoOwner)
+            .unwrap_or(OwnerState::Unowned)
     }
 
     pub(super) fn resource_owner_by_key(&self, key: ResourceOwnerKey) -> OwnerState {
         self.resource_owner_by_key
             .get(&key)
             .copied()
-            .unwrap_or(OwnerState::NoOwner)
+            .unwrap_or(OwnerState::Unowned)
     }
 
     pub(super) fn assign_entity_owner(&mut self, entity: Entity, next: OwnerState) -> bool {
@@ -113,15 +113,15 @@ impl OwnershipRegistry {
         self.assign_target_owner(target, next)
     }
 
-    pub(super) fn owned_targets(&self, controller: ControllerId) -> Vec<OwnershipTarget> {
-        self.targets_by_controller
-            .get(&controller)
+    pub(super) fn owned_targets(&self, owner: OwnerId) -> Vec<OwnershipTarget> {
+        self.targets_by_owner
+            .get(&owner)
             .map(|targets| targets.iter().copied().collect())
             .unwrap_or_default()
     }
 
-    pub(super) fn owned_entities(&self, controller: ControllerId) -> Vec<Entity> {
-        self.owned_targets(controller)
+    pub(super) fn owned_entities(&self, owner: OwnerId) -> Vec<Entity> {
+        self.owned_targets(owner)
             .into_iter()
             .filter_map(|target| match target {
                 OwnershipTarget::Entity(entity) => Some(entity),
@@ -130,8 +130,8 @@ impl OwnershipRegistry {
             .collect()
     }
 
-    pub(super) fn owned_resources(&self, controller: ControllerId) -> Vec<ResourceOwnerKey> {
-        self.owned_targets(controller)
+    pub(super) fn owned_resources(&self, owner: OwnerId) -> Vec<ResourceOwnerKey> {
+        self.owned_targets(owner)
             .into_iter()
             .filter_map(|target| match target {
                 OwnershipTarget::Entity(_) => None,
@@ -162,18 +162,18 @@ impl OwnershipRegistry {
             return false;
         }
 
-        self.remove_controller_target(previous, target);
+        self.remove_owned_target(previous, target);
 
         match target {
             OwnershipTarget::Entity(entity) => {
-                if next == OwnerState::NoOwner {
+                if next == OwnerState::Unowned {
                     self.entity_owner.remove(&entity);
                 } else {
                     self.entity_owner.insert(entity, next);
                 }
             }
             OwnershipTarget::Resource(key) => {
-                if next == OwnerState::NoOwner {
+                if next == OwnerState::Unowned {
                     self.resource_owner_by_key.remove(&key);
                 } else {
                     self.resource_owner_by_key.insert(key, next);
@@ -181,7 +181,7 @@ impl OwnershipRegistry {
             }
         }
 
-        self.add_controller_target(next, target);
+        self.add_owned_target(next, target);
 
         self.next_transfer_sequence = self.next_transfer_sequence.saturating_add(1);
         self.transfer_log.push(OwnershipTransferRecord {
@@ -193,39 +193,36 @@ impl OwnershipRegistry {
         true
     }
 
-    fn remove_controller_target(&mut self, owner: OwnerState, target: OwnershipTarget) {
-        let OwnerState::ControllerOwned(controller) = owner else {
+    fn remove_owned_target(&mut self, owner: OwnerState, target: OwnershipTarget) {
+        let OwnerState::OwnedBy(owner_id) = owner else {
             return;
         };
 
-        if let Some(targets) = self.targets_by_controller.get_mut(&controller) {
+        if let Some(targets) = self.targets_by_owner.get_mut(&owner_id) {
             targets.remove(&target);
         }
     }
 
-    fn add_controller_target(&mut self, owner: OwnerState, target: OwnershipTarget) {
-        let OwnerState::ControllerOwned(controller) = owner else {
+    fn add_owned_target(&mut self, owner: OwnerState, target: OwnershipTarget) {
+        let OwnerState::OwnedBy(owner_id) = owner else {
             return;
         };
 
-        self.targets_by_controller
-            .entry(controller)
-            .or_default()
-            .insert(target);
+        self.targets_by_owner.entry(owner_id).or_default().insert(target);
     }
 }
 
 impl World {
-    pub fn create_controller(&mut self, role: ControllerRole) -> ControllerId {
-        self.ownership.create_controller(role)
+    pub fn create_owner(&mut self, role: OwnerRole) -> OwnerId {
+        self.ownership.create_owner(role)
     }
 
-    pub fn set_controller_role(&mut self, controller: ControllerId, role: ControllerRole) -> bool {
-        self.ownership.set_controller_role(controller, role)
+    pub fn set_owner_role(&mut self, owner: OwnerId, role: OwnerRole) -> bool {
+        self.ownership.set_owner_role(owner, role)
     }
 
-    pub fn controller_role(&self, controller: ControllerId) -> Option<ControllerRole> {
-        self.ownership.controller_role(controller)
+    pub fn owner_role(&self, owner: OwnerId) -> Option<OwnerRole> {
+        self.ownership.owner_role(owner)
     }
 
     pub fn entity_owner(&self, entity: Entity) -> OwnerState {
@@ -258,7 +255,7 @@ impl World {
 
     pub fn resource_owner<R: Resource>(&self) -> OwnerState {
         let Some(key) = self.resource_owner_key::<R>() else {
-            return OwnerState::NoOwner;
+            return OwnerState::Unowned;
         };
         self.ownership.resource_owner_by_key(key)
     }
@@ -269,7 +266,7 @@ impl World {
 
     pub fn resource_owner_by_type_id(&self, resource_type: TypeId) -> OwnerState {
         let Some(key) = self.ownership.resource_key(resource_type) else {
-            return OwnerState::NoOwner;
+            return OwnerState::Unowned;
         };
         self.ownership.resource_owner_by_key(key)
     }
@@ -283,29 +280,29 @@ impl World {
         self.assign_resource_owner::<R>(owner)
     }
 
-    pub fn owned_targets(&self, controller: ControllerId) -> Vec<OwnershipTarget> {
-        self.ownership.owned_targets(controller)
+    pub fn owned_targets(&self, owner: OwnerId) -> Vec<OwnershipTarget> {
+        self.ownership.owned_targets(owner)
     }
 
-    pub fn owned_entities(&self, controller: ControllerId) -> Vec<Entity> {
-        self.ownership.owned_entities(controller)
+    pub fn owned_entities(&self, owner: OwnerId) -> Vec<Entity> {
+        self.ownership.owned_entities(owner)
     }
 
-    pub fn owned_resources(&self, controller: ControllerId) -> Vec<ResourceOwnerKey> {
-        self.ownership.owned_resources(controller)
+    pub fn owned_resources(&self, owner: OwnerId) -> Vec<ResourceOwnerKey> {
+        self.ownership.owned_resources(owner)
     }
 
-    pub fn transfer_controller_targets_to_server(&mut self, controller: ControllerId) -> usize {
-        let targets = self.ownership.owned_targets(controller);
+    pub fn transfer_owned_targets_to_world(&mut self, owner: OwnerId) -> usize {
+        let targets = self.ownership.owned_targets(owner);
         let mut transferred = 0usize;
         for target in targets {
             let changed = match target {
                 OwnershipTarget::Entity(entity) => self
                     .ownership
-                    .assign_entity_owner(entity, OwnerState::ServerOwned),
+                    .assign_entity_owner(entity, OwnerState::WorldOwned),
                 OwnershipTarget::Resource(resource) => self
                     .ownership
-                    .assign_resource_owner_by_key(resource, OwnerState::ServerOwned),
+                    .assign_resource_owner_by_key(resource, OwnerState::WorldOwned),
             };
             if changed {
                 transferred = transferred.saturating_add(1);

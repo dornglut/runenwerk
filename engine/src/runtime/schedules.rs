@@ -71,24 +71,20 @@ impl ScheduleLabel for FrameEnd {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CoreSet {
-    NetReceive,
     Input,
     Time,
     Scene,
     Simulation,
-    Replication,
     FrameEnd,
 }
 
 impl IntoSystemSetKey for CoreSet {
     fn system_set_key(&self) -> SystemSetKey {
         match self {
-            Self::NetReceive => SystemSetKey::of::<CoreSet>("CoreSet::NetReceive"),
             Self::Input => SystemSetKey::of::<CoreSet>("CoreSet::Input"),
             Self::Time => SystemSetKey::of::<CoreSet>("CoreSet::Time"),
             Self::Scene => SystemSetKey::of::<CoreSet>("CoreSet::Scene"),
             Self::Simulation => SystemSetKey::of::<CoreSet>("CoreSet::Simulation"),
-            Self::Replication => SystemSetKey::of::<CoreSet>("CoreSet::Replication"),
             Self::FrameEnd => SystemSetKey::of::<CoreSet>("CoreSet::FrameEnd"),
         }
     }

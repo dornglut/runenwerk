@@ -8,7 +8,6 @@ mod region_invalidation;
 mod replay_window;
 mod replication;
 mod revisions;
-mod tick;
 
 pub use build_graph::{BuildGraph, BuildGraphNode, BuildGraphPhase};
 pub use build_queue::{BuildQueue, BuildQueueClass, BuildQueueItem};
@@ -33,4 +32,3 @@ pub use replication::{
 pub use revisions::{
     BuildGeneration, ChunkGeneration, ChunkRevision, OperationId, SyncCursor, WorldRevision,
 };
-pub use tick::WorldTick;

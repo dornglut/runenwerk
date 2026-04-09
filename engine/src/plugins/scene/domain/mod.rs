@@ -158,12 +158,6 @@ pub struct WorldSceneContext {
     pub debug_entity: ecs::Entity,
     pub frame_count: u64,
     pub enemy_kills: u32,
-    pub session_admitted: bool,
-    pub session_lobby_id: Option<String>,
-    pub session_roster_player_codes: Vec<String>,
-    pub session_max_players: u8,
-    pub session_ai_fill_target: u8,
-    pub session_settings_json: Option<String>,
     pub outbound_notifications: Vec<WorldToOverlayMessage>,
 }
 
@@ -363,12 +357,6 @@ pub fn build_world_scene_runtime(scene: SceneId) -> Result<WorldSceneRuntime> {
         debug_entity,
         frame_count: 0,
         enemy_kills: 0,
-        session_admitted: false,
-        session_lobby_id: None,
-        session_roster_player_codes: Vec::new(),
-        session_max_players: 1,
-        session_ai_fill_target: 1,
-        session_settings_json: None,
         outbound_notifications: Vec::new(),
     };
 

@@ -1,8 +1,7 @@
 use super::*;
 use crate::WorldMut;
-use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use crate::runtime::WorkQueueWriter;
-use ecs::{ControllerRole, TickBufferProvenance, WorkQueueEnqueueError, World};
+use ecs::{OwnerRole, TickBufferProvenance, WorkQueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig, SimulationTick};
@@ -194,7 +193,7 @@ where
     }
 
     if !world_streaming_updates.is_empty()
-        && let Ok(streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>()
+        && let Ok(streaming_interest) = world.resource_mut::<NetStreamingStateResource>()
     {
         for (connection_id, cursor, sent_full_snapshot) in world_streaming_updates {
             streaming_interest.mark_snapshot_sent(connection_id, cursor, sent_full_snapshot);
@@ -253,12 +252,12 @@ where
                 .ok()
                 .and_then(|status| status.connection_id)
             {
-                let controller = ensure_controller_for_connection(
+                let controller = ensure_owner_for_connection(
                     &mut world,
                     connection_id,
-                    ControllerRole::Controller,
+                    OwnerRole::Active,
                 );
-                controller_tick_buffer_provenance(controller)
+                owner_tick_buffer_provenance(controller)
             } else {
                 TickBufferProvenance::UNSPECIFIED
             }
@@ -392,7 +391,7 @@ pub fn update_connection_closed<TSnapshot>(
                 .retain(|connection_id, _| active_connections.contains(connection_id));
         }
 
-        if let Ok(streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>() {
+        if let Ok(streaming_interest) = world.resource_mut::<NetStreamingStateResource>() {
             match connection_id {
                 Some(connection_id) => {
                     streaming_interest.per_connection.remove(&connection_id);
@@ -408,22 +407,22 @@ pub fn update_connection_closed<TSnapshot>(
 
         match connection_id {
             Some(connection_id) => {
-                if let Some(controller) = remove_controller_for_connection(world, connection_id) {
-                    let _ = world.transfer_controller_targets_to_server(controller);
+                if let Some(controller) = remove_owner_for_connection(world, connection_id) {
+                    let _ = world.transfer_owned_targets_to_world(controller);
                 }
             }
             None => {
                 let controllers = world
-                    .resource::<NetworkControllerRouting>()
+                    .resource::<NetworkOwnerRouting>()
                     .ok()
                     .map(|routing| routing.by_connection.values().copied().collect::<Vec<_>>())
                     .unwrap_or_default();
                 for controller in controllers {
-                    let _ = world.transfer_controller_targets_to_server(controller);
+                    let _ = world.transfer_owned_targets_to_world(controller);
                 }
-                if let Ok(routing) = world.resource_mut::<NetworkControllerRouting>() {
+                if let Ok(routing) = world.resource_mut::<NetworkOwnerRouting>() {
                     routing.by_connection.clear();
-                    routing.by_controller.clear();
+                    routing.by_owner.clear();
                 }
             }
         }
@@ -437,9 +436,9 @@ pub fn update_connection_closed<TSnapshot>(
             reset_client_replication_state(state);
         }
         if let Some(connection_id) = connection_id
-            && let Some(controller) = remove_controller_for_connection(world, connection_id)
+            && let Some(controller) = remove_owner_for_connection(world, connection_id)
         {
-            let _ = world.transfer_controller_targets_to_server(controller);
+            let _ = world.transfer_owned_targets_to_world(controller);
         }
     }
 

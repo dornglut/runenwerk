@@ -31,7 +31,7 @@ pub use messaging::{
     WorkQueueEnqueueError, WorkQueueKey, WorkQueueStats,
 };
 pub use ownership::{
-    ControllerId, ControllerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord,
+    OwnerId, OwnerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord,
     ResourceOwnerKey, ResourceOwnershipDescriptor,
 };
 pub use world::World;

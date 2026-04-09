@@ -1,13 +1,13 @@
 use super::super::domain;
 use super::super::runtime::system_time_to_millis;
 use super::super::{
-    SceneEntitySnapshotV1, SceneManager, SceneSimulationSnapshotV1, SceneWorldContextSnapshotV1,
+    SceneEntitySnapshotV2, SceneManager, SceneSimulationSnapshotV2, SceneWorldContextSnapshotV2,
 };
 use anyhow::Result;
 
 pub(crate) fn capture_scene_simulation_snapshot(
     manager: &SceneManager,
-) -> Result<SceneSimulationSnapshotV1> {
+) -> Result<SceneSimulationSnapshotV2> {
     let ctx = &manager.world_runtime.ctx;
     let frame_counter = ctx
         .world
@@ -27,8 +27,8 @@ pub(crate) fn capture_scene_simulation_snapshot(
         .copied()
         .unwrap_or(domain::WorldDebugVelocity { x: 0.0, y: 0.0 });
 
-    Ok(SceneSimulationSnapshotV1 {
-        context: SceneWorldContextSnapshotV1 {
+    Ok(SceneSimulationSnapshotV2 {
+        context: SceneWorldContextSnapshotV2 {
             world: manager.world,
             overlays: manager.overlays.clone(),
             world_scene_label: ctx.world_scene_label.clone(),
@@ -47,14 +47,8 @@ pub(crate) fn capture_scene_simulation_snapshot(
             fixed_step_accumulator: ctx.fixed_step_accumulator,
             frame_count: ctx.frame_count,
             enemy_kills: ctx.enemy_kills,
-            session_admitted: ctx.session_admitted,
-            session_lobby_id: ctx.session_lobby_id.clone(),
-            session_roster_player_codes: ctx.session_roster_player_codes.clone(),
-            session_max_players: ctx.session_max_players,
-            session_ai_fill_target: ctx.session_ai_fill_target,
-            session_settings_json: ctx.session_settings_json.clone(),
         },
-        entities: SceneEntitySnapshotV1 {
+        entities: SceneEntitySnapshotV2 {
             frame_counter,
             debug_position,
             debug_velocity,

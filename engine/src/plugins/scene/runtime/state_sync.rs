@@ -4,9 +4,7 @@ use crate::plugins::{InputState, SceneManager, SceneResource};
 use crate::prelude::domain::{
     GAMEPLAY_CONFIG_PATH, gameplay_config_modified, load_gameplay_config_with_modified_and_error,
 };
-use crate::{
-    GameplayRuntimeConfig, SceneRuntimeState, SessionRuntimeState, UiOverlayState, WindowState,
-};
+use crate::{GameplayRuntimeConfig, SceneRuntimeState, UiOverlayState, WindowState};
 use anyhow::Result;
 
 // Owner: Engine Scene Plugin - Runtime State Sync
@@ -102,36 +100,20 @@ pub(crate) fn sync_world_scene_context_from_input(
     runtime.ctx.delta_seconds = frame_delta_seconds.max(0.0);
 }
 
-pub(crate) fn sync_world_scene_context_from_session(
-    manager: &mut SceneManager,
-    session: &SessionRuntimeState,
-) {
-    let runtime = &mut manager.world_runtime;
-    runtime.ctx.session_admitted = session.admitted;
-    runtime.ctx.session_lobby_id = session.lobby_id.clone();
-    runtime.ctx.session_roster_player_codes = session.roster_player_codes.clone();
-    runtime.ctx.session_max_players = session.max_players.max(1);
-    runtime.ctx.session_ai_fill_target = session
-        .ai_fill_target
-        .clamp(1, runtime.ctx.session_max_players);
-    runtime.ctx.session_settings_json = session.settings_json.clone();
-}
-
 pub(crate) fn publish_scene_state(
     manager: &SceneManager,
     scene_state: &mut SceneRuntimeState,
     gameplay: &mut GameplayRuntimeConfig,
     overlay: &mut UiOverlayState,
 ) {
-    let (scene_state_value, gameplay_value, overlay_value, _) =
-        snapshot_public_scene_state(manager);
+    let (scene_state_value, gameplay_value, overlay_value) = snapshot_public_scene_state(manager);
     *scene_state = scene_state_value;
     *gameplay = gameplay_value;
     *overlay = overlay_value;
 }
 
 pub(crate) fn republish_scene_resources(world: &mut ecs::World) -> Result<()> {
-    let Some((scene_state_value, gameplay_value, overlay_value, session_value)) = world
+    let Some((scene_state_value, gameplay_value, overlay_value)) = world
         .resource::<SceneResource>()
         .ok()
         .and_then(|scene_resource| scene_resource.manager.as_ref())
@@ -148,9 +130,6 @@ pub(crate) fn republish_scene_resources(world: &mut ecs::World) -> Result<()> {
     }
     if let Ok(mut overlay) = world.resource_mut::<UiOverlayState>() {
         *overlay = overlay_value;
-    }
-    if let Ok(mut session) = world.resource_mut::<SessionRuntimeState>() {
-        *session = session_value;
     }
     Ok(())
 }

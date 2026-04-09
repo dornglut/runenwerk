@@ -1,8 +1,8 @@
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::scene::{
-    SceneReplayArchive, SceneReplayCommandFrame, SceneResource, SceneSimulationCodec,
-    SceneSimulationSnapshotV1, capture_scene_replay_command_frame,
+    SceneReplayArchive, SceneReplayInputFrameV2, SceneResource, SceneSimulationCodec,
+    SceneSimulationSnapshotV2, capture_scene_replay_command_frame,
     capture_scene_simulation_snapshot, republish_scene_resources, validate_scene_replay,
 };
 use crate::runtime::{
@@ -50,7 +50,7 @@ pub struct ReplayState {
 
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct ReplayRecorderResource {
-    pub recorder: Option<ReplayRecorder<SceneSimulationSnapshotV1, SceneReplayCommandFrame>>,
+    pub recorder: Option<ReplayRecorder<SceneSimulationSnapshotV2, SceneReplayInputFrameV2>>,
     pub checkpoint_policy: CheckpointPolicy,
     pub storage_policy: ReplayStoragePolicy,
 }
@@ -67,7 +67,7 @@ impl Default for ReplayRecorderResource {
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct ReplayControllerResource {
-    pub controller: ReplayController<SceneSimulationSnapshotV1, SceneReplayCommandFrame>,
+    pub controller: ReplayController<SceneSimulationSnapshotV2, SceneReplayInputFrameV2>,
     pub last_validation: ReplayValidationReport,
 }
 
@@ -88,15 +88,13 @@ impl Plugin for ReplayPlugin {
             FixedUpdate,
             replay_record_command_frame_system
                 .before(CoreSet::Scene)
-                .before(CoreSet::Simulation)
-                .before(CoreSet::Replication),
+                .before(CoreSet::Simulation),
         );
         app.add_systems(
             FixedUpdate,
             replay_capture_checkpoint_system
                 .after(CoreSet::Scene)
-                .after(CoreSet::Simulation)
-                .after(CoreSet::Replication),
+                .after(CoreSet::Simulation),
         );
         app.add_systems(FrameEnd, replay_frame_end_system.in_set(CoreSet::FrameEnd));
     }

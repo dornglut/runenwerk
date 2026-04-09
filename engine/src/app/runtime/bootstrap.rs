@@ -40,9 +40,6 @@ impl App {
         if !self.world.has_resource::<GameplayRuntimeConfig>() {
             self.world.insert_resource(GameplayRuntimeConfig::default());
         }
-        if !self.world.has_resource::<SessionRuntimeState>() {
-            self.world.insert_resource(SessionRuntimeState::default());
-        }
         if !self.world.has_resource::<FixedTimeConfig>() {
             self.world.insert_resource(FixedTimeConfig::default());
         }

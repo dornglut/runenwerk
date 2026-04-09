@@ -320,7 +320,6 @@ fn operation_signature(record: &OperationRecord) -> u64 {
     record.base_world_revision.0.hash(&mut hasher);
     record.planet_id.hash(&mut hasher);
     record.deterministic_seed.hash(&mut hasher);
-    record.server_tick.0.hash(&mut hasher);
     format!("{:?}", record.operation).hash(&mut hasher);
     hasher.finish()
 }

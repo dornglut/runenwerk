@@ -33,7 +33,7 @@ pub struct OpWindowDelta {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChunkResidencyHint {
     pub chunk_id: ChunkId,
-    pub relevant_to_client: bool,
+    pub relevant_to_viewer: bool,
     pub gameplay_locked: bool,
 }
 

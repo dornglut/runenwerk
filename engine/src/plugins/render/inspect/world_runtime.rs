@@ -11,10 +11,6 @@ pub struct WorldRuntimeInspectorSnapshot {
     pub collision_queries: u64,
     pub collision_authority_misses: u64,
     pub world_revision: u64,
-    pub streaming_connection_count: usize,
-    pub streaming_needs_resync_count: usize,
-    pub streaming_max_cursor_lag: u64,
-    pub streaming_max_region_sequence_lag: u64,
     pub region_journal_latest_sequence: u64,
     pub region_journal_record_count: usize,
 }

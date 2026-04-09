@@ -1,11 +1,11 @@
 use super::super::domain::{self, SceneChannels, build_world_scene_runtime};
 use super::super::runtime::{millis_to_system_time, rebuild_overlay_stack};
-use super::super::{SceneManager, SceneSimulationSnapshotV1};
+use super::super::{SceneManager, SceneSimulationSnapshotV2};
 use anyhow::Result;
 
 pub(crate) fn restore_scene_simulation_snapshot(
     manager: &mut SceneManager,
-    snapshot: &SceneSimulationSnapshotV1,
+    snapshot: &SceneSimulationSnapshotV2,
 ) -> Result<()> {
     manager.world = snapshot.context.world;
     manager.world_runtime = build_world_scene_runtime(snapshot.context.world.active)?;
@@ -31,12 +31,6 @@ pub(crate) fn restore_scene_simulation_snapshot(
     ctx.fixed_step_accumulator = snapshot.context.fixed_step_accumulator;
     ctx.frame_count = snapshot.context.frame_count;
     ctx.enemy_kills = snapshot.context.enemy_kills;
-    ctx.session_admitted = snapshot.context.session_admitted;
-    ctx.session_lobby_id = snapshot.context.session_lobby_id.clone();
-    ctx.session_roster_player_codes = snapshot.context.session_roster_player_codes.clone();
-    ctx.session_max_players = snapshot.context.session_max_players;
-    ctx.session_ai_fill_target = snapshot.context.session_ai_fill_target;
-    ctx.session_settings_json = snapshot.context.session_settings_json.clone();
     ctx.outbound_notifications.clear();
 
     if let Ok(mut entity) = ctx.world.entity_mut(ctx.tick_entity)

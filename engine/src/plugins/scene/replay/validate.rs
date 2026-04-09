@@ -1,7 +1,7 @@
 use super::super::runtime::{apply_overlay_messages, republish_scene_resources};
 use super::super::snapshot::restore_scene_simulation_snapshot;
 use super::super::{SceneManager, SceneResource};
-use super::codec::{SceneReplayArchive, SceneReplayCommandFrame};
+use super::codec::{SceneReplayArchive, SceneReplayInputFrameV2};
 use super::playback::replay_scene_frame;
 use crate::runtime::{SimulationTick, WindowState};
 use anyhow::{Result, anyhow};
@@ -19,7 +19,7 @@ pub(crate) fn validate_scene_replay(
         .max_by_key(|checkpoint| checkpoint.meta.tick.0)
         .cloned()
         .ok_or_else(|| anyhow!("no replay checkpoint available for tick {}", target_tick.0))?;
-    let frames: Vec<ReplayJournalFrame<SceneReplayCommandFrame>> = archive
+    let frames: Vec<ReplayJournalFrame<SceneReplayInputFrameV2>> = archive
         .journal
         .iter()
         .filter(|frame| frame.tick.0 > checkpoint.meta.tick.0 && frame.tick.0 <= target_tick.0)

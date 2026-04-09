@@ -5,7 +5,7 @@ use super::super::adapters::resources::{
 use super::super::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use super::super::plugin::WorldAuthorityState;
 use crate::runtime::WorldMut;
-use engine_net::replication::{ReplicationExtractionFilter, extract_replication_deltas};
+use ecs::{ChangeExtractionFilter, OwnerState, ResourceTypeKey};
 use std::collections::BTreeSet;
 use world_ops::{
     ChunkContentDelta, ChunkHeaderDelta, ChunkResidencyHint, OpWindowDelta, OperationId,
@@ -37,20 +37,27 @@ pub fn rebuild_world_replication_state_system(mut world: WorldMut) {
     .flatten()
     .collect::<BTreeSet<_>>();
 
-    let extraction = extract_replication_deltas(
-        &world,
+    let tracked_resource_keys_ref = &tracked_resource_keys;
+    let resource_key_filter = |key: ResourceTypeKey| tracked_resource_keys_ref.contains(&key);
+    let allows_owner = |owner: OwnerState| matches!(owner, OwnerState::Unowned | OwnerState::WorldOwned);
+    let component_ownership_filter = |_: ecs::Entity, owner: OwnerState, _: ecs::ComponentTypeKey| {
+        allows_owner(owner)
+    };
+    let resource_ownership_filter = |_: ResourceTypeKey, owner: OwnerState| allows_owner(owner);
+
+    let extraction = world.extract_structural_deltas(
         ecs::ChangeExtractionWindow {
             tick_start_exclusive: previous_cursor.last_tick,
             tick_end_inclusive: current_tick,
             frame_start_exclusive: u64::MAX,
             frame_end_inclusive: u64::MAX,
         },
-        &ReplicationExtractionFilter {
-            component_keys: None,
-            resource_keys: Some(tracked_resource_keys),
-            include_no_owner: true,
-            include_server_owned: true,
-            allowed_controllers: None,
+        ChangeExtractionFilter {
+            component_key_filter: None,
+            resource_key_filter: Some(&resource_key_filter),
+            component_ownership_filter: Some(&component_ownership_filter),
+            resource_ownership_filter: Some(&resource_ownership_filter),
+            interest_filter: None,
         },
     );
 
@@ -135,7 +142,7 @@ pub fn rebuild_world_replication_state_system(mut world: WorldMut) {
                 *chunk_id,
                 ChunkResidencyHint {
                     chunk_id: *chunk_id,
-                    relevant_to_client: true,
+                    relevant_to_viewer: true,
                     gameplay_locked: *gameplay_locked,
                 },
             )

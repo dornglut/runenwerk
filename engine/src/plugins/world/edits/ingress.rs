@@ -8,16 +8,13 @@ use super::super::{WorldAuthorityState, WorldRuntimeConfig, WorldRuntimeMode};
 use ecs::World;
 use spatial::WorldId;
 use world_ops::{
-    Operation, OperationId, OperationRecord, QuantizedAabb, WorldTick,
-    mark_dirty_chunks_from_quantized_bounds,
+    Operation, OperationId, OperationRecord, QuantizedAabb, mark_dirty_chunks_from_quantized_bounds,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct WorldEditIngressMeta {
     pub planet_id: WorldId,
     pub deterministic_seed: u64,
-    pub server_tick: WorldTick,
-    pub author_connection_id: Option<u64>,
 }
 
 impl Default for WorldEditIngressMeta {
@@ -25,8 +22,6 @@ impl Default for WorldEditIngressMeta {
         Self {
             planet_id: WorldId(0),
             deterministic_seed: 0,
-            server_tick: WorldTick::default(),
-            author_connection_id: None,
         }
     }
 }
@@ -55,8 +50,6 @@ pub fn submit_world_operation(
             operation,
             affected_bounds_q,
             deterministic_seed: meta.deterministic_seed,
-            server_tick: meta.server_tick,
-            author_connection_id: meta.author_connection_id,
         })
     };
 
@@ -101,6 +94,6 @@ pub fn submit_world_operation(
 fn world_runtime_is_authoritative(world: &World) -> bool {
     world
         .resource::<WorldRuntimeConfig>()
-        .map(|config| matches!(config.mode, WorldRuntimeMode::ServerAuthoritative))
+        .map(|config| matches!(config.mode, WorldRuntimeMode::Writable))
         .unwrap_or(true)
 }

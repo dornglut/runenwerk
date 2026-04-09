@@ -1,13 +1,13 @@
 use super::super::SceneManager;
-use super::codec::SceneReplayCommandFrame;
+use super::codec::SceneReplayInputFrameV2;
 use crate::runtime::SimulationTick;
 
 pub(crate) fn capture_scene_replay_command_frame(
     manager: &SceneManager,
     tick: SimulationTick,
-) -> SceneReplayCommandFrame {
+) -> SceneReplayInputFrameV2 {
     let ctx = &manager.world_runtime.ctx;
-    SceneReplayCommandFrame {
+    SceneReplayInputFrameV2 {
         tick,
         world: manager.world,
         overlays: manager.overlays.clone(),
@@ -23,11 +23,5 @@ pub(crate) fn capture_scene_replay_command_frame(
         camera_distance: ctx.camera_distance,
         delta_seconds: ctx.delta_seconds,
         fixed_step_seconds: ctx.fixed_step_seconds,
-        session_admitted: ctx.session_admitted,
-        session_lobby_id: ctx.session_lobby_id.clone(),
-        session_roster_player_codes: ctx.session_roster_player_codes.clone(),
-        session_max_players: ctx.session_max_players,
-        session_ai_fill_target: ctx.session_ai_fill_target,
-        session_settings_json: ctx.session_settings_json.clone(),
     }
 }

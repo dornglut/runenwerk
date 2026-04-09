@@ -1,4 +1,4 @@
-use crate::{OperationId, WorldRevision, WorldTick};
+use crate::{OperationId, WorldRevision};
 use serde::{Deserialize, Serialize};
 use spatial::WorldId;
 
@@ -85,8 +85,6 @@ pub struct OperationRecord {
     pub operation: Operation,
     pub affected_bounds_q: QuantizedAabb,
     pub deterministic_seed: u64,
-    pub server_tick: WorldTick,
-    pub author_connection_id: Option<u64>,
 }
 
 pub fn quantize_position(position_meters: [f32; 3], fixed_point_scale: i32) -> QuantizedVec3 {

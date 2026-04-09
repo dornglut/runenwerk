@@ -28,20 +28,19 @@ use super::{
     },
     chunks::{DirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource},
     queries::nav::WorldNavSummaryResource,
-    streaming::interest::{WorldStreamingInterestResource, sync_world_streaming_interest_system},
 };
 use crate::plugins::adapters::WorldFrameResource;
 use world_ops::WorldRevision;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub enum WorldRuntimeMode {
-    ServerAuthoritative,
-    ClientReplica,
+    Writable,
+    ReadOnly,
 }
 
 impl Default for WorldRuntimeMode {
     fn default() -> Self {
-        Self::ClientReplica
+        Self::ReadOnly
     }
 }
 
@@ -53,7 +52,7 @@ pub struct WorldRuntimeConfig {
 impl Default for WorldRuntimeConfig {
     fn default() -> Self {
         Self {
-            mode: WorldRuntimeMode::ClientReplica,
+            mode: WorldRuntimeMode::ReadOnly,
         }
     }
 }
@@ -79,7 +78,6 @@ pub enum WorldRuntimeSet {
     BuildMetrics,
     BuildIntegrate,
     RenderCacheSync,
-    StreamingInterest,
     ReplicationState,
 }
 
@@ -100,9 +98,6 @@ impl IntoSystemSetKey for WorldRuntimeSet {
             Self::RenderCacheSync => {
                 SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::RenderCacheSync")
             }
-            Self::StreamingInterest => {
-                SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::StreamingInterest")
-            }
             Self::ReplicationState => {
                 SystemSetKey::of::<WorldRuntimeSet>("WorldRuntimeSet::ReplicationState")
             }
@@ -112,10 +107,8 @@ impl IntoSystemSetKey for WorldRuntimeSet {
 
 pub fn world_runtime_mode_for_authority(authority: AuthorityRole) -> WorldRuntimeMode {
     match authority {
-        AuthorityRole::Client => WorldRuntimeMode::ClientReplica,
-        AuthorityRole::Local | AuthorityRole::Server | AuthorityRole::Peer => {
-            WorldRuntimeMode::ServerAuthoritative
-        }
+        AuthorityRole::Client => WorldRuntimeMode::ReadOnly,
+        AuthorityRole::Local | AuthorityRole::Server | AuthorityRole::Peer => WorldRuntimeMode::Writable,
     }
 }
 
@@ -146,7 +139,6 @@ impl Plugin for WorldPlugin {
         app.init_resource::<super::build::integration::WorldCompletedBuildQueueResource>();
         app.init_resource::<CollisionQueryServiceResource>();
         app.init_resource::<WorldNavSummaryResource>();
-        app.init_resource::<WorldStreamingInterestResource>();
         app.init_resource::<ReplicationStateResource>();
         app.init_resource::<WorldReplicationExtractionCursor>();
         app.init_resource::<CaveSectorResource>();
@@ -171,72 +163,56 @@ impl Plugin for WorldPlugin {
             sync_world_runtime_mode_system
                 .in_set(WorldRuntimeSet::ModeSync)
                 .in_set(CoreSet::Simulation)
-                .before(WorldRuntimeSet::Lifecycle)
-                .before(CoreSet::Replication),
+                .before(WorldRuntimeSet::Lifecycle),
         );
         app.add_systems(
             FixedUpdate,
             advance_chunk_lifecycle_system
                 .in_set(WorldRuntimeSet::Lifecycle)
                 .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::ModeSync)
-                .before(CoreSet::Replication),
+                .after(WorldRuntimeSet::ModeSync),
         );
         app.add_systems(
             FixedUpdate,
             dispatch_world_build_jobs_system
                 .in_set(WorldRuntimeSet::BuildDispatch)
                 .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::Lifecycle)
-                .before(CoreSet::Replication),
+                .after(WorldRuntimeSet::Lifecycle),
         );
         app.add_systems(
             FixedUpdate,
             sync_world_build_debug_metrics_system
                 .in_set(WorldRuntimeSet::BuildMetrics)
                 .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::BuildDispatch)
-                .before(CoreSet::Replication),
+                .after(WorldRuntimeSet::BuildDispatch),
         );
         app.add_systems(
             FixedUpdate,
             integrate_completed_build_outputs_system
                 .in_set(WorldRuntimeSet::BuildIntegrate)
                 .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::BuildMetrics)
-                .before(CoreSet::Replication),
+                .after(WorldRuntimeSet::BuildMetrics),
         );
         app.add_systems(
             FixedUpdate,
             sync_world_runtime_debug_metrics_system
                 .in_set(CoreSet::Simulation)
                 .after(WorldRuntimeSet::BuildIntegrate)
-                .before(WorldRuntimeSet::RenderCacheSync)
-                .before(CoreSet::Replication),
+                .before(WorldRuntimeSet::RenderCacheSync),
         );
         app.add_systems(
             FixedUpdate,
             flush_world_render_cache_invalidations_system
                 .in_set(WorldRuntimeSet::RenderCacheSync)
                 .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::BuildIntegrate)
-                .before(CoreSet::Replication),
-        );
-        app.add_systems(
-            FixedUpdate,
-            sync_world_streaming_interest_system
-                .in_set(WorldRuntimeSet::StreamingInterest)
-                .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::RenderCacheSync)
-                .before(CoreSet::Replication),
+                .after(WorldRuntimeSet::BuildIntegrate),
         );
         app.add_systems(
             FixedUpdate,
             rebuild_world_replication_state_system
                 .in_set(WorldRuntimeSet::ReplicationState)
                 .in_set(CoreSet::Simulation)
-                .after(WorldRuntimeSet::StreamingInterest)
-                .before(CoreSet::Replication),
+                .after(WorldRuntimeSet::RenderCacheSync),
         );
         app.add_systems(RenderPrepare, prepare_world_feature_contributions_system);
     }

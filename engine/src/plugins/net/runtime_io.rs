@@ -1,9 +1,8 @@
 use super::*;
-use crate::plugins::world::streaming::interest::WorldStreamingInterestResource;
 use crate::runtime::{WorkQueueDrainer, WorkQueueWriter};
-use crate::{SessionRuntimeState, WorldMut};
+use crate::WorldMut;
 use anyhow::Context;
-use ecs::{ControllerRole, WorkQueueEnqueueError, World};
+use ecs::{OwnerRole, WorkQueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::{AuthorityRole, SimulationProfileConfig};
@@ -76,10 +75,10 @@ where
                     health.connected = true;
                 }
                 if let Some(connection_id) = connection_id {
-                    let _ = ensure_controller_for_connection(
+                    let _ = ensure_owner_for_connection(
                         &mut world,
                         connection_id,
-                        ControllerRole::Controller,
+                        OwnerRole::Active,
                     );
                 }
             }
@@ -135,10 +134,10 @@ where
             }
             SessionRuntimeEvent::JoinAccepted(join) => {
                 let connection = ConnectionId(join.connection_id);
-                let _ = ensure_controller_for_connection(
+                let _ = ensure_owner_for_connection(
                     &mut world,
                     connection,
-                    ControllerRole::Controller,
+                    OwnerRole::Active,
                 );
                 let authority = world
                     .resource::<SimulationProfileConfig>()
@@ -171,7 +170,7 @@ where
                             .needs_full_resync = true;
                     }
                     if let Ok(streaming_interest) =
-                        world.resource_mut::<WorldStreamingInterestResource>()
+                        world.resource_mut::<NetStreamingStateResource>()
                     {
                         streaming_interest.mark_needs_full_resync(connection);
                     }
@@ -258,6 +257,7 @@ where
     }
 
     world.insert_resource(handle);
+    sync_net_diagnostics_view(&mut world);
     Ok(())
 }
 
@@ -303,10 +303,10 @@ where
 
         match message {
             ServerMessage::JoinAccepted(join) => {
-                let _ = ensure_controller_for_connection(
+                let _ = ensure_owner_for_connection(
                     &mut world,
                     ConnectionId(join.connection_id),
-                    ControllerRole::Controller,
+                    OwnerRole::Active,
                 );
                 if let Ok(admission) = world.resource_mut::<NetworkAdmissionState>() {
                     admission.authoritative_join = Some(join.join_state.clone());
@@ -425,6 +425,7 @@ where
         }
     }
 
+    sync_net_diagnostics_view(&mut world);
     Ok(())
 }
 
@@ -472,7 +473,7 @@ where
                 checkpoint.last_ack_cursor = ack.cursor;
                 checkpoint.needs_full_resync = false;
             }
-            if let Ok(streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>() {
+            if let Ok(streaming_interest) = world.resource_mut::<NetStreamingStateResource>() {
                 streaming_interest
                     .mark_snapshot_acknowledged(connection_id, SyncCursor(ack.cursor.0));
             }
@@ -486,10 +487,10 @@ where
         {
             let decoded = TDriver::decode_input(&frame.payload)
                 .map_err(|e| map_driver_error::<TDriver>(e, "decode remote input"))?;
-            let controller = ensure_controller_for_connection(
+            let controller = ensure_owner_for_connection(
                 &mut world,
                 connection_id,
-                ControllerRole::Controller,
+                OwnerRole::Active,
             );
 
             let mut lagged = 0u64;
@@ -502,7 +503,7 @@ where
 
                 if let Err(error) = world.push_buffer_message_for_tick::<TDriver::Input>(
                     frame.tick.0,
-                    controller_tick_buffer_provenance(controller),
+                    owner_tick_buffer_provenance(controller),
                     command,
                 ) {
                     tracing::warn!(?error, "failed to enqueue remote input into tick buffer");
@@ -596,19 +597,62 @@ where
         }
     }
 
+    sync_net_diagnostics_view(&mut world);
     Ok(())
 }
 
 fn apply_session_runtime_join_state(world: &mut World, join_state: &AuthoritativeJoinState) {
-    if let Ok(session) = world.resource_mut::<SessionRuntimeState>() {
+    if let Ok(session) = world.resource_mut::<NetSessionView>() {
         session.apply_authoritative_join(join_state);
     }
 }
 
 fn clear_session_runtime_state(world: &mut World) {
-    if let Ok(session) = world.resource_mut::<SessionRuntimeState>() {
+    if let Ok(session) = world.resource_mut::<NetSessionView>() {
         session.clear();
     }
+}
+
+fn sync_net_diagnostics_view(world: &mut World) {
+    let status = world.resource::<NetworkSessionStatus>().ok().cloned();
+    let health = world.resource::<ConnectionHealth>().ok().cloned();
+    let round_trip = world.resource::<RoundTripMetrics>().ok().copied();
+    let network = world.resource::<NetworkDiagnostics>().ok().copied();
+    let replication = world.resource::<ReplicationDiagnostics>().ok().copied();
+    let prediction = world.resource::<PredictionDiagnostics>().ok().copied();
+
+    if let Ok(view) = world.resource_mut::<NetDiagnosticsView>() {
+        if let Some(status) = status {
+            view.connected = status.connected;
+            view.connection_id = status.connection_id;
+        }
+        if let Some(health) = health {
+            view.close_events = health.close_events;
+            view.error_events = health.error_events;
+            view.reconnect_events = health.reconnect_events;
+        }
+        if let Some(round_trip) = round_trip {
+            view.last_rtt_millis = round_trip.last_rtt_millis;
+        }
+        if let Some(network) = network {
+            view.accepted_connections = network.accepted_connections;
+            view.rejected_connections = network.rejected_connections;
+            view.reconnect_attempts = network.reconnect_attempts;
+        }
+        if let Some(replication) = replication {
+            view.emitted_snapshots = replication.emitted_snapshots;
+            view.applied_snapshots = replication.applied_snapshots;
+            view.acked_snapshots = replication.acked;
+            view.lagged_inputs = replication.lagged;
+        }
+        if let Some(prediction) = prediction {
+            view.corrected_predictions = prediction.corrected;
+        }
+    }
+}
+
+pub fn sync_net_diagnostics_view_system(mut world: WorldMut) {
+    sync_net_diagnostics_view(&mut world);
 }
 
 pub fn client_flush_system(

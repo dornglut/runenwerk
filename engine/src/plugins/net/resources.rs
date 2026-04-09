@@ -1,7 +1,7 @@
 use super::*;
-use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SessionRuntimeState, SystemConfigExt};
+use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SystemConfigExt};
 use ecs::{
-    ControllerId, ControllerRole, OwnershipTarget, TickBufferConfig, TickBufferProvenance,
+    OwnerId, OwnerRole, OwnershipTarget, TickBufferConfig, TickBufferProvenance,
     WorkQueueConfig, WorkQueueEnqueueError, World,
 };
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
@@ -14,7 +14,7 @@ use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 
 const NETWORK_MESSAGE_QUEUE_CAPACITY: usize = 4_096;
 const TICK_BUFFER_PROVENANCE_DOMAIN_SERVER: u32 = 1;
-const TICK_BUFFER_PROVENANCE_DOMAIN_CONTROLLER: u32 = 2;
+const TICK_BUFFER_PROVENANCE_DOMAIN_OWNER: u32 = 2;
 
 fn configure_network_message_queues(world: &mut World) {
     let config = WorkQueueConfig {
@@ -154,32 +154,32 @@ pub fn drain_server_outbox(world: &mut World) -> Vec<OutboundServerMessage> {
     world.work_queue_drain::<OutboundServerMessage>()
 }
 
-pub fn ensure_controller_for_connection(
+pub fn ensure_owner_for_connection(
     world: &mut World,
     connection_id: ConnectionId,
-    role: ControllerRole,
-) -> ControllerId {
-    if let Ok(routing) = world.resource::<NetworkControllerRouting>()
-        && let Some(controller) = routing.by_connection.get(&connection_id).copied()
+    role: OwnerRole,
+) -> OwnerId {
+    if let Ok(routing) = world.resource::<NetworkOwnerRouting>()
+        && let Some(owner_id) = routing.by_connection.get(&connection_id).copied()
     {
-        world.set_controller_role(controller, role);
-        return controller;
+        world.set_owner_role(owner_id, role);
+        return owner_id;
     }
 
-    let controller = world.create_controller(role);
-    if let Ok(routing) = world.resource_mut::<NetworkControllerRouting>() {
-        routing.by_connection.insert(connection_id, controller);
-        routing.by_controller.insert(controller, connection_id);
+    let owner_id = world.create_owner(role);
+    if let Ok(routing) = world.resource_mut::<NetworkOwnerRouting>() {
+        routing.by_connection.insert(connection_id, owner_id);
+        routing.by_owner.insert(owner_id, connection_id);
     }
-    controller
+    owner_id
 }
 
-pub fn controller_for_connection(
+pub fn owner_for_connection(
     world: &World,
     connection_id: ConnectionId,
-) -> Option<ControllerId> {
+) -> Option<OwnerId> {
     world
-        .resource::<NetworkControllerRouting>()
+        .resource::<NetworkOwnerRouting>()
         .ok()
         .and_then(|routing| routing.by_connection.get(&connection_id).copied())
 }
@@ -188,23 +188,20 @@ pub fn server_tick_buffer_provenance() -> TickBufferProvenance {
     TickBufferProvenance::new(TICK_BUFFER_PROVENANCE_DOMAIN_SERVER, 1)
 }
 
-pub fn controller_tick_buffer_provenance(controller: ControllerId) -> TickBufferProvenance {
-    TickBufferProvenance::new(
-        TICK_BUFFER_PROVENANCE_DOMAIN_CONTROLLER,
-        controller.as_raw(),
-    )
+pub fn owner_tick_buffer_provenance(owner_id: OwnerId) -> TickBufferProvenance {
+    TickBufferProvenance::new(TICK_BUFFER_PROVENANCE_DOMAIN_OWNER, owner_id.as_raw())
 }
 
-pub fn remove_controller_for_connection(
+pub fn remove_owner_for_connection(
     world: &mut World,
     connection_id: ConnectionId,
-) -> Option<ControllerId> {
+) -> Option<OwnerId> {
     let mut removed = None;
-    if let Ok(routing) = world.resource_mut::<NetworkControllerRouting>()
-        && let Some(controller) = routing.by_connection.remove(&connection_id)
+    if let Ok(routing) = world.resource_mut::<NetworkOwnerRouting>()
+        && let Some(owner_id) = routing.by_connection.remove(&connection_id)
     {
-        routing.by_controller.remove(&controller);
-        removed = Some(controller);
+        routing.by_owner.remove(&owner_id);
+        removed = Some(owner_id);
     }
     removed
 }
@@ -213,10 +210,10 @@ pub fn route_connection_targets(
     world: &World,
     connection_id: ConnectionId,
 ) -> Vec<OwnershipTarget> {
-    let Some(controller) = controller_for_connection(world, connection_id) else {
+    let Some(owner_id) = owner_for_connection(world, connection_id) else {
         return Vec::new();
     };
-    world.route_controller_targets(controller)
+    world.route_owner_targets(owner_id)
 }
 
 pub(crate) fn configure_runtime_bridge<TDriver>(app: &mut App)
@@ -227,15 +224,15 @@ where
 {
     app.add_systems(
         PreUpdate,
-        network_runtime_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
+        network_runtime_receive_system::<TDriver>.in_set(NetPreUpdateSet::Receive),
     );
     app.add_systems(
         PreUpdate,
-        client_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
+        client_receive_system::<TDriver>.in_set(NetPreUpdateSet::Receive),
     );
     app.add_systems(
         PreUpdate,
-        server_receive_system::<TDriver>.in_set(CoreSet::NetReceive),
+        server_receive_system::<TDriver>.in_set(NetPreUpdateSet::Receive),
     );
 }
 
@@ -247,14 +244,20 @@ pub(crate) fn configure_client_role(app: &mut App) {
     app.init_resource::<NetworkOutboundQueue>();
     app.init_resource::<NetworkSessionStatus>();
     app.init_resource::<NetworkAdmissionState>();
-    app.init_resource::<SessionRuntimeState>();
+    app.init_resource::<NetSessionView>();
+    app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
     app.init_resource::<ClientSessionState>();
-    app.init_resource::<NetworkControllerRouting>();
+    app.init_resource::<NetworkOwnerRouting>();
     app.init_resource::<NetworkReplicationMetadata>();
+    app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
     app.add_systems(FrameEnd, client_flush_system.in_set(CoreSet::FrameEnd));
+    app.add_systems(
+        FrameEnd,
+        sync_net_diagnostics_view_system.in_set(CoreSet::FrameEnd),
+    );
 }
 
 pub(crate) fn configure_server_role(app: &mut App) {
@@ -265,15 +268,21 @@ pub(crate) fn configure_server_role(app: &mut App) {
     app.init_resource::<NetworkOutboundQueue>();
     app.init_resource::<NetworkSessionStatus>();
     app.init_resource::<NetworkAdmissionState>();
-    app.init_resource::<SessionRuntimeState>();
+    app.init_resource::<NetSessionView>();
+    app.init_resource::<NetDiagnosticsView>();
     app.init_resource::<ConnectionHealth>();
     app.init_resource::<RoundTripMetrics>();
     app.init_resource::<ServerSessionConfig>();
     app.init_resource::<ServerSessionState>();
-    app.init_resource::<NetworkControllerRouting>();
+    app.init_resource::<NetworkOwnerRouting>();
     app.init_resource::<NetworkReplicationMetadata>();
+    app.init_resource::<NetStreamingStateResource>();
     app.init_resource::<NetworkDiagnostics>();
     app.add_systems(FrameEnd, server_flush_system.in_set(CoreSet::FrameEnd));
+    app.add_systems(
+        FrameEnd,
+        sync_net_diagnostics_view_system.in_set(CoreSet::FrameEnd),
+    );
 }
 
 pub(crate) fn configure_replication<TDriver>(app: &mut App)
@@ -287,9 +296,16 @@ where
     app.init_resource::<ReplicationDiagnostics>();
     app.add_systems(
         FixedUpdate,
+        sync_connection_streaming_state_system
+            .after(CoreSet::Simulation)
+            .before(NetFixedSet::Prediction),
+    );
+    app.add_systems(
+        FixedUpdate,
         replication_step_system::<TDriver>
-            .in_set(CoreSet::Replication)
-            .after(CoreSet::Simulation),
+            .in_set(NetFixedSet::Replication)
+            .after(CoreSet::Simulation)
+            .after(NetFixedSet::Prediction),
     );
 }
 
@@ -308,8 +324,8 @@ where
     app.add_systems(
         FixedUpdate,
         prediction_step_system::<TDriver>
-            .in_set(CoreSet::Simulation)
-            .before(CoreSet::Replication),
+            .in_set(NetFixedSet::Prediction)
+            .after(CoreSet::Simulation),
     );
 }
 
@@ -444,14 +460,60 @@ pub struct NetworkSessionStatus {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
-pub struct NetworkControllerRouting {
-    pub by_connection: BTreeMap<ConnectionId, ControllerId>,
-    pub by_controller: BTreeMap<ControllerId, ConnectionId>,
+pub struct NetworkOwnerRouting {
+    pub by_connection: BTreeMap<ConnectionId, OwnerId>,
+    pub by_owner: BTreeMap<OwnerId, ConnectionId>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct NetworkAdmissionState {
     pub authoritative_join: Option<AuthoritativeJoinState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
+pub struct NetSessionView {
+    pub admitted: bool,
+    pub lobby_id: Option<String>,
+    pub roster_player_codes: Vec<String>,
+    pub max_players: u8,
+    pub ai_fill_target: u8,
+    pub settings_json: Option<String>,
+}
+
+impl Default for NetSessionView {
+    fn default() -> Self {
+        Self {
+            admitted: false,
+            lobby_id: None,
+            roster_player_codes: Vec::new(),
+            max_players: 1,
+            ai_fill_target: 1,
+            settings_json: None,
+        }
+    }
+}
+
+impl NetSessionView {
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    pub fn apply_authoritative_join(&mut self, join: &AuthoritativeJoinState) {
+        let roster_size = join.roster_player_codes.len().clamp(1, u8::MAX as usize) as u8;
+        let max_players = join.max_players.max(roster_size).max(1);
+        let ai_fill_target = if join.ai_fill_target == 0 {
+            max_players
+        } else {
+            join.ai_fill_target.clamp(roster_size, max_players)
+        };
+
+        self.admitted = true;
+        self.lobby_id = join.lobby_id.clone();
+        self.roster_player_codes = join.roster_player_codes.clone();
+        self.max_players = max_players;
+        self.ai_fill_target = ai_fill_target;
+        self.settings_json = join.settings_json.clone();
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
@@ -611,4 +673,22 @@ pub struct PredictionDiagnostics {
     pub commands_applied: u64,
     pub replayed: u64,
     pub corrected: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Component, ecs::Resource)]
+pub struct NetDiagnosticsView {
+    pub connected: bool,
+    pub connection_id: Option<ConnectionId>,
+    pub accepted_connections: u64,
+    pub rejected_connections: u64,
+    pub reconnect_attempts: u64,
+    pub close_events: u64,
+    pub error_events: u64,
+    pub reconnect_events: u64,
+    pub last_rtt_millis: Option<u32>,
+    pub emitted_snapshots: u64,
+    pub applied_snapshots: u64,
+    pub acked_snapshots: u64,
+    pub lagged_inputs: u64,
+    pub corrected_predictions: u64,
 }

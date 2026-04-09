@@ -9,7 +9,7 @@ use engine::plugins::world::plugin::WorldPlugin;
 use engine::prelude::{App, SimulationTick};
 use spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_ops::{
-    DirtyReason, Operation, QuantizedAabb, WorldTick, quantize_aabb, quantize_position,
+    DirtyReason, Operation, QuantizedAabb, quantize_aabb, quantize_position,
 };
 
 fn test_stamp_operation(fixed_point_scale: i32) -> Operation {
@@ -43,8 +43,6 @@ fn ingress_bounds_marks_render_cache_stale_next_fixed_tick() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 7,
-            server_tick: WorldTick(1),
-            author_connection_id: Some(42),
         },
     );
     assert!(op_id.is_some(), "ingress should append an operation");
@@ -85,8 +83,6 @@ fn duplicate_edits_same_chunk_dedupe_invalidation() {
             WorldEditIngressMeta {
                 planet_id: WorldId(0),
                 deterministic_seed: seed,
-                server_tick: WorldTick(seed),
-                author_connection_id: None,
             },
         );
         assert!(op_id.is_some(), "ingress should append operation {seed}");
@@ -128,8 +124,6 @@ fn multi_chunk_bounds_invalidation_marks_all_touched_chunks_stale() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 99,
-            server_tick: WorldTick(3),
-            author_connection_id: None,
         },
     );
     assert!(op_id.is_some(), "ingress should append an operation");
@@ -201,8 +195,6 @@ fn bridge_does_not_drop_queue_without_render_cache_resource() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 77,
-            server_tick: WorldTick(2),
-            author_connection_id: None,
         },
     );
     assert!(op_id.is_some(), "ingress should append an operation");
@@ -266,8 +258,6 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
         WorldEditIngressMeta {
             planet_id: WorldId(0),
             deterministic_seed: 121,
-            server_tick: WorldTick(4),
-            author_connection_id: None,
         },
     );
     assert!(op_id.is_some(), "ingress should append an operation");

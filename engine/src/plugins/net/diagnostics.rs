@@ -1,3 +1,4 @@
 pub use super::resources::{
-    NetworkDiagnostics, PredictionDiagnostics, ReplicationDiagnostics, RoundTripMetrics,
+    NetDiagnosticsView, NetSessionView, NetworkDiagnostics, PredictionDiagnostics,
+    ReplicationDiagnostics, RoundTripMetrics,
 };

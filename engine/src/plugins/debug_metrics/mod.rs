@@ -130,13 +130,6 @@ fn debug_metrics_overlay_system(
         world_runtime.collision_queries, world_runtime.collision_authority_misses
     ));
     lines.push(format!(
-        "stream conn={} resync={} lag={} rlag={}",
-        world_runtime.streaming_connection_count,
-        world_runtime.streaming_needs_resync_count,
-        world_runtime.streaming_max_cursor_lag,
-        world_runtime.streaming_max_region_sequence_lag
-    ));
-    lines.push(format!(
         "region seq={} records={}",
         world_runtime.region_journal_latest_sequence, world_runtime.region_journal_record_count
     ));

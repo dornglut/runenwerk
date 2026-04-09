@@ -4,7 +4,6 @@ use super::super::adapters::resources::{
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::WorldAuthorityState;
-use super::super::streaming::interest::WorldStreamingInterestResource;
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedCaveFeatureResource,
     PreparedDetailFeatureResource, PreparedProceduralWorldFeatureResource,
@@ -156,37 +155,6 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         timings.observe_world_prepare_sample();
     }
 
-    let streaming_snapshot_values =
-        if let Ok(streaming_interest) = world.resource::<WorldStreamingInterestResource>() {
-            let mut needs_resync_count = 0_usize;
-            let mut max_cursor_lag = 0_u64;
-            let mut max_region_sequence_lag = 0_u64;
-            for connection in streaming_interest.per_connection.values() {
-                if connection.needs_full_resync {
-                    needs_resync_count = needs_resync_count.saturating_add(1);
-                }
-                max_cursor_lag = max_cursor_lag.max(
-                    connection
-                        .last_sent_cursor
-                        .0
-                        .saturating_sub(connection.last_ack_cursor.0),
-                );
-                max_region_sequence_lag = max_region_sequence_lag.max(
-                    connection
-                        .prepared_region_sequence
-                        .saturating_sub(connection.acked_region_sequence),
-                );
-            }
-            Some((
-                streaming_interest.per_connection.len(),
-                needs_resync_count,
-                max_cursor_lag,
-                max_region_sequence_lag,
-            ))
-        } else {
-            None
-        };
-
     let region_journal_snapshot_values =
         if let Ok(journal) = world.resource::<RegionInvalidationJournalResource>() {
             Some((
@@ -222,7 +190,6 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
             world_metrics.collision_queries,
             world_metrics.collision_authority_misses,
             authority.world_revision.0,
-            streaming_snapshot_values.unwrap_or((0, 0, 0, 0)),
             region_journal_snapshot_values.unwrap_or((0, 0)),
         )),
         _ => None,
@@ -241,12 +208,6 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
             collision_queries,
             collision_authority_misses,
             world_revision,
-            (
-                streaming_connection_count,
-                streaming_needs_resync_count,
-                streaming_max_cursor_lag,
-                streaming_max_region_sequence_lag,
-            ),
             (region_journal_latest_sequence, region_journal_record_count),
         )),
         Ok(mut snapshot),
@@ -265,10 +226,6 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         snapshot.collision_queries = collision_queries;
         snapshot.collision_authority_misses = collision_authority_misses;
         snapshot.world_revision = world_revision;
-        snapshot.streaming_connection_count = streaming_connection_count;
-        snapshot.streaming_needs_resync_count = streaming_needs_resync_count;
-        snapshot.streaming_max_cursor_lag = streaming_max_cursor_lag;
-        snapshot.streaming_max_region_sequence_lag = streaming_max_region_sequence_lag;
         snapshot.region_journal_latest_sequence = region_journal_latest_sequence;
         snapshot.region_journal_record_count = region_journal_record_count;
     }

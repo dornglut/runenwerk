@@ -1,8 +1,8 @@
-use super::super::adapters::resources::RegionInvalidationJournalResource;
-use super::super::chunks::lifecycle::WorldChunkRuntimeMapResource;
-use crate::plugins::net::{controller_for_connection, route_connection_targets};
+use super::{owner_for_connection, route_connection_targets};
+use crate::plugins::world::adapters::resources::RegionInvalidationJournalResource;
+use crate::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use crate::runtime::WorldMut;
-use ecs::ControllerRole;
+use ecs::OwnerRole;
 use engine_net::{ConnectionId, ServerSessionState};
 use spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,7 +17,7 @@ pub struct PendingStreamingSnapshot {
 }
 
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]
-pub struct ConnectionChunkInterest {
+pub struct ConnectionStreamingState {
     pub relevant_chunks: BTreeSet<ChunkId>,
     pub gameplay_locked_chunks: BTreeSet<ChunkId>,
     pub last_sent_cursor: SyncCursor,
@@ -29,7 +29,7 @@ pub struct ConnectionChunkInterest {
     pub pending_cursor_markers: BTreeMap<SyncCursor, PendingStreamingSnapshot>,
 }
 
-impl Default for ConnectionChunkInterest {
+impl Default for ConnectionStreamingState {
     fn default() -> Self {
         Self {
             relevant_chunks: BTreeSet::new(),
@@ -46,15 +46,15 @@ impl Default for ConnectionChunkInterest {
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
-pub struct WorldStreamingInterestResource {
-    pub per_connection: BTreeMap<ConnectionId, ConnectionChunkInterest>,
+pub struct NetStreamingStateResource {
+    pub per_connection: BTreeMap<ConnectionId, ConnectionStreamingState>,
 }
 
-impl WorldStreamingInterestResource {
-    pub fn interest_for_connection_mut(
+impl NetStreamingStateResource {
+    pub fn state_for_connection_mut(
         &mut self,
         connection_id: ConnectionId,
-    ) -> &mut ConnectionChunkInterest {
+    ) -> &mut ConnectionStreamingState {
         self.per_connection.entry(connection_id).or_default()
     }
 
@@ -64,69 +64,68 @@ impl WorldStreamingInterestResource {
         cursor: SyncCursor,
         sent_full_snapshot: bool,
     ) {
-        let interest = self.interest_for_connection_mut(connection_id);
-        if cursor.0 >= interest.last_sent_cursor.0 {
-            interest.last_sent_cursor = cursor;
+        let state = self.state_for_connection_mut(connection_id);
+        if cursor.0 >= state.last_sent_cursor.0 {
+            state.last_sent_cursor = cursor;
         }
-        interest.pending_cursor_markers.insert(
+        state.pending_cursor_markers.insert(
             cursor,
             PendingStreamingSnapshot {
-                region_sequence: interest.prepared_region_sequence,
-                full_resync_payload: interest.prepared_full_resync_payload,
+                region_sequence: state.prepared_region_sequence,
+                full_resync_payload: state.prepared_full_resync_payload,
             },
         );
-        while interest.pending_cursor_markers.len() > MAX_PENDING_CURSOR_MARKERS {
-            if let Some(oldest_cursor) = interest.pending_cursor_markers.keys().next().copied() {
-                interest.pending_cursor_markers.remove(&oldest_cursor);
+        while state.pending_cursor_markers.len() > MAX_PENDING_CURSOR_MARKERS {
+            if let Some(oldest_cursor) = state.pending_cursor_markers.keys().next().copied() {
+                state.pending_cursor_markers.remove(&oldest_cursor);
             } else {
                 break;
             }
         }
         if sent_full_snapshot {
-            interest.needs_full_resync = false;
+            state.needs_full_resync = false;
         }
     }
 
     pub fn mark_snapshot_acknowledged(&mut self, connection_id: ConnectionId, cursor: SyncCursor) {
-        let interest = self.interest_for_connection_mut(connection_id);
-        if cursor.0 < interest.last_ack_cursor.0 {
+        let state = self.state_for_connection_mut(connection_id);
+        if cursor.0 < state.last_ack_cursor.0 {
             return;
         }
-        interest.last_ack_cursor = cursor;
+        state.last_ack_cursor = cursor;
 
-        let acknowledged_cursors = interest
+        let acknowledged_cursors = state
             .pending_cursor_markers
             .keys()
             .copied()
             .take_while(|sent_cursor| sent_cursor.0 <= cursor.0)
             .collect::<Vec<_>>();
         for sent_cursor in acknowledged_cursors {
-            if let Some(marker) = interest.pending_cursor_markers.remove(&sent_cursor) {
-                interest.acked_region_sequence =
-                    interest.acked_region_sequence.max(marker.region_sequence);
+            if let Some(marker) = state.pending_cursor_markers.remove(&sent_cursor) {
+                state.acked_region_sequence = state.acked_region_sequence.max(marker.region_sequence);
                 if marker.full_resync_payload {
-                    interest.needs_full_resync = false;
+                    state.needs_full_resync = false;
                 }
             }
         }
 
-        if cursor.0 >= interest.last_sent_cursor.0 {
-            interest.acked_region_sequence = interest
+        if cursor.0 >= state.last_sent_cursor.0 {
+            state.acked_region_sequence = state
                 .acked_region_sequence
-                .max(interest.prepared_region_sequence);
-            if interest.prepared_full_resync_payload {
-                interest.needs_full_resync = false;
+                .max(state.prepared_region_sequence);
+            if state.prepared_full_resync_payload {
+                state.needs_full_resync = false;
             }
         }
     }
 
     pub fn mark_needs_full_resync(&mut self, connection_id: ConnectionId) {
-        let interest = self.interest_for_connection_mut(connection_id);
-        interest.needs_full_resync = true;
+        let state = self.state_for_connection_mut(connection_id);
+        state.needs_full_resync = true;
     }
 }
 
-pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
+pub fn sync_connection_streaming_state_system(mut world: WorldMut) {
     let Ok(session) = world.resource::<ServerSessionState>() else {
         return;
     };
@@ -145,6 +144,7 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
         } else {
             (BTreeSet::new(), BTreeSet::new())
         };
+
     let (journal_min_sequence, journal_max_sequence, journal_records) =
         if let Ok(journal) = world.resource::<RegionInvalidationJournalResource>() {
             let min_sequence = journal.recent_records.front().map(|record| record.sequence);
@@ -158,15 +158,17 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
         } else {
             (None, 0, Vec::new())
         };
+
     let connection_roles = active_connections
         .iter()
         .copied()
         .map(|connection_id| {
-            let role = controller_for_connection(&world, connection_id)
-                .and_then(|controller| world.controller_role(controller));
+            let role = owner_for_connection(&world, connection_id)
+                .and_then(|owner_id| world.owner_role(owner_id));
             (connection_id, role)
         })
         .collect::<BTreeMap<_, _>>();
+
     let owned_target_counts = active_connections
         .iter()
         .copied()
@@ -176,39 +178,38 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
         })
         .collect::<BTreeMap<_, _>>();
 
-    let Ok(streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>() else {
+    let Ok(streaming_state) = world.resource_mut::<NetStreamingStateResource>() else {
         return;
     };
-    streaming_interest
+    streaming_state
         .per_connection
         .retain(|connection_id, _| active_connections.contains(connection_id));
 
     for connection_id in active_connections {
-        let interest = streaming_interest.interest_for_connection_mut(connection_id);
+        let state = streaming_state.state_for_connection_mut(connection_id);
         let role = connection_roles.get(&connection_id).copied().flatten();
         let owned_target_count = owned_target_counts
             .get(&connection_id)
             .copied()
             .unwrap_or(0);
-        if matches!(role, Some(ControllerRole::Spectator))
-            || (matches!(role, Some(ControllerRole::Controller)) && owned_target_count == 0)
+
+        if matches!(role, Some(OwnerRole::Observer))
+            || (matches!(role, Some(OwnerRole::Active)) && owned_target_count == 0)
         {
-            interest.relevant_chunks.clear();
-            interest.gameplay_locked_chunks.clear();
-            interest.prepared_region_sequence = journal_max_sequence;
-            interest.prepared_full_resync_payload = false;
+            state.relevant_chunks.clear();
+            state.gameplay_locked_chunks.clear();
+            state.prepared_region_sequence = journal_max_sequence;
+            state.prepared_full_resync_payload = false;
             continue;
         }
 
-        let journal_gap = journal_min_sequence.is_some_and(|min_sequence| {
-            interest.acked_region_sequence.saturating_add(1) < min_sequence
-        });
+        let journal_gap = journal_min_sequence
+            .is_some_and(|min_sequence| state.acked_region_sequence.saturating_add(1) < min_sequence);
 
-        let full_resync_payload =
-            interest.needs_full_resync || interest.last_ack_cursor.0 == 0 || journal_gap;
+        let full_resync_payload = state.needs_full_resync || state.last_ack_cursor.0 == 0 || journal_gap;
 
         if journal_gap {
-            interest.needs_full_resync = true;
+            state.needs_full_resync = true;
         }
 
         let mut relevant_chunks = BTreeSet::<ChunkId>::new();
@@ -216,7 +217,7 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
             relevant_chunks = runtime_chunks.clone();
         } else {
             for (sequence, chunk_ids) in &journal_records {
-                if *sequence <= interest.acked_region_sequence {
+                if *sequence <= state.acked_region_sequence {
                     continue;
                 }
                 for chunk_id in chunk_ids {
@@ -227,9 +228,9 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
             }
         }
 
-        interest.relevant_chunks = relevant_chunks;
-        interest.gameplay_locked_chunks = gameplay_locked_chunks.clone();
-        interest.prepared_region_sequence = journal_max_sequence;
-        interest.prepared_full_resync_payload = full_resync_payload;
+        state.relevant_chunks = relevant_chunks;
+        state.gameplay_locked_chunks = gameplay_locked_chunks.clone();
+        state.prepared_region_sequence = journal_max_sequence;
+        state.prepared_full_resync_payload = full_resync_payload;
     }
 }
