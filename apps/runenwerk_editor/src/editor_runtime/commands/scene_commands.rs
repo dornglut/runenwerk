@@ -13,8 +13,6 @@ pub struct ExecutedSceneCommand {
     pub metadata: editor_core::CommandMetadata,
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/commands/scene_commands.rs
-/// Method: execute_scene_intent
 pub fn execute_scene_intent(
     runtime: &mut RunenwerkEditorRuntime,
     command_id: CommandId,
@@ -24,8 +22,6 @@ pub fn execute_scene_intent(
     execute_scene_command(runtime, command)
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/commands/scene_commands.rs
-/// Method: execute_scene_command
 pub fn execute_scene_command(
     runtime: &mut RunenwerkEditorRuntime,
     mut command: SceneEditorCommand,
@@ -48,8 +44,6 @@ pub fn execute_scene_command(
     }
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/commands/scene_commands.rs
-/// Method: execute_scene_command_and_push_history
 pub fn execute_scene_command_and_push_history(
     runtime: &mut RunenwerkEditorRuntime,
     mut command: SceneEditorCommand,

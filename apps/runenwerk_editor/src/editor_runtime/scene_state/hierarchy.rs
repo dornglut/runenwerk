@@ -11,8 +11,6 @@ pub struct HierarchyItem {
 }
 
 impl HierarchyItem {
-    /// File: apps/runenwerk_editor/src/editor_runtime/scene_state/hierarchy.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         display_name: impl Into<String>,
@@ -33,24 +31,18 @@ pub struct HierarchySnapshot {
     pub roots: Vec<HierarchyItem>,
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene_state/hierarchy.rs
-/// Method: root_entities
 pub fn root_entities(document: &SceneDocumentState) -> Vec<EntityId> {
     let mut roots = document.children_of(None);
     roots.sort();
     roots
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene_state/hierarchy.rs
-/// Method: children_of
 pub fn children_of(document: &SceneDocumentState, parent: EntityId) -> Vec<EntityId> {
     let mut children = document.children_of(Some(parent));
     children.sort();
     children
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene_state/hierarchy.rs
-/// Method: build_hierarchy_snapshot
 pub fn build_hierarchy_snapshot(document: &SceneDocumentState) -> HierarchySnapshot {
     let roots = root_entities(document)
         .into_iter()
@@ -60,8 +52,6 @@ pub fn build_hierarchy_snapshot(document: &SceneDocumentState) -> HierarchySnaps
     HierarchySnapshot { roots }
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene_state/hierarchy.rs
-/// Method: validate_reparent
 pub fn validate_reparent(
     document: &SceneDocumentState,
     entity: EntityId,
@@ -90,8 +80,6 @@ pub fn validate_reparent(
     Ok(())
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene_state/hierarchy.rs
-/// Method: build_item
 fn build_item(document: &SceneDocumentState, entity: EntityId) -> Option<HierarchyItem> {
     let snapshot = document.entity_snapshot(entity)?;
     let children = children_of(document, entity)

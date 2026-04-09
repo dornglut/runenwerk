@@ -207,8 +207,16 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
             .world()
             .resource::<PredictionDiagnostics>()
             .unwrap()
-            .corrections_applied,
+            .corrected,
         1
+    );
+    assert_eq!(
+        client
+            .world()
+            .resource::<PredictionDiagnostics>()
+            .unwrap()
+            .replayed,
+        0
     );
     assert_eq!(
         client
@@ -226,4 +234,41 @@ fn client_snapshot_application_sends_ack_and_reconciles_prediction() {
             .pending_frames_len(),
         0
     );
+}
+
+#[test]
+fn prediction_replay_updates_prediction_diagnostics_counter() {
+    let mut client = App::headless();
+    client.add_plugins(default_plugins());
+    client.add_plugins((ScenePlugin, NetworkClientPlugin));
+
+    client
+        .world_mut()
+        .resource_mut::<PlayerCommandBuffer>()
+        .unwrap()
+        .push(ClientCommandEnvelope::Move(MoveCommand { x: 1.0, y: 0.0 }));
+    let mut client = client
+        .run_for_ticks(1)
+        .expect("first prediction tick should run");
+
+    let payload = TestReplicationDriver::encode_snapshot(&TestSnapshot::default())
+        .expect("snapshot payload encoding should succeed");
+    enqueue_client_inbox(
+        client.world_mut(),
+        ServerMessage::Snapshot(Snapshot {
+            tick: SimulationTick(0),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor::default(),
+            entity_ids: Vec::new(),
+            payload,
+        }),
+    )
+    .expect("client inbox enqueue should succeed");
+    let client = client
+        .run_for_frames(1)
+        .expect("authoritative snapshot frame should run");
+
+    let diagnostics = client.world().resource::<PredictionDiagnostics>().unwrap();
+    assert_eq!(diagnostics.corrected, 1);
+    assert_eq!(diagnostics.replayed, 1);
 }

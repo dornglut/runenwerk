@@ -10,8 +10,6 @@ pub struct SceneResourceDescriptor {
 }
 
 impl SceneResourceDescriptor {
-    /// File: domain/editor/editor_scene/src/model/resource.rs
-    /// Method: new
     pub fn new(resource_type: ResourceTypeId, display_name: impl Into<String>) -> Self {
         Self {
             resource_type,

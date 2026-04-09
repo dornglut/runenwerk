@@ -16,8 +16,6 @@ pub struct TypeRegistry {
 }
 
 impl TypeRegistry {
-    /// File: domain/ecs/src/reflect/registry.rs
-    /// Method: new
     pub fn new() -> Self {
         Self {
             next_id: 1,
@@ -27,42 +25,30 @@ impl TypeRegistry {
         }
     }
 
-    /// File: domain/ecs/src/reflect/registry.rs
-    /// Method: next_type_id
     pub fn next_type_id(&mut self) -> ReflectTypeId {
         let id = ReflectTypeId(self.next_id);
         self.next_id += 1;
         id
     }
 
-    /// File: domain/ecs/src/reflect/registry.rs
-    /// Method: register
     pub fn register(&mut self, rust_type_id: TypeId, type_info: &'static TypeInfo) {
         self.by_type_id.insert(rust_type_id, type_info);
         self.by_reflect_id.insert(type_info.id, type_info);
         self.by_stable_name.insert(type_info.stable_name, type_info);
     }
 
-    /// File: domain/ecs/src/reflect/registry.rs
-    /// Method: get_by_type_id
     pub fn get_by_type_id(&self, rust_type_id: TypeId) -> Option<&'static TypeInfo> {
         self.by_type_id.get(&rust_type_id).copied()
     }
 
-    /// File: domain/ecs/src/reflect/registry.rs
-    /// Method: get_by_reflect_id
     pub fn get_by_reflect_id(&self, reflect_type_id: ReflectTypeId) -> Option<&'static TypeInfo> {
         self.by_reflect_id.get(&reflect_type_id).copied()
     }
 
-    /// File: domain/ecs/src/reflect/registry.rs
-    /// Method: get_by_stable_name
     pub fn get_by_stable_name(&self, stable_name: &str) -> Option<&'static TypeInfo> {
         self.by_stable_name.get(stable_name).copied()
     }
 
-    /// File: domain/ecs/src/reflect/registry.rs
-    /// Method: all_types
     pub fn all_types(&self) -> impl Iterator<Item = &'static TypeInfo> + '_ {
         self.by_reflect_id.values().copied()
     }
@@ -70,14 +56,10 @@ impl TypeRegistry {
 
 static GLOBAL_TYPE_REGISTRY: OnceLock<Mutex<TypeRegistry>> = OnceLock::new();
 
-/// File: domain/ecs/src/reflect/registry.rs
-/// Method: global_type_registry
 pub fn global_type_registry() -> &'static Mutex<TypeRegistry> {
     GLOBAL_TYPE_REGISTRY.get_or_init(|| Mutex::new(TypeRegistry::new()))
 }
 
-/// File: domain/ecs/src/reflect/registry.rs
-/// Method: allocate_reflect_type_id
 pub fn allocate_reflect_type_id() -> ReflectTypeId {
     let mut registry = global_type_registry()
         .lock()
@@ -85,8 +67,6 @@ pub fn allocate_reflect_type_id() -> ReflectTypeId {
     registry.next_type_id()
 }
 
-/// File: domain/ecs/src/reflect/registry.rs
-/// Method: register_reflect_type
 pub fn register_reflect_type<T>() -> &'static TypeInfo
 where
     T: Reflect,

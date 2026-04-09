@@ -3,8 +3,8 @@ use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
 pub use ecs::{
-    BroadcastReader, BroadcastWriter, Commands, InputStreamDrainer, InputStreamReader,
-    InputStreamWriter, Query, QueueDrainer, QueueReader, QueueWriter, Res, ResMut,
+    BroadcastReader, BroadcastWriter, Commands, Query, Res, ResMut, TickBufferDrainer,
+    TickBufferReader, TickBufferWriter, WorkQueueDrainer, WorkQueueReader, WorkQueueWriter,
 };
 
 pub struct WorldRef {

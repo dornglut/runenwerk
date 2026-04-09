@@ -42,9 +42,9 @@ Design terms in this document map to current runtime code as follows (repo state
 | --- | --- | --- |
 | `Broadcast<T>` | `BroadcastStream*`, `BroadcastReader`, `BroadcastWriter` in `domain/ecs/src/world/messaging/broadcast.rs` and `domain/ecs/src/system/params.rs` | Aligned (semantic match). |
 | `WorkQueue<T>` | `WorkQueue*` in `domain/ecs/src/world/messaging/work_queue.rs`, `domain/ecs/src/system/params.rs`, and net bridge systems | Aligned (hard rename completed). |
-| `TickBuffer<T>` | `InputStream*` in `domain/ecs/src/world/messaging/input_stream.rs` and `domain/ecs/src/system/params.rs` | Temporary mapping only. |
+| `TickBuffer<T>` | `TickBuffer*` in `domain/ecs/src/world/messaging/tick_buffer.rs` and `domain/ecs/src/system/params.rs` | Aligned (hard rename completed). |
 
-`TickBuffer<T>` is intentionally not hard-renamed in code yet. Current `InputStream*` APIs are still input-shaped (`InputMessageSource::{Server, Controller}`, `current_input_tick`, and `mark_input_stream_*` diagnostics hooks), so a direct rename would currently overstate generality.
+`TickBuffer<T>` is now a generic ECS primitive: provenance is opaque (`TickBufferProvenance`), primitive diagnostics are neutral, and net/prediction counters (`acked`, `lagged`, `replayed`, `corrected`) live in net diagnostics resources.
 
 ## Layer Model
 

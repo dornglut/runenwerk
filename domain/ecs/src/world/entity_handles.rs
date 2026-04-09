@@ -25,8 +25,6 @@ impl<'a, T> DerefMut for Mut<'a, T> {
 }
 
 impl<'a, T> Mut<'a, T> {
-    /// File: domain/ecs/src/world/entity_handles.rs
-    /// Method: into_inner
     pub fn into_inner(self) -> &'a mut T {
         self.value
     }

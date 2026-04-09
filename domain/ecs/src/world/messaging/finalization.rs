@@ -36,12 +36,13 @@ impl World {
             .messaging_finalization_counters
             .frame_boundaries
             .saturating_add(1);
+        self.current_frame_index = self.current_frame_index.saturating_add(1);
     }
 
     pub fn finalize_tick_boundary(&mut self, finalized_tick: u64) {
-        self.current_input_tick = finalized_tick;
+        self.current_buffer_tick = finalized_tick;
 
-        for stream in self.input_streams.values_mut() {
+        for stream in self.tick_buffers.values_mut() {
             if stream.config.retain_finalized_ticks {
                 continue;
             }

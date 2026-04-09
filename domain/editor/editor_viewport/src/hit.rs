@@ -15,14 +15,10 @@ pub enum ViewportHitTarget {
 }
 
 impl ViewportHitTarget {
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: entity
     pub fn entity(entity: EntityId) -> Self {
         Self::Entity(entity)
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: component_handle
     pub fn component_handle(entity: EntityId, component_type: ComponentTypeId) -> Self {
         Self::ComponentHandle {
             entity,
@@ -30,20 +26,14 @@ impl ViewportHitTarget {
         }
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: gizmo_axis
     pub fn gizmo_axis(axis: &'static str) -> Self {
         Self::GizmoAxis(axis)
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: grid
     pub fn grid() -> Self {
         Self::Grid
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: none
     pub fn none() -> Self {
         Self::None
     }
@@ -56,20 +46,14 @@ pub struct ViewportHitResult {
 }
 
 impl ViewportHitResult {
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: new
     pub fn new(target: ViewportHitTarget, distance: f32) -> Self {
         Self { target, distance }
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: entity
     pub fn entity(entity: EntityId, distance: f32) -> Self {
         Self::new(ViewportHitTarget::entity(entity), distance)
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: component_handle
     pub fn component_handle(
         entity: EntityId,
         component_type: ComponentTypeId,
@@ -81,20 +65,14 @@ impl ViewportHitResult {
         )
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: gizmo_axis
     pub fn gizmo_axis(axis: &'static str, distance: f32) -> Self {
         Self::new(ViewportHitTarget::gizmo_axis(axis), distance)
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: grid
     pub fn grid(distance: f32) -> Self {
         Self::new(ViewportHitTarget::grid(), distance)
     }
 
-    /// File: domain/editor/editor_viewport/src/hit.rs
-    /// Method: none
     pub fn none() -> Self {
         Self::new(ViewportHitTarget::none(), f32::INFINITY)
     }

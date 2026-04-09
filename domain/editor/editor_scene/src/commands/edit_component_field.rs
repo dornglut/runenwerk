@@ -16,8 +16,6 @@ pub struct EditComponentFieldCommand {
 }
 
 impl EditComponentFieldCommand {
-    /// File: domain/editor/editor_scene/src/commands/edit_component_field.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         component_type: ComponentTypeId,
@@ -33,8 +31,6 @@ impl EditComponentFieldCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/edit_component_field.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         if self.previous_value.is_none() {
             let value = ctx
@@ -54,8 +50,6 @@ impl EditComponentFieldCommand {
             .map_err(map_edit_error)
     }
 
-    /// File: domain/editor/editor_scene/src/commands/edit_component_field.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let Some(previous_value) = self.previous_value.clone() else {
             return Ok(());

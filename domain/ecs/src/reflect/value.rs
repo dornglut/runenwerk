@@ -31,8 +31,6 @@ impl<'a> core::fmt::Debug for ReflectValueMut<'a> {
 }
 
 impl<'a> ReflectValueRef<'a> {
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: new
     pub fn new<T>(value: &'a T) -> Self
     where
         T: Reflect,
@@ -43,26 +41,18 @@ impl<'a> ReflectValueRef<'a> {
         }
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: type_info
     pub fn type_info(&self) -> &'static TypeInfo {
         self.type_info
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: as_any
     pub fn as_any(&self) -> &'a dyn std::any::Any {
         self.value
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: downcast_ref
     pub fn downcast_ref<T: 'static>(&self) -> Option<&'a T> {
         self.value.downcast_ref::<T>()
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: struct_ref
     pub fn struct_ref(&self) -> Option<StructValueRef<'a>> {
         self.type_info.struct_info().map(|info| StructValueRef {
             info,
@@ -72,8 +62,6 @@ impl<'a> ReflectValueRef<'a> {
 }
 
 impl<'a> ReflectValueMut<'a> {
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: new
     pub fn new<T>(value: &'a mut T) -> Self
     where
         T: Reflect,
@@ -84,38 +72,26 @@ impl<'a> ReflectValueMut<'a> {
         }
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: type_info
     pub fn type_info(&self) -> &'static TypeInfo {
         self.type_info
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: as_any
     pub fn as_any(&self) -> &dyn std::any::Any {
         self.value
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: as_any_mut
     pub fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self.value
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: downcast_ref
     pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
         self.value.downcast_ref::<T>()
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: downcast_mut
     pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
         self.value.downcast_mut::<T>()
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: struct_mut
     pub fn struct_mut(self) -> Option<StructValueMut<'a>> {
         self.type_info.struct_info().map(|info| StructValueMut {
             info,
@@ -152,21 +128,15 @@ impl<'a> core::fmt::Debug for StructValueMut<'a> {
 }
 
 impl<'a> StructValueRef<'a> {
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: fields
     pub fn fields(&self) -> &'static [FieldInfo] {
         self.info.fields
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: field
     pub fn field(&self, name: &str) -> Option<ReflectValueRef<'a>> {
         let field = self.info.field_named(name)?;
         (field.get_ref)(self.owner)
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: field_at
     pub fn field_at(&self, index: usize) -> Option<ReflectValueRef<'a>> {
         let field = self.info.field_at(index)?;
         (field.get_ref)(self.owner)
@@ -174,21 +144,15 @@ impl<'a> StructValueRef<'a> {
 }
 
 impl<'a> StructValueMut<'a> {
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: fields
     pub fn fields(&self) -> &'static [FieldInfo] {
         self.info.fields
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: field_mut
     pub fn field_mut(&mut self, name: &str) -> Option<ReflectValueMut<'_>> {
         let field = self.info.field_named(name)?;
         (field.get_mut)(self.owner)
     }
 
-    /// File: domain/ecs/src/reflect/value.rs
-    /// Method: field_at_mut
     pub fn field_at_mut(&mut self, index: usize) -> Option<ReflectValueMut<'_>> {
         let field = self.info.field_at(index)?;
         (field.get_mut)(self.owner)

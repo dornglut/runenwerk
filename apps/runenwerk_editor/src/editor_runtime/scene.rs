@@ -30,8 +30,6 @@ pub struct RunenwerkEditorSceneRuntime<'a> {
 }
 
 impl<'a> RunenwerkEditorSceneRuntime<'a> {
-    /// File: apps/runenwerk_editor/src/editor_runtime/scene.rs
-    /// Method: new
     pub fn new(
         document: &'a mut SceneDocumentState,
         world: &'a mut ecs::World,
@@ -260,8 +258,6 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
     }
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene.rs
-/// Method: read_edit_value_at_path
 fn read_edit_value_at_path(
     current: ecs::reflect::ReflectValueRef<'_>,
     path: &InspectorPath,

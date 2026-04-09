@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{Error, Ident, ItemStruct, LitBool, Path, Result, Token, parse_macro_input};
+use syn::{Error, Ident, ItemStruct, LitBool, LitInt, Path, Result, Token, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn net_entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -27,11 +27,13 @@ pub fn net_component(attr: TokenStream, item: TokenStream) -> TokenStream {
     let profile = enum_variant_expr(args.profile, "ReplicationProfilePreset", "ReliableState");
     let interest = enum_variant_expr(args.interest, "InterestPolicy", "Global");
     let owner_prediction = args.owner_prediction.unwrap_or(false);
-    let direction = match args.direction {
-        Some(direction_path) => path_to_replication_expr(direction_path, "ReplicationDirection"),
-        None => {
-            quote! { ::engine_net::replication::ReplicationProfile::from_preset(profile).direction }
-        }
+    let direction = optional_enum_variant_expr(args.direction, "ReplicationDirection");
+    let reliability = optional_enum_variant_expr(args.reliability, "Reliability");
+    let prediction = optional_enum_variant_expr(args.prediction, "PredictionMode");
+    let priority = optional_enum_variant_expr(args.priority, "BandwidthPriority");
+    let frequency_hz = match args.frequency_hz {
+        Some(value) => quote! { Some(#value) },
+        None => quote! { None },
     };
 
     quote! {
@@ -40,15 +42,20 @@ pub fn net_component(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl #impl_generics ::engine_net::replication::NetComponentMetadata for #struct_ident #ty_generics #where_clause {
             fn replication_descriptor() -> ::engine_net::replication::ReplicatedComponentDescriptor {
                 let profile = #profile;
-                let direction = #direction;
-                ::engine_net::replication::ReplicatedComponentDescriptor {
-                    component_name: stringify!(#struct_ident).to_string(),
-                    authority: #authority,
-                    direction,
+                ::engine_net::replication::ReplicatedComponentDescriptor::new(
+                    stringify!(#struct_ident).to_string(),
+                    #authority,
                     profile,
-                    interest: #interest,
-                    owner_prediction: #owner_prediction,
-                }
+                    #interest,
+                    #owner_prediction,
+                    ::engine_net::replication::ReplicationSemanticsOverrides {
+                        direction: #direction,
+                        reliability: #reliability,
+                        frequency_hz: #frequency_hz,
+                        prediction: #prediction,
+                        priority: #priority,
+                    },
+                )
             }
         }
     }
@@ -67,6 +74,16 @@ fn enum_variant_expr(
             let enum_ident = Ident::new(enum_name, proc_macro2::Span::call_site());
             quote! { ::engine_net::replication::#enum_ident::#default_ident }
         }
+    }
+}
+
+fn optional_enum_variant_expr(value: Option<Path>, enum_name: &str) -> proc_macro2::TokenStream {
+    match value {
+        Some(path) => {
+            let expr = path_to_replication_expr(path, enum_name);
+            quote! { Some(#expr) }
+        }
+        None => quote! { None },
     }
 }
 
@@ -94,6 +111,10 @@ fn path_to_replication_expr(path: Path, enum_name: &str) -> proc_macro2::TokenSt
 struct NetComponentArgs {
     authority: Option<Path>,
     direction: Option<Path>,
+    reliability: Option<Path>,
+    prediction: Option<Path>,
+    priority: Option<Path>,
+    frequency_hz: Option<u16>,
     profile: Option<Path>,
     interest: Option<Path>,
     owner_prediction: Option<bool>,
@@ -113,6 +134,19 @@ impl Parse for NetComponentArgs {
                 "direction" => {
                     args.direction = Some(input.parse()?);
                 }
+                "reliability" => {
+                    args.reliability = Some(input.parse()?);
+                }
+                "prediction" => {
+                    args.prediction = Some(input.parse()?);
+                }
+                "priority" => {
+                    args.priority = Some(input.parse()?);
+                }
+                "frequency_hz" => {
+                    let value: LitInt = input.parse()?;
+                    args.frequency_hz = Some(value.base10_parse()?);
+                }
                 "profile" => {
                     args.profile = Some(input.parse()?);
                 }
@@ -127,7 +161,7 @@ impl Parse for NetComponentArgs {
                     return Err(Error::new(
                         key.span(),
                         format!(
-                            "unsupported net_component argument `{other}` (expected authority, direction, profile, interest, owner_prediction)"
+                            "unsupported net_component argument `{other}` (expected authority, direction, reliability, prediction, priority, frequency_hz, profile, interest, owner_prediction)"
                         ),
                     ));
                 }

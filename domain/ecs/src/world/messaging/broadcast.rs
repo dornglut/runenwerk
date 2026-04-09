@@ -1,3 +1,4 @@
+use super::diagnostics::BroadcastKey;
 use crate::entity::Entity;
 use crate::world::world::World;
 use std::any::{Any, TypeId, type_name};
@@ -83,6 +84,7 @@ pub(crate) struct BroadcastObserver {
 }
 
 pub(crate) struct BroadcastStreamStorage {
+    pub(super) stream_key: BroadcastKey,
     pub(super) stream_type_name: &'static str,
     messages: Box<dyn Any>,
     len_fn: fn(&Box<dyn Any>) -> usize,
@@ -96,7 +98,7 @@ pub(crate) struct BroadcastStreamStorage {
 }
 
 impl BroadcastStreamStorage {
-    pub(super) fn new<T: 'static>() -> Self {
+    pub(super) fn new<T: 'static>(stream_key: BroadcastKey) -> Self {
         fn len_for<T: 'static>(messages: &Box<dyn Any>) -> usize {
             messages
                 .downcast_ref::<Vec<T>>()
@@ -116,6 +118,7 @@ impl BroadcastStreamStorage {
         }
 
         Self {
+            stream_key,
             stream_type_name: type_name::<T>(),
             messages: Box::new(Vec::<T>::new()),
             len_fn: len_for::<T>,
@@ -179,6 +182,11 @@ impl BroadcastStreamStorage {
 }
 
 impl World {
+    fn allocate_broadcast_key(&mut self) -> BroadcastKey {
+        self.next_broadcast_key = self.next_broadcast_key.saturating_add(1);
+        BroadcastKey(self.next_broadcast_key)
+    }
+
     pub fn has_broadcast_stream<T: 'static>(&self) -> bool {
         self.broadcast_streams.contains_key(&TypeId::of::<T>())
     }
@@ -188,27 +196,34 @@ impl World {
         if self.broadcast_streams.contains_key(&type_id) {
             return false;
         }
+        let stream_key = self.allocate_broadcast_key();
         self.broadcast_streams
-            .insert(type_id, BroadcastStreamStorage::new::<T>());
+            .insert(type_id, BroadcastStreamStorage::new::<T>(stream_key));
         true
     }
 
     pub fn configure_broadcast_stream<T: 'static>(&mut self, config: BroadcastStreamConfig) {
         let type_id = TypeId::of::<T>();
+        let stream_key = self.allocate_broadcast_key();
         let stream = self
             .broadcast_streams
             .entry(type_id)
-            .or_insert_with(BroadcastStreamStorage::new::<T>);
+            .or_insert_with(|| BroadcastStreamStorage::new::<T>(stream_key));
         stream.config = config;
     }
 
     pub fn publish_broadcast<T: 'static>(&mut self, message: T) {
         let type_id = TypeId::of::<T>();
+        if !self.broadcast_streams.contains_key(&type_id) {
+            let stream_key = self.allocate_broadcast_key();
+            self.broadcast_streams
+                .insert(type_id, BroadcastStreamStorage::new::<T>(stream_key));
+        }
         let (stream_type_name, emitted_count) = {
             let stream = self
                 .broadcast_streams
-                .entry(type_id)
-                .or_insert_with(BroadcastStreamStorage::new::<T>);
+                .get_mut(&type_id)
+                .expect("broadcast stream should exist after ensure");
             let config = stream.config;
             let stream_type_name = stream.stream_type_name;
             let mut dropped = false;

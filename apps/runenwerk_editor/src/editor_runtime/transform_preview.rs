@@ -17,8 +17,6 @@ pub struct TransformPreviewSession {
 }
 
 impl TransformPreviewSession {
-    /// File: apps/runenwerk_editor/src/editor_runtime/transform_preview.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         tool: TransformToolKind,
@@ -32,8 +30,6 @@ impl TransformPreviewSession {
         }
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/transform_preview.rs
-    /// Method: with_translation_delta
     pub fn with_translation_delta(mut self, delta: Vec3Value) -> Self {
         self.translation_delta = delta;
         self

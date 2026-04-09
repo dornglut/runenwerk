@@ -5,8 +5,6 @@ use editor_inspector::{
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
 
-/// File: apps/runenwerk_editor/src/editor_runtime/inspector_sections.rs
-/// Method: build_component_inspector_sections
 pub fn build_component_inspector_sections(
     runtime: &RunenwerkEditorRuntime,
     entity: EntityId,
@@ -21,8 +19,6 @@ pub fn build_component_inspector_sections(
     })
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/inspector_sections.rs
-/// Method: build_resource_inspector_sections
 pub fn build_resource_inspector_sections(
     runtime: &RunenwerkEditorRuntime,
     resource_type: ResourceTypeId,

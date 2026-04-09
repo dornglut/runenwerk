@@ -1,7 +1,5 @@
 use crate::editor_runtime::RunenwerkEditorRuntime;
 
-/// File: apps/runenwerk_editor/src/editor_runtime/parity.rs
-/// Method: validate_scene_projection_parity
 pub fn validate_scene_projection_parity(
     runtime: &RunenwerkEditorRuntime,
 ) -> Result<(), &'static str> {
@@ -30,8 +28,6 @@ pub fn validate_scene_projection_parity(
     Ok(())
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/parity.rs
-/// Method: assert_scene_projection_parity
 pub fn assert_scene_projection_parity(runtime: &RunenwerkEditorRuntime) {
     let result = validate_scene_projection_parity(runtime);
     debug_assert!(

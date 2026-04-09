@@ -10,8 +10,6 @@ pub struct RunenwerkEditorInspectorBridge<'a> {
 }
 
 impl<'a> RunenwerkEditorInspectorBridge<'a> {
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector.rs
-    /// Method: new
     pub fn new(ids: &'a EditorRuntimeIdRegistry) -> Self {
         Self { ids }
     }

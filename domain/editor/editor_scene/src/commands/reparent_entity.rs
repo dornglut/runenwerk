@@ -13,8 +13,6 @@ pub struct ReparentEntityCommand {
 }
 
 impl ReparentEntityCommand {
-    /// File: domain/editor/editor_scene/src/commands/reparent_entity.rs
-    /// Method: new
     pub fn new(entity: EntityId, new_parent: Option<EntityId>) -> Self {
         Self {
             entity,
@@ -23,8 +21,6 @@ impl ReparentEntityCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/reparent_entity.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let old_parent = ctx
             .runtime_mut()
@@ -33,8 +29,6 @@ impl ReparentEntityCommand {
         Ok(())
     }
 
-    /// File: domain/editor/editor_scene/src/commands/reparent_entity.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let Some(previous_parent) = self.previous_parent else {
             return Ok(());

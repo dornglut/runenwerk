@@ -13,8 +13,6 @@ pub struct CreateEntityCommand {
 }
 
 impl CreateEntityCommand {
-    /// File: domain/editor/editor_scene/src/commands/create_entity.rs
-    /// Method: new
     pub fn new(parent: Option<EntityId>, display_name: impl Into<String>) -> Self {
         Self {
             parent,
@@ -23,8 +21,6 @@ impl CreateEntityCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/create_entity.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         if let Some(snapshot) = self.created.clone() {
             ctx.runtime_mut().restore_entity(snapshot)?;
@@ -44,8 +40,6 @@ impl CreateEntityCommand {
         Ok(())
     }
 
-    /// File: domain/editor/editor_scene/src/commands/create_entity.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let Some(snapshot) = &self.created else {
             return Ok(());

@@ -12,8 +12,6 @@ pub struct InspectorFieldDraft {
 }
 
 impl InspectorFieldDraft {
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: new
     pub fn new(
         entity: EntityId,
         component_type: ComponentTypeId,
@@ -37,26 +35,18 @@ pub struct EditorInspectorUiState {
 }
 
 impl EditorInspectorUiState {
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: new
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: focused_field
     pub fn focused_field(&self) -> Option<&InspectorPath> {
         self.focused_field.as_ref()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: active_draft
     pub fn active_draft(&self) -> Option<&InspectorFieldDraft> {
         self.active_draft.as_ref()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: begin_field_edit
     pub fn begin_field_edit(
         &mut self,
         entity: EntityId,
@@ -73,8 +63,6 @@ impl EditorInspectorUiState {
         ));
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: update_field_draft
     pub fn update_field_draft(&mut self, value: InspectorEditValue) -> Result<(), &'static str> {
         let draft = self
             .active_draft
@@ -85,27 +73,19 @@ impl EditorInspectorUiState {
         Ok(())
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: clear_draft
     pub fn clear_draft(&mut self) {
         self.active_draft = None;
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: clear_focus
     pub fn clear_focus(&mut self) {
         self.focused_field = None;
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: cancel_field_draft
     pub fn cancel_field_draft(&mut self) {
         self.clear_draft();
         self.clear_focus();
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: take_active_draft
     pub fn take_active_draft(&mut self) -> Option<InspectorFieldDraft> {
         let draft = self.active_draft.take();
         if draft.is_some() {
@@ -114,8 +94,6 @@ impl EditorInspectorUiState {
         draft
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: set_expanded
     pub fn set_expanded(&mut self, key: impl Into<String>, is_expanded: bool) {
         let key = key.into();
         if is_expanded {
@@ -125,8 +103,6 @@ impl EditorInspectorUiState {
         }
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: toggle_expanded
     pub fn toggle_expanded(&mut self, key: impl Into<String>) -> bool {
         let key = key.into();
         if self.expanded_keys.remove(&key) {
@@ -137,8 +113,6 @@ impl EditorInspectorUiState {
         }
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/inspector_state.rs
-    /// Method: is_expanded
     pub fn is_expanded(&self, key: &str) -> bool {
         self.expanded_keys.contains(key)
     }

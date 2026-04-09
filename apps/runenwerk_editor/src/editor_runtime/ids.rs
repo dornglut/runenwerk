@@ -61,8 +61,6 @@ pub struct EditorRuntimeIdRegistry {
 }
 
 impl EditorRuntimeIdRegistry {
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: new
     pub fn new() -> Self {
         Self {
             next_entity_id: 1,
@@ -70,16 +68,12 @@ impl EditorRuntimeIdRegistry {
         }
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: allocate_entity_id
     pub fn allocate_entity_id(&mut self) -> EntityId {
         let id = EntityId(self.next_entity_id);
         self.next_entity_id += 1;
         id
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: register_entity
     pub fn register_entity(
         &mut self,
         editor_id: EntityId,
@@ -97,52 +91,38 @@ impl EditorRuntimeIdRegistry {
         );
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: unregister_entity
     pub fn unregister_entity(&mut self, editor_id: EntityId) -> Option<SceneEntitySnapshot> {
         self.entities
             .remove(&editor_id)
             .map(|record| SceneEntitySnapshot::new(editor_id, record.display_name, record.parent))
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: resolve_entity
     pub fn resolve_entity(&self, entity_id: EntityId) -> Option<ecs::Entity> {
         self.entities
             .get(&entity_id)
             .map(|record| record.ecs_entity)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: entity_ids
     pub fn entity_ids(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.entities.keys().copied()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: entity_snapshot
     pub fn entity_snapshot(&self, entity_id: EntityId) -> Option<SceneEntitySnapshot> {
         self.entities.get(&entity_id).map(|record| {
             SceneEntitySnapshot::new(entity_id, record.display_name.clone(), record.parent)
         })
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: entity_display_name
     pub fn entity_display_name(&self, entity_id: EntityId) -> Option<&str> {
         self.entities
             .get(&entity_id)
             .map(|record| record.display_name.as_str())
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: parent_of
     pub fn parent_of(&self, entity_id: EntityId) -> Option<Option<EntityId>> {
         self.entities.get(&entity_id).map(|record| record.parent)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: children_of
     pub fn children_of(&self, parent: Option<EntityId>) -> Vec<EntityId> {
         self.entities
             .iter()
@@ -150,16 +130,12 @@ impl EditorRuntimeIdRegistry {
             .collect()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: has_children
     pub fn has_children(&self, entity_id: EntityId) -> bool {
         self.entities
             .values()
             .any(|record| record.parent == Some(entity_id))
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: rename_entity
     pub fn rename_entity(
         &mut self,
         entity_id: EntityId,
@@ -174,8 +150,6 @@ impl EditorRuntimeIdRegistry {
         Ok(previous)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: would_create_cycle
     pub fn would_create_cycle(&self, entity: EntityId, candidate_parent: EntityId) -> bool {
         let mut current = Some(candidate_parent);
 
@@ -190,8 +164,6 @@ impl EditorRuntimeIdRegistry {
         false
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: reparent_entity
     pub fn reparent_entity(
         &mut self,
         entity_id: EntityId,
@@ -207,8 +179,6 @@ impl EditorRuntimeIdRegistry {
         Ok(previous_parent)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: register_component_type
     pub fn register_component_type<T>(&mut self, editor_id: ComponentTypeId)
     where
         T: ecs::Component + ecs::Reflect + Default + 'static,
@@ -224,14 +194,10 @@ impl EditorRuntimeIdRegistry {
         );
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: component_type_ids
     pub fn component_type_ids(&self) -> impl Iterator<Item = ComponentTypeId> + '_ {
         self.component_types.keys().copied()
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: resolve_component_rust_type_id
     pub fn resolve_component_rust_type_id(
         &self,
         component_type: ComponentTypeId,
@@ -241,16 +207,12 @@ impl EditorRuntimeIdRegistry {
             .map(|registration| registration.rust_type_id)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: component_display_name
     pub fn component_display_name(&self, component_type: ComponentTypeId) -> Option<&str> {
         self.component_types
             .get(&component_type)
             .map(|registration| registration.display_name.as_str())
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: add_default_component
     pub fn add_default_component(
         &self,
         world: &mut ecs::World,
@@ -265,8 +227,6 @@ impl EditorRuntimeIdRegistry {
         (registration.insert_default)(world, entity)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: remove_component_and_capture
     pub fn remove_component_and_capture(
         &mut self,
         world: &mut ecs::World,
@@ -287,8 +247,6 @@ impl EditorRuntimeIdRegistry {
         )
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: restore_removed_component
     pub fn restore_removed_component(
         &mut self,
         world: &mut ecs::World,
@@ -305,14 +263,10 @@ impl EditorRuntimeIdRegistry {
         self.add_default_component(world, ecs_entity, component_type)
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: register_resource_type
     pub fn register_resource_type<T: 'static>(&mut self, editor_id: ResourceTypeId) {
         self.resource_type_ids.insert(editor_id, TypeId::of::<T>());
     }
 
-    /// File: apps/runenwerk_editor/src/editor_runtime/ids.rs
-    /// Method: resolve_resource_rust_type_id
     pub fn resolve_resource_rust_type_id(&self, resource_type: ResourceTypeId) -> Option<TypeId> {
         self.resource_type_ids.get(&resource_type).copied()
     }

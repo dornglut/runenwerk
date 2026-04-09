@@ -13,30 +13,22 @@ pub struct InspectorPath {
 }
 
 impl InspectorPath {
-    /// File: domain/editor/editor_inspector/src/model/path.rs
-    /// Method: root
     pub fn root() -> Self {
         Self {
             segments: Vec::new(),
         }
     }
 
-    /// File: domain/editor/editor_inspector/src/model/path.rs
-    /// Method: child_field
     pub fn child_field(&self, name: impl Into<String>) -> Self {
         let mut segments = self.segments.clone();
         segments.push(InspectorPathSegment::Field(name.into()));
         Self { segments }
     }
 
-    /// File: domain/editor/editor_inspector/src/model/path.rs
-    /// Method: segments
     pub fn segments(&self) -> &[InspectorPathSegment] {
         &self.segments
     }
 
-    /// File: domain/editor/editor_inspector/src/model/path.rs
-    /// Method: stable_key
     pub fn stable_key(&self) -> String {
         if self.segments.is_empty() {
             return "root".to_string();

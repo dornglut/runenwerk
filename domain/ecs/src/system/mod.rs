@@ -4,8 +4,9 @@ mod runtime;
 
 pub use extract::{SystemParam, SystemParamError};
 pub use params::{
-    BroadcastReader, BroadcastReaderState, BroadcastWriter, InputStreamDrainer, InputStreamReader,
-    InputStreamWriter, QueueDrainer, QueueReader, QueueWriter, Res, ResMut, ResView,
+    BroadcastReader, BroadcastReaderState, BroadcastWriter, Res, ResMut, ResView,
+    TickBufferDrainer, TickBufferReader, TickBufferWriter, WorkQueueDrainer, WorkQueueReader,
+    WorkQueueWriter,
 };
 pub use runtime::{
     ConfiguredSystem, IntoSystem, IntoSystemConfigs, IntoSystemSetKey, ParamSlotId,

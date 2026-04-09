@@ -10,8 +10,6 @@ pub struct SceneEntityView {
 }
 
 impl SceneEntityView {
-    /// File: apps/runenwerk_editor/src/editor_runtime/scene_state/entities.rs
-    /// Method: new
     pub fn new(id: EntityId, display_name: impl Into<String>, parent: Option<EntityId>) -> Self {
         Self {
             id,
@@ -21,8 +19,6 @@ impl SceneEntityView {
     }
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene_state/entities.rs
-/// Method: entity_view
 pub fn entity_view(document: &SceneDocumentState, entity: EntityId) -> Option<SceneEntityView> {
     let snapshot = document.entity_snapshot(entity)?;
     Some(SceneEntityView::new(
@@ -32,8 +28,6 @@ pub fn entity_view(document: &SceneDocumentState, entity: EntityId) -> Option<Sc
     ))
 }
 
-/// File: apps/runenwerk_editor/src/editor_runtime/scene_state/entities.rs
-/// Method: all_entity_views
 pub fn all_entity_views(document: &SceneDocumentState) -> Vec<SceneEntityView> {
     let mut entities = document
         .entity_ids()

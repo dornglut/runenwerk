@@ -78,8 +78,6 @@ pub struct SceneCommandContext<'a> {
 }
 
 impl<'a> SceneCommandContext<'a> {
-    /// File: domain/editor/editor_scene/src/bridge/scene_runtime.rs
-    /// Method: new
     pub fn new(
         session: &'a mut editor_core::EditorSession,
         runtime: &'a mut dyn SceneRuntime,
@@ -87,26 +85,18 @@ impl<'a> SceneCommandContext<'a> {
         Self { session, runtime }
     }
 
-    /// File: domain/editor/editor_scene/src/bridge/scene_runtime.rs
-    /// Method: session
     pub fn session(&self) -> &editor_core::EditorSession {
         self.session
     }
 
-    /// File: domain/editor/editor_scene/src/bridge/scene_runtime.rs
-    /// Method: session_mut
     pub fn session_mut(&mut self) -> &mut editor_core::EditorSession {
         self.session
     }
 
-    /// File: domain/editor/editor_scene/src/bridge/scene_runtime.rs
-    /// Method: runtime
     pub fn runtime(&self) -> &dyn SceneRuntime {
         self.runtime
     }
 
-    /// File: domain/editor/editor_scene/src/bridge/scene_runtime.rs
-    /// Method: runtime_mut
     pub fn runtime_mut(&mut self) -> &mut dyn SceneRuntime {
         self.runtime
     }

@@ -8,8 +8,8 @@ pub enum AccessDomain {
     OrphanedComponent,
     Resource,
     BroadcastStream,
-    Queue,
-    InputStream,
+    WorkQueue,
+    TickBuffer,
     Structural,
 }
 
@@ -69,25 +69,25 @@ impl AccessKey {
         }
     }
 
-    pub fn queue<T: 'static>(name: &'static str) -> Self {
-        Self::queue_by_id(TypeId::of::<T>(), name)
+    pub fn work_queue<T: 'static>(name: &'static str) -> Self {
+        Self::work_queue_by_id(TypeId::of::<T>(), name)
     }
 
-    pub fn queue_by_id(type_id: TypeId, name: &'static str) -> Self {
+    pub fn work_queue_by_id(type_id: TypeId, name: &'static str) -> Self {
         Self {
-            domain: AccessDomain::Queue,
+            domain: AccessDomain::WorkQueue,
             type_id: Some(type_id),
             name,
         }
     }
 
-    pub fn input_stream<T: 'static>(name: &'static str) -> Self {
-        Self::input_stream_by_id(TypeId::of::<T>(), name)
+    pub fn tick_buffer<T: 'static>(name: &'static str) -> Self {
+        Self::tick_buffer_by_id(TypeId::of::<T>(), name)
     }
 
-    pub fn input_stream_by_id(type_id: TypeId, name: &'static str) -> Self {
+    pub fn tick_buffer_by_id(type_id: TypeId, name: &'static str) -> Self {
         Self {
-            domain: AccessDomain::InputStream,
+            domain: AccessDomain::TickBuffer,
             type_id: Some(type_id),
             name,
         }

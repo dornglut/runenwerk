@@ -7,16 +7,16 @@ description: "Implementation-ordered roadmap for ECS/runtime/network foundations
 
 This roadmap is implementation-ordered and intentionally biased toward foundational runtime correctness before broader editor feature growth.
 
-Audit date: 2026-04-08.
+Audit date: 2026-04-09.
 
 ## Recommendation Summary
 
 This document is now partly historical.
-The major messaging redesign has already landed in core ECS runtime (`Broadcast*`, `WorkQueue*`, `InputStream*`) with runtime-owned frame/tick finalization hooks.
+The major messaging redesign has already landed in core ECS runtime (`Broadcast*`, `WorkQueue*`, `TickBuffer*`) with runtime-owned frame/tick finalization hooks.
 
 Reason:
 
-- the remaining high-impact gap is naming/semantic convergence (`TickBuffer*` design term vs current `InputStream*` code),
+- the remaining high-impact gaps are extensibility and richer diagnostics, not naming convergence,
 - some roadmap path references below still use pre-merge module paths and should be read as historical context.
 
 Use this roadmap primarily to track remaining convergence work, not as a statement that the old event substrate is still current.
@@ -29,12 +29,11 @@ Target outcome:
 
 - explicit `BroadcastStream<T>` (fan-out, unread cursors),
 - explicit `WorkQueue<T>` (single-owner destructive drain),
-- explicit `InputStream<T>` (tick-buffered command/input flow).
+- explicit `TickBuffer<T>` (tick-buffered command/input flow).
 
 Terminology note:
 
-- `WorkQueue<T>` is the current ECS runtime term in code.
-- Design-doc `TickBuffer<T>` currently maps to `InputStream<T>` in code until input-specific APIs are generalized.
+- `WorkQueue<T>` and `TickBuffer<T>` are the current ECS runtime terms in code.
 
 Primary ownership locations:
 
@@ -47,7 +46,7 @@ Checklist:
 - [ ] define separate storage/config types for broadcast streams and queues in ECS world APIs.
 - [ ] preserve unread cursor behavior for broadcast streams with runtime-owned cursor state.
 - [ ] add bounded queue primitive with explicit overflow and backpressure reporting.
-- [ ] add deterministic tick-scoped input stream buffering contract.
+- [x] add deterministic tick-scoped tick-buffer buffering contract.
 - [ ] keep direct world/admin APIs for inspection, clear, and deterministic test control.
 
 ### F2. Make lifecycle/finalization runtime-owned
@@ -92,19 +91,19 @@ Checklist:
 
 ## Priority 2: Multiplayer-Enabling (After Foundation Split, Before Large Net/Editor Features)
 
-### M1. Typed input stream registry and diagnostics
+### M1. Typed tick-buffer registry and diagnostics
 
 Primary ownership locations:
 
-- new input-stream module in `domain/ecs` (recommended),
+- `domain/ecs/src/world/messaging/tick_buffer.rs`,
 - integration points in `engine/src/plugins/net/prediction.rs` and `engine/src/plugins/net/runtime_io.rs`.
 
 Checklist:
 
-- [ ] register multiple input stream types.
+- [x] register multiple tick-buffer types.
 - [ ] deterministic per-tick ordering and sequence metadata.
 - [ ] optional dedup hooks.
-- [ ] per-stream diagnostics (buffer size, dropped, replayed, acked).
+- [x] per-buffer diagnostics (buffer size, dropped, rejected, pending, sequence).
 
 ### M2. Generic ownership/routing contract
 
@@ -156,9 +155,9 @@ Primary ownership locations:
 
 Checklist:
 
-- [ ] per-stream/per-queue/per-input-stream counters.
+- [x] per-stream/per-queue/per-tick-buffer counters.
 - [ ] consumer lag and backpressure counters.
-- [ ] correction/replay counters tied to stream IDs.
+- [x] correction/replay counters in net diagnostics resources (`PredictionDiagnostics` / `ReplicationDiagnostics`).
 
 ## Priority 3: Advanced / Later
 
@@ -232,6 +231,6 @@ Full MSDF text should follow (or run in parallel late in Priority 2) after messa
 ## Concise Do-Next List
 
 1. implement Priority 1 (messaging split + runtime-owned lifecycle + scheduler conflict semantics + stable IDs).
-2. implement Priority 2 core multiplayer enablers (typed input streams, ownership routing, replication metadata expansion, change extraction, diagnostics).
+2. implement Priority 2 core multiplayer enablers (typed tick buffers, ownership routing, replication metadata expansion, change extraction, diagnostics).
 3. resume substantial editor runtime-integrated feature expansion.
 4. add full MSDF text integration on top of stabilized runtime contracts.

@@ -1,5 +1,6 @@
 pub mod diagnostics;
 pub mod driver;
+pub mod extraction;
 pub mod interest;
 pub mod model;
 pub mod prediction;
@@ -11,10 +12,13 @@ pub use diagnostics::{
     delta_debug_dump, snapshot_debug_dump,
 };
 pub use driver::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
+pub use extraction::{ReplicationExtractionFilter, extract_replication_deltas};
 pub use interest::{InterestContext, InterestPolicy, allows_replication};
 pub use model::{
-    AuthorityModel, NetComponentMetadata, NetEntity, NetEntityMap, NetEntityMapEvent, Replicate,
-    Replicated, ReplicatedComponentDescriptor, ReplicationRegistry,
+    AuthorityModel, NetComponentMetadata, NetEntity, NetEntityMap, NetEntityMapEvent,
+    NetEntityMetadata, NetResourceMetadata, Replicate, Replicated, ReplicatedComponentDescriptor,
+    ReplicatedEntityDescriptor, ReplicatedResourceDescriptor, ReplicationRegistry,
+    ReplicationSemantics, ReplicationSemanticsOverrides,
 };
 pub use prediction::{PredictionState as ReplicationPredictionState, ReconciliationResult};
 pub use profile::{

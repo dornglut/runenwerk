@@ -18,8 +18,6 @@ pub struct ReflectedComponentRegistration {
 }
 
 impl ReflectedComponentRegistration {
-    /// File: domain/ecs/src/reflect/component_registration.rs
-    /// Method: new
     pub const fn new(
         type_info: &'static TypeInfo,
         value_ref: ComponentValueRefAccessor,

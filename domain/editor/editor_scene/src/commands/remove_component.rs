@@ -13,8 +13,6 @@ pub struct RemoveComponentCommand {
 }
 
 impl RemoveComponentCommand {
-    /// File: domain/editor/editor_scene/src/commands/remove_component.rs
-    /// Method: new
     pub fn new(entity: EntityId, component_type: ComponentTypeId) -> Self {
         Self {
             entity,
@@ -23,8 +21,6 @@ impl RemoveComponentCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/remove_component.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let snapshot = ctx
             .runtime_mut()
@@ -33,8 +29,6 @@ impl RemoveComponentCommand {
         Ok(())
     }
 
-    /// File: domain/editor/editor_scene/src/commands/remove_component.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let Some(snapshot) = self.removed_snapshot.clone() else {
             return Ok(());

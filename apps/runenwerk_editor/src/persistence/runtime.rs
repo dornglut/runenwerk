@@ -6,8 +6,6 @@ use editor_scene::{SceneEntitySnapshot, SceneRuntime};
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
 
-/// File: apps/runenwerk_editor/src/persistence/runtime.rs
-/// Method: scene_file_from_runtime
 pub fn scene_file_from_runtime(runtime: &RunenwerkEditorRuntime) -> SceneFileV1 {
     let entities = runtime
         .document()
@@ -25,8 +23,6 @@ pub fn scene_file_from_runtime(runtime: &RunenwerkEditorRuntime) -> SceneFileV1 
     SceneFileV1::new(entities)
 }
 
-/// File: apps/runenwerk_editor/src/persistence/runtime.rs
-/// Method: apply_scene_file_to_runtime
 pub fn apply_scene_file_to_runtime(
     runtime: &mut RunenwerkEditorRuntime,
     scene_file: &SceneFileV1,

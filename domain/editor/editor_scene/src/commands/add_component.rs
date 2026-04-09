@@ -13,8 +13,6 @@ pub struct AddComponentCommand {
 }
 
 impl AddComponentCommand {
-    /// File: domain/editor/editor_scene/src/commands/add_component.rs
-    /// Method: new
     pub fn new(entity: EntityId, component_type: ComponentTypeId) -> Self {
         Self {
             entity,
@@ -23,8 +21,6 @@ impl AddComponentCommand {
         }
     }
 
-    /// File: domain/editor/editor_scene/src/commands/add_component.rs
-    /// Method: apply
     pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         if let Some(snapshot) = self.removed_snapshot.take() {
             ctx.runtime_mut().restore_component(snapshot)?;
@@ -35,8 +31,6 @@ impl AddComponentCommand {
             .add_component(self.entity, self.component_type)
     }
 
-    /// File: domain/editor/editor_scene/src/commands/add_component.rs
-    /// Method: undo
     pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
         let snapshot = ctx
             .runtime_mut()

@@ -1,6 +1,8 @@
 use super::super::adapters::resources::RegionInvalidationJournalResource;
 use super::super::chunks::lifecycle::WorldChunkRuntimeMapResource;
+use crate::plugins::net::{controller_for_connection, route_connection_targets};
 use crate::runtime::WorldMut;
+use ecs::ControllerRole;
 use engine_net::{ConnectionId, ServerSessionState};
 use spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -156,8 +158,25 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
         } else {
             (None, 0, Vec::new())
         };
+    let connection_roles = active_connections
+        .iter()
+        .copied()
+        .map(|connection_id| {
+            let role = controller_for_connection(&world, connection_id)
+                .and_then(|controller| world.controller_role(controller));
+            (connection_id, role)
+        })
+        .collect::<BTreeMap<_, _>>();
+    let owned_target_counts = active_connections
+        .iter()
+        .copied()
+        .map(|connection_id| {
+            let count = route_connection_targets(&world, connection_id).len();
+            (connection_id, count)
+        })
+        .collect::<BTreeMap<_, _>>();
 
-    let Ok(mut streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>() else {
+    let Ok(streaming_interest) = world.resource_mut::<WorldStreamingInterestResource>() else {
         return;
     };
     streaming_interest
@@ -166,6 +185,21 @@ pub fn sync_world_streaming_interest_system(mut world: WorldMut) {
 
     for connection_id in active_connections {
         let interest = streaming_interest.interest_for_connection_mut(connection_id);
+        let role = connection_roles.get(&connection_id).copied().flatten();
+        let owned_target_count = owned_target_counts
+            .get(&connection_id)
+            .copied()
+            .unwrap_or(0);
+        if matches!(role, Some(ControllerRole::Spectator))
+            || (matches!(role, Some(ControllerRole::Controller)) && owned_target_count == 0)
+        {
+            interest.relevant_chunks.clear();
+            interest.gameplay_locked_chunks.clear();
+            interest.prepared_region_sequence = journal_max_sequence;
+            interest.prepared_full_resync_payload = false;
+            continue;
+        }
+
         let journal_gap = journal_min_sequence.is_some_and(|min_sequence| {
             interest.acked_region_sequence.saturating_add(1) < min_sequence
         });

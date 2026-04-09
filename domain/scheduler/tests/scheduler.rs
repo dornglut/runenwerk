@@ -203,13 +203,13 @@ fn scheduler_records_conflicts_but_stays_serial() {
 
 #[test]
 fn same_system_mixed_intents_on_queue_are_rejected() {
-    let queue_key = AccessKey::queue::<u32>("queue");
+    let work_queue_key = AccessKey::work_queue::<u32>("queue");
 
     let result = RegisteredSystem::new::<Update>(
         "invalid_mixed_intent",
         SystemAccess::new()
-            .with_read(queue_key)
-            .with_drain(queue_key),
+            .with_read(work_queue_key)
+            .with_drain(work_queue_key),
         |_ctx: &mut Vec<String>| Ok(()),
     );
     let err = match result {
@@ -222,7 +222,7 @@ fn same_system_mixed_intents_on_queue_are_rejected() {
 }
 
 #[test]
-fn conflict_matrix_covers_broadcast_queue_and_input_stream_domains() {
+fn conflict_matrix_covers_broadcast_queue_and_tick_buffer_domains() {
     fn kind(left: SystemAccess, right: SystemAccess) -> Option<scheduler::ConflictKind> {
         left.conflicts_with(&right)
             .first()
@@ -252,7 +252,7 @@ fn conflict_matrix_covers_broadcast_queue_and_input_stream_domains() {
         Some(scheduler::ConflictKind::WriteWrite)
     );
 
-    let queue = AccessKey::queue::<u32>("queue");
+    let queue = AccessKey::work_queue::<u32>("queue");
     assert_eq!(
         kind(
             SystemAccess::new().with_read(queue),
@@ -275,7 +275,7 @@ fn conflict_matrix_covers_broadcast_queue_and_input_stream_domains() {
         Some(scheduler::ConflictKind::DrainDrain)
     );
 
-    let input = AccessKey::input_stream::<u32>("input_stream");
+    let input = AccessKey::tick_buffer::<u32>("tick_buffer");
     assert_eq!(
         kind(
             SystemAccess::new().with_read(input),

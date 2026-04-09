@@ -19,4 +19,8 @@ impl World {
     pub fn current_change_tick(&self) -> u64 {
         self.change_tick
     }
+
+    pub fn current_frame_index(&self) -> u64 {
+        self.current_frame_index
+    }
 }

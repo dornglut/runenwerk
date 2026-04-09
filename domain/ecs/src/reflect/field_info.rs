@@ -16,8 +16,6 @@ pub struct FieldInfo {
 }
 
 impl FieldInfo {
-    /// File: domain/ecs/src/reflect/field_info.rs
-    /// Method: new
     pub const fn new(
         name: &'static str,
         display_name: &'static str,

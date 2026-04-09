@@ -27,8 +27,6 @@ pub struct TypeInfo {
 }
 
 impl TypeInfo {
-    /// File: domain/ecs/src/reflect/type_info.rs
-    /// Method: new
     pub const fn new(
         id: ReflectTypeId,
         rust_name: &'static str,
@@ -45,8 +43,6 @@ impl TypeInfo {
         }
     }
 
-    /// File: domain/ecs/src/reflect/type_info.rs
-    /// Method: struct_info
     pub fn struct_info(&self) -> Option<&'static StructInfo> {
         match self.shape {
             ReflectShape::Opaque => None,
@@ -54,14 +50,10 @@ impl TypeInfo {
         }
     }
 
-    /// File: domain/ecs/src/reflect/type_info.rs
-    /// Method: is_component
     pub fn is_component(&self) -> bool {
         matches!(self.classification, ReflectClassification::Component)
     }
 
-    /// File: domain/ecs/src/reflect/type_info.rs
-    /// Method: is_resource
     pub fn is_resource(&self) -> bool {
         matches!(self.classification, ReflectClassification::Resource)
     }

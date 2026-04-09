@@ -1,3 +1,4 @@
+pub mod change_extraction;
 mod change_tracking;
 mod component_indexes;
 mod entity_handles;
@@ -7,17 +8,30 @@ mod world;
 
 pub mod component;
 pub mod entity;
+pub mod ownership;
 pub mod resource;
 pub mod spatial;
 
+pub use change_extraction::{
+    ChangeExtractionFilter, ChangeExtractionWindow, ComponentStructuralDelta,
+    ResourceStructuralDelta, StructuralDeltaBatch, StructuralDeltaRef,
+};
 pub use change_tracking::{
-    ComponentChangeKind, ComponentChangeRecord, ResourceChangeKind, ResourceChangeRecord,
+    ComponentChangeKind, ComponentChangeRecord, ComponentTypeKey, ResourceChangeKind,
+    ResourceChangeRecord, ResourceTypeKey,
 };
 pub use entity_handles::{EntityMut, EntityRef, Mut};
 pub use messaging::{
-    BroadcastLifetime, BroadcastObserverNotification, BroadcastObserverTrigger,
-    BroadcastOverflowPolicy, BroadcastStreamConfig, BroadcastStreamStats, BroadcastTracingPolicy,
-    EntityDespawnedEvent, EntitySpawnedEvent, InputStreamConfig, InputStreamPushError,
-    InputStreamStats, MessagingFinalizationCounters, QueueConfig, QueueEnqueueError, QueueStats,
+    BroadcastDiagnosticsSnapshot, BroadcastKey, BroadcastLifetime, BroadcastObserverNotification,
+    BroadcastObserverTrigger, BroadcastOverflowPolicy, BroadcastStreamConfig, BroadcastStreamStats,
+    BroadcastTracingPolicy, EntityDespawnedEvent, EntitySpawnedEvent, MessagingDiagnosticsSnapshot,
+    MessagingFinalizationCounters, TickBufferConfig, TickBufferDiagnosticsSnapshot, TickBufferKey,
+    TickBufferMeta, TickBufferProvenance, TickBufferPushError, TickBufferRecord,
+    TickBufferRecordRef, TickBufferStats, WorkQueueConfig, WorkQueueDiagnosticsSnapshot,
+    WorkQueueEnqueueError, WorkQueueKey, WorkQueueStats,
+};
+pub use ownership::{
+    ControllerId, ControllerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord,
+    ResourceOwnerKey, ResourceOwnershipDescriptor,
 };
 pub use world::World;

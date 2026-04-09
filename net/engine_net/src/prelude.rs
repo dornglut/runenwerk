@@ -2,11 +2,13 @@ pub use crate::protocol::*;
 pub use crate::replication::{
     AuthorityModel, BandwidthPriority, InputDriver, InterestContext, InterestPolicy,
     LaneRouteTrace, NetComponentMetadata, NetEntity, NetEntityMap, NetEntityMapEvent,
-    PredictionMode, ReconciliationResult, Reliability, Replicate, Replicated,
-    ReplicatedComponentDescriptor, ReplicationDriver, ReplicationPredictionState,
-    ReplicationProfile, ReplicationProfilePreset, ReplicationRegistry, ReplicationStats,
-    SnapshotApplyDriver, SnapshotCursor, SnapshotTimeline, allows_replication, apply_delta_payload,
-    delta_debug_dump, snapshot_debug_dump,
+    NetEntityMetadata, NetResourceMetadata, PredictionMode, ReconciliationResult, Reliability,
+    Replicate, Replicated, ReplicatedComponentDescriptor, ReplicatedEntityDescriptor,
+    ReplicatedResourceDescriptor, ReplicationDriver, ReplicationExtractionFilter,
+    ReplicationPredictionState, ReplicationProfile, ReplicationProfilePreset, ReplicationRegistry,
+    ReplicationSemantics, ReplicationSemanticsOverrides, ReplicationStats, SnapshotApplyDriver,
+    SnapshotCursor, SnapshotTimeline, allows_replication, apply_delta_payload, delta_debug_dump,
+    extract_replication_deltas, snapshot_debug_dump,
 };
 pub use crate::runtime::{ReplicationRuntimeCommand, ReplicationRuntimeEvent};
 pub use crate::session::*;

@@ -2,6 +2,12 @@
 use crate::entity::Entity;
 use std::any::TypeId;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct ComponentTypeKey(pub u32);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct ResourceTypeKey(pub u32);
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ComponentChangeKind {
     Added,
@@ -12,8 +18,10 @@ pub enum ComponentChangeKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComponentChangeRecord {
     pub tick: u64,
+    pub frame: u64,
     pub entity: Entity,
     pub component_type: TypeId,
+    pub component_key: ComponentTypeKey,
     pub component_name: &'static str,
     pub kind: ComponentChangeKind,
 }
@@ -34,13 +42,21 @@ pub enum ResourceChangeKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceChangeRecord {
     pub tick: u64,
+    pub frame: u64,
     pub resource_type: TypeId,
+    pub resource_key: ResourceTypeKey,
     pub resource_name: &'static str,
     pub kind: ResourceChangeKind,
 }
 
 #[derive(Debug)]
 pub(super) struct ComponentMeta {
-    pub(super) _id: u32,
+    pub(super) id: ComponentTypeKey,
+    pub(super) name: &'static str,
+}
+
+#[derive(Debug)]
+pub(super) struct ResourceMeta {
+    pub(super) id: ResourceTypeKey,
     pub(super) name: &'static str,
 }
