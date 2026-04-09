@@ -11,15 +11,15 @@ Audit date: 2026-04-08.
 
 ## Recommendation Summary
 
-A major event-system redesign should happen now, before substantial additional editor work.
+This document is now partly historical.
+The major messaging redesign has already landed in core ECS runtime (`Broadcast*`, `WorkQueue*`, `InputStream*`) with runtime-owned frame/tick finalization hooks.
 
 Reason:
 
-- current messaging roles are conflated (broadcast and workflow semantics share one channel model),
-- queue/input/stream behavior is split across plugin conventions rather than reusable ECS/runtime primitives,
-- end-of-frame cleanup is not runtime-owned by default.
+- the remaining high-impact gap is naming/semantic convergence (`TickBuffer*` design term vs current `InputStream*` code),
+- some roadmap path references below still use pre-merge module paths and should be read as historical context.
 
-Without fixing this first, editor features will continue binding to unstable messaging/runtime seams and increase migration cost.
+Use this roadmap primarily to track remaining convergence work, not as a statement that the old event substrate is still current.
 
 ## Priority 1: Foundation (Do Before More Editor Feature Expansion)
 
@@ -28,12 +28,17 @@ Without fixing this first, editor features will continue binding to unstable mes
 Target outcome:
 
 - explicit `BroadcastStream<T>` (fan-out, unread cursors),
-- explicit `Queue<T>` (single-owner destructive drain),
+- explicit `WorkQueue<T>` (single-owner destructive drain),
 - explicit `InputStream<T>` (tick-buffered command/input flow).
+
+Terminology note:
+
+- `WorkQueue<T>` is the current ECS runtime term in code.
+- Design-doc `TickBuffer<T>` currently maps to `InputStream<T>` in code until input-specific APIs are generalized.
 
 Primary ownership locations:
 
-- `domain/ecs/src/world/events/*` (replace/reshape current event substrate),
+- `domain/ecs/src/world/messaging/*`,
 - `domain/ecs/src/system/params.rs` (new params for stream/queue/input read/write/drain semantics),
 - `domain/scheduler/src/access.rs` (access domains for stream read/write/drain conflicts).
 
@@ -51,7 +56,7 @@ Primary ownership locations:
 
 - `engine/src/runtime/frame_lifecycle.rs` (`run_frame`),
 - `domain/ecs/src/system/runtime.rs` (schedule/run hooks if needed),
-- `domain/ecs/src/world/events/dispatch.rs` (or replacement lifecycle endpoints).
+- `domain/ecs/src/world/messaging/finalization.rs`.
 
 Checklist:
 
@@ -72,7 +77,7 @@ Checklist:
 - [ ] expose stable param-slot IDs for diagnostic tooling and stream cursor tracking.
 - [ ] keep deterministic registration and plan reporting.
 
-### F4. Add first-class queue/stream conflict semantics to scheduler
+### F4. Add first-class work-queue/stream conflict semantics to scheduler
 
 Primary ownership locations:
 
@@ -81,7 +86,7 @@ Primary ownership locations:
 
 Checklist:
 
-- [ ] model broadcast read/write and queue destructive drain as explicit access domains.
+- [ ] model broadcast read/write and work-queue destructive drain as explicit access domains.
 - [ ] preserve parallelism where safe while preventing drain/read races.
 - [ ] expose conflicts in plan introspection for tooling.
 

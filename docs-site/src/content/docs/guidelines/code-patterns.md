@@ -19,13 +19,13 @@ Use plugin-based composition through `engine::App` and crate-local plugins:
 
 Place code in the owning domain first:
 
-- `foundation/*` for reusable low-level runtime building blocks.
+- `domain/*` for reusable engine-agnostic runtime building blocks.
 - `engine/*` for engine-generic runtime features.
 - `net/*` for protocol/session/transport/replay contracts.
-- `games/*` for game-specific rules and replication mapping.
 - `apps/*` for binary wiring and external integrations.
+- `adapters/*` for external runtime/engine integration glue.
 
-If the code is only useful to one game, keep it in `games/cavern_hunt` even if it touches networking.
+If the code must stay reusable across different host engines (custom engine, Bevy, Godot), keep it in `domain/*`.
 
 ## Contract-Over-Concrete Pattern
 
@@ -52,7 +52,7 @@ Networking code should depend on contracts, not game internals:
 When behavior changes in a crate/domain:
 
 1. Update that area's `README.md`.
-2. Update that area's `requests.md` when backlog/priorities changed.
-3. Update root docs (`ARCHITECTURE.md`, `DOMAIN_MAP.md`) if boundaries changed.
+2. Update usage/architecture docs for that area when behavior contracts changed.
+3. Update root docs (`architecture.md`, `domain-map.md`) if boundaries changed.
 
 Keep docs aligned with actual workspace members in root `Cargo.toml`.

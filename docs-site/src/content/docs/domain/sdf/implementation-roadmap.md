@@ -6,19 +6,19 @@ description: "Documentation for Foundation SDF Implementation Roadmap."
 # Foundation SDF Implementation Roadmap
 
 Status: implemented baseline
-Scope: `foundation/sdf`
+Scope: `domain/sdf`
 
 ## Completed Structure
 
 ```text
-foundation/sdf/
+domain/sdf/
 ├── Cargo.toml
 ├── README.md
 ├── docs/
 │   ├── index.md
-│   ├── IMPLEMENTATION_ROADMAP.md
-│   ├── API_NOTES.md
-│   ├── OWNERSHIP_BOUNDARY.md
+│   ├── implementation-roadmap.md
+│   ├── api-notes.md
+│   ├── ownership-boundary.md
 │   ├── QUERY_MODEL.md
 │   └── NUMERICS.md
 ├── src/

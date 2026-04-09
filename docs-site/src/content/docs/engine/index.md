@@ -43,7 +43,7 @@ Navigation hub for crate-level engine documentation.
   - [`plugins/net/network-runtime-flow.md`](plugins/net/network-runtime-flow.md)
 - Render:
   - [`plugins/render/readme.md`](plugins/render/readme.md)
-  - [`plugins/render/docs/readme.md`](plugins/render/docs/readme.md)
+  - [`plugins/render/docs/index.md`](plugins/render/docs/index.md)
 - Scene:
   - [`plugins/scene/readme.md`](plugins/scene/readme.md)
 - UI:

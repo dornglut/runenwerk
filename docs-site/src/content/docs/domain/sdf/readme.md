@@ -5,7 +5,7 @@ description: "Documentation for SDF Crate."
 
 # SDF Crate
 
-`sdf` is the shared `foundation` crate for signed-distance-field primitives,
+`sdf` is the shared `domain` crate for signed-distance-field primitives,
 composition, transforms, sampling, gradients/normals, and core SDF queries.
 
 ## Purpose
@@ -43,12 +43,12 @@ Does not own:
 - zero distance: on surface
 - positive distance: outside
 
-## Relation to `foundation/geometry`
+## Relation to `domain/geometry`
 
 `geometry` owns explicit primitives and explicit intersections (`Aabb3`, `Ray3`,
 `Sphere`, `Plane`, etc). `sdf` owns implicit fields and signed-distance queries.
 
-## Relation to future `foundation/spatial`
+## Relation to future `domain/spatial`
 
 `spatial` should own indexing/runtime organization concerns (BVH, chunking,
 clipmaps, LOD helpers). `sdf` remains focused on field math and field queries.
@@ -78,8 +78,8 @@ assert!(hit.is_some());
 ## Documentation
 
 - `docs/index.md`
-- `docs/IMPLEMENTATION_ROADMAP.md`
-- `docs/OWNERSHIP_BOUNDARY.md`
-- `docs/API_NOTES.md`
+- `docs/implementation-roadmap.md`
+- `docs/ownership-boundary.md`
+- `docs/api-notes.md`
 - `docs/QUERY_MODEL.md`
 - `docs/NUMERICS.md`

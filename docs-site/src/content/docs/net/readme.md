@@ -120,7 +120,7 @@ Within each `net/*` crate, organize code by subdomain responsibility using expli
 
 Follow the repository-wide guidance in:
 
-- `docs/guidelines/module_structure_guidelines.md`
+- `docs/guidelines/module-structure-guidelines.md`
 
 Preferred approach:
 
@@ -158,6 +158,7 @@ ownership-oriented submodules.
 
 Current repository-grounded ECS/runtime/multiplayer audit and sequencing docs:
 
+- Dataflow and support systems design: [ecs-runtime-dataflow-and-support-systems-design.md](ecs-runtime-dataflow-and-support-systems-design.md)
 - Feature inventory: [ecs-runtime-feature-inventory.md](ecs-runtime-feature-inventory.md)
 - Capability gap cross-check: [ecs-runtime-gap-summary.md](ecs-runtime-gap-summary.md)
 - Prioritized implementation roadmap: [ecs-runtime-prioritized-roadmap.md](ecs-runtime-prioritized-roadmap.md)

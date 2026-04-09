@@ -1,9 +1,7 @@
 ---
-title: "NET_ARCHITECTURE.md"
-description: "Documentation for NET_ARCHITECTURE.md."
+title: "Networking Architecture"
+description: "Runtime architecture of the Runenwerk multiplayer stack."
 ---
-
-# NET_ARCHITECTURE.md
 
 # Runenwerk Networking Architecture
 
@@ -364,6 +362,8 @@ Examples:
     Unreliable
     UnreliableSequenced
     InputStream
+
+`InputStream` in this section is the transport-lane identifier (`TransportLane::InputStream`), not the ECS runtime `InputStream<T>`/design `TickBuffer<T>` primitive name.
 
 Profiles determine which lane is used.
 

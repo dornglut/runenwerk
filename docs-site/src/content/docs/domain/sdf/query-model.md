@@ -5,7 +5,7 @@ description: "Documentation for Query Model."
 
 # Query Model
 
-`foundation/sdf` provides query helpers that operate on `SdfField3`.
+`domain/sdf` provides query helpers that operate on `SdfField3`.
 
 ## Point Sampling
 

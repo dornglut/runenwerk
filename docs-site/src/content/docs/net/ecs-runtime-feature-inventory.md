@@ -7,6 +7,11 @@ description: "Current implemented ECS/runtime/network foundations relevant to mu
 
 This inventory reflects the code currently in the repository (audit date: 2026-04-08).
 
+Terminology alignment update (2026-04-09):
+
+- ECS runtime queue surfaces use `WorkQueue*` naming.
+- Design-doc `TickBuffer*` currently maps to code `InputStream*` (rename deferred until input-specific API surfaces are generalized).
+
 Status labels used in this document:
 
 - `Implemented`: available and exercised in code/tests.
@@ -41,17 +46,17 @@ Audit coverage spans:
 | Runtime-owned per-system param state | Implemented | `domain/ecs/src/system/runtime.rs` + `domain/ecs/src/system/params.rs` | Param `State` is cached per registered system closure. |
 | Stage-bound deferred command flush | Implemented | `domain/ecs/src/system/runtime.rs` (`flush_stage_commands`) | Structural mutations become visible only after stage boundary. |
 
-### Event/Broadcast Baseline
+### Messaging/Broadcast Baseline
 
 | Capability | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| Typed world event channels | Implemented | `domain/ecs/src/world/events/dispatch.rs` | `emit/read/drain/clear` APIs are present. |
-| Bounded/unbounded channels + overflow policies | Implemented | `domain/ecs/src/world/events/types.rs` | Capacity `Option<usize>`, overflow `DropOldest/DropNewest/Panic`. |
-| Channel lifetimes | Partial | `domain/ecs/src/world/events/types.rs` | Supports `FrameTransient`, `Manual`, `Persistent`; no tick-scoped lifetime. |
+| Typed world broadcast streams | Implemented | `domain/ecs/src/world/messaging/broadcast.rs` | `publish/read/drain/clear` APIs are present. |
+| Bounded/unbounded streams + overflow policies | Implemented | `domain/ecs/src/world/messaging/broadcast.rs` | Capacity `Option<usize>`, overflow `DropOldest/DropNewest/Panic`. |
+| Broadcast lifetimes | Partial | `domain/ecs/src/world/messaging/broadcast.rs` | Supports `FrameTransient`, `Manual`, `Persistent`; no tick-scoped lifetime. |
 | Unread-per-consumer cursors | Implemented | `domain/ecs/src/system/params.rs` (`BroadcastReaderState`, `iter_new`) | Cursor tracked in runtime-owned system param state. |
-| Cursor clamping across retention cleanup | Implemented | `domain/ecs/src/world/events/types.rs` (`events_ref_since`) | Cursor clamps to `[start_sequence, next_sequence]`. |
-| Observer notifications + stats | Implemented | `domain/ecs/src/world/events/dispatch.rs` | `observe_events`, trigger notifications, `event_channel_stats`. |
-| End-of-frame cleanup hook | Partial | `domain/ecs/src/world/events/dispatch.rs` (`finish_event_frame`) | Exists on `World`, but not called by engine runtime frame lifecycle by default. |
+| Cursor clamping across retention cleanup | Implemented | `domain/ecs/src/world/messaging/broadcast.rs` (`messages_ref_since`) | Cursor clamps to `[start_sequence, next_sequence]`. |
+| Observer notifications + stats | Implemented | `domain/ecs/src/world/messaging/broadcast.rs`, `domain/ecs/src/world/messaging/diagnostics.rs` | `observe_broadcast`, trigger notifications, and diagnostics snapshots are available. |
+| End-of-frame cleanup hook | Implemented | `domain/ecs/src/world/messaging/finalization.rs`, `engine/src/runtime/frame_lifecycle.rs` | Runtime frame lifecycle executes messaging frame finalization. |
 
 ### Change Tracking and Structural Signals
 
@@ -96,11 +101,11 @@ Audit coverage spans:
 
 | Capability | Status | Evidence | Why It Matters |
 | --- | --- | --- | --- |
-| Event messaging acts as both broadcast and workflow queue | Partial | `domain/ecs/src/world/events/*` | Works now, but conflates semantics needed for deterministic multiplayer/runtime bridging. |
-| Queue primitives are plugin-local and Vec-backed | Partial | `engine/src/plugins/net/resources.rs` (`push_bounded`) | Useful immediately, but not reusable ECS queue abstraction (no ring/deque, no explicit backpressure metrics). |
-| Input pipeline is driver-centric, not stream-registry-centric | Partial | `net/engine_net/src/replication/driver.rs`, `engine/src/plugins/net/prediction.rs` | Works for one driver type; lacks typed multi-stream registration + diagnostics contract. |
-| Ownership/routing exists as connection-level convention | Partial | `engine/src/plugins/net/runtime_io.rs`, `engine/src/plugins/world/streaming/interest.rs` | Needed for real workloads, but not a reusable ECS ownership contract. |
-| End-of-frame event finalization is not runtime-owned | Partial | `domain/ecs/src/world/events/dispatch.rs` vs `engine/src/runtime/frame_lifecycle.rs` | Leaves lifecycle cleanup correctness to call-site discipline. |
+| Runtime messaging split exists, but tick-buffer vocabulary is not yet aligned | Partial | `domain/ecs/src/world/messaging/broadcast.rs`, `domain/ecs/src/world/messaging/work_queue.rs`, `domain/ecs/src/world/messaging/input_stream.rs` | Broadcast/work-queue/tick-buffer-like semantics are split in core; `InputStream*` naming still carries input-domain leakage relative to design `TickBuffer*` vocabulary. |
+| WorkQueue primitive has core ECS storage but minimal policy surface | Partial | `domain/ecs/src/world/messaging/work_queue.rs` | Reusable core primitive exists (`VecDeque`, capacity/backpressure, stats/diagnostics), but no pluggable overflow/priority/aging policies yet. |
+| InputStream pipeline is typed and registry-backed, but still input-shaped | Partial | `domain/ecs/src/world/messaging/input_stream.rs`, `engine/src/plugins/net/prediction.rs` | Supports typed registration, per-tick buffering, dedup, sequence metadata, and diagnostics; still uses input-domain naming/metadata instead of generic `TickBuffer` vocabulary. |
+| Ownership registry exists, but typed input-to-owned-target routing is still plugin policy | Partial | `domain/ecs/src/world/ownership/*.rs`, `engine/src/plugins/net/runtime_io.rs` | ECS owns controller/entity/resource ownership and routing queries; per-target input dispatch policy is still integration-layer logic. |
+| Broadcast retention policy surface remains narrow | Partial | `domain/ecs/src/world/messaging/broadcast.rs` | Current lifetime modes are useful but there is no tick-scoped lifetime or custom retention policy extension point yet. |
 
 ## MSDF Text: Current Inventory
 
@@ -114,10 +119,10 @@ Audit coverage spans:
 
 ## Inventory Takeaway
 
-The repository already has a strong deterministic runtime base, an event channel substrate, driver-based multiplayer contracts, and replay substrate pieces.
+The repository already has a strong deterministic runtime base, world-owned messaging primitives, driver-based multiplayer contracts, and replay substrate pieces.
 
 The largest foundational gap before scaling editor work is not “add more editor features”; it is finishing generic runtime messaging boundaries:
 
-- split broadcast streams vs destructive queues vs typed input streams,
+- keep broadcast streams vs destructive work queues vs typed input streams semantically distinct,
 - make lifecycle/finalization runtime-owned (not manual),
-- standardize ownership routing and change extraction contracts for replication/editor sync.
+- continue standardizing ownership routing and change extraction contracts for replication/editor sync.

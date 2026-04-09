@@ -5,7 +5,7 @@ description: "Documentation for Geometry Crate."
 
 # Geometry Crate
 
-`geometry` is the shared `foundation` crate for explicit geometric primitives,
+`geometry` is the shared `domain` crate for explicit geometric primitives,
 bounds, and geometric queries built on `glam`.
 
 ## Purpose
@@ -85,6 +85,6 @@ assert_eq!(ground.signed_distance(Vec3::new(0.0, 2.0, 0.0)), 2.0);
 ## Additional Docs
 
 - `docs/index.md`
-- `docs/IMPLEMENTATION_ROADMAP.md`
-- `docs/API_NOTES.md`
-- `docs/OWNERSHIP_BOUNDARY.md`
+- `docs/implementation-roadmap.md`
+- `docs/api-notes.md`
+- `docs/ownership-boundary.md`

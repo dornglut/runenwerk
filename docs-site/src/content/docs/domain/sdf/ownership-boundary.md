@@ -5,18 +5,18 @@ description: "Documentation for Ownership Boundary."
 
 # Ownership Boundary
 
-This document defines what `foundation/sdf` owns and what belongs in other
+This document defines what `domain/sdf` owns and what belongs in other
 workspace domains.
 
 ## SDF vs Geometry
 
-`foundation/sdf` owns:
+`domain/sdf` owns:
 
 - implicit fields and signed-distance sampling
 - field composition and transform wrappers
 - SDF query behavior (raymarch, projection, classification)
 
-`foundation/geometry` owns:
+`domain/geometry` owns:
 
 - explicit primitives and bounds (`Aabb3`, `Ray3`, `Sphere`, `Plane`)
 - explicit geometric intersection helpers
@@ -28,7 +28,7 @@ Rule of thumb:
 
 ## SDF vs Spatial
 
-`foundation/spatial` (future) should own:
+`domain/spatial` (future) should own:
 
 - BVH/chunk/clipmap/LOD indexing/runtime structures
 - field residency, streaming, and region addressing systems

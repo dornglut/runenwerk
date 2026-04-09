@@ -6,13 +6,13 @@ description: Roadmap
 # Foundation Geometry Implementation Roadmap
 
 Status: target roadmap  
-Scope: long-term, high-quality implementation plan for `foundation/geometry`  
+Scope: long-term, high-quality implementation plan for `domain/geometry`  
 Audience: engine/runtime/render/tooling developers  
 Math substrate: `glam`
 
 ## Purpose
 
-`foundation/geometry` is the shared crate for explicit geometric primitives,
+`domain/geometry` is the shared crate for explicit geometric primitives,
 bounds, and geometric queries.
 
 It should provide a stable vocabulary for:
@@ -138,7 +138,7 @@ Required test areas:
 
 The roadmap is complete when:
 
-- `foundation/geometry` is the clear shared home for explicit geometry primitives
-- boundaries with `foundation/spatial` are stable and documented
+- `domain/geometry` is the clear shared home for explicit geometry primitives
+- boundaries with `domain/spatial` are stable and documented
 - core primitives and queries are robust and trusted by tests
 - no engine/render/game-specific assumptions leak into the crate

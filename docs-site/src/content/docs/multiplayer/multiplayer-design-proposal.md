@@ -1,3 +1,7 @@
+---
+title: "Multiplayer Design Proposal"
+---
+
 # Multiplayer Integration Design
 
 ## Goal

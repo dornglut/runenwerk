@@ -9,6 +9,8 @@ This document maps the requested capability model to the current repository stat
 
 Audit date: 2026-04-08.
 
+Terminology alignment update: 2026-04-09 (`Queue*` -> `WorkQueue*` in ECS runtime code; design-doc `TickBuffer*` currently maps to code `InputStream*`).
+
 Status labels:
 
 - `Implemented`: present as reusable behavior now.
@@ -26,17 +28,17 @@ Status labels:
 - `Partial` stable param-slot identity (param state is tuple-slot based but no external slot identity API).
 - `Implemented` runtime-owned per-system state.
 - `Implemented` schedule phase introspection (`Runtime::plan_for`).
-- `Missing` tick/finalization hooks.
-- `Partial` frame/finalization hooks (`FrameEnd` exists; event finalization is not runtime-owned by default).
+- `Implemented` tick finalization hooks (`fixed_step_executor` calls `world.finalize_tick_boundary` per simulated tick).
+- `Implemented` frame finalization hooks (`run_frame` calls `world.finalize_frame_boundary` after `FrameEnd`).
 - `Partial` configurable schedule barriers (set ordering exists; explicit barrier primitives do not).
-- `Partial` conflict-aware scheduling for non-component resources and streams (resources yes; stream/queue domains not first-class).
+- `Implemented` conflict-aware scheduling for non-component resources and messaging primitives (resource, broadcast, work-queue, input-stream domains with read/write/drain conflict modes).
 
 ## 2) Messaging model split
 
-- `Partial` broadcast streams for fan-out notifications (event channels provide this behavior).
-- `Partial` destructive queues for single-owner workflows (plugin inbox/outbox queues, not ECS core primitive).
-- `Partial` typed input streams for commands (driver-oriented input flow, no stream registry).
-- `Partial` observer/diagnostic hooks for instrumentation only (event observers exist).
+- `Implemented` broadcast streams for fan-out notifications (`Broadcast*` in ECS world messaging).
+- `Implemented` destructive work queues for single-owner workflows (`WorkQueue*` in ECS world messaging).
+- `Implemented` typed input streams for per-tick command/input flow (`InputStream*` registry in ECS world messaging).
+- `Implemented` observer/diagnostic hooks for messaging streams (`observe_broadcast`, `messaging_diagnostics_snapshot`).
 - `Missing` explicit gameplay messaging vs runtime/transport messaging split in ECS core.
 - `Missing` explicit local messaging vs replicated/network-visible messaging split.
 
@@ -60,42 +62,42 @@ Status labels:
 - `Missing` consumer lag metrics.
 - `Implemented` dropped message counters.
 - `Missing` end-of-tick cleanup.
-- `Partial` end-of-frame cleanup (available on `World`; not executed automatically by runtime frame lifecycle).
-- `Partial` scheduler access semantics for readers vs writers (read/write modeled; destructive-drain semantics not scheduler-modeled).
+- `Implemented` end-of-frame cleanup (executed from runtime frame lifecycle).
+- `Implemented` scheduler access semantics for readers/writers/drainers.
 
-## 4) Queue features
+## 4) WorkQueue features
 
-- `Partial` bounded queue resources/types (implemented in net plugin resources, not ECS core queue type).
-- `Missing` ring-buffer/deque-backed storage (current `Vec` + `remove(0)`).
+- `Implemented` bounded work-queue types in ECS core (`WorkQueueConfig.capacity`).
+- `Implemented` deque-backed storage (`VecDeque` in `work_queue.rs`).
 - `Implemented` destructive drain semantics.
 - `Partial` batch push/drain (drain-all exists; no explicit batch push API).
-- `Partial` overflow strategies (drop-oldest convention in plugin queues).
-- `Partial` backpressure reporting (warnings, not structured counters/errors).
-- `Partial` queue occupancy metrics (`len`, but no standardized metrics resource).
+- `Partial` overflow strategies (backpressure reject is implemented; alternate overflow policies are not).
+- `Implemented` structured backpressure reporting (`WorkQueueEnqueueError::Backpressure` + counters).
+- `Implemented` queue occupancy/flow metrics (`WorkQueueStats`, diagnostics snapshot).
 - `Missing` producer/consumer ownership rules.
-- `Partial` single-owner drain guarantees (by system convention only).
+- `Implemented` single-owner drain conflict modeling in scheduler access domains.
 - `Missing` optional multi-priority queues.
 - `Missing` optional per-tick drain limits.
 - `Missing` optional queue aging/expiry policies.
-- `Partial` queue debug inspection APIs (slice accessors exist in plugin resources).
+- `Implemented` queue debug inspection APIs (`work_queue_iter`, `work_queue_peek`, stats/diagnostics).
 
 ## 5) Input stream features
 
-- `Missing` typed input registration API.
-- `Partial` per-tick input buffering.
+- `Implemented` typed input registration/configuration API (`ensure_input_stream`, `configure_input_stream`).
+- `Implemented` per-tick input buffering.
 - `Implemented` local input producer API (`InputDriver::take_local_input`).
-- `Partial` simulation-facing input view API (driver `apply_input`; no reusable typed stream view param).
+- `Implemented` simulation-facing typed input view params (`InputStreamReader`, `InputStreamDrainer`).
 - `Implemented` authoritative remote input ingestion.
-- `Partial` deterministic input ordering within a tick (vector order only; no canonical sort/sequence policy).
+- `Implemented` deterministic insertion order within a tick + global per-stream sequence metadata.
 - `Partial` ownership-aware routing (connection-aware ingestion; no entity ownership router).
 - `Implemented` pending predicted input storage.
 - `Implemented` replay of pending local input after correction.
 - `Partial` input acknowledgement support hooks (snapshot ack exists; no dedicated input-ack channel semantics).
-- `Partial` input stream diagnostics (global prediction diagnostics only).
+- `Implemented` per-stream diagnostics (`InputStreamStats`, `InputStreamDiagnosticsSnapshot`).
 - `Partial` input history windows (pending predicted history only).
-- `Missing` optional input deduplication.
-- `Missing` optional input sequence/cursor metadata.
-- `Missing` multiple registered input stream types.
+- `Implemented` optional input deduplication hooks.
+- `Implemented` optional input sequence metadata (`InputMessageMeta.sequence` + stream key).
+- `Implemented` multiple registered input stream types.
 
 ## 6) Replication-facing ECS metadata
 
@@ -115,33 +117,33 @@ Status labels:
 
 ## 7) Ownership and routing
 
-- `Missing` generic owner contract.
-- `Partial` connection/entity routing helpers (plugin-level connection routing and streaming-interest maps).
-- `Partial` one-to-one ownership (interest checks can use optional owner).
-- `Missing` one-to-many ownership support.
+- `Implemented` generic owner contract (`OwnerState`, `OwnershipTarget`, `OwnershipRegistry`).
+- `Implemented` connection/controller-to-target routing helpers (`NetworkControllerRouting` + `World::route_controller_*`).
+- `Implemented` one-to-one ownership (each target has exactly one owner state).
+- `Implemented` one-to-many ownership support (controllers own sets of targets).
 - `Missing` many-to-one grouping support.
-- `Missing` transfer-of-ownership support.
-- `Missing` query helpers for owned entities.
-- `Missing` query helpers for local-owned entities.
+- `Implemented` transfer-of-ownership support (`assign_*`, `transfer_*`, transfer log).
+- `Implemented` query helpers for owned entities/resources/targets.
+- `Partial` query helpers for local-owned entities (controller-scoped helpers exist; no dedicated local-player abstraction in ECS core).
 - `Missing` route typed input to owned entities (generic routing layer).
-- `Partial` support for no-owner/server-owned entities (`Option<ConnectionId>` patterns in session/interest paths).
-- `Partial` support for spectators/controllers without entities (session model supports connections; no generic ownership role contract).
+- `Implemented` support for no-owner/server-owned entities/resources (`OwnerState::NoOwner` / `OwnerState::ServerOwned`).
+- `Implemented` support for spectators/controllers without entities (`ControllerRole` + controller registry).
 - `Implemented` no character/controller shape assumptions in core ECS/runtime API.
 
 ## 8) Change extraction and diff support
 
-- `Partial` structural change feeds (spawn/despawn events + change logs).
+- `Implemented` structural change feeds (`component_change_log` / `resource_change_log` + extraction API).
 - `Implemented` spawn notifications.
 - `Implemented` despawn notifications.
-- `Partial` component added feeds.
-- `Partial` component removed feeds.
+- `Implemented` component added feeds.
+- `Implemented` component removed feeds.
 - `Implemented` changed-component extraction.
 - `Implemented` tick-relative change queries.
-- `Missing` frame-relative change queries.
+- `Implemented` frame-relative change queries.
 - `Partial` diff-friendly world access.
-- `Missing` batched structural delta generation hooks.
-- `Partial` optional filtered change collection by component type (manual filtering over logs).
-- `Missing` optional filtered change collection by ownership/interest.
+- `Implemented` batched structural delta generation hooks (`StructuralDeltaBatch`).
+- `Implemented` optional filtered change collection by type keys.
+- `Implemented` optional filtered change collection by ownership/interest.
 - `Partial` support for replication/state sync/editor/save systems (possible via logs or custom drivers, not standardized extraction API).
 
 ## 9) History, replay, and rollback support
@@ -172,9 +174,9 @@ Status labels:
 
 ## 11) Observability and diagnostics
 
-- `Implemented` per-stream stats (event channels).
-- `Partial` per-queue stats.
-- `Missing` per-input-stream stats.
+- `Implemented` per-stream stats (broadcast/work-queue/input-stream messaging diagnostics).
+- `Implemented` per-work-queue stats.
+- `Implemented` per-input-stream stats.
 - `Partial` overflow/drop counters.
 - `Missing` consumer lag metrics.
 - `Implemented` schedule/tick timing metrics.
@@ -234,10 +236,10 @@ Current codebase alignment is good here:
 
 ## Major Gap Conclusion
 
-The highest-impact gap is the messaging/lifecycle seam:
+The highest-impact remaining gap is semantic alignment and generalization depth, not primitive availability:
 
-1. event channels currently carry multiple semantic roles,
-2. queue/input/stream contracts are split across plugin conventions rather than reusable ECS/runtime primitives,
-3. end-of-frame event cleanup is not runtime-owned by default.
+1. the design term `TickBuffer<T>` still maps to code `InputStream<T>`,
+2. `InputStream*` surfaces remain input-domain-shaped (`InputMessageSource`, `current_input_tick`, `mark_input_stream_*`),
+3. `WorkQueue*` extensibility (priority, aging, custom policies) is still intentionally minimal.
 
-This is the primary reason a major event-system redesign should happen before substantial additional editor features are built on top of the current messaging substrate.
+The current substrate already has world-owned messaging primitives and runtime-owned frame/tick finalization; the next step is targeted generalization and vocabulary convergence rather than another broad messaging-system redesign.

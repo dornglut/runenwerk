@@ -5,7 +5,7 @@ description: "Documentation for API Notes."
 
 # API Notes
 
-Semantics and invariants for `foundation/sdf`.
+Semantics and invariants for `domain/sdf`.
 
 ## Core Contracts
 

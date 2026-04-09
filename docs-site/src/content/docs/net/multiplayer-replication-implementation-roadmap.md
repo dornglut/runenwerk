@@ -229,6 +229,8 @@ Define lanes such as:
 -   `UnreliableSequenced`
 -   `InputStream`
 
+`InputStream` here is a transport-lane label, not the ECS runtime `InputStream<T>` type and not the design-doc `TickBuffer<T>` vocabulary term.
+
 Map profiles to lanes:
 
 -   `PredictedMovement` → `UnreliableSequenced`

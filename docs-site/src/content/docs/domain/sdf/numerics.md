@@ -5,7 +5,7 @@ description: "Documentation for Numerics."
 
 # Numerics
 
-Numerical policy for `foundation/sdf`.
+Numerical policy for `domain/sdf`.
 
 ## Centralized Epsilons
 

@@ -5,7 +5,7 @@ description: Internal architecture and invariants for the ecs runtime.
 
 # ECS Architecture
 
-This document is internal-facing and describes `foundation/ecs` runtime internals,
+This document is internal-facing and describes `domain/ecs` runtime internals,
 unsafe invariants, and behavior contracts.
 
 For public API usage, see [usage-guide.md](usage-guide.md).

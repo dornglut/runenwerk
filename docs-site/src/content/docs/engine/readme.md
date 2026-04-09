@@ -114,4 +114,4 @@ See `tests/README.md` for integration suite coverage.
 
 - Owns runtime loop, plugin composition, replay/runtime integration, and engine-level feature wiring.
 - Consumes `ecs`, `scheduler`, `engine_replay`, `engine_net`, and `engine_sim`.
-- Does not own internals of foundation or net crates.
+- Does not own internals of domain or net crates.

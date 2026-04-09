@@ -82,7 +82,7 @@ This contract is shared by headless and windowed runners.
   - `ecs` for world/resources/components/queries
   - `scheduler` for typed schedule execution
   - `engine_sim`, `engine_net`, `engine_replay` for simulation/network/replay domains
-- `engine` does not own internals of foundation/net crates.
+- `engine` does not own internals of domain/net crates.
 
 ## Related Source Entrypoints
 

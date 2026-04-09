@@ -5,17 +5,17 @@ description: Boundary
 
 # Ownership Boundary
 
-This document defines what `foundation/geometry` owns and what belongs in
+This document defines what `domain/geometry` owns and what belongs in
 other domains/crates.
 
 ## Geometry vs Spatial
 
-`foundation/geometry` owns:
+`domain/geometry` owns:
 
 - explicit primitive/bounds data structures
 - geometric relationships and queries between those primitives
 
-`foundation/spatial` (future) should own:
+`domain/spatial` (future) should own:
 
 - spatial indexing (BVH, octree, quadtree)
 - runtime broad-phase culling/indexing strategies

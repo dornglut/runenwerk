@@ -538,7 +538,7 @@ You explicitly want this engine to be strong for:
 - SDF rendering
 - raymarching
 - procedural rendering
-- hybrid future with `foundation/sdf`, `foundation/spatial`, and `foundation/geometry`
+- hybrid future with `domain/sdf`, `domain/spatial`, and `domain/geometry`
 
 ## Domains
 

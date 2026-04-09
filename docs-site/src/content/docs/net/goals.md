@@ -119,7 +119,7 @@ Avoid:
 
 Repository-wide guidance lives in:
 
-- `docs/guidelines/module_structure_guidelines.md`
+- `docs/guidelines/module-structure-guidelines.md`
 
 ## Non-Goals
 

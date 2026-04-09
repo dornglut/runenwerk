@@ -6,13 +6,13 @@ description: Module Structure
 # Intra‑Crate Module Structure Guidelines
 
 This document defines the **preferred module organization pattern inside
-crates** for the `grotto-quest` workspace.
+crates** for the `Runenwerk` workspace.
 
 It complements:
 
 -   `AGENTS.md`
--   `ARCHITECTURE.md`
--   `DOMAIN_MAP.md`
+-   `architecture.md`
+-   `domain-map.md`
 
 These rules help both humans and AI coding agents consistently place
 code and navigate subsystems.
@@ -253,7 +253,7 @@ Forbidden patterns:
 -   catch‑all utility files
 
 This approach keeps the repository predictable, navigable, and aligned
-with the architecture defined in `ARCHITECTURE.md`.
+with the architecture defined in `architecture.md`.
 
 
 ---
@@ -268,16 +268,14 @@ Pick the owner before picking a file.
 
 Use these rules:
 
-- `foundation/` for low-level reusable runtime primitives
+- `domain/` for low-level reusable and engine-agnostic runtime primitives
 - `engine/` for engine-generic runtime composition, plugins, rendering, input, scene, UI, and time
 - `net/` for protocol, session, transport, replication contracts, replay, and runtime adapters
-- `games/` for game-specific rules, content, replication mapping, and behavior
 - `apps/` for process wiring, config loading, and external service integration
-- `ops/` for deployment/runtime operational definitions
+- `adapters/` for external runtime/engine integration glue
 
-If the logic is specific to one game, it belongs in `games/`, not `engine/` or `net/`.
-
-If the logic is engine-generic, it belongs in `engine/` or `foundation/`.
+If the logic is engine-host agnostic, it belongs in `domain/`.
+If the logic is engine-generic runtime glue, it belongs in `engine/`.
 
 ## 2. Choose the owning crate next
 
@@ -293,10 +291,10 @@ Examples:
   -> `engine/src/plugins/net`
 
 - Cavern Hunt replication/correction/smoothing  
-  -> `games/cavern_hunt/src/net`
+  -> `domain/` (for shared contracts) or `engine/src/plugins/net` (for engine runtime wiring)
 
 - Cavern Hunt gameplay rule or entity behavior  
-  -> `games/cavern_hunt/src/domain/gameplay`
+  -> the owning module under `domain/`
 
 - App bootstrap/config/runtime wiring  
   -> the relevant crate under `apps/`
