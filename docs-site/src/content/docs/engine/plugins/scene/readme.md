@@ -23,7 +23,6 @@ The plugin owns the runtime scene manager and republishes transport-neutral scen
 - `SceneRuntimeState`
 - `GameplayRuntimeConfig`
 - `UiOverlayState`
-- `SessionRuntimeState`
 
 It also defines the current authoritative scene replay/snapshot DTOs:
 
@@ -46,12 +45,10 @@ It also defines the current authoritative scene replay/snapshot DTOs:
 - Add new world-to-overlay message types and formatting paths.
 - Extend the authoritative snapshot boundary as real gameplay state grows.
 - Add scene authoring schemas/compilers under scene-owned authoring modules.
-- Integrate richer session-driven scene/run setup from `SessionRuntimeState`.
 
 ## Guides
 
 - Usage: [../../../docs/reference/plugins/scene/usage-guide.md](../../reference/plugins/scene/usage-guide.md)
 - Advanced: [../../../docs/reference/plugins/scene/advanced-guide.md](../../reference/plugins/scene/advanced-guide.md)
 - Architecture: [../../../docs/reference/plugins/scene/architecture.md](../../reference/plugins/scene/architecture.md)
-
 

@@ -9,6 +9,7 @@ pub struct ToolbarButtonViewModel {
     pub stable_name: &'static str,
     pub label: String,
     pub is_active: bool,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

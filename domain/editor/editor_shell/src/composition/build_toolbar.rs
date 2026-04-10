@@ -6,8 +6,11 @@ use ui_text::FontId;
 use ui_theme::ThemeTokens;
 
 use crate::{
-    TOOLBAR_ROOT_WIDGET_ID, TOOLBAR_ROW_WIDGET_ID, TOOLBAR_SELECT_BUTTON_WIDGET_ID,
-    TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID, ToolbarViewModel,
+    TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID, TOOLBAR_LOAD_BUTTON_WIDGET_ID,
+    TOOLBAR_REDO_BUTTON_WIDGET_ID, TOOLBAR_ROOT_WIDGET_ID, TOOLBAR_ROW_WIDGET_ID,
+    TOOLBAR_SAVE_BUTTON_WIDGET_ID, TOOLBAR_SELECT_BUTTON_WIDGET_ID,
+    TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID, TOOLBAR_UNDO_BUTTON_WIDGET_ID, ToolbarViewModel,
+    UiNodeKind,
 };
 
 pub fn build_toolbar(view_model: &ToolbarViewModel, theme: &ThemeTokens) -> UiNode {
@@ -19,15 +22,24 @@ pub fn build_toolbar(view_model: &ToolbarViewModel, theme: &ThemeTokens) -> UiNo
         let widget_id = match button_vm.stable_name {
             "select" => TOOLBAR_SELECT_BUTTON_WIDGET_ID,
             "translate" => TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
+            "undo" => TOOLBAR_UNDO_BUTTON_WIDGET_ID,
+            "redo" => TOOLBAR_REDO_BUTTON_WIDGET_ID,
+            "save" => TOOLBAR_SAVE_BUTTON_WIDGET_ID,
+            "load" => TOOLBAR_LOAD_BUTTON_WIDGET_ID,
+            "debug_logs" => TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID,
             _ => continue,
         };
 
-        buttons.push(button(
+        let mut node = button(
             widget_id,
             button_vm.label.clone(),
             text_style.clone(),
             theme.clone(),
-        ));
+        );
+        if let UiNodeKind::Button(button_node) = &mut node.kind {
+            button_node.enabled = button_vm.enabled;
+        }
+        buttons.push(node);
     }
 
     let row = hstack(TOOLBAR_ROW_WIDGET_ID, theme.spacing.sm, buttons);

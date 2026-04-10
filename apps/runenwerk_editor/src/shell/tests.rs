@@ -42,7 +42,7 @@ fn build_editor_shell_view_model_reflects_active_tool_and_viewport_state() {
 
     let shell = build_editor_shell_view_model(&app);
 
-    assert_eq!(shell.toolbar.buttons.len(), 2);
+    assert_eq!(shell.toolbar.buttons.len(), 7);
     assert!(
         shell
             .toolbar

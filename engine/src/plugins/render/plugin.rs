@@ -5,7 +5,7 @@ use super::features::{
     PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedProceduralWorldFeatureResource, PreparedUiFrameResource,
     PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureRegistryResource,
-    UiFrameSubmissionRegistryResource, prepare_ui_feature_resource_system,
+    UiFontAtlasResource, UiFrameSubmissionRegistryResource, prepare_ui_feature_resource_system,
     sync_render_feature_registry_system,
     world::{WorldLodPolicyResource, WorldLodSelectionResource, WorldRuntimeCacheResource},
 };
@@ -36,6 +36,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderFlowRegistryResource>();
         app.init_resource::<RenderFeatureRegistryResource>();
         app.init_resource::<PreparedUiFrameResource>();
+        app.init_resource::<UiFontAtlasResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
         app.init_resource::<EditorPickingResultResource>();
         app.init_resource::<PreparedDrawFeatureResource>();

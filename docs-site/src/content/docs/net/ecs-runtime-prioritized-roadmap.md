@@ -1,11 +1,11 @@
 ---
-title: "ECS Runtime Prioritized Roadmap (Pre-Editor Gate)"
-description: "Implementation-ordered roadmap for ECS/runtime/network foundations required before substantial editor expansion."
+title: "ECS Runtime Prioritized Roadmap (Post-Runtime Rewrite)"
+description: "Implementation-ordered roadmap for ECS/runtime/network convergence work after the runtime/network rewrite."
 ---
 
-# ECS Runtime Prioritized Roadmap (Pre-Editor Gate)
+# ECS Runtime Prioritized Roadmap (Post-Runtime Rewrite)
 
-This roadmap is implementation-ordered and intentionally biased toward foundational runtime correctness before broader editor feature growth.
+This roadmap is implementation-ordered and intentionally biased toward remaining runtime convergence work.
 
 Audit date: 2026-04-09.
 
@@ -21,7 +21,7 @@ Reason:
 
 Use this roadmap primarily to track remaining convergence work, not as a statement that the old event substrate is still current.
 
-## Priority 1: Foundation (Do Before More Editor Feature Expansion)
+## Priority 1: Foundation
 
 ### F1. Split messaging model in ECS/runtime core
 
@@ -89,7 +89,7 @@ Checklist:
 - [ ] preserve parallelism where safe while preventing drain/read races.
 - [ ] expose conflicts in plan introspection for tooling.
 
-## Priority 2: Multiplayer-Enabling (After Foundation Split, Before Large Net/Editor Features)
+## Priority 2: Multiplayer-Enabling
 
 ### M1. Typed tick-buffer registry and diagnostics
 
@@ -178,27 +178,22 @@ Checklist:
 - [ ] pluggable stream retention policies.
 - [ ] explicit codec/delta extension registry (beyond trait overrides).
 
-## Editor Gating Guidance
+## Editor Sequencing Guidance
 
-Editor work can continue in limited form (UI composition, tooling UX, non-runtime presentation), but editor systems that depend on messaging/runtime semantics should wait until Priority 1 is complete.
-
-Editor areas that should wait:
-
-- new editor workflows relying on event-driven state propagation,
-- editor multiplayer/session synchronization features,
-- editor undo/redo or timeline features that expect stable stream/queue contracts.
+The runtime/network rewrite is complete and editor MVP implementation can proceed now.
+This roadmap is no longer a precondition gate for editor MVP sequencing.
 
 ## MSDF Text Assessment
 
 ### Should MSDF be added now?
 
-Recommendation: add full MSDF text after Priority 1 foundation work, not before.
+Recommendation: for the editor MVP, treat readable MSDF text as an early bring-up blocker.
 
 Why:
 
-- current text path is approximate but serviceable for interim editor/runtime UI,
-- event/runtime messaging and lifecycle redesign is the higher-risk architectural dependency,
-- MSDF rollout will be cleaner once runtime boundaries and diagnostics are stabilized.
+- current editor panel text is not a usable text path,
+- current renderer still flattens glyph runs into rect proxies,
+- readable panel text is required before deeper editor interaction milestones.
 
 ### Prerequisites
 
@@ -224,13 +219,9 @@ Incremental steps:
 
 ### Blocking status
 
-Full MSDF text is not a blocker for Priority 1 runtime/event redesign.
-
-Full MSDF text should follow (or run in parallel late in Priority 2) after messaging/lifecycle foundations are stable.
+Full MSDF text is a blocker for the first editor MVP interaction slice.
 
 ## Concise Do-Next List
 
-1. implement Priority 1 (messaging split + runtime-owned lifecycle + scheduler conflict semantics + stable IDs).
-2. implement Priority 2 core multiplayer enablers (typed tick buffers, ownership routing, replication metadata expansion, change extraction, diagnostics).
-3. resume substantial editor runtime-integrated feature expansion.
-4. add full MSDF text integration on top of stabilized runtime contracts.
+1. continue Priority 1 and 2 runtime convergence work where still open.
+2. execute editor MVP in implementation order: stale reference cleanup, text bring-up, viewport scene bring-up, picking producer + debug instrumentation, then interaction slice expansion.

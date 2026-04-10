@@ -1,26 +1,33 @@
 use super::*;
 use crate::plugins::render::PreparedUiFrameContribution;
-use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
+use crate::plugins::render::features::{UI_RENDER_FEATURE_ID, UiFontAtlasResource};
 use std::hash::{Hash, Hasher};
 
 impl Renderer {
     pub(super) fn prepare_ui_draws(
-        &self,
+        &mut self,
         device: &Device,
         queue: &Queue,
         contribution: &PreparedUiFrameContribution,
+        atlas_resource: &UiFontAtlasResource,
         surface_width: f32,
         surface_height: f32,
     ) -> UiPreparedDraws {
         let surface_width_u32 = surface_width.max(1.0).round() as u32;
         let surface_height_u32 = surface_height.max(1.0).round() as u32;
-        let flattened_instances = contribution
+        let flattened_rect_instances = contribution
             .submissions
             .iter()
             .flat_map(|submission| Self::extract_rect_instances(&submission.frame))
             .collect::<Vec<_>>();
+        let flattened_glyph_instances = contribution
+            .submissions
+            .iter()
+            .flat_map(|submission| Self::extract_glyph_instances(&submission.frame, atlas_resource))
+            .collect::<Vec<_>>();
+
         let mut batches_by_scissor = BTreeMap::<(u32, u32, u32, u32), Vec<RectInstanceRaw>>::new();
-        for instance in flattened_instances {
+        for instance in flattened_rect_instances {
             let scissor = instance
                 .clip
                 .map(|clip| Self::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
@@ -51,6 +58,47 @@ impl Renderer {
             })
             .collect::<Vec<_>>();
 
+        let mut glyph_batches_by_scissor =
+            BTreeMap::<((u32, u32, u32, u32), u64), Vec<GlyphInstanceRaw>>::new();
+        for instance in flattened_glyph_instances {
+            let scissor = instance
+                .clip
+                .map(|clip| Self::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
+                .unwrap_or_else(|| Some(Self::full_scissor(surface_width_u32, surface_height_u32)));
+            let Some(scissor) = scissor else {
+                continue;
+            };
+            if self
+                .ensure_glyph_atlas_gpu(device, queue, atlas_resource, instance.texture_id)
+                .is_none()
+            {
+                continue;
+            }
+            glyph_batches_by_scissor
+                .entry((scissor, instance.texture_id))
+                .or_default()
+                .push(instance.raw);
+        }
+        let glyph_batches = glyph_batches_by_scissor
+            .into_iter()
+            .filter_map(|((scissor, texture_id), instances)| {
+                if instances.is_empty() {
+                    return None;
+                }
+                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("engine_ui_glyph_batch_instances"),
+                    contents: bytemuck::cast_slice(&instances),
+                    usage: BufferUsages::VERTEX,
+                });
+                Some(UiGlyphBatch {
+                    scissor,
+                    instance_count: instances.len() as u32,
+                    instance_buffer,
+                    texture_id,
+                })
+            })
+            .collect::<Vec<_>>();
+
         if let Some(rect_pass) = self.rect_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
@@ -58,9 +106,17 @@ impl Renderer {
             };
             queue.write_buffer(&rect_pass.screen_buffer, 0, bytemuck::bytes_of(&screen));
         }
+        if let Some(glyph_pass) = self.glyph_pass.as_ref() {
+            let screen = ScreenUniformRaw {
+                size: [surface_width.max(1.0), surface_height.max(1.0)],
+                _pad: [0.0; 2],
+            };
+            queue.write_buffer(&glyph_pass.screen_buffer, 0, bytemuck::bytes_of(&screen));
+        }
 
         UiPreparedDraws {
             rect_batches,
+            glyph_batches,
             surface_size: (surface_width_u32, surface_height_u32),
         }
     }
@@ -72,6 +128,7 @@ impl Renderer {
         prepared_frame: &PreparedRenderFrame,
         shader_registry: &mut ShaderRegistryResource,
         ui_rect_shader_handle: Option<ShaderHandle>,
+        ui_font_atlas: &UiFontAtlasResource,
         surface_format: TextureFormat,
     ) -> RendererPreparedPacket {
         let view = prepared_frame.main_view().cloned().unwrap_or_else(|| {
@@ -113,11 +170,19 @@ impl Renderer {
             .unwrap_or(0);
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
+        self.ensure_glyph_pass(device, surface_format);
         let surface_size = (surface_width_u32.max(1), surface_height_u32.max(1));
         let prepare_ui_start = Instant::now();
         let prepared_ui_current = {
             let _span = tracing::info_span!("renderer.prepare_ui_draws").entered();
-            self.prepare_ui_draws(device, queue, ui, surface_width, surface_height)
+            self.prepare_ui_draws(
+                device,
+                queue,
+                ui,
+                ui_font_atlas,
+                surface_width,
+                surface_height,
+            )
         };
         let prepared_ui = self.resolve_ui_prepared_with_gate(prepared_ui_current, ui_gate);
         prepare_timings.prepare_ui_ms = prepare_ui_start.elapsed().as_secs_f32() * 1000.0;

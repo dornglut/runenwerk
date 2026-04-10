@@ -7,6 +7,11 @@ use editor_core::EntityId;
 pub enum ShellCommand {
     ActivateSelectTool,
     ActivateTranslateTool,
+    Undo,
+    Redo,
+    SaveScene,
+    LoadScene,
+    ToggleDebugLogs,
     SelectOutlinerEntity { entity: EntityId },
     ActivateInspectorField { index: usize },
     NoOp,

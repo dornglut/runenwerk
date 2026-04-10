@@ -8,6 +8,9 @@ pub struct RunenwerkEditorApp {
     pub(crate) inspector_ui_state: EditorInspectorUiState,
     pub(crate) tool_runtime_state: EditorToolRuntimeState,
     pub(crate) viewport_interaction_state: ViewportInteractionState,
+    pub(crate) console_lines: Vec<String>,
+    pub(crate) console_max_lines: usize,
+    pub(crate) debug_logs_enabled: bool,
 }
 
 impl RunenwerkEditorApp {
@@ -17,6 +20,9 @@ impl RunenwerkEditorApp {
             inspector_ui_state: EditorInspectorUiState::new(),
             tool_runtime_state: EditorToolRuntimeState::new(),
             viewport_interaction_state: ViewportInteractionState::new(),
+            console_lines: Vec::new(),
+            console_max_lines: 256,
+            debug_logs_enabled: true,
         }
     }
 
@@ -50,5 +56,29 @@ impl RunenwerkEditorApp {
 
     pub fn viewport_interaction_state_mut(&mut self) -> &mut ViewportInteractionState {
         &mut self.viewport_interaction_state
+    }
+
+    pub fn console_lines(&self) -> &[String] {
+        &self.console_lines
+    }
+
+    pub fn append_console_line(&mut self, line: impl Into<String>) {
+        self.console_lines.push(line.into());
+        if self.console_lines.len() > self.console_max_lines {
+            let drain = self.console_lines.len() - self.console_max_lines;
+            self.console_lines.drain(0..drain);
+        }
+    }
+
+    pub fn debug_logs_enabled(&self) -> bool {
+        self.debug_logs_enabled
+    }
+
+    pub fn set_debug_logs_enabled(&mut self, enabled: bool) {
+        self.debug_logs_enabled = enabled;
+    }
+
+    pub fn toggle_debug_logs_enabled(&mut self) {
+        self.debug_logs_enabled = !self.debug_logs_enabled;
     }
 }

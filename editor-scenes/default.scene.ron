@@ -1,0 +1,39 @@
+(
+    version: 2,
+    entities: [
+        /*[0]*/ (
+            id: 1,
+            display_name: "Graybox",
+            parent: None,
+            transform: (
+                translation: (
+                    0.0,
+                    0.0,
+                    0.0,
+                ),
+                rotation: (
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                ),
+                scale: (
+                    1.0,
+                    1.0,
+                    1.0,
+                ),
+            ),
+            primitive: (
+                kind: Box,
+                box_half_extents: (
+                    0.5,
+                    0.5,
+                    0.5,
+                ),
+                sphere_radius: 0.6,
+                capsule_radius: 0.35,
+                capsule_half_height: 0.75,
+            ),
+        ),
+    ],
+)

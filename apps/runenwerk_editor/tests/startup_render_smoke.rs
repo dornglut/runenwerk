@@ -3,6 +3,8 @@ use engine::plugins::render::{
     UiFrameSubmissionRegistryResource,
 };
 
+const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
+
 #[test]
 fn startup_render_smoke_publishes_editor_shell_submission() {
     let app = runenwerk_editor::runtime::build_headless_app()
@@ -30,6 +32,21 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     assert!(
         has_builtin_ui_pass,
         "editor render flows should include a builtin UI composite pass",
+    );
+    let has_editor_viewport_sdf_pass = flow_registry
+        .compiled_flows()
+        .iter()
+        .flat_map(|flow| flow.execution.passes.iter())
+        .any(|pass| {
+            matches!(
+                pass,
+                CompiledPassExecutionPlan::Fullscreen(plan)
+                if plan.pass_id == EDITOR_VIEWPORT_SDF_PASS_ID
+            )
+        });
+    assert!(
+        has_editor_viewport_sdf_pass,
+        "editor render flows should include the viewport SDF pass",
     );
 
     let submission = submissions

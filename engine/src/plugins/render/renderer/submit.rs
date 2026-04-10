@@ -246,6 +246,11 @@ pub(crate) fn frame_render_submit_system(
     if gfx.ctx.surface_config.width != target_w || gfx.ctx.surface_config.height != target_h {
         gfx.resize(target_w, target_h);
     }
+    let ui_font_atlas = world
+        .resource::<UiFontAtlasResource>()
+        .ok()
+        .map(|resource| resource.clone())
+        .unwrap_or_default();
 
     let render_result = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
@@ -273,6 +278,7 @@ pub(crate) fn frame_render_submit_system(
             &mut shader_registry,
             compiled_flows,
             ui_rect_shader,
+            &ui_font_atlas,
         )
     };
 

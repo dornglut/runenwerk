@@ -1,5 +1,7 @@
 use crate::plugins::render::backend::WgpuCtx;
-use crate::plugins::render::features::{FeatureContributionStatus, FeatureFallbackPolicy};
+use crate::plugins::render::features::{
+    FeatureContributionStatus, FeatureFallbackPolicy, UiFontAtlasResource,
+};
 use crate::plugins::render::frame::PreparedRenderFrame;
 use crate::plugins::render::graph::CompiledRenderFlowPlan;
 use crate::plugins::render::inspect::{PassTimingSample, RuntimeResourceInspectionEntry};
@@ -81,6 +83,73 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
     }
 
     return input.color;
+}
+"#;
+
+pub const DEFAULT_UI_GLYPH_SHADER: &str = r#"
+struct VsIn {
+    @location(0) rect : vec4<f32>,
+    @location(1) uv_rect : vec4<f32>,
+    @location(2) color : vec4<f32>,
+};
+
+struct VsOut {
+    @builtin(position) clip_position : vec4<f32>,
+    @location(0) uv : vec2<f32>,
+    @location(1) color : vec4<f32>,
+};
+
+struct ScreenUniform {
+    size : vec2<f32>,
+    _pad : vec2<f32>,
+};
+
+@group(0) @binding(0)
+var<uniform> screen : ScreenUniform;
+
+@group(1) @binding(0)
+var glyph_texture : texture_2d<f32>;
+
+@group(1) @binding(1)
+var glyph_sampler : sampler;
+
+@vertex
+fn vs_main(input: VsIn, @builtin(vertex_index) vertex_index: u32) -> VsOut {
+    let uv = array<vec2<f32>, 6>(
+        vec2<f32>(0.0, 0.0),
+        vec2<f32>(1.0, 0.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(0.0, 0.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(0.0, 1.0),
+    );
+
+    let p = uv[vertex_index];
+    let pixel = vec2<f32>(
+        input.rect.x + input.rect.z * p.x,
+        input.rect.y + input.rect.w * p.y
+    );
+
+    let x_ndc = (pixel.x / screen.size.x) * 2.0 - 1.0;
+    let y_ndc = 1.0 - (pixel.y / screen.size.y) * 2.0;
+
+    var out: VsOut;
+    out.clip_position = vec4<f32>(x_ndc, y_ndc, 0.0, 1.0);
+    out.uv = vec2<f32>(
+        input.uv_rect.x + input.uv_rect.z * p.x,
+        input.uv_rect.y + input.uv_rect.w * p.y
+    );
+    out.color = input.color;
+    return out;
+}
+
+@fragment
+fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
+    let coverage = textureSample(glyph_texture, glyph_sampler, input.uv).r;
+    if (coverage <= 0.001) {
+        discard;
+    }
+    return vec4<f32>(input.color.rgb, input.color.a * coverage);
 }
 "#;
 
@@ -195,6 +264,21 @@ struct FlattenedUiRectInstance {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct GlyphInstanceRaw {
+    rect: [f32; 4],
+    uv_rect: [f32; 4],
+    color: [f32; 4],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FlattenedUiGlyphInstance {
+    raw: GlyphInstanceRaw,
+    clip: Option<[f32; 4]>,
+    texture_id: u64,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct ScreenUniformRaw {
     size: [f32; 2],
@@ -208,6 +292,15 @@ struct RectPass {
     screen_bind_group: BindGroup,
 }
 
+#[derive(Debug)]
+struct GlyphPass {
+    pipeline: RenderPipeline,
+    screen_buffer: Buffer,
+    screen_bind_group: BindGroup,
+    texture_bind_group_layout: BindGroupLayout,
+    texture_sampler: Sampler,
+}
+
 #[derive(Debug, Clone)]
 struct UiRectBatch {
     scissor: (u32, u32, u32, u32),
@@ -215,9 +308,25 @@ struct UiRectBatch {
     instance_buffer: Buffer,
 }
 
+#[derive(Debug, Clone)]
+struct UiGlyphBatch {
+    scissor: (u32, u32, u32, u32),
+    instance_count: u32,
+    instance_buffer: Buffer,
+    texture_id: u64,
+}
+
+#[derive(Debug)]
+struct UiGlyphAtlasGpu {
+    _texture: Texture,
+    _view: TextureView,
+    bind_group: BindGroup,
+}
+
 #[derive(Debug, Clone, Default)]
 struct UiPreparedDraws {
     rect_batches: Vec<UiRectBatch>,
+    glyph_batches: Vec<UiGlyphBatch>,
     surface_size: (u32, u32),
 }
 
@@ -253,7 +362,9 @@ pub struct Renderer {
     rect_pass: Option<RectPass>,
     rect_pass_format: Option<TextureFormat>,
     rect_pass_shader_revision: u64,
-    text_renderer_format: Option<TextureFormat>,
+    glyph_pass: Option<GlyphPass>,
+    glyph_pass_format: Option<TextureFormat>,
+    glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
     flow_runtime_cache: BTreeMap<String, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
     last_good_ui_prepared: Option<UiPreparedDraws>,
@@ -293,6 +404,7 @@ impl Gfx {
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
+        ui_font_atlas: &UiFontAtlasResource,
     ) -> Result<GfxFrameTimings> {
         let mut timings = GfxFrameTimings::default();
         let acquire_start = Instant::now();
@@ -308,6 +420,7 @@ impl Gfx {
             shader_registry,
             compiled_flows,
             ui_rect_shader,
+            ui_font_atlas,
             self.ctx.surface_config.format,
         )?;
 

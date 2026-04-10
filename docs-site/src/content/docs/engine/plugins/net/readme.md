@@ -46,14 +46,14 @@ Server outbox delivery is explicit:
 
 ## Schedule Ownership
 
-- `PreUpdate` / `CoreSet::NetReceive`
+- `PreUpdate` / `NetPreUpdateSet::Receive`
   - `network_runtime_receive_system`
   - `client_receive_system`
   - `server_receive_system`
 - `FixedUpdate`
-  - `prediction_step_system` in `CoreSet::Simulation`
-  - `replication_step_system` in `CoreSet::Replication`
-  - explicit ordering: `Simulation -> Replication`
+  - `prediction_step_system` in `NetFixedSet::Prediction` (after `CoreSet::Simulation`)
+  - `replication_step_system` in `NetFixedSet::Replication` (after `CoreSet::Simulation` and prediction)
+  - explicit ordering: `Simulation -> Prediction -> Replication`
 - `FrameEnd` / `CoreSet::FrameEnd`
   - `client_flush_system`
   - `server_flush_system`
@@ -70,5 +70,4 @@ Server outbox delivery is explicit:
 - Usage: [../../../docs/reference/plugins/net/usage-guide.md](../../reference/plugins/net/usage-guide.md)
 - Advanced: [../../../docs/reference/plugins/net/advanced-guide.md](../../reference/plugins/net/advanced-guide.md)
 - Architecture: [../../../docs/reference/plugins/net/architecture.md](../../reference/plugins/net/architecture.md)
-
 

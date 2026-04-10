@@ -15,6 +15,7 @@ use editor_shell::UiInputOutcome;
 use ui_input::UiInputEvent;
 use ui_math::UiRect;
 use ui_render_data::UiFrame;
+use ui_text::FontAtlasSource;
 use ui_theme::ThemeTokens;
 
 impl RunenwerkEditorApp {
@@ -92,8 +93,9 @@ impl RunenwerkEditorApp {
         shell_state: &mut RunenwerkEditorShellState,
         bounds: UiRect,
         theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
     ) -> UiFrame {
-        RunenwerkEditorShellController::build_frame(self, shell_state, bounds, theme)
+        RunenwerkEditorShellController::build_frame(self, shell_state, bounds, theme, atlas_source)
     }
 
     pub fn dispatch_shell_input(

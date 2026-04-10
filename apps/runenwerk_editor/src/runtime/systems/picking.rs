@@ -1,0 +1,510 @@
+use editor_core::{EntityId, ToolId};
+use engine::WindowState;
+use engine::plugins::render::{
+    EditorGizmoAxis, EditorPickingHit, EditorPickingResultResource, EditorPickingTarget,
+};
+use engine::runtime::{Res, ResMut};
+use glam::{Vec2, Vec3, vec2, vec3};
+use scene::{LocalTransform, Vec3Value};
+use ui_math::{UiPoint, UiRect};
+
+use crate::editor_runtime::{EditorPrimitive, RunenwerkEditorRuntime};
+use crate::runtime::resources::{
+    EditorHostResource, EditorViewportCamera, editor_viewport_camera,
+    editor_viewport_camera_fov_y_radians,
+};
+use crate::shell::TRANSLATE_TOOL_ID;
+
+const GRID_EPSILON: f32 = 1e-5;
+const GIZMO_AXIS_LENGTH: f32 = 1.25;
+const GIZMO_AXIS_PICK_RADIUS_PX: f32 = 10.0;
+const HIT_DISTANCE_EPSILON: f32 = 0.0001;
+
+#[derive(Debug, Clone, Copy)]
+struct PickingRay {
+    origin: Vec3,
+    direction: Vec3,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AxisScreenHit {
+    axis: EditorGizmoAxis,
+    ray_distance: f32,
+    screen_distance_px: f32,
+}
+
+pub fn produce_editor_picking_system(
+    input: Res<engine::plugins::InputState>,
+    window: Res<WindowState>,
+    mut host: ResMut<EditorHostResource>,
+    mut picking: ResMut<EditorPickingResultResource>,
+) {
+    let bounds = window_bounds(&window);
+    let viewport_bounds = viewport_bounds(
+        host.shell_state.last_tree(),
+        host.shell_state.last_bounds(),
+        host.shell_state.runtime(),
+    )
+    .unwrap_or(bounds);
+    let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
+    let previous_hit = picking.hit;
+
+    picking.set_cursor(
+        (cursor.x, cursor.y),
+        (
+            viewport_bounds.x,
+            viewport_bounds.y,
+            viewport_bounds.width,
+            viewport_bounds.height,
+        ),
+    );
+
+    let next_hit = if !viewport_bounds.contains(cursor) {
+        EditorPickingHit::none()
+    } else if let Some(ray) = viewport_ray(cursor, viewport_bounds) {
+        compose_picking_hit(
+            host.app.runtime(),
+            host.app.runtime().session().active_tool(),
+            host.app.runtime().selected_entity(),
+            cursor,
+            viewport_bounds,
+            ray,
+        )
+    } else {
+        EditorPickingHit::none()
+    };
+
+    picking.set_hit(next_hit);
+    if host.app.debug_logs_enabled() && hit_changed(previous_hit, next_hit) {
+        host.app.append_console_line(format!(
+            "[pick] cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
+            cursor.x,
+            cursor.y,
+            cursor.x - viewport_bounds.x,
+            cursor.y - viewport_bounds.y,
+            picking_target_label(next_hit.target),
+            next_hit.distance
+        ));
+    }
+}
+
+fn compose_picking_hit(
+    runtime: &RunenwerkEditorRuntime,
+    active_tool: Option<ToolId>,
+    selected_entity: Option<EntityId>,
+    cursor: UiPoint,
+    viewport_bounds: UiRect,
+    ray: PickingRay,
+) -> EditorPickingHit {
+    if active_tool == Some(TRANSLATE_TOOL_ID)
+        && let Some(selected) = selected_entity
+        && let Some(transform) = entity_transform(runtime, selected)
+        && let Some(axis_hit) = pick_gizmo_axis(cursor, viewport_bounds, transform.translation)
+    {
+        return EditorPickingHit {
+            target: EditorPickingTarget::GizmoAxis(axis_hit.axis),
+            distance: axis_hit.ray_distance.max(0.0),
+        };
+    }
+
+    let entity_hit = pick_entity_hit(runtime, ray);
+    let grid_hit = pick_grid_hit(ray);
+    choose_primary_hit(entity_hit, grid_hit)
+}
+
+fn choose_primary_hit(
+    entity_hit: Option<EditorPickingHit>,
+    grid_hit: Option<EditorPickingHit>,
+) -> EditorPickingHit {
+    match (entity_hit, grid_hit) {
+        (Some(entity), Some(grid)) => {
+            if entity.distance <= grid.distance {
+                entity
+            } else {
+                grid
+            }
+        }
+        (Some(entity), None) => entity,
+        (None, Some(grid)) => grid,
+        (None, None) => EditorPickingHit::none(),
+    }
+}
+
+fn pick_entity_hit(runtime: &RunenwerkEditorRuntime, ray: PickingRay) -> Option<EditorPickingHit> {
+    let mut best: Option<EditorPickingHit> = None;
+
+    for entity in runtime.document().entity_ids() {
+        let Some(ecs_entity) = runtime.ids().resolve_entity(entity) else {
+            continue;
+        };
+        let Some(transform) = runtime.world().get::<LocalTransform>(ecs_entity).copied() else {
+            continue;
+        };
+        let Some(primitive) = runtime.world().get::<EditorPrimitive>(ecs_entity).copied() else {
+            continue;
+        };
+
+        let half_extents =
+            scaled_half_extents(primitive.box_extents_for_picking(), transform.scale);
+        let center = transform.translation.to_glam();
+        let min = center - half_extents;
+        let max = center + half_extents;
+
+        let Some(distance) = ray_aabb_first_hit(ray.origin, ray.direction, min, max) else {
+            continue;
+        };
+        let candidate = EditorPickingHit {
+            target: EditorPickingTarget::Entity(entity.0),
+            distance,
+        };
+
+        let replace = best
+            .map(|current| candidate.distance < current.distance)
+            .unwrap_or(true);
+        if replace {
+            best = Some(candidate);
+        }
+    }
+
+    best
+}
+
+fn pick_grid_hit(ray: PickingRay) -> Option<EditorPickingHit> {
+    if ray.direction.y.abs() <= GRID_EPSILON {
+        return None;
+    }
+
+    let distance = -ray.origin.y / ray.direction.y;
+    if distance < 0.0 {
+        return None;
+    }
+
+    Some(EditorPickingHit {
+        target: EditorPickingTarget::Grid,
+        distance,
+    })
+}
+
+fn pick_gizmo_axis(
+    cursor: UiPoint,
+    viewport_bounds: UiRect,
+    center: Vec3Value,
+) -> Option<AxisScreenHit> {
+    let camera = editor_viewport_camera();
+    let center_world = center.to_glam();
+    let center_screen = project_world_to_screen(
+        center_world,
+        camera,
+        viewport_bounds,
+        editor_viewport_camera_fov_y_radians(),
+    )?;
+    let cursor_vec = vec2(cursor.x, cursor.y);
+
+    let mut best: Option<AxisScreenHit> = None;
+    for (axis, direction) in [
+        (EditorGizmoAxis::X, vec3(1.0, 0.0, 0.0)),
+        (EditorGizmoAxis::Y, vec3(0.0, 1.0, 0.0)),
+        (EditorGizmoAxis::Z, vec3(0.0, 0.0, 1.0)),
+    ] {
+        let end_world = center_world + direction * GIZMO_AXIS_LENGTH;
+        let Some(end_screen) = project_world_to_screen(
+            end_world,
+            camera,
+            viewport_bounds,
+            editor_viewport_camera_fov_y_radians(),
+        ) else {
+            continue;
+        };
+
+        let screen_distance = point_segment_distance(cursor_vec, center_screen, end_screen);
+        if screen_distance > GIZMO_AXIS_PICK_RADIUS_PX {
+            continue;
+        }
+
+        let ray_distance = (center_world - camera.position)
+            .dot(camera.forward)
+            .max(0.0);
+        let candidate = AxisScreenHit {
+            axis,
+            ray_distance,
+            screen_distance_px: screen_distance,
+        };
+
+        let replace = best
+            .map(|current| candidate.screen_distance_px < current.screen_distance_px)
+            .unwrap_or(true);
+        if replace {
+            best = Some(candidate);
+        }
+    }
+
+    best
+}
+
+fn point_segment_distance(point: Vec2, start: Vec2, end: Vec2) -> f32 {
+    let segment = end - start;
+    let length_sq = segment.length_squared();
+    if length_sq <= f32::EPSILON {
+        return point.distance(start);
+    }
+
+    let t = ((point - start).dot(segment) / length_sq).clamp(0.0, 1.0);
+    let closest = start + segment * t;
+    point.distance(closest)
+}
+
+fn project_world_to_screen(
+    world_point: Vec3,
+    camera: EditorViewportCamera,
+    viewport_bounds: UiRect,
+    fov_y: f32,
+) -> Option<Vec2> {
+    if viewport_bounds.width <= f32::EPSILON || viewport_bounds.height <= f32::EPSILON {
+        return None;
+    }
+
+    let relative = world_point - camera.position;
+    let x_cam = relative.dot(camera.right);
+    let y_cam = relative.dot(camera.up);
+    let z_cam = relative.dot(camera.forward);
+    if z_cam <= 0.001 {
+        return None;
+    }
+
+    let tan_half_fov = (fov_y * 0.5).tan().max(0.0001);
+    let aspect = (viewport_bounds.width / viewport_bounds.height.max(1.0)).max(0.01);
+    let ndc_x = x_cam / (z_cam * tan_half_fov * aspect);
+    let ndc_y = y_cam / (z_cam * tan_half_fov);
+    if ndc_x.abs() > 1.5 || ndc_y.abs() > 1.5 {
+        return None;
+    }
+
+    Some(vec2(
+        viewport_bounds.x + (ndc_x * 0.5 + 0.5) * viewport_bounds.width,
+        viewport_bounds.y + (0.5 - ndc_y * 0.5) * viewport_bounds.height,
+    ))
+}
+
+fn viewport_ray(cursor: UiPoint, viewport_bounds: UiRect) -> Option<PickingRay> {
+    let width = viewport_bounds.width.max(1.0);
+    let height = viewport_bounds.height.max(1.0);
+    if width <= f32::EPSILON || height <= f32::EPSILON {
+        return None;
+    }
+
+    let local_x = ((cursor.x - viewport_bounds.x) / width).clamp(0.0, 1.0);
+    let local_y = ((cursor.y - viewport_bounds.y) / height).clamp(0.0, 1.0);
+    let ndc = vec2(local_x * 2.0 - 1.0, 1.0 - local_y * 2.0);
+
+    let camera = editor_viewport_camera();
+    let tan_half_fov = (editor_viewport_camera_fov_y_radians() * 0.5)
+        .tan()
+        .max(0.0001);
+    let aspect = width / height;
+    let direction = (camera.forward
+        + camera.right * ndc.x * aspect * tan_half_fov
+        + camera.up * ndc.y * tan_half_fov)
+        .normalize_or_zero();
+    if direction.length_squared() <= f32::EPSILON {
+        return None;
+    }
+
+    Some(PickingRay {
+        origin: camera.position,
+        direction,
+    })
+}
+
+fn ray_aabb_first_hit(origin: Vec3, direction: Vec3, min: Vec3, max: Vec3) -> Option<f32> {
+    let mut t_min = 0.0_f32;
+    let mut t_max = f32::INFINITY;
+
+    for axis in 0..3 {
+        let o = origin[axis];
+        let d = direction[axis];
+        let min_value = min[axis];
+        let max_value = max[axis];
+
+        if d.abs() <= f32::EPSILON {
+            if o < min_value || o > max_value {
+                return None;
+            }
+            continue;
+        }
+
+        let inv_d = 1.0 / d;
+        let mut t0 = (min_value - o) * inv_d;
+        let mut t1 = (max_value - o) * inv_d;
+        if t0 > t1 {
+            std::mem::swap(&mut t0, &mut t1);
+        }
+
+        t_min = t_min.max(t0);
+        t_max = t_max.min(t1);
+        if t_max < t_min {
+            return None;
+        }
+    }
+
+    Some(t_min.max(0.0))
+}
+
+fn scaled_half_extents(half_extents: Vec3Value, scale: Vec3Value) -> Vec3 {
+    let safe_scale = vec3(scale.x.abs(), scale.y.abs(), scale.z.abs());
+    vec3(
+        half_extents.x.max(0.05) * safe_scale.x.max(0.0001),
+        half_extents.y.max(0.05) * safe_scale.y.max(0.0001),
+        half_extents.z.max(0.05) * safe_scale.z.max(0.0001),
+    )
+}
+
+fn entity_transform(runtime: &RunenwerkEditorRuntime, entity: EntityId) -> Option<LocalTransform> {
+    let ecs_entity = runtime.ids().resolve_entity(entity)?;
+    runtime.world().get::<LocalTransform>(ecs_entity).copied()
+}
+
+fn picking_target_label(target: EditorPickingTarget) -> String {
+    match target {
+        EditorPickingTarget::None => "none".to_string(),
+        EditorPickingTarget::Grid => "grid".to_string(),
+        EditorPickingTarget::Entity(entity) => format!("entity:{entity}"),
+        EditorPickingTarget::ComponentHandle {
+            entity,
+            component_type,
+        } => format!("component:{entity}:{component_type}"),
+        EditorPickingTarget::GizmoAxis(axis) => format!("gizmo:{}", axis.as_str()),
+    }
+}
+
+fn hit_changed(previous: EditorPickingHit, next: EditorPickingHit) -> bool {
+    previous.target != next.target
+        || (previous.distance - next.distance).abs() > HIT_DISTANCE_EPSILON
+}
+
+fn window_bounds(window: &WindowState) -> UiRect {
+    let width = window.size_px.0.max(1) as f32;
+    let height = window.size_px.1.max(1) as f32;
+    UiRect::new(0.0, 0.0, width, height)
+}
+
+fn viewport_bounds(
+    tree: Option<&editor_shell::UiTree>,
+    bounds: Option<UiRect>,
+    runtime: &editor_shell::UiRuntime,
+) -> Option<UiRect> {
+    let tree = tree?;
+    let bounds = bounds?;
+    let layouts = runtime.compute_layout(tree, bounds);
+    layouts
+        .get(&editor_shell::VIEWPORT_PANEL_WIDGET_ID)
+        .map(|layout| layout.bounds)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::editor_app::RunenwerkEditorApp;
+    use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
+
+    fn seeded_runtime() -> RunenwerkEditorRuntime {
+        let mut app = RunenwerkEditorApp::new();
+        register_mvp_component_types(app.runtime_mut());
+        bootstrap_mvp_scene_if_empty(app.runtime_mut()).expect("mvp bootstrap should succeed");
+        app.runtime
+    }
+
+    #[test]
+    fn compose_hit_returns_entity_for_primitive_intersection() {
+        let runtime = seeded_runtime();
+        let entity = runtime
+            .document()
+            .entity_ids()
+            .next()
+            .expect("seeded runtime should contain one entity");
+        let transform = entity_transform(&runtime, entity).expect("entity should have transform");
+        let camera = editor_viewport_camera();
+        let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
+
+        let hit = compose_picking_hit(
+            &runtime,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            PickingRay {
+                origin: camera.position,
+                direction,
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::Entity(entity.0));
+        assert!(hit.distance >= 0.0);
+    }
+
+    #[test]
+    fn compose_hit_returns_grid_when_no_entity_intersection() {
+        let mut runtime = seeded_runtime();
+        let entity = runtime
+            .document()
+            .entity_ids()
+            .next()
+            .expect("seeded runtime should contain one entity");
+        let ecs_entity = runtime
+            .ids()
+            .resolve_entity(entity)
+            .expect("entity mapping should exist");
+        runtime
+            .world_mut()
+            .remove::<EditorPrimitive>(ecs_entity)
+            .expect("primitive should be removable");
+
+        let camera = editor_viewport_camera();
+        let hit = compose_picking_hit(
+            &runtime,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            PickingRay {
+                origin: camera.position,
+                direction: camera.forward,
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::Grid);
+        assert!(hit.distance >= 0.0);
+    }
+
+    #[test]
+    fn compose_hit_returns_none_for_parallel_ray_without_entity() {
+        let mut runtime = seeded_runtime();
+        let entity = runtime
+            .document()
+            .entity_ids()
+            .next()
+            .expect("seeded runtime should contain one entity");
+        let ecs_entity = runtime
+            .ids()
+            .resolve_entity(entity)
+            .expect("entity mapping should exist");
+        runtime
+            .world_mut()
+            .remove::<EditorPrimitive>(ecs_entity)
+            .expect("primitive should be removable");
+
+        let hit = compose_picking_hit(
+            &runtime,
+            None,
+            None,
+            UiPoint::new(0.0, 0.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            PickingRay {
+                origin: vec3(0.0, 2.0, 0.0),
+                direction: vec3(1.0, 0.0, 0.0),
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::None);
+        assert!(hit.distance.is_infinite());
+    }
+}

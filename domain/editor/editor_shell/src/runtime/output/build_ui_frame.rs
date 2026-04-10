@@ -7,13 +7,27 @@ use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer,
     UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
 };
-use ui_text::{GlyphRun, PositionedGlyph};
+use ui_text::{AtlasTextLayouter, FontAtlasSource, TextLayoutRequest, TextLayouter};
 
-pub fn build_ui_frame(tree: &UiTree, layouts: &ComputedLayoutMap, surface_size: UiSize) -> UiFrame {
+pub fn build_ui_frame(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    surface_size: UiSize,
+    atlas_source: &dyn FontAtlasSource,
+) -> UiFrame {
     let mut layer = UiLayer::new(UiLayerId(0));
     let mut primitive_order = 0u32;
+    let layouter = AtlasTextLayouter;
 
-    emit_node(&tree.root, layouts, &mut layer, 0, &mut primitive_order);
+    emit_node(
+        &tree.root,
+        layouts,
+        &mut layer,
+        atlas_source,
+        &layouter,
+        0,
+        &mut primitive_order,
+    );
 
     UiFrame::with_surfaces(vec![UiSurface::with_layers(
         UiSurfaceId(0),
@@ -26,6 +40,8 @@ fn emit_node(
     node: &UiNode,
     layouts: &ComputedLayoutMap,
     layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
     depth: u32,
     primitive_order: &mut u32,
 ) {
@@ -42,12 +58,22 @@ fn emit_node(
             depth,
             primitive_order,
         ),
-        UiNodeKind::Label(label) => emit_label(label, layout.bounds, layer, depth, primitive_order),
+        UiNodeKind::Label(label) => emit_label(
+            label,
+            layout.bounds,
+            layer,
+            atlas_source,
+            layouter,
+            depth,
+            primitive_order,
+        ),
         UiNodeKind::Button(button) => emit_button(
             button,
             layout.bounds,
             layout.content_bounds,
             layer,
+            atlas_source,
+            layouter,
             depth,
             primitive_order,
         ),
@@ -55,7 +81,15 @@ fn emit_node(
     }
 
     for child in &node.children {
-        emit_node(child, layouts, layer, depth + 1, primitive_order);
+        emit_node(
+            child,
+            layouts,
+            layer,
+            atlas_source,
+            layouter,
+            depth + 1,
+            primitive_order,
+        );
     }
 
     if matches!(node.kind, UiNodeKind::Panel(_) | UiNodeKind::Button(_)) {
@@ -105,6 +139,8 @@ fn emit_button(
     bounds: UiRect,
     content_bounds: UiRect,
     layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
     depth: u32,
     primitive_order: &mut u32,
 ) {
@@ -152,17 +188,41 @@ fn emit_button(
         constraints: ui_layout::LayoutConstraints::tight(text_rect.size()),
     };
 
-    emit_label(&label_node, text_rect, layer, depth + 1, primitive_order);
+    emit_label(
+        &label_node,
+        text_rect,
+        layer,
+        atlas_source,
+        layouter,
+        depth + 1,
+        primitive_order,
+    );
 }
 
 fn emit_label(
     label: &LabelNode,
     bounds: UiRect,
     layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let glyph_run = estimate_glyph_run(label, bounds);
+    let Some(mut glyph_run) = layouter.layout(
+        atlas_source,
+        TextLayoutRequest {
+            text: &label.text,
+            style: &label.text_style,
+            max_width: Some(bounds.width.max(0.0)),
+        },
+    ) else {
+        return;
+    };
+
+    for glyph in &mut glyph_run.glyphs {
+        glyph.origin.x += bounds.x;
+        glyph.origin.y += bounds.y;
+    }
 
     layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
         glyph_run,
@@ -173,33 +233,10 @@ fn emit_label(
             label.text_style.color[2],
             label.text_style.color[3],
         ),
-        default_draw_key(),
+        UiDrawKey::new(0, Some(label.text_style.font_id.0)),
         sort_key(depth, *primitive_order),
     )));
     *primitive_order += 1;
-}
-
-fn estimate_glyph_run(label: &LabelNode, bounds: UiRect) -> GlyphRun {
-    let advance = label.text_style.font_size * 0.6;
-    let baseline_y = bounds.y + label.text_style.font_size;
-
-    let glyphs = label
-        .text
-        .chars()
-        .enumerate()
-        .map(|(index, ch)| PositionedGlyph {
-            ch,
-            origin: ui_math::UiPoint::new(bounds.x + advance * index as f32, baseline_y),
-            advance,
-        })
-        .collect();
-
-    GlyphRun {
-        font_id: label.text_style.font_id,
-        font_size: label.text_style.font_size,
-        glyphs,
-        size: bounds.size(),
-    }
 }
 
 fn paint_from_color(color: ui_theme::UiColor) -> UiPaint {

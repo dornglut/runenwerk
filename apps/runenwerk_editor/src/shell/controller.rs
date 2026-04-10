@@ -5,6 +5,7 @@ use editor_shell::{
 use ui_input::UiInputEvent;
 use ui_math::UiRect;
 use ui_render_data::UiFrame;
+use ui_text::FontAtlasSource;
 use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
@@ -35,10 +36,13 @@ impl RunenwerkEditorShellController {
         shell_state: &mut RunenwerkEditorShellState,
         bounds: UiRect,
         theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
     ) -> UiFrame {
         let tree = Self::rebuild_tree(app, shell_state, theme);
         shell_state.set_last_bounds(bounds);
-        shell_state.runtime().build_frame(&tree, bounds)
+        shell_state
+            .runtime()
+            .build_frame(&tree, bounds, atlas_source)
     }
 
     pub fn dispatch_input(

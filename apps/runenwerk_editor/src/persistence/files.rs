@@ -1,22 +1,22 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use editor_persistence::{ProjectFileV1, SceneFileV1, decode_ron, encode_ron_pretty};
+use editor_persistence::{ProjectFileV1, SceneFileV2, decode_ron, encode_ron_pretty};
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
 use crate::persistence::{apply_scene_file_to_runtime, scene_file_from_runtime};
 
 pub fn write_scene_file(path: &Path, runtime: &RunenwerkEditorRuntime) -> Result<()> {
     let scene_file = scene_file_from_runtime(runtime);
-    let ron = encode_ron_pretty(&scene_file).context("failed to encode SceneFileV1 as RON")?;
+    let ron = encode_ron_pretty(&scene_file).context("failed to encode SceneFileV2 as RON")?;
     std::fs::write(path, ron)
         .with_context(|| format!("failed to write scene file: {}", path.display()))
 }
 
-pub fn read_scene_file(path: &Path) -> Result<SceneFileV1> {
+pub fn read_scene_file(path: &Path) -> Result<SceneFileV2> {
     let source = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read scene file: {}", path.display()))?;
-    decode_ron(&source).context("failed to decode SceneFileV1 from RON")
+    decode_ron(&source).context("failed to decode SceneFileV2 from RON")
 }
 
 pub fn load_scene_file_into_runtime(

@@ -4,6 +4,7 @@ use engine::prelude::*;
 use winit::keyboard::KeyCode;
 
 use crate::runtime::plugin::EditorAppPlugin;
+use crate::runtime::resources::EditorViewportRenderState;
 
 pub const ACTION_EDITOR_UNDO: &str = "editor.undo";
 pub const ACTION_EDITOR_REDO: &str = "editor.redo";
@@ -12,7 +13,9 @@ pub const ACTION_EDITOR_TOOL_TRANSLATE: &str = "editor.tool.translate";
 
 const WINDOW_TITLE: &str = "Runenwerk Editor";
 const EDITOR_MAIN_FLOW_ID: &str = "runenwerk.editor.main";
+const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
 const EDITOR_MAIN_UI_PASS_ID: &str = "runenwerk.editor.main.ui";
+const EDITOR_VIEWPORT_SDF_SHADER_ASSET: &str = "assets/shaders/editor_viewport_sdf.wgsl";
 
 fn configure_app(app: &mut App) {
     app.set_title(WINDOW_TITLE);
@@ -32,9 +35,15 @@ fn configure_app(app: &mut App) {
 
 fn register_editor_render_flow(app: &mut App) {
     let flow = RenderFlow::new(EDITOR_MAIN_FLOW_ID)
+        .with_state::<EditorViewportRenderState>()
         .with_surface_color()
-        .with_builtin_ui()
+        .fullscreen_pass(EDITOR_VIEWPORT_SDF_PASS_ID)
+        .shader_asset(EDITOR_VIEWPORT_SDF_SHADER_ASSET)
+        .uniform_from_state_with_surface(EditorViewportRenderState::compose_uniform)
+        .write_surface_color()
+        .finish()
         .builtin_ui_composite_pass(EDITOR_MAIN_UI_PASS_ID)
+        .depends_on(EDITOR_VIEWPORT_SDF_PASS_ID)
         .finish()
         .validate()
         .expect("editor render flow should validate");

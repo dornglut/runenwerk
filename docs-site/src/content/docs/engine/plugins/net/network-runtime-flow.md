@@ -11,7 +11,7 @@ description: "Documentation for Network Runtime Flow."
 - Transport-agnostic contracts: `net/engine_net`
 - QUIC adapter: `net/engine_net_quic`
 
-## Receive Path (`PreUpdate`, `CoreSet::NetReceive`)
+## Receive Path (`PreUpdate`, `NetPreUpdateSet::Receive`)
 
 1. `network_runtime_receive_system`
    - drains `NetworkRuntimeHandle`
@@ -31,7 +31,7 @@ description: "Documentation for Network Runtime Flow."
 Order is explicit and not registration-order dependent:
 
 1. `prediction_step_system` (`CoreSet::Simulation`)
-2. `replication_step_system` (`CoreSet::Replication`, after simulation)
+2. `replication_step_system` (`NetFixedSet::Replication`, after simulation and prediction)
 
 Server replication behavior:
 

@@ -1,11 +1,13 @@
 use crate::{UiInteraction, UiInteractionResults, UiRuntime};
 use ui_math::UiRect;
+use ui_text::{FontAtlasSource, FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas};
 use ui_theme::ThemeTokens;
 
 use crate::{
-    EditorShellViewModel, InspectorFieldViewModel, InspectorTargetViewModel, InspectorViewModel,
-    OutlinerRowViewModel, OutlinerViewModel, ShellCommand, ToolbarButtonViewModel,
-    ToolbarViewModel, ViewportViewModel, build_editor_shell, map_interactions_to_shell_commands,
+    ConsoleViewModel, EditorShellViewModel, InspectorFieldViewModel, InspectorTargetViewModel,
+    InspectorViewModel, OutlinerRowViewModel, OutlinerViewModel, ShellCommand,
+    ToolbarButtonViewModel, ToolbarViewModel, ViewportViewModel, build_editor_shell,
+    map_interactions_to_shell_commands,
 };
 
 #[test]
@@ -20,12 +22,14 @@ fn shell_view_model_builds_ui_tree_and_frame() {
                     stable_name: "select",
                     label: "Select".to_string(),
                     is_active: true,
+                    enabled: true,
                 },
                 ToolbarButtonViewModel {
                     id: editor_core::ToolId(2),
                     stable_name: "translate",
                     label: "Translate".to_string(),
                     is_active: false,
+                    enabled: true,
                 },
             ],
         },
@@ -54,15 +58,70 @@ fn shell_view_model_builds_ui_tree_and_frame() {
                 is_focused: false,
             }],
         },
+        console: ConsoleViewModel {
+            lines: vec!["boot".to_string()],
+        },
     };
 
     let tree = build_editor_shell(&shell, &theme);
     let runtime = UiRuntime::new();
-    let frame = runtime.build_frame(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0));
+    let atlas_source = TestAtlasSource::ascii();
+    let frame = runtime.build_frame(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0), &atlas_source);
 
     assert_eq!(tree.root_id().0, 1);
     assert_eq!(frame.surfaces.len(), 1);
     assert!(!frame.surfaces[0].layers[0].primitives.is_empty());
+}
+
+struct TestAtlasSource {
+    atlas: MsdfFontAtlas,
+}
+
+impl TestAtlasSource {
+    fn ascii() -> Self {
+        let mut glyphs = std::collections::HashMap::new();
+        for byte in 32_u8..=126_u8 {
+            glyphs.insert(
+                byte as char,
+                GlyphMetrics {
+                    advance: 10.0,
+                    plane_left: 0.0,
+                    plane_top: 8.0,
+                    plane_right: 8.0,
+                    plane_bottom: -2.0,
+                    atlas_left: 0.0,
+                    atlas_top: 0.0,
+                    atlas_right: 0.1,
+                    atlas_bottom: 0.1,
+                },
+            );
+        }
+
+        Self {
+            atlas: MsdfFontAtlas {
+                font_id: FontId(1),
+                texture_width: 256,
+                texture_height: 256,
+                metrics: FontFaceMetrics {
+                    ascender: 9.0,
+                    descender: -3.0,
+                    line_height: 12.0,
+                    base_size: 12.0,
+                },
+                glyphs,
+            },
+        }
+    }
+}
+
+impl FontAtlasSource for TestAtlasSource {
+    fn atlas(&self, font_id: FontId) -> Option<&MsdfFontAtlas> {
+        if font_id == self.atlas.font_id {
+            Some(&self.atlas)
+        } else {
+            None
+        }
+    }
 }
 
 #[test]
@@ -77,6 +136,7 @@ fn toolbar_activation_maps_to_shell_command() {
         outliner: OutlinerViewModel::default(),
         viewport: ViewportViewModel::default(),
         inspector: InspectorViewModel::default(),
+        console: ConsoleViewModel::default(),
     };
 
     let commands = map_interactions_to_shell_commands(&interactions, &view_model);
@@ -101,6 +161,7 @@ fn outliner_row_activation_maps_to_select_entity_command() {
         },
         viewport: ViewportViewModel::default(),
         inspector: InspectorViewModel::default(),
+        console: ConsoleViewModel::default(),
     };
 
     let commands = map_interactions_to_shell_commands(&interactions, &view_model);
@@ -130,6 +191,7 @@ fn inspector_field_activation_maps_to_shell_edit_command() {
             },
             fields: vec![],
         },
+        console: ConsoleViewModel::default(),
     };
 
     let commands = map_interactions_to_shell_commands(&interactions, &view_model);

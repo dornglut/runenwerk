@@ -121,7 +121,16 @@ Audit coverage spans:
 
 The repository already has a strong deterministic runtime base, world-owned messaging primitives, driver-based multiplayer contracts, and replay substrate pieces.
 
-The largest foundational gap before scaling editor work is not “add more editor features”; it is finishing generic runtime messaging boundaries:
+The largest remaining runtime gaps are convergence and extension quality in messaging, ownership routing, and extraction surfaces.
+These gaps no longer block the first editor MVP from proceeding.
+
+For first editor MVP sequencing, the immediate blockers are editor-side:
+
+- readable text bring-up (MSDF path),
+- live viewport picking result production,
+- stale reference cleanup in planning/docs.
+
+Runtime follow-up priorities in this document remain:
 
 - keep broadcast streams vs destructive work queues vs typed tick buffers semantically distinct,
 - make lifecycle/finalization runtime-owned (not manual),

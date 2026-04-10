@@ -4,6 +4,7 @@
 use ui_input::UiInputEvent;
 use ui_math::{UiRect, UiSize};
 use ui_render_data::UiFrame;
+use ui_text::FontAtlasSource;
 
 use crate::{
     ComputedLayoutMap, UiInputOutcome, UiRuntimeState, UiTree, build_ui_frame, compute_tree_layout,
@@ -50,8 +51,18 @@ impl UiRuntime {
         }
     }
 
-    pub fn build_frame(&self, tree: &UiTree, bounds: UiRect) -> UiFrame {
+    pub fn build_frame(
+        &self,
+        tree: &UiTree,
+        bounds: UiRect,
+        atlas_source: &dyn FontAtlasSource,
+    ) -> UiFrame {
         let layouts = self.compute_layout(tree, bounds);
-        build_ui_frame(tree, &layouts, UiSize::new(bounds.width, bounds.height))
+        build_ui_frame(
+            tree,
+            &layouts,
+            UiSize::new(bounds.width, bounds.height),
+            atlas_source,
+        )
     }
 }

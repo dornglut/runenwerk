@@ -824,6 +824,7 @@ impl Renderer {
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
+        ui_font_atlas: &UiFontAtlasResource,
         surface_format: TextureFormat,
     ) -> Result<RendererFrameTimings> {
         let packet = self.prepare_packet(
@@ -832,6 +833,7 @@ impl Renderer {
             prepared_frame,
             shader_registry,
             ui_rect_shader,
+            ui_font_atlas,
             surface_format,
         );
         self.render_packet(

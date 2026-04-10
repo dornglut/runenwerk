@@ -2568,6 +2568,7 @@ name = "runenwerk_editor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "ecs",
  "editor_core",
  "editor_inspector",
@@ -2581,6 +2582,7 @@ dependencies = [
  "ui_input",
  "ui_math",
  "ui_render_data",
+ "ui_text",
  "ui_theme",
  "winit",
 ]

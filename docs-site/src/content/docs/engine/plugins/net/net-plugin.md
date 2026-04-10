@@ -45,9 +45,9 @@ Client state is isolated:
 
 Fixed-step execution is explicit:
 
-- `prediction_step_system` in `CoreSet::Simulation`
-- `replication_step_system` in `CoreSet::Replication`
-- `Replication` runs after `Simulation`
+- `prediction_step_system` in `NetFixedSet::Prediction` (after `CoreSet::Simulation`)
+- `replication_step_system` in `NetFixedSet::Replication`
+- `Replication` runs after `Simulation` and prediction
 
 This avoids registration-order coupling.
 

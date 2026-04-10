@@ -14,14 +14,14 @@ use crate::runtime::app::{
     ACTION_EDITOR_REDO, ACTION_EDITOR_TOOL_SELECT, ACTION_EDITOR_TOOL_TRANSLATE, ACTION_EDITOR_UNDO,
 };
 use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState};
-use crate::shell::{TRANSLATE_TOOL_ID, dispatch_shell_command};
+use crate::shell::dispatch_shell_command;
 
 pub fn dispatch_editor_input_system(
     input: Res<engine::plugins::InputState>,
     window: Res<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
-    mut picking: ResMut<EditorPickingResultResource>,
+    picking: Res<EditorPickingResultResource>,
 ) {
     dispatch_shortcuts(&input, &mut host);
 
@@ -34,15 +34,10 @@ pub fn dispatch_editor_input_system(
     .unwrap_or(bounds);
     let position = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
     let previous = UiPoint::new(bridge.last_mouse_position.0, bridge.last_mouse_position.1);
-    picking.set_cursor(
-        (position.x, position.y),
-        (
-            viewport_bounds.x,
-            viewport_bounds.y,
-            viewport_bounds.width,
-            viewport_bounds.height,
-        ),
-    );
+
+    if picking.revision != bridge.last_logged_picking_revision {
+        bridge.last_logged_picking_revision = picking.revision;
+    }
 
     if position != previous {
         dispatch_pointer_event(
@@ -66,7 +61,12 @@ pub fn dispatch_editor_input_system(
         );
 
         if viewport_bounds.contains(position) {
-            dispatch_viewport_pointer_down(&mut host, &picking);
+            dispatch_viewport_pointer_down(&mut host, &picking, position, viewport_bounds);
+        } else if host.app.debug_logs_enabled() {
+            host.app.append_console_line(format!(
+                "[input] pointer-down routed to shell only: cursor=({:.1},{:.1})",
+                position.x, position.y
+            ));
         }
     }
 
@@ -109,14 +109,28 @@ pub fn dispatch_editor_input_system(
 
 fn dispatch_shortcuts(input: &engine::plugins::InputState, host: &mut EditorHostResource) {
     if input.action_pressed(ACTION_EDITOR_UNDO) {
-        if let Err(error) = undo_last_scene_transaction(host.app.runtime_mut()) {
-            eprintln!("undo shortcut failed: {error}");
+        match undo_last_scene_transaction(host.app.runtime_mut()) {
+            Ok(Some(entry)) => {
+                host.app
+                    .append_console_line(format!("[history] undo: {}", entry.transaction.label));
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("undo shortcut failed: {error}");
+            }
         }
     }
 
     if input.action_pressed(ACTION_EDITOR_REDO) {
-        if let Err(error) = redo_last_scene_transaction(host.app.runtime_mut()) {
-            eprintln!("redo shortcut failed: {error}");
+        match redo_last_scene_transaction(host.app.runtime_mut()) {
+            Ok(Some(entry)) => {
+                host.app
+                    .append_console_line(format!("[history] redo: {}", entry.transaction.label));
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("redo shortcut failed: {error}");
+            }
         }
     }
 
@@ -187,26 +201,44 @@ fn viewport_bounds(
 fn dispatch_viewport_pointer_down(
     host: &mut EditorHostResource,
     picking: &EditorPickingResultResource,
+    position: UiPoint,
+    viewport_bounds: UiRect,
 ) {
-    let hit = map_viewport_hit(
-        picking,
-        host.app.runtime().selected_entity(),
-        host.app.runtime().session().active_tool(),
-    );
+    let hit = map_viewport_hit(picking);
+    let selection_before = host.app.runtime().selected_entity();
+    let local_x = position.x - viewport_bounds.x;
+    let local_y = position.y - viewport_bounds.y;
 
-    if let Err(error) = host
+    if host.app.debug_logs_enabled() {
+        host.app.append_console_line(format!(
+            "[input] viewport pointer-down cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3} sel_before={:?}",
+            position.x,
+            position.y,
+            local_x,
+            local_y,
+            picking_target_label(picking.hit.target),
+            picking.hit.distance,
+            selection_before
+        ));
+    }
+
+    let result = host
         .app
-        .dispatch_viewport_interaction_command(ViewportInteractionCommand::PointerDown { hit })
-    {
+        .dispatch_viewport_interaction_command(ViewportInteractionCommand::PointerDown { hit });
+    if let Err(error) = result {
         eprintln!("viewport pointer-down failed: {error}");
+        return;
+    }
+
+    if host.app.debug_logs_enabled() {
+        host.app.append_console_line(format!(
+            "[input] viewport command=PointerDown sel_after={:?}",
+            host.app.runtime().selected_entity()
+        ));
     }
 }
 
-fn map_viewport_hit(
-    picking: &EditorPickingResultResource,
-    selected_entity: Option<EntityId>,
-    active_tool: Option<editor_core::ToolId>,
-) -> ViewportHitResult {
+fn map_viewport_hit(picking: &EditorPickingResultResource) -> ViewportHitResult {
     let distance = if picking.hit.distance.is_finite() {
         picking.hit.distance
     } else {
@@ -214,7 +246,7 @@ fn map_viewport_hit(
     };
 
     match picking.hit.target {
-        EditorPickingTarget::None => fallback_viewport_hit(selected_entity, active_tool),
+        EditorPickingTarget::None => ViewportHitResult::none(),
         EditorPickingTarget::Grid => ViewportHitResult::grid(distance),
         EditorPickingTarget::Entity(entity) => {
             ViewportHitResult::entity(EntityId(entity), distance)
@@ -233,21 +265,23 @@ fn map_viewport_hit(
     }
 }
 
-fn fallback_viewport_hit(
-    selected_entity: Option<EntityId>,
-    active_tool: Option<editor_core::ToolId>,
-) -> ViewportHitResult {
-    if selected_entity.is_some() && active_tool == Some(TRANSLATE_TOOL_ID) {
-        return ViewportHitResult::gizmo_axis("X", 0.0);
-    }
-
-    ViewportHitResult::none()
-}
-
 fn editor_axis_label(axis: EditorGizmoAxis) -> &'static str {
     match axis {
         EditorGizmoAxis::X => "X",
         EditorGizmoAxis::Y => "Y",
         EditorGizmoAxis::Z => "Z",
+    }
+}
+
+fn picking_target_label(target: EditorPickingTarget) -> String {
+    match target {
+        EditorPickingTarget::None => "none".to_string(),
+        EditorPickingTarget::Grid => "grid".to_string(),
+        EditorPickingTarget::Entity(entity) => format!("entity:{entity}"),
+        EditorPickingTarget::ComponentHandle {
+            entity,
+            component_type,
+        } => format!("component:{entity}:{component_type}"),
+        EditorPickingTarget::GizmoAxis(axis) => format!("gizmo:{}", editor_axis_label(axis)),
     }
 }
