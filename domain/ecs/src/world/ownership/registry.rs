@@ -1,6 +1,6 @@
 use super::model::{
-    OwnerId, OwnerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord,
-    ResourceOwnerKey, ResourceOwnershipDescriptor,
+    OwnerId, OwnerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord, ResourceOwnerKey,
+    ResourceOwnershipDescriptor,
 };
 use crate::component::Resource;
 use crate::entity::Entity;
@@ -35,11 +35,7 @@ impl OwnershipRegistry {
         self.owner_roles.get(&owner).copied()
     }
 
-    pub(super) fn set_owner_role(
-        &mut self,
-        owner: OwnerId,
-        role: OwnerRole,
-    ) -> bool {
+    pub(super) fn set_owner_role(&mut self, owner: OwnerId, role: OwnerRole) -> bool {
         match self.owner_roles.get_mut(&owner) {
             Some(current) => {
                 if *current == role {
@@ -208,7 +204,10 @@ impl OwnershipRegistry {
             return;
         };
 
-        self.targets_by_owner.entry(owner_id).or_default().insert(target);
+        self.targets_by_owner
+            .entry(owner_id)
+            .or_default()
+            .insert(target);
     }
 }
 

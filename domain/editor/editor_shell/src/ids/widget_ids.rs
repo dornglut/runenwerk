@@ -23,19 +23,31 @@ pub const BODY_CONSOLE_SPLIT_WIDGET_ID: WidgetId = WidgetId(23);
 pub const OUTLINER_PANEL_WIDGET_ID: WidgetId = WidgetId(30);
 pub const OUTLINER_TITLE_WIDGET_ID: WidgetId = WidgetId(31);
 pub const OUTLINER_LIST_WIDGET_ID: WidgetId = WidgetId(32);
+pub const OUTLINER_BODY_WIDGET_ID: WidgetId = WidgetId(33);
+pub const OUTLINER_SCROLL_WIDGET_ID: WidgetId = WidgetId(34);
 
 pub const VIEWPORT_PANEL_WIDGET_ID: WidgetId = WidgetId(40);
 pub const VIEWPORT_TITLE_WIDGET_ID: WidgetId = WidgetId(41);
 pub const VIEWPORT_STATUS_WIDGET_ID: WidgetId = WidgetId(42);
+pub const VIEWPORT_BODY_WIDGET_ID: WidgetId = WidgetId(43);
+pub const VIEWPORT_CANVAS_WIDGET_ID: WidgetId = WidgetId(44);
+pub const VIEWPORT_CHROME_WIDGET_ID: WidgetId = WidgetId(45);
+pub const VIEWPORT_CHROME_CONTENT_WIDGET_ID: WidgetId = WidgetId(46);
+pub const VIEWPORT_CANVAS_CONTENT_WIDGET_ID: WidgetId = WidgetId(47);
+pub const VIEWPORT_CANVAS_LABEL_WIDGET_ID: WidgetId = WidgetId(48);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);
 pub const INSPECTOR_LIST_WIDGET_ID: WidgetId = WidgetId(52);
 pub const INSPECTOR_TARGET_WIDGET_ID: WidgetId = WidgetId(53);
+pub const INSPECTOR_BODY_WIDGET_ID: WidgetId = WidgetId(54);
+pub const INSPECTOR_SCROLL_WIDGET_ID: WidgetId = WidgetId(55);
 
 pub const CONSOLE_PANEL_WIDGET_ID: WidgetId = WidgetId(60);
 pub const CONSOLE_TITLE_WIDGET_ID: WidgetId = WidgetId(61);
 pub const CONSOLE_LIST_WIDGET_ID: WidgetId = WidgetId(62);
+pub const CONSOLE_BODY_WIDGET_ID: WidgetId = WidgetId(63);
+pub const CONSOLE_SCROLL_WIDGET_ID: WidgetId = WidgetId(64);
 pub const CONSOLE_LINE_WIDGET_ID_BASE: u64 = 20_000;
 
 pub const OUTLINER_ROW_WIDGET_ID_BASE: u64 = 1_000;

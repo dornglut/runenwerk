@@ -13,7 +13,7 @@ use crate::editor_runtime::{redo_last_scene_transaction, undo_last_scene_transac
 use crate::runtime::app::{
     ACTION_EDITOR_REDO, ACTION_EDITOR_TOOL_SELECT, ACTION_EDITOR_TOOL_TRANSLATE, ACTION_EDITOR_UNDO,
 };
-use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState};
+use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scaled_shell_theme};
 use crate::shell::dispatch_shell_command;
 
 pub fn dispatch_editor_input_system(
@@ -26,6 +26,7 @@ pub fn dispatch_editor_input_system(
     dispatch_shortcuts(&input, &mut host);
 
     let bounds = window_bounds(&window);
+    let shell_theme = scaled_shell_theme(&host.theme, window.scale_factor);
     let viewport_bounds = viewport_bounds(
         host.shell_state.last_tree(),
         host.shell_state.last_bounds(),
@@ -42,6 +43,7 @@ pub fn dispatch_editor_input_system(
     if position != previous {
         dispatch_pointer_event(
             &mut host,
+            &shell_theme,
             bounds,
             PointerEventKind::Move,
             position,
@@ -50,9 +52,22 @@ pub fn dispatch_editor_input_system(
         );
     }
 
+    if input.scroll_delta.abs() > f32::EPSILON {
+        dispatch_pointer_event(
+            &mut host,
+            &shell_theme,
+            bounds,
+            PointerEventKind::Scroll,
+            position,
+            UiVector::new(0.0, input.scroll_delta),
+            None,
+        );
+    }
+
     if input.left_mouse_pressed() {
         dispatch_pointer_event(
             &mut host,
+            &shell_theme,
             bounds,
             PointerEventKind::Down,
             position,
@@ -87,6 +102,7 @@ pub fn dispatch_editor_input_system(
     if input.left_mouse_released() {
         dispatch_pointer_event(
             &mut host,
+            &shell_theme,
             bounds,
             PointerEventKind::Up,
             position,
@@ -156,6 +172,7 @@ fn dispatch_shortcuts(input: &engine::plugins::InputState, host: &mut EditorHost
 
 fn dispatch_pointer_event(
     host: &mut EditorHostResource,
+    shell_theme: &ui_theme::ThemeTokens,
     bounds: UiRect,
     kind: PointerEventKind,
     position: UiPoint,
@@ -173,7 +190,7 @@ fn dispatch_pointer_event(
 
     if let Err(error) =
         host.app
-            .dispatch_shell_input(&mut host.shell_state, bounds, &host.theme, &event)
+            .dispatch_shell_input(&mut host.shell_state, bounds, shell_theme, &event)
     {
         eprintln!("editor shell input dispatch failed: {error}");
     }
@@ -194,7 +211,7 @@ fn viewport_bounds(
     let bounds = bounds?;
     let layouts = runtime.compute_layout(tree, bounds);
     layouts
-        .get(&editor_shell::VIEWPORT_PANEL_WIDGET_ID)
+        .get(&editor_shell::VIEWPORT_CANVAS_WIDGET_ID)
         .map(|layout| layout.bounds)
 }
 

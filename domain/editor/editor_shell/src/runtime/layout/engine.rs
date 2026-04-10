@@ -8,23 +8,33 @@ use ui_layout::{
 use ui_math::{Axis, UiRect, UiSize};
 
 use crate::{
-    ButtonNode, ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, SplitNode, StackNode,
-    UiNode, UiNodeKind, UiTree,
+    ButtonNode, ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, ScrollNode, SplitNode,
+    StackNode, UiNode, UiNodeKind, UiRuntimeState, UiTree,
 };
 
-pub fn compute_tree_layout(tree: &UiTree, bounds: UiRect) -> ComputedLayoutMap {
+pub fn compute_tree_layout(
+    tree: &UiTree,
+    bounds: UiRect,
+    state: &UiRuntimeState,
+) -> ComputedLayoutMap {
     let mut out = ComputedLayoutMap::new();
-    layout_node(&tree.root, bounds, &mut out);
+    layout_node(&tree.root, bounds, state, &mut out);
     out
 }
 
-fn layout_node(node: &UiNode, bounds: UiRect, out: &mut ComputedLayoutMap) -> UiSize {
+fn layout_node(
+    node: &UiNode,
+    bounds: UiRect,
+    state: &UiRuntimeState,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
     match &node.kind {
-        UiNodeKind::Panel(panel) => layout_panel(node, panel, bounds, out),
+        UiNodeKind::Panel(panel) => layout_panel(node, panel, bounds, state, out),
         UiNodeKind::Label(label) => layout_label(node, label, bounds, out),
         UiNodeKind::Button(button) => layout_button(node, button, bounds, out),
-        UiNodeKind::Stack(stack) => layout_stack(node, stack, bounds, out),
-        UiNodeKind::Split(split) => layout_split(node, split, bounds, out),
+        UiNodeKind::Scroll(scroll) => layout_scroll(node, scroll, bounds, state, out),
+        UiNodeKind::Stack(stack) => layout_stack(node, stack, bounds, state, out),
+        UiNodeKind::Split(split) => layout_split(node, split, bounds, state, out),
     }
 }
 
@@ -32,16 +42,36 @@ fn layout_panel(
     node: &UiNode,
     panel: &PanelNode,
     bounds: UiRect,
+    state: &UiRuntimeState,
     out: &mut ComputedLayoutMap,
 ) -> UiSize {
     let content_bounds = bounds.inset(panel.padding);
 
-    let mut content_size = UiSize::ZERO;
-    for child in &node.children {
-        let child_size = layout_node(child, content_bounds, out);
-        content_size.width = content_size.width.max(child_size.width);
-        content_size.height = content_size.height.max(child_size.height);
-    }
+    let content_size = if node.children.is_empty() {
+        UiSize::ZERO
+    } else if node.children.len() == 1 {
+        layout_node(&node.children[0], content_bounds, state, out)
+    } else {
+        let child_items = node
+            .children
+            .iter()
+            .map(|child| StackItem::auto(measure_node(child)))
+            .collect::<Vec<_>>();
+
+        let layout = StackLayout::vertical(panel.gap)
+            .with_main_align(MainAxisAlignment::Start)
+            .with_cross_align(CrossAxisAlignment::Stretch);
+
+        let arranged = layout.arrange(content_bounds, &child_items);
+        for (child, child_bounds) in node.children.iter().zip(arranged.into_iter()) {
+            layout_node(child, child_bounds, state, out);
+        }
+
+        layout.measure(
+            &child_items,
+            LayoutConstraints::loose(content_bounds.size()),
+        )
+    };
 
     let measured_size = UiSize::new(
         (content_size.width + panel.padding.horizontal()).max(panel.min_size.width),
@@ -69,9 +99,13 @@ fn layout_label(
     let estimated_width =
         (label.text.chars().count() as f32 * label.text_style.font_size * 0.6).max(0.0);
 
-    let size = label
+    let constrained_size = label
         .constraints
         .constrain(UiSize::new(estimated_width, line_height));
+    let size = UiSize::new(
+        constrained_size.width.min(bounds.width.max(0.0)),
+        constrained_size.height.min(bounds.height.max(0.0)),
+    );
 
     let layout_bounds = UiRect::new(bounds.x, bounds.y, size.width, size.height);
 
@@ -118,10 +152,49 @@ fn layout_button(
     measured_size
 }
 
+fn layout_scroll(
+    node: &UiNode,
+    scroll: &ScrollNode,
+    bounds: UiRect,
+    state: &UiRuntimeState,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let scrollbar_width = scroll.bar_width.min(bounds.width.max(0.0));
+    let content_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        (bounds.width - scrollbar_width).max(0.0),
+        bounds.height.max(0.0),
+    );
+
+    if let Some(child) = node.children.first() {
+        let measured_content = measure_node(child);
+        let content_height = measured_content.height.max(content_bounds.height);
+        let max_offset = (content_height - content_bounds.height).max(0.0);
+        let offset = state.scroll_offset(node.id).clamp(0.0, max_offset);
+
+        let child_bounds = UiRect::new(
+            content_bounds.x,
+            content_bounds.y - offset,
+            content_bounds.width,
+            content_height,
+        );
+        layout_node(child, child_bounds, state, out);
+    }
+
+    let measured_size = bounds.size();
+    out.insert(
+        node.id,
+        ComputedLayout::new(bounds, content_bounds, measured_size),
+    );
+    measured_size
+}
+
 fn layout_stack(
     node: &UiNode,
     stack: &StackNode,
     bounds: UiRect,
+    state: &UiRuntimeState,
     out: &mut ComputedLayoutMap,
 ) -> UiSize {
     let content_bounds = bounds.inset(stack.padding);
@@ -151,7 +224,7 @@ fn layout_stack(
     let arranged = layout.arrange(content_bounds, &child_items);
 
     for (child, child_bounds) in node.children.iter().zip(arranged.into_iter()) {
-        layout_node(child, child_bounds, out);
+        layout_node(child, child_bounds, state, out);
     }
 
     let measured_content = layout.measure(
@@ -176,6 +249,7 @@ fn layout_split(
     node: &UiNode,
     split: &SplitNode,
     bounds: UiRect,
+    state: &UiRuntimeState,
     out: &mut ComputedLayoutMap,
 ) -> UiSize {
     let layout = SplitLayout::new(split.axis, split.ratio, split.gap);
@@ -185,11 +259,11 @@ fn layout_split(
     match node.children.as_slice() {
         [left, right] => {
             let (left_bounds, right_bounds) = layout.arrange(bounds);
-            layout_node(left, left_bounds, out);
-            layout_node(right, right_bounds, out);
+            layout_node(left, left_bounds, state, out);
+            layout_node(right, right_bounds, state, out);
         }
         [only] => {
-            layout_node(only, bounds, out);
+            layout_node(only, bounds, state, out);
         }
         _ => {}
     }
@@ -239,6 +313,10 @@ fn measure_node(node: &UiNode) -> UiSize {
                 (line_height + button.padding.vertical()).max(button.min_size.height),
             )
         }
+        UiNodeKind::Scroll(scroll) => {
+            let child = node.children.first().map(measure_node).unwrap_or(UiSize::ZERO);
+            UiSize::new(child.width + scroll.bar_width, child.height)
+        }
         UiNodeKind::Stack(stack) => {
             let mut items = Vec::with_capacity(node.children.len());
             for (index, child) in node.children.iter().enumerate() {
@@ -272,6 +350,27 @@ fn measure_node(node: &UiNode) -> UiSize {
                 measured.height + stack.padding.vertical(),
             )
         }
-        UiNodeKind::Split(_) => UiSize::ZERO,
+        UiNodeKind::Split(split) => measure_split(node, split),
+    }
+}
+
+fn measure_split(node: &UiNode, split: &SplitNode) -> UiSize {
+    match node.children.as_slice() {
+        [left, right] => {
+            let left_size = measure_node(left);
+            let right_size = measure_node(right);
+            match split.axis {
+                Axis::Horizontal => UiSize::new(
+                    left_size.width + split.gap.max(0.0) + right_size.width,
+                    left_size.height.max(right_size.height),
+                ),
+                Axis::Vertical => UiSize::new(
+                    left_size.width.max(right_size.width),
+                    left_size.height + split.gap.max(0.0) + right_size.height,
+                ),
+            }
+        }
+        [only] => measure_node(only),
+        _ => UiSize::ZERO,
     }
 }

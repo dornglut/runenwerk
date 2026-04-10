@@ -396,7 +396,7 @@ fn viewport_bounds(
     let bounds = bounds?;
     let layouts = runtime.compute_layout(tree, bounds);
     layouts
-        .get(&editor_shell::VIEWPORT_PANEL_WIDGET_ID)
+        .get(&editor_shell::VIEWPORT_CANVAS_WIDGET_ID)
         .map(|layout| layout.bounds)
 }
 

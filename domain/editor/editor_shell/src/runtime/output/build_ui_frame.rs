@@ -1,7 +1,9 @@
 //! File: domain/ui/ui_runtime/src/output/build_ui_frame.rs
 //! Purpose: Convert retained tree + computed layout into UiFrame.
 
-use crate::{ButtonNode, ComputedLayoutMap, LabelNode, PanelNode, UiNode, UiNodeKind, UiTree};
+use crate::{
+    ButtonNode, ComputedLayoutMap, LabelNode, PanelNode, ScrollNode, UiNode, UiNodeKind, UiTree,
+};
 use ui_math::{UiRect, UiSize};
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer,
@@ -77,6 +79,14 @@ fn emit_node(
             depth,
             primitive_order,
         ),
+        UiNodeKind::Scroll(scroll) => emit_scroll_begin(
+            scroll,
+            layout.bounds,
+            layout.content_bounds,
+            layer,
+            depth,
+            primitive_order,
+        ),
         UiNodeKind::Stack(_) | UiNodeKind::Split(_) => {}
     }
 
@@ -92,11 +102,31 @@ fn emit_node(
         );
     }
 
-    if matches!(node.kind, UiNodeKind::Panel(_) | UiNodeKind::Button(_)) {
-        layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
-            sort_key: sort_key(depth, *primitive_order),
-        }));
-        *primitive_order += 1;
+    match &node.kind {
+        UiNodeKind::Panel(_) | UiNodeKind::Button(_) => {
+            layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
+                sort_key: sort_key(depth, *primitive_order),
+            }));
+            *primitive_order += 1;
+        }
+        UiNodeKind::Scroll(scroll) => {
+            layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
+                sort_key: sort_key(depth, *primitive_order),
+            }));
+            *primitive_order += 1;
+
+            emit_scrollbar(
+                node,
+                scroll,
+                layouts,
+                layout.bounds,
+                layout.content_bounds,
+                layer,
+                depth,
+                primitive_order,
+            );
+        }
+        UiNodeKind::Label(_) | UiNodeKind::Stack(_) | UiNodeKind::Split(_) => {}
     }
 }
 
@@ -120,7 +150,7 @@ fn emit_panel(
     layer.push(UiPrimitive::Border(BorderPrimitive::new(
         bounds,
         panel.theme.radius.md,
-        1.0,
+        panel.theme.border_width,
         paint_from_color(panel.theme.border),
         default_draw_key(),
         sort_key(depth, *primitive_order),
@@ -131,6 +161,93 @@ fn emit_panel(
         rect: content_bounds,
         sort_key: sort_key(depth, *primitive_order),
     }));
+    *primitive_order += 1;
+}
+
+fn emit_scroll_begin(
+    _scroll: &ScrollNode,
+    _bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+        rect: content_bounds,
+        sort_key: sort_key(depth, *primitive_order),
+    }));
+    *primitive_order += 1;
+}
+
+fn emit_scrollbar(
+    node: &UiNode,
+    scroll: &ScrollNode,
+    layouts: &ComputedLayoutMap,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    let track_width = (bounds.width - content_bounds.width).max(0.0);
+    if track_width <= f32::EPSILON || content_bounds.height <= f32::EPSILON {
+        return;
+    }
+
+    let track_rect = UiRect::new(
+        content_bounds.x + content_bounds.width,
+        content_bounds.y,
+        track_width,
+        content_bounds.height,
+    );
+
+    let Some(child) = node.children.first() else {
+        return;
+    };
+    let Some(child_layout) = layouts.get(&child.id) else {
+        return;
+    };
+
+    let viewport_height = content_bounds.height.max(0.0);
+    let content_height = child_layout.measured_size.height.max(viewport_height);
+    let max_offset = (content_height - viewport_height).max(0.0);
+    let scroll_offset = (content_bounds.y - child_layout.bounds.y).clamp(0.0, max_offset);
+
+    let thumb_height = if max_offset <= f32::EPSILON {
+        track_rect.height
+    } else {
+        ((viewport_height / content_height) * track_rect.height)
+            .clamp(scroll.min_thumb_height, track_rect.height)
+    };
+    let thumb_range = (track_rect.height - thumb_height).max(0.0);
+    let thumb_y = if max_offset <= f32::EPSILON {
+        track_rect.y
+    } else {
+        track_rect.y + thumb_range * (scroll_offset / max_offset)
+    };
+    let thumb_rect = UiRect::new(track_rect.x, thumb_y, track_rect.width, thumb_height);
+    let radius = scroll.theme.radius.sm.min(track_rect.width * 0.5);
+
+    let mut track_color = scroll.theme.border;
+    track_color.a = (track_color.a * 0.35).clamp(0.0, 1.0);
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        track_rect,
+        radius,
+        paint_from_color(track_color),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    let mut thumb_color = scroll.theme.accent;
+    thumb_color.a = (thumb_color.a * 0.80).clamp(0.0, 1.0);
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        thumb_rect,
+        radius,
+        paint_from_color(thumb_color),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
     *primitive_order += 1;
 }
 
@@ -162,7 +279,7 @@ fn emit_button(
     layer.push(UiPrimitive::Border(BorderPrimitive::new(
         bounds,
         button.theme.radius.sm,
-        1.0,
+        button.theme.border_width,
         paint_from_color(button.theme.border),
         default_draw_key(),
         sort_key(depth, *primitive_order),

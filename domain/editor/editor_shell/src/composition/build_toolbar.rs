@@ -3,7 +3,7 @@
 
 use crate::{UiNode, button, hstack, panel};
 use ui_text::FontId;
-use ui_theme::ThemeTokens;
+use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
     TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID, TOOLBAR_LOAD_BUTTON_WIDGET_ID,
@@ -43,5 +43,12 @@ pub fn build_toolbar(view_model: &ToolbarViewModel, theme: &ThemeTokens) -> UiNo
     }
 
     let row = hstack(TOOLBAR_ROW_WIDGET_ID, theme.spacing.sm, buttons);
-    panel(TOOLBAR_ROOT_WIDGET_ID, theme.clone(), vec![row])
+    let mut toolbar_theme = theme.clone();
+    toolbar_theme.background_panel = UiColor::new(
+        (theme.background_panel.r + 0.02).clamp(0.0, 1.0),
+        (theme.background_panel.g + 0.02).clamp(0.0, 1.0),
+        (theme.background_panel.b + 0.03).clamp(0.0, 1.0),
+        0.95,
+    );
+    panel(TOOLBAR_ROOT_WIDGET_ID, toolbar_theme, vec![row])
 }

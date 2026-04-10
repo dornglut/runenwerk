@@ -10,6 +10,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) viewport_interaction_state: ViewportInteractionState,
     pub(crate) console_lines: Vec<String>,
     pub(crate) console_max_lines: usize,
+    pub(crate) console_follow_enabled: bool,
     pub(crate) debug_logs_enabled: bool,
 }
 
@@ -22,6 +23,7 @@ impl RunenwerkEditorApp {
             viewport_interaction_state: ViewportInteractionState::new(),
             console_lines: Vec::new(),
             console_max_lines: 256,
+            console_follow_enabled: true,
             debug_logs_enabled: true,
         }
     }
@@ -68,6 +70,14 @@ impl RunenwerkEditorApp {
             let drain = self.console_lines.len() - self.console_max_lines;
             self.console_lines.drain(0..drain);
         }
+    }
+
+    pub fn console_follow_enabled(&self) -> bool {
+        self.console_follow_enabled
+    }
+
+    pub fn set_console_follow_enabled(&mut self, enabled: bool) {
+        self.console_follow_enabled = enabled;
     }
 
     pub fn debug_logs_enabled(&self) -> bool {

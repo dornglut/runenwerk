@@ -17,7 +17,7 @@ impl IntoSystemSetKey for NetPreUpdateSet {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NetFixedSet {
     Prediction,
-    Replication
+    Replication,
 }
 
 impl IntoSystemSetKey for NetFixedSet {

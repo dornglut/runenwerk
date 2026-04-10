@@ -3,8 +3,8 @@ use engine::net::prelude::{
     Ack, ClientMessage, ConnectionId, NetPlugin, NetRole, ServerSessionState, SessionPhase,
     SnapshotCursor,
 };
-use engine::plugins::net::{enqueue_server_inbox_from, update_connection_closed};
 use engine::plugins::net::NetStreamingStateResource;
+use engine::plugins::net::{enqueue_server_inbox_from, update_connection_closed};
 use engine::plugins::world::adapters::resources::{
     PartitionConfigResource, ReplicationStateResource,
 };

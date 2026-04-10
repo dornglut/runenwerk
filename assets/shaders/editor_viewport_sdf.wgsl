@@ -48,7 +48,7 @@ fn sdf_capsule(point: vec3<f32>, center: vec3<f32>, radius: f32, half_height: f3
     return length(q - closest) - radius;
 }
 
-fn scene_sdf(point: vec3<f32>) -> f32 {
+fn sdf_main_primitive(point: vec3<f32>) -> f32 {
     let center = u.object_transform.xyz;
     let primitive_kind = u.primitive_flags.x;
 
@@ -66,6 +66,27 @@ fn scene_sdf(point: vec3<f32>) -> f32 {
     }
 
     return sdf_box(point, center, max(u.primitive_params_a.xyz, vec3<f32>(0.05, 0.05, 0.05)));
+}
+
+fn sdf_ground_box(point: vec3<f32>) -> f32 {
+    return sdf_box(point, vec3<f32>(0.0, -1.0, 0.0), vec3<f32>(8.0, 0.25, 8.0));
+}
+
+fn scene_sdf(point: vec3<f32>) -> f32 {
+    let ground = sdf_ground_box(point);
+    if u.primitive_flags.y == 0u {
+        return ground;
+    }
+    return min(ground, sdf_main_primitive(point));
+}
+
+fn is_ground_hit(point: vec3<f32>) -> bool {
+    let ground_distance = abs(sdf_ground_box(point));
+    if u.primitive_flags.y == 0u {
+        return true;
+    }
+    let primitive_distance = abs(sdf_main_primitive(point));
+    return ground_distance <= primitive_distance;
 }
 
 fn estimate_normal(point: vec3<f32>) -> vec3<f32> {
@@ -120,6 +141,19 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let viewport_size = max(u.viewport.zw, vec2<f32>(1.0, 1.0));
     let viewport_local = (pixel - u.viewport.xy) / viewport_size;
     let ndc = vec2<f32>(viewport_local.x * 2.0 - 1.0, 1.0 - viewport_local.y * 2.0);
+    let debug_stage = u.primitive_flags.z;
+
+    if debug_stage == 1u {
+        return vec4<f32>(0.95, 0.12, 0.36, 1.0);
+    }
+    if debug_stage == 2u {
+        let gradient = vec3<f32>(
+            clamp(viewport_local.x, 0.0, 1.0),
+            clamp(viewport_local.y, 0.0, 1.0),
+            clamp((ndc.x + 1.0) * 0.5, 0.0, 1.0)
+        );
+        return vec4<f32>(gradient, 1.0);
+    }
 
     let aspect = viewport_size.x / viewport_size.y;
     let tan_half_fov = tan(u.camera_position.w * 0.5);
@@ -168,7 +202,10 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let light_dir = normalize(vec3<f32>(0.5, 0.8, 0.35));
     let diff = max(dot(normal, light_dir), 0.1);
     let rim = pow(max(1.0 - max(dot(normal, -ray_dir), 0.0), 0.0), 2.0);
-    let base = vec3<f32>(0.72, 0.74, 0.77);
+    var base = vec3<f32>(0.72, 0.74, 0.77);
+    if is_ground_hit(point) {
+        base = vec3<f32>(0.34, 0.37, 0.41);
+    }
     let lit = base * diff + vec3<f32>(0.15, 0.20, 0.28) * rim;
     return vec4<f32>(lit, 1.0);
 }

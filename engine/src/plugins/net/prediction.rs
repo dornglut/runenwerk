@@ -252,11 +252,8 @@ where
                 .ok()
                 .and_then(|status| status.connection_id)
             {
-                let controller = ensure_owner_for_connection(
-                    &mut world,
-                    connection_id,
-                    OwnerRole::Active,
-                );
+                let controller =
+                    ensure_owner_for_connection(&mut world, connection_id, OwnerRole::Active);
                 owner_tick_buffer_provenance(controller)
             } else {
                 TickBufferProvenance::UNSPECIFIED

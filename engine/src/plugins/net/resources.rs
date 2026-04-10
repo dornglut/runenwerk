@@ -1,8 +1,8 @@
 use super::*;
 use crate::{App, CoreSet, FixedUpdate, FrameEnd, PreUpdate, SystemConfigExt};
 use ecs::{
-    OwnerId, OwnerRole, OwnershipTarget, TickBufferConfig, TickBufferProvenance,
-    WorkQueueConfig, WorkQueueEnqueueError, World,
+    OwnerId, OwnerRole, OwnershipTarget, TickBufferConfig, TickBufferProvenance, WorkQueueConfig,
+    WorkQueueEnqueueError, World,
 };
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
@@ -174,10 +174,7 @@ pub fn ensure_owner_for_connection(
     owner_id
 }
 
-pub fn owner_for_connection(
-    world: &World,
-    connection_id: ConnectionId,
-) -> Option<OwnerId> {
+pub fn owner_for_connection(world: &World, connection_id: ConnectionId) -> Option<OwnerId> {
     world
         .resource::<NetworkOwnerRouting>()
         .ok()

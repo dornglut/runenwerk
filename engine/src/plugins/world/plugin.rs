@@ -108,7 +108,9 @@ impl IntoSystemSetKey for WorldRuntimeSet {
 pub fn world_runtime_mode_for_authority(authority: AuthorityRole) -> WorldRuntimeMode {
     match authority {
         AuthorityRole::Client => WorldRuntimeMode::ReadOnly,
-        AuthorityRole::Local | AuthorityRole::Server | AuthorityRole::Peer => WorldRuntimeMode::Writable,
+        AuthorityRole::Local | AuthorityRole::Server | AuthorityRole::Peer => {
+            WorldRuntimeMode::Writable
+        }
     }
 }
 

@@ -15,7 +15,7 @@ const WINDOW_TITLE: &str = "Runenwerk Editor";
 const EDITOR_MAIN_FLOW_ID: &str = "runenwerk.editor.main";
 const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
 const EDITOR_MAIN_UI_PASS_ID: &str = "runenwerk.editor.main.ui";
-const EDITOR_VIEWPORT_SDF_SHADER_ASSET: &str = "assets/shaders/editor_viewport_sdf.wgsl";
+pub const EDITOR_VIEWPORT_SDF_SHADER_ASSET: &str = "assets/shaders/editor_viewport_sdf.wgsl";
 
 fn configure_app(app: &mut App) {
     app.set_title(WINDOW_TITLE);

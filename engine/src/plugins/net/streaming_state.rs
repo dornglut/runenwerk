@@ -102,7 +102,8 @@ impl NetStreamingStateResource {
             .collect::<Vec<_>>();
         for sent_cursor in acknowledged_cursors {
             if let Some(marker) = state.pending_cursor_markers.remove(&sent_cursor) {
-                state.acked_region_sequence = state.acked_region_sequence.max(marker.region_sequence);
+                state.acked_region_sequence =
+                    state.acked_region_sequence.max(marker.region_sequence);
                 if marker.full_resync_payload {
                     state.needs_full_resync = false;
                 }
@@ -203,10 +204,12 @@ pub fn sync_connection_streaming_state_system(mut world: WorldMut) {
             continue;
         }
 
-        let journal_gap = journal_min_sequence
-            .is_some_and(|min_sequence| state.acked_region_sequence.saturating_add(1) < min_sequence);
+        let journal_gap = journal_min_sequence.is_some_and(|min_sequence| {
+            state.acked_region_sequence.saturating_add(1) < min_sequence
+        });
 
-        let full_resync_payload = state.needs_full_resync || state.last_ack_cursor.0 == 0 || journal_gap;
+        let full_resync_payload =
+            state.needs_full_resync || state.last_ack_cursor.0 == 0 || journal_gap;
 
         if journal_gap {
             state.needs_full_resync = true;

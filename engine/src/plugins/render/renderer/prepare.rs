@@ -26,20 +26,11 @@ impl Renderer {
             .flat_map(|submission| Self::extract_glyph_instances(&submission.frame, atlas_resource))
             .collect::<Vec<_>>();
 
-        let mut batches_by_scissor = BTreeMap::<(u32, u32, u32, u32), Vec<RectInstanceRaw>>::new();
-        for instance in flattened_rect_instances {
-            let scissor = instance
-                .clip
-                .map(|clip| Self::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
-                .unwrap_or_else(|| Some(Self::full_scissor(surface_width_u32, surface_height_u32)));
-            if let Some(scissor) = scissor {
-                batches_by_scissor
-                    .entry(scissor)
-                    .or_default()
-                    .push(instance.raw);
-            }
-        }
-        let rect_batches = batches_by_scissor
+        let rect_batches = group_rect_batches_ordered(
+            flattened_rect_instances,
+            surface_width_u32,
+            surface_height_u32,
+        )
             .into_iter()
             .filter_map(|(scissor, instances)| {
                 if instances.is_empty() {
@@ -58,8 +49,7 @@ impl Renderer {
             })
             .collect::<Vec<_>>();
 
-        let mut glyph_batches_by_scissor =
-            BTreeMap::<((u32, u32, u32, u32), u64), Vec<GlyphInstanceRaw>>::new();
+        let mut glyph_batches_by_scissor = Vec::<((u32, u32, u32, u32), u64, Vec<GlyphInstanceRaw>)>::new();
         for instance in flattened_glyph_instances {
             let scissor = instance
                 .clip
@@ -74,14 +64,18 @@ impl Renderer {
             {
                 continue;
             }
-            glyph_batches_by_scissor
-                .entry((scissor, instance.texture_id))
-                .or_default()
-                .push(instance.raw);
+            if let Some((last_scissor, last_texture, instances)) = glyph_batches_by_scissor.last_mut()
+                && *last_scissor == scissor
+                && *last_texture == instance.texture_id
+            {
+                instances.push(instance.raw);
+            } else {
+                glyph_batches_by_scissor.push((scissor, instance.texture_id, vec![instance.raw]));
+            }
         }
         let glyph_batches = glyph_batches_by_scissor
             .into_iter()
-            .filter_map(|((scissor, texture_id), instances)| {
+            .filter_map(|(scissor, texture_id, instances)| {
                 if instances.is_empty() {
                     return None;
                 }
@@ -232,6 +226,72 @@ impl Renderer {
                 }
             }
         }
+    }
+}
+
+fn group_rect_batches_ordered(
+    flattened_rect_instances: Vec<FlattenedUiRectInstance>,
+    surface_width_u32: u32,
+    surface_height_u32: u32,
+) -> Vec<((u32, u32, u32, u32), Vec<RectInstanceRaw>)> {
+    let mut grouped = Vec::<((u32, u32, u32, u32), Vec<RectInstanceRaw>)>::new();
+    for instance in flattened_rect_instances {
+        let scissor = instance
+            .clip
+            .map(|clip| Renderer::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
+            .unwrap_or_else(|| Some(Renderer::full_scissor(surface_width_u32, surface_height_u32)));
+        let Some(scissor) = scissor else {
+            continue;
+        };
+        if let Some((last_scissor, instances)) = grouped.last_mut()
+            && *last_scissor == scissor
+        {
+            instances.push(instance.raw);
+        } else {
+            grouped.push((scissor, vec![instance.raw]));
+        }
+    }
+    grouped
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rect_batch_grouping_preserves_non_consecutive_order() {
+        let a = FlattenedUiRectInstance {
+            raw: RectInstanceRaw {
+                rect: [0.0, 0.0, 10.0, 10.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+                radius: 0.0,
+                _pad: [0.0; 3],
+            },
+            clip: Some([0.0, 0.0, 10.0, 10.0]),
+        };
+        let b = FlattenedUiRectInstance {
+            raw: RectInstanceRaw {
+                rect: [20.0, 0.0, 10.0, 10.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+                radius: 0.0,
+                _pad: [0.0; 3],
+            },
+            clip: Some([20.0, 0.0, 10.0, 10.0]),
+        };
+        let c = FlattenedUiRectInstance {
+            raw: RectInstanceRaw {
+                rect: [1.0, 1.0, 8.0, 8.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+                radius: 0.0,
+                _pad: [0.0; 3],
+            },
+            clip: Some([0.0, 0.0, 10.0, 10.0]),
+        };
+        let grouped = group_rect_batches_ordered(vec![a, b, c], 100, 100);
+        assert_eq!(grouped.len(), 3);
+        assert_eq!(grouped[0].1.len(), 1);
+        assert_eq!(grouped[1].1.len(), 1);
+        assert_eq!(grouped[2].1.len(), 1);
     }
 }
 

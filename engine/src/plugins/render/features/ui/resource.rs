@@ -74,7 +74,7 @@ fn build_default_editor_font_atlas() -> anyhow::Result<(MsdfFontAtlas, UiFontAtl
     for ch in charset {
         let scaled = font.glyph(ch).scaled(scale);
         let h_metrics = scaled.h_metrics();
-        let exact = scaled.exact_bounding_box();
+        let exact_bb = scaled.exact_bounding_box();
         let positioned = scaled.positioned(point(0.0, 0.0));
         let pixel_bb = positioned.pixel_bounding_box();
 
@@ -99,8 +99,15 @@ fn build_default_editor_font_atlas() -> anyhow::Result<(MsdfFontAtlas, UiFontAtl
         max_width = max_width.max(bitmap_width);
         max_height = max_height.max(bitmap_height);
 
-        let (plane_left, plane_top, plane_right, plane_bottom) = exact
-            .map(|bb| (bb.min.x, bb.max.y, bb.max.x, bb.min.y))
+        let (plane_left, plane_top, plane_right, plane_bottom) = exact_bb
+            .map(|bb| {
+                (
+                    bb.min.x,
+                    bb.max.y,
+                    bb.max.x,
+                    bb.min.y,
+                )
+            })
             .unwrap_or((0.0, 0.0, 0.0, 0.0));
 
         glyph_entries.push((
@@ -198,6 +205,7 @@ fn build_default_editor_font_atlas() -> anyhow::Result<(MsdfFontAtlas, UiFontAtl
 
 fn default_editor_charset() -> Vec<char> {
     let mut chars = (32_u8..=126_u8).map(char::from).collect::<Vec<_>>();
+    chars.push('…');
     chars.push('•');
     chars
 }

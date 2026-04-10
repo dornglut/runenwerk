@@ -1,7 +1,12 @@
 use engine::plugins::render::{
-    CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
+    CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderShaderReference,
+    ShaderRegistryResource,
+    UiFrameProducerId,
     UiFrameSubmissionRegistryResource,
 };
+use runenwerk_editor::editor_runtime::EditorPrimitiveKind;
+use runenwerk_editor::runtime::app::EDITOR_VIEWPORT_SDF_SHADER_ASSET;
+use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
 
 const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
 
@@ -19,6 +24,14 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .world()
         .resource::<RenderFlowRegistryResource>()
         .expect("render flow registry should exist");
+    let shader_registry = app
+        .world()
+        .resource::<ShaderRegistryResource>()
+        .expect("shader registry should exist");
+    let viewport_state = app
+        .world()
+        .resource::<EditorViewportRenderState>()
+        .expect("viewport render state should exist");
 
     assert!(
         flow_registry.flow_count() > 0,
@@ -33,20 +46,27 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         has_builtin_ui_pass,
         "editor render flows should include a builtin UI composite pass",
     );
-    let has_editor_viewport_sdf_pass = flow_registry
+    let viewport_pass_shader_asset = flow_registry
         .compiled_flows()
         .iter()
         .flat_map(|flow| flow.execution.passes.iter())
-        .any(|pass| {
-            matches!(
-                pass,
-                CompiledPassExecutionPlan::Fullscreen(plan)
-                if plan.pass_id == EDITOR_VIEWPORT_SDF_PASS_ID
-            )
+        .find_map(|pass| match pass {
+            CompiledPassExecutionPlan::Fullscreen(plan) if plan.pass_id == EDITOR_VIEWPORT_SDF_PASS_ID => {
+                plan.shader.as_ref().and_then(|shader| match shader {
+                    RenderShaderReference::AssetPath(path) => Some(path.as_str()),
+                    RenderShaderReference::RegistryHandle(_) => None,
+                })
+            }
+            _ => None,
         });
     assert!(
-        has_editor_viewport_sdf_pass,
+        viewport_pass_shader_asset.is_some(),
         "editor render flows should include the viewport SDF pass",
+    );
+    assert_eq!(
+        viewport_pass_shader_asset,
+        Some(EDITOR_VIEWPORT_SDF_SHADER_ASSET),
+        "viewport SDF pass should reference the expected shader asset path",
     );
 
     let submission = submissions
@@ -60,5 +80,40 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     assert!(
         submission.primitive_count_hint() > 0,
         "editor shell frame should contain renderable primitives"
+    );
+    let shader_loaded = shader_registry.revision_for(EDITOR_VIEWPORT_SDF_SHADER_ASSET) > 0;
+    assert_eq!(
+        viewport_state.shader_loaded,
+        shader_loaded,
+        "viewport render diagnostics should mirror shader registry load status",
+    );
+    assert!(
+        viewport_state.viewport_valid,
+        "viewport render diagnostics should mark viewport as valid",
+    );
+    assert!(
+        viewport_state.has_primitive,
+        "viewport render diagnostics should include a primitive",
+    );
+    assert!(
+        viewport_state.viewport_bounds_px.2 > f32::EPSILON
+            && viewport_state.viewport_bounds_px.3 > f32::EPSILON,
+        "viewport bounds should be non-zero",
+    );
+    assert_eq!(
+        viewport_state.debug_stage,
+        EditorViewportDebugStage::Scene,
+        "headless startup should default to scene debug stage",
+    );
+    assert!(
+        !viewport_state.root_background_opaque,
+        "root background should default to non-occluding mode",
+    );
+    assert!(
+        matches!(
+            viewport_state.primitive_kind,
+            EditorPrimitiveKind::Box | EditorPrimitiveKind::Sphere
+        ),
+        "viewport verification primitive must stay in box/sphere scope",
     );
 }

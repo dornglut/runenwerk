@@ -1,67 +1,23 @@
 use crate::{UiInteraction, UiInteractionResults, UiRuntime};
-use ui_math::UiRect;
+use ui_input::{Modifiers, PointerEvent, PointerEventKind, UiInputEvent};
+use ui_math::{UiPoint, UiRect, UiVector};
 use ui_text::{FontAtlasSource, FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas};
 use ui_theme::ThemeTokens;
 
 use crate::{
-    ConsoleViewModel, EditorShellViewModel, InspectorFieldViewModel, InspectorTargetViewModel,
-    InspectorViewModel, OutlinerRowViewModel, OutlinerViewModel, ShellCommand,
-    ToolbarButtonViewModel, ToolbarViewModel, ViewportViewModel, build_editor_shell,
+    CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ConsoleViewModel,
+    EditorShellViewModel, INSPECTOR_PANEL_WIDGET_ID, InspectorFieldViewModel,
+    InspectorTargetViewModel, InspectorViewModel, OUTLINER_PANEL_WIDGET_ID, OutlinerRowViewModel,
+    OutlinerViewModel, ShellCommand, TOOLBAR_ROOT_WIDGET_ID, ToolbarButtonViewModel,
+    ToolbarViewModel, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportViewModel,
+    build_editor_shell,
     map_interactions_to_shell_commands,
 };
 
 #[test]
 fn shell_view_model_builds_ui_tree_and_frame() {
     let theme = ThemeTokens::default();
-
-    let shell = EditorShellViewModel {
-        toolbar: ToolbarViewModel {
-            buttons: vec![
-                ToolbarButtonViewModel {
-                    id: editor_core::ToolId(1),
-                    stable_name: "select",
-                    label: "Select".to_string(),
-                    is_active: true,
-                    enabled: true,
-                },
-                ToolbarButtonViewModel {
-                    id: editor_core::ToolId(2),
-                    stable_name: "translate",
-                    label: "Translate".to_string(),
-                    is_active: false,
-                    enabled: true,
-                },
-            ],
-        },
-        outliner: OutlinerViewModel {
-            rows: vec![OutlinerRowViewModel {
-                entity: editor_core::EntityId(1),
-                display_name: "Player".to_string(),
-                depth: 0,
-                is_selected: true,
-            }],
-        },
-        viewport: ViewportViewModel {
-            selected_entity: Some(editor_core::EntityId(1)),
-            hovered_entity: None,
-            drag_in_progress: false,
-            preview_active: false,
-        },
-        inspector: InspectorViewModel {
-            target: InspectorTargetViewModel::Component {
-                entity_display_name: "Player".to_string(),
-                component_display_name: "LocalTransform".to_string(),
-            },
-            fields: vec![InspectorFieldViewModel {
-                label: "translation.x".to_string(),
-                value_summary: "1.0".to_string(),
-                is_focused: false,
-            }],
-        },
-        console: ConsoleViewModel {
-            lines: vec!["boot".to_string()],
-        },
-    };
+    let shell = sample_shell_view_model();
 
     let tree = build_editor_shell(&shell, &theme);
     let runtime = UiRuntime::new();
@@ -71,6 +27,136 @@ fn shell_view_model_builds_ui_tree_and_frame() {
     assert_eq!(tree.root_id().0, 1);
     assert_eq!(frame.surfaces.len(), 1);
     assert!(!frame.surfaces[0].layers[0].primitives.is_empty());
+}
+
+#[test]
+fn layout_keeps_viewport_canvas_nonzero_and_inside_viewport_panel() {
+    let theme = ThemeTokens::default();
+    let shell = sample_shell_view_model();
+    let tree = build_editor_shell(&shell, &theme);
+    let runtime = UiRuntime::new();
+    let layouts = runtime.compute_layout(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0));
+
+    let viewport_panel = layouts
+        .get(&VIEWPORT_PANEL_WIDGET_ID)
+        .expect("viewport panel layout should exist")
+        .bounds;
+    let viewport_canvas = layouts
+        .get(&VIEWPORT_CANVAS_WIDGET_ID)
+        .expect("viewport canvas layout should exist")
+        .bounds;
+
+    assert!(
+        viewport_canvas.width > 0.0,
+        "viewport canvas width must be non-zero"
+    );
+    assert!(
+        viewport_canvas.height > 0.0,
+        "viewport canvas height must be non-zero"
+    );
+
+    assert!(viewport_canvas.x >= viewport_panel.x);
+    assert!(viewport_canvas.y >= viewport_panel.y);
+    assert!(viewport_canvas.x + viewport_canvas.width <= viewport_panel.x + viewport_panel.width);
+    assert!(viewport_canvas.y + viewport_canvas.height <= viewport_panel.y + viewport_panel.height);
+}
+
+#[test]
+fn layout_ensures_major_panels_do_not_overlap() {
+    let theme = ThemeTokens::default();
+    let shell = sample_shell_view_model();
+    let tree = build_editor_shell(&shell, &theme);
+    let runtime = UiRuntime::new();
+    let layouts = runtime.compute_layout(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0));
+
+    let toolbar = layout_bounds(&layouts, TOOLBAR_ROOT_WIDGET_ID);
+    let outliner = layout_bounds(&layouts, OUTLINER_PANEL_WIDGET_ID);
+    let viewport = layout_bounds(&layouts, VIEWPORT_PANEL_WIDGET_ID);
+    let inspector = layout_bounds(&layouts, INSPECTOR_PANEL_WIDGET_ID);
+    let console = layout_bounds(&layouts, CONSOLE_PANEL_WIDGET_ID);
+
+    assert!(!intersects(toolbar, outliner));
+    assert!(!intersects(toolbar, viewport));
+    assert!(!intersects(toolbar, inspector));
+    assert!(!intersects(outliner, viewport));
+    assert!(!intersects(outliner, inspector));
+    assert!(!intersects(viewport, inspector));
+    assert!(!intersects(outliner, console));
+    assert!(!intersects(viewport, console));
+    assert!(!intersects(inspector, console));
+}
+
+#[test]
+fn console_scroll_offset_clamps_and_reserves_scrollbar_gutter() {
+    let theme = ThemeTokens::default();
+    let shell = scrollable_shell_view_model();
+    let tree = build_editor_shell(&shell, &theme);
+    let mut runtime = UiRuntime::new();
+    let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
+
+    let initial_layouts = runtime.compute_layout(&tree, bounds);
+    let scroll_bounds = layout_bounds(&initial_layouts, CONSOLE_SCROLL_WIDGET_ID);
+    let scroll_content_bounds = initial_layouts
+        .get(&CONSOLE_SCROLL_WIDGET_ID)
+        .expect("console scroll layout should exist")
+        .content_bounds;
+    assert!(
+        scroll_content_bounds.width < scroll_bounds.width,
+        "scroll container should reserve visible scrollbar gutter"
+    );
+
+    let pointer = UiPoint::new(
+        scroll_content_bounds.x + scroll_content_bounds.width * 0.5,
+        scroll_content_bounds.y + 12.0,
+    );
+
+    for _ in 0..64 {
+        let layouts = runtime.compute_layout(&tree, bounds);
+        runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: pointer,
+                delta: UiVector::new(0.0, -8.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+    }
+
+    let max_offset = max_scroll_offset(
+        &runtime.compute_layout(&tree, bounds),
+        CONSOLE_SCROLL_WIDGET_ID,
+        CONSOLE_LIST_WIDGET_ID,
+    );
+    let offset = runtime.state().scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
+    assert!(offset > 0.0, "scrolling should advance console offset");
+    assert!(
+        offset <= max_offset + 0.001,
+        "scroll offset should clamp to content range"
+    );
+
+    for _ in 0..64 {
+        let layouts = runtime.compute_layout(&tree, bounds);
+        runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: pointer,
+                delta: UiVector::new(0.0, 8.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+    }
+    assert!(
+        runtime.state().scroll_offset(CONSOLE_SCROLL_WIDGET_ID) <= 0.001,
+        "scrolling upward should clamp back to zero"
+    );
 }
 
 struct TestAtlasSource {
@@ -200,4 +286,88 @@ fn inspector_field_activation_maps_to_shell_edit_command() {
         commands,
         vec![ShellCommand::ActivateInspectorField { index: 3 }]
     );
+}
+
+fn sample_shell_view_model() -> EditorShellViewModel {
+    EditorShellViewModel {
+        toolbar: ToolbarViewModel {
+            buttons: vec![
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(1),
+                    stable_name: "select",
+                    label: "Select".to_string(),
+                    is_active: true,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2),
+                    stable_name: "translate",
+                    label: "Translate".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+            ],
+        },
+        outliner: OutlinerViewModel {
+            rows: vec![OutlinerRowViewModel {
+                entity: editor_core::EntityId(1),
+                display_name: "Player".to_string(),
+                depth: 0,
+                is_selected: true,
+            }],
+        },
+        viewport: ViewportViewModel {
+            selected_entity: Some(editor_core::EntityId(1)),
+            hovered_entity: None,
+            drag_in_progress: false,
+            preview_active: false,
+        },
+        inspector: InspectorViewModel {
+            target: InspectorTargetViewModel::Component {
+                entity_display_name: "Player".to_string(),
+                component_display_name: "LocalTransform".to_string(),
+            },
+            fields: vec![InspectorFieldViewModel {
+                label: "translation.x".to_string(),
+                value_summary: "1.0".to_string(),
+                is_focused: false,
+            }],
+        },
+        console: ConsoleViewModel {
+            lines: vec!["boot".to_string()],
+        },
+    }
+}
+
+fn scrollable_shell_view_model() -> EditorShellViewModel {
+    let mut shell = sample_shell_view_model();
+    shell.console = ConsoleViewModel {
+        lines: (0..120).map(|index| format!("line-{index:03}")).collect(),
+    };
+    shell
+}
+
+fn layout_bounds(layouts: &crate::ComputedLayoutMap, id: crate::WidgetId) -> UiRect {
+    layouts
+        .get(&id)
+        .expect("layout should contain widget")
+        .bounds
+}
+
+fn intersects(a: UiRect, b: UiRect) -> bool {
+    a.intersect(b).is_some()
+}
+
+fn max_scroll_offset(
+    layouts: &crate::ComputedLayoutMap,
+    scroll_widget_id: crate::WidgetId,
+    list_widget_id: crate::WidgetId,
+) -> f32 {
+    let scroll = layouts
+        .get(&scroll_widget_id)
+        .expect("scroll layout should exist");
+    let list = layouts
+        .get(&list_widget_id)
+        .expect("list layout should exist");
+    (list.measured_size.height - scroll.content_bounds.height).max(0.0)
 }

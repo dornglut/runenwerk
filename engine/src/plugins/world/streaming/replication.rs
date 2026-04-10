@@ -39,10 +39,10 @@ pub fn rebuild_world_replication_state_system(mut world: WorldMut) {
 
     let tracked_resource_keys_ref = &tracked_resource_keys;
     let resource_key_filter = |key: ResourceTypeKey| tracked_resource_keys_ref.contains(&key);
-    let allows_owner = |owner: OwnerState| matches!(owner, OwnerState::Unowned | OwnerState::WorldOwned);
-    let component_ownership_filter = |_: ecs::Entity, owner: OwnerState, _: ecs::ComponentTypeKey| {
-        allows_owner(owner)
-    };
+    let allows_owner =
+        |owner: OwnerState| matches!(owner, OwnerState::Unowned | OwnerState::WorldOwned);
+    let component_ownership_filter =
+        |_: ecs::Entity, owner: OwnerState, _: ecs::ComponentTypeKey| allows_owner(owner);
     let resource_ownership_filter = |_: ResourceTypeKey, owner: OwnerState| allows_owner(owner);
 
     let extraction = world.extract_structural_deltas(

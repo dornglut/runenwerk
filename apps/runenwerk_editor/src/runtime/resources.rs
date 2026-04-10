@@ -7,6 +7,45 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_runtime::{EditorPrimitive, EditorPrimitiveKind};
 use crate::shell::RunenwerkEditorShellState;
 
+const SHELL_READABILITY_BUMP: f32 = 1.15;
+const SHELL_SCALE_MIN: f32 = 1.0;
+const SHELL_SCALE_MAX: f32 = 3.0;
+const VIEWPORT_BOUNDS_EPSILON: f32 = 0.25;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorViewportDebugStage {
+    Scene,
+    Mask,
+    Gradient,
+}
+
+impl EditorViewportDebugStage {
+    pub fn as_u32(self) -> u32 {
+        match self {
+            Self::Scene => 0,
+            Self::Mask => 1,
+            Self::Gradient => 2,
+        }
+    }
+
+    pub fn from_env_value(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "mask" => Self::Mask,
+            "gradient" => Self::Gradient,
+            "scene" | "" => Self::Scene,
+            _ => Self::Scene,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Scene => "scene",
+            Self::Mask => "mask",
+            Self::Gradient => "gradient",
+        }
+    }
+}
+
 #[derive(ecs::Component, ecs::Resource)]
 pub struct EditorHostResource {
     pub app: RunenwerkEditorApp,
@@ -22,6 +61,14 @@ impl Default for EditorHostResource {
             theme: ThemeTokens::default(),
         }
     }
+}
+
+pub fn effective_shell_scale(scale_factor: f64) -> f32 {
+    (scale_factor as f32).clamp(SHELL_SCALE_MIN, SHELL_SCALE_MAX) * SHELL_READABILITY_BUMP
+}
+
+pub fn scaled_shell_theme(theme: &ThemeTokens, scale_factor: f64) -> ThemeTokens {
+    theme.scaled_by(effective_shell_scale(scale_factor))
 }
 
 #[derive(Debug, Default, Clone, Copy, ecs::Component, ecs::Resource)]
@@ -47,6 +94,11 @@ pub struct EditorViewportSdfUniform {
 #[derive(Debug, Clone, Copy, ecs::Component, ecs::Resource)]
 pub struct EditorViewportRenderState {
     pub viewport_bounds_px: (f32, f32, f32, f32),
+    pub effective_shell_scale: f32,
+    pub viewport_valid: bool,
+    pub shader_loaded: bool,
+    pub debug_stage: EditorViewportDebugStage,
+    pub root_background_opaque: bool,
     pub has_primitive: bool,
     pub primitive_kind: EditorPrimitiveKind,
     pub primitive_translation: Vec3Value,
@@ -54,12 +106,21 @@ pub struct EditorViewportRenderState {
     pub sphere_radius: f32,
     pub capsule_radius: f32,
     pub capsule_half_height: f32,
+    pub visibility_contradiction_active: bool,
+    pub last_reported_viewport_bounds_px: Option<(f32, f32, f32, f32)>,
+    pub last_reported_shell_scale: Option<f32>,
+    pub last_reported_debug_state: Option<(EditorViewportDebugStage, bool, bool, bool, bool)>,
 }
 
 impl Default for EditorViewportRenderState {
     fn default() -> Self {
         Self {
             viewport_bounds_px: (0.0, 0.0, 0.0, 0.0),
+            effective_shell_scale: 1.0,
+            viewport_valid: false,
+            shader_loaded: false,
+            debug_stage: EditorViewportDebugStage::Scene,
+            root_background_opaque: false,
             has_primitive: false,
             primitive_kind: EditorPrimitiveKind::Box,
             primitive_translation: Vec3Value::zero(),
@@ -67,18 +128,67 @@ impl Default for EditorViewportRenderState {
             sphere_radius: 0.6,
             capsule_radius: 0.35,
             capsule_half_height: 0.75,
+            visibility_contradiction_active: false,
+            last_reported_viewport_bounds_px: None,
+            last_reported_shell_scale: None,
+            last_reported_debug_state: None,
         }
     }
 }
 
 impl EditorViewportRenderState {
-    pub fn set_viewport_bounds(&mut self, bounds: (f32, f32, f32, f32)) {
+    pub fn set_viewport_bounds(&mut self, bounds: (f32, f32, f32, f32)) -> bool {
+        let changed = !approx_bounds_eq(self.viewport_bounds_px, bounds);
         self.viewport_bounds_px = bounds;
+        changed
+    }
+
+    pub fn set_effective_shell_scale(&mut self, scale: f32) -> bool {
+        let changed = (self.effective_shell_scale - scale).abs() > f32::EPSILON;
+        self.effective_shell_scale = scale;
+        changed
+    }
+
+    pub fn set_debug_stage(&mut self, stage: EditorViewportDebugStage) -> bool {
+        let changed = self.debug_stage != stage;
+        self.debug_stage = stage;
+        changed
+    }
+
+    pub fn set_root_background_opaque(&mut self, enabled: bool) -> bool {
+        let changed = self.root_background_opaque != enabled;
+        self.root_background_opaque = enabled;
+        changed
+    }
+
+    pub fn should_report_bounds_change(&mut self) -> bool {
+        let should_report = match self.last_reported_viewport_bounds_px {
+            Some(last) => !approx_bounds_eq(last, self.viewport_bounds_px),
+            None => true,
+        };
+        if should_report {
+            self.last_reported_viewport_bounds_px = Some(self.viewport_bounds_px);
+        }
+        should_report
+    }
+
+    pub fn should_report_scale_change(&mut self) -> bool {
+        let should_report = match self.last_reported_shell_scale {
+            Some(last) => (last - self.effective_shell_scale).abs() > f32::EPSILON,
+            None => true,
+        };
+        if should_report {
+            self.last_reported_shell_scale = Some(self.effective_shell_scale);
+        }
+        should_report
     }
 
     pub fn set_primitive(&mut self, translation: Vec3Value, primitive: EditorPrimitive) {
         self.has_primitive = true;
-        self.primitive_kind = primitive.kind();
+        self.primitive_kind = match primitive.kind() {
+            EditorPrimitiveKind::Capsule => EditorPrimitiveKind::Box,
+            kind => kind,
+        };
         self.primitive_translation = translation;
         self.box_half_extents = primitive.box_half_extents;
         self.sphere_radius = primitive.sphere_radius;
@@ -88,6 +198,40 @@ impl EditorViewportRenderState {
 
     pub fn clear_primitive(&mut self) {
         self.has_primitive = false;
+    }
+
+    pub fn update_visibility_diagnostics(&mut self, viewport_valid: bool, shader_loaded: bool) {
+        self.viewport_valid = viewport_valid;
+        self.shader_loaded = shader_loaded;
+    }
+
+    pub fn scene_should_be_invisible(&self) -> bool {
+        self.debug_stage == EditorViewportDebugStage::Scene
+            && (!self.viewport_valid || !self.shader_loaded || !self.has_primitive)
+    }
+
+    pub fn should_report_visibility_contradiction(
+        &mut self,
+        contradiction_active: bool,
+    ) -> bool {
+        let should_report = contradiction_active && !self.visibility_contradiction_active;
+        self.visibility_contradiction_active = contradiction_active;
+        should_report
+    }
+
+    pub fn should_report_debug_state_change(&mut self) -> bool {
+        let next = (
+            self.debug_stage,
+            self.root_background_opaque,
+            self.viewport_valid,
+            self.shader_loaded,
+            self.has_primitive,
+        );
+        let changed = self.last_reported_debug_state != Some(next);
+        if changed {
+            self.last_reported_debug_state = Some(next);
+        }
+        changed
     }
 
     pub fn compose_uniform(&self, surface: (u32, u32)) -> EditorViewportSdfUniform {
@@ -133,11 +277,18 @@ impl EditorViewportRenderState {
             primitive_flags: [
                 self.primitive_kind.as_u32(),
                 if self.has_primitive { 1 } else { 0 },
-                0,
-                0,
+                self.debug_stage.as_u32(),
+                if self.root_background_opaque { 1 } else { 0 },
             ],
         }
     }
+}
+
+fn approx_bounds_eq(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
+    (a.0 - b.0).abs() <= VIEWPORT_BOUNDS_EPSILON
+        && (a.1 - b.1).abs() <= VIEWPORT_BOUNDS_EPSILON
+        && (a.2 - b.2).abs() <= VIEWPORT_BOUNDS_EPSILON
+        && (a.3 - b.3).abs() <= VIEWPORT_BOUNDS_EPSILON
 }
 
 #[derive(Debug, Clone, Copy)]

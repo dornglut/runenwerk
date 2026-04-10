@@ -35,11 +35,7 @@ pub(crate) fn rebuild_overlay_stack(manager: &mut SceneManager, slots: &[SceneSl
 
 pub(crate) fn snapshot_public_scene_state(
     manager: &SceneManager,
-) -> (
-    SceneRuntimeState,
-    GameplayRuntimeConfig,
-    UiOverlayState,
-) {
+) -> (SceneRuntimeState, GameplayRuntimeConfig, UiOverlayState) {
     let gameplay = GameplayRuntimeConfig {
         chunk_size: manager.world_runtime.ctx.gameplay_config.chunk_size,
         chunk_load_radius: manager.world_runtime.ctx.gameplay_config.chunk_load_radius,

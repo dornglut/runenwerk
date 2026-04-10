@@ -1,6 +1,6 @@
 use super::*;
-use crate::runtime::{WorkQueueDrainer, WorkQueueWriter};
 use crate::WorldMut;
+use crate::runtime::{WorkQueueDrainer, WorkQueueWriter};
 use anyhow::Context;
 use ecs::{OwnerRole, WorkQueueEnqueueError, World};
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
@@ -75,11 +75,8 @@ where
                     health.connected = true;
                 }
                 if let Some(connection_id) = connection_id {
-                    let _ = ensure_owner_for_connection(
-                        &mut world,
-                        connection_id,
-                        OwnerRole::Active,
-                    );
+                    let _ =
+                        ensure_owner_for_connection(&mut world, connection_id, OwnerRole::Active);
                 }
             }
             SessionRuntimeEvent::ClientMessage {
@@ -134,11 +131,7 @@ where
             }
             SessionRuntimeEvent::JoinAccepted(join) => {
                 let connection = ConnectionId(join.connection_id);
-                let _ = ensure_owner_for_connection(
-                    &mut world,
-                    connection,
-                    OwnerRole::Active,
-                );
+                let _ = ensure_owner_for_connection(&mut world, connection, OwnerRole::Active);
                 let authority = world
                     .resource::<SimulationProfileConfig>()
                     .map(|config| config.authority)
@@ -487,11 +480,8 @@ where
         {
             let decoded = TDriver::decode_input(&frame.payload)
                 .map_err(|e| map_driver_error::<TDriver>(e, "decode remote input"))?;
-            let controller = ensure_owner_for_connection(
-                &mut world,
-                connection_id,
-                OwnerRole::Active,
-            );
+            let controller =
+                ensure_owner_for_connection(&mut world, connection_id, OwnerRole::Active);
 
             let mut lagged = 0u64;
             let current_tick = world.current_buffer_tick();

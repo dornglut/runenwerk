@@ -1,9 +1,10 @@
 //! File: domain/editor/editor_shell/src/composition/build_editor_shell.rs
 //! Purpose: Compose the first editor shell tree.
 
-use crate::{UiTree, panel, split, vstack};
+use crate::{UiTree, panel, split, vstack_with_policies};
+use ui_layout::SizePolicy;
 use ui_math::Axis;
-use ui_theme::ThemeTokens;
+use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
     BODY_CONSOLE_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
@@ -42,15 +43,35 @@ pub fn build_editor_shell(view_model: &EditorShellViewModel, theme: &ThemeTokens
         vec![body, console],
     );
 
+    let mut root_theme = theme.clone();
+    root_theme.background_panel = if root_background_opaque_enabled() {
+        theme.background
+    } else {
+        UiColor::new(theme.background.r, theme.background.g, theme.background.b, 0.0)
+    };
+    root_theme.border = UiColor::new(theme.border.r, theme.border.g, theme.border.b, 0.80);
+
     let root = panel(
         ROOT_WIDGET_ID,
-        theme.clone(),
-        vec![vstack(
+        root_theme,
+        vec![vstack_with_policies(
             BODY_ROOT_WIDGET_ID,
             theme.spacing.sm,
+            vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
             vec![toolbar, body_with_console],
         )],
     );
 
     UiTree::new(root)
+}
+
+fn root_background_opaque_enabled() -> bool {
+    std::env::var("RUNENWERK_EDITOR_VIEWPORT_ROOT_OPAQUE")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
 }

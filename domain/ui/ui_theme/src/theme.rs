@@ -13,6 +13,7 @@ pub struct ThemeTokens {
     pub foreground_muted: UiColor,
     pub accent: UiColor,
     pub border: UiColor,
+    pub border_width: f32,
     pub spacing: SpacingScale,
     pub radius: RadiusScale,
     pub typography: TypographyScale,
@@ -29,7 +30,7 @@ impl ThemeTokens {
                 self.foreground.b,
                 self.foreground.a,
             ],
-            line_height: None,
+            line_height: Some((self.typography.body * 1.35).max(1.0)),
             align: TextAlign::Start,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
@@ -46,7 +47,7 @@ impl ThemeTokens {
                 self.foreground_muted.b,
                 self.foreground_muted.a,
             ],
-            line_height: None,
+            line_height: Some((self.typography.body_small * 1.35).max(1.0)),
             align: TextAlign::Start,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
@@ -63,7 +64,7 @@ impl ThemeTokens {
                 self.foreground.b,
                 self.foreground.a,
             ],
-            line_height: None,
+            line_height: Some((self.typography.heading * 1.25).max(1.0)),
             align: TextAlign::Start,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
@@ -80,10 +81,41 @@ impl ThemeTokens {
                 self.foreground.b,
                 self.foreground.a,
             ],
-            line_height: None,
+            line_height: Some((self.typography.monospace * 1.35).max(1.0)),
             align: TextAlign::Start,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
+        }
+    }
+
+    pub fn scaled_by(&self, scale: f32) -> Self {
+        let factor = scale.max(0.1);
+        Self {
+            background: self.background,
+            background_panel: self.background_panel,
+            foreground: self.foreground,
+            foreground_muted: self.foreground_muted,
+            accent: self.accent,
+            border: self.border,
+            border_width: (self.border_width * factor).clamp(0.5, 4.0),
+            spacing: SpacingScale {
+                xs: self.spacing.xs * factor,
+                sm: self.spacing.sm * factor,
+                md: self.spacing.md * factor,
+                lg: self.spacing.lg * factor,
+                xl: self.spacing.xl * factor,
+            },
+            radius: RadiusScale {
+                sm: self.radius.sm * factor,
+                md: self.radius.md * factor,
+                lg: self.radius.lg * factor,
+            },
+            typography: TypographyScale {
+                body: self.typography.body * factor,
+                body_small: self.typography.body_small * factor,
+                heading: self.typography.heading * factor,
+                monospace: self.typography.monospace * factor,
+            },
         }
     }
 }
@@ -97,6 +129,7 @@ impl Default for ThemeTokens {
             foreground_muted: UiColor::new(0.70, 0.73, 0.78, 1.0),
             accent: UiColor::new(0.38, 0.58, 0.95, 1.0),
             border: UiColor::new(0.24, 0.26, 0.32, 1.0),
+            border_width: 1.0,
             spacing: SpacingScale {
                 xs: 4.0,
                 sm: 8.0,

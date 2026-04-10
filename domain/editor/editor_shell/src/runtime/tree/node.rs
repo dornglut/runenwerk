@@ -38,6 +38,7 @@ pub enum UiNodeKind {
     Panel(PanelNode),
     Label(LabelNode),
     Button(ButtonNode),
+    Scroll(ScrollNode),
     Stack(StackNode),
     Split(SplitNode),
 }
@@ -45,6 +46,7 @@ pub enum UiNodeKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PanelNode {
     pub padding: UiInsets,
+    pub gap: f32,
     pub min_size: UiSize,
     pub theme: ThemeTokens,
 }
@@ -52,7 +54,8 @@ pub struct PanelNode {
 impl PanelNode {
     pub fn new(theme: ThemeTokens) -> Self {
         Self {
-            padding: UiInsets::ZERO,
+            padding: UiInsets::all(theme.spacing.sm),
+            gap: theme.spacing.xs,
             min_size: UiSize::ZERO,
             theme,
         }
@@ -88,13 +91,40 @@ pub struct ButtonNode {
 
 impl ButtonNode {
     pub fn new(label: impl Into<String>, text_style: TextStyle, theme: ThemeTokens) -> Self {
+        let line_height = text_style.line_height_or_default(text_style.font_size * 1.2);
+        let padding = UiInsets::new(
+            theme.spacing.sm,
+            theme.spacing.xs,
+            theme.spacing.sm,
+            theme.spacing.xs,
+        );
         Self {
             label: label.into(),
             text_style,
-            padding: UiInsets::all(8.0),
-            min_size: UiSize::new(48.0, 28.0),
+            padding,
+            min_size: UiSize::new(
+                (theme.spacing.xl * 2.0).max(32.0),
+                (line_height + padding.vertical()).max(theme.spacing.lg + theme.spacing.sm),
+            ),
             theme,
             enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScrollNode {
+    pub bar_width: f32,
+    pub min_thumb_height: f32,
+    pub theme: ThemeTokens,
+}
+
+impl ScrollNode {
+    pub fn new(theme: ThemeTokens) -> Self {
+        Self {
+            bar_width: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
+            min_thumb_height: (theme.spacing.lg + theme.spacing.xs).max(18.0),
+            theme,
         }
     }
 }

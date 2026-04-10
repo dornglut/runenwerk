@@ -43,3 +43,5 @@ mesh = SubResource("PlaneMesh_br8qb")
 
 [node name="Player" parent="." unique_id=815062029 instance=ExtResource("2_br8qb")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2392132, 0)
+
+[node name="ChunkStreamingNode" type="ChunkStreamingNode" parent="." unique_id=2095902866]
