@@ -15,7 +15,8 @@ const WINDOW_TITLE: &str = "Runenwerk Editor";
 const EDITOR_MAIN_FLOW_ID: &str = "runenwerk.editor.main";
 const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
 const EDITOR_MAIN_UI_PASS_ID: &str = "runenwerk.editor.main.ui";
-pub const EDITOR_VIEWPORT_SDF_SHADER_ASSET: &str = "assets/shaders/editor_viewport_sdf.wgsl";
+pub const EDITOR_VIEWPORT_SDF_SHADER_ASSET_PATH: &str = "assets/shaders/editor_viewport_sdf.wgsl";
+pub const EDITOR_VIEWPORT_SDF_SHADER_ID: &str = "editor_viewport_sdf";
 
 fn configure_app(app: &mut App) {
     app.set_title(WINDOW_TITLE);
@@ -38,7 +39,7 @@ fn register_editor_render_flow(app: &mut App) {
         .with_state::<EditorViewportRenderState>()
         .with_surface_color()
         .fullscreen_pass(EDITOR_VIEWPORT_SDF_PASS_ID)
-        .shader_asset(EDITOR_VIEWPORT_SDF_SHADER_ASSET)
+        .shader_asset(EDITOR_VIEWPORT_SDF_SHADER_ID)
         .uniform_from_state_with_surface(EditorViewportRenderState::compose_uniform)
         .write_surface_color()
         .finish()

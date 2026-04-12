@@ -15,6 +15,11 @@ impl Renderer {
             last_good_ui_prepared: None,
             last_pass_timings: Vec::new(),
             last_runtime_resources: Vec::new(),
+            last_pass_provenance: Vec::new(),
+            last_capture_plan: crate::plugins::render::inspect::ResolvedRenderCapturePlan::default(
+            ),
+            last_capture_selector_results: Vec::new(),
+            last_captured_textures: Vec::new(),
         }
     }
 
@@ -26,6 +31,28 @@ impl Renderer {
         &self,
     ) -> &[crate::plugins::render::inspect::RuntimeResourceInspectionEntry] {
         &self.last_runtime_resources
+    }
+
+    pub fn last_pass_provenance(
+        &self,
+    ) -> &[crate::plugins::render::inspect::RenderPassProvenanceRecord] {
+        &self.last_pass_provenance
+    }
+
+    pub fn last_capture_plan(&self) -> &crate::plugins::render::inspect::ResolvedRenderCapturePlan {
+        &self.last_capture_plan
+    }
+
+    pub fn last_capture_selector_results(
+        &self,
+    ) -> &[crate::plugins::render::inspect::RenderCaptureSelectorResult] {
+        &self.last_capture_selector_results
+    }
+
+    pub fn last_captured_textures(
+        &self,
+    ) -> &[crate::plugins::render::inspect::RenderCapturedTexture] {
+        &self.last_captured_textures
     }
 
     pub fn flow_pipeline_cache_stats(&self) -> super::pipeline_cache::RendererPipelineCacheStats {

@@ -11,9 +11,10 @@ use super::features::{
 };
 use super::frame::PreparedRenderFrameResource;
 use super::inspect::{
-    RenderDebugGraphDumpState, RenderDebugOverlayState, RenderDebugTimingsState,
-    RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
-    WorldRuntimeInspectorSnapshot,
+    RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
+    RenderDebugFrameReportState, RenderDebugGraphDumpState, RenderDebugOverlayState,
+    RenderDebugTimingsState, RenderPassProvenanceState, RenderRuntimeResourceInspectorState,
+    RenderTextureInspectorState, WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
 use super::renderer::submit::{
@@ -58,6 +59,11 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderTextureInspectorState>();
         app.init_resource::<RenderDebugTimingsState>();
         app.init_resource::<RenderDebugGraphDumpState>();
+        app.init_resource::<RenderDebugControlResource>();
+        app.init_resource::<RenderDebugConfigResource>();
+        app.init_resource::<RenderCapturedTextureState>();
+        app.init_resource::<RenderPassProvenanceState>();
+        app.init_resource::<RenderDebugFrameReportState>();
         app.init_resource::<WorldRuntimeInspectorSnapshot>();
         app.init_resource::<StartupState>();
         app.init_resource::<DebugMetricsState>();

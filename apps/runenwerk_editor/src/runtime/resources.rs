@@ -11,12 +11,15 @@ const SHELL_READABILITY_BUMP: f32 = 1.15;
 const SHELL_SCALE_MIN: f32 = 1.0;
 const SHELL_SCALE_MAX: f32 = 3.0;
 const VIEWPORT_BOUNDS_EPSILON: f32 = 0.25;
+const BRANCH_TRACE_FLOAT_EPSILON: f32 = 0.0005;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorViewportDebugStage {
     Scene,
     Mask,
     Gradient,
+    PrimitiveGate,
+    HitMiss,
 }
 
 impl EditorViewportDebugStage {
@@ -25,6 +28,8 @@ impl EditorViewportDebugStage {
             Self::Scene => 0,
             Self::Mask => 1,
             Self::Gradient => 2,
+            Self::PrimitiveGate => 3,
+            Self::HitMiss => 4,
         }
     }
 
@@ -32,6 +37,8 @@ impl EditorViewportDebugStage {
         match value.trim().to_ascii_lowercase().as_str() {
             "mask" => Self::Mask,
             "gradient" => Self::Gradient,
+            "primitive_gate" | "primitive-gate" | "primitivegate" => Self::PrimitiveGate,
+            "hit_miss" | "hit-miss" | "hitmiss" => Self::HitMiss,
             "scene" | "" => Self::Scene,
             _ => Self::Scene,
         }
@@ -42,6 +49,8 @@ impl EditorViewportDebugStage {
             Self::Scene => "scene",
             Self::Mask => "mask",
             Self::Gradient => "gradient",
+            Self::PrimitiveGate => "primitive_gate",
+            Self::HitMiss => "hit_miss",
         }
     }
 }
@@ -91,6 +100,94 @@ pub struct EditorViewportSdfUniform {
     pub primitive_flags: [u32; 4],
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct EditorViewportBranchTraceSnapshot {
+    pub viewport_bounds_px: (f32, f32, f32, f32),
+    pub viewport_valid: bool,
+    pub shader_loaded: bool,
+    pub debug_stage: EditorViewportDebugStage,
+    pub has_primitive: bool,
+    pub primitive_kind: EditorPrimitiveKind,
+    pub primitive_translation: Vec3Value,
+    pub surface: [f32; 4],
+    pub viewport: [f32; 4],
+    pub camera_position: [f32; 4],
+    pub camera_forward: [f32; 4],
+    pub camera_right: [f32; 4],
+    pub camera_up: [f32; 4],
+    pub primitive_params_a: [f32; 4],
+    pub primitive_params_b: [f32; 4],
+    pub primitive_flags: [u32; 4],
+}
+
+impl EditorViewportBranchTraceSnapshot {
+    pub fn approx_eq(&self, other: &Self) -> bool {
+        approx_bounds_eq(self.viewport_bounds_px, other.viewport_bounds_px)
+            && self.viewport_valid == other.viewport_valid
+            && self.shader_loaded == other.shader_loaded
+            && self.debug_stage == other.debug_stage
+            && self.has_primitive == other.has_primitive
+            && self.primitive_kind == other.primitive_kind
+            && approx_vec3(self.primitive_translation, other.primitive_translation)
+            && approx_vec4(self.surface, other.surface)
+            && approx_vec4(self.viewport, other.viewport)
+            && approx_vec4(self.camera_position, other.camera_position)
+            && approx_vec4(self.camera_forward, other.camera_forward)
+            && approx_vec4(self.camera_right, other.camera_right)
+            && approx_vec4(self.camera_up, other.camera_up)
+            && approx_vec4(self.primitive_params_a, other.primitive_params_a)
+            && approx_vec4(self.primitive_params_b, other.primitive_params_b)
+            && self.primitive_flags == other.primitive_flags
+    }
+
+    pub fn summary_line(self) -> String {
+        format!(
+            "stage={}({}) valid={} shader_loaded={} has_primitive={} kind={:?} bounds=({:.1},{:.1},{:.1},{:.1}) viewport=({:.1},{:.1},{:.1},{:.1}) surface=({:.0},{:.0}) obj=({:.2},{:.2},{:.2}) params_a=({:.2},{:.2},{:.2},{:.2}) params_b=({:.2},{:.2},{:.2},{:.2}) flags={:?} cam_pos=({:.2},{:.2},{:.2}) fov={:.3} cam_fwd=({:.3},{:.3},{:.3}) cam_right=({:.3},{:.3},{:.3}) cam_up=({:.3},{:.3},{:.3})",
+            self.debug_stage.label(),
+            self.debug_stage.as_u32(),
+            self.viewport_valid,
+            self.shader_loaded,
+            self.has_primitive,
+            self.primitive_kind,
+            self.viewport_bounds_px.0,
+            self.viewport_bounds_px.1,
+            self.viewport_bounds_px.2,
+            self.viewport_bounds_px.3,
+            self.viewport[0],
+            self.viewport[1],
+            self.viewport[2],
+            self.viewport[3],
+            self.surface[0],
+            self.surface[1],
+            self.primitive_translation.x,
+            self.primitive_translation.y,
+            self.primitive_translation.z,
+            self.primitive_params_a[0],
+            self.primitive_params_a[1],
+            self.primitive_params_a[2],
+            self.primitive_params_a[3],
+            self.primitive_params_b[0],
+            self.primitive_params_b[1],
+            self.primitive_params_b[2],
+            self.primitive_params_b[3],
+            self.primitive_flags,
+            self.camera_position[0],
+            self.camera_position[1],
+            self.camera_position[2],
+            self.camera_position[3],
+            self.camera_forward[0],
+            self.camera_forward[1],
+            self.camera_forward[2],
+            self.camera_right[0],
+            self.camera_right[1],
+            self.camera_right[2],
+            self.camera_up[0],
+            self.camera_up[1],
+            self.camera_up[2],
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, ecs::Component, ecs::Resource)]
 pub struct EditorViewportRenderState {
     pub viewport_bounds_px: (f32, f32, f32, f32),
@@ -110,6 +207,7 @@ pub struct EditorViewportRenderState {
     pub last_reported_viewport_bounds_px: Option<(f32, f32, f32, f32)>,
     pub last_reported_shell_scale: Option<f32>,
     pub last_reported_debug_state: Option<(EditorViewportDebugStage, bool, bool, bool, bool)>,
+    pub last_reported_branch_trace: Option<EditorViewportBranchTraceSnapshot>,
 }
 
 impl Default for EditorViewportRenderState {
@@ -132,6 +230,7 @@ impl Default for EditorViewportRenderState {
             last_reported_viewport_bounds_px: None,
             last_reported_shell_scale: None,
             last_reported_debug_state: None,
+            last_reported_branch_trace: None,
         }
     }
 }
@@ -210,10 +309,7 @@ impl EditorViewportRenderState {
             && (!self.viewport_valid || !self.shader_loaded || !self.has_primitive)
     }
 
-    pub fn should_report_visibility_contradiction(
-        &mut self,
-        contradiction_active: bool,
-    ) -> bool {
+    pub fn should_report_visibility_contradiction(&mut self, contradiction_active: bool) -> bool {
         let should_report = contradiction_active && !self.visibility_contradiction_active;
         self.visibility_contradiction_active = contradiction_active;
         should_report
@@ -230,6 +326,42 @@ impl EditorViewportRenderState {
         let changed = self.last_reported_debug_state != Some(next);
         if changed {
             self.last_reported_debug_state = Some(next);
+        }
+        changed
+    }
+
+    pub fn branch_trace_snapshot(&self, surface: (u32, u32)) -> EditorViewportBranchTraceSnapshot {
+        let uniform = self.compose_uniform(surface);
+        EditorViewportBranchTraceSnapshot {
+            viewport_bounds_px: self.viewport_bounds_px,
+            viewport_valid: self.viewport_valid,
+            shader_loaded: self.shader_loaded,
+            debug_stage: self.debug_stage,
+            has_primitive: self.has_primitive,
+            primitive_kind: self.primitive_kind,
+            primitive_translation: self.primitive_translation,
+            surface: uniform.surface,
+            viewport: uniform.viewport,
+            camera_position: uniform.camera_position,
+            camera_forward: uniform.camera_forward,
+            camera_right: uniform.camera_right,
+            camera_up: uniform.camera_up,
+            primitive_params_a: uniform.primitive_params_a,
+            primitive_params_b: uniform.primitive_params_b,
+            primitive_flags: uniform.primitive_flags,
+        }
+    }
+
+    pub fn should_report_branch_trace_change(
+        &mut self,
+        snapshot: EditorViewportBranchTraceSnapshot,
+    ) -> bool {
+        let changed = match self.last_reported_branch_trace {
+            Some(previous) => !previous.approx_eq(&snapshot),
+            None => true,
+        };
+        if changed {
+            self.last_reported_branch_trace = Some(snapshot);
         }
         changed
     }
@@ -289,6 +421,21 @@ fn approx_bounds_eq(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
         && (a.1 - b.1).abs() <= VIEWPORT_BOUNDS_EPSILON
         && (a.2 - b.2).abs() <= VIEWPORT_BOUNDS_EPSILON
         && (a.3 - b.3).abs() <= VIEWPORT_BOUNDS_EPSILON
+}
+
+fn approx_f32(a: f32, b: f32) -> bool {
+    (a - b).abs() <= BRANCH_TRACE_FLOAT_EPSILON
+}
+
+fn approx_vec3(a: Vec3Value, b: Vec3Value) -> bool {
+    approx_f32(a.x, b.x) && approx_f32(a.y, b.y) && approx_f32(a.z, b.z)
+}
+
+fn approx_vec4(a: [f32; 4], b: [f32; 4]) -> bool {
+    approx_f32(a[0], b[0])
+        && approx_f32(a[1], b[1])
+        && approx_f32(a[2], b[2])
+        && approx_f32(a[3], b[3])
 }
 
 #[derive(Debug, Clone, Copy)]

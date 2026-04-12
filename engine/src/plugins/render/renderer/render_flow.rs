@@ -10,7 +10,12 @@ use crate::plugins::render::graph::{
     CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan, RenderShaderReference,
 };
 use crate::plugins::render::inspect::{
-    PassTimingSample, RuntimeResourceInspectionEntry, RuntimeResourceReuse, resource_kind_name,
+    CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
+    RenderCapturePointIdentity, RenderCaptureSelector, RenderCaptureSelectorResult,
+    RenderCaptureTerminal, RenderCaptureTerminalCode, RenderDebugConfigResource,
+    RenderDebugControlResource, RenderPassProvenanceRecord, RenderSelectorResolution,
+    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry, RuntimeResourceReuse,
+    resource_kind_name,
 };
 use crate::plugins::render::pipelines::{
     FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey, FlowPrimitiveTopologyClass,
@@ -18,6 +23,7 @@ use crate::plugins::render::pipelines::{
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
+use std::sync::mpsc::channel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RuntimeResourceKind {
@@ -119,6 +125,251 @@ struct ResolvedDepthTargetView {
 }
 
 #[derive(Debug)]
+struct PendingCaptureReadback {
+    selector_index: usize,
+    identity: RenderCaptureIdentity,
+    buffer: Buffer,
+    width: u32,
+    height: u32,
+    source_format: TextureFormat,
+    readback_format: TextureReadbackFormat,
+    padded_bytes_per_row: u32,
+}
+
+#[derive(Debug, Clone)]
+struct SelectorRuntimeState {
+    selector: RenderCaptureSelector,
+    capture_point: Option<RenderCapturePointIdentity>,
+    frame_identity: Option<RenderCaptureIdentity>,
+    terminal: Option<RenderCaptureTerminal>,
+}
+
+impl SelectorRuntimeState {
+    fn new(selector: RenderCaptureSelector) -> Self {
+        Self {
+            selector,
+            capture_point: None,
+            frame_identity: None,
+            terminal: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct FrameCaptureRuntime {
+    frame_index: u64,
+    selectors: Vec<SelectorRuntimeState>,
+}
+
+impl FrameCaptureRuntime {
+    fn new(
+        frame_index: u64,
+        debug_control: &RenderDebugControlResource,
+        selectors: &[RenderCaptureSelector],
+    ) -> Self {
+        let mut states = selectors
+            .iter()
+            .cloned()
+            .map(SelectorRuntimeState::new)
+            .collect::<Vec<_>>();
+
+        if !debug_control.capture_enabled {
+            for state in &mut states {
+                state.terminal = Some(RenderCaptureTerminal::with_reason(
+                    RenderCaptureTerminalCode::Disabled,
+                    "capture_disabled",
+                    "capture stage is disabled by RenderDebugControlResource",
+                ));
+            }
+        } else if !debug_control.readback_enabled {
+            for state in &mut states {
+                state.terminal = Some(RenderCaptureTerminal::with_reason(
+                    RenderCaptureTerminalCode::Disabled,
+                    "readback_disabled",
+                    "readback stage is disabled by RenderDebugControlResource",
+                ));
+            }
+        }
+
+        Self {
+            frame_index,
+            selectors: states,
+        }
+    }
+
+    fn should_attempt_stage(&self, stage: CaptureStage) -> bool {
+        self.selectors.iter().any(|state| {
+            state.selector.stage == stage
+                && state.terminal.is_none()
+                && state.frame_identity.is_none()
+        })
+    }
+
+    fn set_terminal_with_reason(
+        &mut self,
+        selector_index: usize,
+        code: RenderCaptureTerminalCode,
+        reason_code: &str,
+        detail: String,
+    ) {
+        if let Some(state) = self.selectors.get_mut(selector_index)
+            && state.terminal.is_none()
+        {
+            state.terminal = Some(RenderCaptureTerminal::with_reason(
+                code,
+                reason_code,
+                detail,
+            ));
+        }
+    }
+
+    fn set_terminal(&mut self, selector_index: usize, terminal: RenderCaptureTerminal) {
+        if let Some(state) = self.selectors.get_mut(selector_index) {
+            state.terminal = Some(terminal);
+        }
+    }
+
+    fn set_matched_identity(
+        &mut self,
+        selector_index: usize,
+        capture_point: RenderCapturePointIdentity,
+        frame_identity: RenderCaptureIdentity,
+    ) {
+        if let Some(state) = self.selectors.get_mut(selector_index) {
+            state.capture_point = Some(capture_point);
+            state.frame_identity = Some(frame_identity);
+        }
+    }
+
+    fn finalize_unresolved(&mut self) {
+        for state in &mut self.selectors {
+            if state.terminal.is_some() {
+                continue;
+            }
+            if state.frame_identity.is_some() {
+                state.terminal = Some(RenderCaptureTerminal::with_reason(
+                    RenderCaptureTerminalCode::Skipped,
+                    "missing_terminal_capture_result",
+                    "selector matched a capture point but no terminal capture result was produced",
+                ));
+                continue;
+            }
+            state.terminal = Some(RenderCaptureTerminal::with_reason(
+                RenderCaptureTerminalCode::Unmatched,
+                "selector_unmatched",
+                "selector matched no capture point in this frame",
+            ));
+        }
+    }
+
+    fn into_plan_and_results(
+        self,
+    ) -> (ResolvedRenderCapturePlan, Vec<RenderCaptureSelectorResult>) {
+        let mut plan = ResolvedRenderCapturePlan {
+            frame_index: self.frame_index,
+            selectors: Vec::with_capacity(self.selectors.len()),
+        };
+        let mut results = Vec::<RenderCaptureSelectorResult>::with_capacity(self.selectors.len());
+
+        for (selector_index, state) in self.selectors.into_iter().enumerate() {
+            let terminal = state.terminal.unwrap_or_else(|| {
+                RenderCaptureTerminal::with_reason(
+                    RenderCaptureTerminalCode::Unmatched,
+                    "selector_unmatched",
+                    "selector matched no capture point in this frame",
+                )
+            });
+            let capture_point = state
+                .capture_point
+                .clone()
+                .unwrap_or_else(|| state.selector.stable_point_fallback());
+            let resolution = match terminal.code {
+                RenderCaptureTerminalCode::Unmatched => RenderSelectorResolution::Unmatched {
+                    reason: terminal.reason.clone().unwrap_or_else(|| {
+                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                            "selector_unmatched",
+                            "selector matched no capture point in this frame",
+                        )
+                    }),
+                },
+                RenderCaptureTerminalCode::Disabled => RenderSelectorResolution::Disabled {
+                    reason: terminal.reason.clone().unwrap_or_else(|| {
+                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                            "capture_disabled",
+                            "capture is disabled",
+                        )
+                    }),
+                },
+                RenderCaptureTerminalCode::Unsupported => RenderSelectorResolution::Unsupported {
+                    reason: terminal.reason.clone().unwrap_or_else(|| {
+                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                            "capture_unsupported",
+                            "selector resolved to an unsupported capture path",
+                        )
+                    }),
+                },
+                RenderCaptureTerminalCode::Skipped => RenderSelectorResolution::Skipped {
+                    reason: terminal.reason.clone().unwrap_or_else(|| {
+                        crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                            "capture_skipped",
+                            "capture matched a point but did not produce a completed readback",
+                        )
+                    }),
+                },
+                RenderCaptureTerminalCode::ReadbackFailed
+                | RenderCaptureTerminalCode::ExportFailed
+                | RenderCaptureTerminalCode::Completed => {
+                    if let Some(frame_identity) = state.frame_identity.clone() {
+                        RenderSelectorResolution::Matched {
+                            capture_point: capture_point.clone(),
+                            frame_identity,
+                        }
+                    } else {
+                        RenderSelectorResolution::Skipped {
+                            reason: terminal.reason.clone().unwrap_or_else(|| {
+                                crate::plugins::render::inspect::RenderCaptureTerminalReason::new(
+                                    "capture_missing_match",
+                                    "selector terminal state did not include a matched frame identity",
+                                )
+                            }),
+                        }
+                    }
+                }
+            };
+
+            plan.selectors.push(
+                crate::plugins::render::inspect::ResolvedRenderCaptureSelector {
+                    selector_index,
+                    selector: state.selector.clone(),
+                    resolution,
+                },
+            );
+            results.push(RenderCaptureSelectorResult {
+                selector_index,
+                selector: state.selector,
+                capture_point,
+                frame_identity: state.frame_identity,
+                terminal,
+                artifact_path: None,
+            });
+        }
+
+        (plan, results)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextureReadbackMode {
+    Rgba8,
+    Bgra8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TextureReadbackFormat {
+    mode: TextureReadbackMode,
+}
+
+#[derive(Debug)]
 enum RuntimeBindingResource<'a> {
     TextureView(TextureView),
     SamplerPlaceholder,
@@ -137,6 +388,24 @@ struct RuntimeBindingResolved<'a> {
 enum FeaturePassAction {
     Execute,
     Skip,
+}
+
+#[derive(Debug, Clone)]
+struct EncodedPassEvidence {
+    dispatch_workgroups: Option<[u32; 3]>,
+    shader_id: String,
+    shader_revision: u64,
+    fallback_used: bool,
+    pipeline_key: Option<FlowPassPipelineKey>,
+}
+
+#[derive(Debug, Clone)]
+struct EncodedPipelinePass {
+    dispatch_workgroups: Option<[u32; 3]>,
+    shader_id: String,
+    shader_revision: u64,
+    fallback_used: bool,
+    pipeline_key: FlowPassPipelineKey,
 }
 
 impl FlowRuntimeResources {
@@ -338,11 +607,35 @@ impl FlowRuntimeResources {
         })
     }
 
+    fn capture_texture_class(
+        &self,
+        resource_id: &str,
+        fallback_class: CaptureTextureClass,
+    ) -> CaptureTextureClass {
+        if resource_id == SURFACE_COLOR_RESOURCE_ID || resource_id == SURFACE_DEPTH_RESOURCE_ID {
+            return CaptureTextureClass::ImportedTexture;
+        }
+        let Some(descriptor) = self.descriptors.get(resource_id) else {
+            return fallback_class;
+        };
+        match descriptor {
+            RenderResourceDescriptor::DepthTarget(_) => CaptureTextureClass::DepthTarget,
+            RenderResourceDescriptor::HistoryTexture(_) => CaptureTextureClass::HistoryTexture,
+            RenderResourceDescriptor::ImportedTexture(_) => CaptureTextureClass::ImportedTexture,
+            RenderResourceDescriptor::SampledTexture(_)
+            | RenderResourceDescriptor::StorageTexture(_)
+            | RenderResourceDescriptor::ColorTarget(_) => CaptureTextureClass::ColorTarget,
+            RenderResourceDescriptor::UniformBuffer(_)
+            | RenderResourceDescriptor::StorageBuffer(_)
+            | RenderResourceDescriptor::ImportedBuffer(_) => fallback_class,
+        }
+    }
+
     fn resolve_resource_id<'a>(
         &self,
         pass_id: &str,
         resource: &'a CompiledResourceRef,
-        role: &str,
+        _role: &str,
     ) -> Result<&'a str> {
         match resource {
             CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => {
@@ -727,12 +1020,23 @@ impl Renderer {
         packet: RendererPreparedPacket,
         compiled_flows: &[CompiledRenderFlowPlan],
         shader_registry: &ShaderRegistryResource,
+        debug_control: &RenderDebugControlResource,
+        debug_config: &RenderDebugConfigResource,
     ) -> Result<RendererFrameTimings> {
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("engine_render_encoder"),
         });
         self.last_pass_timings.clear();
         self.last_runtime_resources.clear();
+        self.last_pass_provenance.clear();
+        self.last_capture_plan = ResolvedRenderCapturePlan::default();
+        self.last_capture_selector_results.clear();
+        self.last_captured_textures.clear();
+
+        let frame_index = prepared_frame.context.frame_index;
+        let mut capture_runtime =
+            FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
+        let mut pending_capture_readbacks = Vec::<PendingCaptureReadback>::new();
 
         if packet.view_count > 1 {
             bail!(
@@ -775,9 +1079,33 @@ impl Renderer {
                     if !self.pass_targets_active_view(pass, packet.view_id.as_str()) {
                         continue;
                     }
+                    if let Some(feature_id) = execution_pass_feature_id(pass) {
+                        match self.resolve_feature_pass_action(
+                            feature_id,
+                            execution_pass_id(pass),
+                            &packet,
+                        )? {
+                            FeaturePassAction::Execute => {}
+                            FeaturePassAction::Skip => continue,
+                        }
+                    }
                     ensure_compiled_pass_is_supported(pass)?;
+                    if capture_runtime.should_attempt_stage(CaptureStage::Before) {
+                        self.queue_pass_texture_captures(
+                            device,
+                            &mut encoder,
+                            frame_texture,
+                            &packet,
+                            flow,
+                            pass,
+                            runtime_resources,
+                            CaptureStage::Before,
+                            &mut capture_runtime,
+                            &mut pending_capture_readbacks,
+                        )?;
+                    }
                     let pass_encode_start = Instant::now();
-                    let dispatch_workgroups = self.encode_compiled_pass(
+                    let evidence = self.encode_compiled_pass(
                         device,
                         &mut encoder,
                         frame_texture,
@@ -789,14 +1117,106 @@ impl Renderer {
                         shader_registry,
                         runtime_resources,
                     )?;
+                    if capture_runtime.should_attempt_stage(CaptureStage::After) {
+                        self.queue_pass_texture_captures(
+                            device,
+                            &mut encoder,
+                            frame_texture,
+                            &packet,
+                            flow,
+                            pass,
+                            runtime_resources,
+                            CaptureStage::After,
+                            &mut capture_runtime,
+                            &mut pending_capture_readbacks,
+                        )?;
+                    }
                     self.last_pass_timings.push(PassTimingSample {
                         flow_id: flow.flow_id.clone(),
                         pass_id: execution_pass_id(pass).to_string(),
                         pass_kind: execution_pass_kind_name(pass).to_string(),
                         millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
-                        dispatch_workgroups,
+                        dispatch_workgroups: evidence.dispatch_workgroups,
                     });
+                    if debug_control.provenance_enabled {
+                        let pass_resource_truth = collect_pass_resource_truth(
+                            flow.flow_id.as_str(),
+                            pass,
+                            runtime_resources,
+                        );
+                        self.last_pass_provenance.push(RenderPassProvenanceRecord {
+                            frame_index,
+                            flow_id: flow.flow_id.clone(),
+                            pass_id: execution_pass_id(pass).to_string(),
+                            pass_label: execution_pass_id(pass).to_string(),
+                            pass_kind: execution_flow_pass_kind(pass),
+                            order_index: execution_pass_order_index(pass),
+                            feature_id: execution_pass_feature_id(pass).map(str::to_string),
+                            shader_id: evidence.shader_id,
+                            shader_revision: evidence.shader_revision,
+                            fallback_used: evidence.fallback_used,
+                            pipeline_stats_key: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(FlowPassPipelineKey::stats_key)
+                                .unwrap_or_default(),
+                            bind_group_layout_signature_hash: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(|key| key.bind_group_layout_signature_hash)
+                                .unwrap_or_default(),
+                            material_specialization_fragment_hash: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(|key| key.material_specialization_fragment_hash)
+                                .unwrap_or_default(),
+                            view_signature_hash: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(|key| key.view_signature_hash)
+                                .unwrap_or_default(),
+                            feature_runtime_version: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(|key| key.feature_runtime_version)
+                                .unwrap_or_default(),
+                            color_formats: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(|key| key.color_formats.clone())
+                                .unwrap_or_default(),
+                            depth_format: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .and_then(|key| key.depth_format),
+                            sample_count: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(|key| key.sample_count)
+                                .unwrap_or(1),
+                            primitive_topology_class: evidence
+                                .pipeline_key
+                                .as_ref()
+                                .map(|key| key.primitive_topology_class)
+                                .unwrap_or(FlowPrimitiveTopologyClass::None),
+                            render_targets: pass_resource_truth.render_targets,
+                            sampled_textures: pass_resource_truth.sampled_textures,
+                            storage_textures: pass_resource_truth.storage_textures,
+                            depth_targets: pass_resource_truth.depth_targets,
+                            capture_points_available: pass_resource_truth.capture_points_available,
+                        });
+                    }
                 }
+            }
+            if capture_runtime.should_attempt_stage(CaptureStage::Final) {
+                self.queue_final_surface_capture(
+                    device,
+                    &mut encoder,
+                    frame_texture,
+                    &packet,
+                    &mut capture_runtime,
+                    &mut pending_capture_readbacks,
+                )?;
             }
             Ok(())
         })();
@@ -810,6 +1230,17 @@ impl Renderer {
             queue.submit(std::iter::once(encoder.finish()));
         }
         timings.encode_submit_ms = encode_submit_start.elapsed().as_secs_f32() * 1000.0;
+        if !pending_capture_readbacks.is_empty() {
+            for pending in pending_capture_readbacks.drain(..) {
+                let (selector_index, capture) = read_capture_back(device, pending);
+                capture_runtime.set_terminal(selector_index, capture.terminal.clone());
+                self.last_captured_textures.push(capture);
+            }
+        }
+        capture_runtime.finalize_unresolved();
+        let (capture_plan, capture_selector_results) = capture_runtime.into_plan_and_results();
+        self.last_capture_plan = capture_plan;
+        self.last_capture_selector_results = capture_selector_results;
         Ok(timings)
     }
 
@@ -826,6 +1257,8 @@ impl Renderer {
         ui_rect_shader: Option<ShaderHandle>,
         ui_font_atlas: &UiFontAtlasResource,
         surface_format: TextureFormat,
+        debug_control: &RenderDebugControlResource,
+        debug_config: &RenderDebugConfigResource,
     ) -> Result<RendererFrameTimings> {
         let packet = self.prepare_packet(
             device,
@@ -845,6 +1278,8 @@ impl Renderer {
             packet,
             compiled_flows,
             shader_registry,
+            debug_control,
+            debug_config,
         )
     }
 
@@ -884,14 +1319,7 @@ impl Renderer {
         pass: &CompiledPassExecutionPlan,
         shader_registry: &ShaderRegistryResource,
         runtime_resources: &FlowRuntimeResources,
-    ) -> Result<Option<[u32; 3]>> {
-        if let Some(feature_id) = execution_pass_feature_id(pass) {
-            match self.resolve_feature_pass_action(feature_id, execution_pass_id(pass), packet)? {
-                FeaturePassAction::Execute => {}
-                FeaturePassAction::Skip => return Ok(None),
-            }
-        }
-
+    ) -> Result<EncodedPassEvidence> {
         match pass {
             CompiledPassExecutionPlan::Compute(value) => self
                 .encode_compute_pass(
@@ -905,7 +1333,13 @@ impl Renderer {
                     value,
                     shader_registry,
                 )
-                .map(Some),
+                .map(|value| EncodedPassEvidence {
+                    dispatch_workgroups: value.dispatch_workgroups,
+                    shader_id: value.shader_id,
+                    shader_revision: value.shader_revision,
+                    fallback_used: value.fallback_used,
+                    pipeline_key: Some(value.pipeline_key),
+                }),
             CompiledPassExecutionPlan::Fullscreen(value) => self
                 .encode_fullscreen_pass(
                     device,
@@ -918,7 +1352,13 @@ impl Renderer {
                     value,
                     shader_registry,
                 )
-                .map(|()| None),
+                .map(|value| EncodedPassEvidence {
+                    dispatch_workgroups: None,
+                    shader_id: value.shader_id,
+                    shader_revision: value.shader_revision,
+                    fallback_used: value.fallback_used,
+                    pipeline_key: Some(value.pipeline_key),
+                }),
             CompiledPassExecutionPlan::Graphics(value) => self
                 .encode_graphics_pass(
                     device,
@@ -931,16 +1371,40 @@ impl Renderer {
                     value,
                     shader_registry,
                 )
-                .map(|()| None),
+                .map(|value| EncodedPassEvidence {
+                    dispatch_workgroups: None,
+                    shader_id: value.shader_id,
+                    shader_revision: value.shader_revision,
+                    fallback_used: value.fallback_used,
+                    pipeline_key: Some(value.pipeline_key),
+                }),
             CompiledPassExecutionPlan::Copy(value) => self
                 .encode_copy_pass(encoder, frame_texture, packet, runtime_resources, value)
-                .map(|()| None),
+                .map(|()| EncodedPassEvidence {
+                    dispatch_workgroups: None,
+                    shader_id: "builtin:copy".to_string(),
+                    shader_revision: 0,
+                    fallback_used: false,
+                    pipeline_key: None,
+                }),
             CompiledPassExecutionPlan::Present(value) => self
                 .encode_present_pass(encoder, frame_texture, packet, runtime_resources, value)
-                .map(|()| None),
+                .map(|()| EncodedPassEvidence {
+                    dispatch_workgroups: None,
+                    shader_id: "builtin:present".to_string(),
+                    shader_revision: 0,
+                    fallback_used: false,
+                    pipeline_key: None,
+                }),
             CompiledPassExecutionPlan::BuiltinUiComposite(_value) => {
                 self.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
-                Ok(None)
+                Ok(EncodedPassEvidence {
+                    dispatch_workgroups: None,
+                    shader_id: "builtin:ui_composite".to_string(),
+                    shader_revision: 0,
+                    fallback_used: false,
+                    pipeline_key: None,
+                })
             }
         }
     }
@@ -1015,6 +1479,298 @@ impl Renderer {
     }
 
     #[allow(clippy::too_many_arguments)]
+    fn queue_pass_texture_captures(
+        &mut self,
+        device: &Device,
+        encoder: &mut CommandEncoder,
+        frame_texture: &Texture,
+        packet: &RendererPreparedPacket,
+        flow: &CompiledRenderFlowPlan,
+        pass: &CompiledPassExecutionPlan,
+        runtime_resources: &FlowRuntimeResources,
+        stage: CaptureStage,
+        capture_runtime: &mut FrameCaptureRuntime,
+        pending_capture_readbacks: &mut Vec<PendingCaptureReadback>,
+    ) -> Result<()> {
+        let pass_id = execution_pass_id(pass);
+        let pass_label = pass_id.to_string();
+
+        for selector_index in 0..capture_runtime.selectors.len() {
+            let (selector, terminal_is_set, existing_capture_point) = {
+                let selector_state = &capture_runtime.selectors[selector_index];
+                (
+                    selector_state.selector.clone(),
+                    selector_state.terminal.is_some(),
+                    selector_state.capture_point.clone(),
+                )
+            };
+            if terminal_is_set || selector.stage != stage {
+                continue;
+            }
+            let texture_class = runtime_resources
+                .capture_texture_class(selector.resource_id.as_str(), selector.texture_class);
+            let capture_point = RenderCapturePointIdentity {
+                flow_id: flow.flow_id.clone(),
+                pass_id: pass_id.to_string(),
+                stage,
+                resource_id: selector.resource_id.clone(),
+                texture_class,
+            };
+            if !selector.matches_point(&capture_point) {
+                continue;
+            }
+            if let Some(existing_capture_point) = existing_capture_point
+                && existing_capture_point != capture_point
+            {
+                capture_runtime.set_terminal_with_reason(
+                    selector_index,
+                    RenderCaptureTerminalCode::Unsupported,
+                    "selector_multiple_matches",
+                    format!(
+                        "selector '{}' matched multiple capture points: '{}' and '{}'",
+                        selector.describe(),
+                        existing_capture_point.resource_id,
+                        capture_point.resource_id,
+                    ),
+                );
+                continue;
+            }
+            let identity = RenderCaptureIdentity {
+                frame_index: capture_runtime.frame_index,
+                pass_label: pass_label.clone(),
+                capture_point: capture_point.clone(),
+            };
+            capture_runtime.set_matched_identity(selector_index, capture_point, identity.clone());
+
+            let resolved_texture = runtime_resources.resolve_texture(
+                pass_id,
+                selector.resource_id.as_str(),
+                frame_texture,
+                packet.surface_size,
+                packet.surface_format,
+            );
+            let resolved_texture = match resolved_texture {
+                Ok(value) => value,
+                Err(err) => {
+                    let terminal = RenderCaptureTerminal::with_reason(
+                        RenderCaptureTerminalCode::Skipped,
+                        "texture_resolution_failed",
+                        err.to_string(),
+                    );
+                    capture_runtime.set_terminal(selector_index, terminal.clone());
+                    self.last_captured_textures.push(RenderCapturedTexture {
+                        identity,
+                        width: 0,
+                        height: 0,
+                        format: "unknown".to_string(),
+                        bytes_rgba8: None,
+                        terminal,
+                    });
+                    continue;
+                }
+            };
+
+            let readback_format = texture_readback_format(resolved_texture.format);
+            let readback_format = match readback_format {
+                Some(value) => value,
+                None => {
+                    let terminal = RenderCaptureTerminal::with_reason(
+                        RenderCaptureTerminalCode::Unsupported,
+                        "unsupported_readback_format",
+                        format!(
+                            "readback for format {:?} is not implemented yet",
+                            resolved_texture.format
+                        ),
+                    );
+                    capture_runtime.set_terminal(selector_index, terminal.clone());
+                    self.last_captured_textures.push(RenderCapturedTexture {
+                        identity,
+                        width: resolved_texture.size.0,
+                        height: resolved_texture.size.1,
+                        format: format!("{:?}", resolved_texture.format),
+                        bytes_rgba8: None,
+                        terminal,
+                    });
+                    continue;
+                }
+            };
+
+            match enqueue_texture_capture_copy(
+                device,
+                encoder,
+                selector_index,
+                identity,
+                resolved_texture.texture,
+                resolved_texture.size,
+                resolved_texture.format,
+                readback_format,
+            ) {
+                Ok(pending) => pending_capture_readbacks.push(pending),
+                Err(err) => {
+                    let terminal = RenderCaptureTerminal::with_reason(
+                        RenderCaptureTerminalCode::ReadbackFailed,
+                        "enqueue_capture_copy_failed",
+                        err.to_string(),
+                    );
+                    capture_runtime.set_terminal(selector_index, terminal.clone());
+                    self.last_captured_textures.push(RenderCapturedTexture {
+                        identity: RenderCaptureIdentity {
+                            frame_index: capture_runtime.frame_index,
+                            pass_label: pass_label.clone(),
+                            capture_point: RenderCapturePointIdentity {
+                                flow_id: flow.flow_id.clone(),
+                                pass_id: pass_id.to_string(),
+                                stage,
+                                resource_id: selector.resource_id.clone(),
+                                texture_class,
+                            },
+                        },
+                        width: resolved_texture.size.0,
+                        height: resolved_texture.size.1,
+                        format: format!("{:?}", resolved_texture.format),
+                        bytes_rgba8: None,
+                        terminal,
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn queue_final_surface_capture(
+        &mut self,
+        device: &Device,
+        encoder: &mut CommandEncoder,
+        frame_texture: &Texture,
+        packet: &RendererPreparedPacket,
+        capture_runtime: &mut FrameCaptureRuntime,
+        pending_capture_readbacks: &mut Vec<PendingCaptureReadback>,
+    ) -> Result<()> {
+        for selector_index in 0..capture_runtime.selectors.len() {
+            let (selector, terminal_is_set, existing_capture_point) = {
+                let selector_state = &capture_runtime.selectors[selector_index];
+                (
+                    selector_state.selector.clone(),
+                    selector_state.terminal.is_some(),
+                    selector_state.capture_point.clone(),
+                )
+            };
+            if terminal_is_set || selector.stage != CaptureStage::Final {
+                continue;
+            }
+            let capture_point = RenderCapturePointIdentity {
+                flow_id: "frame".to_string(),
+                pass_id: "frame.final".to_string(),
+                stage: CaptureStage::Final,
+                resource_id: selector.resource_id.clone(),
+                texture_class: selector.texture_class,
+            };
+            if !selector.matches_point(&capture_point) {
+                continue;
+            }
+            if let Some(existing_capture_point) = existing_capture_point
+                && existing_capture_point != capture_point
+            {
+                capture_runtime.set_terminal_with_reason(
+                    selector_index,
+                    RenderCaptureTerminalCode::Unsupported,
+                    "selector_multiple_matches",
+                    format!(
+                        "selector '{}' matched multiple final-stage capture points",
+                        selector.describe()
+                    ),
+                );
+                continue;
+            }
+            let identity = RenderCaptureIdentity {
+                frame_index: capture_runtime.frame_index,
+                pass_label: "frame.final".to_string(),
+                capture_point: capture_point.clone(),
+            };
+            capture_runtime.set_matched_identity(selector_index, capture_point, identity.clone());
+            if selector.resource_id != SURFACE_COLOR_RESOURCE_ID {
+                let terminal = RenderCaptureTerminal::with_reason(
+                    RenderCaptureTerminalCode::Unsupported,
+                    "final_stage_resource_unsupported",
+                    "final-stage capture currently supports only surface.color".to_string(),
+                );
+                capture_runtime.set_terminal(selector_index, terminal.clone());
+                self.last_captured_textures.push(RenderCapturedTexture {
+                    identity,
+                    width: packet.surface_size.0,
+                    height: packet.surface_size.1,
+                    format: format!("{:?}", packet.surface_format),
+                    bytes_rgba8: None,
+                    terminal,
+                });
+                continue;
+            }
+
+            let Some(readback_format) = texture_readback_format(packet.surface_format) else {
+                let terminal = RenderCaptureTerminal::with_reason(
+                    RenderCaptureTerminalCode::Unsupported,
+                    "unsupported_final_readback_format",
+                    format!(
+                        "readback for format {:?} is not implemented yet",
+                        packet.surface_format
+                    ),
+                );
+                capture_runtime.set_terminal(selector_index, terminal.clone());
+                self.last_captured_textures.push(RenderCapturedTexture {
+                    identity,
+                    width: packet.surface_size.0,
+                    height: packet.surface_size.1,
+                    format: format!("{:?}", packet.surface_format),
+                    bytes_rgba8: None,
+                    terminal,
+                });
+                continue;
+            };
+
+            match enqueue_texture_capture_copy(
+                device,
+                encoder,
+                selector_index,
+                identity,
+                frame_texture,
+                packet.surface_size,
+                packet.surface_format,
+                readback_format,
+            ) {
+                Ok(pending) => pending_capture_readbacks.push(pending),
+                Err(err) => {
+                    let terminal = RenderCaptureTerminal::with_reason(
+                        RenderCaptureTerminalCode::ReadbackFailed,
+                        "enqueue_capture_copy_failed",
+                        err.to_string(),
+                    );
+                    capture_runtime.set_terminal(selector_index, terminal.clone());
+                    self.last_captured_textures.push(RenderCapturedTexture {
+                        identity: RenderCaptureIdentity {
+                            frame_index: capture_runtime.frame_index,
+                            pass_label: "frame.final".to_string(),
+                            capture_point: RenderCapturePointIdentity {
+                                flow_id: "frame".to_string(),
+                                pass_id: "frame.final".to_string(),
+                                stage: CaptureStage::Final,
+                                resource_id: SURFACE_COLOR_RESOURCE_ID.to_string(),
+                                texture_class: selector.texture_class,
+                            },
+                        },
+                        width: packet.surface_size.0,
+                        height: packet.surface_size.1,
+                        format: format!("{:?}", packet.surface_format),
+                        bytes_rgba8: None,
+                        terminal,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn encode_compute_pass(
         &mut self,
         device: &Device,
@@ -1026,7 +1782,7 @@ impl Renderer {
         runtime_resources: &FlowRuntimeResources,
         pass: &CompiledComputeExecutionPlan,
         shader_registry: &ShaderRegistryResource,
-    ) -> Result<[u32; 3]> {
+    ) -> Result<EncodedPipelinePass> {
         let shader = resolve_shader_material(
             pass.shader.as_ref(),
             shader_registry,
@@ -1062,7 +1818,7 @@ impl Renderer {
             pass.pass_id.as_str(),
             FlowPassKind::Compute,
             pass.feature_id.as_deref(),
-            shader.identity.as_str(),
+            shader.pipeline_identity.as_str(),
             shader.revision,
             &pass.bindings,
             ShaderStages::COMPUTE,
@@ -1115,7 +1871,13 @@ impl Renderer {
             pass.set_bind_group(0, bind_group, &[]);
         }
         pass.dispatch_workgroups(dispatch[0], dispatch[1], dispatch[2]);
-        Ok(dispatch)
+        Ok(EncodedPipelinePass {
+            dispatch_workgroups: Some(dispatch),
+            shader_id: shader.shader_id,
+            shader_revision: shader.revision,
+            fallback_used: shader.fallback_used,
+            pipeline_key,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1130,7 +1892,7 @@ impl Renderer {
         runtime_resources: &FlowRuntimeResources,
         plan: &CompiledRasterExecutionPlan,
         shader_registry: &ShaderRegistryResource,
-    ) -> Result<()> {
+    ) -> Result<EncodedPipelinePass> {
         if !plan.draw_buffers.vertex_buffers.is_empty()
             || !plan.draw_buffers.index_buffers.is_empty()
             || !plan.draw_buffers.instance_buffers.is_empty()
@@ -1164,7 +1926,7 @@ impl Renderer {
             plan.pass_id.as_str(),
             FlowPassKind::Fullscreen,
             plan.feature_id.as_deref(),
-            shader.identity.as_str(),
+            shader.pipeline_identity.as_str(),
             shader.revision,
             &plan.bindings,
             ShaderStages::VERTEX_FRAGMENT,
@@ -1256,7 +2018,13 @@ impl Renderer {
             pass.set_bind_group(0, bind_group, &[]);
         }
         pass.draw(0..3, 0..1);
-        Ok(())
+        Ok(EncodedPipelinePass {
+            dispatch_workgroups: None,
+            shader_id: shader.shader_id,
+            shader_revision: shader.revision,
+            fallback_used: shader.fallback_used,
+            pipeline_key,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1271,7 +2039,7 @@ impl Renderer {
         runtime_resources: &FlowRuntimeResources,
         plan: &CompiledRasterExecutionPlan,
         shader_registry: &ShaderRegistryResource,
-    ) -> Result<()> {
+    ) -> Result<EncodedPipelinePass> {
         let color_target = runtime_resources.resolve_color_target_from_plan(
             plan.pass_id.as_str(),
             &plan.targets,
@@ -1296,7 +2064,7 @@ impl Renderer {
             plan.pass_id.as_str(),
             FlowPassKind::Graphics,
             plan.feature_id.as_deref(),
-            shader.identity.as_str(),
+            shader.pipeline_identity.as_str(),
             shader.revision,
             &plan.bindings,
             ShaderStages::VERTEX_FRAGMENT,
@@ -1454,7 +2222,13 @@ impl Renderer {
             (true, None) => pass.draw_indexed(0..3, 0, 0..1),
             (false, None) => pass.draw(0..3, 0..1),
         }
-        Ok(())
+        Ok(EncodedPipelinePass {
+            dispatch_workgroups: None,
+            shader_id: shader.shader_id,
+            shader_revision: shader.revision,
+            fallback_used: shader.fallback_used,
+            pipeline_key,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1920,6 +2694,387 @@ impl Renderer {
     }
 }
 
+#[derive(Debug, Default)]
+struct PassResourceTruth {
+    render_targets: Vec<String>,
+    sampled_textures: Vec<String>,
+    storage_textures: Vec<String>,
+    depth_targets: Vec<String>,
+    capture_points_available: Vec<RenderCapturePointIdentity>,
+}
+
+fn collect_pass_resource_truth(
+    flow_id: &str,
+    pass: &CompiledPassExecutionPlan,
+    runtime_resources: &FlowRuntimeResources,
+) -> PassResourceTruth {
+    let pass_id = execution_pass_id(pass).to_string();
+    let mut render_targets = Vec::<String>::new();
+    let mut sampled_textures = Vec::<String>::new();
+    let mut storage_textures = Vec::<String>::new();
+    let mut depth_targets = Vec::<String>::new();
+    let mut render_target_seen = BTreeSet::<String>::new();
+    let mut sampled_seen = BTreeSet::<String>::new();
+    let mut storage_seen = BTreeSet::<String>::new();
+    let mut depth_seen = BTreeSet::<String>::new();
+
+    match pass {
+        CompiledPassExecutionPlan::Compute(plan) => {
+            for entry in &plan.bindings.bind_group.entries {
+                match entry {
+                    CompiledBindingEntry::SampledTexture { resource } => {
+                        push_resolved_resource_id(
+                            pass_id.as_str(),
+                            resource,
+                            "sampled_texture",
+                            runtime_resources,
+                            &mut sampled_seen,
+                            &mut sampled_textures,
+                        );
+                    }
+                    CompiledBindingEntry::StorageTexture { resource, .. } => {
+                        push_resolved_resource_id(
+                            pass_id.as_str(),
+                            resource,
+                            "storage_texture",
+                            runtime_resources,
+                            &mut storage_seen,
+                            &mut storage_textures,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        CompiledPassExecutionPlan::Fullscreen(plan) | CompiledPassExecutionPlan::Graphics(plan) => {
+            for target in &plan.targets.color_outputs {
+                push_resolved_resource_id(
+                    pass_id.as_str(),
+                    target,
+                    "color_target",
+                    runtime_resources,
+                    &mut render_target_seen,
+                    &mut render_targets,
+                );
+            }
+            if let Some(depth_output) = plan.targets.depth_output.as_ref() {
+                push_resolved_resource_id(
+                    pass_id.as_str(),
+                    depth_output,
+                    "depth_target",
+                    runtime_resources,
+                    &mut depth_seen,
+                    &mut depth_targets,
+                );
+            }
+            for entry in &plan.bindings.bind_group.entries {
+                match entry {
+                    CompiledBindingEntry::SampledTexture { resource } => {
+                        push_resolved_resource_id(
+                            pass_id.as_str(),
+                            resource,
+                            "sampled_texture",
+                            runtime_resources,
+                            &mut sampled_seen,
+                            &mut sampled_textures,
+                        );
+                    }
+                    CompiledBindingEntry::StorageTexture { resource, .. } => {
+                        push_resolved_resource_id(
+                            pass_id.as_str(),
+                            resource,
+                            "storage_texture",
+                            runtime_resources,
+                            &mut storage_seen,
+                            &mut storage_textures,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        CompiledPassExecutionPlan::Copy(plan) => {
+            if let Some(source) = plan.source.as_ref() {
+                push_resolved_resource_id(
+                    pass_id.as_str(),
+                    source,
+                    "copy_source",
+                    runtime_resources,
+                    &mut render_target_seen,
+                    &mut render_targets,
+                );
+            }
+            if let Some(destination) = plan.destination.as_ref() {
+                push_resolved_resource_id(
+                    pass_id.as_str(),
+                    destination,
+                    "copy_destination",
+                    runtime_resources,
+                    &mut render_target_seen,
+                    &mut render_targets,
+                );
+            }
+        }
+        CompiledPassExecutionPlan::Present(plan) => {
+            if let Some(source) = plan.source.as_ref() {
+                push_resolved_resource_id(
+                    pass_id.as_str(),
+                    source,
+                    "present_source",
+                    runtime_resources,
+                    &mut render_target_seen,
+                    &mut render_targets,
+                );
+            }
+        }
+        CompiledPassExecutionPlan::BuiltinUiComposite(plan) => {
+            push_resolved_resource_id(
+                pass_id.as_str(),
+                &plan.color_output,
+                "ui_composite_color_output",
+                runtime_resources,
+                &mut render_target_seen,
+                &mut render_targets,
+            );
+        }
+    }
+
+    let mut capture_points_available = Vec::<RenderCapturePointIdentity>::new();
+    let mut capture_point_seen = BTreeSet::<RenderCapturePointIdentity>::new();
+    for resource_id in render_targets
+        .iter()
+        .chain(sampled_textures.iter())
+        .chain(storage_textures.iter())
+        .chain(depth_targets.iter())
+    {
+        let texture_class = runtime_resources
+            .capture_texture_class(resource_id.as_str(), CaptureTextureClass::ColorTarget);
+        for stage in [CaptureStage::Before, CaptureStage::After] {
+            let identity = RenderCapturePointIdentity {
+                flow_id: flow_id.to_string(),
+                pass_id: pass_id.clone(),
+                stage,
+                resource_id: resource_id.clone(),
+                texture_class,
+            };
+            if capture_point_seen.insert(identity.clone()) {
+                capture_points_available.push(identity);
+            }
+        }
+    }
+
+    PassResourceTruth {
+        render_targets,
+        sampled_textures,
+        storage_textures,
+        depth_targets,
+        capture_points_available,
+    }
+}
+
+fn push_resolved_resource_id(
+    pass_id: &str,
+    target: &CompiledResourceRef,
+    role: &str,
+    runtime_resources: &FlowRuntimeResources,
+    seen: &mut BTreeSet<String>,
+    output: &mut Vec<String>,
+) {
+    if let Ok(resource_id) = runtime_resources.resolve_resource_id(pass_id, target, role) {
+        let key = resource_id.to_string();
+        if seen.insert(key.clone()) {
+            output.push(key);
+        }
+    }
+}
+
+fn enqueue_texture_capture_copy(
+    device: &Device,
+    encoder: &mut CommandEncoder,
+    selector_index: usize,
+    identity: RenderCaptureIdentity,
+    texture: &Texture,
+    size: (u32, u32),
+    source_format: TextureFormat,
+    readback_format: TextureReadbackFormat,
+) -> Result<PendingCaptureReadback> {
+    let width = size.0.max(1);
+    let height = size.1.max(1);
+    let unpadded_bytes_per_row = width
+        .checked_mul(4)
+        .ok_or_else(|| anyhow::anyhow!("capture width overflow for {}", identity.pass_id()))?;
+    let padded_bytes_per_row = align_to(unpadded_bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT);
+    let total_size = (padded_bytes_per_row as u64)
+        .checked_mul(height as u64)
+        .ok_or_else(|| {
+            anyhow::anyhow!("capture buffer size overflow for {}", identity.pass_id())
+        })?;
+
+    let buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("engine_render_capture_readback"),
+        size: total_size,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    encoder.copy_texture_to_buffer(
+        TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        },
+        TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(padded_bytes_per_row),
+                rows_per_image: Some(height),
+            },
+        },
+        Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    Ok(PendingCaptureReadback {
+        selector_index,
+        identity,
+        buffer,
+        width,
+        height,
+        source_format,
+        readback_format,
+        padded_bytes_per_row,
+    })
+}
+
+fn read_capture_back(
+    device: &Device,
+    pending: PendingCaptureReadback,
+) -> (usize, RenderCapturedTexture) {
+    let PendingCaptureReadback {
+        selector_index,
+        identity,
+        buffer,
+        width,
+        height,
+        source_format,
+        readback_format,
+        padded_bytes_per_row,
+    } = pending;
+    let mut capture = RenderCapturedTexture {
+        identity,
+        width,
+        height,
+        format: format!("{:?}", source_format),
+        bytes_rgba8: None,
+        terminal: RenderCaptureTerminal::completed(),
+    };
+
+    let slice = buffer.slice(..);
+    let (sender, receiver) = channel();
+    slice.map_async(MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
+    if let Err(err) = device.poll(PollType::wait_indefinitely()) {
+        capture.terminal = RenderCaptureTerminal::with_reason(
+            RenderCaptureTerminalCode::ReadbackFailed,
+            "device_poll_failed",
+            format!("device.poll failed for capture readback: {err}"),
+        );
+        return (selector_index, capture);
+    }
+
+    match receiver.recv() {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => {
+            capture.terminal = RenderCaptureTerminal::with_reason(
+                RenderCaptureTerminalCode::ReadbackFailed,
+                "map_async_failed",
+                format!("buffer map_async failed: {err}"),
+            );
+            return (selector_index, capture);
+        }
+        Err(err) => {
+            capture.terminal = RenderCaptureTerminal::with_reason(
+                RenderCaptureTerminalCode::ReadbackFailed,
+                "map_async_channel_failed",
+                format!("buffer map_async channel failed: {err}"),
+            );
+            return (selector_index, capture);
+        }
+    }
+
+    let data = slice.get_mapped_range();
+    let unpadded_bytes_per_row = width.saturating_mul(4) as usize;
+    let expected_padded_len = padded_bytes_per_row as usize * height as usize;
+    if data.len() < expected_padded_len {
+        capture.terminal = RenderCaptureTerminal::with_reason(
+            RenderCaptureTerminalCode::ReadbackFailed,
+            "mapped_bytes_too_short",
+            format!(
+                "mapped capture bytes too short: actual={} expected_at_least={}",
+                data.len(),
+                expected_padded_len
+            ),
+        );
+        drop(data);
+        buffer.unmap();
+        return (selector_index, capture);
+    }
+
+    let mut rgba = vec![0u8; unpadded_bytes_per_row * height as usize];
+    for row in 0..height as usize {
+        let source_offset = row * padded_bytes_per_row as usize;
+        let source_end = source_offset + unpadded_bytes_per_row;
+        let destination_offset = row * unpadded_bytes_per_row;
+        let destination_end = destination_offset + unpadded_bytes_per_row;
+        let source_row = &data[source_offset..source_end];
+        let destination_row = &mut rgba[destination_offset..destination_end];
+        match readback_format.mode {
+            TextureReadbackMode::Rgba8 => destination_row.copy_from_slice(source_row),
+            TextureReadbackMode::Bgra8 => {
+                for (pixel_index, chunk) in source_row.chunks_exact(4).enumerate() {
+                    let destination_index = pixel_index * 4;
+                    destination_row[destination_index] = chunk[2];
+                    destination_row[destination_index + 1] = chunk[1];
+                    destination_row[destination_index + 2] = chunk[0];
+                    destination_row[destination_index + 3] = chunk[3];
+                }
+            }
+        }
+    }
+
+    capture.bytes_rgba8 = Some(rgba);
+    drop(data);
+    buffer.unmap();
+    (selector_index, capture)
+}
+
+fn texture_readback_format(format: TextureFormat) -> Option<TextureReadbackFormat> {
+    let mode = match format {
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => TextureReadbackMode::Rgba8,
+        TextureFormat::Bgra8Unorm | TextureFormat::Bgra8UnormSrgb => TextureReadbackMode::Bgra8,
+        _ => return None,
+    };
+    Some(TextureReadbackFormat { mode })
+}
+
+fn align_to(value: u32, alignment: u32) -> u32 {
+    if alignment == 0 {
+        return value;
+    }
+    let remainder = value % alignment;
+    if remainder == 0 {
+        value
+    } else {
+        value + (alignment - remainder)
+    }
+}
+
 fn execution_pass_kind_name(pass: &CompiledPassExecutionPlan) -> &'static str {
     match pass {
         CompiledPassExecutionPlan::Compute(_) => "compute",
@@ -1928,6 +3083,17 @@ fn execution_pass_kind_name(pass: &CompiledPassExecutionPlan) -> &'static str {
         CompiledPassExecutionPlan::Copy(_) => "copy",
         CompiledPassExecutionPlan::Present(_) => "present",
         CompiledPassExecutionPlan::BuiltinUiComposite(_) => "builtin_ui_composite",
+    }
+}
+
+fn execution_flow_pass_kind(pass: &CompiledPassExecutionPlan) -> FlowPassKind {
+    match pass {
+        CompiledPassExecutionPlan::Compute(_) => FlowPassKind::Compute,
+        CompiledPassExecutionPlan::Fullscreen(_) => FlowPassKind::Fullscreen,
+        CompiledPassExecutionPlan::Graphics(_) => FlowPassKind::Graphics,
+        CompiledPassExecutionPlan::Copy(_) => FlowPassKind::Copy,
+        CompiledPassExecutionPlan::Present(_) => FlowPassKind::Present,
+        CompiledPassExecutionPlan::BuiltinUiComposite(_) => FlowPassKind::BuiltinUiComposite,
     }
 }
 
@@ -1953,11 +3119,24 @@ fn execution_pass_feature_id(pass: &CompiledPassExecutionPlan) -> Option<&str> {
     }
 }
 
+fn execution_pass_order_index(pass: &CompiledPassExecutionPlan) -> usize {
+    match pass {
+        CompiledPassExecutionPlan::Compute(value) => value.order_index,
+        CompiledPassExecutionPlan::Fullscreen(value) => value.order_index,
+        CompiledPassExecutionPlan::Graphics(value) => value.order_index,
+        CompiledPassExecutionPlan::Copy(value) => value.order_index,
+        CompiledPassExecutionPlan::Present(value) => value.order_index,
+        CompiledPassExecutionPlan::BuiltinUiComposite(value) => value.order_index,
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ResolvedShaderMaterial<'a> {
     source: &'a str,
-    identity: String,
+    shader_id: String,
+    pipeline_identity: String,
     revision: u64,
+    fallback_used: bool,
 }
 
 fn resolve_shader_material<'a>(
@@ -1967,20 +3146,32 @@ fn resolve_shader_material<'a>(
     fallback_identity: &'static str,
 ) -> ResolvedShaderMaterial<'a> {
     match reference {
-        Some(RenderShaderReference::AssetPath(path)) => ResolvedShaderMaterial {
-            source: shader_registry.source_or(path, fallback_source),
-            identity: format!("asset:{path}"),
-            revision: shader_registry.revision_for(path),
-        },
-        Some(RenderShaderReference::RegistryHandle(handle)) => ResolvedShaderMaterial {
-            source: shader_registry.source_or_handle(*handle, fallback_source),
-            identity: format!("handle:{}", handle.index()),
-            revision: shader_registry.revision_for_handle(*handle),
-        },
+        Some(RenderShaderReference::AssetPath(path)) => {
+            let revision = shader_registry.revision_for(path);
+            ResolvedShaderMaterial {
+                source: shader_registry.source_or(path, fallback_source),
+                shader_id: path.clone(),
+                pipeline_identity: format!("asset:{path}"),
+                revision,
+                fallback_used: revision == 0,
+            }
+        }
+        Some(RenderShaderReference::RegistryHandle(handle)) => {
+            let revision = shader_registry.revision_for_handle(*handle);
+            ResolvedShaderMaterial {
+                source: shader_registry.source_or_handle(*handle, fallback_source),
+                shader_id: format!("handle:{}", handle.index()),
+                pipeline_identity: format!("handle:{}", handle.index()),
+                revision,
+                fallback_used: revision == 0,
+            }
+        }
         None => ResolvedShaderMaterial {
             source: fallback_source,
-            identity: fallback_identity.to_string(),
+            shader_id: fallback_identity.to_string(),
+            pipeline_identity: fallback_identity.to_string(),
             revision: 0,
+            fallback_used: false,
         },
     }
 }

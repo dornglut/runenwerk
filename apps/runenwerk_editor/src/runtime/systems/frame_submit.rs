@@ -1,8 +1,7 @@
 use engine::WindowState;
 use engine::plugins::render::{
     EditorPickingResultResource, EditorPickingTarget, ShaderRegistryResource, UiFontAtlasResource,
-    UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
-    UiFrameSubmissionRegistryResource,
+    UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
 };
 use engine::runtime::{Res, ResMut};
 use scene::LocalTransform;
@@ -13,16 +12,17 @@ use ui_render_data::{
 };
 
 use crate::editor_runtime::EditorPrimitive;
-use crate::runtime::app::EDITOR_VIEWPORT_SDF_SHADER_ASSET;
+use crate::runtime::app::EDITOR_VIEWPORT_SDF_SHADER_ID;
 use crate::runtime::resources::{
-    EditorHostResource, EditorViewportDebugStage, EditorViewportRenderState,
-    effective_shell_scale, scaled_shell_theme,
+    EditorHostResource, EditorViewportDebugStage, EditorViewportRenderState, effective_shell_scale,
+    scaled_shell_theme,
 };
 
 const EDITOR_SHELL_UI_PRODUCER_ID: &str = "editor.shell";
 const DEBUG_HARDCODED_UI_FRAME_ENV: &str = "RUNENWERK_EDITOR_DEBUG_UI_FRAME";
 const VIEWPORT_DEBUG_STAGE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_DEBUG_STAGE";
 const VIEWPORT_ROOT_OPAQUE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_ROOT_OPAQUE";
+const VIEWPORT_BRANCH_TRACE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_BRANCH_TRACE";
 
 pub fn submit_editor_frame_system(
     window: Res<WindowState>,
@@ -55,7 +55,7 @@ pub fn submit_editor_frame_system(
     let viewport_bounds_changed =
         populate_viewport_render_state(app, &mut viewport_render, viewport_bounds);
     let viewport_valid = viewport_is_valid(viewport_bounds);
-    let shader_loaded = shader_registry.revision_for(EDITOR_VIEWPORT_SDF_SHADER_ASSET) > 0;
+    let shader_loaded = shader_registry.revision_for(EDITOR_VIEWPORT_SDF_SHADER_ID) > 0;
     let debug_stage = viewport_debug_stage();
     let root_background_opaque = root_background_opaque_enabled();
     viewport_render.update_visibility_diagnostics(viewport_valid, shader_loaded);
@@ -66,6 +66,15 @@ pub fn submit_editor_frame_system(
         picking_hits_entity_or_component(&picking) && viewport_render.scene_should_be_invisible();
     let should_report_contradiction =
         viewport_render.should_report_visibility_contradiction(contradiction_active);
+    let branch_trace_enabled = viewport_branch_trace_enabled();
+    let branch_trace_snapshot = if branch_trace_enabled || should_report_contradiction {
+        Some(
+            viewport_render
+                .branch_trace_snapshot((window.size_px.0.max(1), window.size_px.1.max(1))),
+        )
+    } else {
+        None
+    };
 
     if app.debug_logs_enabled() {
         if shell_scale_changed && viewport_render.should_report_scale_change() {
@@ -87,7 +96,10 @@ pub fn submit_editor_frame_system(
             }
         }
 
-        if root_probe_changed || debug_stage_changed || viewport_render.should_report_debug_state_change() {
+        if root_probe_changed
+            || debug_stage_changed
+            || viewport_render.should_report_debug_state_change()
+        {
             app.append_console_line(format!(
                 "[viewport] root-occlusion={} debug-stage={} viewport_valid={} shader_loaded={} primitive_visible={}",
                 if viewport_render.root_background_opaque { "opaque" } else { "transparent" },
@@ -97,14 +109,25 @@ pub fn submit_editor_frame_system(
                 viewport_render.has_primitive,
             ));
         }
+    }
 
+    if branch_trace_enabled
+        && let Some(snapshot) = branch_trace_snapshot
+        && viewport_render.should_report_branch_trace_change(snapshot)
+    {
+        app.append_console_line(format!("[viewport.branch] {}", snapshot.summary_line()));
     }
 
     if should_report_contradiction {
-        app.append_console_line(format!(
+        let mut line = format!(
             "[viewport] contradiction: analytic picking hit while render-state indicates invisible ({})",
             contradiction_reasons(&viewport_render)
-        ));
+        );
+        if let Some(snapshot) = branch_trace_snapshot {
+            line.push_str(" | ");
+            line.push_str(&snapshot.summary_line());
+        }
+        app.append_console_line(line);
     }
 
     submissions.replace(
@@ -134,6 +157,17 @@ fn viewport_debug_stage() -> EditorViewportDebugStage {
 
 fn root_background_opaque_enabled() -> bool {
     std::env::var(VIEWPORT_ROOT_OPAQUE_ENV)
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn viewport_branch_trace_enabled() -> bool {
+    std::env::var(VIEWPORT_BRANCH_TRACE_ENV)
         .map(|value| {
             matches!(
                 value.trim().to_ascii_lowercase().as_str(),

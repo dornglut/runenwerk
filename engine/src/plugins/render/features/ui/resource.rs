@@ -100,14 +100,7 @@ fn build_default_editor_font_atlas() -> anyhow::Result<(MsdfFontAtlas, UiFontAtl
         max_height = max_height.max(bitmap_height);
 
         let (plane_left, plane_top, plane_right, plane_bottom) = exact_bb
-            .map(|bb| {
-                (
-                    bb.min.x,
-                    bb.max.y,
-                    bb.max.x,
-                    bb.min.y,
-                )
-            })
+            .map(|bb| (bb.min.x, -bb.min.y, bb.max.x, -bb.max.y))
             .unwrap_or((0.0, 0.0, 0.0, 0.0));
 
         glyph_entries.push((
@@ -252,4 +245,48 @@ pub fn prepare_ui_feature_resource_system(
             })
             .collect(),
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn glyph_metrics<'a>(atlas: &'a MsdfFontAtlas, ch: char) -> &'a GlyphMetrics {
+        atlas
+            .glyphs
+            .get(&ch)
+            .unwrap_or_else(|| panic!("glyph metrics missing for '{ch}'"))
+    }
+
+    #[test]
+    fn default_editor_font_atlas_uses_baseline_up_orientation_for_representative_glyphs() {
+        let (atlas, _image) =
+            build_default_editor_font_atlas().expect("default atlas should build for tests");
+
+        for ch in ['N', 'o', 'n', 'g', 'e', 'p', 'y'] {
+            let metrics = glyph_metrics(&atlas, ch);
+            assert!(
+                metrics.plane_top > 0.0,
+                "glyph '{ch}' should have positive plane_top with baseline-up metrics",
+            );
+        }
+
+        for ch in ['g', 'p', 'y'] {
+            let metrics = glyph_metrics(&atlas, ch);
+            assert!(
+                metrics.plane_bottom < -1.0,
+                "descender glyph '{ch}' should have clearly negative plane_bottom; got {}",
+                metrics.plane_bottom,
+            );
+        }
+
+        for ch in ['N', 'o', 'n', 'e'] {
+            let metrics = glyph_metrics(&atlas, ch);
+            assert!(
+                metrics.plane_bottom > -1.0,
+                "non-descender glyph '{ch}' should stay near baseline for plane_bottom; got {}",
+                metrics.plane_bottom,
+            );
+        }
+    }
 }

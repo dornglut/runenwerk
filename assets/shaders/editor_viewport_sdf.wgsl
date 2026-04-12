@@ -131,44 +131,12 @@ fn grid_shade(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> vec4<f32> {
     return vec4<f32>(mix(vec3<f32>(0.09, 0.10, 0.12), color, fog), 1.0);
 }
 
-@fragment
-fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
-    let pixel = position.xy;
-    if !viewport_contains(pixel) {
-        discard;
-    }
+struct RaymarchResult {
+    hit : bool,
+    distance : f32,
+};
 
-    let viewport_size = max(u.viewport.zw, vec2<f32>(1.0, 1.0));
-    let viewport_local = (pixel - u.viewport.xy) / viewport_size;
-    let ndc = vec2<f32>(viewport_local.x * 2.0 - 1.0, 1.0 - viewport_local.y * 2.0);
-    let debug_stage = u.primitive_flags.z;
-
-    if debug_stage == 1u {
-        return vec4<f32>(0.95, 0.12, 0.36, 1.0);
-    }
-    if debug_stage == 2u {
-        let gradient = vec3<f32>(
-            clamp(viewport_local.x, 0.0, 1.0),
-            clamp(viewport_local.y, 0.0, 1.0),
-            clamp((ndc.x + 1.0) * 0.5, 0.0, 1.0)
-        );
-        return vec4<f32>(gradient, 1.0);
-    }
-
-    let aspect = viewport_size.x / viewport_size.y;
-    let tan_half_fov = tan(u.camera_position.w * 0.5);
-
-    let ray_origin = u.camera_position.xyz;
-    let ray_dir = normalize(
-        u.camera_forward.xyz
-        + u.camera_right.xyz * ndc.x * aspect * tan_half_fov
-        + u.camera_up.xyz * ndc.y * tan_half_fov
-    );
-
-    if u.primitive_flags.y == 0u {
-        return grid_shade(ray_origin, ray_dir);
-    }
-
+fn march_scene(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> RaymarchResult {
     var t = 0.0;
     var hit = false;
     var steps: u32 = 0u;
@@ -193,11 +161,81 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         steps = steps + 1u;
     }
 
-    if !hit {
+    return RaymarchResult(hit, t);
+}
+
+@fragment
+fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    let pixel = position.xy;
+    let debug_stage = u.primitive_flags.z;
+    let inside_viewport = viewport_contains(pixel);
+    if debug_stage == 1u {
+        if inside_viewport {
+            return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+        }
+        return vec4<f32>(0.02, 0.02, 0.02, 1.0);
+    }
+
+    if !inside_viewport {
+        discard;
+    }
+
+    let viewport_size = max(u.viewport.zw, vec2<f32>(1.0, 1.0));
+    let viewport_local = (pixel - u.viewport.xy) / viewport_size;
+    let ndc = vec2<f32>(viewport_local.x * 2.0 - 1.0, 1.0 - viewport_local.y * 2.0);
+    let has_primitive = u.primitive_flags.y != 0u;
+
+    if debug_stage == 2u {
+        let gradient = vec3<f32>(
+            clamp(viewport_local.x, 0.0, 1.0),
+            clamp(viewport_local.y, 0.0, 1.0),
+            clamp((ndc.x + 1.0) * 0.5, 0.0, 1.0)
+        );
+        return vec4<f32>(gradient, 1.0);
+    }
+    if debug_stage == 3u {
+        if has_primitive {
+            return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+        }
+        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
+
+    let aspect = viewport_size.x / viewport_size.y;
+    let tan_half_fov = tan(u.camera_position.w * 0.5);
+
+    let ray_origin = u.camera_position.xyz;
+    let ray_dir = normalize(
+        u.camera_forward.xyz
+        + u.camera_right.xyz * ndc.x * aspect * tan_half_fov
+        + u.camera_up.xyz * ndc.y * tan_half_fov
+    );
+
+    var ray_hit = false;
+    var ray_hit_distance = 0.0;
+    if has_primitive {
+        let march = march_scene(ray_origin, ray_dir);
+        ray_hit = march.hit;
+        ray_hit_distance = march.distance;
+    }
+
+    if debug_stage == 4u {
+        if !has_primitive {
+            return vec4<f32>(1.0, 0.5, 0.0, 1.0);
+        }
+        if ray_hit {
+            return vec4<f32>(1.0, 1.0, 0.0, 1.0);
+        }
+        return vec4<f32>(0.0, 0.35, 1.0, 1.0);
+    }
+
+    if !has_primitive {
+        return grid_shade(ray_origin, ray_dir);
+    }
+    if !ray_hit {
         return grid_shade(ray_origin, ray_dir);
     }
 
-    let point = ray_origin + ray_dir * t;
+    let point = ray_origin + ray_dir * ray_hit_distance;
     let normal = estimate_normal(point);
     let light_dir = normalize(vec3<f32>(0.5, 0.8, 0.35));
     let diff = max(dot(normal, light_dir), 0.1);

@@ -1,10 +1,22 @@
+mod artifacts;
+mod capture;
+mod config;
 mod graph_dump;
+mod pass_provenance;
+mod plan;
+mod report;
 mod resource_inspector;
 mod texture_view;
 mod timings;
 mod world_runtime;
 
+pub use artifacts::*;
+pub use capture::*;
+pub use config::*;
 pub use graph_dump::*;
+pub use pass_provenance::*;
+pub use plan::*;
+pub use report::*;
 pub use resource_inspector::*;
 pub use texture_view::*;
 pub use timings::*;

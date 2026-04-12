@@ -289,7 +289,10 @@ mod tests {
         ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiLayer, UiLayerId, UiPaint,
         UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
     };
-    use ui_text::{AtlasTextLayouter, TextAlign, TextLayoutRequest, TextLayouter, TextOverflow, TextStyle, TextWrap};
+    use ui_text::{
+        AtlasTextLayouter, TextAlign, TextLayoutRequest, TextLayouter, TextOverflow, TextStyle,
+        TextWrap,
+    };
 
     #[test]
     fn extract_rect_instances_preserves_clip_stack_emission_order() {
@@ -397,5 +400,87 @@ mod tests {
                 glyph.ch,
             );
         }
+    }
+
+    #[test]
+    fn flatten_glyph_run_places_descenders_below_baseline_for_representative_word() {
+        let atlas = UiFontAtlasResource::default();
+        let style = TextStyle {
+            font_id: DEFAULT_EDITOR_FONT_ID,
+            font_size: 14.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            line_height: None,
+            align: TextAlign::Start,
+            wrap: TextWrap::NoWrap,
+            overflow: TextOverflow::Clip,
+        };
+        let glyph_run = AtlasTextLayouter
+            .layout(
+                &atlas,
+                TextLayoutRequest {
+                    text: "Nongepy",
+                    style: &style,
+                    max_width: None,
+                },
+            )
+            .expect("expected atlas text layout");
+        let baseline = glyph_run
+            .glyphs
+            .first()
+            .map(|glyph| glyph.origin.y)
+            .expect("representative run should contain glyphs");
+
+        let run = GlyphRunPrimitive::new(
+            glyph_run.clone(),
+            Some(UiRect::new(0.0, 0.0, 480.0, 96.0)),
+            UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
+            UiDrawKey::new(0, Some(DEFAULT_EDITOR_FONT_ID.0)),
+            UiSortKey::new(0, 0, 0),
+        );
+        let mut instances = Vec::new();
+        flatten_glyph_run(&run, None, &atlas, &mut instances);
+        assert_eq!(instances.len(), glyph_run.glyphs.len());
+
+        let mut by_char = std::collections::HashMap::new();
+        for (glyph, instance) in glyph_run.glyphs.iter().zip(instances.iter()) {
+            by_char.entry(glyph.ch).or_insert(instance);
+        }
+
+        for ch in ['g', 'p', 'y'] {
+            let instance = by_char
+                .get(&ch)
+                .unwrap_or_else(|| panic!("flattened run should contain '{ch}'"));
+            let bottom = instance.raw.rect[1] + instance.raw.rect[3];
+            assert!(
+                bottom > baseline + 0.5,
+                "descender glyph '{ch}' should render below baseline; bottom={bottom} baseline={baseline}",
+            );
+        }
+
+        for ch in ['N', 'o', 'n', 'e'] {
+            let instance = by_char
+                .get(&ch)
+                .unwrap_or_else(|| panic!("flattened run should contain '{ch}'"));
+            let bottom = instance.raw.rect[1] + instance.raw.rect[3];
+            assert!(
+                bottom < baseline + 0.5,
+                "non-descender glyph '{ch}' should stay near baseline; bottom={bottom} baseline={baseline}",
+            );
+        }
+
+        let top_n = by_char
+            .get(&'N')
+            .expect("flattened run should contain 'N'")
+            .raw
+            .rect[1];
+        let top_g = by_char
+            .get(&'g')
+            .expect("flattened run should contain 'g'")
+            .raw
+            .rect[1];
+        assert!(
+            top_n + 0.5 < top_g,
+            "cap-height glyph 'N' should render above descender glyph 'g'; top_n={top_n} top_g={top_g}",
+        );
     }
 }

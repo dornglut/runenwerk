@@ -1,3 +1,4 @@
+use crate::plugins::render::inspect::{CaptureStage, RenderCapturedTexture};
 use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{RenderFlow, RenderResourceDescriptor, ResourceLifetime};
 
@@ -5,6 +6,52 @@ use crate::plugins::render::{RenderFlow, RenderResourceDescriptor, ResourceLifet
 pub struct RenderTextureInspectorState {
     pub selected_texture: Option<String>,
     pub hovered_texture: Option<String>,
+    pub captured: Vec<CapturedTextureViewEntry>,
+}
+
+impl RenderTextureInspectorState {
+    pub fn observe_captures(&mut self, captures: &[RenderCapturedTexture]) {
+        self.captured.clear();
+        self.captured.extend(captures.iter().map(|capture| {
+            let identity = &capture.identity;
+            CapturedTextureViewEntry {
+                frame_index: identity.frame_index,
+                flow_id: identity.flow_id().to_string(),
+                pass_id: identity.pass_id().to_string(),
+                pass_label: identity.pass_label.clone(),
+                stage: identity.stage(),
+                resource_id: identity.resource_id().to_string(),
+                texture_class: identity.texture_class().as_str().to_string(),
+                width: capture.width,
+                height: capture.height,
+                format: capture.format.clone(),
+                has_pixels: capture.bytes_rgba8.is_some(),
+                terminal_code: capture.terminal.code.as_str().to_string(),
+                terminal_reason: capture
+                    .terminal
+                    .reason
+                    .as_ref()
+                    .map(|value| value.detail.clone()),
+            }
+        }));
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapturedTextureViewEntry {
+    pub frame_index: u64,
+    pub flow_id: String,
+    pub pass_id: String,
+    pub pass_label: String,
+    pub stage: CaptureStage,
+    pub resource_id: String,
+    pub texture_class: String,
+    pub width: u32,
+    pub height: u32,
+    pub format: String,
+    pub has_pixels: bool,
+    pub terminal_code: String,
+    pub terminal_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

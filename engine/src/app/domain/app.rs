@@ -2,6 +2,7 @@ use crate::app::domain::mode::AppMode;
 use crate::app::domain::runner::{AppRunner, FixedFramesRunner};
 use crate::app::domain::state::WindowedAppState;
 use crate::plugins::input::InputState;
+use crate::plugins::render::inspect::{RenderDebugConfigResource, RenderDebugControlResource};
 use crate::plugins::render::{RenderFlow, RenderFlowRegistryResource};
 use crate::plugins::{
     SceneReplayArchive, load_replay, seek_loaded_replay, start_recording, stop_recording,
@@ -144,6 +145,28 @@ impl App {
         }
         if let Ok(registry) = self.world.resource_mut::<RenderFlowRegistryResource>() {
             registry.upsert_flow(flow);
+        }
+        self
+    }
+
+    pub fn update_render_debug_control<F>(&mut self, update: F) -> &mut Self
+    where
+        F: FnOnce(&mut RenderDebugControlResource),
+    {
+        self.init_resource::<RenderDebugControlResource>();
+        if let Ok(mut control) = self.world.resource_mut::<RenderDebugControlResource>() {
+            update(&mut control);
+        }
+        self
+    }
+
+    pub fn update_render_debug_config<F>(&mut self, update: F) -> &mut Self
+    where
+        F: FnOnce(&mut RenderDebugConfigResource),
+    {
+        self.init_resource::<RenderDebugConfigResource>();
+        if let Ok(mut config) = self.world.resource_mut::<RenderDebugConfigResource>() {
+            update(&mut config);
         }
         self
     }

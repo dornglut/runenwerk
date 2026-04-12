@@ -4,7 +4,11 @@ use crate::plugins::render::features::{
 };
 use crate::plugins::render::frame::PreparedRenderFrame;
 use crate::plugins::render::graph::CompiledRenderFlowPlan;
-use crate::plugins::render::inspect::{PassTimingSample, RuntimeResourceInspectionEntry};
+use crate::plugins::render::inspect::{
+    PassTimingSample, RenderCaptureSelectorResult, RenderCapturedTexture,
+    RenderDebugConfigResource, RenderDebugControlResource, RenderPassProvenanceRecord,
+    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
+};
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -370,6 +374,10 @@ pub struct Renderer {
     last_good_ui_prepared: Option<UiPreparedDraws>,
     last_pass_timings: Vec<PassTimingSample>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
+    last_pass_provenance: Vec<RenderPassProvenanceRecord>,
+    last_capture_plan: ResolvedRenderCapturePlan,
+    last_capture_selector_results: Vec<RenderCaptureSelectorResult>,
+    last_captured_textures: Vec<RenderCapturedTexture>,
 }
 
 #[derive(Debug, ecs::Component, ecs::Resource)]
@@ -405,6 +413,8 @@ impl Gfx {
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
         ui_font_atlas: &UiFontAtlasResource,
+        debug_control: &RenderDebugControlResource,
+        debug_config: &RenderDebugConfigResource,
     ) -> Result<GfxFrameTimings> {
         let mut timings = GfxFrameTimings::default();
         let acquire_start = Instant::now();
@@ -422,6 +432,8 @@ impl Gfx {
             ui_rect_shader,
             ui_font_atlas,
             self.ctx.surface_config.format,
+            debug_control,
+            debug_config,
         )?;
 
         let present_start = Instant::now();

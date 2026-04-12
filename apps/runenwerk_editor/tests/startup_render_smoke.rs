@@ -1,11 +1,9 @@
 use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderShaderReference,
-    ShaderRegistryResource,
-    UiFrameProducerId,
-    UiFrameSubmissionRegistryResource,
+    ShaderRegistryResource, UiFrameProducerId, UiFrameSubmissionRegistryResource,
 };
 use runenwerk_editor::editor_runtime::EditorPrimitiveKind;
-use runenwerk_editor::runtime::app::EDITOR_VIEWPORT_SDF_SHADER_ASSET;
+use runenwerk_editor::runtime::app::EDITOR_VIEWPORT_SDF_SHADER_ID;
 use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
 
 const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
@@ -46,12 +44,14 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         has_builtin_ui_pass,
         "editor render flows should include a builtin UI composite pass",
     );
-    let viewport_pass_shader_asset = flow_registry
+    let viewport_pass_shader_ref = flow_registry
         .compiled_flows()
         .iter()
         .flat_map(|flow| flow.execution.passes.iter())
         .find_map(|pass| match pass {
-            CompiledPassExecutionPlan::Fullscreen(plan) if plan.pass_id == EDITOR_VIEWPORT_SDF_PASS_ID => {
+            CompiledPassExecutionPlan::Fullscreen(plan)
+                if plan.pass_id == EDITOR_VIEWPORT_SDF_PASS_ID =>
+            {
                 plan.shader.as_ref().and_then(|shader| match shader {
                     RenderShaderReference::AssetPath(path) => Some(path.as_str()),
                     RenderShaderReference::RegistryHandle(_) => None,
@@ -60,18 +60,19 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
             _ => None,
         });
     assert!(
-        viewport_pass_shader_asset.is_some(),
+        viewport_pass_shader_ref.is_some(),
         "editor render flows should include the viewport SDF pass",
     );
     assert_eq!(
-        viewport_pass_shader_asset,
-        Some(EDITOR_VIEWPORT_SDF_SHADER_ASSET),
-        "viewport SDF pass should reference the expected shader asset path",
+        viewport_pass_shader_ref,
+        Some(EDITOR_VIEWPORT_SDF_SHADER_ID),
+        "viewport SDF pass should reference the shader id used for stable runtime lookup",
     );
 
     let submission = submissions
         .get(&UiFrameProducerId::new("editor.shell"))
         .expect("editor shell submission should exist");
+    let scene_overlay_submission = submissions.get(&UiFrameProducerId::new("scene.overlay"));
 
     assert!(
         !submission.frame.is_empty(),
@@ -81,11 +82,20 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         submission.primitive_count_hint() > 0,
         "editor shell frame should contain renderable primitives"
     );
-    let shader_loaded = shader_registry.revision_for(EDITOR_VIEWPORT_SDF_SHADER_ASSET) > 0;
-    assert_eq!(
+    assert!(
+        scene_overlay_submission
+            .map(|submission| submission.is_empty())
+            .unwrap_or(true),
+        "startup path should not include a non-empty scene.overlay submission that could overwrite viewport output",
+    );
+    let shader_revision = shader_registry.revision_for(EDITOR_VIEWPORT_SDF_SHADER_ID);
+    assert!(
+        shader_revision > 0,
+        "viewport SDF shader id should resolve to a loaded shader revision (>0); got {shader_revision}",
+    );
+    assert!(
         viewport_state.shader_loaded,
-        shader_loaded,
-        "viewport render diagnostics should mirror shader registry load status",
+        "viewport render diagnostics should report viewport shader as loaded",
     );
     assert!(
         viewport_state.viewport_valid,

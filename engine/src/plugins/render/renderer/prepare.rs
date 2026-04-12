@@ -31,25 +31,26 @@ impl Renderer {
             surface_width_u32,
             surface_height_u32,
         )
-            .into_iter()
-            .filter_map(|(scissor, instances)| {
-                if instances.is_empty() {
-                    return None;
-                }
-                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                    label: Some("engine_ui_rect_batch_instances"),
-                    contents: bytemuck::cast_slice(&instances),
-                    usage: BufferUsages::VERTEX,
-                });
-                Some(UiRectBatch {
-                    scissor,
-                    instance_count: instances.len() as u32,
-                    instance_buffer,
-                })
+        .into_iter()
+        .filter_map(|(scissor, instances)| {
+            if instances.is_empty() {
+                return None;
+            }
+            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("engine_ui_rect_batch_instances"),
+                contents: bytemuck::cast_slice(&instances),
+                usage: BufferUsages::VERTEX,
+            });
+            Some(UiRectBatch {
+                scissor,
+                instance_count: instances.len() as u32,
+                instance_buffer,
             })
-            .collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
-        let mut glyph_batches_by_scissor = Vec::<((u32, u32, u32, u32), u64, Vec<GlyphInstanceRaw>)>::new();
+        let mut glyph_batches_by_scissor =
+            Vec::<((u32, u32, u32, u32), u64, Vec<GlyphInstanceRaw>)>::new();
         for instance in flattened_glyph_instances {
             let scissor = instance
                 .clip
@@ -64,7 +65,8 @@ impl Renderer {
             {
                 continue;
             }
-            if let Some((last_scissor, last_texture, instances)) = glyph_batches_by_scissor.last_mut()
+            if let Some((last_scissor, last_texture, instances)) =
+                glyph_batches_by_scissor.last_mut()
                 && *last_scissor == scissor
                 && *last_texture == instance.texture_id
             {
@@ -239,7 +241,12 @@ fn group_rect_batches_ordered(
         let scissor = instance
             .clip
             .map(|clip| Renderer::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
-            .unwrap_or_else(|| Some(Renderer::full_scissor(surface_width_u32, surface_height_u32)));
+            .unwrap_or_else(|| {
+                Some(Renderer::full_scissor(
+                    surface_width_u32,
+                    surface_height_u32,
+                ))
+            });
         let Some(scissor) = scissor else {
             continue;
         };

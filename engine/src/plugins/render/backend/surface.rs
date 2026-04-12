@@ -10,7 +10,7 @@ pub fn build_surface_config(
     alpha_mode: CompositeAlphaMode,
 ) -> SurfaceConfiguration {
     SurfaceConfiguration {
-        usage: TextureUsages::RENDER_ATTACHMENT,
+        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         format,
         width: width.max(1),
         height: height.max(1),
