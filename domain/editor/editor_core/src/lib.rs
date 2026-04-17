@@ -3,20 +3,32 @@
 
 pub mod command;
 pub mod document;
+pub mod error;
 pub mod executor;
 pub mod history;
+pub mod ratification;
+pub mod reconciliation;
 pub mod selection;
 pub mod session;
+pub mod session_change;
+pub mod sharing;
 pub mod tool;
 pub mod transaction;
 pub mod transaction_builder;
+pub mod workflow;
 
 pub use command::*;
 pub use document::*;
+pub use error::*;
 pub use executor::*;
 pub use history::*;
+pub use ratification::*;
+pub use reconciliation::*;
 pub use selection::*;
 pub use session::*;
+pub use session_change::*;
+pub use sharing::*;
 pub use tool::*;
 pub use transaction::*;
 pub use transaction_builder::*;
+pub use workflow::*;

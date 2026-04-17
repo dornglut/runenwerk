@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::{DocumentDescriptor, DocumentId, HistoryStack, SelectionSet, ToolId};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EditorMode {
     Edit,
     Play,
