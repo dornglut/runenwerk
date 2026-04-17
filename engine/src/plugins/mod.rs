@@ -3,6 +3,7 @@
 //! See `engine/src/plugins/README.md` for plugin geometry-old/navigation.
 
 pub mod debug_metrics;
+pub mod diagnostics;
 pub mod fixed_step;
 pub mod grid;
 pub mod input;
@@ -15,6 +16,11 @@ pub(crate) mod shared;
 pub mod time;
 pub mod world;
 pub use debug_metrics::*;
+pub use diagnostics::{
+    DiagnosticsAttachment, DiagnosticsConfigResource, DiagnosticsConsoleFeedResource,
+    DiagnosticsEntry, DiagnosticsFrameReport, DiagnosticsPlugin, DiagnosticsReportStoreResource,
+    DiagnosticsSeverity, DiagnosticsStatus, DiagnosticsSummary, ResolvedDiagnosticsPlan,
+};
 pub use fixed_step::*;
 pub use grid::*;
 pub use input::*;
@@ -33,6 +39,7 @@ pub fn default_plugins() -> Vec<Box<dyn Plugin>> {
         Box::new(FixedStepPlugin),
         Box::new(ReplayPlugin),
         Box::new(InputFinalizePlugin),
+        Box::new(DiagnosticsPlugin),
     ]
 }
 

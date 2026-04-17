@@ -2,8 +2,8 @@
 //! Purpose: Persistent runtime state across UI frames.
 
 use crate::WidgetId;
-use ui_input::FocusTargetId;
 use std::collections::BTreeMap;
+use ui_input::FocusTargetId;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct UiRuntimeState {

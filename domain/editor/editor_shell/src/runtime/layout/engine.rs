@@ -314,7 +314,11 @@ fn measure_node(node: &UiNode) -> UiSize {
             )
         }
         UiNodeKind::Scroll(scroll) => {
-            let child = node.children.first().map(measure_node).unwrap_or(UiSize::ZERO);
+            let child = node
+                .children
+                .first()
+                .map(measure_node)
+                .unwrap_or(UiSize::ZERO);
             UiSize::new(child.width + scroll.bar_width, child.height)
         }
         UiNodeKind::Stack(stack) => {

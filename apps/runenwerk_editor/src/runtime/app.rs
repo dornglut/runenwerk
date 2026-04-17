@@ -1,5 +1,8 @@
 use anyhow::Result;
-use engine::plugins::{RenderFlow, RenderPlugin, ScenePlugin, default_plugins};
+use engine::plugins::{
+    DiagnosticsConfigResource, RenderFlow, RenderPlugin, ScenePlugin, SchedulerDiagnosticsPlugin,
+    default_plugins,
+};
 use engine::prelude::*;
 use winit::keyboard::KeyCode;
 
@@ -21,10 +24,12 @@ pub const EDITOR_VIEWPORT_SDF_SHADER_ID: &str = "editor_viewport_sdf";
 fn configure_app(app: &mut App) {
     app.set_title(WINDOW_TITLE);
     app.add_plugins(default_plugins());
+    app.add_plugin(SchedulerDiagnosticsPlugin);
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     register_editor_render_flow(app);
     app.add_plugin(EditorAppPlugin);
+    configure_editor_diagnostics(app);
 
     app.add_input_bindings([
         (ACTION_EDITOR_UNDO, KeyCode::KeyZ),
@@ -32,6 +37,26 @@ fn configure_app(app: &mut App) {
         (ACTION_EDITOR_TOOL_SELECT, KeyCode::Digit1),
         (ACTION_EDITOR_TOOL_TRANSLATE, KeyCode::Digit2),
     ]);
+}
+
+fn configure_editor_diagnostics(app: &mut App) {
+    if let Ok(config) = app.world_mut().resource_mut::<DiagnosticsConfigResource>() {
+        config.adapters.console_enabled = env_flag_or("RUNENWERK_EDITOR_DIAGNOSTICS_CONSOLE", true);
+        config.adapters.stdout_enabled = env_flag_or("RUNENWERK_EDITOR_DIAGNOSTICS_STDOUT", true);
+        config.adapters.file_json_enabled = env_flag_or("RUNENWERK_EDITOR_DIAGNOSTICS_JSON", false);
+    }
+}
+
+fn env_flag_or(key: &str, default: bool) -> bool {
+    std::env::var(key)
+        .ok()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(default)
 }
 
 fn register_editor_render_flow(app: &mut App) {

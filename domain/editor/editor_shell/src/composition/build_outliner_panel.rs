@@ -9,8 +9,7 @@ use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
-    OUTLINER_SCROLL_WIDGET_ID,
-    OUTLINER_TITLE_WIDGET_ID, OutlinerViewModel, outliner_row_widget_id,
+    OUTLINER_SCROLL_WIDGET_ID, OUTLINER_TITLE_WIDGET_ID, OutlinerViewModel, outliner_row_widget_id,
 };
 
 pub fn build_outliner_panel(view_model: &OutlinerViewModel, theme: &ThemeTokens) -> UiNode {
@@ -39,7 +38,11 @@ pub fn build_outliner_panel(view_model: &OutlinerViewModel, theme: &ThemeTokens)
         })
         .collect::<Vec<_>>();
 
-    let list = vstack(OUTLINER_LIST_WIDGET_ID, (theme.spacing.xs * 0.60).max(1.5), rows);
+    let list = vstack(
+        OUTLINER_LIST_WIDGET_ID,
+        (theme.spacing.xs * 0.60).max(1.5),
+        rows,
+    );
     let scroll = vscroll(OUTLINER_SCROLL_WIDGET_ID, theme.clone(), vec![list]);
     let body = vstack_with_policies(
         OUTLINER_BODY_WIDGET_ID,

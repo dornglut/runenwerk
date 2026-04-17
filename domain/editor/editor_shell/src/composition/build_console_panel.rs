@@ -28,7 +28,11 @@ pub fn build_console_panel(view_model: &ConsoleViewModel, theme: &ThemeTokens) -
         ));
     }
 
-    let list = vstack(CONSOLE_LIST_WIDGET_ID, (theme.spacing.xs * 0.35).max(1.0), rows);
+    let list = vstack(
+        CONSOLE_LIST_WIDGET_ID,
+        (theme.spacing.xs * 0.35).max(1.0),
+        rows,
+    );
     let scroll = vscroll(CONSOLE_SCROLL_WIDGET_ID, theme.clone(), vec![list]);
     let body = vstack_with_policies(
         CONSOLE_BODY_WIDGET_ID,

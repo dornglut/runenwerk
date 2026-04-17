@@ -61,7 +61,11 @@ pub fn build_inspector_panel(view_model: &InspectorViewModel, theme: &ThemeToken
         )));
     }
 
-    let list = vstack(INSPECTOR_LIST_WIDGET_ID, (theme.spacing.xs * 0.85).max(2.0), rows);
+    let list = vstack(
+        INSPECTOR_LIST_WIDGET_ID,
+        (theme.spacing.xs * 0.85).max(2.0),
+        rows,
+    );
     let scroll = vscroll(INSPECTOR_SCROLL_WIDGET_ID, theme.clone(), vec![list]);
     let body = vstack_with_policies(
         INSPECTOR_BODY_WIDGET_ID,

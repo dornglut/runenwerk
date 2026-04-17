@@ -234,7 +234,11 @@ fn find_scroll_owner_inner(
     None
 }
 
-fn scroll_max_offset(tree: &UiTree, layouts: &ComputedLayoutMap, scroll_widget: WidgetId) -> Option<f32> {
+fn scroll_max_offset(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    scroll_widget: WidgetId,
+) -> Option<f32> {
     let scroll_layout = layouts.get(&scroll_widget)?;
     let scroll_node = find_node(tree, scroll_widget)?;
     let child_id = scroll_node.children.first()?.id;

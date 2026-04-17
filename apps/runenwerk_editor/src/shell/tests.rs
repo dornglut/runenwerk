@@ -108,13 +108,8 @@ fn console_follow_disengages_on_upward_scroll_and_reengages_at_bottom() {
     let theme = ThemeTokens::default();
     let atlas = UiFontAtlasResource::default();
 
-    let _ = RunenwerkEditorShellController::build_frame(
-        &app,
-        &mut shell_state,
-        bounds,
-        &theme,
-        &atlas,
-    );
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
     assert!(app.console_follow_enabled());
 
     let tree = shell_state
@@ -190,13 +185,8 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
     let theme = ThemeTokens::default();
     let atlas = UiFontAtlasResource::default();
 
-    let _ = RunenwerkEditorShellController::build_frame(
-        &app,
-        &mut shell_state,
-        bounds,
-        &theme,
-        &atlas,
-    );
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
     let tree = shell_state
         .last_tree()
         .expect("shell tree should be cached")
@@ -205,20 +195,17 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
         .runtime()
         .max_scroll_offset(&tree, bounds, CONSOLE_SCROLL_WIDGET_ID)
         .unwrap_or(0.0);
-    let initial_offset = shell_state.runtime().scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
+    let initial_offset = shell_state
+        .runtime()
+        .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
     assert!(
         (initial_offset - initial_max).abs() <= 1.0,
         "follow-enabled frame should pin console to bottom",
     );
 
     app.append_console_line("[test] new follow-on line");
-    let _ = RunenwerkEditorShellController::build_frame(
-        &app,
-        &mut shell_state,
-        bounds,
-        &theme,
-        &atlas,
-    );
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
     let tree_after_append = shell_state
         .last_tree()
         .expect("shell tree should remain cached")
@@ -227,7 +214,9 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
         .runtime()
         .max_scroll_offset(&tree_after_append, bounds, CONSOLE_SCROLL_WIDGET_ID)
         .unwrap_or(0.0);
-    let offset_after_append = shell_state.runtime().scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
+    let offset_after_append = shell_state
+        .runtime()
+        .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
     assert!(
         (offset_after_append - max_after_append).abs() <= 1.0,
         "auto-follow should stay at bottom while enabled",
@@ -237,17 +226,16 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
     shell_state
         .runtime_mut()
         .set_scroll_offset(CONSOLE_SCROLL_WIDGET_ID, (max_after_append * 0.5).max(0.0));
-    let previous_offset = shell_state.runtime().scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
+    let previous_offset = shell_state
+        .runtime()
+        .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
 
     app.append_console_line("[test] new follow-off line");
-    let _ = RunenwerkEditorShellController::build_frame(
-        &app,
-        &mut shell_state,
-        bounds,
-        &theme,
-        &atlas,
-    );
-    let offset_follow_disabled = shell_state.runtime().scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let offset_follow_disabled = shell_state
+        .runtime()
+        .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
     assert!(
         (offset_follow_disabled - previous_offset).abs() <= 1.0,
         "disabled follow should preserve user scroll position",

@@ -47,7 +47,12 @@ pub fn build_editor_shell(view_model: &EditorShellViewModel, theme: &ThemeTokens
     root_theme.background_panel = if root_background_opaque_enabled() {
         theme.background
     } else {
-        UiColor::new(theme.background.r, theme.background.g, theme.background.b, 0.0)
+        UiColor::new(
+            theme.background.r,
+            theme.background.g,
+            theme.background.b,
+            0.0,
+        )
     };
     root_theme.border = UiColor::new(theme.border.r, theme.border.g, theme.border.b, 0.80);
 

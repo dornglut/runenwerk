@@ -7,7 +7,8 @@ use crate::plugins::inspect::{
     RenderPixelProbeResult, RenderPixelProbeStatus, RenderPixelSampleMode,
     RenderRuntimeResourceInspectorState, RenderTextureDiffMetrics, RenderTextureDiffMismatchSample,
     RenderTextureDiffRequest, RenderTextureDiffResult, RenderTextureDiffStatus,
-    RenderTextureInspectorState, export_captured_textures, validate_selector_terminal_invariant,
+    RenderTextureInspectorState, export_captured_textures,
+    submit_render_frame_report_to_diagnostics, validate_selector_terminal_invariant,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::*;
@@ -411,6 +412,13 @@ pub(crate) fn frame_render_submit_system(
                             value.selector_index, value.message
                         )
                     }));
+            }
+            if let Err(err) = submit_render_frame_report_to_diagnostics(&mut world, &frame_report) {
+                tracing::warn!(
+                    frame = frame_report.frame_index,
+                    error = %err,
+                    "failed submitting render diagnostics report to canonical diagnostics core"
+                );
             }
             if let Ok(report_state) = world.resource_mut::<RenderDebugFrameReportState>() {
                 report_state.observe_frame(frame_report);

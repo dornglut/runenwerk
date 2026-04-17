@@ -10,8 +10,7 @@ use crate::{
     InspectorTargetViewModel, InspectorViewModel, OUTLINER_PANEL_WIDGET_ID, OutlinerRowViewModel,
     OutlinerViewModel, ShellCommand, TOOLBAR_ROOT_WIDGET_ID, ToolbarButtonViewModel,
     ToolbarViewModel, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportViewModel,
-    build_editor_shell,
-    map_interactions_to_shell_commands,
+    build_editor_shell, map_interactions_to_shell_commands,
 };
 
 #[test]

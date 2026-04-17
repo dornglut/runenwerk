@@ -134,8 +134,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        FontFaceMetrics, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle,
-        TextWrap,
+        FontFaceMetrics, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle, TextWrap,
     };
 
     #[derive(Default)]

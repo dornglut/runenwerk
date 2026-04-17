@@ -1,7 +1,6 @@
 use editor_shell::{
     CONSOLE_SCROLL_WIDGET_ID, EditorShellViewModel, ShellCommand, UiInputOutcome, UiTree,
-    build_editor_shell,
-    map_interactions_to_shell_commands,
+    build_editor_shell, map_interactions_to_shell_commands,
 };
 use ui_input::{PointerEventKind, UiInputEvent};
 use ui_math::UiRect;
@@ -71,7 +70,9 @@ impl RunenwerkEditorShellController {
         shell_state.set_last_bounds(bounds);
 
         let layouts = shell_state.runtime().compute_layout(&tree, bounds);
-        let pre_offset = shell_state.runtime().scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
+        let pre_offset = shell_state
+            .runtime()
+            .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
         let pre_max = shell_state
             .runtime()
             .max_scroll_offset_for_layout(&tree, &layouts, CONSOLE_SCROLL_WIDGET_ID)
@@ -83,7 +84,9 @@ impl RunenwerkEditorShellController {
 
         if is_console_scroll_event(event, &outcome) {
             let post_layouts = shell_state.runtime().compute_layout(&tree, bounds);
-            let post_offset = shell_state.runtime().scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
+            let post_offset = shell_state
+                .runtime()
+                .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
             let post_max = shell_state
                 .runtime()
                 .max_scroll_offset_for_layout(&tree, &post_layouts, CONSOLE_SCROLL_WIDGET_ID)
