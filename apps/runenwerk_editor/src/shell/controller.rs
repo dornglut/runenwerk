@@ -1,6 +1,6 @@
 use editor_shell::{
-    CONSOLE_SCROLL_WIDGET_ID, EditorShellViewModel, ShellCommand, UiInputOutcome, UiTree,
-    build_editor_shell, map_interactions_to_shell_commands,
+    CONSOLE_SCROLL_WIDGET_ID, EditorShellViewModel, ShellCommand, ShellExpressionFrame,
+    UiInputOutcome, UiTree, build_editor_shell, map_interactions_to_shell_commands,
 };
 use ui_input::{PointerEventKind, UiInputEvent};
 use ui_math::UiRect;
@@ -40,6 +40,16 @@ impl RunenwerkEditorShellController {
         theme: &ThemeTokens,
         atlas_source: &dyn FontAtlasSource,
     ) -> UiFrame {
+        Self::build_expression_frame(app, shell_state, bounds, theme, atlas_source).into_ui_frame()
+    }
+
+    pub fn build_expression_frame(
+        app: &RunenwerkEditorApp,
+        shell_state: &mut RunenwerkEditorShellState,
+        bounds: UiRect,
+        theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
+    ) -> ShellExpressionFrame {
         let tree = Self::rebuild_tree(app, shell_state, theme);
         shell_state.set_last_bounds(bounds);
         if app.console_follow_enabled()
@@ -52,9 +62,11 @@ impl RunenwerkEditorShellController {
                 .runtime_mut()
                 .set_scroll_offset(CONSOLE_SCROLL_WIDGET_ID, max_offset);
         }
-        shell_state
+        let frame = shell_state
             .runtime()
-            .build_frame(&tree, bounds, atlas_source)
+            .build_frame(&tree, bounds, atlas_source);
+
+        ShellExpressionFrame::new(app.runtime().current_scene_reality_version(), frame)
     }
 
     pub fn dispatch_input(

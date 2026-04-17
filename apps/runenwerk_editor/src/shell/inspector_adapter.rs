@@ -1,24 +1,42 @@
 use editor_inspector::InspectorValue;
-use editor_shell::{InspectorFieldViewModel, InspectorTargetViewModel, InspectorViewModel};
+use editor_shell::{
+    InspectorFieldViewModel, InspectorObservationFrame, InspectorObservedField,
+    InspectorObservedTarget, InspectorTargetViewModel, InspectorViewModel, ObservationConsumerKind,
+    ObservationFrameMetadata, ObservationSourceReality,
+};
 
 use crate::editor_panels::{InspectorPanelViewModel, InspectorWidgetField};
 
-pub fn build_inspector_view_model(view_model: &InspectorPanelViewModel) -> InspectorViewModel {
+pub fn build_inspector_observation_frame(
+    view_model: &InspectorPanelViewModel,
+    source_version: editor_core::RealityVersion,
+) -> InspectorObservationFrame {
+    let metadata = ObservationFrameMetadata::strict_current(
+        ObservationSourceReality::ObservedScene,
+        ObservationConsumerKind::Inspector,
+        source_version,
+    );
+
     match view_model {
-        InspectorPanelViewModel::Empty => InspectorViewModel::default(),
+        InspectorPanelViewModel::Empty => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Empty,
+            fields: Vec::new(),
+        },
         InspectorPanelViewModel::Entity {
             display_name,
             components,
             available_component_types,
             ..
         } => {
-            InspectorViewModel {
-                target: InspectorTargetViewModel::Entity {
+            InspectorObservationFrame {
+                metadata,
+                target: InspectorObservedTarget::Entity {
                     display_name: display_name.clone(),
                 },
                 fields: components
                     .iter()
-                    .map(|component| InspectorFieldViewModel {
+                    .map(|component| InspectorObservedField {
                         label: component.display_name.clone(),
                         value_summary: if component.is_selected {
                             "selected".to_string()
@@ -28,7 +46,7 @@ pub fn build_inspector_view_model(view_model: &InspectorPanelViewModel) -> Inspe
                         is_focused: false,
                     })
                     .chain(available_component_types.iter().map(|component| {
-                        InspectorFieldViewModel {
+                        InspectorObservedField {
                             label: format!("+ {}", component.display_name),
                             value_summary: if component.already_attached {
                                 "already attached".to_string()
@@ -46,30 +64,34 @@ pub fn build_inspector_view_model(view_model: &InspectorPanelViewModel) -> Inspe
             component_display_name,
             widget_fields,
             ..
-        } => InspectorViewModel {
-            target: InspectorTargetViewModel::Component {
+        } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Component {
                 entity_display_name: entity_display_name.clone(),
                 component_display_name: component_display_name.clone(),
             },
             fields: widget_fields
                 .iter()
-                .map(build_inspector_field_view_model)
+                .map(build_inspector_observed_field)
                 .collect(),
         },
-        InspectorPanelViewModel::Resource { resource_type } => InspectorViewModel {
-            target: InspectorTargetViewModel::Resource {
+        InspectorPanelViewModel::Resource { resource_type } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Resource {
                 display_name: format!("Resource {}", resource_type.0),
             },
             fields: Vec::new(),
         },
-        InspectorPanelViewModel::Unsupported { target } => InspectorViewModel {
-            target: InspectorTargetViewModel::Unsupported {
+        InspectorPanelViewModel::Unsupported { target } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Unsupported {
                 label: target.clone(),
             },
             fields: Vec::new(),
         },
-        InspectorPanelViewModel::Error { message } => InspectorViewModel {
-            target: InspectorTargetViewModel::Error {
+        InspectorPanelViewModel::Error { message } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Error {
                 message: message.clone(),
             },
             fields: Vec::new(),
@@ -77,14 +99,52 @@ pub fn build_inspector_view_model(view_model: &InspectorPanelViewModel) -> Inspe
     }
 }
 
-fn build_inspector_field_view_model(field: &InspectorWidgetField) -> InspectorFieldViewModel {
+pub fn build_inspector_view_model(frame: &InspectorObservationFrame) -> InspectorViewModel {
+    let target = match &frame.target {
+        InspectorObservedTarget::Empty => InspectorTargetViewModel::Empty,
+        InspectorObservedTarget::Entity { display_name } => InspectorTargetViewModel::Entity {
+            display_name: display_name.clone(),
+        },
+        InspectorObservedTarget::Component {
+            entity_display_name,
+            component_display_name,
+        } => InspectorTargetViewModel::Component {
+            entity_display_name: entity_display_name.clone(),
+            component_display_name: component_display_name.clone(),
+        },
+        InspectorObservedTarget::Resource { display_name } => InspectorTargetViewModel::Resource {
+            display_name: display_name.clone(),
+        },
+        InspectorObservedTarget::Unsupported { label } => InspectorTargetViewModel::Unsupported {
+            label: label.clone(),
+        },
+        InspectorObservedTarget::Error { message } => InspectorTargetViewModel::Error {
+            message: message.clone(),
+        },
+    };
+
+    InspectorViewModel {
+        target,
+        fields: frame
+            .fields
+            .iter()
+            .map(|field| InspectorFieldViewModel {
+                label: field.label.clone(),
+                value_summary: field.value_summary.clone(),
+                is_focused: field.is_focused,
+            })
+            .collect(),
+    }
+}
+
+fn build_inspector_observed_field(field: &InspectorWidgetField) -> InspectorObservedField {
     let draft_prefix = field
         .draft_value
         .as_ref()
         .map(|draft| format!("draft={draft:?} | "))
         .unwrap_or_default();
 
-    InspectorFieldViewModel {
+    InspectorObservedField {
         label: field.display_name.clone(),
         value_summary: format!("{draft_prefix}{}", inspector_value_summary(&field.value)),
         is_focused: field.is_focused,

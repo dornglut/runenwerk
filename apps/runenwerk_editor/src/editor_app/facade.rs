@@ -84,6 +84,23 @@ impl RunenwerkEditorApp {
         result
     }
 
+    pub fn reconcile_shared_change(
+        &mut self,
+        envelope: editor_core::SharedChangeEnvelope,
+    ) -> editor_core::ReconciliationDecision {
+        self.runtime.reconcile_shared_change(envelope)
+    }
+
+    pub fn propagate_shared_changes<S>(
+        &mut self,
+        sink: &mut S,
+    ) -> Result<usize, <S as editor_core::SharedChangePropagationSink>::Error>
+    where
+        S: editor_core::SharedChangePropagationSink,
+    {
+        self.runtime.propagate_shared_changes(sink)
+    }
+
     pub fn cancel_viewport_interaction(&mut self) -> Result<(), &'static str> {
         self.dispatch_viewport_interaction_command(ViewportInteractionCommand::CancelInteraction)
     }
@@ -96,6 +113,22 @@ impl RunenwerkEditorApp {
         atlas_source: &dyn FontAtlasSource,
     ) -> UiFrame {
         RunenwerkEditorShellController::build_frame(self, shell_state, bounds, theme, atlas_source)
+    }
+
+    pub fn build_shell_expression_frame(
+        &self,
+        shell_state: &mut RunenwerkEditorShellState,
+        bounds: UiRect,
+        theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
+    ) -> editor_shell::ShellExpressionFrame {
+        RunenwerkEditorShellController::build_expression_frame(
+            self,
+            shell_state,
+            bounds,
+            theme,
+            atlas_source,
+        )
     }
 
     pub fn dispatch_shell_input(

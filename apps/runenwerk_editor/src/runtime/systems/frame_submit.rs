@@ -41,10 +41,16 @@ pub fn submit_editor_frame_system(
         theme,
     } = &mut *host;
     let shell_theme = scaled_shell_theme(theme, window.scale_factor);
-    let frame = if debug_hardcoded_ui_frame_enabled() {
-        build_debug_frame(bounds)
+    let (expression_source_version, frame) = if debug_hardcoded_ui_frame_enabled() {
+        let expression = editor_shell::ShellExpressionFrame::new(
+            app.runtime().current_scene_reality_version(),
+            build_debug_frame(bounds),
+        );
+        (expression.source_version, expression.into_ui_frame())
     } else {
-        app.build_shell_frame(shell_state, bounds, &shell_theme, &*atlas)
+        let expression =
+            app.build_shell_expression_frame(shell_state, bounds, &shell_theme, &*atlas);
+        (expression.source_version, expression.into_ui_frame())
     };
     let viewport_bounds = viewport_bounds(
         shell_state.last_tree(),
@@ -79,8 +85,8 @@ pub fn submit_editor_frame_system(
     if app.debug_logs_enabled() {
         if shell_scale_changed && viewport_render.should_report_scale_change() {
             app.append_console_line(format!(
-                "[ui] shell scale={:.3} window_scale={:.3}",
-                shell_scale, window.scale_factor
+                "[ui] shell scale={:.3} window_scale={:.3} expression_version={}",
+                shell_scale, window.scale_factor, expression_source_version.0
             ));
         }
 
