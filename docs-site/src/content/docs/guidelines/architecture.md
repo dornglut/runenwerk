@@ -7,6 +7,11 @@ description: Architecture
 
 This document defines the active crate/domain boundaries in `Runenwerk` and where new code belongs.
 
+For the canonical governing architecture doctrine, see
+[`runenwerk-architecture.md`](runenwerk-architecture.md).
+
+This page remains the workspace boundary and placement guide.
+
 ## Top-Level Domains
 
 - `domain/`: engine-agnostic reusable gameplay/runtime logic (`ecs`, `scheduler`, `scene`, editor domains)

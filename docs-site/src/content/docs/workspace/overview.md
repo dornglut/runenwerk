@@ -21,6 +21,8 @@ This page is a lightweight orientation map for the active Runenwerk repository.
 
 - Workspace agent rules: [`agents.md`](agents.md)
 - Docs root index: [`../index.mdx`](../index.mdx)
+- Canonical architecture doctrine: [`../guidelines/runenwerk-architecture.md`](../guidelines/runenwerk-architecture.md)
+- Workspace architecture boundaries: [`../guidelines/architecture.md`](../guidelines/architecture.md)
 - Domain docs: [`../domain/00-overview.md`](../domain/00-overview.md)
 - Engine docs: [`../engine/index.md`](../engine/index.md)
 - Net docs: [`../net/readme.md`](../net/readme.md)
