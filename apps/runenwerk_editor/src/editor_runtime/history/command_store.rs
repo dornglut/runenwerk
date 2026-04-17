@@ -1,19 +1,25 @@
 use std::collections::HashMap;
 
-use editor_core::TransactionId;
+use editor_core::{RatifiedChange, TransactionId};
 use editor_scene::SceneEditorCommand;
 
 #[derive(Debug, Clone)]
 pub struct StoredSceneTransaction {
     pub transaction_id: TransactionId,
     pub commands: Vec<SceneEditorCommand>,
+    pub ratified_change: RatifiedChange,
 }
 
 impl StoredSceneTransaction {
-    pub fn new(transaction_id: TransactionId, commands: Vec<SceneEditorCommand>) -> Self {
+    pub fn new(
+        transaction_id: TransactionId,
+        commands: Vec<SceneEditorCommand>,
+        ratified_change: RatifiedChange,
+    ) -> Self {
         Self {
             transaction_id,
             commands,
+            ratified_change,
         }
     }
 }

@@ -1,4 +1,7 @@
-use editor_core::{Command, CommandExecutor, CommandId, ComponentTypeId, EntityId, TransactionId};
+use editor_core::{
+    Command, CommandExecutor, CommandId, ComponentTypeId, EntityId, SemanticOperation,
+    TransactionId,
+};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_scene::{
     SceneCommandContext, SceneCommandIntent, SceneEditorCommand, scene_intent_to_command,
@@ -164,7 +167,7 @@ fn undo_redo_replays_stored_scene_transaction() {
     )
     .expect("create entity with history should succeed");
 
-    execute_scene_command_and_push_history(
+    let add_change = execute_scene_command_and_push_history(
         &mut runtime,
         scene_intent_to_command(
             CommandId(11),
@@ -176,7 +179,8 @@ fn undo_redo_replays_stored_scene_transaction() {
         "Add Component",
         TransactionId(101),
     )
-    .expect("add component with history should succeed");
+    .expect("add component with history should succeed")
+    .expect("add component should ratify");
 
     let ecs_entity = runtime
         .ids()
@@ -189,11 +193,30 @@ fn undo_redo_replays_stored_scene_transaction() {
         .expect("undo should succeed")
         .expect("undo should return history entry");
     assert_eq!(undone.transaction.id, TransactionId(101));
+    assert_eq!(undone.causality_id, add_change.causality_id);
+    assert_eq!(
+        undone.semantic_operations,
+        vec![SemanticOperation::SceneTransactionUndone]
+    );
     assert!(runtime.world().get::<Position>(ecs_entity).is_none());
 
     let redone = redo_last_scene_transaction(&mut runtime)
         .expect("redo should succeed")
         .expect("redo should return history entry");
     assert_eq!(redone.transaction.id, TransactionId(101));
+    assert_eq!(redone.causality_id, add_change.causality_id);
+    assert_eq!(
+        redone.semantic_operations,
+        vec![SemanticOperation::SceneTransactionRedone]
+    );
     assert!(runtime.world().get::<Position>(ecs_entity).is_some());
+
+    assert_eq!(runtime.ratified_change_log().len(), 4);
+    assert_eq!(
+        runtime
+            .last_ratified_change()
+            .expect("redo ratification should be retained")
+            .semantic_operations,
+        vec![SemanticOperation::SceneTransactionRedone]
+    );
 }

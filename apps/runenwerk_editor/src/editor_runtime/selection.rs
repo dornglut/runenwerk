@@ -9,6 +9,14 @@ pub fn select_single_entity(
     runtime: &mut RunenwerkEditorRuntime,
     entity: EntityId,
 ) -> Result<(), &'static str> {
+    select_single_entity_with_origin(runtime, entity, editor_core::ChangeOrigin::Runtime)
+}
+
+pub fn select_single_entity_with_origin(
+    runtime: &mut RunenwerkEditorRuntime,
+    entity: EntityId,
+    origin: editor_core::ChangeOrigin,
+) -> Result<(), &'static str> {
     if runtime.ids().resolve_entity(entity).is_none() {
         return Err("editor entity is not registered");
     }
@@ -16,6 +24,12 @@ pub fn select_single_entity(
     runtime
         .session_mut()
         .select_single(SelectionTarget::Entity(entity));
+    runtime.record_session_change(
+        origin,
+        editor_core::SessionChangeKind::SelectionSetSingle {
+            target: SelectionTarget::Entity(entity),
+        },
+    );
 
     Ok(())
 }
@@ -24,6 +38,20 @@ pub fn select_single_component(
     runtime: &mut RunenwerkEditorRuntime,
     entity: EntityId,
     component_type: ComponentTypeId,
+) -> Result<(), &'static str> {
+    select_single_component_with_origin(
+        runtime,
+        entity,
+        component_type,
+        editor_core::ChangeOrigin::Runtime,
+    )
+}
+
+pub fn select_single_component_with_origin(
+    runtime: &mut RunenwerkEditorRuntime,
+    entity: EntityId,
+    component_type: ComponentTypeId,
+    origin: editor_core::ChangeOrigin,
 ) -> Result<(), &'static str> {
     if runtime.ids().resolve_entity(entity).is_none() {
         return Err("editor entity is not registered");
@@ -39,12 +67,33 @@ pub fn select_single_component(
             entity,
             component_type,
         });
+    runtime.record_session_change(
+        origin,
+        editor_core::SessionChangeKind::SelectionSetSingle {
+            target: SelectionTarget::Component {
+                entity,
+                component_type,
+            },
+        },
+    );
 
     Ok(())
 }
 
 pub fn clear_selection(runtime: &mut RunenwerkEditorRuntime) {
+    clear_selection_with_origin(runtime, editor_core::ChangeOrigin::Runtime);
+}
+
+pub fn clear_selection_with_origin(
+    runtime: &mut RunenwerkEditorRuntime,
+    origin: editor_core::ChangeOrigin,
+) {
+    if runtime.session().selection().is_empty() {
+        return;
+    }
+
     runtime.session_mut().clear_selection();
+    runtime.record_session_change(origin, editor_core::SessionChangeKind::SelectionCleared);
 }
 
 pub fn primary_selected_entity(runtime: &RunenwerkEditorRuntime) -> Option<EntityId> {
@@ -81,6 +130,6 @@ pub fn sync_selection_after_scene_change(runtime: &mut RunenwerkEditorRuntime) {
     };
 
     if should_clear {
-        runtime.session_mut().clear_selection();
+        clear_selection_with_origin(runtime, editor_core::ChangeOrigin::Runtime);
     }
 }

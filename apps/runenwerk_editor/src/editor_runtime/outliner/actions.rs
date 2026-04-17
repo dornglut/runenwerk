@@ -1,25 +1,19 @@
 use editor_core::{EntityId, SelectionTarget};
 use editor_inspector::InspectTarget;
 
-use crate::editor_runtime::RunenwerkEditorRuntime;
+use crate::editor_runtime::{
+    RunenwerkEditorRuntime, clear_selection_with_origin, select_single_entity_with_origin,
+};
 
 pub fn select_entity_from_outliner(
     runtime: &mut RunenwerkEditorRuntime,
     entity: EntityId,
 ) -> Result<(), &'static str> {
-    if runtime.ids().resolve_entity(entity).is_none() {
-        return Err("editor entity is not registered");
-    }
-
-    runtime
-        .session_mut()
-        .select_single(SelectionTarget::Entity(entity));
-
-    Ok(())
+    select_single_entity_with_origin(runtime, entity, editor_core::ChangeOrigin::OutlinerPanel)
 }
 
 pub fn clear_outliner_selection(runtime: &mut RunenwerkEditorRuntime) {
-    runtime.session_mut().clear_selection();
+    clear_selection_with_origin(runtime, editor_core::ChangeOrigin::OutlinerPanel);
 }
 
 pub fn selected_outliner_entity(runtime: &RunenwerkEditorRuntime) -> Option<EntityId> {

@@ -2,7 +2,9 @@ use editor_core::{ComponentTypeId, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use scene::LocalTransform;
 
-use crate::editor_runtime::{RunenwerkEditorRuntime, execute_scene_transaction_and_push_history};
+use crate::editor_runtime::{
+    RunenwerkEditorRuntime, execute_scene_transaction_and_push_history_with_origin,
+};
 
 pub fn commit_translation_preview_into_local_transform(
     runtime: &mut RunenwerkEditorRuntime,
@@ -67,12 +69,14 @@ pub fn commit_translation_preview_into_local_transform(
         ),
     ];
 
-    let _ = execute_scene_transaction_and_push_history(
+    let _ = execute_scene_transaction_and_push_history_with_origin(
         runtime,
         transaction_id,
         "Apply Translation Preview",
         &mut commands,
-    )?;
+        editor_core::ChangeOrigin::ToolInteraction,
+    )
+    .map_err(editor_core::GoverningChangeError::as_static_str)?;
 
     Ok(())
 }

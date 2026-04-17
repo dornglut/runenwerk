@@ -1,3 +1,4 @@
+pub(crate) mod ratification;
 pub mod scene_commands;
 pub mod transactions;
 

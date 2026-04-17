@@ -9,7 +9,6 @@ use ui_input::{Modifiers, PointerButton, PointerEvent, PointerEventKind, UiInput
 use ui_math::{UiPoint, UiRect, UiVector};
 
 use crate::editor_features::viewport::ViewportInteractionCommand;
-use crate::editor_runtime::{redo_last_scene_transaction, undo_last_scene_transaction};
 use crate::runtime::app::{
     ACTION_EDITOR_REDO, ACTION_EDITOR_TOOL_SELECT, ACTION_EDITOR_TOOL_TRANSLATE, ACTION_EDITOR_UNDO,
 };
@@ -125,28 +124,14 @@ pub fn dispatch_editor_input_system(
 
 fn dispatch_shortcuts(input: &engine::plugins::InputState, host: &mut EditorHostResource) {
     if input.action_pressed(ACTION_EDITOR_UNDO) {
-        match undo_last_scene_transaction(host.app.runtime_mut()) {
-            Ok(Some(entry)) => {
-                host.app
-                    .append_console_line(format!("[history] undo: {}", entry.transaction.label));
-            }
-            Ok(None) => {}
-            Err(error) => {
-                eprintln!("undo shortcut failed: {error}");
-            }
+        if let Err(error) = dispatch_shell_command(&mut host.app, ShellCommand::Undo) {
+            eprintln!("undo shortcut failed: {error}");
         }
     }
 
     if input.action_pressed(ACTION_EDITOR_REDO) {
-        match redo_last_scene_transaction(host.app.runtime_mut()) {
-            Ok(Some(entry)) => {
-                host.app
-                    .append_console_line(format!("[history] redo: {}", entry.transaction.label));
-            }
-            Ok(None) => {}
-            Err(error) => {
-                eprintln!("redo shortcut failed: {error}");
-            }
+        if let Err(error) = dispatch_shell_command(&mut host.app, ShellCommand::Redo) {
+            eprintln!("redo shortcut failed: {error}");
         }
     }
 

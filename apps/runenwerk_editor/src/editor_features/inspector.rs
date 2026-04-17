@@ -2,11 +2,11 @@ use editor_core::{ComponentTypeId, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 
 use crate::editor_app::RunenwerkEditorApp;
-use crate::editor_features::scene_commands::execute_intent_with_history;
+use crate::editor_features::scene_commands::execute_intent_with_history_from_origin;
 use crate::editor_panels::{
     InspectorPanelCommand, InspectorPanelCommandResult, InspectorPanelPresenter,
 };
-use crate::editor_runtime::{RunenwerkEditorRuntime, select_single_component};
+use crate::editor_runtime::{RunenwerkEditorRuntime, select_single_component_with_origin};
 
 pub fn dispatch_inspector_command(
     app: &mut RunenwerkEditorApp,
@@ -17,7 +17,12 @@ pub fn dispatch_inspector_command(
             entity,
             component_type,
         } => {
-            select_single_component(app.runtime_mut(), entity, component_type)?;
+            select_single_component_with_origin(
+                app.runtime_mut(),
+                entity,
+                component_type,
+                editor_core::ChangeOrigin::InspectorPanel,
+            )?;
             app.inspector_ui_state_mut().clear_draft();
             app.inspector_ui_state_mut().clear_focus();
         }
@@ -25,14 +30,16 @@ pub fn dispatch_inspector_command(
             entity,
             component_type,
         } => {
-            execute_intent_with_history(
+            execute_intent_with_history_from_origin(
                 app.runtime_mut(),
                 "Add Component",
                 editor_scene::SceneCommandIntent::AddComponent {
                     entity,
                     component_type,
                 },
-            )?;
+                editor_core::ChangeOrigin::InspectorPanel,
+            )
+            .map_err(editor_core::GoverningChangeError::as_static_str)?;
             app.inspector_ui_state_mut().clear_draft();
             app.inspector_ui_state_mut().clear_focus();
         }
@@ -40,14 +47,16 @@ pub fn dispatch_inspector_command(
             entity,
             component_type,
         } => {
-            execute_intent_with_history(
+            execute_intent_with_history_from_origin(
                 app.runtime_mut(),
                 "Remove Component",
                 editor_scene::SceneCommandIntent::RemoveComponent {
                     entity,
                     component_type,
                 },
-            )?;
+                editor_core::ChangeOrigin::InspectorPanel,
+            )
+            .map_err(editor_core::GoverningChangeError::as_static_str)?;
             app.inspector_ui_state_mut().clear_draft();
             app.inspector_ui_state_mut().clear_focus();
         }
@@ -110,7 +119,7 @@ fn commit_component_field_edit(
     path: InspectorPath,
     value: InspectorEditValue,
 ) -> Result<(), &'static str> {
-    execute_intent_with_history(
+    execute_intent_with_history_from_origin(
         runtime,
         "Edit Component Field",
         editor_scene::SceneCommandIntent::EditComponentField {
@@ -119,5 +128,7 @@ fn commit_component_field_edit(
             path,
             value,
         },
+        editor_core::ChangeOrigin::InspectorPanel,
     )
+    .map_err(editor_core::GoverningChangeError::as_static_str)
 }
