@@ -2,8 +2,8 @@ use std::collections::BTreeSet;
 
 use editor_core::EntityId;
 use editor_persistence::{
-    SceneEntityRecordV2, SceneFileV2, ScenePrimitiveKind, ScenePrimitiveRecord,
-    SceneTransformRecord,
+    FormedScenePackageV2, SceneEntityRecordV2, SceneFileV2, ScenePrimitiveKind,
+    ScenePrimitiveRecord, SceneTransformRecord,
 };
 use editor_scene::{SceneEntitySnapshot, SceneRuntime};
 use scene::{LocalTransform, QuatValue, Vec3Value};
@@ -39,11 +39,25 @@ pub fn apply_scene_file_to_runtime(
     runtime: &mut RunenwerkEditorRuntime,
     scene_file: &SceneFileV2,
 ) -> Result<(), &'static str> {
+    apply_scene_entities_to_runtime(runtime, &scene_file.entities)
+}
+
+pub fn apply_formed_scene_to_runtime(
+    runtime: &mut RunenwerkEditorRuntime,
+    formed_scene: &FormedScenePackageV2,
+) -> Result<(), &'static str> {
+    apply_scene_entities_to_runtime(runtime, formed_scene.entities())
+}
+
+fn apply_scene_entities_to_runtime(
+    runtime: &mut RunenwerkEditorRuntime,
+    entities: &[SceneEntityRecordV2],
+) -> Result<(), &'static str> {
     if runtime.document().entity_ids().next().is_some() {
         return Err("scene import requires an empty runtime document");
     }
 
-    let mut pending = scene_file.entities.clone();
+    let mut pending = entities.to_vec();
     pending.sort_by(|left, right| left.id.cmp(&right.id));
 
     let mut restored = BTreeSet::new();
@@ -78,7 +92,7 @@ pub fn apply_scene_file_to_runtime(
         pending = next_pending;
     }
 
-    for entity in &scene_file.entities {
+    for entity in entities {
         let editor_entity = EntityId(entity.id);
         let ecs_entity = runtime
             .ids()

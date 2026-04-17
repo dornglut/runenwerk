@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 bytemuck = { version = "1.24.0", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 engine = { path = "../../engine" }
 winit = "0.30.9"
 

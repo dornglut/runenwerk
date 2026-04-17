@@ -1,4 +1,4 @@
-use editor_core::{EntityId, SelectionTarget};
+use editor_core::{ChangeOrigin, EntityId, SelectionTarget, SessionChangeKind, WorkflowEventKind};
 use editor_shell::{CONSOLE_SCROLL_WIDGET_ID, ShellCommand};
 use engine::plugins::render::UiFontAtlasResource;
 use ui_input::{Modifiers, PointerEvent, PointerEventKind, UiInputEvent};
@@ -95,6 +95,31 @@ fn dispatch_shell_command_selects_outliner_entity() {
         app.runtime().session().selection().primary(),
         Some(&SelectionTarget::Entity(EntityId(1)))
     );
+    assert!(matches!(
+        app.runtime()
+            .session_change_log()
+            .last()
+            .map(|change| (change.origin, change.kind.clone())),
+        Some((
+            ChangeOrigin::OutlinerPanel,
+            SessionChangeKind::SelectionSetSingle {
+                target: SelectionTarget::Entity(EntityId(1))
+            }
+        ))
+    ));
+}
+
+#[test]
+fn dispatch_shell_command_records_workflow_dispatch_event() {
+    let mut app = RunenwerkEditorApp::new();
+
+    dispatch_shell_command(&mut app, ShellCommand::NoOp)
+        .expect("no-op shell command should succeed");
+
+    assert!(matches!(
+        app.runtime().workflow_log().last().map(|event| &event.kind),
+        Some(WorkflowEventKind::ShellCommandDispatched { command: "NoOp" })
+    ));
 }
 
 #[test]

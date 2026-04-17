@@ -36,6 +36,14 @@ impl RunenwerkEditorApp {
         &mut self.runtime
     }
 
+    pub fn replace_runtime(&mut self, runtime: RunenwerkEditorRuntime) {
+        self.runtime = runtime;
+        self.inspector_ui_state.clear_draft();
+        self.inspector_ui_state.clear_focus();
+        self.tool_runtime_state = EditorToolRuntimeState::new();
+        self.viewport_interaction_state.clear();
+    }
+
     pub fn inspector_ui_state(&self) -> &EditorInspectorUiState {
         &self.inspector_ui_state
     }

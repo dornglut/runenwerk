@@ -5,12 +5,15 @@ use editor_inspector::{InspectorEditValue, InspectorValue};
 use editor_shell::ShellCommand;
 
 use crate::editor_app::RunenwerkEditorApp;
+use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
 use crate::editor_panels::{InspectorPanelCommand, InspectorPanelViewModel, OutlinerPanelCommand};
 use crate::editor_runtime::{
-    bootstrap_mvp_scene_if_empty, is_local_transform_component, redo_last_scene_transaction,
-    register_mvp_component_types, undo_last_scene_transaction,
+    bootstrap_mvp_scene_if_empty, is_local_transform_component, register_mvp_component_types,
 };
-use crate::persistence::{load_scene_file_into_runtime, write_scene_file};
+use crate::persistence::{
+    load_scene_file_into_runtime, read_retained_change_log, retained_change_log_path_for_scene,
+    write_retained_change_log, write_scene_file,
+};
 use crate::shell::{SELECT_TOOL_ID, TRANSLATE_TOOL_ID};
 
 const TRANSFORM_STEPPER_INCREMENT: f64 = 0.25;
@@ -20,24 +23,48 @@ pub fn dispatch_shell_command(
     app: &mut RunenwerkEditorApp,
     command: ShellCommand,
 ) -> Result<(), &'static str> {
+    app.runtime_mut().record_workflow_event(
+        editor_core::WorkflowEventKind::ShellCommandDispatched {
+            command: shell_command_label(&command),
+        },
+    );
+
     match command {
         ShellCommand::ActivateSelectTool => {
             app.runtime_mut()
                 .session_mut()
                 .set_active_tool(Some(SELECT_TOOL_ID));
+            app.runtime_mut().record_session_change(
+                editor_core::ChangeOrigin::EditorShell,
+                editor_core::SessionChangeKind::ActiveToolSet {
+                    tool_id: Some(SELECT_TOOL_ID),
+                },
+            );
         }
         ShellCommand::ActivateTranslateTool => {
             app.runtime_mut()
                 .session_mut()
                 .set_active_tool(Some(TRANSLATE_TOOL_ID));
+            app.runtime_mut().record_session_change(
+                editor_core::ChangeOrigin::EditorShell,
+                editor_core::SessionChangeKind::ActiveToolSet {
+                    tool_id: Some(TRANSLATE_TOOL_ID),
+                },
+            );
         }
         ShellCommand::Undo => {
-            if let Some(entry) = undo_last_scene_transaction(app.runtime_mut())? {
+            if let Some(entry) =
+                undo_last_scene_change(app.runtime_mut(), editor_core::ChangeOrigin::EditorShell)
+                    .map_err(editor_core::GoverningChangeError::as_static_str)?
+            {
                 app.append_console_line(format!("[history] undo: {}", entry.transaction.label));
             }
         }
         ShellCommand::Redo => {
-            if let Some(entry) = redo_last_scene_transaction(app.runtime_mut())? {
+            if let Some(entry) =
+                redo_last_scene_change(app.runtime_mut(), editor_core::ChangeOrigin::EditorShell)
+                    .map_err(editor_core::GoverningChangeError::as_static_str)?
+            {
                 app.append_console_line(format!("[history] redo: {}", entry.transaction.label));
             }
         }
@@ -68,6 +95,21 @@ pub fn dispatch_shell_command(
     }
 
     Ok(())
+}
+
+fn shell_command_label(command: &ShellCommand) -> &'static str {
+    match command {
+        ShellCommand::ActivateSelectTool => "ActivateSelectTool",
+        ShellCommand::ActivateTranslateTool => "ActivateTranslateTool",
+        ShellCommand::Undo => "Undo",
+        ShellCommand::Redo => "Redo",
+        ShellCommand::SaveScene => "SaveScene",
+        ShellCommand::LoadScene => "LoadScene",
+        ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
+        ShellCommand::SelectOutlinerEntity { .. } => "SelectOutlinerEntity",
+        ShellCommand::ActivateInspectorField { .. } => "ActivateInspectorField",
+        ShellCommand::NoOp => "NoOp",
+    }
 }
 
 fn activate_inspector_field(
@@ -206,7 +248,24 @@ fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), &'stat
     }
 
     write_scene_file(&path, app.runtime()).map_err(|_| "failed to save editor scene")?;
+    let retained_path = retained_change_log_path_for_scene(&path);
+    let entry_count = write_retained_change_log(&retained_path, app.runtime())
+        .map_err(|_| "failed to save retained change log")?;
+    app.runtime_mut()
+        .record_workflow_event(editor_core::WorkflowEventKind::SceneSaved {
+            path: path.display().to_string(),
+        });
+    app.runtime_mut()
+        .record_workflow_event(editor_core::WorkflowEventKind::RetainedChangesSaved {
+            path: retained_path.display().to_string(),
+            entry_count,
+        });
     app.append_console_line(format!("[io] saved {}", path.display()));
+    app.append_console_line(format!(
+        "[io] retained {} ratified changes at {}",
+        entry_count,
+        retained_path.display()
+    ));
     Ok(())
 }
 
@@ -222,12 +281,37 @@ fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), &'st
 
     let mut runtime = crate::editor_runtime::RunenwerkEditorRuntime::new();
     register_mvp_component_types(&mut runtime);
-    load_scene_file_into_runtime(&path, &mut runtime).map_err(|_| "failed to load editor scene")?;
+    let migration = load_scene_file_into_runtime(&path, &mut runtime)
+        .map_err(|_| "failed to load editor scene")?;
+    let retained_path = retained_change_log_path_for_scene(&path);
+    let retained = if retained_path.exists() {
+        Some(
+            read_retained_change_log(&retained_path)
+                .map_err(|_| "failed to load retained change log")?,
+        )
+    } else {
+        None
+    };
     bootstrap_mvp_scene_if_empty(&mut runtime)?;
-    app.runtime = runtime;
-    app.inspector_ui_state.clear_draft();
-    app.inspector_ui_state.clear_focus();
-    app.viewport_interaction_state.clear();
+    app.replace_runtime(runtime);
+    app.runtime_mut()
+        .record_workflow_event(editor_core::WorkflowEventKind::SceneLoaded {
+            path: path.display().to_string(),
+            migration_path: migration,
+        });
+    if let Some(retained) = retained {
+        app.runtime_mut().record_workflow_event(
+            editor_core::WorkflowEventKind::RetainedChangesLoaded {
+                path: retained_path.display().to_string(),
+                entry_count: retained.entries.len(),
+            },
+        );
+        app.append_console_line(format!(
+            "[io] loaded retained change log: {} entries ({})",
+            retained.entries.len(),
+            retained_path.display()
+        ));
+    }
     app.append_console_line(format!("[io] loaded {}", path.display()));
     Ok(())
 }

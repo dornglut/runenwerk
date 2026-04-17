@@ -2579,6 +2579,7 @@ dependencies = [
  "engine",
  "glam 0.32.1",
  "scene",
+ "serde",
  "ui_input",
  "ui_math",
  "ui_render_data",
