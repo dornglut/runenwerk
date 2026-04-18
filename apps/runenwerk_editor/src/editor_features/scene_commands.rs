@@ -1,10 +1,9 @@
-use editor_core::{ChangeOrigin, CommandId, GoverningChangeError, RatifiedChange, TransactionId};
+use editor_core::{ChangeOrigin, GoverningChangeError, RatifiedChange};
 use editor_scene::{SceneCommandIntent, SceneEditorCommand};
 
 use crate::editor_runtime::{
-    RunenwerkEditorRuntime, execute_scene_command_and_push_history_with_origin,
-    execute_scene_transaction_and_push_history_with_origin,
-    redo_last_scene_transaction_with_origin, undo_last_scene_transaction_with_origin,
+    RunenwerkEditorRuntime, ratify_scene_command, ratify_scene_intent, ratify_scene_redo,
+    ratify_scene_transaction, ratify_scene_undo,
 };
 
 pub fn execute_intent_with_history(
@@ -26,16 +25,7 @@ pub fn execute_intent_with_history_from_origin(
     intent: SceneCommandIntent,
     origin: ChangeOrigin,
 ) -> Result<(), GoverningChangeError> {
-    let command_id = runtime.allocate_command_id();
-    let transaction_id = runtime.allocate_transaction_id();
-
-    let result = execute_scene_command_and_push_history_with_origin(
-        runtime,
-        editor_scene::scene_intent_to_command(command_id, intent),
-        transaction_label,
-        transaction_id,
-        origin,
-    )?;
+    let result = ratify_scene_intent(runtime, transaction_label, intent, origin)?;
 
     if result.is_none() {
         return Ok(());
@@ -63,15 +53,7 @@ pub fn execute_command_with_history_from_origin(
     command: SceneEditorCommand,
     origin: ChangeOrigin,
 ) -> Result<(), GoverningChangeError> {
-    let transaction_id = runtime.allocate_transaction_id();
-
-    let result = execute_scene_command_and_push_history_with_origin(
-        runtime,
-        command,
-        transaction_label,
-        transaction_id,
-        origin,
-    )?;
+    let result = ratify_scene_command(runtime, transaction_label, command, origin)?;
 
     if result.is_none() {
         return Ok(());
@@ -99,15 +81,7 @@ pub fn execute_transaction_with_history_from_origin(
     commands: &mut [SceneEditorCommand],
     origin: ChangeOrigin,
 ) -> Result<(), GoverningChangeError> {
-    let transaction_id = runtime.allocate_transaction_id();
-
-    let result = execute_scene_transaction_and_push_history_with_origin(
-        runtime,
-        transaction_id,
-        transaction_label,
-        commands,
-        origin,
-    )?;
+    let result = ratify_scene_transaction(runtime, transaction_label, commands, origin)?;
 
     if result.is_none() {
         return Ok(());
@@ -120,20 +94,12 @@ pub fn undo_last_scene_change(
     runtime: &mut RunenwerkEditorRuntime,
     origin: ChangeOrigin,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    undo_last_scene_transaction_with_origin(runtime, origin)
+    ratify_scene_undo(runtime, origin)
 }
 
 pub fn redo_last_scene_change(
     runtime: &mut RunenwerkEditorRuntime,
     origin: ChangeOrigin,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    redo_last_scene_transaction_with_origin(runtime, origin)
-}
-
-pub fn next_command_id(runtime: &mut RunenwerkEditorRuntime) -> CommandId {
-    runtime.allocate_command_id()
-}
-
-pub fn next_transaction_id(runtime: &mut RunenwerkEditorRuntime) -> TransactionId {
-    runtime.allocate_transaction_id()
+    ratify_scene_redo(runtime, origin)
 }

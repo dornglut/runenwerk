@@ -4,7 +4,7 @@
 use std::collections::VecDeque;
 use std::time::SystemTime;
 
-use crate::{RatificationId, ReconciliationResult, SharedChangeSequence};
+use crate::{MigrationPathId, RatificationId, ReconciliationResult, SharedChangeSequence};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct WorkflowEventId(pub u64);
@@ -37,7 +37,7 @@ pub enum WorkflowEventKind {
     },
     SceneLoaded {
         path: String,
-        migration_path: Option<&'static str>,
+        migration_path: Option<MigrationPathId>,
     },
 }
 

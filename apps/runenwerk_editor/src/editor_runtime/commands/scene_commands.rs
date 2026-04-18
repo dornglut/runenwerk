@@ -1,41 +1,35 @@
 use editor_core::{
-    ChangeOrigin, CommandExecutor, CommandId, GoverningChangeError, RatifiedChange,
-    SemanticOperation,
+    ChangeOrigin, CommandExecutor, CommandId, EditorMutationError, GoverningChangeError,
+    RatifiedChange, SemanticOperation,
 };
-use editor_scene::{
-    SceneCommandContext, SceneCommandIntent, SceneEditorCommand, scene_intent_to_command,
-};
+use editor_scene::{SceneCommandIntent, SceneEditorCommand, scene_intent_to_command};
 
 use super::ratification::ratify_scene_change;
 use crate::editor_runtime::{
-    RunenwerkEditorRuntime, StoredSceneTransaction, assert_scene_projection_parity,
-    sync_selection_after_scene_change,
+    RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
 };
+use crate::editor_runtime::parity::assert_scene_projection_parity;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutedSceneCommand {
     pub metadata: editor_core::CommandMetadata,
 }
 
-pub fn execute_scene_intent(
+pub(crate) fn execute_scene_intent(
     runtime: &mut RunenwerkEditorRuntime,
     command_id: CommandId,
     intent: SceneCommandIntent,
-) -> Result<Option<ExecutedSceneCommand>, &'static str> {
+) -> Result<Option<ExecutedSceneCommand>, EditorMutationError> {
     let command = scene_intent_to_command(command_id, intent);
     execute_scene_command(runtime, command)
 }
 
-pub fn execute_scene_command(
+pub(crate) fn execute_scene_command(
     runtime: &mut RunenwerkEditorRuntime,
     mut command: SceneEditorCommand,
-) -> Result<Option<ExecutedSceneCommand>, &'static str> {
-    let executed = {
-        let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-        let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
-
-        CommandExecutor::execute_command(&mut ctx, &mut command)?
-    };
+) -> Result<Option<ExecutedSceneCommand>, EditorMutationError> {
+    let executed = runtime
+        .with_scene_command_context(|ctx| CommandExecutor::execute_command(ctx, &mut command))?;
 
     sync_selection_after_scene_change(runtime);
     assert_scene_projection_parity(runtime);
@@ -48,22 +42,7 @@ pub fn execute_scene_command(
     }
 }
 
-pub fn execute_scene_command_and_push_history(
-    runtime: &mut RunenwerkEditorRuntime,
-    command: SceneEditorCommand,
-    transaction_label: impl Into<String>,
-    transaction_id: editor_core::TransactionId,
-) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    execute_scene_command_and_push_history_with_origin(
-        runtime,
-        command,
-        transaction_label,
-        transaction_id,
-        ChangeOrigin::Runtime,
-    )
-}
-
-pub fn execute_scene_command_and_push_history_with_origin(
+pub(crate) fn execute_scene_command_and_push_history_with_origin(
     runtime: &mut RunenwerkEditorRuntime,
     mut command: SceneEditorCommand,
     transaction_label: impl Into<String>,
@@ -71,26 +50,28 @@ pub fn execute_scene_command_and_push_history_with_origin(
     origin: ChangeOrigin,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
     let transaction_label = transaction_label.into();
+    let before_snapshot = runtime.capture_scene_snapshot();
 
-    let executed_command_metadata = {
-        let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-        let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
+    let executed_command_metadata =
+        runtime.with_scene_command_context(|ctx| -> Result<_, GoverningChangeError> {
+            let executed_command = CommandExecutor::execute_command(ctx, &mut command)
+                .map_err(|error| GoverningChangeError::mutation_rejected(error.message))?;
 
-        let executed_command = CommandExecutor::execute_command(&mut ctx, &mut command)
-            .map_err(GoverningChangeError::mutation_rejected)?;
+            if let Some(executed_command) = &executed_command {
+                let entry = editor_core::HistoryEntry::new(
+                    editor_core::TransactionMetadata::new(
+                        transaction_id,
+                        transaction_label.clone(),
+                    ),
+                    vec![executed_command.metadata.clone()],
+                );
 
-        if let Some(executed_command) = &executed_command {
-            let entry = editor_core::HistoryEntry::new(
-                editor_core::TransactionMetadata::new(transaction_id, transaction_label.clone()),
-                vec![executed_command.metadata.clone()],
-            );
-
-            ctx.session_mut().history_mut().push_applied(entry);
-            Some(executed_command.metadata.clone())
-        } else {
-            None
-        }
-    };
+                ctx.session_mut().history_mut().push_applied(entry);
+                Ok(Some(executed_command.metadata.clone()))
+            } else {
+                Ok(None)
+            }
+        })?;
 
     sync_selection_after_scene_change(runtime);
     assert_scene_projection_parity(runtime);
@@ -108,12 +89,13 @@ pub fn execute_scene_command_and_push_history_with_origin(
         None,
     );
     runtime.record_ratified_change(ratified_change.clone());
+    let after_snapshot = runtime.capture_scene_snapshot();
 
-    let store = runtime.command_store_mut();
-    store.clear_redo();
-    store.store_applied(StoredSceneTransaction::new(
+    runtime.clear_redo_retained_transactions();
+    runtime.store_applied_retained_transaction(RetainedSceneTransaction::new(
         transaction_id,
-        vec![command],
+        before_snapshot,
+        after_snapshot,
         ratified_change.clone(),
     ));
 
@@ -151,7 +133,7 @@ mod tests {
     fn executes_scene_command_and_pushes_history() {
         let mut runtime = RunenwerkEditorRuntime::new();
 
-        let result = execute_scene_command_and_push_history(
+        let result = execute_scene_command_and_push_history_with_origin(
             &mut runtime,
             editor_scene::scene_intent_to_command(
                 CommandId(2),
@@ -162,6 +144,7 @@ mod tests {
             ),
             "Create Entity",
             TransactionId(1),
+            ChangeOrigin::Runtime,
         )
         .expect("scene command execution should succeed");
 

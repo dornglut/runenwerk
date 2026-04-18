@@ -368,7 +368,7 @@ fn viewport_interaction_drag_requires_active_drag_session() {
         })
         .expect_err("drag without active session should fail");
 
-    assert_eq!(error, "no active viewport drag");
+    assert_eq!(error.message, "no active viewport drag");
 }
 
 #[test]
@@ -381,7 +381,10 @@ fn viewport_interaction_gizmo_requires_selected_entity() {
         })
         .expect_err("gizmo drag without selection should fail");
 
-    assert_eq!(error, "cannot start gizmo drag without selected entity");
+    assert_eq!(
+        error.message,
+        "cannot start gizmo drag without selected entity"
+    );
 }
 
 #[test]

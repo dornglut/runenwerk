@@ -1,4 +1,4 @@
-use editor_core::EntityId;
+use editor_core::{EditorMutationError, EntityId};
 
 use crate::editor_runtime::SceneDocumentState;
 
@@ -56,9 +56,11 @@ pub fn validate_reparent(
     document: &SceneDocumentState,
     entity: EntityId,
     new_parent: Option<EntityId>,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     if !document.contains(entity) {
-        return Err("editor entity is not registered");
+        return Err(EditorMutationError::runtime_rejected(
+            "editor entity is not registered",
+        ));
     }
 
     let Some(parent) = new_parent else {
@@ -66,15 +68,21 @@ pub fn validate_reparent(
     };
 
     if !document.contains(parent) {
-        return Err("new parent entity is not registered");
+        return Err(EditorMutationError::runtime_rejected(
+            "new parent entity is not registered",
+        ));
     }
 
     if parent == entity {
-        return Err("entity cannot be parented to itself");
+        return Err(EditorMutationError::runtime_rejected(
+            "entity cannot be parented to itself",
+        ));
     }
 
     if document.would_create_cycle(entity, parent) {
-        return Err("reparent would create a hierarchy cycle");
+        return Err(EditorMutationError::runtime_rejected(
+            "reparent would create a hierarchy cycle",
+        ));
     }
 
     Ok(())

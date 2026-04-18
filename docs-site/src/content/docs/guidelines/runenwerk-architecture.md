@@ -1,5 +1,5 @@
 ---
-title: Runenwerk Architecture v6
+title: Runenwerk 9-Layer Architecture
 description: Canonical governing architecture doctrine for Runenwerk.
 ---
 

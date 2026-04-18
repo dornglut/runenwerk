@@ -1,10 +1,10 @@
 use std::any::TypeId;
 
-use editor_core::ComponentTypeId;
+use editor_core::{ComponentTypeId, EditorMutationError};
 use editor_scene::SceneCommandIntent;
 use scene::{LocalTransform, Vec3Value};
 
-use crate::editor_runtime::{RunenwerkEditorRuntime, execute_scene_intent};
+use crate::editor_runtime::{execute_scene_intent, RunenwerkEditorRuntime};
 
 pub const LOCAL_TRANSFORM_COMPONENT_TYPE_ID: ComponentTypeId = ComponentTypeId(500);
 pub const EDITOR_PRIMITIVE_COMPONENT_TYPE_ID: ComponentTypeId = ComponentTypeId(501);
@@ -107,7 +107,7 @@ pub fn register_mvp_component_types(runtime: &mut RunenwerkEditorRuntime) {
 
 pub fn bootstrap_mvp_scene_if_empty(
     runtime: &mut RunenwerkEditorRuntime,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     if runtime.document().entity_ids().next().is_some() {
         return Ok(());
     }
@@ -122,11 +122,14 @@ pub fn bootstrap_mvp_scene_if_empty(
         },
     )?;
 
-    let entity = runtime
-        .document()
-        .entity_ids()
-        .next()
-        .ok_or("expected created entity in document")?;
+    let entity =
+        runtime
+            .document()
+            .entity_ids()
+            .next()
+            .ok_or(EditorMutationError::runtime_rejected(
+                "expected created entity in document",
+            ))?;
 
     let add_transform_command_id = runtime.allocate_command_id();
     execute_scene_intent(

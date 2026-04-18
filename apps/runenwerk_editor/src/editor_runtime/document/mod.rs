@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use editor_core::EntityId;
+use editor_core::{EditorMutationError, EntityId};
 use editor_scene::SceneEntitySnapshot;
 
 use crate::editor_runtime::{
-    HierarchySnapshot, SceneEntityView, all_entity_views, build_hierarchy_snapshot,
+    all_entity_views, build_hierarchy_snapshot, HierarchySnapshot, SceneEntityView,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,10 +68,12 @@ impl SceneDocumentState {
         entity: EntityId,
         display_name: impl Into<String>,
         parent: Option<EntityId>,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), EditorMutationError> {
         if let Some(parent) = parent {
             if !self.contains(parent) {
-                return Err("new parent entity is not registered");
+                return Err(EditorMutationError::runtime_rejected(
+                    "new parent entity is not registered",
+                ));
             }
         }
 
@@ -85,7 +87,10 @@ impl SceneDocumentState {
         Ok(())
     }
 
-    pub fn restore_entity(&mut self, snapshot: SceneEntitySnapshot) -> Result<(), &'static str> {
+    pub fn restore_entity(
+        &mut self,
+        snapshot: SceneEntitySnapshot,
+    ) -> Result<(), EditorMutationError> {
         self.register_entity(snapshot.id, snapshot.display_name, snapshot.parent)
     }
 
@@ -95,15 +100,21 @@ impl SceneDocumentState {
             .map(|record| SceneEntitySnapshot::new(entity, record.display_name, record.parent))
     }
 
+    pub fn clear_entities(&mut self) {
+        self.entities.clear();
+    }
+
     pub fn rename_entity(
         &mut self,
         entity: EntityId,
         new_display_name: impl Into<String>,
-    ) -> Result<String, &'static str> {
-        let record = self
-            .entities
-            .get_mut(&entity)
-            .ok_or("editor entity is not registered")?;
+    ) -> Result<String, EditorMutationError> {
+        let record =
+            self.entities
+                .get_mut(&entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
 
         let previous = std::mem::replace(&mut record.display_name, new_display_name.into());
         Ok(previous)
@@ -127,9 +138,11 @@ impl SceneDocumentState {
         &self,
         entity: EntityId,
         new_parent: Option<EntityId>,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), EditorMutationError> {
         if !self.contains(entity) {
-            return Err("editor entity is not registered");
+            return Err(EditorMutationError::runtime_rejected(
+                "editor entity is not registered",
+            ));
         }
 
         let Some(parent) = new_parent else {
@@ -137,15 +150,21 @@ impl SceneDocumentState {
         };
 
         if !self.contains(parent) {
-            return Err("new parent entity is not registered");
+            return Err(EditorMutationError::runtime_rejected(
+                "new parent entity is not registered",
+            ));
         }
 
         if parent == entity {
-            return Err("entity cannot be parented to itself");
+            return Err(EditorMutationError::runtime_rejected(
+                "entity cannot be parented to itself",
+            ));
         }
 
         if self.would_create_cycle(entity, parent) {
-            return Err("reparent would create a hierarchy cycle");
+            return Err(EditorMutationError::runtime_rejected(
+                "reparent would create a hierarchy cycle",
+            ));
         }
 
         Ok(())
@@ -155,12 +174,14 @@ impl SceneDocumentState {
         &mut self,
         entity: EntityId,
         new_parent: Option<EntityId>,
-    ) -> Result<Option<EntityId>, &'static str> {
+    ) -> Result<Option<EntityId>, EditorMutationError> {
         self.validate_reparent(entity, new_parent)?;
-        let record = self
-            .entities
-            .get_mut(&entity)
-            .ok_or("editor entity is not registered")?;
+        let record =
+            self.entities
+                .get_mut(&entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
 
         let previous_parent = record.parent;
         record.parent = new_parent;

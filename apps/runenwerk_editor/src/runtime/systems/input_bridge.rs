@@ -1,6 +1,4 @@
-use editor_core::{ComponentTypeId, EntityId};
 use editor_shell::ShellCommand;
-use editor_viewport::ViewportHitResult;
 use engine::WindowState;
 use engine::plugins::input::domain::action;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingResultResource, EditorPickingTarget};
@@ -13,6 +11,7 @@ use crate::runtime::app::{
     ACTION_EDITOR_REDO, ACTION_EDITOR_TOOL_SELECT, ACTION_EDITOR_TOOL_TRANSLATE, ACTION_EDITOR_UNDO,
 };
 use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scaled_shell_theme};
+use crate::runtime::{build_picking_expression_frame, viewport_hit_from_picking_expression};
 use crate::shell::dispatch_shell_command;
 
 pub fn dispatch_editor_input_system(
@@ -206,20 +205,23 @@ fn dispatch_viewport_pointer_down(
     position: UiPoint,
     viewport_bounds: UiRect,
 ) {
-    let hit = map_viewport_hit(picking);
+    let expression =
+        build_picking_expression_frame(picking, host.app.runtime().current_scene_reality_version());
+    let hit = viewport_hit_from_picking_expression(&expression);
     let selection_before = host.app.runtime().selected_entity();
     let local_x = position.x - viewport_bounds.x;
     let local_y = position.y - viewport_bounds.y;
 
     if host.app.debug_logs_enabled() {
         host.app.append_console_line(format!(
-            "[input] viewport pointer-down cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3} sel_before={:?}",
+            "[input] viewport pointer-down cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3} expr_frame={} sel_before={:?}",
             position.x,
             position.y,
             local_x,
             local_y,
             picking_target_label(picking.hit.target),
             picking.hit.distance,
+            expression.metadata.frame_id.0,
             selection_before
         ));
     }
@@ -237,33 +239,6 @@ fn dispatch_viewport_pointer_down(
             "[input] viewport command=PointerDown sel_after={:?}",
             host.app.runtime().selected_entity()
         ));
-    }
-}
-
-fn map_viewport_hit(picking: &EditorPickingResultResource) -> ViewportHitResult {
-    let distance = if picking.hit.distance.is_finite() {
-        picking.hit.distance
-    } else {
-        0.0
-    };
-
-    match picking.hit.target {
-        EditorPickingTarget::None => ViewportHitResult::none(),
-        EditorPickingTarget::Grid => ViewportHitResult::grid(distance),
-        EditorPickingTarget::Entity(entity) => {
-            ViewportHitResult::entity(EntityId(entity), distance)
-        }
-        EditorPickingTarget::ComponentHandle {
-            entity,
-            component_type,
-        } => ViewportHitResult::component_handle(
-            EntityId(entity),
-            ComponentTypeId(component_type),
-            distance,
-        ),
-        EditorPickingTarget::GizmoAxis(axis) => {
-            ViewportHitResult::gizmo_axis(editor_axis_label(axis), distance)
-        }
     }
 }
 

@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::DocumentId;
+use crate::{DocumentId, EditorMutationError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct EntityId(pub u64);
@@ -95,9 +95,11 @@ impl SelectionSet {
         removed
     }
 
-    pub fn set_primary(&mut self, target: &SelectionTarget) -> Result<(), &'static str> {
+    pub fn set_primary(&mut self, target: &SelectionTarget) -> Result<(), EditorMutationError> {
         if !self.items.contains(target) {
-            return Err("cannot set primary selection to a target not in the selection set");
+            return Err(EditorMutationError::session_rejected(
+                "cannot set primary selection to a target not in the selection set",
+            ));
         }
 
         self.primary = Some(target.clone());

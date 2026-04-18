@@ -480,6 +480,7 @@ mod tests {
             ordered,
             vec![
                 "scene.route".to_string(),
+                "editor.picking".to_string(),
                 "ui".to_string(),
                 "world.draw".to_string(),
                 "cave.interior".to_string(),

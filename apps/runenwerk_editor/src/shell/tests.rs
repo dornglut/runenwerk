@@ -18,14 +18,15 @@ struct TestMarker;
 fn build_editor_shell_view_model_reflects_current_outliner_selection() {
     let mut app = RunenwerkEditorApp::new();
 
-    let ecs_entity = app.runtime_mut().world_mut().spawn(TestMarker);
+    let ecs_entity = app.runtime_mut().spawn_world_entity(TestMarker);
 
     app.runtime_mut()
         .register_entity(EntityId(1), ecs_entity, "Player", None);
 
-    app.runtime_mut()
-        .session_mut()
-        .select_single(SelectionTarget::Entity(EntityId(1)));
+    app.runtime_mut().set_selection_single_with_origin(
+        SelectionTarget::Entity(EntityId(1)),
+        ChangeOrigin::Runtime,
+    );
 
     let shell = build_editor_shell_view_model(&app);
 
@@ -39,8 +40,7 @@ fn build_editor_shell_view_model_reflects_active_tool_and_viewport_state() {
     let mut app = RunenwerkEditorApp::new();
 
     app.runtime_mut()
-        .session_mut()
-        .set_active_tool(Some(TRANSLATE_TOOL_ID));
+        .set_active_tool_with_origin(Some(TRANSLATE_TOOL_ID), ChangeOrigin::Runtime);
 
     app.tool_runtime_state_mut()
         .set_hovered_entity(Some(EntityId(7)));
@@ -78,7 +78,7 @@ fn dispatch_shell_command_updates_active_tool() {
 #[test]
 fn dispatch_shell_command_selects_outliner_entity() {
     let mut app = RunenwerkEditorApp::new();
-    let ecs_entity = app.runtime_mut().world_mut().spawn(TestMarker);
+    let ecs_entity = app.runtime_mut().spawn_world_entity(TestMarker);
     app.runtime_mut()
         .register_entity(EntityId(1), ecs_entity, "Player", None);
 

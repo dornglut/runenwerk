@@ -2,9 +2,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use editor_persistence::{
-    ProjectFileV1, SceneFileV2, SceneLoadResult, SceneMigrationPath, decode_ron,
-    decode_scene_file_with_migration, encode_ron_pretty, form_scene_for_runtime,
-    normalize_scene_file,
+    decode_ron, decode_scene_file_with_migration, encode_ron_pretty, form_scene_for_runtime,
+    normalize_scene_file, ProjectFileV1, SceneFileV2, SceneLoadResult, SceneMigrationPath,
 };
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
@@ -32,18 +31,44 @@ pub fn read_scene_file_v2(path: &Path) -> Result<SceneFileV2> {
 pub fn load_scene_file_into_runtime(
     path: &Path,
     runtime: &mut RunenwerkEditorRuntime,
-) -> Result<Option<&'static str>> {
-    let loaded = read_scene_file(path)?;
+) -> Result<Option<editor_core::MigrationPathId>> {
+    load_scene_file_into_runtime_classified(path, runtime)
+        .map_err(|class| anyhow::Error::msg(classification_message(class)))
+}
+
+pub fn load_scene_file_into_runtime_classified(
+    path: &Path,
+    runtime: &mut RunenwerkEditorRuntime,
+) -> std::result::Result<Option<editor_core::MigrationPathId>, editor_core::MigrationFailureClass> {
+    let loaded =
+        read_scene_file(path).map_err(|_| editor_core::MigrationFailureClass::DecodeFailure)?;
     let normalized = normalize_scene_file(loaded.scene)
-        .map_err(|error| anyhow::Error::msg(error.as_static_str()))
-        .context("failed to normalize scene file")?;
+        .map_err(|_| editor_core::MigrationFailureClass::NormalizationFailure)?;
     let formed = form_scene_for_runtime(normalized);
-    let migration = match loaded.migration {
-        SceneMigrationPath::IdentityV2 => None,
-        path => Some(path.as_static_str()),
-    };
-    apply_formed_scene_to_runtime(runtime, &formed).map_err(anyhow::Error::msg)?;
+    let migration = scene_migration_path_id(loaded.migration);
+    apply_formed_scene_to_runtime(runtime, &formed)
+        .map_err(|_| editor_core::MigrationFailureClass::ApplyFailure)?;
     Ok(migration)
+}
+
+fn scene_migration_path_id(path: SceneMigrationPath) -> Option<editor_core::MigrationPathId> {
+    match path {
+        SceneMigrationPath::IdentityV2 => None,
+        SceneMigrationPath::V1ToV2DefaultPrimitive => {
+            Some(editor_core::SCENE_MIGRATION_V1_TO_V2_DEFAULT_PRIMITIVE)
+        }
+    }
+}
+
+fn classification_message(class: editor_core::MigrationFailureClass) -> &'static str {
+    match class {
+        editor_core::MigrationFailureClass::DecodeFailure => "failed to decode scene file",
+        editor_core::MigrationFailureClass::NormalizationFailure => {
+            "failed to normalize scene file"
+        }
+        editor_core::MigrationFailureClass::FormationFailure => "failed to form scene package",
+        editor_core::MigrationFailureClass::ApplyFailure => "failed to apply scene package",
+    }
 }
 
 pub fn write_project_file(path: &Path, project: &ProjectFileV1) -> Result<()> {
@@ -61,7 +86,7 @@ pub fn read_project_file(path: &Path) -> Result<ProjectFileV1> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editor_runtime::{RunenwerkEditorRuntime, register_mvp_component_types};
+    use crate::editor_runtime::{register_mvp_component_types, RunenwerkEditorRuntime};
 
     fn temp_scene_path(name: &str) -> std::path::PathBuf {
         let mut path = std::env::temp_dir();
@@ -113,7 +138,10 @@ mod tests {
 
         let migration =
             load_scene_file_into_runtime(&path, &mut runtime).expect("scene load should succeed");
-        assert_eq!(migration, Some("scene:v1->v2:default-primitive"));
+        assert_eq!(
+            migration,
+            Some(editor_core::SCENE_MIGRATION_V1_TO_V2_DEFAULT_PRIMITIVE)
+        );
         assert_eq!(runtime.document().entity_ids().count(), 1);
 
         let _ = std::fs::remove_file(path);

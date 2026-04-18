@@ -1,5 +1,6 @@
 use editor_core::EntityId;
 use editor_viewport::{ViewportHitResult, ViewportHitTarget};
+use editor_core::EditorMutationError;
 
 use crate::editor_runtime::{
     RunenwerkEditorRuntime, clear_selection_with_origin, select_single_component_with_origin,
@@ -30,7 +31,7 @@ impl ViewportPanelPresenter {
     pub fn dispatch(
         runtime: &mut RunenwerkEditorRuntime,
         command: ViewportPanelCommand,
-    ) -> Result<ViewportPanelState, &'static str> {
+    ) -> Result<ViewportPanelState, EditorMutationError> {
         match command {
             ViewportPanelCommand::SelectEntity { entity } => {
                 select_single_entity_with_origin(
@@ -57,7 +58,7 @@ impl ViewportPanelPresenter {
 fn apply_viewport_hit_selection(
     runtime: &mut RunenwerkEditorRuntime,
     hit: &ViewportHitResult,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     match &hit.target {
         ViewportHitTarget::Entity(entity) => {
             select_single_entity_with_origin(

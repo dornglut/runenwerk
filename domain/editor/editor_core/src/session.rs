@@ -3,7 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::{DocumentDescriptor, DocumentId, HistoryStack, SelectionSet, ToolId};
+use crate::{
+    DocumentDescriptor, DocumentId, EditorMutationError, HistoryStack, SelectionSet, ToolId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EditorMode {
@@ -116,11 +118,11 @@ impl EditorSession {
         &mut self,
         document_id: crate::DocumentId,
         is_dirty: bool,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), EditorMutationError> {
         let document = self
             .documents
             .get_mut(&document_id)
-            .ok_or("document not found")?;
+            .ok_or(EditorMutationError::session_rejected("document not found"))?;
 
         document.is_dirty = is_dirty;
         Ok(())
@@ -128,7 +130,7 @@ impl EditorSession {
 }
 
 impl crate::CommandContext for EditorSession {
-    type Error = &'static str;
+    type Error = EditorMutationError;
 
     fn mark_document_dirty(
         &mut self,

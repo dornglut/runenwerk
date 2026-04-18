@@ -1,61 +1,41 @@
-use editor_core::{
-    ChangeOrigin, Command, CommandExecutor, GoverningChangeError, RatifiedChange, SemanticOperation,
-};
-use editor_scene::SceneCommandContext;
+use editor_core::{ChangeOrigin, GoverningChangeError, RatifiedChange, SemanticOperation};
 
+use crate::editor_runtime::parity::assert_scene_projection_parity;
 use crate::editor_runtime::{
-    RunenwerkEditorRuntime, StoredSceneTransaction, assert_scene_projection_parity,
-    sync_selection_after_scene_change,
+    sync_selection_after_scene_change, RetainedSceneTransaction, RunenwerkEditorRuntime,
 };
 
 use crate::editor_runtime::commands::ratification::ratify_scene_change;
 
-pub fn undo_last_scene_transaction(
-    runtime: &mut RunenwerkEditorRuntime,
-) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    undo_last_scene_transaction_with_origin(runtime, ChangeOrigin::Runtime)
-}
-
-pub fn undo_last_scene_transaction_with_origin(
+pub(crate) fn undo_last_scene_transaction_with_origin(
     runtime: &mut RunenwerkEditorRuntime,
     origin: ChangeOrigin,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    let Some(history_entry) = runtime.session_mut().history_mut().pop_undo() else {
+    let Some(history_entry) = runtime.pop_undo_history_entry() else {
         return Ok(None);
     };
 
     let transaction_id = history_entry.transaction.id;
-    let Some(mut stored) = runtime.command_store_mut().take_applied(transaction_id) else {
+    let Some(stored) = runtime.take_applied_retained_transaction(transaction_id) else {
         return Err(GoverningChangeError::history_inconsistent(
             "missing stored scene transaction for undo",
         ));
     };
 
-    {
-        let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-        let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
-
-        for command in stored.commands.iter_mut().rev() {
-            command
-                .undo(&mut ctx)
-                .map_err(GoverningChangeError::mutation_rejected)?;
-        }
-    }
+    runtime
+        .restore_scene_snapshot(&stored.before_snapshot)
+        .map_err(|error| GoverningChangeError::mutation_rejected(error.message))?;
 
     let causality_id = stored.ratified_change.causality_id;
 
-    runtime
-        .command_store_mut()
-        .store_redo(StoredSceneTransaction::new(
-            transaction_id,
-            stored.commands,
-            stored.ratified_change,
-        ));
+    runtime.store_redo_retained_transaction(RetainedSceneTransaction::new(
+        transaction_id,
+        stored.before_snapshot,
+        stored.after_snapshot,
+        stored.ratified_change,
+    ));
 
-    runtime
-        .session_mut()
-        .history_mut()
-        .push_redo(history_entry.clone());
+    runtime.push_redo_history_entry(history_entry.clone());
 
     sync_selection_after_scene_change(runtime);
     assert_scene_projection_parity(runtime);
@@ -73,51 +53,35 @@ pub fn undo_last_scene_transaction_with_origin(
     Ok(Some(ratified_change))
 }
 
-pub fn redo_last_scene_transaction(
-    runtime: &mut RunenwerkEditorRuntime,
-) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    redo_last_scene_transaction_with_origin(runtime, ChangeOrigin::Runtime)
-}
-
-pub fn redo_last_scene_transaction_with_origin(
+pub(crate) fn redo_last_scene_transaction_with_origin(
     runtime: &mut RunenwerkEditorRuntime,
     origin: ChangeOrigin,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    let Some(history_entry) = runtime.session_mut().history_mut().pop_redo() else {
+    let Some(history_entry) = runtime.pop_redo_history_entry() else {
         return Ok(None);
     };
 
     let transaction_id = history_entry.transaction.id;
-    let Some(mut stored) = runtime.command_store_mut().take_redo(transaction_id) else {
+    let Some(stored) = runtime.take_redo_retained_transaction(transaction_id) else {
         return Err(GoverningChangeError::history_inconsistent(
             "missing stored scene transaction for redo",
         ));
     };
 
-    {
-        let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-        let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
-
-        for command in stored.commands.iter_mut() {
-            CommandExecutor::execute_command(&mut ctx, command)
-                .map_err(GoverningChangeError::mutation_rejected)?;
-        }
-    }
+    runtime
+        .restore_scene_snapshot(&stored.after_snapshot)
+        .map_err(|error| GoverningChangeError::mutation_rejected(error.message))?;
 
     let causality_id = stored.ratified_change.causality_id;
 
-    runtime
-        .command_store_mut()
-        .store_applied(StoredSceneTransaction::new(
-            transaction_id,
-            stored.commands,
-            stored.ratified_change,
-        ));
+    runtime.store_applied_retained_transaction(RetainedSceneTransaction::new(
+        transaction_id,
+        stored.before_snapshot,
+        stored.after_snapshot,
+        stored.ratified_change,
+    ));
 
-    runtime
-        .session_mut()
-        .history_mut()
-        .push_applied(history_entry.clone());
+    runtime.push_applied_history_entry(history_entry.clone());
 
     sync_selection_after_scene_change(runtime);
     assert_scene_projection_parity(runtime);

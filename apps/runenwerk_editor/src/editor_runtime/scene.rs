@@ -1,7 +1,7 @@
-use editor_core::{ComponentTypeId, EntityId, ResourceTypeId};
+use editor_core::{ComponentTypeId, EditorMutationError, EntityId, ResourceTypeId};
 use editor_inspector::{
-    InspectorEditError, InspectorEditValue, InspectorPath, InspectorPathSegment,
-    set_component_field_value, set_resource_field_value,
+    set_component_field_value, set_resource_field_value, InspectorEditError, InspectorEditValue,
+    InspectorPath, InspectorPathSegment,
 };
 use editor_scene::{SceneComponentSnapshot, SceneEntitySnapshot, SceneRuntime};
 
@@ -48,10 +48,12 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         &mut self,
         parent: Option<EntityId>,
         display_name: &str,
-    ) -> Result<EntityId, &'static str> {
+    ) -> Result<EntityId, EditorMutationError> {
         if let Some(parent) = parent {
             if !self.document.contains(parent) {
-                return Err("new parent entity is not registered");
+                return Err(EditorMutationError::runtime_rejected(
+                    "new parent entity is not registered",
+                ));
             }
         }
 
@@ -59,48 +61,57 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         let editor_id = self.ids.allocate_entity_id();
         self.document
             .register_entity(editor_id, display_name.to_string(), parent)?;
-        self.ids
-            .register_entity(editor_id, ecs_entity, display_name.to_string(), parent);
+        self.ids.register_entity(editor_id, ecs_entity);
 
         Ok(editor_id)
     }
 
-    fn restore_entity(&mut self, snapshot: SceneEntitySnapshot) -> Result<(), &'static str> {
+    fn restore_entity(&mut self, snapshot: SceneEntitySnapshot) -> Result<(), EditorMutationError> {
         if let Some(parent) = snapshot.parent {
             if !self.document.contains(parent) {
-                return Err("new parent entity is not registered");
+                return Err(EditorMutationError::runtime_rejected(
+                    "new parent entity is not registered",
+                ));
             }
         }
 
-        let ecs_entity = self.world.spawn(EmptyEntityBundle);
         self.document.restore_entity(snapshot.clone())?;
-        self.ids.register_entity(
-            snapshot.id,
-            ecs_entity,
-            snapshot.display_name,
-            snapshot.parent,
-        );
+
+        if self.ids.resolve_entity(snapshot.id).is_none() {
+            let ecs_entity = self.world.spawn(EmptyEntityBundle);
+            self.ids.register_entity(snapshot.id, ecs_entity);
+        }
+
         Ok(())
     }
 
-    fn delete_entity(&mut self, entity: EntityId) -> Result<SceneEntitySnapshot, &'static str> {
+    fn delete_entity(
+        &mut self,
+        entity: EntityId,
+    ) -> Result<SceneEntitySnapshot, EditorMutationError> {
         if self.document.has_children(entity) {
-            return Err("cannot delete entity while it still has children");
+            return Err(EditorMutationError::runtime_rejected(
+                "cannot delete entity while it still has children",
+            ));
         }
 
-        let snapshot = self
-            .document
-            .entity_snapshot(entity)
-            .ok_or("editor entity is not registered")?;
+        let snapshot =
+            self.document
+                .entity_snapshot(entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
 
-        let ecs_entity = self
-            .ids
-            .resolve_entity(entity)
-            .ok_or("editor entity is not registered")?;
+        let ecs_entity =
+            self.ids
+                .resolve_entity(entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
 
         self.world
             .despawn(ecs_entity)
-            .map_err(|_| "failed to despawn ecs entity")?;
+            .map_err(|_| EditorMutationError::runtime_rejected("failed to despawn ecs entity"))?;
 
         let _ = self.document.unregister_entity(entity);
         let _ = self.ids.unregister_entity(entity);
@@ -112,22 +123,21 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         &mut self,
         entity: EntityId,
         new_parent: Option<EntityId>,
-    ) -> Result<Option<EntityId>, &'static str> {
-        let previous_parent = self.document.reparent_entity(entity, new_parent)?;
-        let projected_previous_parent = self.ids.reparent_entity(entity, new_parent)?;
-        debug_assert_eq!(projected_previous_parent, previous_parent);
-        Ok(previous_parent)
+    ) -> Result<Option<EntityId>, EditorMutationError> {
+        self.document.reparent_entity(entity, new_parent)
     }
 
     fn add_component(
         &mut self,
         entity: EntityId,
         component_type: ComponentTypeId,
-    ) -> Result<(), &'static str> {
-        let ecs_entity = self
-            .ids
-            .resolve_entity(entity)
-            .ok_or("editor entity is not registered")?;
+    ) -> Result<(), EditorMutationError> {
+        let ecs_entity =
+            self.ids
+                .resolve_entity(entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
 
         self.ids
             .add_default_component(self.world, ecs_entity, component_type)
@@ -137,16 +147,20 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         &mut self,
         entity: EntityId,
         component_type: ComponentTypeId,
-    ) -> Result<SceneComponentSnapshot, &'static str> {
-        let ecs_entity = self
-            .ids
-            .resolve_entity(entity)
-            .ok_or("editor entity is not registered")?;
+    ) -> Result<SceneComponentSnapshot, EditorMutationError> {
+        let ecs_entity =
+            self.ids
+                .resolve_entity(entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
 
         let display_name = self
             .ids
             .component_display_name(component_type)
-            .ok_or("component type is not registered in editor runtime")?
+            .ok_or(EditorMutationError::runtime_rejected(
+                "component type is not registered in editor runtime",
+            ))?
             .to_string();
 
         self.ids
@@ -159,11 +173,13 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         ))
     }
 
-    fn restore_component(&mut self, snapshot: SceneComponentSnapshot) -> Result<(), &'static str> {
-        let ecs_entity = self
-            .ids
-            .resolve_entity(snapshot.entity)
-            .ok_or("editor entity is not registered")?;
+    fn restore_component(
+        &mut self,
+        snapshot: SceneComponentSnapshot,
+    ) -> Result<(), EditorMutationError> {
+        let ecs_entity = self.ids.resolve_entity(snapshot.entity).ok_or(
+            EditorMutationError::runtime_rejected("editor entity is not registered"),
+        )?;
 
         self.ids.restore_removed_component(
             self.world,
@@ -246,15 +262,9 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         &mut self,
         entity: EntityId,
         new_display_name: &str,
-    ) -> Result<String, &'static str> {
-        let previous = self
-            .document
-            .rename_entity(entity, new_display_name.to_string())?;
-        let projected_previous = self
-            .ids
-            .rename_entity(entity, new_display_name.to_string())?;
-        debug_assert_eq!(projected_previous, previous);
-        Ok(previous)
+    ) -> Result<String, EditorMutationError> {
+        self.document
+            .rename_entity(entity, new_display_name.to_string())
     }
 }
 

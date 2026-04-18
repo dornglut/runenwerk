@@ -580,7 +580,7 @@ fn validate_imported_resource_descriptors(
                 ImportedTextureSemantic::HistoryTexture => {}
                 ImportedTextureSemantic::External => {
                     issues.push(format!(
-                        "resource '{}' uses external imported texture semantics; external imports are compatibility-only and not supported in active runtime flows",
+                        "resource '{}' uses external imported texture semantics; external imports are not supported in active runtime flows",
                         id
                     ));
                 }
@@ -589,7 +589,7 @@ fn validate_imported_resource_descriptors(
                 ImportedBufferSemantic::HistoryBuffer => {}
                 ImportedBufferSemantic::External => {
                     issues.push(format!(
-                        "resource '{}' uses external imported buffer semantics; external imports are compatibility-only and not supported in active runtime flows",
+                        "resource '{}' uses external imported buffer semantics; external imports are not supported in active runtime flows",
                         id
                     ));
                 }

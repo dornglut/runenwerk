@@ -108,7 +108,7 @@ impl SceneEditorCommand {
 }
 
 impl Command for SceneEditorCommand {
-    type Error = &'static str;
+    type Error = editor_core::EditorMutationError;
     type Context<'a> = SceneCommandContext<'a>;
 
     fn metadata(&self) -> &CommandMetadata {
@@ -175,7 +175,7 @@ mod tests {
             &mut self,
             parent: Option<EntityId>,
             display_name: &str,
-        ) -> Result<EntityId, &'static str> {
+        ) -> Result<EntityId, editor_core::EditorMutationError> {
             self.next_entity_id += 1;
             let id = EntityId(self.next_entity_id);
             self.entities.insert(
@@ -185,21 +185,33 @@ mod tests {
             Ok(id)
         }
 
-        fn restore_entity(&mut self, snapshot: SceneEntitySnapshot) -> Result<(), &'static str> {
+        fn restore_entity(
+            &mut self,
+            snapshot: SceneEntitySnapshot,
+        ) -> Result<(), editor_core::EditorMutationError> {
             self.entities.insert(snapshot.id, snapshot);
             Ok(())
         }
 
-        fn delete_entity(&mut self, entity: EntityId) -> Result<SceneEntitySnapshot, &'static str> {
-            self.entities.remove(&entity).ok_or("entity not found")
+        fn delete_entity(
+            &mut self,
+            entity: EntityId,
+        ) -> Result<SceneEntitySnapshot, editor_core::EditorMutationError> {
+            self.entities
+                .remove(&entity)
+                .ok_or(editor_core::EditorMutationError::runtime_rejected(
+                    "entity not found",
+                ))
         }
 
         fn reparent_entity(
             &mut self,
             entity: EntityId,
             new_parent: Option<EntityId>,
-        ) -> Result<Option<EntityId>, &'static str> {
-            let entry = self.entities.get_mut(&entity).ok_or("entity not found")?;
+        ) -> Result<Option<EntityId>, editor_core::EditorMutationError> {
+            let entry = self.entities.get_mut(&entity).ok_or(
+                editor_core::EditorMutationError::runtime_rejected("entity not found"),
+            )?;
             let old_parent = entry.parent;
             entry.parent = new_parent;
             Ok(old_parent)
@@ -209,7 +221,7 @@ mod tests {
             &mut self,
             entity: EntityId,
             component_type: ComponentTypeId,
-        ) -> Result<(), &'static str> {
+        ) -> Result<(), editor_core::EditorMutationError> {
             self.component_fields.insert(
                 (entity, component_type, "root".to_string()),
                 InspectorEditValue::Text("component".to_string()),
@@ -221,7 +233,7 @@ mod tests {
             &mut self,
             entity: EntityId,
             component_type: ComponentTypeId,
-        ) -> Result<crate::SceneComponentSnapshot, &'static str> {
+        ) -> Result<crate::SceneComponentSnapshot, editor_core::EditorMutationError> {
             self.component_fields
                 .retain(|(stored_entity, stored_type, _), _| {
                     *stored_entity != entity || *stored_type != component_type
@@ -237,7 +249,7 @@ mod tests {
         fn restore_component(
             &mut self,
             snapshot: crate::SceneComponentSnapshot,
-        ) -> Result<(), &'static str> {
+        ) -> Result<(), editor_core::EditorMutationError> {
             self.component_fields.insert(
                 (snapshot.entity, snapshot.component_type, "root".to_string()),
                 InspectorEditValue::Text(snapshot.display_name),
@@ -295,8 +307,10 @@ mod tests {
             &mut self,
             entity: EntityId,
             new_display_name: &str,
-        ) -> Result<String, &'static str> {
-            let entry = self.entities.get_mut(&entity).ok_or("entity not found")?;
+        ) -> Result<String, editor_core::EditorMutationError> {
+            let entry = self.entities.get_mut(&entity).ok_or(
+                editor_core::EditorMutationError::runtime_rejected("entity not found"),
+            )?;
             let previous = std::mem::replace(&mut entry.display_name, new_display_name.to_string());
             Ok(previous)
         }

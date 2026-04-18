@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_scene/src/commands/edit_component_field.rs
 //! Purpose: Edit component field command with undo support.
 
-use editor_core::{ComponentTypeId, EntityId};
+use editor_core::{ComponentTypeId, EditorMutationError, EntityId};
 use editor_inspector::{InspectorEditError, InspectorEditValue, InspectorPath};
 
 use crate::SceneCommandContext;
@@ -31,7 +31,7 @@ impl EditComponentFieldCommand {
         }
     }
 
-    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         if self.previous_value.is_none() {
             let value = ctx
                 .runtime()
@@ -50,7 +50,7 @@ impl EditComponentFieldCommand {
             .map_err(map_edit_error)
     }
 
-    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         let Some(previous_value) = self.previous_value.clone() else {
             return Ok(());
         };
@@ -61,15 +61,31 @@ impl EditComponentFieldCommand {
     }
 }
 
-fn map_edit_error(error: InspectorEditError) -> &'static str {
+fn map_edit_error(error: InspectorEditError) -> EditorMutationError {
     match error {
-        InspectorEditError::TargetNotFound => "inspector target not found",
-        InspectorEditError::TypeNotRegistered => "inspector type not registered",
-        InspectorEditError::ValueNotAvailable => "inspector value not available",
-        InspectorEditError::InvalidPath => "invalid inspector path",
-        InspectorEditError::UnsupportedPathSegment => "unsupported inspector path segment",
-        InspectorEditError::UnsupportedValueType { .. } => "unsupported inspector value type",
-        InspectorEditError::IntegerOutOfRange { .. } => "integer out of range",
-        InspectorEditError::FloatOutOfRange { .. } => "float out of range",
+        InspectorEditError::TargetNotFound => {
+            EditorMutationError::inspector_rejected("inspector target not found")
+        }
+        InspectorEditError::TypeNotRegistered => {
+            EditorMutationError::inspector_rejected("inspector type not registered")
+        }
+        InspectorEditError::ValueNotAvailable => {
+            EditorMutationError::inspector_rejected("inspector value not available")
+        }
+        InspectorEditError::InvalidPath => {
+            EditorMutationError::inspector_rejected("invalid inspector path")
+        }
+        InspectorEditError::UnsupportedPathSegment => {
+            EditorMutationError::inspector_rejected("unsupported inspector path segment")
+        }
+        InspectorEditError::UnsupportedValueType { .. } => {
+            EditorMutationError::inspector_rejected("unsupported inspector value type")
+        }
+        InspectorEditError::IntegerOutOfRange { .. } => {
+            EditorMutationError::inspector_rejected("integer out of range")
+        }
+        InspectorEditError::FloatOutOfRange { .. } => {
+            EditorMutationError::inspector_rejected("float out of range")
+        }
     }
 }

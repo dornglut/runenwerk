@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use editor_core::EntityId;
+use editor_core::{EditorMutationError, EntityId};
 use editor_persistence::{
     FormedScenePackageV2, SceneEntityRecordV2, SceneFileV2, ScenePrimitiveKind,
     ScenePrimitiveRecord, SceneTransformRecord,
@@ -9,8 +9,8 @@ use editor_scene::{SceneEntitySnapshot, SceneRuntime};
 use scene::{LocalTransform, QuatValue, Vec3Value};
 
 use crate::editor_runtime::{
-    EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, EditorPrimitive, EditorPrimitiveKind,
-    LOCAL_TRANSFORM_COMPONENT_TYPE_ID, RunenwerkEditorRuntime,
+    EditorPrimitive, EditorPrimitiveKind, RunenwerkEditorRuntime,
+    EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, LOCAL_TRANSFORM_COMPONENT_TYPE_ID,
 };
 
 pub fn scene_file_from_runtime(runtime: &RunenwerkEditorRuntime) -> SceneFileV2 {
@@ -38,23 +38,25 @@ pub fn scene_file_from_runtime(runtime: &RunenwerkEditorRuntime) -> SceneFileV2 
 pub fn apply_scene_file_to_runtime(
     runtime: &mut RunenwerkEditorRuntime,
     scene_file: &SceneFileV2,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     apply_scene_entities_to_runtime(runtime, &scene_file.entities)
 }
 
 pub fn apply_formed_scene_to_runtime(
     runtime: &mut RunenwerkEditorRuntime,
     formed_scene: &FormedScenePackageV2,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     apply_scene_entities_to_runtime(runtime, formed_scene.entities())
 }
 
 fn apply_scene_entities_to_runtime(
     runtime: &mut RunenwerkEditorRuntime,
     entities: &[SceneEntityRecordV2],
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     if runtime.document().entity_ids().next().is_some() {
-        return Err("scene import requires an empty runtime document");
+        return Err(EditorMutationError::runtime_rejected(
+            "scene import requires an empty runtime document",
+        ));
     }
 
     let mut pending = entities.to_vec();
@@ -80,13 +82,16 @@ fn apply_scene_entities_to_runtime(
                     EntityId(entity.id),
                     entity.display_name,
                     entity.parent.map(EntityId),
-                ))?;
+                ))
+                .map_err(|error| EditorMutationError::runtime_rejected(error.message))?;
             restored.insert(entity.id);
             progressed = true;
         }
 
         if !progressed {
-            return Err("scene file has missing or cyclic parent references");
+            return Err(EditorMutationError::runtime_rejected(
+                "scene file has missing or cyclic parent references",
+            ));
         }
 
         pending = next_pending;
@@ -94,30 +99,27 @@ fn apply_scene_entities_to_runtime(
 
     for entity in entities {
         let editor_entity = EntityId(entity.id);
-        let ecs_entity = runtime
-            .ids()
-            .resolve_entity(editor_entity)
-            .ok_or("scene file references unknown entity id")?;
-
         if !runtime.entity_has_component(editor_entity, LOCAL_TRANSFORM_COMPONENT_TYPE_ID) {
             runtime
                 .scene_runtime()
-                .add_component(editor_entity, LOCAL_TRANSFORM_COMPONENT_TYPE_ID)?;
+                .add_component(editor_entity, LOCAL_TRANSFORM_COMPONENT_TYPE_ID)
+                .map_err(|error| EditorMutationError::runtime_rejected(error.message))?;
         }
         if !runtime.entity_has_component(editor_entity, EDITOR_PRIMITIVE_COMPONENT_TYPE_ID) {
             runtime
                 .scene_runtime()
-                .add_component(editor_entity, EDITOR_PRIMITIVE_COMPONENT_TYPE_ID)?;
+                .add_component(editor_entity, EDITOR_PRIMITIVE_COMPONENT_TYPE_ID)
+                .map_err(|error| EditorMutationError::runtime_rejected(error.message))?;
         }
 
-        runtime
-            .world_mut()
-            .insert(ecs_entity, local_transform_from_record(entity.transform))
-            .map_err(|_| "failed to restore local transform component")?;
-        runtime
-            .world_mut()
-            .insert(ecs_entity, editor_primitive_from_record(entity.primitive))
-            .map_err(|_| "failed to restore primitive component")?;
+        runtime.insert_component_for_editor_entity(
+            editor_entity,
+            local_transform_from_record(entity.transform),
+        )?;
+        runtime.insert_component_for_editor_entity(
+            editor_entity,
+            editor_primitive_from_record(entity.primitive),
+        )?;
     }
 
     Ok(())
@@ -234,17 +236,10 @@ mod tests {
             .entity_ids()
             .next()
             .expect("seeded runtime should contain one entity");
-        let ecs_entity = source_app
-            .runtime()
-            .ids()
-            .resolve_entity(entity)
-            .expect("entity mapping should exist");
-
         source_app
             .runtime_mut()
-            .world_mut()
-            .insert(
-                ecs_entity,
+            .insert_component_for_editor_entity(
+                entity,
                 LocalTransform::new(
                     Vec3Value::new(3.0, 1.5, -2.0),
                     QuatValue::new(0.0, 0.0, 0.0, 1.0),
@@ -259,8 +254,7 @@ mod tests {
         primitive.capsule_half_height = 1.2;
         source_app
             .runtime_mut()
-            .world_mut()
-            .insert(ecs_entity, primitive)
+            .insert_component_for_editor_entity(entity, primitive)
             .expect("primitive insert should succeed");
 
         let scene_file = scene_file_from_runtime(source_app.runtime());

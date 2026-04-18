@@ -2,15 +2,12 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
 #[derive(Default)]
-#[deprecated(
-    note = "compatibility projection helper only; active runtime submission uses PreparedRenderFrame"
-)]
 pub struct RenderFrameDataRegistry<'a> {
     by_type: HashMap<TypeId, &'a dyn Any>,
 }
 
 impl<'a> RenderFrameDataRegistry<'a> {
-    // Compatibility helper for projection APIs and tests.
+    // Projection helper for adapter APIs and tests.
     // Runtime submit/render path uses PreparedRenderFrame and does not consume this registry.
     pub fn new() -> Self {
         Self::default()

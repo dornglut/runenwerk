@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_scene/src/commands/create_entity.rs
 //! Purpose: Create entity command with undo support.
 
-use editor_core::EntityId;
+use editor_core::{EditorMutationError, EntityId};
 
 use crate::{SceneCommandContext, SceneEntitySnapshot};
 
@@ -21,7 +21,7 @@ impl CreateEntityCommand {
         }
     }
 
-    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         if let Some(snapshot) = self.created.clone() {
             ctx.runtime_mut().restore_entity(snapshot)?;
             return Ok(());
@@ -40,7 +40,7 @@ impl CreateEntityCommand {
         Ok(())
     }
 
-    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         let Some(snapshot) = &self.created else {
             return Ok(());
         };

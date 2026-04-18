@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_scene/src/commands/rename_entity.rs
 //! Purpose: Rename entity command with undo support.
 
-use editor_core::EntityId;
+use editor_core::{EditorMutationError, EntityId};
 
 use crate::SceneCommandContext;
 
@@ -21,7 +21,7 @@ impl RenameEntityCommand {
         }
     }
 
-    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         let previous = ctx
             .runtime_mut()
             .rename_entity(self.entity, &self.new_display_name)?;
@@ -33,7 +33,7 @@ impl RenameEntityCommand {
         Ok(())
     }
 
-    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         let Some(previous_display_name) = self.previous_display_name.as_deref() else {
             return Ok(());
         };

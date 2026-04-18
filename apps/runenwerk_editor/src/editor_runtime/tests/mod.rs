@@ -1,5 +1,6 @@
 pub mod shared;
 
+mod architecture_guards;
 mod inspector;
 mod outliner;
 mod scene_editing;

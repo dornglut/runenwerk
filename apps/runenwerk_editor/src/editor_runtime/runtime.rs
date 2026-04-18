@@ -1,13 +1,17 @@
-use editor_core::{ComponentTypeId, EditorSession, EntityId, ResourceTypeId};
-use editor_inspector::InspectTarget;
-use editor_scene::SceneComponentDescriptor;
+use std::collections::HashSet;
+
+use editor_core::{ComponentTypeId, EditorMutationError, EditorSession, EntityId, ResourceTypeId};
+use editor_inspector::{InspectTarget, InspectorEditError, InspectorEditValue, InspectorPath};
+use editor_scene::{SceneComponentDescriptor, SceneRuntime};
 
 use crate::editor_runtime::{
-    EditorRuntimeIdRegistry, HierarchySnapshot, OutlinerTree, RatifiedChangeLog,
-    RunenwerkEditorInspectorBridge, RunenwerkEditorSceneRuntime, SceneCommandStore,
-    SceneDocumentState, SceneEntityView, all_entity_views, build_hierarchy_snapshot,
-    outliner_tree_from_hierarchy_snapshot, primary_selected_entity,
-    resolve_primary_inspect_target_from_runtime, validate_reparent,
+    all_entity_views, build_hierarchy_snapshot, outliner_tree_from_hierarchy_snapshot,
+    primary_selected_entity, resolve_primary_inspect_target_from_runtime, validate_reparent,
+    AuthoredSceneReality, EditorRuntimeIdRegistry, HierarchySnapshot, InstantiatedSceneReality,
+    OutlinerTree, RatifiedChangeLog, RetainedSceneTransaction, RunenwerkEditorInspectorBridge,
+    RunenwerkEditorSceneRuntime, SceneComponentSnapshotRecord, SceneDocumentState, SceneEntityView,
+    SceneFieldSnapshot, SceneResourceSnapshotRecord, SceneRetentionStore, SceneRuntimeSnapshot,
+    SessionReality, SimulatedSceneReality,
 };
 
 struct SceneRealityStore {
@@ -29,9 +33,11 @@ impl SceneRealityStore {
 pub struct RunenwerkEditorRuntime {
     session: EditorSession,
     scene_realities: SceneRealityStore,
-    command_store: SceneCommandStore,
+    retention_store: SceneRetentionStore,
     ratified_changes: RatifiedChangeLog,
     session_changes: editor_core::SessionChangeLog,
+    session_share_outbox: editor_core::SessionShareOutbox,
+    session_share_policy: editor_core::SessionSharePolicy,
     shared_changes: editor_core::SharedChangeOutbox,
     sharing_policy: editor_core::SharingPolicy,
     workflow: editor_core::WorkflowLog,
@@ -40,6 +46,7 @@ pub struct RunenwerkEditorRuntime {
     next_ratification_id: u64,
     next_causality_id: u64,
     next_session_change_id: u64,
+    next_session_share_sequence: u64,
     next_shared_change_sequence: u64,
     next_workflow_event_id: u64,
     scene_reality_version: u64,
@@ -50,9 +57,11 @@ impl RunenwerkEditorRuntime {
         Self {
             session: EditorSession::new(),
             scene_realities: SceneRealityStore::new(),
-            command_store: SceneCommandStore::new(),
+            retention_store: SceneRetentionStore::new(),
             ratified_changes: RatifiedChangeLog::new(),
             session_changes: editor_core::SessionChangeLog::new(),
+            session_share_outbox: editor_core::SessionShareOutbox::new(),
+            session_share_policy: editor_core::SessionSharePolicy::Disabled,
             shared_changes: editor_core::SharedChangeOutbox::new(),
             sharing_policy: editor_core::SharingPolicy::LocalOnly,
             workflow: editor_core::WorkflowLog::new(),
@@ -61,6 +70,7 @@ impl RunenwerkEditorRuntime {
             next_ratification_id: 1,
             next_causality_id: 1,
             next_session_change_id: 1,
+            next_session_share_sequence: 1,
             next_shared_change_sequence: 1,
             next_workflow_event_id: 1,
             scene_reality_version: 0,
@@ -71,16 +81,140 @@ impl RunenwerkEditorRuntime {
         &self.session
     }
 
-    pub(crate) fn session_mut(&mut self) -> &mut EditorSession {
-        &mut self.session
+    pub fn session_reality(&self) -> SessionReality<'_> {
+        SessionReality::new(&self.session)
+    }
+
+    pub fn authored_reality(&self) -> AuthoredSceneReality<'_> {
+        AuthoredSceneReality::new(&self.scene_realities.authored)
+    }
+
+    pub fn instantiated_reality(&self) -> InstantiatedSceneReality<'_> {
+        InstantiatedSceneReality::new(
+            &self.scene_realities.instantiated,
+            &self.scene_realities.identities,
+        )
+    }
+
+    pub fn simulated_reality(&self) -> SimulatedSceneReality<'_> {
+        SimulatedSceneReality::new(&self.scene_realities.instantiated)
+    }
+
+    pub(crate) fn set_active_tool_with_origin(
+        &mut self,
+        tool_id: Option<editor_core::ToolId>,
+        origin: editor_core::ChangeOrigin,
+    ) {
+        self.session.set_active_tool(tool_id);
+        self.record_session_change(
+            origin,
+            editor_core::SessionChangeKind::ActiveToolSet { tool_id },
+        );
+    }
+
+    pub(crate) fn set_selection_single_with_origin(
+        &mut self,
+        target: editor_core::SelectionTarget,
+        origin: editor_core::ChangeOrigin,
+    ) {
+        self.session.select_single(target.clone());
+        self.record_session_change(
+            origin,
+            editor_core::SessionChangeKind::SelectionSetSingle { target },
+        );
+    }
+
+    pub(crate) fn clear_selection_with_origin(
+        &mut self,
+        origin: editor_core::ChangeOrigin,
+    ) -> bool {
+        if self.session.selection().is_empty() {
+            return false;
+        }
+
+        self.session.clear_selection();
+        self.record_session_change(origin, editor_core::SessionChangeKind::SelectionCleared);
+        true
+    }
+
+    pub(crate) fn pop_undo_history_entry(&mut self) -> Option<editor_core::HistoryEntry> {
+        self.session.history_mut().pop_undo()
+    }
+
+    pub(crate) fn pop_redo_history_entry(&mut self) -> Option<editor_core::HistoryEntry> {
+        self.session.history_mut().pop_redo()
+    }
+
+    pub(crate) fn push_applied_history_entry(&mut self, entry: editor_core::HistoryEntry) {
+        self.session.history_mut().push_applied(entry);
+    }
+
+    pub(crate) fn push_redo_history_entry(&mut self, entry: editor_core::HistoryEntry) {
+        self.session.history_mut().push_redo(entry);
     }
 
     pub fn world(&self) -> &ecs::World {
         &self.scene_realities.instantiated
     }
 
-    pub(crate) fn world_mut(&mut self) -> &mut ecs::World {
-        &mut self.scene_realities.instantiated
+    #[cfg(test)]
+    pub(crate) fn spawn_world_entity<T>(&mut self, component: T) -> ecs::Entity
+    where
+        T: ecs::Component + 'static,
+    {
+        self.scene_realities.instantiated.spawn(component)
+    }
+
+    pub(crate) fn insert_component_for_editor_entity<T>(
+        &mut self,
+        editor_entity: EntityId,
+        component: T,
+    ) -> Result<(), EditorMutationError>
+    where
+        T: ecs::Component + 'static,
+    {
+        let ecs_entity = self
+            .scene_realities
+            .identities
+            .resolve_entity(editor_entity)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "editor entity is not registered",
+            ))?;
+
+        self.scene_realities
+            .instantiated
+            .insert(ecs_entity, component)
+            .map_err(|_| {
+                EditorMutationError::runtime_rejected(
+                    "failed to insert component for editor entity",
+                )
+            })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn remove_component_for_editor_entity<T>(
+        &mut self,
+        editor_entity: EntityId,
+    ) -> Result<T, EditorMutationError>
+    where
+        T: ecs::Component + 'static,
+    {
+        let ecs_entity = self
+            .scene_realities
+            .identities
+            .resolve_entity(editor_entity)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "editor entity is not registered",
+            ))?;
+
+        self.scene_realities
+            .instantiated
+            .remove::<T>(ecs_entity)
+            .map_err(|_| {
+                EditorMutationError::runtime_rejected(
+                    "failed to remove component for editor entity",
+                )
+            })
     }
 
     pub fn document(&self) -> &SceneDocumentState {
@@ -91,12 +225,256 @@ impl RunenwerkEditorRuntime {
         &self.scene_realities.identities
     }
 
-    pub fn command_store(&self) -> &SceneCommandStore {
-        &self.command_store
+    pub fn retention_store(&self) -> &SceneRetentionStore {
+        &self.retention_store
     }
 
-    pub(crate) fn command_store_mut(&mut self) -> &mut SceneCommandStore {
-        &mut self.command_store
+    pub(crate) fn clear_scene_entities_only(&mut self) {
+        let entity_ids = self
+            .scene_realities
+            .authored
+            .entity_ids()
+            .collect::<Vec<_>>();
+
+        for entity_id in entity_ids {
+            if let Some(ecs_entity) = self.scene_realities.identities.resolve_entity(entity_id) {
+                let _ = self.scene_realities.instantiated.despawn(ecs_entity);
+            }
+        }
+
+        self.scene_realities.authored.clear_entities();
+        self.scene_realities.identities.clear_scene_entities();
+    }
+
+    pub(crate) fn capture_scene_snapshot(&self) -> SceneRuntimeSnapshot {
+        let mut snapshot = SceneRuntimeSnapshot::default();
+
+        snapshot.entities = self
+            .scene_realities
+            .authored
+            .entity_ids()
+            .filter_map(|entity| self.scene_realities.authored.entity_snapshot(entity))
+            .collect();
+
+        for entity in self.scene_realities.authored.entity_ids() {
+            for component_type in self.scene_realities.identities.component_type_ids() {
+                if !self.entity_has_component(entity, component_type) {
+                    continue;
+                }
+
+                let Some(ecs_entity) = self.scene_realities.identities.resolve_entity(entity)
+                else {
+                    continue;
+                };
+                let Some(rust_type_id) = self
+                    .scene_realities
+                    .identities
+                    .resolve_component_rust_type_id(component_type)
+                else {
+                    continue;
+                };
+                let Some(value) = self
+                    .scene_realities
+                    .instantiated
+                    .reflected_component_value_ref(ecs_entity, rust_type_id)
+                else {
+                    continue;
+                };
+
+                let mut fields = Vec::new();
+                collect_reflected_leaf_fields(value, InspectorPath::root(), &mut fields);
+                snapshot.components.push(SceneComponentSnapshotRecord::new(
+                    entity,
+                    component_type,
+                    fields,
+                ));
+            }
+        }
+
+        for resource_type in self.scene_realities.identities.resource_type_ids() {
+            let Some(rust_type_id) = self
+                .scene_realities
+                .identities
+                .resolve_resource_rust_type_id(resource_type)
+            else {
+                continue;
+            };
+            let Some(value) = self
+                .scene_realities
+                .instantiated
+                .reflected_resource_value_ref(rust_type_id)
+            else {
+                continue;
+            };
+
+            let mut fields = Vec::new();
+            collect_reflected_leaf_fields(value, InspectorPath::root(), &mut fields);
+            snapshot
+                .resources
+                .push(SceneResourceSnapshotRecord::new(resource_type, fields));
+        }
+
+        snapshot
+    }
+
+    pub(crate) fn restore_scene_snapshot(
+        &mut self,
+        snapshot: &SceneRuntimeSnapshot,
+    ) -> Result<(), EditorMutationError> {
+        let target_entity_ids = snapshot
+            .entities
+            .iter()
+            .map(|entity| entity.id)
+            .collect::<HashSet<_>>();
+
+        let existing_entity_ids = self
+            .scene_realities
+            .authored
+            .entity_ids()
+            .collect::<Vec<_>>();
+        for entity_id in existing_entity_ids {
+            if target_entity_ids.contains(&entity_id) {
+                continue;
+            }
+
+            if let Some(ecs_entity) = self.scene_realities.identities.resolve_entity(entity_id) {
+                let _ = self.scene_realities.instantiated.despawn(ecs_entity);
+            }
+            let _ = self.scene_realities.authored.unregister_entity(entity_id);
+            let _ = self.scene_realities.identities.unregister_entity(entity_id);
+        }
+
+        self.scene_realities.authored.clear_entities();
+
+        let mut pending_entities = snapshot.entities.clone();
+        while !pending_entities.is_empty() {
+            let mut progressed = false;
+            let mut remaining = Vec::new();
+
+            for entity in pending_entities {
+                if let Some(parent) = entity.parent {
+                    if !self.scene_realities.authored.contains(parent) {
+                        remaining.push(entity);
+                        continue;
+                    }
+                }
+
+                self.scene_runtime()
+                    .restore_entity(entity)
+                    .map_err(|error| EditorMutationError::runtime_rejected(error.message))?;
+                progressed = true;
+            }
+
+            if !progressed {
+                return Err(EditorMutationError::runtime_rejected(
+                    "failed to restore scene hierarchy",
+                ));
+            }
+            pending_entities = remaining;
+        }
+
+        let component_types = self
+            .scene_realities
+            .identities
+            .component_type_ids()
+            .collect::<Vec<_>>();
+        for entity in snapshot.entities.iter().map(|entity| entity.id) {
+            for component_type in &component_types {
+                if !self.entity_has_component(entity, *component_type) {
+                    continue;
+                }
+
+                self.scene_runtime()
+                    .remove_component(entity, *component_type)
+                    .map_err(|error| EditorMutationError::runtime_rejected(error.message))?;
+            }
+        }
+        self.scene_realities
+            .identities
+            .clear_removed_component_cache();
+
+        for component in &snapshot.components {
+            self.scene_runtime()
+                .add_component(component.entity, component.component_type)
+                .map_err(|error| EditorMutationError::runtime_rejected(error.message))?;
+
+            for field in &component.fields {
+                self.scene_runtime()
+                    .write_component_field(
+                        component.entity,
+                        component.component_type,
+                        &field.path,
+                        field.value.clone(),
+                    )
+                    .map_err(map_inspector_edit_error)?;
+            }
+        }
+
+        for resource in &snapshot.resources {
+            for field in &resource.fields {
+                self.scene_runtime()
+                    .write_resource_field(resource.resource_type, &field.path, field.value.clone())
+                    .map_err(map_inspector_edit_error)?;
+            }
+        }
+
+        self.scene_realities
+            .identities
+            .clear_removed_component_cache();
+
+        Ok(())
+    }
+
+    pub(crate) fn prepare_for_scene_load(&mut self) {
+        self.clear_scene_entities_only();
+        self.session = EditorSession::new();
+        self.retention_store = SceneRetentionStore::new();
+        self.ratified_changes = RatifiedChangeLog::new();
+        self.session_changes = editor_core::SessionChangeLog::new();
+        self.session_share_outbox = editor_core::SessionShareOutbox::new();
+        self.shared_changes = editor_core::SharedChangeOutbox::new();
+        self.workflow = editor_core::WorkflowLog::new();
+        self.next_command_id = 1;
+        self.next_transaction_id = 1;
+        self.next_ratification_id = 1;
+        self.next_causality_id = 1;
+        self.next_session_change_id = 1;
+        self.next_session_share_sequence = 1;
+        self.next_shared_change_sequence = 1;
+        self.next_workflow_event_id = 1;
+        self.scene_reality_version = 0;
+    }
+
+    pub(crate) fn clear_redo_retained_transactions(&mut self) {
+        self.retention_store.clear_redo();
+    }
+
+    pub(crate) fn store_applied_retained_transaction(
+        &mut self,
+        transaction: RetainedSceneTransaction,
+    ) {
+        self.retention_store.store_applied(transaction);
+    }
+
+    pub(crate) fn take_applied_retained_transaction(
+        &mut self,
+        transaction_id: editor_core::TransactionId,
+    ) -> Option<RetainedSceneTransaction> {
+        self.retention_store.take_applied(transaction_id)
+    }
+
+    pub(crate) fn store_redo_retained_transaction(
+        &mut self,
+        transaction: RetainedSceneTransaction,
+    ) {
+        self.retention_store.store_redo(transaction);
+    }
+
+    pub(crate) fn take_redo_retained_transaction(
+        &mut self,
+        transaction_id: editor_core::TransactionId,
+    ) -> Option<RetainedSceneTransaction> {
+        self.retention_store.take_redo(transaction_id)
     }
 
     pub fn ratified_change_log(&self) -> &RatifiedChangeLog {
@@ -109,6 +487,22 @@ impl RunenwerkEditorRuntime {
 
     pub fn workflow_log(&self) -> &editor_core::WorkflowLog {
         &self.workflow
+    }
+
+    pub fn session_share_policy(&self) -> editor_core::SessionSharePolicy {
+        self.session_share_policy
+    }
+
+    pub fn set_session_share_policy(&mut self, policy: editor_core::SessionSharePolicy) {
+        self.session_share_policy = policy;
+    }
+
+    pub fn queued_session_share_count(&self) -> usize {
+        self.session_share_outbox.len()
+    }
+
+    pub fn drain_session_share_changes(&mut self) -> Vec<editor_core::SessionShareEnvelope> {
+        self.session_share_outbox.drain()
     }
 
     pub fn sharing_policy(&self) -> editor_core::SharingPolicy {
@@ -202,7 +596,19 @@ impl RunenwerkEditorRuntime {
         let id = editor_core::SessionChangeId(self.next_session_change_id);
         self.next_session_change_id += 1;
         self.session_changes
-            .push(editor_core::SessionChange::new(id, origin, kind));
+            .push(editor_core::SessionChange::new(id, origin, kind.clone()));
+
+        if self.session_share_policy == editor_core::SessionSharePolicy::ObservationSafe {
+            if let Some(shared_kind) = map_session_change_to_share(&kind) {
+                let sequence = editor_core::SessionShareSequence(self.next_session_share_sequence);
+                self.next_session_share_sequence += 1;
+                self.session_share_outbox
+                    .enqueue(editor_core::SessionShareEnvelope::new(
+                        sequence,
+                        editor_core::SessionShareEntry::new(origin, shared_kind),
+                    ));
+            }
+        }
     }
 
     pub(crate) fn record_workflow_event(&mut self, kind: editor_core::WorkflowEventKind) {
@@ -224,16 +630,18 @@ impl RunenwerkEditorRuntime {
         )
     }
 
-    pub(crate) fn session_and_scene_runtime(
+    pub(crate) fn with_scene_command_context<R>(
         &mut self,
-    ) -> (&mut EditorSession, RunenwerkEditorSceneRuntime<'_>) {
+        run: impl FnOnce(&mut editor_scene::SceneCommandContext<'_>) -> R,
+    ) -> R {
         let session = &mut self.session;
-        let scene_runtime = RunenwerkEditorSceneRuntime::new(
+        let mut scene_runtime = RunenwerkEditorSceneRuntime::new(
             &mut self.scene_realities.authored,
             &mut self.scene_realities.instantiated,
             &mut self.scene_realities.identities,
         );
-        (session, scene_runtime)
+        let mut context = editor_scene::SceneCommandContext::new(session, &mut scene_runtime);
+        run(&mut context)
     }
 
     pub fn register_entity(
@@ -243,17 +651,13 @@ impl RunenwerkEditorRuntime {
         display_name: impl Into<String>,
         parent: Option<EntityId>,
     ) {
-        let display_name = display_name.into();
         self.scene_realities
             .authored
-            .register_entity(editor_id, display_name.clone(), parent)
+            .register_entity(editor_id, display_name.into(), parent)
             .expect("document entity registration failed");
-        self.scene_realities.identities.register_entity(
-            editor_id,
-            ecs_entity,
-            display_name,
-            parent,
-        );
+        self.scene_realities
+            .identities
+            .register_entity(editor_id, ecs_entity);
     }
 
     pub fn register_component_type<T>(&mut self, editor_id: ComponentTypeId)
@@ -304,7 +708,7 @@ impl RunenwerkEditorRuntime {
         &self,
         entity: EntityId,
         new_parent: Option<EntityId>,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), EditorMutationError> {
         validate_reparent(&self.scene_realities.authored, entity, new_parent)
     }
 
@@ -412,5 +816,169 @@ impl RunenwerkEditorRuntime {
             .sort_by(|left, right| left.1.cmp(&right.1).then_with(|| left.0.cmp(&right.0)));
 
         component_types
+    }
+}
+
+fn map_session_change_to_share(
+    kind: &editor_core::SessionChangeKind,
+) -> Option<editor_core::SessionShareKind> {
+    match kind {
+        editor_core::SessionChangeKind::ActiveToolSet { tool_id } => {
+            Some(editor_core::SessionShareKind::ActiveToolSet { tool_id: *tool_id })
+        }
+        editor_core::SessionChangeKind::ModeSet { mode } => {
+            Some(editor_core::SessionShareKind::ModeSet { mode: *mode })
+        }
+        editor_core::SessionChangeKind::SelectionSetSingle { target } => {
+            Some(editor_core::SessionShareKind::SelectionSetSingle {
+                target: target.clone(),
+            })
+        }
+        editor_core::SessionChangeKind::SelectionCleared => {
+            Some(editor_core::SessionShareKind::SelectionCleared)
+        }
+    }
+}
+
+fn map_inspector_edit_error(error: InspectorEditError) -> EditorMutationError {
+    match error {
+        InspectorEditError::TargetNotFound => {
+            EditorMutationError::runtime_rejected("inspector target not found")
+        }
+        InspectorEditError::TypeNotRegistered => {
+            EditorMutationError::runtime_rejected("inspector type not registered")
+        }
+        InspectorEditError::ValueNotAvailable => {
+            EditorMutationError::runtime_rejected("inspector value not available")
+        }
+        InspectorEditError::InvalidPath => {
+            EditorMutationError::runtime_rejected("invalid inspector path")
+        }
+        InspectorEditError::UnsupportedPathSegment => {
+            EditorMutationError::runtime_rejected("unsupported inspector path segment")
+        }
+        InspectorEditError::UnsupportedValueType { .. } => {
+            EditorMutationError::runtime_rejected("unsupported inspector value type")
+        }
+        InspectorEditError::IntegerOutOfRange { .. } => {
+            EditorMutationError::runtime_rejected("integer out of range")
+        }
+        InspectorEditError::FloatOutOfRange { .. } => {
+            EditorMutationError::runtime_rejected("float out of range")
+        }
+    }
+}
+
+fn collect_reflected_leaf_fields(
+    value: ecs::reflect::ReflectValueRef<'_>,
+    path: InspectorPath,
+    out: &mut Vec<SceneFieldSnapshot>,
+) {
+    if let Some(bool_value) = value.downcast_ref::<bool>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Bool(*bool_value),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<i8>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<i16>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<i32>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<i64>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<isize>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<u8>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<u16>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<u32>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<u64>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(int_value) = value.downcast_ref::<usize>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Integer(*int_value as i64),
+        ));
+        return;
+    }
+    if let Some(float_value) = value.downcast_ref::<f32>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Float(*float_value as f64),
+        ));
+        return;
+    }
+    if let Some(float_value) = value.downcast_ref::<f64>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Float(*float_value),
+        ));
+        return;
+    }
+    if let Some(text_value) = value.downcast_ref::<String>() {
+        out.push(SceneFieldSnapshot::new(
+            path,
+            InspectorEditValue::Text(text_value.clone()),
+        ));
+        return;
+    }
+
+    if let Some(struct_ref) = value.struct_ref() {
+        for field in struct_ref.fields() {
+            let Some(field_value) = struct_ref.field(field.name) else {
+                continue;
+            };
+            collect_reflected_leaf_fields(field_value, path.clone().child_field(field.name), out);
+        }
     }
 }

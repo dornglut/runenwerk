@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_scene/src/commands/delete_entity.rs
 //! Purpose: Delete entity command with undo support.
 
-use editor_core::EntityId;
+use editor_core::{EditorMutationError, EntityId};
 
 use crate::{SceneCommandContext, SceneEntitySnapshot};
 
@@ -19,13 +19,13 @@ impl DeleteEntityCommand {
         }
     }
 
-    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         let deleted = ctx.runtime_mut().delete_entity(self.entity)?;
         self.deleted = Some(deleted);
         Ok(())
     }
 
-    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         let Some(snapshot) = self.deleted.clone() else {
             return Ok(());
         };

@@ -1,4 +1,4 @@
-use editor_core::{CommandId, ComponentTypeId, EntityId};
+use editor_core::{ChangeOrigin, CommandId, ComponentTypeId, EntityId};
 use editor_inspector::{InspectTarget, InspectorEditValue, InspectorPath, InspectorValue};
 use editor_scene::SceneCommandIntent;
 
@@ -6,9 +6,7 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_panels::{
     InspectorPanelCommand, InspectorPanelViewModel, OutlinerPanelCommand, flatten_editable_fields,
 };
-use crate::editor_runtime::{
-    execute_scene_intent, redo_last_scene_transaction, undo_last_scene_transaction,
-};
+use crate::editor_runtime::{execute_scene_intent, ratify_scene_redo, ratify_scene_undo};
 
 use super::shared::Position;
 
@@ -212,7 +210,7 @@ fn inspector_panel_edit_component_field_command_is_undoable_and_redoable() {
         assert_eq!(position.speed, 9.5);
     }
 
-    let undone = undo_last_scene_transaction(app.runtime_mut())
+    let undone = ratify_scene_undo(app.runtime_mut(), ChangeOrigin::Runtime)
         .expect("undo should succeed")
         .expect("undo should return entry");
     assert_eq!(undone.transaction.label, "Edit Component Field");
@@ -226,7 +224,7 @@ fn inspector_panel_edit_component_field_command_is_undoable_and_redoable() {
         assert_eq!(position.speed, 0.0);
     }
 
-    let redone = redo_last_scene_transaction(app.runtime_mut())
+    let redone = ratify_scene_redo(app.runtime_mut(), ChangeOrigin::Runtime)
         .expect("redo should succeed")
         .expect("redo should return entry");
     assert_eq!(redone.transaction.label, "Edit Component Field");

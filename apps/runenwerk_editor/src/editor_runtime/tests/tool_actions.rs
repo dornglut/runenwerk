@@ -166,7 +166,7 @@ fn tool_action_begin_preview_requires_primary_selection() {
         .dispatch_tool_action(ToolAction::BeginPreview)
         .expect_err("begin preview without selection should fail");
 
-    assert_eq!(error, "cannot begin preview without a primary selection");
+    assert_eq!(error.message, "cannot begin preview without a primary selection");
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn tool_action_update_preview_requires_active_session() {
         .dispatch_tool_action(ToolAction::UpdatePreview)
         .expect_err("update preview without session should fail");
 
-    assert_eq!(error, "no active preview session");
+    assert_eq!(error.message, "no active preview session");
 }
 
 #[test]

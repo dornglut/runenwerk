@@ -42,15 +42,21 @@ pub fn submit_editor_frame_system(
     } = &mut *host;
     let shell_theme = scaled_shell_theme(theme, window.scale_factor);
     let (expression_source_version, frame) = if debug_hardcoded_ui_frame_enabled() {
-        let expression = editor_shell::ShellExpressionFrame::new(
+        let expression = editor_shell::ShellUiExpressionFrame::new(
             app.runtime().current_scene_reality_version(),
             build_debug_frame(bounds),
         );
-        (expression.source_version, expression.into_ui_frame())
+        (
+            expression.metadata.source_version,
+            expression.into_ui_frame(),
+        )
     } else {
         let expression =
             app.build_shell_expression_frame(shell_state, bounds, &shell_theme, &*atlas);
-        (expression.source_version, expression.into_ui_frame())
+        (
+            expression.metadata.source_version,
+            expression.into_ui_frame(),
+        )
     };
     let viewport_bounds = viewport_bounds(
         shell_state.last_tree(),

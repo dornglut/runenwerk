@@ -3,13 +3,11 @@ use editor_core::{
     TransactionId,
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
-use editor_scene::{
-    SceneCommandContext, SceneCommandIntent, SceneEditorCommand, scene_intent_to_command,
-};
+use editor_scene::{SceneCommandIntent, SceneEditorCommand, scene_intent_to_command};
 
 use crate::editor_runtime::{
-    RunenwerkEditorRuntime, execute_scene_command, execute_scene_command_and_push_history,
-    execute_scene_intent, redo_last_scene_transaction, undo_last_scene_transaction,
+    RunenwerkEditorRuntime, execute_scene_command, execute_scene_intent,
+    ratify_scene_command_with_transaction_id, ratify_scene_redo, ratify_scene_undo,
 };
 
 use super::shared::Position;
@@ -116,24 +114,17 @@ fn scene_editing_vertical_slice_create_add_edit_remove_and_undo_remove() {
         },
     );
 
-    {
-        let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-        let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
-
-        CommandExecutor::execute_command(&mut ctx, &mut remove_command)
-            .expect("remove component command should execute");
-    }
+    runtime
+        .with_scene_command_context(|ctx| {
+            CommandExecutor::execute_command(ctx, &mut remove_command)
+        })
+        .expect("remove component command should execute");
 
     assert!(runtime.world().get::<Position>(ecs_entity).is_none());
 
-    {
-        let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-        let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
-
-        remove_command
-            .undo(&mut ctx)
-            .expect("undo remove component should restore prior value");
-    }
+    runtime
+        .with_scene_command_context(|ctx| remove_command.undo(ctx))
+        .expect("undo remove component should restore prior value");
 
     let restored_component = runtime
         .world()
@@ -153,8 +144,9 @@ fn undo_redo_replays_stored_scene_transaction() {
 
     runtime.register_component_type::<Position>(component_type);
 
-    execute_scene_command_and_push_history(
+    ratify_scene_command_with_transaction_id(
         &mut runtime,
+        "Create Entity",
         scene_intent_to_command(
             CommandId(10),
             SceneCommandIntent::CreateEntity {
@@ -162,13 +154,14 @@ fn undo_redo_replays_stored_scene_transaction() {
                 display_name: "Player".to_string(),
             },
         ),
-        "Create Entity",
         TransactionId(100),
+        editor_core::ChangeOrigin::Runtime,
     )
     .expect("create entity with history should succeed");
 
-    let add_change = execute_scene_command_and_push_history(
+    let add_change = ratify_scene_command_with_transaction_id(
         &mut runtime,
+        "Add Component",
         scene_intent_to_command(
             CommandId(11),
             SceneCommandIntent::AddComponent {
@@ -176,8 +169,8 @@ fn undo_redo_replays_stored_scene_transaction() {
                 component_type,
             },
         ),
-        "Add Component",
         TransactionId(101),
+        editor_core::ChangeOrigin::Runtime,
     )
     .expect("add component with history should succeed")
     .expect("add component should ratify");
@@ -189,7 +182,7 @@ fn undo_redo_replays_stored_scene_transaction() {
 
     assert!(runtime.world().get::<Position>(ecs_entity).is_some());
 
-    let undone = undo_last_scene_transaction(&mut runtime)
+    let undone = ratify_scene_undo(&mut runtime, editor_core::ChangeOrigin::Runtime)
         .expect("undo should succeed")
         .expect("undo should return history entry");
     assert_eq!(undone.transaction.id, TransactionId(101));
@@ -200,7 +193,7 @@ fn undo_redo_replays_stored_scene_transaction() {
     );
     assert!(runtime.world().get::<Position>(ecs_entity).is_none());
 
-    let redone = redo_last_scene_transaction(&mut runtime)
+    let redone = ratify_scene_redo(&mut runtime, editor_core::ChangeOrigin::Runtime)
         .expect("redo should succeed")
         .expect("redo should return history entry");
     assert_eq!(redone.transaction.id, TransactionId(101));

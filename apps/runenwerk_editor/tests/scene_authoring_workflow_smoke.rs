@@ -1,4 +1,4 @@
-use editor_core::{CommandId, ComponentTypeId, EntityId};
+use editor_core::{ChangeOrigin, ComponentTypeId, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_scene::SceneCommandIntent;
 use editor_viewport::ViewportHitResult;
@@ -6,10 +6,10 @@ use scene::{LocalTransform, Vec3Value};
 
 use runenwerk_editor::editor_app::RunenwerkEditorApp;
 use runenwerk_editor::editor_features::viewport::ViewportInteractionCommand;
-use runenwerk_editor::editor_panels::{InspectorPanelCommand, OutlinerPanelCommand};
-use runenwerk_editor::editor_runtime::{
-    execute_scene_intent, redo_last_scene_transaction, undo_last_scene_transaction,
+use runenwerk_editor::editor_features::{
+    execute_intent_with_history, redo_last_scene_change, undo_last_scene_change,
 };
+use runenwerk_editor::editor_panels::{InspectorPanelCommand, OutlinerPanelCommand};
 
 #[derive(Debug, Clone, Default, ecs::Reflect)]
 struct Vec2 {
@@ -34,9 +34,9 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
     app.runtime_mut()
         .register_component_type::<LocalTransform>(transform_type);
 
-    execute_scene_intent(
+    execute_intent_with_history(
         app.runtime_mut(),
-        CommandId(1),
+        "Create Entity",
         SceneCommandIntent::CreateEntity {
             parent: None,
             display_name: "Entity".to_string(),
@@ -44,9 +44,9 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
     )
     .expect("entity create should succeed");
 
-    execute_scene_intent(
+    execute_intent_with_history(
         app.runtime_mut(),
-        CommandId(2),
+        "Add Position",
         SceneCommandIntent::AddComponent {
             entity: EntityId(1),
             component_type: position_type,
@@ -54,9 +54,9 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
     )
     .expect("position add should succeed");
 
-    execute_scene_intent(
+    execute_intent_with_history(
         app.runtime_mut(),
-        CommandId(3),
+        "Add LocalTransform",
         SceneCommandIntent::AddComponent {
             entity: EntityId(1),
             component_type: transform_type,
@@ -107,7 +107,7 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         .expect("local transform should exist");
     assert_eq!(transform.translation, Vec3Value::new(6.0, 0.0, 0.0));
 
-    let undone = undo_last_scene_transaction(app.runtime_mut())
+    let undone = undo_last_scene_change(app.runtime_mut(), ChangeOrigin::Runtime)
         .expect("undo should succeed")
         .expect("undo should return history entry");
     assert!(
@@ -125,7 +125,7 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         Vec3Value::new(0.0, 0.0, 0.0)
     );
 
-    let redone = redo_last_scene_transaction(app.runtime_mut())
+    let redone = redo_last_scene_change(app.runtime_mut(), ChangeOrigin::Runtime)
         .expect("redo should succeed")
         .expect("redo should return history entry");
     assert!(

@@ -11,31 +11,40 @@ pub trait SceneRuntime {
         &mut self,
         parent: Option<EntityId>,
         display_name: &str,
-    ) -> Result<EntityId, &'static str>;
+    ) -> Result<EntityId, editor_core::EditorMutationError>;
 
-    fn restore_entity(&mut self, snapshot: SceneEntitySnapshot) -> Result<(), &'static str>;
+    fn restore_entity(
+        &mut self,
+        snapshot: SceneEntitySnapshot,
+    ) -> Result<(), editor_core::EditorMutationError>;
 
-    fn delete_entity(&mut self, entity: EntityId) -> Result<SceneEntitySnapshot, &'static str>;
+    fn delete_entity(
+        &mut self,
+        entity: EntityId,
+    ) -> Result<SceneEntitySnapshot, editor_core::EditorMutationError>;
 
     fn reparent_entity(
         &mut self,
         entity: EntityId,
         new_parent: Option<EntityId>,
-    ) -> Result<Option<EntityId>, &'static str>;
+    ) -> Result<Option<EntityId>, editor_core::EditorMutationError>;
 
     fn add_component(
         &mut self,
         entity: EntityId,
         component_type: ComponentTypeId,
-    ) -> Result<(), &'static str>;
+    ) -> Result<(), editor_core::EditorMutationError>;
 
     fn remove_component(
         &mut self,
         entity: EntityId,
         component_type: ComponentTypeId,
-    ) -> Result<SceneComponentSnapshot, &'static str>;
+    ) -> Result<SceneComponentSnapshot, editor_core::EditorMutationError>;
 
-    fn restore_component(&mut self, snapshot: SceneComponentSnapshot) -> Result<(), &'static str>;
+    fn restore_component(
+        &mut self,
+        snapshot: SceneComponentSnapshot,
+    ) -> Result<(), editor_core::EditorMutationError>;
 
     fn read_component_field(
         &self,
@@ -69,7 +78,7 @@ pub trait SceneRuntime {
         &mut self,
         entity: EntityId,
         new_display_name: &str,
-    ) -> Result<String, &'static str>;
+    ) -> Result<String, editor_core::EditorMutationError>;
 }
 
 pub struct SceneCommandContext<'a> {
@@ -103,7 +112,7 @@ impl<'a> SceneCommandContext<'a> {
 }
 
 impl<'a> editor_core::CommandContext for SceneCommandContext<'a> {
-    type Error = &'static str;
+    type Error = editor_core::EditorMutationError;
 
     fn mark_document_dirty(
         &mut self,

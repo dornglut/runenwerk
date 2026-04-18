@@ -168,6 +168,10 @@ fn march_scene(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> RaymarchResult {
     return RaymarchResult(hit, t);
 }
 
+fn color_magenta() -> vec4<f32> {
+    return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+}
+
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let pixel = position.xy;

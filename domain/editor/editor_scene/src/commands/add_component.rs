@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_scene/src/commands/add_component.rs
 //! Purpose: Add component command with undo support.
 
-use editor_core::{ComponentTypeId, EntityId};
+use editor_core::{ComponentTypeId, EditorMutationError, EntityId};
 
 use crate::{SceneCommandContext, SceneComponentSnapshot};
 
@@ -21,7 +21,7 @@ impl AddComponentCommand {
         }
     }
 
-    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn apply(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         if let Some(snapshot) = self.removed_snapshot.take() {
             ctx.runtime_mut().restore_component(snapshot)?;
             return Ok(());
@@ -31,7 +31,7 @@ impl AddComponentCommand {
             .add_component(self.entity, self.component_type)
     }
 
-    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), &'static str> {
+    pub fn undo(&mut self, ctx: &mut SceneCommandContext) -> Result<(), EditorMutationError> {
         let snapshot = ctx
             .runtime_mut()
             .remove_component(self.entity, self.component_type)?;

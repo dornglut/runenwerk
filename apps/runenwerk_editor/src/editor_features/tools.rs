@@ -6,11 +6,12 @@ use crate::editor_runtime::{
     commit_translation_preview_into_local_transform, select_single_component_with_origin,
     select_single_entity_with_origin,
 };
+use editor_core::EditorMutationError;
 
 pub fn dispatch_tool_action(
     app: &mut RunenwerkEditorApp,
     action: ToolAction,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     match action {
         ToolAction::SelectSingle(target) => match target {
             editor_core::SelectionTarget::Entity(entity) => {
@@ -31,7 +32,11 @@ pub fn dispatch_tool_action(
                     editor_core::ChangeOrigin::ToolInteraction,
                 )?;
             }
-            _ => return Err("unsupported selection target for tool action"),
+            _ => {
+                return Err(EditorMutationError::session_rejected(
+                    "unsupported selection target for tool action",
+                ));
+            }
         },
         ToolAction::ClearSelection => {
             clear_selection_with_origin(
@@ -46,7 +51,7 @@ pub fn dispatch_tool_action(
                 intent,
                 editor_core::ChangeOrigin::ToolInteraction,
             )
-            .map_err(editor_core::GoverningChangeError::as_static_str)?;
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
         }
         ToolAction::HoverEntity(entity) => {
             app.tool_runtime_state_mut().set_hovered_entity(entity);
@@ -58,7 +63,9 @@ pub fn dispatch_tool_action(
                 .selection()
                 .primary()
                 .cloned()
-                .ok_or("cannot begin preview without a primary selection")?;
+                .ok_or(EditorMutationError::session_rejected(
+                    "cannot begin preview without a primary selection",
+                ))?;
 
             app.tool_runtime_state_mut()
                 .begin_preview(selection, TransformToolKind::Translate)?;
@@ -70,7 +77,9 @@ pub fn dispatch_tool_action(
             let preview = app
                 .tool_runtime_state_mut()
                 .commit_preview()
-                .ok_or("no active preview session")?;
+                .ok_or(EditorMutationError::session_rejected(
+                    "no active preview session",
+                ))?;
 
             commit_translation_preview_into_local_transform(
                 app.runtime_mut(),
@@ -82,7 +91,9 @@ pub fn dispatch_tool_action(
             let _ = app
                 .tool_runtime_state_mut()
                 .cancel_preview()
-                .ok_or("no active preview session")?;
+                .ok_or(EditorMutationError::session_rejected(
+                    "no active preview session",
+                ))?;
         }
     }
 
@@ -92,7 +103,7 @@ pub fn dispatch_tool_action(
 pub fn dispatch_tool_actions(
     app: &mut RunenwerkEditorApp,
     actions: impl IntoIterator<Item = ToolAction>,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     for action in actions {
         dispatch_tool_action(app, action)?;
     }

@@ -4,6 +4,7 @@ use scene::Vec3Value;
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::ToolAction;
 use crate::editor_tools_state::TranslateAxis;
+use editor_core::EditorMutationError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewportToolCommand {
@@ -30,7 +31,7 @@ impl ViewportToolController {
     pub fn dispatch(
         app: &mut RunenwerkEditorApp,
         command: ViewportToolCommand,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), EditorMutationError> {
         match command {
             ViewportToolCommand::BeginTranslateDrag { entity } => {
                 begin_translate_preview(app, entity)?;
@@ -41,14 +42,15 @@ impl ViewportToolController {
             }
             ViewportToolCommand::BeginTranslateAxisDrag { entity, axis } => {
                 begin_translate_preview(app, entity)?;
-                app.tool_runtime_state_mut()
-                    .set_translate_axis(Some(axis))?;
+                app.tool_runtime_state_mut().set_translate_axis(Some(axis))?;
             }
             ViewportToolCommand::UpdateTranslateAxisDrag { amount } => {
                 let axis = app
                     .tool_runtime_state()
                     .translate_axis()
-                    .ok_or("no active translate axis")?;
+                    .ok_or(EditorMutationError::session_rejected(
+                        "no active translate axis",
+                    ))?;
 
                 let delta = axis_delta(axis, amount);
                 app.update_translation_preview(delta)?;
@@ -69,7 +71,7 @@ impl ViewportToolController {
 fn begin_translate_preview(
     app: &mut RunenwerkEditorApp,
     entity: EntityId,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     app.dispatch_tool_action(ToolAction::SelectSingle(
         editor_core::SelectionTarget::Entity(entity),
     ))?;

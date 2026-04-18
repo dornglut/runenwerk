@@ -1,34 +1,37 @@
-use editor_core::{ComponentTypeId, EntityId};
+use editor_core::{ComponentTypeId, EditorMutationError, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use scene::LocalTransform;
 
-use crate::editor_runtime::{
-    RunenwerkEditorRuntime, execute_scene_transaction_and_push_history_with_origin,
-};
+use crate::editor_runtime::{RunenwerkEditorRuntime, ratify_scene_transaction};
 
 pub fn commit_translation_preview_into_local_transform(
     runtime: &mut RunenwerkEditorRuntime,
     entity: EntityId,
     delta: scene::Vec3Value,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     let local_transform_type = find_registered_component_type::<LocalTransform>(runtime)
-        .ok_or("LocalTransform is not registered in editor runtime")?;
+        .ok_or(EditorMutationError::runtime_rejected(
+            "LocalTransform is not registered in editor runtime",
+        ))?;
 
     let ecs_entity = runtime
         .ids()
         .resolve_entity(entity)
-        .ok_or("editor entity is not registered")?;
+        .ok_or(EditorMutationError::runtime_rejected(
+            "editor entity is not registered",
+        ))?;
 
     let current = runtime
         .world()
         .get::<LocalTransform>(ecs_entity)
-        .ok_or("entity does not have LocalTransform")?;
+        .ok_or(EditorMutationError::runtime_rejected(
+            "entity does not have LocalTransform",
+        ))?;
 
     let next_x = current.translation.x + delta.x;
     let next_y = current.translation.y + delta.y;
     let next_z = current.translation.z + delta.z;
 
-    let transaction_id = runtime.allocate_transaction_id();
     let command_x = runtime.allocate_command_id();
     let command_y = runtime.allocate_command_id();
     let command_z = runtime.allocate_command_id();
@@ -69,14 +72,13 @@ pub fn commit_translation_preview_into_local_transform(
         ),
     ];
 
-    let _ = execute_scene_transaction_and_push_history_with_origin(
+    let _ = ratify_scene_transaction(
         runtime,
-        transaction_id,
         "Apply Translation Preview",
         &mut commands,
         editor_core::ChangeOrigin::ToolInteraction,
     )
-    .map_err(editor_core::GoverningChangeError::as_static_str)?;
+    .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
 
     Ok(())
 }

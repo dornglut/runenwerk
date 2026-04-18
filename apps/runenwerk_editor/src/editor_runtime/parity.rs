@@ -1,34 +1,33 @@
+use editor_core::EditorMutationError;
+
 use crate::editor_runtime::RunenwerkEditorRuntime;
 
-pub fn validate_scene_projection_parity(
+pub(crate) fn validate_scene_projection_parity(
     runtime: &RunenwerkEditorRuntime,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     let document = runtime.document();
     let ids = runtime.ids();
 
     for entity in document.entity_ids() {
-        let Some(document_snapshot) = document.entity_snapshot(entity) else {
-            return Err("document snapshot missing for known entity");
-        };
-        let Some(projected_snapshot) = ids.entity_snapshot(entity) else {
-            return Err("projection snapshot missing for document entity");
-        };
-
-        if document_snapshot != projected_snapshot {
-            return Err("document and projection snapshots diverged");
+        if ids.resolve_entity(entity).is_none() {
+            return Err(EditorMutationError::runtime_rejected(
+                "projection mapping missing for document entity",
+            ));
         }
     }
 
     for entity in ids.entity_ids() {
         if !document.contains(entity) {
-            return Err("projection contains entity missing from document");
+            return Err(EditorMutationError::runtime_rejected(
+                "projection contains entity missing from document",
+            ));
         }
     }
 
     Ok(())
 }
 
-pub fn assert_scene_projection_parity(runtime: &RunenwerkEditorRuntime) {
+pub(crate) fn assert_scene_projection_parity(runtime: &RunenwerkEditorRuntime) {
     let result = validate_scene_projection_parity(runtime);
     debug_assert!(
         result.is_ok(),

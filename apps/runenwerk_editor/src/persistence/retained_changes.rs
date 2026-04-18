@@ -1,94 +1,66 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use editor_persistence::{decode_ron, encode_ron_pretty};
-use serde::{Deserialize, Serialize};
+use editor_persistence::{
+    RETAINED_CHANGE_LOG_VERSION_V1, RetainedRatifiedChangeLogV1, RetainedRatifiedChangeRecordV1,
+    decode_ron, encode_ron_pretty,
+};
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
 
-pub const RETAINED_CHANGE_LOG_VERSION_V1: u32 = 1;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RetainedRatifiedChangeRecordV1 {
-    pub ratification_id: u64,
-    pub transaction_id: u64,
-    pub transaction_label: String,
-    pub causality_id: u64,
-    pub origin: String,
-    pub authority_scope: String,
-    pub affected_domains: Vec<String>,
-    pub affected_scopes: Vec<String>,
-    pub base_version: u64,
-    pub result_version: u64,
-    pub semantic_operations: Vec<String>,
-    pub ratification_class: String,
-    pub reversibility_class: String,
-    pub retention_hint: String,
-    pub stability_class: String,
-    pub reconciliation_policy: String,
-    pub propagation_structure: String,
-    pub timestamp_unix_millis: Option<u64>,
-}
-
-impl RetainedRatifiedChangeRecordV1 {
-    fn from_change(change: &editor_core::RatifiedChange) -> Self {
-        Self {
-            ratification_id: change.ratification_id.0,
-            transaction_id: change.transaction.id.0,
-            transaction_label: change.transaction.label.clone(),
-            causality_id: change.causality_id.0,
-            origin: change_origin_label(change.origin).to_string(),
-            authority_scope: authority_scope_label(change.authority_scope).to_string(),
-            affected_domains: change
-                .affected_domains
-                .iter()
-                .copied()
-                .map(meaning_domain_label)
-                .map(ToString::to_string)
-                .collect(),
-            affected_scopes: change.affected_scopes.clone(),
-            base_version: change.base_version.0,
-            result_version: change.result_version.0,
-            semantic_operations: change
-                .semantic_operations
-                .iter()
-                .copied()
-                .map(semantic_operation_label)
-                .map(ToString::to_string)
-                .collect(),
-            ratification_class: ratification_class_label(change.ratification_class).to_string(),
-            reversibility_class: reversibility_class_label(change.reversibility_class).to_string(),
-            retention_hint: retention_hint_label(change.retention_hint).to_string(),
-            stability_class: stability_class_label(change.stability_class).to_string(),
-            reconciliation_policy: reconciliation_policy_label(change.reconciliation_policy)
-                .to_string(),
-            propagation_structure: propagation_structure_label(change.propagation_structure)
-                .to_string(),
-            timestamp_unix_millis: change
-                .timestamp
-                .duration_since(std::time::UNIX_EPOCH)
-                .ok()
-                .map(|duration| duration.as_millis() as u64),
-        }
+fn retained_change_log_from_runtime(
+    runtime: &RunenwerkEditorRuntime,
+) -> RetainedRatifiedChangeLogV1 {
+    RetainedRatifiedChangeLogV1 {
+        version: RETAINED_CHANGE_LOG_VERSION_V1,
+        entries: runtime
+            .ratified_change_log()
+            .iter()
+            .map(retained_change_record_from_change)
+            .collect(),
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RetainedRatifiedChangeLogV1 {
-    pub version: u32,
-    pub entries: Vec<RetainedRatifiedChangeRecordV1>,
-}
-
-impl RetainedRatifiedChangeLogV1 {
-    pub fn from_runtime(runtime: &RunenwerkEditorRuntime) -> Self {
-        Self {
-            version: RETAINED_CHANGE_LOG_VERSION_V1,
-            entries: runtime
-                .ratified_change_log()
-                .iter()
-                .map(RetainedRatifiedChangeRecordV1::from_change)
-                .collect(),
-        }
+fn retained_change_record_from_change(
+    change: &editor_core::RatifiedChange,
+) -> RetainedRatifiedChangeRecordV1 {
+    RetainedRatifiedChangeRecordV1 {
+        ratification_id: change.ratification_id.0,
+        transaction_id: change.transaction.id.0,
+        transaction_label: change.transaction.label.clone(),
+        causality_id: change.causality_id.0,
+        origin: change_origin_label(change.origin).to_string(),
+        authority_scope: authority_scope_label(change.authority_scope).to_string(),
+        affected_domains: change
+            .affected_domains
+            .iter()
+            .copied()
+            .map(meaning_domain_label)
+            .map(ToString::to_string)
+            .collect(),
+        affected_scopes: change.affected_scopes.clone(),
+        base_version: change.base_version.0,
+        result_version: change.result_version.0,
+        semantic_operations: change
+            .semantic_operations
+            .iter()
+            .copied()
+            .map(semantic_operation_label)
+            .map(ToString::to_string)
+            .collect(),
+        ratification_class: ratification_class_label(change.ratification_class).to_string(),
+        reversibility_class: reversibility_class_label(change.reversibility_class).to_string(),
+        retention_hint: retention_hint_label(change.retention_hint).to_string(),
+        stability_class: stability_class_label(change.stability_class).to_string(),
+        reconciliation_policy: reconciliation_policy_label(change.reconciliation_policy)
+            .to_string(),
+        propagation_structure: propagation_structure_label(change.propagation_structure)
+            .to_string(),
+        timestamp_unix_millis: change
+            .timestamp
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|duration| duration.as_millis() as u64),
     }
 }
 
@@ -102,7 +74,7 @@ pub fn retained_change_log_path_for_scene(scene_path: &Path) -> PathBuf {
 }
 
 pub fn write_retained_change_log(path: &Path, runtime: &RunenwerkEditorRuntime) -> Result<usize> {
-    let retained = RetainedRatifiedChangeLogV1::from_runtime(runtime);
+    let retained = retained_change_log_from_runtime(runtime);
     let entry_count = retained.entries.len();
     let ron = encode_ron_pretty(&retained).context("failed to encode retained change log")?;
     std::fs::write(path, ron)
@@ -206,9 +178,7 @@ mod tests {
     use editor_scene::{SceneCommandIntent, scene_intent_to_command};
 
     use super::*;
-    use crate::editor_runtime::{
-        RunenwerkEditorRuntime, execute_scene_command_and_push_history_with_origin,
-    };
+    use crate::editor_runtime::{RunenwerkEditorRuntime, ratify_scene_command_with_transaction_id};
 
     fn temp_change_log_path() -> PathBuf {
         let mut path = std::env::temp_dir();
@@ -225,8 +195,9 @@ mod tests {
         let mut runtime = RunenwerkEditorRuntime::new();
         let command_id = runtime.allocate_command_id();
         let transaction_id = runtime.allocate_transaction_id();
-        let _ = execute_scene_command_and_push_history_with_origin(
+        let _ = ratify_scene_command_with_transaction_id(
             &mut runtime,
+            "Create Entity",
             scene_intent_to_command(
                 command_id,
                 SceneCommandIntent::CreateEntity {
@@ -234,7 +205,6 @@ mod tests {
                     display_name: "Entity".to_string(),
                 },
             ),
-            "Create Entity",
             transaction_id,
             ChangeOrigin::Runtime,
         )

@@ -2,60 +2,15 @@ use editor_core::{
     ChangeOrigin, CommandExecutor, GoverningChangeError, HistoryEntry, RatifiedChange,
     SemanticOperation, TransactionId, TransactionMetadata,
 };
-use editor_scene::{SceneCommandContext, SceneEditorCommand};
+use editor_scene::SceneEditorCommand;
 
 use super::ratification::ratify_scene_change;
 use crate::editor_runtime::{
-    RunenwerkEditorRuntime, StoredSceneTransaction, assert_scene_projection_parity,
-    sync_selection_after_scene_change,
+    RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
 };
+use crate::editor_runtime::parity::assert_scene_projection_parity;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutedSceneTransaction {
-    pub metadata: TransactionMetadata,
-    pub commands: Vec<editor_core::CommandMetadata>,
-}
-
-pub fn execute_scene_transaction(
-    runtime: &mut RunenwerkEditorRuntime,
-    transaction_id: TransactionId,
-    transaction_label: impl Into<String>,
-    commands: &mut [SceneEditorCommand],
-) -> Result<ExecutedSceneTransaction, &'static str> {
-    let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-    let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
-
-    let metadata = TransactionMetadata::new(transaction_id, transaction_label);
-    let executed = CommandExecutor::execute_transaction(&mut ctx, metadata.clone(), commands)?;
-
-    let commands_metadata = executed
-        .commands
-        .iter()
-        .map(|command| command.metadata.clone())
-        .collect::<Vec<_>>();
-
-    Ok(ExecutedSceneTransaction {
-        metadata,
-        commands: commands_metadata,
-    })
-}
-
-pub fn execute_scene_transaction_and_push_history(
-    runtime: &mut RunenwerkEditorRuntime,
-    transaction_id: TransactionId,
-    transaction_label: impl Into<String>,
-    commands: &mut [SceneEditorCommand],
-) -> Result<Option<RatifiedChange>, GoverningChangeError> {
-    execute_scene_transaction_and_push_history_with_origin(
-        runtime,
-        transaction_id,
-        transaction_label,
-        commands,
-        ChangeOrigin::Runtime,
-    )
-}
-
-pub fn execute_scene_transaction_and_push_history_with_origin(
+pub(crate) fn execute_scene_transaction_and_push_history_with_origin(
     runtime: &mut RunenwerkEditorRuntime,
     transaction_id: TransactionId,
     transaction_label: impl Into<String>,
@@ -72,7 +27,7 @@ pub fn execute_scene_transaction_and_push_history_with_origin(
     )
 }
 
-pub fn execute_scene_transaction_and_push_history_with_origin_and_causality(
+pub(crate) fn execute_scene_transaction_and_push_history_with_origin_and_causality(
     runtime: &mut RunenwerkEditorRuntime,
     transaction_id: TransactionId,
     transaction_label: impl Into<String>,
@@ -81,35 +36,36 @@ pub fn execute_scene_transaction_and_push_history_with_origin_and_causality(
     causality_id: Option<editor_core::CausalityId>,
 ) -> Result<Option<RatifiedChange>, GoverningChangeError> {
     let transaction_label = transaction_label.into();
+    let before_snapshot = runtime.capture_scene_snapshot();
 
-    let (metadata, commands_metadata, stored_commands) = {
-        let (session, mut scene_runtime) = runtime.session_and_scene_runtime();
-        let mut ctx = SceneCommandContext::new(session, &mut scene_runtime);
+    let executed =
+        runtime.with_scene_command_context(|ctx| -> Result<_, GoverningChangeError> {
+            let metadata = TransactionMetadata::new(transaction_id, transaction_label.clone());
+            let executed = CommandExecutor::execute_transaction(ctx, metadata.clone(), commands)
+                .map_err(|error| GoverningChangeError::mutation_rejected(error.message))?;
 
-        let metadata = TransactionMetadata::new(transaction_id, transaction_label.clone());
-        let executed = CommandExecutor::execute_transaction(&mut ctx, metadata.clone(), commands)
-            .map_err(GoverningChangeError::mutation_rejected)?;
+            if executed.commands.is_empty() {
+                return Ok(None);
+            }
 
-        if executed.commands.is_empty() {
-            return Ok(None);
-        }
+            let commands_metadata = executed
+                .commands
+                .iter()
+                .map(|command| command.metadata.clone())
+                .collect::<Vec<_>>();
 
-        let stored_commands = commands.to_vec();
+            ctx.session_mut()
+                .history_mut()
+                .push_applied(HistoryEntry::new(
+                    metadata.clone(),
+                    commands_metadata.clone(),
+                ));
 
-        let commands_metadata = executed
-            .commands
-            .iter()
-            .map(|command| command.metadata.clone())
-            .collect::<Vec<_>>();
+            Ok(Some((metadata, commands_metadata)))
+        })?;
 
-        ctx.session_mut()
-            .history_mut()
-            .push_applied(HistoryEntry::new(
-                metadata.clone(),
-                commands_metadata.clone(),
-            ));
-
-        (metadata, commands_metadata, stored_commands)
+    let Some((metadata, commands_metadata)) = executed else {
+        return Ok(None);
     };
 
     let ratified_change = ratify_scene_change(
@@ -121,11 +77,13 @@ pub fn execute_scene_transaction_and_push_history_with_origin_and_causality(
         causality_id,
     );
     runtime.record_ratified_change(ratified_change.clone());
-    let store = runtime.command_store_mut();
-    store.clear_redo();
-    store.store_applied(StoredSceneTransaction::new(
+    let after_snapshot = runtime.capture_scene_snapshot();
+
+    runtime.clear_redo_retained_transactions();
+    runtime.store_applied_retained_transaction(RetainedSceneTransaction::new(
         transaction_id,
-        stored_commands,
+        before_snapshot,
+        after_snapshot,
         ratified_change.clone(),
     ));
 
@@ -164,11 +122,12 @@ mod tests {
             ),
         ];
 
-        let executed = execute_scene_transaction_and_push_history(
+        let executed = execute_scene_transaction_and_push_history_with_origin(
             &mut runtime,
             TransactionId(1),
             "Create Two Entities",
             &mut commands,
+            ChangeOrigin::Runtime,
         )
         .expect("transaction should execute");
 

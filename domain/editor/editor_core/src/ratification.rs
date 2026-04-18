@@ -3,7 +3,9 @@
 
 use std::time::SystemTime;
 
-use crate::{CommandMetadata, TransactionMetadata};
+use crate::{
+    CommandMetadata, MigrationPathId, ReconciliationPolicy, StabilityClass, TransactionMetadata,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RatificationId(pub u64);
@@ -37,27 +39,10 @@ pub enum RetentionHint {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum StabilityClass {
-    SessionVolatile,
-    LocalDurable,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ReconciliationPolicy {
-    Forbidden,
-    RejectOnBaseVersionMismatch,
-    LastWriterWinsLocal,
-    SessionLocalOnly,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropagationStructure {
     LocalOnly,
     SessionBroadcast,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct MigrationPathId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChangeOrigin {

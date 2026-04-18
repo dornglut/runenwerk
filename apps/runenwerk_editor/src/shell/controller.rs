@@ -1,5 +1,5 @@
 use editor_shell::{
-    CONSOLE_SCROLL_WIDGET_ID, EditorShellViewModel, ShellCommand, ShellExpressionFrame,
+    CONSOLE_SCROLL_WIDGET_ID, EditorShellViewModel, ShellCommand, ShellUiExpressionFrame,
     UiInputOutcome, UiTree, build_editor_shell, map_interactions_to_shell_commands,
 };
 use ui_input::{PointerEventKind, UiInputEvent};
@@ -49,7 +49,7 @@ impl RunenwerkEditorShellController {
         bounds: UiRect,
         theme: &ThemeTokens,
         atlas_source: &dyn FontAtlasSource,
-    ) -> ShellExpressionFrame {
+    ) -> ShellUiExpressionFrame {
         let tree = Self::rebuild_tree(app, shell_state, theme);
         shell_state.set_last_bounds(bounds);
         if app.console_follow_enabled()
@@ -66,7 +66,7 @@ impl RunenwerkEditorShellController {
             .runtime()
             .build_frame(&tree, bounds, atlas_source);
 
-        ShellExpressionFrame::new(app.runtime().current_scene_reality_version(), frame)
+        ShellUiExpressionFrame::new(app.runtime().current_scene_reality_version(), frame)
     }
 
     pub fn dispatch_input(
@@ -75,7 +75,7 @@ impl RunenwerkEditorShellController {
         bounds: UiRect,
         theme: &ThemeTokens,
         event: &UiInputEvent,
-    ) -> Result<UiInputOutcome, &'static str> {
+    ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
         let view_model = Self::rebuild_view_model(app);
         let tree = build_editor_shell(&view_model, theme);
         shell_state.set_last_tree(tree.clone());
@@ -120,7 +120,7 @@ impl RunenwerkEditorShellController {
     fn dispatch_commands(
         app: &mut RunenwerkEditorApp,
         commands: Vec<ShellCommand>,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), editor_core::EditorMutationError> {
         for command in commands {
             dispatch_shell_command(app, command)?;
         }

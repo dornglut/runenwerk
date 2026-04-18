@@ -4,11 +4,12 @@ use crate::editor_panels::{
     OutlinerPanelCommand, OutlinerPanelCommandResult, OutlinerPanelPresenter,
 };
 use crate::editor_runtime::select_entity_from_outliner;
+use editor_core::EditorMutationError;
 
 pub fn dispatch_outliner_command(
     app: &mut RunenwerkEditorApp,
     command: OutlinerPanelCommand,
-) -> Result<OutlinerPanelCommandResult, &'static str> {
+) -> Result<OutlinerPanelCommandResult, EditorMutationError> {
     match command {
         OutlinerPanelCommand::SelectEntity { entity } => {
             select_entity_from_outliner(app.runtime_mut(), entity)?;
@@ -26,7 +27,7 @@ pub fn dispatch_outliner_command(
                 },
                 editor_core::ChangeOrigin::OutlinerPanel,
             )
-            .map_err(editor_core::GoverningChangeError::as_static_str)?;
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
         }
         OutlinerPanelCommand::ReparentEntity { entity, new_parent } => {
             app.runtime().validate_reparent(entity, new_parent)?;
@@ -37,7 +38,7 @@ pub fn dispatch_outliner_command(
                 editor_scene::SceneCommandIntent::ReparentEntity { entity, new_parent },
                 editor_core::ChangeOrigin::OutlinerPanel,
             )
-            .map_err(editor_core::GoverningChangeError::as_static_str)?;
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
         }
         OutlinerPanelCommand::DeleteEntity { entity } => {
             execute_intent_with_history_from_origin(
@@ -46,7 +47,7 @@ pub fn dispatch_outliner_command(
                 editor_scene::SceneCommandIntent::DeleteEntity { entity },
                 editor_core::ChangeOrigin::OutlinerPanel,
             )
-            .map_err(editor_core::GoverningChangeError::as_static_str)?;
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
         }
     }
 

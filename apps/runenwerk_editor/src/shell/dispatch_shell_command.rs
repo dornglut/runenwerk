@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use editor_core::ComponentTypeId;
+use editor_core::{ComponentTypeId, EditorMutationError};
 use editor_inspector::{InspectorEditValue, InspectorValue};
 use editor_shell::ShellCommand;
 
@@ -11,8 +11,8 @@ use crate::editor_runtime::{
     bootstrap_mvp_scene_if_empty, is_local_transform_component, register_mvp_component_types,
 };
 use crate::persistence::{
-    load_scene_file_into_runtime, read_retained_change_log, retained_change_log_path_for_scene,
-    write_retained_change_log, write_scene_file,
+    load_scene_file_into_runtime_classified, read_retained_change_log,
+    retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
 };
 use crate::shell::{SELECT_TOOL_ID, TRANSLATE_TOOL_ID};
 
@@ -22,7 +22,7 @@ const DEFAULT_EDITOR_SCENE_PATH: &str = "editor-scenes/default.scene.ron";
 pub fn dispatch_shell_command(
     app: &mut RunenwerkEditorApp,
     command: ShellCommand,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     app.runtime_mut().record_workflow_event(
         editor_core::WorkflowEventKind::ShellCommandDispatched {
             command: shell_command_label(&command),
@@ -31,31 +31,21 @@ pub fn dispatch_shell_command(
 
     match command {
         ShellCommand::ActivateSelectTool => {
-            app.runtime_mut()
-                .session_mut()
-                .set_active_tool(Some(SELECT_TOOL_ID));
-            app.runtime_mut().record_session_change(
+            app.runtime_mut().set_active_tool_with_origin(
+                Some(SELECT_TOOL_ID),
                 editor_core::ChangeOrigin::EditorShell,
-                editor_core::SessionChangeKind::ActiveToolSet {
-                    tool_id: Some(SELECT_TOOL_ID),
-                },
             );
         }
         ShellCommand::ActivateTranslateTool => {
-            app.runtime_mut()
-                .session_mut()
-                .set_active_tool(Some(TRANSLATE_TOOL_ID));
-            app.runtime_mut().record_session_change(
+            app.runtime_mut().set_active_tool_with_origin(
+                Some(TRANSLATE_TOOL_ID),
                 editor_core::ChangeOrigin::EditorShell,
-                editor_core::SessionChangeKind::ActiveToolSet {
-                    tool_id: Some(TRANSLATE_TOOL_ID),
-                },
             );
         }
         ShellCommand::Undo => {
             if let Some(entry) =
                 undo_last_scene_change(app.runtime_mut(), editor_core::ChangeOrigin::EditorShell)
-                    .map_err(editor_core::GoverningChangeError::as_static_str)?
+                    .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?
             {
                 app.append_console_line(format!("[history] undo: {}", entry.transaction.label));
             }
@@ -63,7 +53,7 @@ pub fn dispatch_shell_command(
         ShellCommand::Redo => {
             if let Some(entry) =
                 redo_last_scene_change(app.runtime_mut(), editor_core::ChangeOrigin::EditorShell)
-                    .map_err(editor_core::GoverningChangeError::as_static_str)?
+                    .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?
             {
                 app.append_console_line(format!("[history] redo: {}", entry.transaction.label));
             }
@@ -115,7 +105,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
 fn activate_inspector_field(
     app: &mut RunenwerkEditorApp,
     index: usize,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     let inspector_view = app.inspector_view_model();
 
     match inspector_view {
@@ -135,7 +125,9 @@ fn activate_inspector_field(
 
             let offset = index.saturating_sub(components.len());
             let Some(candidate) = available_component_types.get(offset) else {
-                return Err("inspector field index out of range");
+                return Err(EditorMutationError::inspector_rejected(
+                    "inspector field index out of range",
+                ));
             };
 
             if candidate.already_attached {
@@ -156,10 +148,13 @@ fn activate_inspector_field(
         } => {
             let field = widget_fields
                 .get(index)
-                .ok_or("inspector field index out of range")?;
+                .ok_or(EditorMutationError::inspector_rejected(
+                    "inspector field index out of range",
+                ))?;
 
-            let next_value = next_shell_edit_value(app.runtime(), component_type, field)
-                .ok_or("inspector field is not editable")?;
+            let next_value = next_shell_edit_value(app.runtime(), component_type, field).ok_or(
+                EditorMutationError::inspector_rejected("inspector field is not editable"),
+            )?;
 
             app.dispatch_inspector_command(InspectorPanelCommand::EditComponentField {
                 entity,
@@ -173,9 +168,9 @@ fn activate_inspector_field(
         InspectorPanelViewModel::Empty
         | InspectorPanelViewModel::Resource { .. }
         | InspectorPanelViewModel::Unsupported { .. }
-        | InspectorPanelViewModel::Error { .. } => {
-            Err("shell inspector field activation requires entity/component target")
-        }
+        | InspectorPanelViewModel::Error { .. } => Err(EditorMutationError::inspector_rejected(
+            "shell inspector field activation requires entity/component target",
+        )),
     }
 }
 
@@ -241,16 +236,19 @@ fn default_scene_file_path() -> PathBuf {
     PathBuf::from(DEFAULT_EDITOR_SCENE_PATH)
 }
 
-fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), &'static str> {
+fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), EditorMutationError> {
     let path = default_scene_file_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|_| "failed to create editor scene folder")?;
+        std::fs::create_dir_all(parent).map_err(|_| {
+            EditorMutationError::runtime_rejected("failed to create editor scene folder")
+        })?;
     }
 
-    write_scene_file(&path, app.runtime()).map_err(|_| "failed to save editor scene")?;
+    write_scene_file(&path, app.runtime())
+        .map_err(|_| EditorMutationError::runtime_rejected("failed to save editor scene"))?;
     let retained_path = retained_change_log_path_for_scene(&path);
     let entry_count = write_retained_change_log(&retained_path, app.runtime())
-        .map_err(|_| "failed to save retained change log")?;
+        .map_err(|_| EditorMutationError::runtime_rejected("failed to save retained change log"))?;
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneSaved {
             path: path.display().to_string(),
@@ -269,7 +267,7 @@ fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), &'stat
     Ok(())
 }
 
-fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), &'static str> {
+fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), EditorMutationError> {
     let path = default_scene_file_path();
     if !path.exists() {
         app.append_console_line(format!(
@@ -279,26 +277,45 @@ fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), &'st
         return Ok(());
     }
 
-    let mut runtime = crate::editor_runtime::RunenwerkEditorRuntime::new();
-    register_mvp_component_types(&mut runtime);
-    let migration = load_scene_file_into_runtime(&path, &mut runtime)
-        .map_err(|_| "failed to load editor scene")?;
+    {
+        let runtime = app.runtime_mut();
+        runtime.prepare_for_scene_load();
+        register_mvp_component_types(runtime);
+    }
+
+    let migration = match load_scene_file_into_runtime_classified(&path, app.runtime_mut()) {
+        Ok(migration) => migration,
+        Err(class) => {
+            app.append_console_line(format!(
+                "[io] load failed ({})",
+                migration_failure_class_label(class)
+            ));
+            return Err(EditorMutationError::runtime_rejected(
+                "failed to load editor scene",
+            ));
+        }
+    };
     let retained_path = retained_change_log_path_for_scene(&path);
     let retained = if retained_path.exists() {
-        Some(
-            read_retained_change_log(&retained_path)
-                .map_err(|_| "failed to load retained change log")?,
-        )
+        Some(read_retained_change_log(&retained_path).map_err(|_| {
+            EditorMutationError::runtime_rejected("failed to load retained change log")
+        })?)
     } else {
         None
     };
-    bootstrap_mvp_scene_if_empty(&mut runtime)?;
-    app.replace_runtime(runtime);
+    bootstrap_mvp_scene_if_empty(app.runtime_mut())?;
+    app.reset_transient_editor_ui_state();
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneLoaded {
             path: path.display().to_string(),
             migration_path: migration,
         });
+    if let Some(migration_path) = migration {
+        app.append_console_line(format!(
+            "[io] scene migration applied: {}",
+            editor_core::migration_path_label(migration_path)
+        ));
+    }
     if let Some(retained) = retained {
         app.runtime_mut().record_workflow_event(
             editor_core::WorkflowEventKind::RetainedChangesLoaded {
@@ -314,4 +331,13 @@ fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), &'st
     }
     app.append_console_line(format!("[io] loaded {}", path.display()));
     Ok(())
+}
+
+fn migration_failure_class_label(class: editor_core::MigrationFailureClass) -> &'static str {
+    match class {
+        editor_core::MigrationFailureClass::DecodeFailure => "decode-failure",
+        editor_core::MigrationFailureClass::NormalizationFailure => "normalization-failure",
+        editor_core::MigrationFailureClass::FormationFailure => "formation-failure",
+        editor_core::MigrationFailureClass::ApplyFailure => "apply-failure",
+    }
 }

@@ -1,4 +1,4 @@
-use editor_core::{ComponentTypeId, EntityId};
+use editor_core::{ComponentTypeId, EditorMutationError, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 
 use crate::editor_app::RunenwerkEditorApp;
@@ -11,7 +11,7 @@ use crate::editor_runtime::{RunenwerkEditorRuntime, select_single_component_with
 pub fn dispatch_inspector_command(
     app: &mut RunenwerkEditorApp,
     command: InspectorPanelCommand,
-) -> Result<InspectorPanelCommandResult, &'static str> {
+) -> Result<InspectorPanelCommandResult, EditorMutationError> {
     match command {
         InspectorPanelCommand::SelectComponent {
             entity,
@@ -39,7 +39,7 @@ pub fn dispatch_inspector_command(
                 },
                 editor_core::ChangeOrigin::InspectorPanel,
             )
-            .map_err(editor_core::GoverningChangeError::as_static_str)?;
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
             app.inspector_ui_state_mut().clear_draft();
             app.inspector_ui_state_mut().clear_focus();
         }
@@ -56,7 +56,7 @@ pub fn dispatch_inspector_command(
                 },
                 editor_core::ChangeOrigin::InspectorPanel,
             )
-            .map_err(editor_core::GoverningChangeError::as_static_str)?;
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
             app.inspector_ui_state_mut().clear_draft();
             app.inspector_ui_state_mut().clear_focus();
         }
@@ -86,7 +86,9 @@ pub fn dispatch_inspector_command(
             let draft = app
                 .inspector_ui_state_mut()
                 .take_active_draft()
-                .ok_or("no active inspector field draft")?;
+                .ok_or(EditorMutationError::inspector_rejected(
+                    "no active inspector field draft",
+                ))?;
 
             commit_component_field_edit(
                 app.runtime_mut(),
@@ -118,7 +120,7 @@ fn commit_component_field_edit(
     component_type: ComponentTypeId,
     path: InspectorPath,
     value: InspectorEditValue,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     execute_intent_with_history_from_origin(
         runtime,
         "Edit Component Field",
@@ -130,5 +132,5 @@ fn commit_component_field_edit(
         },
         editor_core::ChangeOrigin::InspectorPanel,
     )
-    .map_err(editor_core::GoverningChangeError::as_static_str)
+    .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))
 }

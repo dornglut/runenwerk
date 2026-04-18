@@ -1,5 +1,6 @@
 use editor_core::{EntityId, SelectionTarget};
 use editor_inspector::InspectTarget;
+use editor_core::EditorMutationError;
 
 use crate::editor_runtime::{
     RunenwerkEditorRuntime, clear_selection_with_origin, select_single_entity_with_origin,
@@ -8,7 +9,7 @@ use crate::editor_runtime::{
 pub fn select_entity_from_outliner(
     runtime: &mut RunenwerkEditorRuntime,
     entity: EntityId,
-) -> Result<(), &'static str> {
+) -> Result<(), EditorMutationError> {
     select_single_entity_with_origin(runtime, entity, editor_core::ChangeOrigin::OutlinerPanel)
 }
 

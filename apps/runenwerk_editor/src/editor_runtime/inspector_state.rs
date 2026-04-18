@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use editor_core::{ComponentTypeId, EntityId};
+use editor_core::{ComponentTypeId, EditorMutationError, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,11 +63,13 @@ impl EditorInspectorUiState {
         ));
     }
 
-    pub fn update_field_draft(&mut self, value: InspectorEditValue) -> Result<(), &'static str> {
+    pub fn update_field_draft(&mut self, value: InspectorEditValue) -> Result<(), EditorMutationError> {
         let draft = self
             .active_draft
             .as_mut()
-            .ok_or("no active inspector field draft")?;
+            .ok_or(EditorMutationError::inspector_rejected(
+                "no active inspector field draft",
+            ))?;
 
         draft.value = value;
         Ok(())

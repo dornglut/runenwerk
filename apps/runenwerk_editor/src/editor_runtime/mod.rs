@@ -1,4 +1,4 @@
-pub mod commands;
+pub(crate) mod commands;
 pub mod document;
 pub mod history;
 pub mod ids;
@@ -7,7 +7,9 @@ pub mod inspector_sections;
 pub mod inspector_state;
 pub mod mvp_scene;
 pub mod outliner;
-pub mod parity;
+pub(crate) mod parity;
+pub mod ratification;
+pub mod realities;
 pub mod runtime;
 pub mod scene;
 pub mod scene_state;
@@ -19,7 +21,7 @@ pub mod transform_preview;
 #[cfg(test)]
 mod tests;
 
-pub use commands::*;
+pub(crate) use commands::*;
 pub use document::*;
 pub use history::*;
 pub use ids::*;
@@ -28,7 +30,8 @@ pub use inspector_sections::*;
 pub use inspector_state::*;
 pub use mvp_scene::*;
 pub use outliner::*;
-pub use parity::*;
+pub use ratification::*;
+pub use realities::*;
 pub use runtime::*;
 pub use scene::*;
 pub use scene_state::*;

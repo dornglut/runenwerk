@@ -5,6 +5,7 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::{ViewportToolCommand, ViewportToolController};
 use crate::editor_panels::ViewportPanelCommand;
 use crate::editor_tools_state::TranslateAxis;
+use editor_core::EditorMutationError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewportInteractionCommand {
@@ -52,7 +53,7 @@ impl ViewportInteractionController {
         app: &mut RunenwerkEditorApp,
         state: &mut ViewportInteractionState,
         command: ViewportInteractionCommand,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), EditorMutationError> {
         match command {
             ViewportInteractionCommand::PointerDown { hit } => match hit.target {
                 ViewportHitTarget::Entity(entity) => {
@@ -67,7 +68,9 @@ impl ViewportInteractionController {
                     let entity = app
                         .runtime()
                         .selected_entity()
-                        .ok_or("cannot start gizmo drag without selected entity")?;
+                        .ok_or(EditorMutationError::session_rejected(
+                            "cannot start gizmo drag without selected entity",
+                        ))?;
 
                     let translate_axis = map_gizmo_axis(axis)?;
                     ViewportToolController::dispatch(
@@ -89,7 +92,9 @@ impl ViewportInteractionController {
             },
             ViewportInteractionCommand::PointerDragAxis { amount } => {
                 if !state.drag_in_progress {
-                    return Err("no active viewport drag");
+                    return Err(EditorMutationError::session_rejected(
+                        "no active viewport drag",
+                    ));
                 }
 
                 ViewportToolController::dispatch(
@@ -120,11 +125,11 @@ impl ViewportInteractionController {
     }
 }
 
-fn map_gizmo_axis(axis: &'static str) -> Result<TranslateAxis, &'static str> {
+fn map_gizmo_axis(axis: &'static str) -> Result<TranslateAxis, EditorMutationError> {
     match axis {
         "x" | "X" => Ok(TranslateAxis::X),
         "y" | "Y" => Ok(TranslateAxis::Y),
         "z" | "Z" => Ok(TranslateAxis::Z),
-        _ => Err("unsupported gizmo axis"),
+        _ => Err(EditorMutationError::runtime_rejected("unsupported gizmo axis")),
     }
 }

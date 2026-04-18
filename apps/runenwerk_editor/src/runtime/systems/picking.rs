@@ -449,13 +449,8 @@ mod tests {
             .entity_ids()
             .next()
             .expect("seeded runtime should contain one entity");
-        let ecs_entity = runtime
-            .ids()
-            .resolve_entity(entity)
-            .expect("entity mapping should exist");
         runtime
-            .world_mut()
-            .remove::<EditorPrimitive>(ecs_entity)
+            .remove_component_for_editor_entity::<EditorPrimitive>(entity)
             .expect("primitive should be removable");
 
         let camera = editor_viewport_camera();
@@ -483,13 +478,8 @@ mod tests {
             .entity_ids()
             .next()
             .expect("seeded runtime should contain one entity");
-        let ecs_entity = runtime
-            .ids()
-            .resolve_entity(entity)
-            .expect("entity mapping should exist");
         runtime
-            .world_mut()
-            .remove::<EditorPrimitive>(ecs_entity)
+            .remove_component_for_editor_entity::<EditorPrimitive>(entity)
             .expect("primitive should be removable");
 
         let hit = compose_picking_hit(

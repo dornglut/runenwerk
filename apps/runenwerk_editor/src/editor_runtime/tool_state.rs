@@ -1,4 +1,4 @@
-use editor_core::{EntityId, SelectionTarget};
+use editor_core::{EditorMutationError, EntityId, SelectionTarget};
 use scene::Vec3Value;
 
 use crate::editor_runtime::{TransformPreviewSession, TransformToolKind};
@@ -36,9 +36,11 @@ impl EditorToolRuntimeState {
         self.translate_axis
     }
 
-    pub fn set_translate_axis(&mut self, axis: Option<TranslateAxis>) -> Result<(), &'static str> {
+    pub fn set_translate_axis(&mut self, axis: Option<TranslateAxis>) -> Result<(), EditorMutationError> {
         if axis.is_some() && self.preview.is_none() {
-            return Err("cannot set translate axis without active preview");
+            return Err(EditorMutationError::session_rejected(
+                "cannot set translate axis without active preview",
+            ));
         }
 
         self.translate_axis = axis;
@@ -49,11 +51,15 @@ impl EditorToolRuntimeState {
         &mut self,
         selection: SelectionTarget,
         tool: TransformToolKind,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), EditorMutationError> {
         let entity = match selection {
             SelectionTarget::Entity(entity) => entity,
             SelectionTarget::Component { entity, .. } => entity,
-            _ => return Err("selection target is not previewable"),
+            _ => {
+                return Err(EditorMutationError::session_rejected(
+                    "selection target is not previewable",
+                ));
+            }
         };
 
         self.preview = Some(TransformPreviewSession::new(entity, tool, selection));
@@ -61,16 +67,20 @@ impl EditorToolRuntimeState {
         Ok(())
     }
 
-    pub fn update_translation_preview(&mut self, delta: Vec3Value) -> Result<(), &'static str> {
-        let preview = self.preview.as_mut().ok_or("no active preview session")?;
+    pub fn update_translation_preview(&mut self, delta: Vec3Value) -> Result<(), EditorMutationError> {
+        let preview = self.preview.as_mut().ok_or(EditorMutationError::session_rejected(
+            "no active preview session",
+        ))?;
 
         preview.translation_delta = delta;
         Ok(())
     }
 
-    pub fn update_preview(&mut self) -> Result<(), &'static str> {
+    pub fn update_preview(&mut self) -> Result<(), EditorMutationError> {
         if self.preview.is_none() {
-            return Err("no active preview session");
+            return Err(EditorMutationError::session_rejected(
+                "no active preview session",
+            ));
         }
 
         Ok(())

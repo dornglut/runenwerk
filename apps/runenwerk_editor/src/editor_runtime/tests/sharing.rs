@@ -1,12 +1,11 @@
 use editor_core::{
-    ChangeOrigin, ReconciliationRejectReason, ReconciliationResult, SharedChangeEnvelope,
-    SharedChangePropagationSink, SharedChangeSequence, SharingPolicy, WorkflowEventKind,
+    ChangeOrigin, ReconciliationRejectReason, ReconciliationResult, SessionShareKind,
+    SessionSharePolicy, SharedChangeEnvelope, SharedChangePropagationSink, SharedChangeSequence,
+    SharingPolicy, ToolId, WorkflowEventKind,
 };
 use editor_scene::{SceneCommandIntent, scene_intent_to_command};
 
-use crate::editor_runtime::{
-    RunenwerkEditorRuntime, execute_scene_command_and_push_history_with_origin,
-};
+use crate::editor_runtime::{RunenwerkEditorRuntime, ratify_scene_command_with_transaction_id};
 
 #[test]
 fn broadcast_policy_enqueues_shared_change_and_logs_workflow_event() {
@@ -91,6 +90,24 @@ fn reconcile_shared_change_rejects_base_version_mismatch() {
     assert_eq!(local_runtime.ratified_change_log().len(), 1);
 }
 
+#[test]
+fn observation_safe_session_share_policy_enqueues_session_changes() {
+    let mut runtime = RunenwerkEditorRuntime::new();
+    runtime.set_session_share_policy(SessionSharePolicy::ObservationSafe);
+
+    runtime.set_active_tool_with_origin(Some(ToolId(9)), ChangeOrigin::EditorShell);
+
+    assert_eq!(runtime.queued_session_share_count(), 1);
+    let queued = runtime.drain_session_share_changes();
+    assert_eq!(queued.len(), 1);
+    assert!(matches!(
+        queued[0].entry.kind,
+        SessionShareKind::ActiveToolSet {
+            tool_id: Some(ToolId(9))
+        }
+    ));
+}
+
 fn create_entity_change(
     runtime: &mut RunenwerkEditorRuntime,
     display_name: &str,
@@ -98,8 +115,9 @@ fn create_entity_change(
 ) -> editor_core::RatifiedChange {
     let command_id = runtime.allocate_command_id();
     let transaction_id = runtime.allocate_transaction_id();
-    execute_scene_command_and_push_history_with_origin(
+    ratify_scene_command_with_transaction_id(
         runtime,
+        format!("Create {display_name}"),
         scene_intent_to_command(
             command_id,
             SceneCommandIntent::CreateEntity {
@@ -107,7 +125,6 @@ fn create_entity_change(
                 display_name: display_name.to_string(),
             },
         ),
-        format!("Create {display_name}"),
         transaction_id,
         origin,
     )
