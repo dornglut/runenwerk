@@ -1,7 +1,10 @@
 //! File: domain/ui/ui_render_data/src/primitives/ui_primitive.rs
 //! Purpose: Sum type over all supported UI render primitives.
 
-use crate::{BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, RectPrimitive};
+use crate::{
+    BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, RectPrimitive,
+    ViewportSurfaceEmbedPrimitive,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiPrimitive {
@@ -9,6 +12,7 @@ pub enum UiPrimitive {
     Border(BorderPrimitive),
     GlyphRun(GlyphRunPrimitive),
     Image(ImagePrimitive),
+    ViewportSurfaceEmbed(ViewportSurfaceEmbedPrimitive),
     Clip(ClipPrimitive),
 }
 
@@ -33,6 +37,12 @@ impl From<GlyphRunPrimitive> for UiPrimitive {
 impl From<ImagePrimitive> for UiPrimitive {
     fn from(value: ImagePrimitive) -> Self {
         Self::Image(value)
+    }
+}
+
+impl From<ViewportSurfaceEmbedPrimitive> for UiPrimitive {
+    fn from(value: ViewportSurfaceEmbedPrimitive) -> Self {
+        Self::ViewportSurfaceEmbed(value)
     }
 }
 

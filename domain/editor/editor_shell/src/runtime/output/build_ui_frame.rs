@@ -3,11 +3,13 @@
 
 use crate::{
     ButtonNode, ComputedLayoutMap, LabelNode, PanelNode, ScrollNode, UiNode, UiNodeKind, UiTree,
+    ViewportSurfaceEmbedNode,
 };
 use ui_math::{UiRect, UiSize};
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer,
     UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
+    ViewportSurfaceEmbedPrimitive,
 };
 use ui_text::{AtlasTextLayouter, FontAtlasSource, TextLayoutRequest, TextLayouter};
 
@@ -25,6 +27,7 @@ pub fn build_ui_frame(
         &tree.root,
         layouts,
         &mut layer,
+        surface_size,
         atlas_source,
         &layouter,
         0,
@@ -42,6 +45,7 @@ fn emit_node(
     node: &UiNode,
     layouts: &ComputedLayoutMap,
     layer: &mut UiLayer,
+    surface_size: UiSize,
     atlas_source: &dyn FontAtlasSource,
     layouter: &dyn TextLayouter,
     depth: u32,
@@ -79,6 +83,14 @@ fn emit_node(
             depth,
             primitive_order,
         ),
+        UiNodeKind::ViewportSurfaceEmbed(embed) => emit_viewport_surface_embed(
+            embed,
+            layout.bounds,
+            surface_size,
+            layer,
+            depth,
+            primitive_order,
+        ),
         UiNodeKind::Scroll(scroll) => emit_scroll_begin(
             scroll,
             layout.bounds,
@@ -95,6 +107,7 @@ fn emit_node(
             child,
             layouts,
             layer,
+            surface_size,
             atlas_source,
             layouter,
             depth + 1,
@@ -126,7 +139,10 @@ fn emit_node(
                 primitive_order,
             );
         }
-        UiNodeKind::Label(_) | UiNodeKind::Stack(_) | UiNodeKind::Split(_) => {}
+        UiNodeKind::Label(_)
+        | UiNodeKind::ViewportSurfaceEmbed(_)
+        | UiNodeKind::Stack(_)
+        | UiNodeKind::Split(_) => {}
     }
 }
 
@@ -249,6 +265,40 @@ fn emit_scrollbar(
         sort_key(depth, *primitive_order),
     )));
     *primitive_order += 1;
+}
+
+fn emit_viewport_surface_embed(
+    embed: &ViewportSurfaceEmbedNode,
+    bounds: UiRect,
+    surface_size: UiSize,
+    layer: &mut UiLayer,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    let uv_rect = normalized_uv_rect(bounds, surface_size);
+    layer.push(UiPrimitive::ViewportSurfaceEmbed(
+        ViewportSurfaceEmbedPrimitive::new(
+            embed.viewport_id,
+            embed.slot,
+            bounds,
+            uv_rect,
+            UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
+            sort_key(depth, *primitive_order),
+        ),
+    ));
+    *primitive_order += 1;
+}
+
+fn normalized_uv_rect(bounds: UiRect, surface_size: UiSize) -> UiRect {
+    let width = surface_size.width.max(1.0);
+    let height = surface_size.height.max(1.0);
+
+    let u0 = (bounds.x / width).clamp(0.0, 1.0);
+    let v0 = (bounds.y / height).clamp(0.0, 1.0);
+    let u1 = ((bounds.x + bounds.width) / width).clamp(0.0, 1.0);
+    let v1 = ((bounds.y + bounds.height) / height).clamp(0.0, 1.0);
+
+    UiRect::new(u0, v0, (u1 - u0).max(0.0), (v1 - v0).max(0.0))
 }
 
 fn emit_button(

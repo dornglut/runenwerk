@@ -16,29 +16,36 @@ const BRANCH_TRACE_FLOAT_EPSILON: f32 = 0.0005;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorViewportDebugStage {
     Scene,
-    Mask,
-    Gradient,
-    PrimitiveGate,
-    HitMiss,
+    ViewportCoverage,
+    ViewportUvGradient,
+    PrimitiveAvailability,
+    PickingHitMiss,
 }
 
 impl EditorViewportDebugStage {
     pub fn as_u32(self) -> u32 {
         match self {
             Self::Scene => 0,
-            Self::Mask => 1,
-            Self::Gradient => 2,
-            Self::PrimitiveGate => 3,
-            Self::HitMiss => 4,
+            Self::ViewportCoverage => 1,
+            Self::ViewportUvGradient => 2,
+            Self::PrimitiveAvailability => 3,
+            Self::PickingHitMiss => 4,
         }
     }
 
     pub fn from_env_value(value: &str) -> Self {
         match value.trim().to_ascii_lowercase().as_str() {
-            "mask" => Self::Mask,
-            "gradient" => Self::Gradient,
-            "primitive_gate" | "primitive-gate" | "primitivegate" => Self::PrimitiveGate,
-            "hit_miss" | "hit-miss" | "hitmiss" => Self::HitMiss,
+            "viewport_coverage" | "viewport-coverage" | "coverage" | "mask" => {
+                Self::ViewportCoverage
+            }
+            "viewport_uv_gradient" | "viewport-uv-gradient" | "uv_gradient" | "gradient" => {
+                Self::ViewportUvGradient
+            }
+            "primitive_availability" | "primitive-availability" | "primitive_gate"
+            | "primitive-gate" | "primitivegate" => Self::PrimitiveAvailability,
+            "picking_hit_miss" | "picking-hit-miss" | "hit_miss" | "hit-miss" | "hitmiss" => {
+                Self::PickingHitMiss
+            }
             "scene" | "" => Self::Scene,
             _ => Self::Scene,
         }
@@ -47,10 +54,10 @@ impl EditorViewportDebugStage {
     pub fn label(self) -> &'static str {
         match self {
             Self::Scene => "scene",
-            Self::Mask => "mask",
-            Self::Gradient => "gradient",
-            Self::PrimitiveGate => "primitive_gate",
-            Self::HitMiss => "hit_miss",
+            Self::ViewportCoverage => "viewport_coverage",
+            Self::ViewportUvGradient => "viewport_uv_gradient",
+            Self::PrimitiveAvailability => "primitive_availability",
+            Self::PickingHitMiss => "picking_hit_miss",
         }
     }
 }
@@ -87,7 +94,7 @@ pub struct EditorInputBridgeState {
 }
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
-pub struct EditorViewportSdfUniform {
+pub struct EditorViewportSceneProductUniform {
     pub surface: [f32; 4],
     pub viewport: [f32; 4],
     pub camera_position: [f32; 4],
@@ -331,7 +338,7 @@ impl EditorViewportRenderState {
     }
 
     pub fn branch_trace_snapshot(&self, surface: (u32, u32)) -> EditorViewportBranchTraceSnapshot {
-        let uniform = self.compose_uniform(surface);
+        let uniform = self.compose_scene_product_uniform(surface);
         EditorViewportBranchTraceSnapshot {
             viewport_bounds_px: self.viewport_bounds_px,
             viewport_valid: self.viewport_valid,
@@ -366,12 +373,15 @@ impl EditorViewportRenderState {
         changed
     }
 
-    pub fn compose_uniform(&self, surface: (u32, u32)) -> EditorViewportSdfUniform {
+    pub fn compose_scene_product_uniform(
+        &self,
+        surface: (u32, u32),
+    ) -> EditorViewportSceneProductUniform {
         let width = surface.0.max(1) as f32;
         let height = surface.1.max(1) as f32;
         let camera = editor_viewport_camera();
 
-        EditorViewportSdfUniform {
+        EditorViewportSceneProductUniform {
             surface: [width, height, 1.0 / width, 1.0 / height],
             viewport: [
                 self.viewport_bounds_px.0,

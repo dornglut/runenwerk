@@ -1,21 +1,29 @@
 use engine::WindowState;
 use engine::plugins::render::{
-    EditorPickingResultResource, EditorPickingTarget, ShaderRegistryResource, UiFontAtlasResource,
+    EditorPickingResultResource, EditorPickingTarget, UiFontAtlasResource,
     UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
+    ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::{Res, ResMut};
 use scene::LocalTransform;
+use editor_viewport::{
+    ArtifactObservationFrame, ExpressionDimensions, ProductAvailabilityState, ProducerHealth,
+};
 use ui_math::UiRect;
 use ui_render_data::{
     RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
-    UiSurface, UiSurfaceId,
+    UiSurface, UiSurfaceId, ViewportSurfaceSlot,
 };
 
 use crate::editor_runtime::EditorPrimitive;
-use crate::runtime::app::EDITOR_VIEWPORT_SDF_SHADER_ID;
 use crate::runtime::resources::{
     EditorHostResource, EditorViewportDebugStage, EditorViewportRenderState, effective_shell_scale,
     scaled_shell_theme,
+};
+use crate::runtime::viewport::{
+    MAIN_VIEWPORT_ID, ViewportArtifactObservationResource, ViewportLayoutEntry,
+    ViewportLayoutMapResource, ViewportPresentationStateResource, ViewportProductRegistryResource,
+    build_surface_binding_registry, default_presentation_state, initial_product_descriptors,
 };
 
 const EDITOR_SHELL_UI_PRODUCER_ID: &str = "editor.shell";
@@ -28,9 +36,10 @@ pub fn submit_editor_frame_system(
     window: Res<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut viewport_render: ResMut<EditorViewportRenderState>,
+    viewport_observations: Res<ViewportArtifactObservationResource>,
+    mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
     atlas: Res<UiFontAtlasResource>,
     picking: Res<EditorPickingResultResource>,
-    shader_registry: Res<ShaderRegistryResource>,
     mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
 ) {
     let bounds = window_bounds(&window);
@@ -41,6 +50,7 @@ pub fn submit_editor_frame_system(
         theme,
     } = &mut *host;
     let shell_theme = scaled_shell_theme(theme, window.scale_factor);
+    let viewport_products = viewport_observations.frame_for(MAIN_VIEWPORT_ID);
     let (expression_source_version, frame) = if debug_hardcoded_ui_frame_enabled() {
         let expression = editor_shell::ShellUiExpressionFrame::new(
             app.runtime().current_scene_reality_version(),
@@ -51,23 +61,38 @@ pub fn submit_editor_frame_system(
             expression.into_ui_frame(),
         )
     } else {
-        let expression =
-            app.build_shell_expression_frame(shell_state, bounds, &shell_theme, &*atlas);
+        let expression = app.build_shell_expression_frame(
+            shell_state,
+            bounds,
+            &shell_theme,
+            &*atlas,
+            viewport_products,
+        );
         (
             expression.metadata.source_version,
             expression.into_ui_frame(),
         )
     };
-    let viewport_bounds = viewport_bounds(
-        shell_state.last_tree(),
-        shell_state.last_bounds(),
-        shell_state.runtime(),
-    )
-    .unwrap_or(bounds);
+    let viewport_bounds = viewport_bounds_from_frame(&frame, MAIN_VIEWPORT_ID.0)
+        .or_else(|| {
+            viewport_bounds(
+                shell_state.last_tree(),
+                shell_state.last_bounds(),
+                shell_state.runtime(),
+            )
+        })
+        .or_else(|| viewport_bounds_from_render_state(&viewport_render))
+        .unwrap_or(bounds);
     let viewport_bounds_changed =
         populate_viewport_render_state(app, &mut viewport_render, viewport_bounds);
+    viewport_layout_map.clear();
+    viewport_layout_map.upsert_entry(ViewportLayoutEntry {
+        viewport_id: MAIN_VIEWPORT_ID,
+        host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        bounds: viewport_bounds,
+    });
     let viewport_valid = viewport_is_valid(viewport_bounds);
-    let shader_loaded = shader_registry.revision_for(EDITOR_VIEWPORT_SDF_SHADER_ID) > 0;
+    let shader_loaded = true;
     let debug_stage = viewport_debug_stage();
     let root_background_opaque = root_background_opaque_enabled();
     viewport_render.update_visibility_diagnostics(viewport_valid, shader_loaded);
@@ -150,6 +175,45 @@ pub fn submit_editor_frame_system(
     );
 }
 
+pub fn sync_viewport_presentation_products_system(
+    host: Res<EditorHostResource>,
+    viewport_render: Res<EditorViewportRenderState>,
+    mut viewport_products_registry: ResMut<ViewportProductRegistryResource>,
+    mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
+    mut viewport_observations: ResMut<ViewportArtifactObservationResource>,
+    mut viewport_surface_bindings: ResMut<ViewportSurfaceBindingRegistryResource>,
+) {
+    let source_version = host.app.runtime().current_scene_reality_version();
+    let product_dimensions = ExpressionDimensions::new(
+        viewport_render.viewport_bounds_px.2.max(1.0).round() as u32,
+        viewport_render.viewport_bounds_px.3.max(1.0).round() as u32,
+    );
+    let descriptors = initial_product_descriptors(product_dimensions, source_version);
+    viewport_products_registry.update_viewport_descriptors(MAIN_VIEWPORT_ID, descriptors.clone());
+
+    let mut presentation_state = viewport_presentations
+        .state_for(MAIN_VIEWPORT_ID)
+        .cloned()
+        .unwrap_or_else(default_presentation_state);
+    if !descriptors
+        .iter()
+        .any(|descriptor| descriptor.id == presentation_state.selected_primary_product_id)
+    {
+        presentation_state.select_primary_product(
+            default_presentation_state().selected_primary_product_id,
+        );
+    }
+    viewport_presentations.upsert_state(presentation_state.clone());
+
+    viewport_observations.upsert_frame(build_artifact_observation_frame(
+        &descriptors,
+        &presentation_state,
+        source_version,
+    ));
+    viewport_surface_bindings
+        .replace_registry(build_surface_binding_registry(&presentation_state));
+}
+
 fn debug_hardcoded_ui_frame_enabled() -> bool {
     std::env::var(DEBUG_HARDCODED_UI_FRAME_ENV)
         .map(|value| {
@@ -218,6 +282,33 @@ fn window_bounds(window: &WindowState) -> UiRect {
     UiRect::new(0.0, 0.0, width, height)
 }
 
+fn viewport_bounds_from_frame(frame: &UiFrame, viewport_id: u64) -> Option<UiRect> {
+    frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .find_map(|primitive| {
+            let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
+                return None;
+            };
+            if embed.viewport_id == viewport_id && embed.slot == ViewportSurfaceSlot::Primary {
+                Some(embed.rect)
+            } else {
+                None
+            }
+        })
+}
+
+fn viewport_bounds_from_render_state(state: &EditorViewportRenderState) -> Option<UiRect> {
+    let (x, y, width, height) = state.viewport_bounds_px;
+    if width > f32::EPSILON && height > f32::EPSILON {
+        Some(UiRect::new(x, y, width, height))
+    } else {
+        None
+    }
+}
+
 fn viewport_is_valid(bounds: UiRect) -> bool {
     bounds.width > f32::EPSILON && bounds.height > f32::EPSILON
 }
@@ -258,7 +349,7 @@ fn viewport_bounds(
     let bounds = bounds?;
     let layouts = runtime.compute_layout(tree, bounds);
     layouts
-        .get(&editor_shell::VIEWPORT_CANVAS_WIDGET_ID)
+        .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
         .map(|layout| layout.bounds)
 }
 
@@ -310,4 +401,40 @@ fn entity_primitive(
         .get::<EditorPrimitive>(ecs_entity)
         .copied()?;
     Some((transform, primitive))
+}
+
+fn build_artifact_observation_frame(
+    descriptors: &[editor_viewport::ExpressionProductDescriptor],
+    presentation_state: &editor_viewport::ViewportPresentationState,
+    source_version: editor_core::RealityVersion,
+) -> ArtifactObservationFrame {
+    let mut frame = ArtifactObservationFrame::new(presentation_state.viewport_id, source_version);
+    frame.available_products = descriptors.to_vec();
+    frame.selected_primary_product_id = Some(presentation_state.selected_primary_product_id);
+    frame.selected_overlay_product_ids = presentation_state.selected_overlay_product_ids.clone();
+
+    for descriptor in descriptors {
+        frame
+            .availability_by_product
+            .insert(descriptor.id, ProductAvailabilityState::Available);
+        frame
+            .producer_health_by_product
+            .insert(descriptor.id, ProducerHealth::Healthy);
+    }
+
+    if !frame
+        .availability_by_product
+        .contains_key(&presentation_state.selected_primary_product_id)
+    {
+        frame.availability_by_product.insert(
+            presentation_state.selected_primary_product_id,
+            ProductAvailabilityState::Unavailable,
+        );
+        frame.producer_health_by_product.insert(
+            presentation_state.selected_primary_product_id,
+            ProducerHealth::Unavailable,
+        );
+    }
+
+    frame
 }

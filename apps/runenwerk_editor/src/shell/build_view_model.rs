@@ -1,4 +1,5 @@
 use editor_shell::EditorShellViewModel;
+use editor_viewport::ArtifactObservationFrame;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::shell::{
@@ -8,6 +9,13 @@ use crate::shell::{
 };
 
 pub fn build_editor_shell_view_model(app: &RunenwerkEditorApp) -> EditorShellViewModel {
+    build_editor_shell_view_model_with_viewport_products(app, None)
+}
+
+pub fn build_editor_shell_view_model_with_viewport_products(
+    app: &RunenwerkEditorApp,
+    viewport_products: Option<&ArtifactObservationFrame>,
+) -> EditorShellViewModel {
     let scene_version = app.runtime().current_scene_reality_version();
     let session = app.runtime().session_reality();
     let outliner_state = app.outliner_state();
@@ -24,6 +32,7 @@ pub fn build_editor_shell_view_model(app: &RunenwerkEditorApp) -> EditorShellVie
         scene_version,
     );
     let viewport_frame = build_viewport_observation_frame(
+        viewport_products,
         app.runtime().selected_entity(),
         app.viewport_interaction_state().drag_in_progress(),
         viewport_tool_state,

@@ -859,6 +859,31 @@ impl FlowRuntimeResources {
         })
     }
 
+    pub(super) fn resolve_ui_texture_view(
+        &self,
+        pass_id: &str,
+        resource_id: &str,
+        frame_texture: &Texture,
+        frame_size: (u32, u32),
+        frame_format: TextureFormat,
+    ) -> Result<TextureView> {
+        let texture = self.resolve_texture(
+            pass_id,
+            resource_id,
+            frame_texture,
+            frame_size,
+            frame_format,
+        )?;
+        if texture.is_depth {
+            bail!(
+                "ui composite cannot sample depth texture '{}' for pass '{}'",
+                resource_id,
+                pass_id
+            );
+        }
+        Ok(texture.texture.create_view(&TextureViewDescriptor::default()))
+    }
+
     fn resolve_buffer<'a>(
         &'a self,
         pass_id: &str,
@@ -1256,6 +1281,7 @@ impl Renderer {
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
         ui_font_atlas: &UiFontAtlasResource,
+        viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         surface_format: TextureFormat,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
@@ -1267,6 +1293,7 @@ impl Renderer {
             shader_registry,
             ui_rect_shader,
             ui_font_atlas,
+            viewport_surface_bindings,
             surface_format,
         );
         self.render_packet(
@@ -1397,7 +1424,18 @@ impl Renderer {
                     pipeline_key: None,
                 }),
             CompiledPassExecutionPlan::BuiltinUiComposite(_value) => {
-                self.encode_ui_pass(encoder, frame_view, &packet.prepared_ui);
+                self.encode_ui_pass(
+                    device,
+                    encoder,
+                    frame_texture,
+                    frame_view,
+                    &packet.prepared_ui,
+                    flow.flow_id.as_str(),
+                    runtime_resources,
+                    &packet.viewport_surface_bindings,
+                    packet.surface_size,
+                    packet.surface_format,
+                );
                 Ok(EncodedPassEvidence {
                     dispatch_workgroups: None,
                     shader_id: "builtin:ui_composite".to_string(),

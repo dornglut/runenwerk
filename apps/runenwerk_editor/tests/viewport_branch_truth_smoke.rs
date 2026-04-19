@@ -1,6 +1,8 @@
 use engine::WindowState;
 use glam::{Vec3, vec3};
-use runenwerk_editor::runtime::resources::{EditorViewportRenderState, EditorViewportSdfUniform};
+use runenwerk_editor::runtime::resources::{
+    EditorViewportRenderState, EditorViewportSceneProductUniform,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CenterBranchClass {
@@ -26,7 +28,7 @@ fn viewport_branch_truth_smoke() {
         .expect("viewport render state should exist");
     let surface = (window.size_px.0.max(1), window.size_px.1.max(1));
     let snapshot = viewport_state.branch_trace_snapshot(surface);
-    let uniform = viewport_state.compose_uniform(surface);
+    let uniform = viewport_state.compose_scene_product_uniform(surface);
 
     let class = classify_center_sample(&uniform);
     assert!(
@@ -50,7 +52,7 @@ fn viewport_branch_truth_smoke() {
     );
 }
 
-fn classify_center_sample(uniform: &EditorViewportSdfUniform) -> CenterBranchClass {
+fn classify_center_sample(uniform: &EditorViewportSceneProductUniform) -> CenterBranchClass {
     if uniform.viewport[2] <= 1.0 || uniform.viewport[3] <= 1.0 {
         return CenterBranchClass::InvalidViewport;
     }
@@ -119,7 +121,11 @@ fn viewport_contains(pixel: (f32, f32), viewport: [f32; 4]) -> bool {
         && pixel.1 <= max_corner.1
 }
 
-fn march_scene(uniform: &EditorViewportSdfUniform, ray_origin: Vec3, ray_dir: Vec3) -> bool {
+fn march_scene(
+    uniform: &EditorViewportSceneProductUniform,
+    ray_origin: Vec3,
+    ray_dir: Vec3,
+) -> bool {
     let mut t = 0.0_f32;
     for _ in 0..96_u32 {
         let point = ray_origin + ray_dir * t;
@@ -135,7 +141,7 @@ fn march_scene(uniform: &EditorViewportSdfUniform, ray_origin: Vec3, ray_dir: Ve
     false
 }
 
-fn scene_sdf(uniform: &EditorViewportSdfUniform, point: Vec3) -> f32 {
+fn scene_sdf(uniform: &EditorViewportSceneProductUniform, point: Vec3) -> f32 {
     let ground = sdf_ground_box(point);
     if uniform.primitive_flags[1] == 0 {
         return ground;
@@ -143,7 +149,7 @@ fn scene_sdf(uniform: &EditorViewportSdfUniform, point: Vec3) -> f32 {
     ground.min(sdf_main_primitive(uniform, point))
 }
 
-fn sdf_main_primitive(uniform: &EditorViewportSdfUniform, point: Vec3) -> f32 {
+fn sdf_main_primitive(uniform: &EditorViewportSceneProductUniform, point: Vec3) -> f32 {
     let center = vec3(
         uniform.object_transform[0],
         uniform.object_transform[1],

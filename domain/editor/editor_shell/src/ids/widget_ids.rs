@@ -35,6 +35,9 @@ pub const VIEWPORT_CHROME_WIDGET_ID: WidgetId = WidgetId(45);
 pub const VIEWPORT_CHROME_CONTENT_WIDGET_ID: WidgetId = WidgetId(46);
 pub const VIEWPORT_CANVAS_CONTENT_WIDGET_ID: WidgetId = WidgetId(47);
 pub const VIEWPORT_CANVAS_LABEL_WIDGET_ID: WidgetId = WidgetId(48);
+pub const VIEWPORT_SURFACE_EMBED_WIDGET_ID: WidgetId = WidgetId(49);
+pub const VIEWPORT_PRODUCTS_TITLE_WIDGET_ID: WidgetId = WidgetId(70);
+pub const VIEWPORT_PRODUCTS_LIST_WIDGET_ID: WidgetId = WidgetId(71);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);
@@ -52,6 +55,7 @@ pub const CONSOLE_LINE_WIDGET_ID_BASE: u64 = 20_000;
 
 pub const OUTLINER_ROW_WIDGET_ID_BASE: u64 = 1_000;
 pub const INSPECTOR_FIELD_WIDGET_ID_BASE: u64 = 10_000;
+pub const VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE: u64 = 30_000;
 
 pub fn outliner_row_widget_id(index: usize) -> WidgetId {
     WidgetId(OUTLINER_ROW_WIDGET_ID_BASE + index as u64)
@@ -63,6 +67,10 @@ pub fn inspector_field_widget_id(index: usize) -> WidgetId {
 
 pub fn console_line_widget_id(index: usize) -> WidgetId {
     WidgetId(CONSOLE_LINE_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn viewport_product_button_widget_id(index: usize) -> WidgetId {
+    WidgetId(VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE + index as u64)
 }
 
 pub fn outliner_row_index(widget_id: WidgetId) -> Option<usize> {
@@ -80,5 +88,14 @@ pub fn inspector_field_index(widget_id: WidgetId) -> Option<usize> {
     }
 
     let raw = widget_id.0 - INSPECTOR_FIELD_WIDGET_ID_BASE;
+    usize::try_from(raw).ok()
+}
+
+pub fn viewport_product_button_index(widget_id: WidgetId) -> Option<usize> {
+    if widget_id.0 < VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE {
+        return None;
+    }
+
+    let raw = widget_id.0 - VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE;
     usize::try_from(raw).ok()
 }

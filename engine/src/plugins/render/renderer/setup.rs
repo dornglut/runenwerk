@@ -9,6 +9,8 @@ impl Renderer {
             rect_pass_shader_revision: 0,
             glyph_pass: None,
             glyph_pass_format: None,
+            viewport_embed_pass: None,
+            viewport_embed_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
             flow_runtime_cache: std::collections::BTreeMap::new(),
             flow_pipeline_cache: super::pipeline_cache::FlowPipelineArtifactCache::default(),
@@ -315,6 +317,147 @@ impl Renderer {
         self.glyph_atlas_gpu.clear();
     }
 
+    pub(super) fn ensure_viewport_embed_pass(
+        &mut self,
+        device: &Device,
+        format: TextureFormat,
+    ) {
+        if self.viewport_embed_pass.is_some() && self.viewport_embed_pass_format == Some(format) {
+            return;
+        }
+
+        let shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("engine_ui_viewport_embed_shader"),
+            source: ShaderSource::Wgsl(DEFAULT_UI_VIEWPORT_EMBED_SHADER.into()),
+        });
+
+        let screen_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("engine_ui_viewport_embed_screen_uniform"),
+            size: std::mem::size_of::<ScreenUniformRaw>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let screen_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("engine_ui_viewport_embed_screen_bind_group_layout"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let screen_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("engine_ui_viewport_embed_screen_bind_group"),
+            layout: &screen_bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: screen_buffer.as_entire_binding(),
+            }],
+        });
+
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("engine_ui_viewport_embed_texture_bind_group_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let texture_sampler = device.create_sampler(&SamplerDescriptor {
+            label: Some("engine_ui_viewport_embed_sampler"),
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("engine_ui_viewport_embed_pipeline_layout"),
+            bind_group_layouts: &[&screen_bind_group_layout, &texture_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("engine_ui_viewport_embed_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
+                buffers: &[VertexBufferLayout {
+                    array_stride: std::mem::size_of::<ViewportEmbedInstanceRaw>() as u64,
+                    step_mode: VertexStepMode::Instance,
+                    attributes: &[
+                        VertexAttribute {
+                            format: VertexFormat::Float32x4,
+                            offset: 0,
+                            shader_location: 0,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32x4,
+                            offset: 16,
+                            shader_location: 1,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32x4,
+                            offset: 32,
+                            shader_location: 2,
+                        },
+                    ],
+                }],
+            },
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
+                targets: &[Some(ColorTargetState {
+                    format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        self.viewport_embed_pass = Some(ViewportEmbedPass {
+            pipeline,
+            screen_buffer,
+            screen_bind_group,
+            texture_bind_group_layout,
+            texture_sampler,
+        });
+        self.viewport_embed_pass_format = Some(format);
+    }
+
     pub(super) fn ensure_glyph_atlas_gpu(
         &mut self,
         device: &Device,
@@ -416,9 +559,16 @@ impl Renderer {
 
     pub(super) fn encode_ui_pass(
         &self,
+        device: &Device,
         encoder: &mut CommandEncoder,
+        frame_texture: &Texture,
         frame_view: &TextureView,
         prepared: &UiPreparedDraws,
+        flow_id: &str,
+        runtime_resources: &super::render_flow::FlowRuntimeResources,
+        viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
+        surface_size: (u32, u32),
+        surface_format: TextureFormat,
     ) {
         let Some(rect_pass) = self.rect_pass.as_ref() else {
             return;
@@ -444,6 +594,64 @@ impl Renderer {
             pass.set_pipeline(&rect_pass.pipeline);
             pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
             for batch in &prepared.rect_batches {
+                pass.set_scissor_rect(
+                    batch.scissor.0,
+                    batch.scissor.1,
+                    batch.scissor.2,
+                    batch.scissor.3,
+                );
+                pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
+                pass.draw(0..6, 0..batch.instance_count);
+            }
+        }
+
+        if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
+            let mut viewport_bind_groups = std::collections::BTreeMap::<String, BindGroup>::new();
+            pass.set_pipeline(&viewport_embed_pass.pipeline);
+            pass.set_bind_group(0, &viewport_embed_pass.screen_bind_group, &[]);
+            for batch in &prepared.viewport_embed_batches {
+                let Some(binding) = viewport_surface_bindings.get(batch.viewport_id, batch.slot)
+                else {
+                    continue;
+                };
+                if binding.flow_id.as_str() != flow_id {
+                    continue;
+                }
+
+                if !viewport_bind_groups.contains_key(binding.resource_id.as_str()) {
+                    let Ok(view) = runtime_resources.resolve_ui_texture_view(
+                        "builtin_ui_viewport_embed",
+                        binding.resource_id.as_str(),
+                        frame_texture,
+                        surface_size,
+                        surface_format,
+                    ) else {
+                        continue;
+                    };
+                    let bind_group = device.create_bind_group(&BindGroupDescriptor {
+                        label: Some("engine_ui_viewport_embed_bind_group"),
+                        layout: &viewport_embed_pass.texture_bind_group_layout,
+                        entries: &[
+                            BindGroupEntry {
+                                binding: 0,
+                                resource: BindingResource::TextureView(&view),
+                            },
+                            BindGroupEntry {
+                                binding: 1,
+                                resource: BindingResource::Sampler(
+                                    &viewport_embed_pass.texture_sampler,
+                                ),
+                            },
+                        ],
+                    });
+                    viewport_bind_groups.insert(binding.resource_id.clone(), bind_group);
+                }
+
+                let Some(bind_group) = viewport_bind_groups.get(binding.resource_id.as_str())
+                else {
+                    continue;
+                };
+                pass.set_bind_group(1, bind_group, &[]);
                 pass.set_scissor_rect(
                     batch.scissor.0,
                     batch.scissor.1,

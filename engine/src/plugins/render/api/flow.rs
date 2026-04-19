@@ -55,6 +55,13 @@ impl RenderFlow {
         self
     }
 
+    pub fn with_color_target(mut self, id: impl Into<String>) -> Self {
+        self.upsert_resource(RenderResourceDescriptor::color_target(
+            RenderResourceId::new(id.into()),
+        ));
+        self
+    }
+
     pub fn with_builtin_ui(self) -> Self {
         self
     }

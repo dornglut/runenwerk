@@ -1,4 +1,4 @@
-struct EditorViewportSdfUniform {
+struct EditorViewportSceneProductUniform {
     surface : vec4<f32>,
     viewport : vec4<f32>,
     camera_position : vec4<f32>,
@@ -12,7 +12,7 @@ struct EditorViewportSdfUniform {
 };
 
 @group(0) @binding(0)
-var<uniform> u : EditorViewportSdfUniform;
+var<uniform> u : EditorViewportSceneProductUniform;
 
 struct VsOut {
     @builtin(position) clip_position : vec4<f32>,

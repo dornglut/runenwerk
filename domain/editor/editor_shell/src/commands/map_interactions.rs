@@ -7,7 +7,7 @@ use crate::{
     ShellCommand, TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID, TOOLBAR_LOAD_BUTTON_WIDGET_ID,
     TOOLBAR_REDO_BUTTON_WIDGET_ID, TOOLBAR_SAVE_BUTTON_WIDGET_ID, TOOLBAR_SELECT_BUTTON_WIDGET_ID,
     TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID, TOOLBAR_UNDO_BUTTON_WIDGET_ID, inspector_field_index,
-    outliner_row_index,
+    outliner_row_index, viewport_product_button_index,
 };
 
 pub fn map_interactions_to_shell_commands(
@@ -58,6 +58,22 @@ pub fn map_interactions_to_shell_commands(
                 }
             } else if *widget_id == TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID {
                 ShellCommand::ToggleDebugLogs
+            } else if let Some(index) = viewport_product_button_index(*widget_id) {
+                view_model
+                    .viewport
+                    .product_choices
+                    .get(index)
+                    .map(|choice| {
+                        if choice.enabled {
+                            ShellCommand::SelectViewportProduct {
+                                viewport_id: choice.viewport_id,
+                                product_id: choice.product_id,
+                            }
+                        } else {
+                            ShellCommand::NoOp
+                        }
+                    })
+                    .unwrap_or(ShellCommand::NoOp)
             } else if let Some(index) = inspector_field_index(*widget_id) {
                 ShellCommand::ActivateInspectorField { index }
             } else if let Some(index) = outliner_row_index(*widget_id) {

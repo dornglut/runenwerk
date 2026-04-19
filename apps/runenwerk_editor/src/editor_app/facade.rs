@@ -4,6 +4,9 @@ use crate::editor_features::inspector::dispatch_inspector_command;
 use crate::editor_features::outliner::dispatch_outliner_command;
 use crate::editor_features::tools::{dispatch_tool_action, dispatch_tool_actions};
 use crate::editor_features::viewport::{ViewportInteractionCommand, ViewportInteractionController};
+use crate::runtime::viewport::{
+    ViewportArtifactObservationResource, ViewportPresentationStateResource,
+};
 use crate::editor_panels::{
     InspectorPanelCommand, InspectorPanelCommandResult, InspectorPanelPresenter,
     InspectorPanelViewModel, OutlinerPanelCommand, OutlinerPanelCommandResult,
@@ -18,6 +21,7 @@ use ui_render_data::UiFrame;
 use ui_text::FontAtlasSource;
 use ui_theme::ThemeTokens;
 use editor_core::EditorMutationError;
+use editor_viewport::ArtifactObservationFrame;
 
 impl RunenwerkEditorApp {
     pub fn outliner_state(&self) -> OutlinerPanelState {
@@ -112,8 +116,16 @@ impl RunenwerkEditorApp {
         bounds: UiRect,
         theme: &ThemeTokens,
         atlas_source: &dyn FontAtlasSource,
+        viewport_products: Option<&ArtifactObservationFrame>,
     ) -> UiFrame {
-        RunenwerkEditorShellController::build_frame(self, shell_state, bounds, theme, atlas_source)
+        RunenwerkEditorShellController::build_frame_with_viewport_products(
+            self,
+            shell_state,
+            bounds,
+            theme,
+            atlas_source,
+            viewport_products,
+        )
     }
 
     pub fn build_shell_expression_frame(
@@ -122,13 +134,15 @@ impl RunenwerkEditorApp {
         bounds: UiRect,
         theme: &ThemeTokens,
         atlas_source: &dyn FontAtlasSource,
+        viewport_products: Option<&ArtifactObservationFrame>,
     ) -> editor_shell::ShellUiExpressionFrame {
-        RunenwerkEditorShellController::build_expression_frame(
+        RunenwerkEditorShellController::build_expression_frame_with_viewport_products(
             self,
             shell_state,
             bounds,
             theme,
             atlas_source,
+            viewport_products,
         )
     }
 
@@ -138,7 +152,19 @@ impl RunenwerkEditorApp {
         bounds: UiRect,
         theme: &ThemeTokens,
         event: &UiInputEvent,
+        viewport_products: Option<&ArtifactObservationFrame>,
+        viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
-        RunenwerkEditorShellController::dispatch_input(self, shell_state, bounds, theme, event)
+        RunenwerkEditorShellController::dispatch_input_with_viewport_products(
+            self,
+            shell_state,
+            bounds,
+            theme,
+            event,
+            viewport_products,
+            viewport_presentations,
+            viewport_observations,
+        )
     }
 }

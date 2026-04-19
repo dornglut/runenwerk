@@ -5,6 +5,7 @@ use crate::plugins::render::features::{
 use crate::runtime::{Res, ResMut};
 use rusttype::{Font, Scale, point};
 use std::collections::HashMap;
+use ui_render_data::ViewportSurfaceBindingRegistry;
 use ui_text::{FontAtlasSource, FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas};
 
 pub const DEFAULT_EDITOR_FONT_ID: FontId = FontId(1);
@@ -245,6 +246,25 @@ pub fn prepare_ui_feature_resource_system(
             })
             .collect(),
     };
+}
+
+#[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
+pub struct ViewportSurfaceBindingRegistryResource {
+    registry: ViewportSurfaceBindingRegistry,
+}
+
+impl ViewportSurfaceBindingRegistryResource {
+    pub fn registry(&self) -> &ViewportSurfaceBindingRegistry {
+        &self.registry
+    }
+
+    pub fn registry_mut(&mut self) -> &mut ViewportSurfaceBindingRegistry {
+        &mut self.registry
+    }
+
+    pub fn replace_registry(&mut self, registry: ViewportSurfaceBindingRegistry) {
+        self.registry = registry;
+    }
 }
 
 #[cfg(test)]

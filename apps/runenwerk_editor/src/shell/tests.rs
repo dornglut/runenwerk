@@ -1,4 +1,8 @@
 use editor_core::{ChangeOrigin, EntityId, SelectionTarget, SessionChangeKind, WorkflowEventKind};
+use editor_viewport::{
+    ArtifactObservationFrame, ExpressionProductId, ProductAvailabilityState, ProducerHealth,
+    ViewportId,
+};
 use editor_shell::{CONSOLE_SCROLL_WIDGET_ID, ShellCommand};
 use engine::plugins::render::UiFontAtlasResource;
 use ui_input::{Modifiers, PointerEvent, PointerEventKind, UiInputEvent};
@@ -6,6 +10,9 @@ use ui_math::{UiPoint, UiRect, UiVector};
 use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
+use crate::runtime::viewport::{
+    ViewportArtifactObservationResource, ViewportPresentationStateResource,
+};
 use crate::shell::{
     RunenwerkEditorShellController, RunenwerkEditorShellState, SELECT_TOOL_ID, TRANSLATE_TOOL_ID,
     build_editor_shell_view_model, dispatch_shell_command,
@@ -63,11 +70,11 @@ fn build_editor_shell_view_model_reflects_active_tool_and_viewport_state() {
 fn dispatch_shell_command_updates_active_tool() {
     let mut app = RunenwerkEditorApp::new();
 
-    dispatch_shell_command(&mut app, ShellCommand::ActivateSelectTool)
+    dispatch_shell_command(&mut app, ShellCommand::ActivateSelectTool, None, None)
         .expect("select tool command should succeed");
     assert_eq!(app.runtime().session().active_tool(), Some(SELECT_TOOL_ID));
 
-    dispatch_shell_command(&mut app, ShellCommand::ActivateTranslateTool)
+    dispatch_shell_command(&mut app, ShellCommand::ActivateTranslateTool, None, None)
         .expect("translate tool command should succeed");
     assert_eq!(
         app.runtime().session().active_tool(),
@@ -87,6 +94,8 @@ fn dispatch_shell_command_selects_outliner_entity() {
         ShellCommand::SelectOutlinerEntity {
             entity: EntityId(1),
         },
+        None,
+        None,
     )
     .expect("outliner select shell command should succeed");
 
@@ -110,10 +119,45 @@ fn dispatch_shell_command_selects_outliner_entity() {
 }
 
 #[test]
+fn dispatch_shell_command_selects_viewport_product_when_available() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut viewport_presentations = ViewportPresentationStateResource::default();
+    let mut viewport_observations = ViewportArtifactObservationResource::default();
+    let viewport_id = ViewportId(1);
+    let product_id = ExpressionProductId(2);
+    let mut frame = ArtifactObservationFrame::new(viewport_id, app.runtime().current_scene_reality_version());
+    frame
+        .availability_by_product
+        .insert(product_id, ProductAvailabilityState::Available);
+    frame
+        .producer_health_by_product
+        .insert(product_id, ProducerHealth::Healthy);
+    viewport_observations.upsert_frame(frame);
+
+    dispatch_shell_command(
+        &mut app,
+        ShellCommand::SelectViewportProduct {
+            viewport_id,
+            product_id,
+        },
+        Some(&mut viewport_presentations),
+        Some(&viewport_observations),
+    )
+    .expect("viewport product select shell command should succeed");
+
+    assert_eq!(
+        viewport_presentations
+            .state_for(viewport_id)
+            .map(|state| state.selected_primary_product_id),
+        Some(product_id)
+    );
+}
+
+#[test]
 fn dispatch_shell_command_records_workflow_dispatch_event() {
     let mut app = RunenwerkEditorApp::new();
 
-    dispatch_shell_command(&mut app, ShellCommand::NoOp)
+    dispatch_shell_command(&mut app, ShellCommand::NoOp, None, None)
         .expect("no-op shell command should succeed");
 
     assert!(matches!(

@@ -1,12 +1,19 @@
 use engine::plugins::render::{
-    CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderShaderReference,
-    ShaderRegistryResource, UiFrameProducerId, UiFrameSubmissionRegistryResource,
+    CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
+    UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
-use runenwerk_editor::editor_runtime::EditorPrimitiveKind;
-use runenwerk_editor::runtime::app::EDITOR_VIEWPORT_SDF_SHADER_ID;
 use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
+use runenwerk_editor::runtime::viewport::{
+    EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR,
+};
+use ui_render_data::{UiPrimitive, ViewportSurfaceSlot};
 
-const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
+const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
+const SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
+const SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
+const PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
+const OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.overlay";
+const VIEWPORT_BOUNDS_EPSILON: f32 = 0.75;
 
 #[test]
 fn startup_render_smoke_publishes_editor_shell_submission() {
@@ -22,10 +29,10 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .world()
         .resource::<RenderFlowRegistryResource>()
         .expect("render flow registry should exist");
-    let shader_registry = app
+    let viewport_bindings = app
         .world()
-        .resource::<ShaderRegistryResource>()
-        .expect("shader registry should exist");
+        .resource::<ViewportSurfaceBindingRegistryResource>()
+        .expect("viewport surface binding registry should exist");
     let viewport_state = app
         .world()
         .resource::<EditorViewportRenderState>()
@@ -44,29 +51,48 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         has_builtin_ui_pass,
         "editor render flows should include a builtin UI composite pass",
     );
-    let viewport_pass_shader_ref = flow_registry
+
+    let pass_ids = flow_registry
         .compiled_flows()
         .iter()
-        .flat_map(|flow| flow.execution.passes.iter())
-        .find_map(|pass| match pass {
-            CompiledPassExecutionPlan::Fullscreen(plan)
-                if plan.pass_id == EDITOR_VIEWPORT_SDF_PASS_ID =>
-            {
-                plan.shader.as_ref().and_then(|shader| match shader {
-                    RenderShaderReference::AssetPath(path) => Some(path.as_str()),
-                    RenderShaderReference::RegistryHandle(_) => None,
-                })
-            }
-            _ => None,
-        });
+        .flat_map(|flow| flow.pass_order.iter().map(|pass| pass.pass_id().to_string()))
+        .collect::<Vec<_>>();
     assert!(
-        viewport_pass_shader_ref.is_some(),
-        "editor render flows should include the viewport SDF pass",
+        pass_ids.iter().any(|id| id == SURFACE_CLEAR_PASS_ID),
+        "render flow should include surface clear pass",
     );
-    assert_eq!(
-        viewport_pass_shader_ref,
-        Some(EDITOR_VIEWPORT_SDF_SHADER_ID),
-        "viewport SDF pass should reference the shader id used for stable runtime lookup",
+    assert!(
+        pass_ids.iter().any(|id| id == SCENE_PRODUCT_PASS_ID),
+        "render flow should include scene product pass",
+    );
+    assert!(
+        pass_ids.iter().any(|id| id == PICKING_PRODUCT_PASS_ID),
+        "render flow should include picking product pass",
+    );
+    assert!(
+        pass_ids.iter().any(|id| id == OVERLAY_PRODUCT_PASS_ID),
+        "render flow should include overlay product pass",
+    );
+    assert!(
+        !pass_ids
+            .iter()
+            .any(|id| id == LEGACY_FULLSCREEN_MASK_PASS_ID),
+        "legacy fullscreen-mask viewport pass must not be present in active render flow",
+    );
+
+    let editor_flow = flow_registry
+        .compiled_flows()
+        .iter()
+        .find(|flow| flow.flow_id == EDITOR_MAIN_FLOW_ID)
+        .expect("editor main flow should exist");
+    let has_scene_product_resource = editor_flow
+        .resources
+        .resources
+        .iter()
+        .any(|resource| resource.id().as_str() == VIEWPORT_RESOURCE_SCENE_COLOR);
+    assert!(
+        has_scene_product_resource,
+        "editor flow resources should include scene product target resource",
     );
 
     let submission = submissions
@@ -83,20 +109,66 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         "editor shell frame should contain renderable primitives"
     );
     assert!(
+        submission
+            .frame
+            .surfaces
+            .iter()
+            .flat_map(|surface| surface.layers.iter())
+            .flat_map(|layer| layer.primitives.iter())
+            .any(|primitive| matches!(primitive, UiPrimitive::ViewportSurfaceEmbed(_))),
+        "editor shell submission must embed viewport surface through dedicated embed primitive",
+    );
+    assert!(
         scene_overlay_submission
             .map(|submission| submission.is_empty())
             .unwrap_or(true),
         "startup path should not include a non-empty scene.overlay submission that could overwrite viewport output",
     );
-    let shader_revision = shader_registry.revision_for(EDITOR_VIEWPORT_SDF_SHADER_ID);
-    assert!(
-        shader_revision > 0,
-        "viewport SDF shader id should resolve to a loaded shader revision (>0); got {shader_revision}",
+
+    let primary_binding = viewport_bindings
+        .registry()
+        .get(1, ViewportSurfaceSlot::Primary)
+        .expect("viewport primary surface binding should exist");
+    assert_eq!(primary_binding.flow_id.as_str(), EDITOR_MAIN_FLOW_ID);
+    assert_eq!(
+        primary_binding.resource_id.as_str(),
+        VIEWPORT_RESOURCE_SCENE_COLOR,
     );
+
+    let viewport_embed = submission
+        .frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .find_map(|primitive| {
+            let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
+                return None;
+            };
+            if embed.viewport_id == 1 && embed.slot == ViewportSurfaceSlot::Primary {
+                Some(embed)
+            } else {
+                None
+            }
+        })
+        .expect("viewport embed primitive for primary slot should exist");
+
     assert!(
-        viewport_state.shader_loaded,
-        "viewport render diagnostics should report viewport shader as loaded",
+        (viewport_state.viewport_bounds_px.0 - viewport_embed.rect.x).abs() <= VIEWPORT_BOUNDS_EPSILON
+            && (viewport_state.viewport_bounds_px.1 - viewport_embed.rect.y).abs()
+                <= VIEWPORT_BOUNDS_EPSILON
+            && (viewport_state.viewport_bounds_px.2 - viewport_embed.rect.width).abs()
+                <= VIEWPORT_BOUNDS_EPSILON
+            && (viewport_state.viewport_bounds_px.3 - viewport_embed.rect.height).abs()
+                <= VIEWPORT_BOUNDS_EPSILON,
+        "viewport render bounds must match shell embed rect; state={:?} embed=({:.2},{:.2},{:.2},{:.2})",
+        viewport_state.viewport_bounds_px,
+        viewport_embed.rect.x,
+        viewport_embed.rect.y,
+        viewport_embed.rect.width,
+        viewport_embed.rect.height,
     );
+
     assert!(
         viewport_state.viewport_valid,
         "viewport render diagnostics should mark viewport as valid",
@@ -118,12 +190,5 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     assert!(
         !viewport_state.root_background_opaque,
         "root background should default to non-occluding mode",
-    );
-    assert!(
-        matches!(
-            viewport_state.primitive_kind,
-            EditorPrimitiveKind::Box | EditorPrimitiveKind::Sphere
-        ),
-        "viewport verification primitive must stay in box/sphere scope",
     );
 }

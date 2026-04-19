@@ -3,7 +3,7 @@
 
 use editor_core::{ComponentTypeId, EntityId, RealityVersion};
 use editor_shell::{PickingExpressionAxis, PickingExpressionFrame, PickingExpressionTarget};
-use editor_viewport::ViewportHitResult;
+use editor_viewport::{ViewportHitResult, ViewportId};
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingResultResource, EditorPickingTarget};
 
 pub fn build_picking_expression_frame(
@@ -32,6 +32,27 @@ pub fn viewport_hit_from_picking_expression(frame: &PickingExpressionFrame) -> V
             ViewportHitResult::gizmo_axis(axis_label(axis), frame.distance)
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ViewportPickingProductFrame {
+    pub viewport_id: ViewportId,
+    pub expression: PickingExpressionFrame,
+}
+
+pub fn build_viewport_picking_product_frame(
+    viewport_id: ViewportId,
+    picking: &EditorPickingResultResource,
+    source_version: RealityVersion,
+) -> ViewportPickingProductFrame {
+    ViewportPickingProductFrame {
+        viewport_id,
+        expression: build_picking_expression_frame(picking, source_version),
+    }
+}
+
+pub fn viewport_hit_from_picking_product(frame: &ViewportPickingProductFrame) -> ViewportHitResult {
+    viewport_hit_from_picking_expression(&frame.expression)
 }
 
 fn map_picking_target(target: EditorPickingTarget) -> PickingExpressionTarget {

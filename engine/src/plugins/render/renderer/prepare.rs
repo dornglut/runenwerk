@@ -25,6 +25,11 @@ impl Renderer {
             .iter()
             .flat_map(|submission| Self::extract_glyph_instances(&submission.frame, atlas_resource))
             .collect::<Vec<_>>();
+        let flattened_viewport_embed_instances = contribution
+            .submissions
+            .iter()
+            .flat_map(|submission| Self::extract_viewport_embed_instances(&submission.frame))
+            .collect::<Vec<_>>();
 
         let rect_batches = group_rect_batches_ordered(
             flattened_rect_instances,
@@ -94,6 +99,30 @@ impl Renderer {
                 })
             })
             .collect::<Vec<_>>();
+        let viewport_embed_batches = group_viewport_embed_batches_ordered(
+            flattened_viewport_embed_instances,
+            surface_width_u32,
+            surface_height_u32,
+        )
+        .into_iter()
+        .filter_map(|(scissor, viewport_id, slot, instances)| {
+            if instances.is_empty() {
+                return None;
+            }
+            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("engine_ui_viewport_embed_batch_instances"),
+                contents: bytemuck::cast_slice(&instances),
+                usage: BufferUsages::VERTEX,
+            });
+            Some(UiViewportEmbedBatch {
+                scissor,
+                instance_count: instances.len() as u32,
+                instance_buffer,
+                viewport_id,
+                slot,
+            })
+        })
+        .collect::<Vec<_>>();
 
         if let Some(rect_pass) = self.rect_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -109,10 +138,22 @@ impl Renderer {
             };
             queue.write_buffer(&glyph_pass.screen_buffer, 0, bytemuck::bytes_of(&screen));
         }
+        if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
+            let screen = ScreenUniformRaw {
+                size: [surface_width.max(1.0), surface_height.max(1.0)],
+                _pad: [0.0; 2],
+            };
+            queue.write_buffer(
+                &viewport_embed_pass.screen_buffer,
+                0,
+                bytemuck::bytes_of(&screen),
+            );
+        }
 
         UiPreparedDraws {
             rect_batches,
             glyph_batches,
+            viewport_embed_batches,
             surface_size: (surface_width_u32, surface_height_u32),
         }
     }
@@ -125,6 +166,7 @@ impl Renderer {
         shader_registry: &mut ShaderRegistryResource,
         ui_rect_shader_handle: Option<ShaderHandle>,
         ui_font_atlas: &UiFontAtlasResource,
+        viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         surface_format: TextureFormat,
     ) -> RendererPreparedPacket {
         let view = prepared_frame.main_view().cloned().unwrap_or_else(|| {
@@ -167,6 +209,7 @@ impl Renderer {
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
         self.ensure_glyph_pass(device, surface_format);
+        self.ensure_viewport_embed_pass(device, surface_format);
         let surface_size = (surface_width_u32.max(1), surface_height_u32.max(1));
         let prepare_ui_start = Instant::now();
         let prepared_ui_current = {
@@ -193,6 +236,7 @@ impl Renderer {
             feature_gates,
             feature_runtime_signatures,
             prepared_ui,
+            viewport_surface_bindings: viewport_surface_bindings.clone(),
             prepare_timings,
         }
     }
@@ -256,6 +300,50 @@ fn group_rect_batches_ordered(
             instances.push(instance.raw);
         } else {
             grouped.push((scissor, vec![instance.raw]));
+        }
+    }
+    grouped
+}
+
+fn group_viewport_embed_batches_ordered(
+    flattened_instances: Vec<FlattenedUiViewportEmbedInstance>,
+    surface_width_u32: u32,
+    surface_height_u32: u32,
+) -> Vec<(
+    (u32, u32, u32, u32),
+    u64,
+    ViewportSurfaceSlot,
+    Vec<ViewportEmbedInstanceRaw>,
+)> {
+    let mut grouped =
+        Vec::<((u32, u32, u32, u32), u64, ViewportSurfaceSlot, Vec<ViewportEmbedInstanceRaw>)>::new(
+        );
+    for instance in flattened_instances {
+        let scissor = instance
+            .clip
+            .map(|clip| Renderer::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
+            .unwrap_or_else(|| {
+                Some(Renderer::full_scissor(
+                    surface_width_u32,
+                    surface_height_u32,
+                ))
+            });
+        let Some(scissor) = scissor else {
+            continue;
+        };
+        if let Some((last_scissor, last_viewport_id, last_slot, instances)) = grouped.last_mut()
+            && *last_scissor == scissor
+            && *last_viewport_id == instance.viewport_id
+            && *last_slot == instance.slot
+        {
+            instances.push(instance.raw);
+        } else {
+            grouped.push((
+                scissor,
+                instance.viewport_id,
+                instance.slot,
+                vec![instance.raw],
+            ));
         }
     }
     grouped

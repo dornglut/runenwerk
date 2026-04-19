@@ -1,5 +1,4 @@
 use editor_core::{EntityId, ToolId};
-use engine::WindowState;
 use engine::plugins::render::{
     EditorGizmoAxis, EditorPickingHit, EditorPickingResultResource, EditorPickingTarget,
 };
@@ -13,6 +12,7 @@ use crate::runtime::resources::{
     EditorHostResource, EditorViewportCamera, editor_viewport_camera,
     editor_viewport_camera_fov_y_radians,
 };
+use crate::runtime::viewport::ViewportLayoutMapResource;
 use crate::shell::TRANSLATE_TOOL_ID;
 
 const GRID_EPSILON: f32 = 1e-5;
@@ -35,41 +35,40 @@ struct AxisScreenHit {
 
 pub fn produce_editor_picking_system(
     input: Res<engine::plugins::InputState>,
-    window: Res<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut picking: ResMut<EditorPickingResultResource>,
+    viewport_layout_map: Res<ViewportLayoutMapResource>,
 ) {
-    let bounds = window_bounds(&window);
-    let viewport_bounds = viewport_bounds(
-        host.shell_state.last_tree(),
-        host.shell_state.last_bounds(),
-        host.shell_state.runtime(),
-    )
-    .unwrap_or(bounds);
     let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
     let previous_hit = picking.hit;
+    let routed_viewport = routed_viewport_bounds(&host, &viewport_layout_map);
+    let cursor_viewport_bounds = routed_viewport
+        .map(|(_, value)| value)
+        .unwrap_or(UiRect::new(0.0, 0.0, 0.0, 0.0));
 
     picking.set_cursor(
         (cursor.x, cursor.y),
         (
-            viewport_bounds.x,
-            viewport_bounds.y,
-            viewport_bounds.width,
-            viewport_bounds.height,
+            cursor_viewport_bounds.x,
+            cursor_viewport_bounds.y,
+            cursor_viewport_bounds.width,
+            cursor_viewport_bounds.height,
         ),
     );
 
-    let next_hit = if !viewport_bounds.contains(cursor) {
-        EditorPickingHit::none()
-    } else if let Some(ray) = viewport_ray(cursor, viewport_bounds) {
-        compose_picking_hit(
-            host.app.runtime(),
-            host.app.runtime().session().active_tool(),
-            host.app.runtime().selected_entity(),
-            cursor,
-            viewport_bounds,
-            ray,
-        )
+    let next_hit = if let Some((_, viewport_bounds)) = routed_viewport {
+        if let Some(ray) = viewport_ray(cursor, viewport_bounds) {
+            compose_picking_hit(
+                host.app.runtime(),
+                host.app.runtime().session().active_tool(),
+                host.app.runtime().selected_entity(),
+                cursor,
+                viewport_bounds,
+                ray,
+            )
+        } else {
+            EditorPickingHit::none()
+        }
     } else {
         EditorPickingHit::none()
     };
@@ -80,8 +79,8 @@ pub fn produce_editor_picking_system(
             "[pick] cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
             cursor.x,
             cursor.y,
-            cursor.x - viewport_bounds.x,
-            cursor.y - viewport_bounds.y,
+            cursor.x - cursor_viewport_bounds.x,
+            cursor.y - cursor_viewport_bounds.y,
             picking_target_label(next_hit.target),
             next_hit.distance
         ));
@@ -381,23 +380,21 @@ fn hit_changed(previous: EditorPickingHit, next: EditorPickingHit) -> bool {
         || (previous.distance - next.distance).abs() > HIT_DISTANCE_EPSILON
 }
 
-fn window_bounds(window: &WindowState) -> UiRect {
-    let width = window.size_px.0.max(1) as f32;
-    let height = window.size_px.1.max(1) as f32;
-    UiRect::new(0.0, 0.0, width, height)
-}
-
-fn viewport_bounds(
-    tree: Option<&editor_shell::UiTree>,
-    bounds: Option<UiRect>,
-    runtime: &editor_shell::UiRuntime,
-) -> Option<UiRect> {
-    let tree = tree?;
-    let bounds = bounds?;
-    let layouts = runtime.compute_layout(tree, bounds);
-    layouts
-        .get(&editor_shell::VIEWPORT_CANVAS_WIDGET_ID)
-        .map(|layout| layout.bounds)
+fn routed_viewport_bounds(
+    host: &EditorHostResource,
+    layout_map: &ViewportLayoutMapResource,
+) -> Option<(editor_viewport::ViewportId, UiRect)> {
+    let runtime_state = host.shell_state.runtime().state();
+    let viewport_id = runtime_state
+        .captured_widget
+        .and_then(|widget| layout_map.viewport_for_widget(widget))
+        .or_else(|| {
+            runtime_state
+                .hovered_widget
+                .and_then(|widget| layout_map.viewport_for_widget(widget))
+        })?;
+    let bounds = layout_map.entry_for_viewport(viewport_id)?.bounds;
+    Some((viewport_id, bounds))
 }
 
 #[cfg(test)]

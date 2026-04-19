@@ -3,7 +3,7 @@ use crate::plugins::render::features::UiFontAtlasResource;
 use ui_math::UiRect;
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, RectPrimitive, UiFrame,
-    UiPrimitive,
+    UiPrimitive, ViewportSurfaceEmbedPrimitive,
 };
 
 impl Renderer {
@@ -47,6 +47,7 @@ impl Renderer {
                             }
                         }
                         UiPrimitive::GlyphRun(_) => {}
+                        UiPrimitive::ViewportSurfaceEmbed(_) => {}
                     }
                 }
             }
@@ -83,7 +84,48 @@ impl Renderer {
                                 &mut instances,
                             );
                         }
-                        UiPrimitive::Rect(_) | UiPrimitive::Border(_) | UiPrimitive::Image(_) => {}
+                        UiPrimitive::Rect(_)
+                        | UiPrimitive::Border(_)
+                        | UiPrimitive::Image(_)
+                        | UiPrimitive::ViewportSurfaceEmbed(_) => {}
+                    }
+                }
+            }
+        }
+        instances
+    }
+
+    pub(super) fn extract_viewport_embed_instances(
+        frame: &UiFrame,
+    ) -> Vec<FlattenedUiViewportEmbedInstance> {
+        let mut instances = Vec::new();
+        for surface in &frame.surfaces {
+            for layer in &surface.layers {
+                let mut clip_stack: Vec<Option<UiRect>> = Vec::new();
+                for primitive in &layer.primitives {
+                    match primitive {
+                        UiPrimitive::Clip(ClipPrimitive::Push { rect, .. }) => {
+                            let next = match clip_stack.last().copied() {
+                                Some(Some(parent)) => parent.intersect(*rect),
+                                Some(None) => None,
+                                None => Some(*rect),
+                            };
+                            clip_stack.push(next);
+                        }
+                        UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => {
+                            let _ = clip_stack.pop();
+                        }
+                        UiPrimitive::ViewportSurfaceEmbed(embed) => {
+                            if let Some(entry) =
+                                flattened_viewport_embed(embed, current_clip(&clip_stack), None)
+                            {
+                                instances.push(entry);
+                            }
+                        }
+                        UiPrimitive::Rect(_)
+                        | UiPrimitive::Border(_)
+                        | UiPrimitive::Image(_)
+                        | UiPrimitive::GlyphRun(_) => {}
                     }
                 }
             }
@@ -212,6 +254,33 @@ fn flattened_image(
         0.0,
         clip,
     )
+}
+
+fn flattened_viewport_embed(
+    embed: &ViewportSurfaceEmbedPrimitive,
+    stack_clip: Option<UiRect>,
+    local_clip: Option<UiRect>,
+) -> Option<FlattenedUiViewportEmbedInstance> {
+    let clip = effective_clip(stack_clip, local_clip, embed.rect)?;
+    if embed.rect.width <= f32::EPSILON || embed.rect.height <= f32::EPSILON || embed.tint.a <= f32::EPSILON {
+        return None;
+    }
+
+    Some(FlattenedUiViewportEmbedInstance {
+        raw: ViewportEmbedInstanceRaw {
+            rect: [embed.rect.x, embed.rect.y, embed.rect.width, embed.rect.height],
+            uv_rect: [
+                embed.uv_rect.x,
+                embed.uv_rect.y,
+                embed.uv_rect.width,
+                embed.uv_rect.height,
+            ],
+            tint: [embed.tint.r, embed.tint.g, embed.tint.b, embed.tint.a],
+        },
+        clip: clip.map(|value| [value.x, value.y, value.width, value.height]),
+        viewport_id: embed.viewport_id,
+        slot: embed.slot,
+    })
 }
 
 fn flattened_rect_raw(

@@ -3,6 +3,7 @@
 
 use ui_layout::{LayoutConstraints, SizePolicy};
 use ui_math::{Axis, UiInsets, UiSize};
+use ui_render_data::ViewportSurfaceSlot;
 use ui_text::TextStyle;
 use ui_theme::ThemeTokens;
 
@@ -38,6 +39,7 @@ pub enum UiNodeKind {
     Panel(PanelNode),
     Label(LabelNode),
     Button(ButtonNode),
+    ViewportSurfaceEmbed(ViewportSurfaceEmbedNode),
     Scroll(ScrollNode),
     Stack(StackNode),
     Split(SplitNode),
@@ -108,6 +110,23 @@ impl ButtonNode {
             ),
             theme,
             enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ViewportSurfaceEmbedNode {
+    pub viewport_id: u64,
+    pub slot: ViewportSurfaceSlot,
+    pub min_size: UiSize,
+}
+
+impl ViewportSurfaceEmbedNode {
+    pub fn new(viewport_id: u64, slot: ViewportSurfaceSlot) -> Self {
+        Self {
+            viewport_id,
+            slot,
+            min_size: UiSize::new(64.0, 64.0),
         }
     }
 }

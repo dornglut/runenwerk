@@ -69,11 +69,11 @@ It does not own world rendering policy and it does not define product semantics.
 Each viewport owns a **viewport surface set** and **presentation state**, not a one-off hardcoded scene-color surface.
 
 ### 3. Producers do not render “to the panel”
-Producers publish **typed expression products**.  
+Producers publish **typed expression products**.
 Viewport presentation resolves those products into panel-owned surfaces for display.
 
 ### 4. UI does not clip fullscreen rendering
-The shell embeds viewport-owned presentation surfaces.  
+The shell embeds viewport-owned presentation surfaces.
 Containment is achieved by ownership and composition, not by fullscreen rendering followed by shader masking.
 
 ### 5. Interaction is viewport-local
@@ -87,7 +87,7 @@ This separation is not optional and must exist from the first implementation.
 - viewport presentation selects and displays product
 
 ### 7. Phase 1 may be narrow in breadth, not in architecture
-It is acceptable if phase 1 only has one viewport and one main scene-color-like product.  
+It is acceptable if phase 1 only has one viewport and one main scene-color-like product.
 It is not acceptable if phase 1 hardcodes an architecture equivalent to “viewport == scene color renderer output.”
 
 ### 8. The viewport must be a serious tooling surface
@@ -103,7 +103,7 @@ The architecture must support, by design, not by later exception:
 ## Architectural Positioning in the Nine Layers
 
 ### Layer 1 — Runtime Simulation
-Owns live world and simulation state.  
+Owns live world and simulation state.
 Examples:
 - ECS scene state
 - water simulation state
@@ -116,7 +116,7 @@ Viewport relevance:
 - viewport presentation consumes outputs from these domains but does not own them
 
 ### Layer 2 — Mutation / Ratification
-Owns accepted changes to viewport configuration, panel configuration, and authored graph-backed display settings.  
+Owns accepted changes to viewport configuration, panel configuration, and authored graph-backed display settings.
 Examples:
 - selected displayed product
 - viewport presentation mode
@@ -129,7 +129,7 @@ Viewport relevance:
 - the viewport should not change products implicitly through hidden renderer state
 
 ### Layer 3 — Retention / Recovery
-Owns reconstructability, viewport configuration history, and future expression cache lineage.  
+Owns reconstructability, viewport configuration history, and future expression cache lineage.
 Examples:
 - viewport layout history
 - selected output history
@@ -140,7 +140,7 @@ Viewport relevance:
 - the design must allow viewport configuration and future retained expression metadata without redefining ownership later
 
 ### Layer 4 — Observation
-Owns observed editor-facing forms.  
+Owns observed editor-facing forms.
 Examples:
 - available viewport products
 - selected product metadata
@@ -152,7 +152,7 @@ Viewport relevance:
 - viewport UI and tooling consume observation-oriented state, not renderer-private internals
 
 ### Layer 5 — Authority / Partition
-Owns which domains may produce, expose, or consume specific products.  
+Owns which domains may produce, expose, or consume specific products.
 Examples:
 - local-only debug outputs
 - partition-local field products
@@ -163,7 +163,7 @@ Viewport relevance:
 - the architecture must preserve who owns and may expose products
 
 ### Layer 6 — Asset / Content
-Owns authored graphs and content definitions.  
+Owns authored graphs and content definitions.
 Examples:
 - scene document
 - material graph
@@ -177,8 +177,8 @@ Viewport relevance:
 - viewport should not depend directly on material graph as its general abstraction
 
 ### Layer 7 — Expression
-Owns typed consumer-facing products derived from authored, formed, or simulated realities.  
-This is the central layer for the viewport upgrade.  
+Owns typed consumer-facing products derived from authored, formed, or simulated realities.
+This is the central layer for the viewport upgrade.
 Examples:
 - scene color expression
 - picking expression
@@ -194,7 +194,7 @@ Viewport relevance:
 - offscreen viewport surfaces and product display belong structurally here and in Layer 9, not in fullscreen shell hacks
 
 ### Layer 8 — Sharing / Replication
-Owns shared or remote display products where needed.  
+Owns shared or remote display products where needed.
 Examples:
 - collaborative viewport preview
 - streamed diagnostics view
@@ -203,7 +203,7 @@ Viewport relevance:
 - not required in initial breadth, but the architecture must not block future shared products
 
 ### Layer 9 — Editor / Tooling
-Owns panel behavior, interactions, and tooling-side presentation.  
+Owns panel behavior, interactions, and tooling-side presentation.
 Examples:
 - viewport panel
 - split view
@@ -216,53 +216,6 @@ Viewport relevance:
 - panel owns presentation state
 - panel embeds the viewport-owned presentation surface
 - panel interaction is viewport-local
-
----
-
-## Workspace and Shell Boundary
-
-The viewport is one tool surface inside the wider editor workspace.
-
-The shell/workspace layer owns:
-- docking
-- tabs
-- splits
-- panel placement
-- high-level input routing
-- workspace composition
-
-The viewport owns:
-- viewport presentation state
-- viewport-local interaction
-- viewport-local surfaces
-- viewport-local product selection and display
-
-The producer layer owns:
-- generation of typed expression products
-
-This boundary prevents the viewport from becoming a hidden replacement for the shell/workspace system, and prevents the shell from becoming the semantic owner of viewport rendering or interaction.
-
----
-
-## Tool Surface Pattern
-
-The viewport should be understood as the first major **tool surface**, not as a special-case rendering exception.
-
-The same architectural pattern should later apply to:
-- graph canvases
-- animation timelines
-- curve editors
-- color tools
-- atlas viewers
-- field viewers
-
-Each tool surface should follow the same split:
-- observation-facing model
-- local session/presentation/interaction state
-- ratified mutations where applicable
-- shell/workspace composition around it
-
-The viewport design therefore establishes a reusable pattern, not just a viewport fix.
 
 ---
 
@@ -338,7 +291,7 @@ Examples:
 - volume slice producer
 - diagnostics/provenance producer
 
-A producer must not be modeled as “rendering to the panel.”  
+A producer must not be modeled as “rendering to the panel.”
 It creates products.
 
 ### 2. Expression Products
@@ -416,13 +369,15 @@ These contracts should be introduced from the first implementation.
 ### ViewportId
 Stable identifier for a viewport instance.
 
+`ViewportId` is specialized viewport/tool identity. It must coexist with broader workspace hosting identities such as panel hosts, panel instances, tab stacks, and generic tool-surface instances without being conflated with them.
+
 ### ExpressionProductId
 Stable identifier for a presentable expression product.
 
 ### ExpressionProductKind
 Describes the semantic kind of output.
 
-Initial kinds should already allow future breadth, even if not all are implemented immediately.  
+Initial kinds should already allow future breadth, even if not all are implemented immediately.
 Examples:
 - SceneColor2D
 - Depth2D
@@ -469,6 +424,8 @@ Minimum required responsibility:
 ### ArtifactObservationFrame
 Observed model exposed to tooling/UI.
 
+This should be understood as a viewport-facing observation frame over available expression products and their status, not as direct exposure of renderer-private authority state.
+
 Minimum useful fields:
 - available products
 - selected product(s)
@@ -476,74 +433,6 @@ Minimum useful fields:
 - producer status
 - dimensions/format summary
 - freshness / stale state where known
-
----
-
-## Input Routing, Focus, and Pointer Capture
-
-Viewport interaction must integrate with the generic UI input model rather than inventing a separate side-channel.
-
-The viewport design must fit:
-- focus ownership
-- pointer capture
-- propagation/stop behavior
-- repaint and relayout requests
-- shell-to-tool-surface event routing
-
-Required fit:
-- viewport can acquire pointer capture during drags, manipulations, marquee selection, orbit/pan, or gizmo interaction
-- viewport can release capture explicitly
-- viewport can request focus changes
-- viewport interaction does not bypass shell/workspace routing
-
-This keeps viewport interaction compatible with the broader UI substrate.
-
----
-
-## Viewport Session State vs Ratified Changes
-
-The viewport architecture must distinguish clearly between:
-
-### Presentation state
-Examples:
-- selected product
-- display mode
-- overlay toggles
-- channel/slice/mip selection
-- camera mode
-- zoom/pan
-
-### Interaction/session-local state
-Examples:
-- hovered hit
-- active gizmo drag
-- marquee selection in progress
-- orbit/pan in progress
-- temporary probe state
-- manipulation preview state
-
-### Ratified changes
-Examples:
-- committed transform change
-- committed selection change where applicable
-- committed authored/runtime mutation triggered by viewport tooling
-
-This separation prevents transient viewport interaction from becoming accidental governing change.
-
----
-
-## Workspace Composition Compatibility
-
-The viewport must remain compatible with future workspace growth.
-
-Required fit:
-- docked panels
-- tabbed panels
-- split panels
-- hidden/background panels
-- future multi-window workspaces
-
-Viewport-owned surfaces and viewport presentation state must survive movement within the workspace without changing ownership semantics.
 
 ---
 
@@ -745,7 +634,7 @@ This allows the viewport architecture to remain stable while supporting:
 ## Rendering and Ordering Model
 
 ### Current ordering problem
-The scene pass is effectively global, and the shell UI overlays it.  
+The scene pass is effectively global, and the shell UI overlays it.
 This is why content can appear behind panels and only peek through gaps.
 
 ### New ordering model
@@ -757,7 +646,7 @@ For each viewport:
 5. Composite shell/UI around the already-contained viewport content.
 
 ### Consequence
-No fullscreen masking is needed as the primary containment mechanism.  
+No fullscreen masking is needed as the primary containment mechanism.
 Scissor or shader clipping may still exist inside specific producers, but they are not the architectural boundary.
 
 ---
@@ -871,4 +760,5 @@ After the first correct implementation:
 
 The long-term Runenwerk viewport must be:
 
-**a panel-owned presentation architecture for typed expression products, with viewport-local interaction, explicit producer/product/presentation separation, comparative and layered viewing support, workspace-compatible composition, and nine-layer alignment from the first implementation.**
+**a panel-owned presentation architecture for typed expression products, with viewport-local interaction, explicit producer/product/presentation separation, comparative and layered viewing support, and nine-layer alignment from the first implementation.**
+

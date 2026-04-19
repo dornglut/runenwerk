@@ -2,12 +2,14 @@
 //! Crate: editor_viewport
 
 pub mod camera;
+pub mod expression;
 pub mod hit;
 pub mod overlay;
 pub mod snap;
 pub mod viewport;
 
 pub use camera::*;
+pub use expression::*;
 pub use hit::*;
 pub use overlay::*;
 pub use snap::*;

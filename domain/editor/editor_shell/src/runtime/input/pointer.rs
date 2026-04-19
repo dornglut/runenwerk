@@ -197,6 +197,7 @@ fn activation_for_release(
         UiNodeKind::Button(_) => Some(UiInteraction::Activated(widget_id)),
         UiNodeKind::Panel(_)
         | UiNodeKind::Label(_)
+        | UiNodeKind::ViewportSurfaceEmbed(_)
         | UiNodeKind::Scroll(_)
         | UiNodeKind::Stack(_)
         | UiNodeKind::Split(_) => None,

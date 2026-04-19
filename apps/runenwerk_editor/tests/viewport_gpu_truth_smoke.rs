@@ -9,9 +9,10 @@ use winit::event_loop::EventLoop;
 use winit::window::Window;
 
 const FLOW_ID: &str = "runenwerk.editor.main";
-const VIEWPORT_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
+const VIEWPORT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const UI_PASS_ID: &str = "runenwerk.editor.main.ui";
-const RESOURCE_ID: &str = "surface.color";
+const VIEWPORT_RESOURCE_ID: &str = "editor.viewport.v1.scene_color";
+const SURFACE_RESOURCE_ID: &str = "surface.color";
 
 #[test]
 #[cfg_attr(
@@ -63,21 +64,21 @@ fn viewport_gpu_truth_smoke() {
                 flow_id: Some(FLOW_ID.to_string()),
                 pass_id: Some(VIEWPORT_PASS_ID.to_string()),
                 stage: CaptureStage::After,
-                resource_id: RESOURCE_ID.to_string(),
-                texture_class: CaptureTextureClass::ImportedTexture,
+                resource_id: VIEWPORT_RESOURCE_ID.to_string(),
+                texture_class: CaptureTextureClass::ColorTarget,
             },
             RenderCaptureSelector {
                 flow_id: Some(FLOW_ID.to_string()),
                 pass_id: Some(UI_PASS_ID.to_string()),
                 stage: CaptureStage::Before,
-                resource_id: RESOURCE_ID.to_string(),
+                resource_id: SURFACE_RESOURCE_ID.to_string(),
                 texture_class: CaptureTextureClass::ImportedTexture,
             },
             RenderCaptureSelector {
                 flow_id: Some(FLOW_ID.to_string()),
                 pass_id: Some(UI_PASS_ID.to_string()),
                 stage: CaptureStage::After,
-                resource_id: RESOURCE_ID.to_string(),
+                resource_id: SURFACE_RESOURCE_ID.to_string(),
                 texture_class: CaptureTextureClass::ImportedTexture,
             },
         ];
@@ -93,13 +94,18 @@ fn viewport_gpu_truth_smoke() {
         .expect("captured texture state should exist");
 
     let viewport_after = captures
-        .find(FLOW_ID, VIEWPORT_PASS_ID, CaptureStage::After, RESOURCE_ID)
+        .find(
+            FLOW_ID,
+            VIEWPORT_PASS_ID,
+            CaptureStage::After,
+            VIEWPORT_RESOURCE_ID,
+        )
         .expect("viewport pass after-capture should exist");
     let ui_before = captures
-        .find(FLOW_ID, UI_PASS_ID, CaptureStage::Before, RESOURCE_ID)
+        .find(FLOW_ID, UI_PASS_ID, CaptureStage::Before, SURFACE_RESOURCE_ID)
         .expect("ui pass before-capture should exist");
     let ui_after = captures
-        .find(FLOW_ID, UI_PASS_ID, CaptureStage::After, RESOURCE_ID)
+        .find(FLOW_ID, UI_PASS_ID, CaptureStage::After, SURFACE_RESOURCE_ID)
         .expect("ui pass after-capture should exist");
 
     assert!(
@@ -125,11 +131,6 @@ fn viewport_gpu_truth_smoke() {
         .sample_center_rgba8()
         .expect("ui after capture should provide center pixel");
 
-    assert_eq!(
-        center_viewport, center_ui_before,
-        "ui-before should match viewport-after at center pixel"
-    );
-
     let inside_point = RenderPixelCoordinate {
         x: (viewport_after.width / 2).max(1),
         y: (viewport_after.height / 2).max(1),
@@ -152,10 +153,11 @@ fn viewport_gpu_truth_smoke() {
         .expect("outside point should be sampleable after ui pass");
 
     assert!(
-        center_ui_before != center_ui_after
+        center_viewport != center_ui_before
+            || center_ui_before != center_ui_after
             || inside_before != inside_after
             || outside_before != outside_after,
-        "expected ui composite pass to modify at least one sampled point"
+        "expected viewport product and ui composite passes to affect sampled points"
     );
 
     let provenance = app

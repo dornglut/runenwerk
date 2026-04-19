@@ -225,6 +225,13 @@ impl FullscreenPassBuilder {
         self
     }
 
+    pub fn sample_texture(mut self, id: impl Into<String>) -> Self {
+        let id = RenderResourceId::new(id.into());
+        push_unique_resource(&mut self.pass.reads, id.clone());
+        push_unique_resource(&mut self.pass.sampled_textures, id);
+        self
+    }
+
     pub fn bind_ping_pong_storage(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
         let (a_id, b_id) = self
@@ -247,6 +254,11 @@ impl FullscreenPassBuilder {
             &mut self.pass.writes,
             RenderResourceId::new(SURFACE_COLOR_RESOURCE_ID),
         );
+        self
+    }
+
+    pub fn write_color_target(mut self, id: impl Into<String>) -> Self {
+        push_unique_resource(&mut self.pass.writes, RenderResourceId::new(id.into()));
         self
     }
 

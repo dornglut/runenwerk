@@ -227,7 +227,7 @@ macro_rules! impl_into_system_configs_tuple {
         where
             $($name: IntoSystemConfigs<$marker>,)+
         {
-            fn register<L: ScheduleLabel>(
+            fn register<Sched: ScheduleLabel>(
                 self,
                 world: &mut World,
                 scheduler: &mut ExecutionScheduler<World>,
@@ -235,7 +235,7 @@ macro_rules! impl_into_system_configs_tuple {
                 build_errors: &mut Vec<anyhow::Error>,
             ) {
                 $(
-                    self.$index.register::<L>(
+                    self.$index.register::<Sched>(
                         world,
                         scheduler,
                         deferred_commands.clone(),
@@ -288,6 +288,122 @@ impl_into_system_configs_tuple!(
     (F, FMarker, 5),
     (G, GMarker, 6),
     (H, HMarker, 7)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8),
+    (J, JMarker, 9)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8),
+    (J, JMarker, 9),
+    (K, KMarker, 10)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8),
+    (J, JMarker, 9),
+    (K, KMarker, 10),
+    (L, LMarker, 11)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8),
+    (J, JMarker, 9),
+    (K, KMarker, 10),
+    (L, LMarker, 11),
+    (M, MMarker, 12)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8),
+    (J, JMarker, 9),
+    (K, KMarker, 10),
+    (L, LMarker, 11),
+    (M, MMarker, 12),
+    (N, NMarker, 13)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8),
+    (J, JMarker, 9),
+    (K, KMarker, 10),
+    (L, LMarker, 11),
+    (M, MMarker, 12),
+    (N, NMarker, 13),
+    (O, OMarker, 14)
+);
+impl_into_system_configs_tuple!(
+    (A, AMarker, 0),
+    (B, BMarker, 1),
+    (C, CMarker, 2),
+    (D, DMarker, 3),
+    (E, EMarker, 4),
+    (F, FMarker, 5),
+    (G, GMarker, 6),
+    (H, HMarker, 7),
+    (I, IMarker, 8),
+    (J, JMarker, 9),
+    (K, KMarker, 10),
+    (L, LMarker, 11),
+    (M, MMarker, 12),
+    (N, NMarker, 13),
+    (O, OMarker, 14),
+    (P, PMarker, 15)
 );
 
 trait SystemParamState: Sized {
@@ -367,7 +483,7 @@ macro_rules! impl_into_system {
             R: SystemOutput,
             $($param: SystemParamState,)*
         {
-            fn into_registered_system<L: ScheduleLabel>(
+            fn into_registered_system<Sched: ScheduleLabel>(
                 self,
                 world: &mut World,
                 deferred_commands: DeferredCommands,
@@ -392,7 +508,7 @@ macro_rules! impl_into_system {
                 let mut func = self;
                 let deferred_commands_ref = deferred_commands.clone();
 
-                let mut registered = RegisteredSystem::new::<L>(system_name, access, move |world| {
+                let mut registered = RegisteredSystem::new::<Sched>(system_name, access, move |world| {
                     let mut commands = Commands::new_external_owner();
                     $(
                         let $param = unsafe {
@@ -434,6 +550,122 @@ impl_into_system!(
     (5, F),
     (6, G),
     (7, H)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I),
+    (9, J)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I),
+    (9, J),
+    (10, K)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I),
+    (9, J),
+    (10, K),
+    (11, L)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I),
+    (9, J),
+    (10, K),
+    (11, L),
+    (12, M)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I),
+    (9, J),
+    (10, K),
+    (11, L),
+    (12, M),
+    (13, N)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I),
+    (9, J),
+    (10, K),
+    (11, L),
+    (12, M),
+    (13, N),
+    (14, O)
+);
+impl_into_system!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+    (8, I),
+    (9, J),
+    (10, K),
+    (11, L),
+    (12, M),
+    (13, N),
+    (14, O),
+    (15, P)
 );
 
 pub struct Runtime {
@@ -619,4 +851,146 @@ fn query_access_to_system_access(access: QueryAccess) -> SystemAccess {
         system_access.add_write(AccessKey::structural("world_structure"));
     }
     system_access
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Runtime;
+    use crate::{Res, ResMut, Resource, World};
+    use scheduler::label::ScheduleLabel;
+
+    macro_rules! define_u32_resource {
+        ($name:ident) => {
+            #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+            struct $name(pub u32);
+            impl Resource for $name {}
+        };
+    }
+
+    define_u32_resource!(R0);
+    define_u32_resource!(R1);
+    define_u32_resource!(R2);
+    define_u32_resource!(R3);
+    define_u32_resource!(R4);
+    define_u32_resource!(R5);
+    define_u32_resource!(R6);
+    define_u32_resource!(R7);
+    define_u32_resource!(R8);
+    define_u32_resource!(R9);
+    define_u32_resource!(R10);
+    define_u32_resource!(R11);
+    define_u32_resource!(R12);
+    define_u32_resource!(R13);
+    define_u32_resource!(R14);
+
+    define_u32_resource!(Sum);
+    define_u32_resource!(Counter);
+
+    #[derive(Debug, Copy, Clone)]
+    struct MaxAritySchedule;
+    impl ScheduleLabel for MaxAritySchedule {}
+
+    #[derive(Debug, Copy, Clone)]
+    struct MaxTupleSchedule;
+    impl ScheduleLabel for MaxTupleSchedule {}
+
+    fn max_arity_system(
+        r0: Res<R0>,
+        r1: Res<R1>,
+        r2: Res<R2>,
+        r3: Res<R3>,
+        r4: Res<R4>,
+        r5: Res<R5>,
+        r6: Res<R6>,
+        r7: Res<R7>,
+        r8: Res<R8>,
+        r9: Res<R9>,
+        r10: Res<R10>,
+        r11: Res<R11>,
+        r12: Res<R12>,
+        r13: Res<R13>,
+        r14: Res<R14>,
+        mut sum: ResMut<Sum>,
+    ) {
+        sum.0 =
+            r0.0 + r1.0 + r2.0 + r3.0 + r4.0 + r5.0 + r6.0 + r7.0 + r8.0 + r9.0 + r10.0 + r11.0
+                + r12.0
+                + r13.0
+                + r14.0;
+    }
+
+    fn bump_counter(mut counter: ResMut<Counter>) {
+        counter.0 = counter.0.saturating_add(1);
+    }
+
+    #[test]
+    fn supports_max_function_system_arity_sixteen() {
+        let mut world = World::new();
+        world.insert_resource(R0(1));
+        world.insert_resource(R1(2));
+        world.insert_resource(R2(3));
+        world.insert_resource(R3(4));
+        world.insert_resource(R4(5));
+        world.insert_resource(R5(6));
+        world.insert_resource(R6(7));
+        world.insert_resource(R7(8));
+        world.insert_resource(R8(9));
+        world.insert_resource(R9(10));
+        world.insert_resource(R10(11));
+        world.insert_resource(R11(12));
+        world.insert_resource(R12(13));
+        world.insert_resource(R13(14));
+        world.insert_resource(R14(15));
+        world.insert_resource(Sum(0));
+
+        let mut runtime = Runtime::new();
+        runtime.add_systems::<MaxAritySchedule, _, _>(&mut world, max_arity_system);
+        runtime
+            .run_schedule::<MaxAritySchedule>(&mut world)
+            .expect("max-arity system should register and execute");
+
+        let actual = world
+            .resource::<Sum>()
+            .expect("sum resource should exist after schedule")
+            .0;
+        assert_eq!(actual, 120);
+    }
+
+    #[test]
+    fn supports_max_tuple_registration_arity_sixteen() {
+        let mut world = World::new();
+        world.insert_resource(Counter(0));
+
+        let mut runtime = Runtime::new();
+        runtime.add_systems::<MaxTupleSchedule, _, _>(
+            &mut world,
+            (
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+                bump_counter,
+            ),
+        );
+        runtime
+            .run_schedule::<MaxTupleSchedule>(&mut world)
+            .expect("max-tuple system registration should execute");
+
+        let actual = world
+            .resource::<Counter>()
+            .expect("counter resource should exist after schedule")
+            .0;
+        assert_eq!(actual, 16);
+    }
 }

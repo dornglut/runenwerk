@@ -8,6 +8,9 @@ use winit::keyboard::KeyCode;
 
 use crate::runtime::plugin::EditorAppPlugin;
 use crate::runtime::resources::EditorViewportRenderState;
+use crate::runtime::viewport::{
+    VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS, VIEWPORT_RESOURCE_SCENE_COLOR,
+};
 
 pub const ACTION_EDITOR_UNDO: &str = "editor.undo";
 pub const ACTION_EDITOR_REDO: &str = "editor.redo";
@@ -16,10 +19,12 @@ pub const ACTION_EDITOR_TOOL_TRANSLATE: &str = "editor.tool.translate";
 
 const WINDOW_TITLE: &str = "Runenwerk Editor";
 const EDITOR_MAIN_FLOW_ID: &str = "runenwerk.editor.main";
-const EDITOR_VIEWPORT_SDF_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
+const EDITOR_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
+const EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
+const EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
+const EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.overlay";
 const EDITOR_MAIN_UI_PASS_ID: &str = "runenwerk.editor.main.ui";
-pub const EDITOR_VIEWPORT_SDF_SHADER_ASSET_PATH: &str = "assets/shaders/editor_viewport_sdf.wgsl";
-pub const EDITOR_VIEWPORT_SDF_SHADER_ID: &str = "editor_viewport_sdf";
+pub const EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID: &str = "editor_viewport_scene_product";
 
 fn configure_app(app: &mut App) {
     app.set_title(WINDOW_TITLE);
@@ -62,14 +67,29 @@ fn env_flag_or(key: &str, default: bool) -> bool {
 fn register_editor_render_flow(app: &mut App) {
     let flow = RenderFlow::new(EDITOR_MAIN_FLOW_ID)
         .with_state::<EditorViewportRenderState>()
+        .with_color_target(VIEWPORT_RESOURCE_SCENE_COLOR)
+        .with_color_target(VIEWPORT_RESOURCE_PICKING_IDS)
+        .with_color_target(VIEWPORT_RESOURCE_OVERLAY)
         .with_surface_color()
-        .fullscreen_pass(EDITOR_VIEWPORT_SDF_PASS_ID)
-        .shader_asset(EDITOR_VIEWPORT_SDF_SHADER_ID)
-        .uniform_from_state_with_surface(EditorViewportRenderState::compose_uniform)
+        .fullscreen_pass(EDITOR_SURFACE_CLEAR_PASS_ID)
         .write_surface_color()
         .finish()
+        .fullscreen_pass(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
+        .shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)
+        .uniform_from_state_with_surface(EditorViewportRenderState::compose_scene_product_uniform)
+        .write_color_target(VIEWPORT_RESOURCE_SCENE_COLOR)
+        .finish()
+        .fullscreen_pass(EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID)
+        .depends_on(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
+        .write_color_target(VIEWPORT_RESOURCE_PICKING_IDS)
+        .finish()
+        .fullscreen_pass(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
+        .depends_on(EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID)
+        .write_color_target(VIEWPORT_RESOURCE_OVERLAY)
+        .finish()
         .builtin_ui_composite_pass(EDITOR_MAIN_UI_PASS_ID)
-        .depends_on(EDITOR_VIEWPORT_SDF_PASS_ID)
+        .depends_on(EDITOR_SURFACE_CLEAR_PASS_ID)
+        .depends_on(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
         .finish()
         .validate()
         .expect("editor render flow should validate");

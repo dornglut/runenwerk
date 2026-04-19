@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use editor_core::{ComponentTypeId, EditorMutationError};
 use editor_inspector::{InspectorEditValue, InspectorValue};
 use editor_shell::ShellCommand;
+use editor_viewport::{ProductAvailabilityState, ViewportPresentationState};
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
@@ -14,6 +15,9 @@ use crate::persistence::{
     load_scene_file_into_runtime_classified, read_retained_change_log,
     retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
 };
+use crate::runtime::viewport::{
+    ViewportArtifactObservationResource, ViewportPresentationStateResource,
+};
 use crate::shell::{SELECT_TOOL_ID, TRANSLATE_TOOL_ID};
 
 const TRANSFORM_STEPPER_INCREMENT: f64 = 0.25;
@@ -22,6 +26,8 @@ const DEFAULT_EDITOR_SCENE_PATH: &str = "editor-scenes/default.scene.ron";
 pub fn dispatch_shell_command(
     app: &mut RunenwerkEditorApp,
     command: ShellCommand,
+    viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+    viewport_observations: Option<&ViewportArtifactObservationResource>,
 ) -> Result<(), EditorMutationError> {
     app.runtime_mut().record_workflow_event(
         editor_core::WorkflowEventKind::ShellCommandDispatched {
@@ -78,6 +84,37 @@ pub fn dispatch_shell_command(
         ShellCommand::SelectOutlinerEntity { entity } => {
             app.dispatch_outliner_command(OutlinerPanelCommand::SelectEntity { entity })?;
         }
+        ShellCommand::SelectViewportProduct {
+            viewport_id,
+            product_id,
+        } => match (viewport_presentations, viewport_observations) {
+            (Some(viewport_presentations), Some(viewport_observations)) => {
+                let selectable = viewport_observations
+                    .frame_for(viewport_id)
+                    .and_then(|frame| frame.availability_by_product.get(&product_id).copied())
+                    .map(|availability| availability == ProductAvailabilityState::Available)
+                    .unwrap_or(false);
+                if selectable {
+                    if let Some(state) = viewport_presentations.state_for_mut(viewport_id) {
+                        state.select_primary_product(product_id);
+                    } else {
+                        viewport_presentations
+                            .upsert_state(ViewportPresentationState::new(viewport_id, product_id));
+                    }
+                } else {
+                    app.append_console_line(format!(
+                        "[viewport] product selection ignored (unavailable): viewport={} product={}",
+                        viewport_id.0, product_id.0
+                    ));
+                }
+            }
+            _ => {
+                app.append_console_line(
+                    "[viewport] product selection ignored (missing viewport runtime context)"
+                        .to_string(),
+                );
+            }
+        },
         ShellCommand::ActivateInspectorField { index } => {
             activate_inspector_field(app, index)?;
         }
@@ -97,6 +134,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::LoadScene => "LoadScene",
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
         ShellCommand::SelectOutlinerEntity { .. } => "SelectOutlinerEntity",
+        ShellCommand::SelectViewportProduct { .. } => "SelectViewportProduct",
         ShellCommand::ActivateInspectorField { .. } => "ActivateInspectorField",
         ShellCommand::NoOp => "NoOp",
     }

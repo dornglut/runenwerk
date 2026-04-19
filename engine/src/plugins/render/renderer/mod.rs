@@ -15,6 +15,7 @@ use bytemuck::{Pod, Zeroable};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
+use ui_render_data::{ViewportSurfaceBindingRegistry, ViewportSurfaceSlot};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 use winit::window::Window;
@@ -157,6 +158,70 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
 }
 "#;
 
+pub const DEFAULT_UI_VIEWPORT_EMBED_SHADER: &str = r#"
+struct VsIn {
+    @location(0) rect : vec4<f32>,
+    @location(1) uv_rect : vec4<f32>,
+    @location(2) tint : vec4<f32>,
+};
+
+struct VsOut {
+    @builtin(position) clip_position : vec4<f32>,
+    @location(0) uv : vec2<f32>,
+    @location(1) tint : vec4<f32>,
+};
+
+struct ScreenUniform {
+    size : vec2<f32>,
+    _pad : vec2<f32>,
+};
+
+@group(0) @binding(0)
+var<uniform> screen : ScreenUniform;
+
+@group(1) @binding(0)
+var viewport_texture : texture_2d<f32>;
+
+@group(1) @binding(1)
+var viewport_sampler : sampler;
+
+@vertex
+fn vs_main(input: VsIn, @builtin(vertex_index) vertex_index: u32) -> VsOut {
+    let uv = array<vec2<f32>, 6>(
+        vec2<f32>(0.0, 0.0),
+        vec2<f32>(1.0, 0.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(0.0, 0.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(0.0, 1.0),
+    );
+
+    let p = uv[vertex_index];
+    let pixel = vec2<f32>(
+        input.rect.x + input.rect.z * p.x,
+        input.rect.y + input.rect.w * p.y
+    );
+
+    let x_ndc = (pixel.x / screen.size.x) * 2.0 - 1.0;
+    let y_ndc = 1.0 - (pixel.y / screen.size.y) * 2.0;
+
+    var out: VsOut;
+    out.clip_position = vec4<f32>(x_ndc, y_ndc, 0.0, 1.0);
+    out.uv = vec2<f32>(
+        input.uv_rect.x + input.uv_rect.z * p.x,
+        input.uv_rect.y + input.uv_rect.w * p.y
+    );
+    out.tint = input.tint;
+    return out;
+}
+
+@fragment
+fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
+    let sample_color = textureSample(viewport_texture, viewport_sampler, input.uv);
+    return sample_color * input.tint;
+}
+"#;
+
 pub const DEFAULT_FULLSCREEN_SHADER: &str = r#"
 struct VsOut {
     @builtin(position) clip_position : vec4<f32>,
@@ -283,6 +348,22 @@ struct FlattenedUiGlyphInstance {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct ViewportEmbedInstanceRaw {
+    rect: [f32; 4],
+    uv_rect: [f32; 4],
+    tint: [f32; 4],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FlattenedUiViewportEmbedInstance {
+    raw: ViewportEmbedInstanceRaw,
+    clip: Option<[f32; 4]>,
+    viewport_id: u64,
+    slot: ViewportSurfaceSlot,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct ScreenUniformRaw {
     size: [f32; 2],
@@ -305,6 +386,15 @@ struct GlyphPass {
     texture_sampler: Sampler,
 }
 
+#[derive(Debug)]
+struct ViewportEmbedPass {
+    pipeline: RenderPipeline,
+    screen_buffer: Buffer,
+    screen_bind_group: BindGroup,
+    texture_bind_group_layout: BindGroupLayout,
+    texture_sampler: Sampler,
+}
+
 #[derive(Debug, Clone)]
 struct UiRectBatch {
     scissor: (u32, u32, u32, u32),
@@ -320,6 +410,15 @@ struct UiGlyphBatch {
     texture_id: u64,
 }
 
+#[derive(Debug, Clone)]
+struct UiViewportEmbedBatch {
+    scissor: (u32, u32, u32, u32),
+    instance_count: u32,
+    instance_buffer: Buffer,
+    viewport_id: u64,
+    slot: ViewportSurfaceSlot,
+}
+
 #[derive(Debug)]
 struct UiGlyphAtlasGpu {
     _texture: Texture,
@@ -331,6 +430,7 @@ struct UiGlyphAtlasGpu {
 struct UiPreparedDraws {
     rect_batches: Vec<UiRectBatch>,
     glyph_batches: Vec<UiGlyphBatch>,
+    viewport_embed_batches: Vec<UiViewportEmbedBatch>,
     surface_size: (u32, u32),
 }
 
@@ -358,6 +458,7 @@ pub(crate) struct RendererPreparedPacket {
     feature_gates: BTreeMap<String, FeatureExecutionGate>,
     feature_runtime_signatures: BTreeMap<String, u64>,
     prepared_ui: UiPreparedDraws,
+    viewport_surface_bindings: ViewportSurfaceBindingRegistry,
     prepare_timings: RendererFrameTimings,
 }
 
@@ -368,6 +469,8 @@ pub struct Renderer {
     rect_pass_shader_revision: u64,
     glyph_pass: Option<GlyphPass>,
     glyph_pass_format: Option<TextureFormat>,
+    viewport_embed_pass: Option<ViewportEmbedPass>,
+    viewport_embed_pass_format: Option<TextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
     flow_runtime_cache: BTreeMap<String, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
@@ -413,6 +516,7 @@ impl Gfx {
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
         ui_font_atlas: &UiFontAtlasResource,
+        viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
     ) -> Result<GfxFrameTimings> {
@@ -431,6 +535,7 @@ impl Gfx {
             compiled_flows,
             ui_rect_shader,
             ui_font_atlas,
+            viewport_surface_bindings,
             self.ctx.surface_config.format,
             debug_control,
             debug_config,

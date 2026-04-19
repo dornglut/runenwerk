@@ -262,6 +262,11 @@ pub(crate) fn frame_render_submit_system(
         .ok()
         .map(|resource| resource.clone())
         .unwrap_or_default();
+    let viewport_surface_bindings = world
+        .resource::<ViewportSurfaceBindingRegistryResource>()
+        .ok()
+        .map(|resource| resource.registry().clone())
+        .unwrap_or_default();
     let debug_control = world
         .resource::<RenderDebugControlResource>()
         .ok()
@@ -300,6 +305,7 @@ pub(crate) fn frame_render_submit_system(
             compiled_flows,
             ui_rect_shader,
             &ui_font_atlas,
+            &viewport_surface_bindings,
             &debug_control,
             &debug_config,
         )

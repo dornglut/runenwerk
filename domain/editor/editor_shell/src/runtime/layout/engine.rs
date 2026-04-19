@@ -9,7 +9,7 @@ use ui_math::{Axis, UiRect, UiSize};
 
 use crate::{
     ButtonNode, ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, ScrollNode, SplitNode,
-    StackNode, UiNode, UiNodeKind, UiRuntimeState, UiTree,
+    StackNode, UiNode, UiNodeKind, UiRuntimeState, UiTree, ViewportSurfaceEmbedNode,
 };
 
 pub fn compute_tree_layout(
@@ -32,6 +32,9 @@ fn layout_node(
         UiNodeKind::Panel(panel) => layout_panel(node, panel, bounds, state, out),
         UiNodeKind::Label(label) => layout_label(node, label, bounds, out),
         UiNodeKind::Button(button) => layout_button(node, button, bounds, out),
+        UiNodeKind::ViewportSurfaceEmbed(embed) => {
+            layout_viewport_surface_embed(node, embed, bounds, out)
+        }
         UiNodeKind::Scroll(scroll) => layout_scroll(node, scroll, bounds, state, out),
         UiNodeKind::Stack(stack) => layout_stack(node, stack, bounds, state, out),
         UiNodeKind::Split(split) => layout_split(node, split, bounds, state, out),
@@ -149,6 +152,20 @@ fn layout_button(
         ComputedLayout::new(layout_bounds, content_bounds, measured_size),
     );
 
+    measured_size
+}
+
+fn layout_viewport_surface_embed(
+    node: &UiNode,
+    embed: &ViewportSurfaceEmbedNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = UiSize::new(
+        bounds.width.max(embed.min_size.width),
+        bounds.height.max(embed.min_size.height),
+    );
+    out.insert(node.id, ComputedLayout::new(bounds, bounds, measured_size));
     measured_size
 }
 
@@ -313,6 +330,7 @@ fn measure_node(node: &UiNode) -> UiSize {
                 (line_height + button.padding.vertical()).max(button.min_size.height),
             )
         }
+        UiNodeKind::ViewportSurfaceEmbed(embed) => embed.min_size,
         UiNodeKind::Scroll(scroll) => {
             let child = node
                 .children

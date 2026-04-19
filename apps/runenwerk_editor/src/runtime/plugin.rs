@@ -8,7 +8,11 @@ use crate::runtime::resources::{
 };
 use crate::runtime::systems::{
     bootstrap_editor_demo_system, dispatch_editor_input_system, produce_editor_picking_system,
-    submit_editor_frame_system,
+    submit_editor_frame_system, sync_viewport_presentation_products_system,
+};
+use crate::runtime::viewport::{
+    ViewportArtifactObservationResource, ViewportLayoutMapResource, ViewportPresentationStateResource,
+    ViewportProductRegistryResource,
 };
 
 pub struct EditorAppPlugin;
@@ -17,6 +21,8 @@ pub struct EditorAppPlugin;
 pub enum EditorRuntimeSet {
     Picking,
     InputBridge,
+    FrameSubmit,
+    ViewportPresentationSync,
 }
 
 impl IntoSystemSetKey for EditorRuntimeSet {
@@ -26,6 +32,12 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::InputBridge => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::InputBridge")
             }
+            Self::FrameSubmit => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::FrameSubmit")
+            }
+            Self::ViewportPresentationSync => SystemSetKey::of::<EditorRuntimeSet>(
+                "EditorRuntimeSet::ViewportPresentationSync",
+            ),
         }
     }
 }
@@ -35,6 +47,10 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<EditorHostResource>();
         app.init_resource::<EditorInputBridgeState>();
         app.init_resource::<EditorViewportRenderState>();
+        app.init_resource::<ViewportProductRegistryResource>();
+        app.init_resource::<ViewportPresentationStateResource>();
+        app.init_resource::<ViewportArtifactObservationResource>();
+        app.init_resource::<ViewportLayoutMapResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
 
         app.add_systems(Startup, bootstrap_editor_demo_system);
@@ -56,6 +72,15 @@ impl Plugin for EditorAppPlugin {
         app.add_systems(
             Update,
             submit_editor_frame_system
+                .in_set(EditorRuntimeSet::FrameSubmit)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
+            sync_viewport_presentation_products_system
+                .in_set(EditorRuntimeSet::ViewportPresentationSync)
+                .after(EditorRuntimeSet::FrameSubmit)
                 .after(CoreSet::Input)
                 .after(CoreSet::Time),
         );

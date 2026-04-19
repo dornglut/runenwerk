@@ -1,6 +1,7 @@
 use crate::{UiInteraction, UiInteractionResults, UiRuntime};
 use ui_input::{Modifiers, PointerEvent, PointerEventKind, UiInputEvent};
 use ui_math::{UiPoint, UiRect, UiVector};
+use ui_render_data::UiPrimitive;
 use ui_text::{FontAtlasSource, FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas};
 use ui_theme::ThemeTokens;
 
@@ -9,8 +10,9 @@ use crate::{
     EditorShellViewModel, INSPECTOR_PANEL_WIDGET_ID, InspectorFieldViewModel,
     InspectorTargetViewModel, InspectorViewModel, OUTLINER_PANEL_WIDGET_ID, OutlinerRowViewModel,
     OutlinerViewModel, ShellCommand, TOOLBAR_ROOT_WIDGET_ID, ToolbarButtonViewModel,
-    ToolbarViewModel, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportViewModel,
-    build_editor_shell, map_interactions_to_shell_commands,
+    ToolbarViewModel, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
+    ViewportProductChoiceViewModel, ViewportViewModel, build_editor_shell,
+    map_interactions_to_shell_commands, viewport_product_button_widget_id,
 };
 
 #[test]
@@ -26,6 +28,50 @@ fn shell_view_model_builds_ui_tree_and_frame() {
     assert_eq!(tree.root_id().0, 1);
     assert_eq!(frame.surfaces.len(), 1);
     assert!(!frame.surfaces[0].layers[0].primitives.is_empty());
+}
+
+#[test]
+fn viewport_embed_uv_rect_maps_to_canvas_screen_region() {
+    let theme = ThemeTokens::default();
+    let shell = sample_shell_view_model();
+    let tree = build_editor_shell(&shell, &theme);
+    let runtime = UiRuntime::new();
+    let atlas_source = TestAtlasSource::ascii();
+    let surface_bounds = UiRect::new(0.0, 0.0, 1600.0, 900.0);
+    let frame = runtime.build_frame(&tree, surface_bounds, &atlas_source);
+
+    let embed = frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .find_map(|primitive| match primitive {
+            UiPrimitive::ViewportSurfaceEmbed(value) => Some(value),
+            _ => None,
+        })
+        .expect("viewport embed primitive should exist");
+
+    let expected_u0 = embed.rect.x / surface_bounds.width;
+    let expected_v0 = embed.rect.y / surface_bounds.height;
+    let expected_uw = embed.rect.width / surface_bounds.width;
+    let expected_vh = embed.rect.height / surface_bounds.height;
+
+    assert!(
+        (embed.uv_rect.x - expected_u0).abs() <= 0.0001,
+        "embed uv x should match normalized panel x",
+    );
+    assert!(
+        (embed.uv_rect.y - expected_v0).abs() <= 0.0001,
+        "embed uv y should match normalized panel y",
+    );
+    assert!(
+        (embed.uv_rect.width - expected_uw).abs() <= 0.0001,
+        "embed uv width should match normalized panel width",
+    );
+    assert!(
+        (embed.uv_rect.height - expected_vh).abs() <= 0.0001,
+        "embed uv height should match normalized panel height",
+    );
 }
 
 #[test]
@@ -260,6 +306,44 @@ fn outliner_row_activation_maps_to_select_entity_command() {
 }
 
 #[test]
+fn viewport_product_activation_maps_to_select_product_command() {
+    let interactions = UiInteractionResults {
+        items: vec![UiInteraction::Activated(viewport_product_button_widget_id(0))],
+    };
+    let view_model = EditorShellViewModel {
+        toolbar: ToolbarViewModel::default(),
+        outliner: OutlinerViewModel::default(),
+        viewport: ViewportViewModel {
+            viewport_id: Some(editor_viewport::ViewportId(1)),
+            selected_primary_product_id: Some(editor_viewport::ExpressionProductId(1)),
+            product_choices: vec![ViewportProductChoiceViewModel {
+                viewport_id: editor_viewport::ViewportId(1),
+                product_id: editor_viewport::ExpressionProductId(2),
+                label: "PickingIds2D".to_string(),
+                selected: false,
+                enabled: true,
+            }],
+            selected_entity: None,
+            hovered_entity: None,
+            drag_in_progress: false,
+            preview_active: false,
+        },
+        inspector: InspectorViewModel::default(),
+        console: ConsoleViewModel::default(),
+    };
+
+    let commands = map_interactions_to_shell_commands(&interactions, &view_model);
+
+    assert_eq!(
+        commands,
+        vec![ShellCommand::SelectViewportProduct {
+            viewport_id: editor_viewport::ViewportId(1),
+            product_id: editor_viewport::ExpressionProductId(2),
+        }]
+    );
+}
+
+#[test]
 fn inspector_field_activation_maps_to_shell_edit_command() {
     let interactions = UiInteractionResults {
         items: vec![UiInteraction::Activated(crate::inspector_field_widget_id(
@@ -316,6 +400,24 @@ fn sample_shell_view_model() -> EditorShellViewModel {
             }],
         },
         viewport: ViewportViewModel {
+            viewport_id: Some(editor_viewport::ViewportId(1)),
+            selected_primary_product_id: Some(editor_viewport::ExpressionProductId(1)),
+            product_choices: vec![
+                ViewportProductChoiceViewModel {
+                    viewport_id: editor_viewport::ViewportId(1),
+                    product_id: editor_viewport::ExpressionProductId(1),
+                    label: "SceneColor2D".to_string(),
+                    selected: true,
+                    enabled: true,
+                },
+                ViewportProductChoiceViewModel {
+                    viewport_id: editor_viewport::ViewportId(1),
+                    product_id: editor_viewport::ExpressionProductId(2),
+                    label: "PickingIds2D".to_string(),
+                    selected: false,
+                    enabled: true,
+                },
+            ],
             selected_entity: Some(editor_core::EntityId(1)),
             hovered_entity: None,
             drag_in_progress: false,

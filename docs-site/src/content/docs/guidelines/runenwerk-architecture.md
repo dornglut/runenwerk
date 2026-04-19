@@ -1,16 +1,14 @@
 ---
-title: Runenwerk 9-Layer Architecture
+title: Runenwerk 9-Layer Architecture Doctrine
 description: Canonical governing architecture doctrine for Runenwerk.
 ---
 
-# Runenwerk Architecture v6
+# Runenwerk Architecture Doctrine
 _Last revised: 2026-04-17_
 
 ## Status
 
 This document defines the recommended long-term governing architecture for Runenwerk.
-
-It supersedes the earlier v3, v4, and v5 formulations by shifting the visible doctrine away from borrowed pattern language and toward a Runenwerk-native model.
 
 The architecture is now defined primarily by:
 
@@ -148,6 +146,7 @@ Examples:
 - authored gameplay data
 - import settings
 - authored partition metadata
+- future workspace/editor/tool definitions
 
 Properties:
 - exists without a running world
@@ -378,6 +377,7 @@ Formation may include:
 - streaming partition product generation
 - representation-support product generation
 - asset binding and compilation
+- future editor/workspace/tool host formation where authored editor-definition workflows exist
 
 ## 6.3 Formation target plurality
 One authored structure may produce more than one formed product.
@@ -385,6 +385,7 @@ One authored structure may produce more than one formed product.
 Examples:
 - one scene may produce a runtime package, a streaming package, a diagnostics package, and a remote-preview package
 - one material graph may produce products for several expression backends
+- one authored editor/workspace definition may later produce host-ready compositions, packaged editor products, or specialized tool arrangements
 
 ## 6.4 Source linkage rule
 Where round-tripping or inspection matters, instantiated and formed realities should retain source lineage metadata.
