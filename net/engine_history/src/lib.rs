@@ -13,7 +13,6 @@ pub use model::*;
 pub use policy::*;
 pub use recorder::*;
 pub use validation::*;
-pub use validation::*;
 
 pub type WorldHash = SimulationHash;
 

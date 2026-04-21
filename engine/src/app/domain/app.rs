@@ -118,7 +118,7 @@ impl App {
 
     pub fn set_title(&mut self, title: impl Into<String>) -> &mut Self {
         self.title = title.into();
-        if let Ok(mut window) = self.world.resource_mut::<WindowState>() {
+        if let Ok(window) = self.world.resource_mut::<WindowState>() {
             window.set_title(self.title.clone());
         }
         self
@@ -172,7 +172,7 @@ impl App {
     }
 
     pub fn set_simulation_profile(&mut self, profile: SimulationProfile) -> &mut Self {
-        if let Ok(mut config) = self.world.resource_mut::<SimulationProfileConfig>() {
+        if let Ok(config) = self.world.resource_mut::<SimulationProfileConfig>() {
             config.profile = profile;
             config.determinism = match profile {
                 SimulationProfile::DeterministicLockstep | SimulationProfile::RollbackSession => {
@@ -205,7 +205,7 @@ impl App {
 
     pub fn set_simulation_seed(&mut self, seed: SimulationSeed) -> &mut Self {
         self.world.insert_resource(seed);
-        if let Ok(mut rng) = self.world.resource_mut::<SimulationRng>() {
+        if let Ok(rng) = self.world.resource_mut::<SimulationRng>() {
             rng.reseed(seed);
         }
         self
@@ -244,7 +244,7 @@ impl App {
         if self.world.resource::<SceneCatalog>().is_err() {
             self.world.insert_resource(SceneCatalog::default());
         }
-        if let Ok(mut catalog) = self.world.resource_mut::<SceneCatalog>() {
+        if let Ok(catalog) = self.world.resource_mut::<SceneCatalog>() {
             catalog.register(scene.id, scene.template_path);
         }
         self
@@ -256,7 +256,7 @@ impl App {
         if self.world.resource::<SceneCatalog>().is_err() {
             self.world.insert_resource(SceneCatalog::default());
         }
-        if let Ok(mut catalog) = self.world.resource_mut::<SceneCatalog>() {
+        if let Ok(catalog) = self.world.resource_mut::<SceneCatalog>() {
             if catalog.handle(&id).is_some() {
                 let mut suffix = 2usize;
                 let base = id.clone();

@@ -121,7 +121,7 @@ fn scene_simulation_delta_round_trips_back_to_the_current_snapshot() {
     };
 
     {
-        let mut scene = app
+        let scene = app
             .world_mut()
             .resource_mut::<SceneResource>()
             .expect("scene resource should exist");
@@ -268,7 +268,7 @@ fn scene_template_buttons_switch_scene_on_click() {
     };
 
     {
-        let mut input = app
+        let input = app
             .world_mut()
             .resource_mut::<InputState>()
             .expect("input state should exist");
@@ -278,7 +278,7 @@ fn scene_template_buttons_switch_scene_on_click() {
     app = app.run_for_frames(1).expect("press frame should run");
 
     {
-        let mut input = app
+        let input = app
             .world_mut()
             .resource_mut::<InputState>()
             .expect("input state should exist");
@@ -306,7 +306,7 @@ fn scene_template_ui_events_do_not_accumulate_across_frames() {
 
     for frame in 0..6 {
         {
-            let mut scene = app
+            let scene = app
                 .world_mut()
                 .resource_mut::<SceneResource>()
                 .expect("scene resource should exist");

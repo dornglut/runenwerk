@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use editor_viewport::ViewportId;
-use engine::plugins::{RenderFlowId, RenderResourceId};
 
 /// File: apps/runenwerk_editor/src/runtime/viewport/surface_set.rs
 /// Purpose: Explicit per-viewport-owned presentation surface bundles.
@@ -20,12 +19,12 @@ pub enum ViewportSurfaceSlot {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ViewportSurfaceHandle {
-	pub flow_id: RenderFlowId,
-	pub resource_id: RenderResourceId,
+	pub flow_id: &'static str,
+	pub resource_id: &'static str,
 }
 
 impl ViewportSurfaceHandle {
-	pub const fn new(flow_id: RenderFlowId, resource_id: RenderResourceId) -> Self {
+	pub const fn new(flow_id: &'static str, resource_id: &'static str) -> Self {
 		Self { flow_id, resource_id }
 	}
 }
@@ -65,7 +64,7 @@ impl ViewportSurfaceSet {
 	}
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct ViewportSurfaceSetResource {
 	sets: BTreeMap<ViewportId, ViewportSurfaceSet>,
 }
@@ -104,5 +103,16 @@ impl ViewportSurfaceSetResource {
 
 	pub fn viewport_ids(&self) -> impl Iterator<Item = ViewportId> + '_ {
 		self.sets.keys().copied()
+	}
+
+	pub fn surface_sets(&self) -> impl Iterator<Item = &ViewportSurfaceSet> {
+		self.sets.values()
+	}
+
+	pub fn retain_viewports(
+		&mut self,
+		mut keep: impl FnMut(ViewportId) -> bool,
+	) {
+		self.sets.retain(|viewport_id, _| keep(*viewport_id));
 	}
 }

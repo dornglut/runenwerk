@@ -564,7 +564,6 @@ mod tests {
     use crate::storage::{
         SDF_PAGE_EDGE_BRICKS, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfPageRecord,
     };
-    use std::collections::BTreeMap;
     use world_ops::{ChunkGeneration, ChunkRevision};
 
     fn clear_payload(chunk_id: ChunkId) -> SdfChunkPayload {

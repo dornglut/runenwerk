@@ -1,15 +1,21 @@
 use editor_core::RealityVersion;
 use editor_viewport::{
     ExpressionDimensions, ExpressionProductDescriptor, ExpressionProductId, ExpressionProductKind,
-    ExpressionSourceRealityClass, ViewportPresentationState,
+    ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
 };
-use engine::plugins::render::{RenderFlowRegistryResource, UiFrameProducerId, UiFrameSubmissionRegistryResource};
+use engine::plugins::render::{
+    EditorPickingHit, EditorPickingTarget, RenderFlowRegistryResource, UiFrameProducerId,
+    UiFrameSubmissionRegistryResource,
+};
 use runenwerk_editor::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, PRODUCT_ID_SCENE_COLOR,
-    default_presentation_state,
-    initial_product_descriptors,
+    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, PRODUCT_ID_PICKING_IDS, PRODUCT_ID_SCENE_COLOR,
+    VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS, VIEWPORT_RESOURCE_SCENE_COLOR,
+    ViewportArtifactObservationResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceHandle,
+    ViewportSurfaceSetResource, ViewportSurfaceSlot, build_surface_binding_registry,
+    initial_presentation_state, initial_product_descriptors,
 };
-use ui_render_data::UiPrimitive;
+use ui_render_data::{UiPrimitive, ViewportSurfaceSlot as UiViewportSurfaceSlot};
 
 const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
 
@@ -53,11 +59,124 @@ fn viewport_product_descriptor_requires_explicit_product_identity() {
 }
 
 #[test]
-fn default_presentation_state_is_stable_for_single_session_viewport() {
-    let state = default_presentation_state();
+fn runtime_viewport_resources_start_empty_before_bootstrap() {
+    assert!(ViewportSurfaceSetResource::default().viewport_ids().next().is_none());
+    assert!(ViewportProductRegistryResource::default().is_empty());
+    assert!(ViewportPresentationStateResource::default().is_empty());
+    assert!(ViewportArtifactObservationResource::default().is_empty());
+    assert!(ViewportPickingResultsResource::default().is_empty());
+}
 
-    assert_eq!(state.viewport_id, MAIN_VIEWPORT_ID);
-    assert_eq!(state.selected_primary_product_id, PRODUCT_ID_SCENE_COLOR);
+#[test]
+fn bootstrap_seeding_is_explicit_and_main_viewport_scoped() {
+    let app = runenwerk_editor::runtime::build_headless_app()
+        .run_for_frames(1)
+        .expect("headless editor app should run");
+    let surface_sets = app
+        .world()
+        .resource::<ViewportSurfaceSetResource>()
+        .expect("surface set resource should exist");
+    let presentations = app
+        .world()
+        .resource::<ViewportPresentationStateResource>()
+        .expect("presentation state resource should exist");
+
+    assert!(
+        surface_sets.surface_set(MAIN_VIEWPORT_ID).is_some(),
+        "startup seeding should register the main viewport surface set explicitly",
+    );
+    assert!(
+        presentations.state_for(MAIN_VIEWPORT_ID).is_some(),
+        "startup seeding should register explicit presentation state for the main viewport",
+    );
+}
+
+#[test]
+fn derived_bindings_support_multiple_viewports_without_main_fallback() {
+    let viewport_a = ViewportId(2);
+    let viewport_b = ViewportId(3);
+
+    let mut surface_sets = ViewportSurfaceSetResource::default();
+    for viewport_id in [viewport_a, viewport_b] {
+        surface_sets.set_surface(
+            viewport_id,
+            ViewportSurfaceSlot::PrimaryColor,
+            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
+        );
+        surface_sets.set_surface(
+            viewport_id,
+            ViewportSurfaceSlot::PickingIds,
+            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_PICKING_IDS),
+        );
+        surface_sets.set_surface(
+            viewport_id,
+            ViewportSurfaceSlot::Overlay,
+            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY),
+        );
+    }
+
+    let mut presentations = ViewportPresentationStateResource::default();
+    presentations.upsert_state(initial_presentation_state(viewport_a));
+    let mut state_b = initial_presentation_state(viewport_b);
+    state_b.select_primary_product(PRODUCT_ID_PICKING_IDS);
+    presentations.upsert_state(state_b);
+
+    let registry = build_surface_binding_registry(&surface_sets, &presentations);
+    let primary_a = registry
+        .get(viewport_a.0, UiViewportSurfaceSlot::Primary)
+        .expect("viewport A should retain its primary binding");
+    let primary_b = registry
+        .get(viewport_b.0, UiViewportSurfaceSlot::Primary)
+        .expect("viewport B should retain its primary binding");
+
+    assert_eq!(primary_a.resource_id.as_str(), VIEWPORT_RESOURCE_SCENE_COLOR);
+    assert_eq!(primary_b.resource_id.as_str(), VIEWPORT_RESOURCE_PICKING_IDS);
+    assert!(
+        registry
+            .get(MAIN_VIEWPORT_ID.0, UiViewportSurfaceSlot::Primary)
+            .is_none(),
+        "derived registry must not synthesize an implicit main viewport fallback",
+    );
+}
+
+#[test]
+fn viewport_picking_results_do_not_overwrite_across_viewports() {
+    let mut picking_results = ViewportPickingResultsResource::default();
+    let viewport_a = ViewportId(11);
+    let viewport_b = ViewportId(12);
+    picking_results.set_viewport_result(
+        viewport_a,
+        (100.0, 120.0),
+        (0.0, 0.0, 300.0, 200.0),
+        EditorPickingHit {
+            target: EditorPickingTarget::Entity(42),
+            distance: 1.0,
+        },
+    );
+    picking_results.set_viewport_result(
+        viewport_b,
+        (600.0, 180.0),
+        (400.0, 0.0, 300.0, 200.0),
+        EditorPickingHit {
+            target: EditorPickingTarget::Grid,
+            distance: 2.0,
+        },
+    );
+
+    assert_eq!(
+        picking_results
+            .result_for(viewport_a)
+            .map(|value| value.hit.target),
+        Some(EditorPickingTarget::Entity(42)),
+        "viewport A picking result should remain intact after viewport B update",
+    );
+    assert_eq!(
+        picking_results
+            .result_for(viewport_b)
+            .map(|value| value.hit.target),
+        Some(EditorPickingTarget::Grid),
+        "viewport B picking result should be stored independently",
+    );
 }
 
 #[test]

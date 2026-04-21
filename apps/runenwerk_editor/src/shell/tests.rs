@@ -1,7 +1,7 @@
 use editor_core::{ChangeOrigin, EntityId, SelectionTarget, SessionChangeKind, WorkflowEventKind};
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionProductId, ProductAvailabilityState, ProducerHealth,
-    ViewportId,
+    ViewportId, ViewportPresentationState,
 };
 use editor_shell::{CONSOLE_SCROLL_WIDGET_ID, ShellCommand};
 use engine::plugins::render::UiFontAtlasResource;
@@ -64,6 +64,18 @@ fn build_editor_shell_view_model_reflects_active_tool_and_viewport_state() {
     );
     assert_eq!(shell.viewport.hovered_entity, Some(EntityId(7)));
     assert!(!shell.viewport.preview_active);
+}
+
+#[test]
+fn build_editor_shell_view_model_has_no_implicit_main_viewport_without_products() {
+    let app = RunenwerkEditorApp::new();
+
+    let shell = build_editor_shell_view_model(&app);
+
+    assert!(
+        shell.viewport.viewport_id.is_none(),
+        "shell view model must not synthesize an implicit main viewport id when runtime has no viewport products",
+    );
 }
 
 #[test]
@@ -150,6 +162,57 @@ fn dispatch_shell_command_selects_viewport_product_when_available() {
             .state_for(viewport_id)
             .map(|state| state.selected_primary_product_id),
         Some(product_id)
+    );
+}
+
+#[test]
+fn dispatch_shell_command_updates_only_target_viewport_product_selection() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut viewport_presentations = ViewportPresentationStateResource::default();
+    let mut viewport_observations = ViewportArtifactObservationResource::default();
+    let viewport_a = ViewportId(1);
+    let viewport_b = ViewportId(2);
+    let product_scene = ExpressionProductId(1);
+    let product_picking = ExpressionProductId(2);
+    viewport_presentations.upsert_state(ViewportPresentationState::new(viewport_a, product_scene));
+    viewport_presentations.upsert_state(ViewportPresentationState::new(viewport_b, product_scene));
+
+    for viewport_id in [viewport_a, viewport_b] {
+        let mut frame =
+            ArtifactObservationFrame::new(viewport_id, app.runtime().current_scene_reality_version());
+        frame
+            .availability_by_product
+            .insert(product_picking, ProductAvailabilityState::Available);
+        frame
+            .producer_health_by_product
+            .insert(product_picking, ProducerHealth::Healthy);
+        viewport_observations.upsert_frame(frame);
+    }
+
+    dispatch_shell_command(
+        &mut app,
+        ShellCommand::SelectViewportProduct {
+            viewport_id: viewport_b,
+            product_id: product_picking,
+        },
+        Some(&mut viewport_presentations),
+        Some(&viewport_observations),
+    )
+    .expect("viewport product select shell command should succeed");
+
+    assert_eq!(
+        viewport_presentations
+            .state_for(viewport_a)
+            .map(|state| state.selected_primary_product_id),
+        Some(product_scene),
+        "selection for viewport A should remain unchanged",
+    );
+    assert_eq!(
+        viewport_presentations
+            .state_for(viewport_b)
+            .map(|state| state.selected_primary_product_id),
+        Some(product_picking),
+        "selection for viewport B should update independently",
     );
 }
 

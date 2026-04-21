@@ -13,17 +13,27 @@ use crate::{
     VIEWPORT_SURFACE_EMBED_WIDGET_ID, ViewportViewModel,
 };
 
-pub fn build_viewport_panel(_view_model: &ViewportViewModel, theme: &ThemeTokens) -> UiNode {
-    let viewport_surface = viewport_surface_embed(
-        VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-        1,
-        ViewportSurfaceSlot::Primary,
-    );
+pub fn build_viewport_panel(view_model: &ViewportViewModel, theme: &ThemeTokens) -> UiNode {
+    let viewport_children = view_model
+        .viewport_id
+        .map(|viewport_id| {
+            vec![viewport_surface_embed(
+                VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+                viewport_id.0,
+                ViewportSurfaceSlot::Primary,
+            )]
+        })
+        .unwrap_or_default();
+    let viewport_child_policies = if viewport_children.is_empty() {
+        Vec::new()
+    } else {
+        vec![SizePolicy::flex(1.0)]
+    };
     let canvas_content = vstack_with_policies(
         VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
         theme.spacing.xs,
-        vec![SizePolicy::flex(1.0)],
-        vec![viewport_surface],
+        viewport_child_policies,
+        viewport_children,
     );
     let mut canvas_theme = theme.clone();
     canvas_theme.background_panel = UiColor::new(

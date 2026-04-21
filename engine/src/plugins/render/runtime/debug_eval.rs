@@ -1,6 +1,5 @@
 use crate::plugins::inspect::{
-	CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCaptureSelector,
-	RenderCaptureTerminal, RenderCaptureTerminalCode, RenderCaptureTerminalReason,
+	RenderCaptureSelector, RenderCaptureTerminalCode, RenderCaptureTerminalReason,
 	RenderCapturedTexture, RenderPixelCoordinate, RenderPixelProbeAssertionMode,
 	RenderPixelProbeRequest, RenderPixelProbeResult, RenderPixelProbeStatus,
 	RenderPixelSampleMode, RenderTextureDiffMetrics, RenderTextureDiffMismatchSample,
@@ -417,6 +416,9 @@ pub(crate) fn clamp_lines(lines: &mut Vec<String>, max_lines: usize) {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::plugins::inspect::{
+		CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCaptureTerminal,
+	};
 	use crate::plugins::render::frame::{
 		PreparedDeformationFeatureContribution, PreparedDeformationStream, PreparedDrawBatch,
 		PreparedDrawFeatureContribution, PreparedFeaturePayload,

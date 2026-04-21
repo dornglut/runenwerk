@@ -138,25 +138,25 @@ pub(crate) fn start_recording(world: &mut ecs::World) -> Result<()> {
         codec_version: SceneSimulationCodec::codec_version(),
     };
 
-    if let Ok(mut info) = world.resource_mut::<ReplaySessionInfo>() {
+    if let Ok(info) = world.resource_mut::<ReplaySessionInfo>() {
         *info = ReplaySessionInfo {
             session_id,
             seed,
             tick_rate_hz,
         };
     }
-    if let Ok(mut controller) = world.resource_mut::<ReplayControllerResource>() {
+    if let Ok(controller) = world.resource_mut::<ReplayControllerResource>() {
         controller.controller.clear();
         controller.last_validation = ReplayValidationReport::default();
     }
-    if let Ok(mut recorder) = world.resource_mut::<ReplayRecorderResource>() {
+    if let Ok(recorder) = world.resource_mut::<ReplayRecorderResource>() {
         recorder.recorder = Some(ReplayRecorder::new(
             header,
             checkpoint_policy,
             storage_policy,
         ));
     }
-    if let Ok(mut state) = world.resource_mut::<ReplayState>() {
+    if let Ok(state) = world.resource_mut::<ReplayState>() {
         state.mode = ReplayMode::Recording;
         state.initial_checkpoint_captured = false;
         state.last_loaded_tick = None;
@@ -175,7 +175,7 @@ pub(crate) fn stop_recording(world: &mut ecs::World) -> Result<SceneReplayArchiv
         .take()
         .ok_or_else(|| anyhow!("replay recording is not active"))?
         .into_archive();
-    if let Ok(mut state) = world.resource_mut::<ReplayState>() {
+    if let Ok(state) = world.resource_mut::<ReplayState>() {
         state.mode = ReplayMode::Disabled;
         state.initial_checkpoint_captured = false;
         state.last_loaded_tick = None;
@@ -187,11 +187,11 @@ pub(crate) fn load_replay(world: &mut ecs::World, archive: SceneReplayArchive) -
     if !world.has_resource::<ReplayControllerResource>() || !world.has_resource::<ReplayState>() {
         return Err(anyhow!("ReplayPlugin is not installed"));
     }
-    if let Ok(mut controller) = world.resource_mut::<ReplayControllerResource>() {
+    if let Ok(controller) = world.resource_mut::<ReplayControllerResource>() {
         controller.controller.load(archive);
         controller.last_validation = ReplayValidationReport::default();
     }
-    if let Ok(mut state) = world.resource_mut::<ReplayState>() {
+    if let Ok(state) = world.resource_mut::<ReplayState>() {
         state.mode = ReplayMode::Playback;
         state.initial_checkpoint_captured = false;
         state.last_loaded_tick = None;
@@ -210,10 +210,10 @@ pub(crate) fn seek_loaded_replay(
         .archive_cloned()
         .ok_or_else(|| anyhow!("no replay archive is loaded"))?;
     let report = validate_scene_replay(world, &archive, target_tick)?;
-    if let Ok(mut controller) = world.resource_mut::<ReplayControllerResource>() {
+    if let Ok(controller) = world.resource_mut::<ReplayControllerResource>() {
         controller.last_validation = report.clone();
     }
-    if let Ok(mut state) = world.resource_mut::<ReplayState>() {
+    if let Ok(state) = world.resource_mut::<ReplayState>() {
         state.mode = ReplayMode::Playback;
         state.last_loaded_tick = Some(target_tick);
     }

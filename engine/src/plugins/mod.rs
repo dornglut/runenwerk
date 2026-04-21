@@ -26,10 +26,15 @@ pub use grid::*;
 pub use input::*;
 pub use render::*;
 pub use replay::*;
-pub use scene::*;
+pub use scene::plugin::ScenePlugin;
+pub use scene::runtime::controls::*;
+pub use scene::types::*;
 pub use scheduler_diagnostics::*;
-pub use time::*;
-pub use world::*;
+pub use time::TimePlugin;
+pub use world::plugin::{
+    WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeSet,
+    WorldRuntimeState,
+};
 
 use crate::plugin::Plugin;
 

@@ -24,6 +24,10 @@ fn main() -> Result<()> {
         .validate()?;
 
     let order = flow.pass_order()?;
+    let order = order
+        .into_iter()
+        .map(|pass_id| pass_id.to_string())
+        .collect::<Vec<_>>();
     println!("postprocess flow order: {}", order.join(" -> "));
     Ok(())
 }

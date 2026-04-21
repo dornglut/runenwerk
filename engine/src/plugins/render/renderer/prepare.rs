@@ -154,7 +154,6 @@ impl Renderer {
             rect_batches,
             glyph_batches,
             viewport_embed_batches,
-            surface_size: (surface_width_u32, surface_height_u32),
         }
     }
 

@@ -38,7 +38,7 @@ struct WinitRunner {
 impl WinitRunner {
     fn sync_window_state(&mut self, window: &Window) -> Result<()> {
         let size = window.inner_size();
-        let mut window_state = self
+        let window_state = self
             .state
             .world
             .resource_mut::<WindowState>()
@@ -102,7 +102,7 @@ impl WinitRunner {
             return Ok(());
         };
 
-        let mut window_state = self
+        let window_state = self
             .state
             .world
             .resource_mut::<WindowState>()

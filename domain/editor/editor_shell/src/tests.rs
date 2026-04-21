@@ -75,6 +75,30 @@ fn viewport_embed_uv_rect_maps_to_canvas_screen_region() {
 }
 
 #[test]
+fn viewport_panel_without_viewport_identity_renders_without_embed_primitive() {
+    let theme = ThemeTokens::default();
+    let mut shell = sample_shell_view_model();
+    shell.viewport.viewport_id = None;
+    shell.viewport.product_choices.clear();
+    let tree = build_editor_shell(&shell, &theme);
+    let runtime = UiRuntime::new();
+    let atlas_source = TestAtlasSource::ascii();
+    let frame = runtime.build_frame(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0), &atlas_source);
+
+    let has_embed = frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .any(|primitive| matches!(primitive, UiPrimitive::ViewportSurfaceEmbed(_)));
+
+    assert!(
+        !has_embed,
+        "viewport panel must not synthesize embed primitives when viewport identity is absent",
+    );
+}
+
+#[test]
 fn layout_keeps_viewport_canvas_nonzero_and_inside_viewport_panel() {
     let theme = ThemeTokens::default();
     let shell = sample_shell_view_model();

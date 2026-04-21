@@ -71,7 +71,6 @@ pub(crate) struct SceneTemplateButtonSpec {
 
 #[derive(Debug, Clone)]
 pub(crate) struct SceneTemplateSceneSpec {
-    pub scene_id: String,
     pub body: String,
     pub panel_style: UiStyle,
     pub body_text_style: SceneTemplateTextStyle,
@@ -443,7 +442,6 @@ fn load_scene_template_spec(scene_id: &str, path: &str) -> anyhow::Result<SceneT
         .transpose()?;
 
     Ok(SceneTemplateSceneSpec {
-        scene_id: scene_id.to_string(),
         body: if scene.body.trim().is_empty() {
             scene_id.replace('_', " ")
         } else {

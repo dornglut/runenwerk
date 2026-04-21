@@ -19,7 +19,6 @@ static NEXT_FLOW_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
 struct PingPongStorageRegistration {
-    label: String,
     a_id: RenderResourceId,
     b_id: RenderResourceId,
 }
@@ -328,7 +327,6 @@ impl RenderFlow {
         self.ping_pong_storage.insert(
             base_label.clone(),
             PingPongStorageRegistration {
-                label: base_label,
                 a_id,
                 b_id,
             },

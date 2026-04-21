@@ -89,7 +89,7 @@ pub fn advance_chunk_lifecycle_system(
 }
 
 pub fn ensure_chunk_runtime_record(world: &mut WorldMut, chunk_id: ChunkId) {
-    if let Ok(mut chunks) = world.resource_mut::<WorldChunkRuntimeMapResource>() {
+    if let Ok(chunks) = world.resource_mut::<WorldChunkRuntimeMapResource>() {
         chunks.ensure_chunk(chunk_id);
     }
 }

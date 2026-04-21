@@ -2,7 +2,7 @@ use editor_shell::ShellCommand;
 use editor_viewport::ViewportId;
 use engine::WindowState;
 use engine::plugins::input::domain::action;
-use engine::plugins::render::{EditorGizmoAxis, EditorPickingResultResource, EditorPickingTarget};
+use engine::plugins::render::{EditorGizmoAxis, EditorPickingTarget};
 use engine::runtime::{Res, ResMut};
 use ui_input::{Modifiers, PointerButton, PointerEvent, PointerEventKind, UiInputEvent};
 use ui_math::{UiPoint, UiRect, UiVector};
@@ -13,8 +13,8 @@ use crate::runtime::app::{
 };
 use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scaled_shell_theme};
 use crate::runtime::viewport::{
-    MAIN_VIEWPORT_ID, ViewportArtifactObservationResource, ViewportLayoutMapResource,
-    ViewportPresentationStateResource,
+    ViewportArtifactObservationResource, ViewportLayoutMapResource,
+    ViewportPickingResultsResource, ViewportPresentationStateResource,
 };
 use crate::runtime::{
     build_viewport_picking_product_frame, viewport_hit_from_picking_product,
@@ -33,7 +33,7 @@ pub fn dispatch_editor_input_system(
     window: Res<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
-    picking: Res<EditorPickingResultResource>,
+    picking_results: Res<ViewportPickingResultsResource>,
     mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
     viewport_layout_map: Res<ViewportLayoutMapResource>,
@@ -47,12 +47,12 @@ pub fn dispatch_editor_input_system(
 
     let bounds = window_bounds(&window);
     let shell_theme = scaled_shell_theme(&host.theme, window.scale_factor);
-    let viewport_products = viewport_observations.frame_for(MAIN_VIEWPORT_ID);
+    let viewport_products = viewport_observations.first_frame();
     let position = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
     let previous = UiPoint::new(bridge.last_mouse_position.0, bridge.last_mouse_position.1);
 
-    if picking.revision != bridge.last_logged_picking_revision {
-        bridge.last_logged_picking_revision = picking.revision;
+    if picking_results.global_revision() != bridge.last_logged_picking_revision {
+        bridge.last_logged_picking_revision = picking_results.global_revision();
     }
 
     if position != previous {
@@ -103,7 +103,7 @@ pub fn dispatch_editor_input_system(
             .as_ref()
             .and_then(|value| viewport_pointer_route(&viewport_layout_map, &value.dispatch, position));
         if let Some(route) = pointer_route {
-            dispatch_viewport_pointer_down(&mut host, &picking, position, route);
+            dispatch_viewport_pointer_down(&mut host, &picking_results, position, route);
         } else if host.app.debug_logs_enabled() {
             host.app.append_console_line(format!(
                 "[input] pointer-down routed to shell only: cursor=({:.1},{:.1})",
@@ -291,16 +291,17 @@ fn window_bounds(window: &WindowState) -> UiRect {
 
 fn dispatch_viewport_pointer_down(
     host: &mut EditorHostResource,
-    picking: &EditorPickingResultResource,
+    picking_results: &ViewportPickingResultsResource,
     position: UiPoint,
     route: ViewportPointerRoute,
 ) {
     let expression = build_viewport_picking_product_frame(
         route.viewport_id,
-        picking,
+        picking_results,
         host.app.runtime().current_scene_reality_version(),
     );
     let hit = viewport_hit_from_picking_product(&expression);
+    let picking = picking_results.result_for(route.viewport_id);
     let selection_before = host.app.runtime().selected_entity();
 
     if host.app.debug_logs_enabled() {
@@ -312,8 +313,10 @@ fn dispatch_viewport_pointer_down(
             position.y,
             route.local_position.x,
             route.local_position.y,
-            picking_target_label(picking.hit.target),
-            picking.hit.distance,
+            picking
+                .map(|value| picking_target_label(value.hit.target))
+                .unwrap_or_else(|| "none".to_string()),
+            picking.map(|value| value.hit.distance).unwrap_or(f32::INFINITY),
             expression.expression.metadata.frame_id.0,
             selection_before
         ));

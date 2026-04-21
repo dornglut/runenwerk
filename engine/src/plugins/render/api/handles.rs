@@ -7,7 +7,7 @@ pub struct PassHandle {
 }
 
 impl PassHandle {
-    pub(crate) fn new(id: RenderPassId) -> Self {
+    pub const fn new(id: RenderPassId) -> Self {
         Self { id }
     }
 

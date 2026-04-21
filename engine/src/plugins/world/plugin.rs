@@ -29,7 +29,7 @@ use super::{
     chunks::{DirtyChunkMapResource, lifecycle::WorldChunkRuntimeMapResource},
     queries::nav::WorldNavSummaryResource,
 };
-use crate::plugins::adapters::WorldFrameResource;
+use crate::plugins::world::adapters::WorldFrameResource;
 use world_ops::WorldRevision;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]

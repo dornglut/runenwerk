@@ -1,7 +1,7 @@
 //! File: apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs
 //! Purpose: Producer-owned render resource identities for viewport expression products.
 
-use editor_viewport::ViewportSurfaceSlot;
+use crate::runtime::viewport::ViewportSurfaceSlot;
 
 pub const EDITOR_MAIN_FLOW_ID: &str = "runenwerk.editor.main";
 

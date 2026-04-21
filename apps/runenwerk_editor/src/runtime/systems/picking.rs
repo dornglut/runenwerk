@@ -1,6 +1,6 @@
 use editor_core::{EntityId, ToolId};
 use engine::plugins::render::{
-    EditorGizmoAxis, EditorPickingHit, EditorPickingResultResource, EditorPickingTarget,
+    EditorGizmoAxis, EditorPickingHit, EditorPickingTarget,
 };
 use engine::runtime::{Res, ResMut};
 use glam::{Vec2, Vec3, vec2, vec3};
@@ -12,7 +12,7 @@ use crate::runtime::resources::{
     EditorHostResource, EditorViewportCamera, editor_viewport_camera,
     editor_viewport_camera_fov_y_radians,
 };
-use crate::runtime::viewport::ViewportLayoutMapResource;
+use crate::runtime::viewport::{ViewportLayoutMapResource, ViewportPickingResultsResource};
 use crate::shell::TRANSLATE_TOOL_ID;
 
 const GRID_EPSILON: f32 = 1e-5;
@@ -36,28 +36,17 @@ struct AxisScreenHit {
 pub fn produce_editor_picking_system(
     input: Res<engine::plugins::InputState>,
     mut host: ResMut<EditorHostResource>,
-    mut picking: ResMut<EditorPickingResultResource>,
+    mut viewport_picking_results: ResMut<ViewportPickingResultsResource>,
     viewport_layout_map: Res<ViewportLayoutMapResource>,
 ) {
     let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
-    let previous_hit = picking.hit;
     let routed_viewport = routed_viewport_bounds(&host, &viewport_layout_map);
-    let cursor_viewport_bounds = routed_viewport
-        .map(|(_, value)| value)
-        .unwrap_or(UiRect::new(0.0, 0.0, 0.0, 0.0));
-
-    picking.set_cursor(
-        (cursor.x, cursor.y),
-        (
-            cursor_viewport_bounds.x,
-            cursor_viewport_bounds.y,
-            cursor_viewport_bounds.width,
-            cursor_viewport_bounds.height,
-        ),
-    );
-
-    let next_hit = if let Some((_, viewport_bounds)) = routed_viewport {
-        if let Some(ray) = viewport_ray(cursor, viewport_bounds) {
+    if let Some((viewport_id, viewport_bounds)) = routed_viewport {
+        let previous_hit = viewport_picking_results
+            .result_for(viewport_id)
+            .map(|value| value.hit)
+            .unwrap_or_else(EditorPickingHit::none);
+        let next_hit = if let Some(ray) = viewport_ray(cursor, viewport_bounds) {
             compose_picking_hit(
                 host.app.runtime(),
                 host.app.runtime().session().active_tool(),
@@ -68,22 +57,34 @@ pub fn produce_editor_picking_system(
             )
         } else {
             EditorPickingHit::none()
+        };
+        let cursor_viewport_bounds = (
+            viewport_bounds.x,
+            viewport_bounds.y,
+            viewport_bounds.width,
+            viewport_bounds.height,
+        );
+        viewport_picking_results.set_viewport_result(
+            viewport_id,
+            (cursor.x, cursor.y),
+            cursor_viewport_bounds,
+            next_hit,
+        );
+
+        if host.app.debug_logs_enabled() && hit_changed(previous_hit, next_hit) {
+            host.app.append_console_line(format!(
+                "[pick] viewport={} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
+                viewport_id.0,
+                cursor.x,
+                cursor.y,
+                cursor.x - viewport_bounds.x,
+                cursor.y - viewport_bounds.y,
+                picking_target_label(next_hit.target),
+                next_hit.distance
+            ));
         }
     } else {
-        EditorPickingHit::none()
-    };
-
-    picking.set_hit(next_hit);
-    if host.app.debug_logs_enabled() && hit_changed(previous_hit, next_hit) {
-        host.app.append_console_line(format!(
-            "[pick] cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
-            cursor.x,
-            cursor.y,
-            cursor.x - cursor_viewport_bounds.x,
-            cursor.y - cursor_viewport_bounds.y,
-            picking_target_label(next_hit.target),
-            next_hit.distance
-        ));
+        viewport_picking_results.clear_all_hits((cursor.x, cursor.y));
     }
 }
 

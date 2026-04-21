@@ -30,7 +30,7 @@ fn ui_input_plugin_marks_overlay_consumed_when_editor_mode_is_toggled() {
     let mut app = App::headless();
     app.add_plugin(ScenePlugin);
     {
-        let mut input = app
+        let input = app
             .world_mut()
             .resource_mut::<InputState>()
             .expect("input state should exist");

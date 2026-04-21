@@ -11,7 +11,7 @@ use ecs::{Runtime, World};
 /// This does not install resources. Builtin resources are installed by
 /// `App::install_builtin_resources` during app construction.
 pub(crate) fn prepare_world_for_run(world: &mut World, title: &str, headless: bool) {
-    if let Ok(mut window) = world.resource_mut::<WindowState>() {
+    if let Ok(window) = world.resource_mut::<WindowState>() {
         window.set_headless(headless);
         window.redraw_requested = false;
         window.close_requested = false;

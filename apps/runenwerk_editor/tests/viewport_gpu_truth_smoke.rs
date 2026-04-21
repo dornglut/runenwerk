@@ -4,8 +4,9 @@ use engine::plugins::render::inspect::{
     RenderCapturedTextureState, RenderPassProvenanceState, RenderPixelCoordinate,
 };
 use std::sync::Arc;
+use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
-use winit::event_loop::EventLoop;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::Window;
 
 const FLOW_ID: &str = "runenwerk.editor.main";
@@ -35,16 +36,7 @@ fn viewport_gpu_truth_smoke() {
         return;
     }
 
-    let event_loop = EventLoop::new().expect("event loop should initialize");
-    let attrs = Window::default_attributes()
-        .with_title("runenwerk viewport gpu smoke")
-        .with_visible(false)
-        .with_inner_size(PhysicalSize::new(1280, 720));
-    let window = Arc::new(
-        event_loop
-            .create_window(attrs)
-            .expect("hidden smoke-test window should be created"),
-    );
+    let window = create_hidden_window();
     let gfx = Gfx::new(window).expect("gfx should initialize for smoke test");
 
     let mut app = runenwerk_editor::runtime::build_headless_app();
@@ -201,4 +193,52 @@ fn macos_main_thread_smoke_enabled() -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+fn create_hidden_window() -> Arc<Window> {
+    struct HiddenWindowBootstrap {
+        attrs: winit::window::WindowAttributes,
+        window: Option<Arc<Window>>,
+        error: Option<String>,
+    }
+
+    impl ApplicationHandler for HiddenWindowBootstrap {
+        fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+            match event_loop.create_window(self.attrs.clone()) {
+                Ok(window) => self.window = Some(Arc::new(window)),
+                Err(err) => self.error = Some(err.to_string()),
+            }
+            event_loop.exit();
+        }
+
+        fn window_event(
+            &mut self,
+            _event_loop: &ActiveEventLoop,
+            _window_id: winit::window::WindowId,
+            _event: winit::event::WindowEvent,
+        ) {
+        }
+    }
+
+    let event_loop = EventLoop::new().expect("event loop should initialize");
+    let attrs = Window::default_attributes()
+        .with_title("runenwerk viewport gpu smoke")
+        .with_visible(false)
+        .with_inner_size(PhysicalSize::new(1280, 720));
+    let mut bootstrap = HiddenWindowBootstrap {
+        attrs,
+        window: None,
+        error: None,
+    };
+    event_loop
+        .run_app(&mut bootstrap)
+        .expect("window bootstrap loop should run");
+
+    if let Some(error) = bootstrap.error {
+        panic!("hidden smoke-test window should be created: {error}");
+    }
+
+    bootstrap
+        .window
+        .expect("window bootstrap should capture the created window")
 }

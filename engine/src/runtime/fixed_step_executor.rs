@@ -57,7 +57,7 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
     let config = FixedStepFrameConfig::from_world(world);
 
     {
-        let mut fixed_state = world
+        let fixed_state = world
             .resource_mut::<FixedTimeState>()
             .expect("FixedTimeState should be installed");
         fixed_state.accumulator_seconds += config.delta_seconds;
@@ -78,7 +78,7 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
         }
 
         let tick_value = {
-            let mut tick = world
+            let tick = world
                 .resource_mut::<SimulationTick>()
                 .expect("SimulationTick should be installed");
             tick.0 = tick.0.saturating_add(1);
@@ -91,7 +91,7 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
         world.finalize_tick_boundary(tick_value);
         steps = steps.saturating_add(1);
 
-        let mut fixed_state = world
+        let fixed_state = world
             .resource_mut::<FixedTimeState>()
             .expect("FixedTimeState should be installed");
         fixed_state.accumulator_seconds -= config.step_seconds;
@@ -105,7 +105,7 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
         fixed_state.accumulator_seconds + f32::EPSILON >= config.step_seconds
     };
     if saturated {
-        let mut fixed_state = world
+        let fixed_state = world
             .resource_mut::<FixedTimeState>()
             .expect("FixedTimeState should be installed");
         fixed_state.accumulator_seconds = 0.0;

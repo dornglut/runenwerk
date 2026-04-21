@@ -8,11 +8,12 @@ use crate::runtime::resources::{
 };
 use crate::runtime::systems::{
     bootstrap_editor_demo_system, dispatch_editor_input_system, produce_editor_picking_system,
-    submit_editor_frame_system, sync_viewport_presentation_products_system,
+    seed_viewport_runtime_contracts_system, submit_editor_frame_system,
+    sync_viewport_presentation_products_system,
 };
 use crate::runtime::viewport::{
-    ViewportArtifactObservationResource, ViewportLayoutMapResource, ViewportPresentationStateResource,
-    ViewportProductRegistryResource,
+    ViewportArtifactObservationResource, ViewportLayoutMapResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceSetResource,
 };
 
 pub struct EditorAppPlugin;
@@ -51,9 +52,12 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportPresentationStateResource>();
         app.init_resource::<ViewportArtifactObservationResource>();
         app.init_resource::<ViewportLayoutMapResource>();
+        app.init_resource::<ViewportSurfaceSetResource>();
+        app.init_resource::<ViewportPickingResultsResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
 
         app.add_systems(Startup, bootstrap_editor_demo_system);
+        app.add_systems(Startup, seed_viewport_runtime_contracts_system);
         app.add_systems(
             Update,
             produce_editor_picking_system

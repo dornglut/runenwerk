@@ -164,7 +164,7 @@ fn ingress_invalidation_uses_partition_quantization_scale() {
     let mut app = App::headless();
     app.add_plugin(WorldPlugin);
     {
-        let mut partition = app
+        let partition = app
             .world_mut()
             .resource_mut::<PartitionConfigResource>()
             .expect("world partition config should be available");
@@ -243,7 +243,7 @@ fn world_revision_advances_only_for_integrated_outputs() {
     );
 
     {
-        let mut runtime_chunks = app
+        let runtime_chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("chunk runtime should exist");
@@ -252,7 +252,7 @@ fn world_revision_advances_only_for_integrated_outputs() {
         record.pending_build_generation = Some(BuildGeneration(9));
     }
     {
-        let mut completed = app
+        let completed = app
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
@@ -306,7 +306,7 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
 
     let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 3, y: 2, z: -1 });
     {
-        let mut runtime_chunks = app
+        let runtime_chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("chunk runtime should exist");
@@ -332,7 +332,7 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
         dirty.mark_dirty(chunk_id, DirtyReason::Geometry);
     }
     {
-        let mut completed = app
+        let completed = app
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
@@ -503,7 +503,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
 
     let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 6, y: 0, z: -2 });
     {
-        let mut runtime_chunks = app
+        let runtime_chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("chunk runtime should exist");
@@ -522,7 +522,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
         );
     }
     {
-        let mut completed = app
+        let completed = app
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
@@ -583,7 +583,7 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
     let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: -4, y: 1, z: 3 });
     let wrong_chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: -3, y: 1, z: 3 });
     {
-        let mut runtime_chunks = app
+        let runtime_chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("chunk runtime should exist");
@@ -602,7 +602,7 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
         );
     }
     {
-        let mut completed = app
+        let completed = app
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");

@@ -64,7 +64,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         op_log_count = log.operations.len() as u64;
     }
 
-    if let Ok(mut world_feature) = world.resource_mut::<PreparedWorldFeatureResource>() {
+    if let Ok(world_feature) = world.resource_mut::<PreparedWorldFeatureResource>() {
         world_feature.status = if visible_chunks.is_empty() {
             FeatureContributionStatus::Stale
         } else {
@@ -87,7 +87,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
             (Vec::new(), 0)
         };
 
-    if let Ok(mut cave_feature) = world.resource_mut::<PreparedCaveFeatureResource>() {
+    if let Ok(cave_feature) = world.resource_mut::<PreparedCaveFeatureResource>() {
         cave_feature.status = if visible_sector_ids.is_empty() {
             FeatureContributionStatus::Stale
         } else {
@@ -100,7 +100,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         };
     }
 
-    if let Ok(mut detail_feature) = world.resource_mut::<PreparedDetailFeatureResource>() {
+    if let Ok(detail_feature) = world.resource_mut::<PreparedDetailFeatureResource>() {
         detail_feature.status = if detail_cells.is_empty() {
             FeatureContributionStatus::Stale
         } else {
@@ -112,7 +112,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         };
     }
 
-    if let Ok(mut procedural_feature) =
+    if let Ok(procedural_feature) =
         world.resource_mut::<PreparedProceduralWorldFeatureResource>()
     {
         procedural_feature.status = FeatureContributionStatus::Missing;
@@ -120,13 +120,13 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         procedural_feature.payload = PreparedProceduralWorldFeatureContribution::default();
     }
 
-    if let Ok(mut wind_feature) = world.resource_mut::<PreparedWindFieldFeatureResource>() {
+    if let Ok(wind_feature) = world.resource_mut::<PreparedWindFieldFeatureResource>() {
         wind_feature.status = FeatureContributionStatus::Missing;
         wind_feature.fallback_policy = FeatureFallbackPolicy::SkipFeaturePasses;
         wind_feature.payload = PreparedWindFieldFeatureContribution::default();
     }
 
-    if let Ok(mut metrics) = world.resource_mut::<WorldDebugMetricsResource>() {
+    if let Ok(metrics) = world.resource_mut::<WorldDebugMetricsResource>() {
         metrics.op_log_count = op_log_count;
     }
 
@@ -144,14 +144,14 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         _ => None,
     };
 
-    if let (Some((resident, stale, page_miss, interactive, background)), Ok(mut inspector)) = (
+    if let (Some((resident, stale, page_miss, interactive, background)), Ok(inspector)) = (
         runtime_inspector_values,
         world.resource_mut::<RenderRuntimeResourceInspectorState>(),
     ) {
         inspector.observe_world_runtime(resident, stale, page_miss, interactive, background);
     }
 
-    if let Ok(mut timings) = world.resource_mut::<RenderDebugTimingsState>() {
+    if let Ok(timings) = world.resource_mut::<RenderDebugTimingsState>() {
         timings.observe_world_prepare_sample();
     }
 
@@ -210,7 +210,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
             world_revision,
             (region_journal_latest_sequence, region_journal_record_count),
         )),
-        Ok(mut snapshot),
+        Ok(snapshot),
     ) = (
         world_snapshot_values,
         world.resource_mut::<WorldRuntimeInspectorSnapshot>(),

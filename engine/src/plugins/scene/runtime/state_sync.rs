@@ -122,13 +122,13 @@ pub(crate) fn republish_scene_resources(world: &mut ecs::World) -> Result<()> {
         return Ok(());
     };
 
-    if let Ok(mut scene_state) = world.resource_mut::<SceneRuntimeState>() {
+    if let Ok(scene_state) = world.resource_mut::<SceneRuntimeState>() {
         *scene_state = scene_state_value;
     }
-    if let Ok(mut gameplay) = world.resource_mut::<GameplayRuntimeConfig>() {
+    if let Ok(gameplay) = world.resource_mut::<GameplayRuntimeConfig>() {
         *gameplay = gameplay_value;
     }
-    if let Ok(mut overlay) = world.resource_mut::<UiOverlayState>() {
+    if let Ok(overlay) = world.resource_mut::<UiOverlayState>() {
         *overlay = overlay_value;
     }
     Ok(())

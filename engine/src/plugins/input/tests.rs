@@ -1,7 +1,6 @@
 // Owner: Engine Input Plugin - Tests
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::plugins::{
         InputBindingChange, InputBindingChangeResult, InputState, KeyChord, action,
     };

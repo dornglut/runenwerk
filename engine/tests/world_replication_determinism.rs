@@ -336,7 +336,7 @@ fn world_streaming_interest_tracks_connection_cursor_and_cleanup() {
 
     let connection_id = ConnectionId(55);
     {
-        let mut session = app
+        let session = app
             .world_mut()
             .resource_mut::<ServerSessionState>()
             .expect("net server session state should exist");

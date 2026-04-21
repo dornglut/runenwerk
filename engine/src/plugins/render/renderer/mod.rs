@@ -432,7 +432,6 @@ struct UiPreparedDraws {
     rect_batches: Vec<UiRectBatch>,
     glyph_batches: Vec<UiGlyphBatch>,
     viewport_embed_batches: Vec<UiViewportEmbedBatch>,
-    surface_size: (u32, u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

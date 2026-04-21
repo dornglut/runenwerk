@@ -26,9 +26,9 @@ pub(crate) fn validate_scene_replay(
         .cloned()
         .collect();
 
-    {
+    let report = {
         let window = world.resource::<WindowState>().ok().cloned();
-        let mut scene_resource = world
+        let scene_resource = world
             .resource_mut::<SceneResource>()
             .map_err(|_| anyhow!("ScenePlugin resource is not available"))?;
         if scene_resource.manager.is_none() {
@@ -60,11 +60,12 @@ pub(crate) fn validate_scene_replay(
             }
         }
         apply_overlay_messages(manager);
-        drop(scene_resource);
-        if let Ok(mut tick) = world.resource_mut::<SimulationTick>() {
-            *tick = target_tick;
-        }
-        republish_scene_resources(world)?;
-        Ok(report)
+        report
+    };
+
+    if let Ok(tick) = world.resource_mut::<SimulationTick>() {
+        *tick = target_tick;
     }
+    republish_scene_resources(world)?;
+    Ok(report)
 }

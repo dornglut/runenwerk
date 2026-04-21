@@ -1,7 +1,7 @@
 mod entry;
 mod error;
 mod key;
-mod prelude;
+pub mod prelude;
 mod query;
 mod spatial_hash;
 mod storage;

@@ -1,6 +1,6 @@
 use engine::WindowState;
 use engine::plugins::render::{
-    EditorPickingResultResource, EditorPickingTarget, UiFontAtlasResource,
+    EditorPickingTarget, UiFontAtlasResource,
     UiFrameProducerId, UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
     UiFrameSubmissionRegistryResource,
     ViewportSurfaceBindingRegistryResource,
@@ -22,9 +22,10 @@ use crate::runtime::resources::{
     scaled_shell_theme,
 };
 use crate::runtime::viewport::{
-    MAIN_VIEWPORT_ID, ViewportArtifactObservationResource, ViewportLayoutEntry,
-    ViewportLayoutMapResource, ViewportPresentationStateResource, ViewportProductRegistryResource,
-    build_surface_binding_registry, default_presentation_state, initial_product_descriptors,
+    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
+    ViewportPickingResultsResource, ViewportPresentationStateResource, ViewportProductRegistryResource,
+    ViewportSurfaceSetResource, build_surface_binding_registry, initial_presentation_state,
+    initial_product_descriptors,
 };
 
 const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
@@ -40,7 +41,7 @@ pub fn submit_editor_frame_system(
     viewport_observations: Res<ViewportArtifactObservationResource>,
     mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
     atlas: Res<UiFontAtlasResource>,
-    picking: Res<EditorPickingResultResource>,
+    viewport_picking_results: Res<ViewportPickingResultsResource>,
     mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
 ) {
     let bounds = window_bounds(&window);
@@ -51,7 +52,8 @@ pub fn submit_editor_frame_system(
         theme,
     } = &mut *host;
     let shell_theme = scaled_shell_theme(theme, window.scale_factor);
-    let viewport_products = viewport_observations.frame_for(MAIN_VIEWPORT_ID);
+    let viewport_products = viewport_observations.first_frame();
+    let active_viewport_id = viewport_products.map(|value| value.viewport_id);
     let (expression_source_version, frame) = if debug_hardcoded_ui_frame_enabled() {
         let expression = editor_shell::ShellUiExpressionFrame::new(
             app.runtime().current_scene_reality_version(),
@@ -74,7 +76,8 @@ pub fn submit_editor_frame_system(
             expression.into_ui_frame(),
         )
     };
-    let viewport_bounds = viewport_bounds_from_frame(&frame, MAIN_VIEWPORT_ID.0)
+    let viewport_bounds = active_viewport_id
+        .and_then(|viewport_id| viewport_bounds_from_frame(&frame, viewport_id.0))
         .or_else(|| {
             viewport_bounds(
                 shell_state.last_tree(),
@@ -87,11 +90,13 @@ pub fn submit_editor_frame_system(
     let viewport_bounds_changed =
         populate_viewport_render_state(app, &mut viewport_render, viewport_bounds);
     viewport_layout_map.clear();
-    viewport_layout_map.upsert_entry(ViewportLayoutEntry {
-        viewport_id: MAIN_VIEWPORT_ID,
-        host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-        bounds: viewport_bounds,
-    });
+    if let Some(viewport_id) = active_viewport_id {
+        viewport_layout_map.upsert_entry(ViewportLayoutEntry {
+            viewport_id,
+            host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+            bounds: viewport_bounds,
+        });
+    }
     let viewport_valid = viewport_is_valid(viewport_bounds);
     let shader_loaded = true;
     let debug_stage = viewport_debug_stage();
@@ -100,8 +105,8 @@ pub fn submit_editor_frame_system(
     let debug_stage_changed = viewport_render.set_debug_stage(debug_stage);
     let root_probe_changed = viewport_render.set_root_background_opaque(root_background_opaque);
     let shell_scale_changed = viewport_render.set_effective_shell_scale(shell_scale);
-    let contradiction_active =
-        picking_hits_entity_or_component(&picking) && viewport_render.scene_should_be_invisible();
+    let contradiction_active = picking_hits_entity_or_component(&viewport_picking_results, active_viewport_id)
+        && viewport_render.scene_should_be_invisible();
     let should_report_contradiction =
         viewport_render.should_report_visibility_contradiction(contradiction_active);
     let branch_trace_enabled = viewport_branch_trace_enabled();
@@ -179,40 +184,51 @@ pub fn submit_editor_frame_system(
 pub fn sync_viewport_presentation_products_system(
     host: Res<EditorHostResource>,
     viewport_render: Res<EditorViewportRenderState>,
+    viewport_surface_sets: Res<ViewportSurfaceSetResource>,
     mut viewport_products_registry: ResMut<ViewportProductRegistryResource>,
     mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
     mut viewport_observations: ResMut<ViewportArtifactObservationResource>,
     mut viewport_surface_bindings: ResMut<ViewportSurfaceBindingRegistryResource>,
 ) {
+    let canonical_viewport_ids = viewport_surface_sets.viewport_ids().collect::<Vec<_>>();
     let source_version = host.app.runtime().current_scene_reality_version();
     let product_dimensions = ExpressionDimensions::new(
         viewport_render.viewport_bounds_px.2.max(1.0).round() as u32,
         viewport_render.viewport_bounds_px.3.max(1.0).round() as u32,
     );
-    let descriptors = initial_product_descriptors(product_dimensions, source_version);
-    viewport_products_registry.update_viewport_descriptors(MAIN_VIEWPORT_ID, descriptors.clone());
+    for viewport_id in &canonical_viewport_ids {
+        let descriptors = initial_product_descriptors(product_dimensions, source_version);
+        viewport_products_registry.update_viewport_descriptors(*viewport_id, descriptors.clone());
 
-    let mut presentation_state = viewport_presentations
-        .state_for(MAIN_VIEWPORT_ID)
-        .cloned()
-        .unwrap_or_else(default_presentation_state);
-    if !descriptors
-        .iter()
-        .any(|descriptor| descriptor.id == presentation_state.selected_primary_product_id)
-    {
-        presentation_state.select_primary_product(
-            default_presentation_state().selected_primary_product_id,
-        );
+        let mut presentation_state = viewport_presentations
+            .state_for(*viewport_id)
+            .cloned()
+            .unwrap_or_else(|| initial_presentation_state(*viewport_id));
+        if !descriptors
+            .iter()
+            .any(|descriptor| descriptor.id == presentation_state.selected_primary_product_id)
+        {
+            presentation_state.select_primary_product(
+                initial_presentation_state(*viewport_id).selected_primary_product_id,
+            );
+        }
+        viewport_presentations.upsert_state(presentation_state.clone());
+        viewport_observations.upsert_frame(build_artifact_observation_frame(
+            &descriptors,
+            &presentation_state,
+            source_version,
+        ));
     }
-    viewport_presentations.upsert_state(presentation_state.clone());
 
-    viewport_observations.upsert_frame(build_artifact_observation_frame(
-        &descriptors,
-        &presentation_state,
-        source_version,
+    let viewport_id_set = canonical_viewport_ids.into_iter().collect::<std::collections::BTreeSet<_>>();
+    viewport_products_registry.retain_viewports(|viewport_id| viewport_id_set.contains(&viewport_id));
+    viewport_presentations.retain_viewports(|viewport_id| viewport_id_set.contains(&viewport_id));
+    viewport_observations.retain_viewports(|viewport_id| viewport_id_set.contains(&viewport_id));
+
+    viewport_surface_bindings.replace_registry(build_surface_binding_registry(
+        &viewport_surface_sets,
+        &viewport_presentations,
     ));
-    viewport_surface_bindings
-        .replace_registry(build_surface_binding_registry(&presentation_state));
 }
 
 fn debug_hardcoded_ui_frame_enabled() -> bool {
@@ -314,7 +330,16 @@ fn viewport_is_valid(bounds: UiRect) -> bool {
     bounds.width > f32::EPSILON && bounds.height > f32::EPSILON
 }
 
-fn picking_hits_entity_or_component(picking: &EditorPickingResultResource) -> bool {
+fn picking_hits_entity_or_component(
+    picking_results: &ViewportPickingResultsResource,
+    viewport_id: Option<editor_viewport::ViewportId>,
+) -> bool {
+    let Some(viewport_id) = viewport_id else {
+        return false;
+    };
+    let Some(picking) = picking_results.result_for(viewport_id) else {
+        return false;
+    };
     matches!(
         picking.hit.target,
         EditorPickingTarget::Entity(_) | EditorPickingTarget::ComponentHandle { .. }

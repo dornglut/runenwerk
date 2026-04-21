@@ -142,7 +142,7 @@ impl InputDriver for TestReplicationDriver {
     fn take_local_input(world: &mut World) -> Result<Vec<Self::Input>, Self::Error> {
         Ok(world
             .resource_mut::<PlayerCommandBuffer>()
-            .map(|mut commands| commands.drain())
+            .map(|commands| commands.drain())
             .unwrap_or_default())
     }
 

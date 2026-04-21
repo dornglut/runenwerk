@@ -57,7 +57,7 @@ impl AppRunner for FixedTicksRunner {
             .resource::<FixedTimeConfig>()
             .map(|config| config.step_seconds)
             .unwrap_or(1.0 / 60.0);
-        if let Ok(mut time) = world.resource_mut::<Time>() {
+        if let Ok(time) = world.resource_mut::<Time>() {
             time.delta_seconds = fixed_step_seconds;
         }
     }

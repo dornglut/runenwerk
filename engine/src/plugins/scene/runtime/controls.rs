@@ -13,7 +13,7 @@ fn with_scene_manager_mut<T>(
         return Err(anyhow!("ScenePlugin is not installed"));
     }
     let window = world.resource::<WindowState>().ok().cloned();
-    let mut scene_resource = world
+    let scene_resource = world
         .resource_mut::<SceneResource>()
         .map_err(|_| anyhow!("ScenePlugin resource is not available"))?;
     if scene_resource.manager.is_none() {

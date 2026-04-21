@@ -4,16 +4,18 @@
 use editor_core::{ComponentTypeId, EntityId, RealityVersion};
 use editor_shell::{PickingExpressionAxis, PickingExpressionFrame, PickingExpressionTarget};
 use editor_viewport::{ViewportHitResult, ViewportId};
-use engine::plugins::render::{EditorGizmoAxis, EditorPickingResultResource, EditorPickingTarget};
+use engine::plugins::render::{EditorGizmoAxis, EditorPickingHit, EditorPickingTarget};
+
+use crate::runtime::viewport::ViewportPickingResultsResource;
 
 pub fn build_picking_expression_frame(
-    picking: &EditorPickingResultResource,
+    hit: EditorPickingHit,
     source_version: RealityVersion,
 ) -> PickingExpressionFrame {
     PickingExpressionFrame::new(
         source_version,
-        map_picking_target(picking.hit.target),
-        picking.hit.distance,
+        map_picking_target(hit.target),
+        hit.distance,
     )
 }
 
@@ -42,12 +44,16 @@ pub struct ViewportPickingProductFrame {
 
 pub fn build_viewport_picking_product_frame(
     viewport_id: ViewportId,
-    picking: &EditorPickingResultResource,
+    picking_results: &ViewportPickingResultsResource,
     source_version: RealityVersion,
 ) -> ViewportPickingProductFrame {
+    let hit = picking_results
+        .result_for(viewport_id)
+        .map(|value| value.hit)
+        .unwrap_or_else(EditorPickingHit::none);
     ViewportPickingProductFrame {
         viewport_id,
-        expression: build_picking_expression_frame(picking, source_version),
+        expression: build_picking_expression_frame(hit, source_version),
     }
 }
 

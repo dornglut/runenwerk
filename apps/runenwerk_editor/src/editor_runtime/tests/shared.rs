@@ -10,9 +10,3 @@ pub struct Position {
     pub speed: f32,
     pub label: String,
 }
-
-#[derive(Debug, Clone, Default, ecs::Component, ecs::ReflectComponent)]
-pub struct Velocity {
-    pub x: f32,
-    pub y: f32,
-}
