@@ -44,6 +44,7 @@ Breaking changes in the strict canonical surface:
   - use `TypedId::try_from_raw(...)` or `TryFrom<u64>`.
 - `IdTag` is removed from the canonical surface.
 - `TypedIdSequence<Tag>` moved to `legacy` feature and is deprecated.
+- `#[id]` now generates `*Allocator` aliases as canonical; `*Sequence` remains deprecated compatibility.
 
 Allocator API hardening:
 

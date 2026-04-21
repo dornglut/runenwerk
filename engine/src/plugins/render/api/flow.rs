@@ -6,8 +6,8 @@ use crate::plugins::render::api::{
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
     FlowValidationReport, GpuParams, RenderFlowGraph, RenderFlowId, RenderFlowValidationError,
-    RenderPassId, RenderPassIdSequence, RenderPassNode, RenderResourceDescriptor, RenderResourceId,
-    RenderResourceIdSequence, validate_flow_graph,
+    RenderPassId, RenderPassIdAllocator, RenderPassNode, RenderResourceDescriptor,
+    RenderResourceId, RenderResourceIdAllocator, validate_flow_graph,
 };
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,8 +29,8 @@ pub struct RenderFlow {
     pass_ids_by_label: BTreeMap<String, RenderPassId>,
     resource_ids_by_label: BTreeMap<String, RenderResourceId>,
     ping_pong_storage: BTreeMap<String, PingPongStorageRegistration>,
-    next_pass_id: RenderPassIdSequence,
-    next_resource_id: RenderResourceIdSequence,
+    next_pass_id: RenderPassIdAllocator,
+    next_resource_id: RenderResourceIdAllocator,
 }
 
 impl RenderFlow {
@@ -43,8 +43,8 @@ impl RenderFlow {
             pass_ids_by_label: BTreeMap::new(),
             resource_ids_by_label: BTreeMap::new(),
             ping_pong_storage: BTreeMap::new(),
-            next_pass_id: RenderPassIdSequence::default(),
-            next_resource_id: RenderResourceIdSequence::default(),
+            next_pass_id: RenderPassIdAllocator::default(),
+            next_resource_id: RenderResourceIdAllocator::default(),
         }
     }
 
