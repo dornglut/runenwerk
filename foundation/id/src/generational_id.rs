@@ -119,6 +119,9 @@ impl<'de, Tag> serde::Deserialize<'de> for GenerationalId<Tag> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "serde")]
+    use alloc::string::ToString;
+
     use super::*;
     use static_assertions::assert_not_impl_any;
 

@@ -129,6 +129,8 @@ impl<Tag> fmt::Debug for MonotonicIdAllocator<Tag> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::*;
     use proptest::prelude::*;
     use static_assertions::assert_not_impl_any;
