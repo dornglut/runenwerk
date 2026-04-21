@@ -2,9 +2,9 @@ use core::fmt;
 
 use crate::{MonotonicIdAllocator, TypedId};
 
-/// Deprecated façade over [`MonotonicIdAllocator`].
+/// Legacy façade retained for migration compatibility.
 #[deprecated(
-    note = "Use MonotonicIdAllocator<Tag> directly; TypedIdSequence<Tag> will be removed in a later cycle."
+    note = "Use MonotonicIdAllocator<Tag> directly; TypedIdSequence<Tag> is a legacy compatibility shim."
 )]
 pub struct TypedIdSequence<Tag> {
     allocator: MonotonicIdAllocator<Tag>,
@@ -13,14 +13,15 @@ pub struct TypedIdSequence<Tag> {
 #[allow(deprecated)]
 impl<Tag> TypedIdSequence<Tag> {
     #[deprecated(note = "Use MonotonicIdAllocator::new")]
-    pub const fn new(start_at: u64) -> Self {
+    pub fn new(start_at: u64) -> Self {
         Self {
-            allocator: MonotonicIdAllocator::new(start_at),
+            allocator: MonotonicIdAllocator::new(start_at)
+                .expect("TypedIdSequence start_at must be non-zero"),
         }
     }
 
     #[deprecated(note = "Use MonotonicIdAllocator::next_raw")]
-    pub const fn next_raw(&self) -> u64 {
+    pub fn next_raw(&self) -> u64 {
         self.allocator.next_raw()
     }
 
@@ -36,7 +37,7 @@ impl<Tag> TypedIdSequence<Tag> {
 
     #[deprecated(note = "Use MonotonicIdAllocator::try_allocate")]
     pub fn try_allocate(&mut self) -> Option<TypedId<Tag>> {
-        self.allocator.try_allocate()
+        self.allocator.try_allocate().ok()
     }
 
     #[deprecated(note = "Use MonotonicIdAllocator::allocate_batch")]
@@ -139,10 +140,22 @@ mod tests {
 
     #[test]
     #[allow(deprecated)]
-    #[should_panic(expected = "MonotonicIdAllocator exhausted at u64::MAX")]
+    #[should_panic(expected = "MonotonicIdAllocator exhausted")]
     fn allocate_panics_after_u64_max() {
         let mut sequence = TypedIdSequence::<AnotherTag>::new(u64::MAX - 1);
         let _ = sequence.allocate();
         let _ = sequence.allocate();
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn try_allocate_maps_exhausted_to_none() {
+        let mut sequence = TypedIdSequence::<AnotherTag>::new(u64::MAX - 1);
+        let _ = sequence.allocate();
+        assert_eq!(
+            sequence.allocator.try_allocate(),
+            Err(crate::AllocationError::Exhausted)
+        );
+        assert!(sequence.try_allocate().is_none());
     }
 }

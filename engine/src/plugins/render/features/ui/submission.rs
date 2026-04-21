@@ -32,7 +32,7 @@ impl UiFrameSubmissionOrder {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct UiFrameSubmission {
     pub producer_id: UiFrameProducerId,
     pub route: UiFrameRoute,

@@ -1,128 +1,22 @@
+use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
 
-#[repr(transparent)]
-pub struct GenerationalId<Tag> {
-    raw: u64,
-    _marker: PhantomData<fn() -> Tag>,
-}
-
-impl<Tag> GenerationalId<Tag> {
-    pub const fn from_parts(slot: u32, generation: u32) -> Self {
-        let raw = ((generation as u64) << 32) | (slot as u64);
-        Self {
-            raw,
-            _marker: PhantomData,
-        }
-    }
-
-    pub const fn from_raw(raw: u64) -> Self {
-        Self {
-            raw,
-            _marker: PhantomData,
-        }
-    }
-
-    pub const fn slot(self) -> u32 {
-        self.raw as u32
-    }
-
-    pub const fn generation(self) -> u32 {
-        (self.raw >> 32) as u32
-    }
-
-    pub const fn raw(self) -> u64 {
-        self.raw
-    }
-}
-
-impl<Tag> Default for GenerationalId<Tag> {
-    fn default() -> Self {
-        Self::from_parts(0, 0)
-    }
-}
-
-impl<Tag> Copy for GenerationalId<Tag> {}
-
-impl<Tag> Clone for GenerationalId<Tag> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<Tag> PartialEq for GenerationalId<Tag> {
-    fn eq(&self, other: &Self) -> bool {
-        self.raw == other.raw
-    }
-}
-
-impl<Tag> Eq for GenerationalId<Tag> {}
-
-impl<Tag> PartialOrd for GenerationalId<Tag> {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<Tag> Ord for GenerationalId<Tag> {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.raw.cmp(&other.raw)
-    }
-}
-
-impl<Tag> core::hash::Hash for GenerationalId<Tag> {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.raw.hash(state);
-    }
-}
-
-impl<Tag> fmt::Debug for GenerationalId<Tag> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GenerationalId")
-            .field("slot", &self.slot())
-            .field("generation", &self.generation())
-            .finish()
-    }
-}
-
-impl<Tag> From<u64> for GenerationalId<Tag> {
-    fn from(value: u64) -> Self {
-        Self::from_raw(value)
-    }
-}
-
-impl<Tag> From<GenerationalId<Tag>> for u64 {
-    fn from(value: GenerationalId<Tag>) -> Self {
-        value.raw()
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<Tag> serde::Serialize for GenerationalId<Tag> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_u64(self.raw)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, Tag> serde::Deserialize<'de> for GenerationalId<Tag> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let raw = u64::deserialize(deserializer)?;
-        Ok(Self::from_raw(raw))
-    }
-}
+use crate::{AllocationError, FreeError, GenerationalId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum SlotState {
     Live,
     Free,
     Retired,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GenerationalAllocatorStats {
+    pub live_slots: usize,
+    pub free_slots: usize,
+    pub retired_slots: usize,
+    pub capacity_slots: usize,
 }
 
 /// Allocator-only lifecycle manager for generation-tracked IDs.
@@ -135,6 +29,7 @@ pub struct GenerationalIdAllocator<Tag> {
     generations: Vec<u32>,
     states: Vec<SlotState>,
     live_count: usize,
+    retired_count: usize,
     _marker: PhantomData<fn() -> Tag>,
 }
 
@@ -146,23 +41,24 @@ impl<Tag> GenerationalIdAllocator<Tag> {
             generations: Vec::new(),
             states: Vec::new(),
             live_count: 0,
+            retired_count: 0,
             _marker: PhantomData,
         }
     }
 
-    pub fn try_allocate(&mut self) -> Option<GenerationalId<Tag>> {
+    pub fn try_allocate(&mut self) -> Result<GenerationalId<Tag>, AllocationError> {
         if let Some(slot) = self.free_slots.pop() {
             let index = slot as usize;
             if self.states.get(index) != Some(&SlotState::Free) {
-                return None;
+                return Err(AllocationError::Exhausted);
             }
             self.states[index] = SlotState::Live;
             self.live_count += 1;
-            return Some(GenerationalId::from_parts(slot, self.generations[index]));
+            return Ok(GenerationalId::from_parts(slot, self.generations[index]));
         }
 
         if self.next_slot > u32::MAX as u64 {
-            return None;
+            return Err(AllocationError::Exhausted);
         }
 
         let slot = self.next_slot as u32;
@@ -170,24 +66,36 @@ impl<Tag> GenerationalIdAllocator<Tag> {
         self.generations.push(0);
         self.states.push(SlotState::Live);
         self.live_count += 1;
-        Some(GenerationalId::from_parts(slot, 0))
+        Ok(GenerationalId::from_parts(slot, 0))
     }
 
     pub fn allocate(&mut self) -> GenerationalId<Tag> {
         self.try_allocate()
-            .expect("GenerationalIdAllocator exhausted available slots")
+            .expect("GenerationalIdAllocator exhausted")
     }
 
-    pub fn free(&mut self, id: GenerationalId<Tag>) -> bool {
+    pub fn try_free(&mut self, id: GenerationalId<Tag>) -> Result<(), FreeError> {
         let slot = id.slot() as usize;
         let Some(generation) = self.generations.get_mut(slot) else {
-            return false;
+            return Err(FreeError::UnknownSlot { slot: id.slot() });
         };
         let Some(state) = self.states.get_mut(slot) else {
-            return false;
+            return Err(FreeError::UnknownSlot { slot: id.slot() });
         };
-        if *state != SlotState::Live || *generation != id.generation() {
-            return false;
+
+        match *state {
+            SlotState::Live => {}
+            SlotState::Free | SlotState::Retired => {
+                return Err(FreeError::NotLive { slot: id.slot() });
+            }
+        }
+
+        if *generation != id.generation() {
+            return Err(FreeError::StaleGeneration {
+                slot: id.slot(),
+                expected_generation: *generation,
+                provided_generation: id.generation(),
+            });
         }
 
         self.live_count = self.live_count.saturating_sub(1);
@@ -200,10 +108,16 @@ impl<Tag> GenerationalIdAllocator<Tag> {
             }
             None => {
                 *state = SlotState::Retired;
+                self.retired_count += 1;
             }
         }
 
-        true
+        Ok(())
+    }
+
+    pub fn free(&mut self, id: GenerationalId<Tag>) {
+        self.try_free(id)
+            .expect("GenerationalIdAllocator::free called with invalid handle")
     }
 
     pub fn is_live(&self, id: GenerationalId<Tag>) -> bool {
@@ -224,6 +138,15 @@ impl<Tag> GenerationalIdAllocator<Tag> {
     pub fn capacity_slots(&self) -> usize {
         self.generations.len()
     }
+
+    pub fn stats(&self) -> GenerationalAllocatorStats {
+        GenerationalAllocatorStats {
+            live_slots: self.live_count,
+            free_slots: self.free_slots.len(),
+            retired_slots: self.retired_count,
+            capacity_slots: self.capacity_slots(),
+        }
+    }
 }
 
 impl<Tag> Default for GenerationalIdAllocator<Tag> {
@@ -237,8 +160,7 @@ impl<Tag> fmt::Debug for GenerationalIdAllocator<Tag> {
         f.debug_struct("GenerationalIdAllocator")
             .field("next_slot", &self.next_slot)
             .field("live_count", &self.live_count)
-            .field("capacity_slots", &self.capacity_slots())
-            .field("free_slots", &self.free_slots.len())
+            .field("stats", &self.stats())
             .finish()
     }
 }
@@ -246,17 +168,11 @@ impl<Tag> fmt::Debug for GenerationalIdAllocator<Tag> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
     use static_assertions::assert_not_impl_any;
+    use std::collections::HashSet;
 
     enum EntityTag {}
-
-    #[test]
-    fn packed_layout_roundtrip_is_stable() {
-        let id = GenerationalId::<EntityTag>::from_parts(7, 9);
-        assert_eq!(id.raw(), ((9u64) << 32) | 7u64);
-        assert_eq!(id.slot(), 7);
-        assert_eq!(id.generation(), 9);
-    }
 
     #[test]
     fn allocates_and_reports_liveness() {
@@ -266,13 +182,24 @@ mod tests {
         assert!(allocator.is_live(id));
         assert_eq!(allocator.live_count(), 1);
         assert_eq!(allocator.capacity_slots(), 1);
+        assert_eq!(
+            allocator.stats(),
+            GenerationalAllocatorStats {
+                live_slots: 1,
+                free_slots: 0,
+                retired_slots: 0,
+                capacity_slots: 1,
+            }
+        );
     }
 
     #[test]
     fn reuse_increments_generation_and_invalidates_stale() {
         let mut allocator = GenerationalIdAllocator::<EntityTag>::new();
         let first = allocator.allocate();
-        assert!(allocator.free(first));
+        allocator
+            .try_free(first)
+            .expect("initial live handle should free");
 
         let reused = allocator.allocate();
         assert_eq!(reused.slot(), first.slot());
@@ -282,12 +209,38 @@ mod tests {
     }
 
     #[test]
-    fn free_returns_false_for_stale_or_unknown_ids() {
+    fn try_free_returns_error_for_stale_or_unknown_ids() {
         let mut allocator = GenerationalIdAllocator::<EntityTag>::new();
         let first = allocator.allocate();
-        assert!(allocator.free(first));
-        assert!(!allocator.free(first));
-        assert!(!allocator.free(GenerationalId::from_parts(99, 0)));
+        allocator
+            .try_free(first)
+            .expect("initial live handle should free");
+
+        let stale = allocator.try_free(first);
+        assert_eq!(stale, Err(FreeError::NotLive { slot: first.slot() }));
+
+        let unknown = allocator.try_free(GenerationalId::from_parts(99, 0));
+        assert_eq!(unknown, Err(FreeError::UnknownSlot { slot: 99 }));
+    }
+
+    #[test]
+    fn stale_generation_error_is_reported() {
+        let mut allocator = GenerationalIdAllocator::<EntityTag>::new();
+        let first = allocator.allocate();
+        allocator
+            .try_free(first)
+            .expect("initial live handle should free");
+
+        let reused = allocator.allocate();
+        let stale = allocator.try_free(first);
+        assert_eq!(
+            stale,
+            Err(FreeError::StaleGeneration {
+                slot: reused.slot(),
+                expected_generation: reused.generation(),
+                provided_generation: first.generation(),
+            })
+        );
     }
 
     #[test]
@@ -296,11 +249,14 @@ mod tests {
         let id = allocator.allocate();
 
         allocator.generations[id.slot() as usize] = u32::MAX;
-        assert!(allocator.free(GenerationalId::from_parts(id.slot(), u32::MAX)));
+        allocator
+            .try_free(GenerationalId::from_parts(id.slot(), u32::MAX))
+            .expect("slot at generation max should retire");
 
         assert!(!allocator.is_live(GenerationalId::from_parts(id.slot(), u32::MAX)));
         assert!(allocator.free_slots.is_empty());
         assert_eq!(allocator.states[id.slot() as usize], SlotState::Retired);
+        assert_eq!(allocator.stats().retired_slots, 1);
     }
 
     #[test]
@@ -309,14 +265,16 @@ mod tests {
         let id = allocator.allocate();
 
         allocator.generations[id.slot() as usize] = u32::MAX;
-        assert!(allocator.free(GenerationalId::from_parts(id.slot(), u32::MAX)));
+        allocator
+            .try_free(GenerationalId::from_parts(id.slot(), u32::MAX))
+            .expect("slot at generation max should retire");
         allocator.next_slot = (u32::MAX as u64) + 1;
 
-        assert!(allocator.try_allocate().is_none());
+        assert_eq!(allocator.try_allocate(), Err(AllocationError::Exhausted));
     }
 
     #[test]
-    #[should_panic(expected = "GenerationalIdAllocator exhausted available slots")]
+    #[should_panic(expected = "GenerationalIdAllocator exhausted")]
     fn allocate_panics_when_exhausted() {
         let mut allocator = GenerationalIdAllocator::<EntityTag>::new();
         allocator.next_slot = (u32::MAX as u64) + 1;
@@ -328,15 +286,20 @@ mod tests {
         assert_not_impl_any!(GenerationalIdAllocator<EntityTag>: Copy, Clone);
     }
 
-    #[cfg(feature = "serde")]
-    #[test]
-    fn serde_roundtrip_uses_packed_u64() {
-        let id = GenerationalId::<EntityTag>::from_parts(123, 456);
-        let encoded = serde_json::to_string(&id).expect("serialize generational id");
-        assert_eq!(encoded, id.raw().to_string());
+    proptest! {
+        #[test]
+        fn property_live_handles_are_unique(count in 1usize..256usize) {
+            let mut allocator = GenerationalIdAllocator::<EntityTag>::new();
+            let handles = (0..count)
+                .map(|_| allocator.allocate())
+                .collect::<Vec<_>>();
 
-        let decoded: GenerationalId<EntityTag> =
-            serde_json::from_str(&encoded).expect("deserialize generational id");
-        assert_eq!(decoded, id);
+            let unique = handles
+                .iter()
+                .map(|id| id.raw())
+                .collect::<HashSet<_>>();
+            prop_assert_eq!(unique.len(), handles.len());
+            prop_assert!(handles.into_iter().all(|id| allocator.is_live(id)));
+        }
     }
 }
