@@ -2,9 +2,10 @@ use crate::plugins::InputState;
 // Owner: Engine Scene Plugin - Tests
 use super::super::domain::{QuestState, SceneTemplateUiEvent, WorldToOverlayMessage};
 use super::super::{
-    ScenePlugin, SceneResource, apply_scene_simulation_delta, build_scene_simulation_delta,
-    capture_scene_simulation_snapshot, format_world_message, switch_scene_by_id,
+    ScenePlugin, SceneResource, capture_scene_simulation_snapshot, format_world_message,
+    switch_scene_by_id,
 };
+use super::super::test_support::{apply_scene_simulation_delta, build_scene_simulation_delta};
 use crate::prelude::*;
 use ui_render_data::UiPrimitive;
 use winit::event::{ElementState, MouseButton};

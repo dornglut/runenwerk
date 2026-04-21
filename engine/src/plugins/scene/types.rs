@@ -19,7 +19,6 @@ pub(crate) struct SceneManager {
 }
 
 pub use super::replay::codec::{
-    SceneEntityDeltaV2, SceneEntitySnapshotV2, SceneReplayArchive, SceneReplayInputFrameV2,
-    SceneSimulationDeltaV2, SceneSimulationSnapshotV2, SceneWorldContextDeltaV2,
+    SceneEntitySnapshotV2, SceneReplayArchive, SceneReplayInputFrameV2, SceneSimulationSnapshotV2,
     SceneWorldContextSnapshotV2,
 };

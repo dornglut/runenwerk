@@ -26,10 +26,15 @@ The plugin owns the runtime scene manager and republishes transport-neutral scen
 
 It also defines the current authoritative scene replay/snapshot DTOs:
 
-- `SceneSimulationSnapshotV1`
-- `SceneSimulationDeltaV1`
-- `SceneReplayCommandFrame`
+- `SceneSimulationSnapshotV2`
+- `SceneReplayInputFrameV2`
 - `SceneReplayArchive`
+
+Replay contract boundary is snapshot + command journal + hash validation:
+
+- periodic checkpoint snapshots
+- per-tick replay input command journal frames
+- replay validation via expected/actual hash comparison
 
 ## Ownership Boundaries
 
@@ -51,4 +56,3 @@ It also defines the current authoritative scene replay/snapshot DTOs:
 - Usage: [../../../docs/reference/plugins/scene/usage-guide.md](../../reference/plugins/scene/usage-guide.md)
 - Advanced: [../../../docs/reference/plugins/scene/advanced-guide.md](../../reference/plugins/scene/advanced-guide.md)
 - Architecture: [../../../docs/reference/plugins/scene/architecture.md](../../reference/plugins/scene/architecture.md)
-

@@ -1,19 +1,53 @@
 use super::super::{
-    SceneEntityDeltaV2, SceneEntitySnapshotV2, SceneSimulationDeltaV2, SceneSimulationSnapshotV2,
-    SceneWorldContextDeltaV2, SceneWorldContextSnapshotV2,
+    SceneEntitySnapshotV2, SceneSimulationSnapshotV2, SceneWorldContextSnapshotV2,
 };
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct SceneEntityDeltaTest {
+    pub frame_counter: Option<crate::plugins::scene::domain::WorldFrameCounter>,
+    pub debug_position: Option<crate::plugins::scene::domain::WorldDebugPosition>,
+    pub debug_velocity: Option<crate::plugins::scene::domain::WorldDebugVelocity>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct SceneWorldContextDeltaTest {
+    pub world: Option<crate::plugins::scene::domain::SceneSlot>,
+    pub overlays: Option<Vec<crate::plugins::scene::domain::SceneSlot>>,
+    pub world_scene_label: Option<String>,
+    pub overlay_scene_label: Option<String>,
+    pub gameplay_config: Option<crate::plugins::scene::domain::GameplayConfig>,
+    pub gameplay_config_modified_millis: Option<Option<u64>>,
+    pub gameplay_config_revision: Option<u64>,
+    pub overlay_consumed: Option<bool>,
+    pub player_move_x: Option<f32>,
+    pub player_move_y: Option<f32>,
+    pub camera_yaw: Option<f32>,
+    pub camera_pitch: Option<f32>,
+    pub camera_distance: Option<f32>,
+    pub delta_seconds: Option<f32>,
+    pub fixed_step_seconds: Option<f32>,
+    pub fixed_step_accumulator: Option<f32>,
+    pub frame_count: Option<u64>,
+    pub enemy_kills: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct SceneSimulationDeltaTest {
+    pub context: SceneWorldContextDeltaTest,
+    pub entities: SceneEntityDeltaTest,
+}
 
 pub(crate) fn build_scene_simulation_delta(
     base: &SceneSimulationSnapshotV2,
     current: &SceneSimulationSnapshotV2,
-) -> SceneSimulationDeltaV2 {
+) -> SceneSimulationDeltaTest {
     let base_ctx = &base.context;
     let current_ctx = &current.context;
     let base_entities = &base.entities;
     let current_entities = &current.entities;
 
-    SceneSimulationDeltaV2 {
-        context: SceneWorldContextDeltaV2 {
+    SceneSimulationDeltaTest {
+        context: SceneWorldContextDeltaTest {
             world: (base_ctx.world != current_ctx.world).then_some(current_ctx.world),
             overlays: (base_ctx.overlays != current_ctx.overlays)
                 .then_some(current_ctx.overlays.clone()),
@@ -53,7 +87,7 @@ pub(crate) fn build_scene_simulation_delta(
             enemy_kills: (base_ctx.enemy_kills != current_ctx.enemy_kills)
                 .then_some(current_ctx.enemy_kills),
         },
-        entities: SceneEntityDeltaV2 {
+        entities: SceneEntityDeltaTest {
             frame_counter: (base_entities.frame_counter != current_entities.frame_counter)
                 .then_some(current_entities.frame_counter),
             debug_position: (base_entities.debug_position != current_entities.debug_position)
@@ -66,7 +100,7 @@ pub(crate) fn build_scene_simulation_delta(
 
 pub(crate) fn apply_scene_simulation_delta(
     base: &SceneSimulationSnapshotV2,
-    delta: &SceneSimulationDeltaV2,
+    delta: &SceneSimulationDeltaTest,
 ) -> SceneSimulationSnapshotV2 {
     SceneSimulationSnapshotV2 {
         context: SceneWorldContextSnapshotV2 {
