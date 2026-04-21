@@ -112,23 +112,8 @@ pub struct WorkspaceState {
 pub enum WorkspaceStateError {
     MissingRootHost(PanelHostId),
     MissingHost(PanelHostId),
-    DuplicateHost(PanelHostId),
     MissingTabStack(TabStackId),
-    DuplicateTabStack(TabStackId),
     MissingPanel(PanelInstanceId),
-    PanelNotInTabStack {
-        panel_id: PanelInstanceId,
-        tab_stack_id: TabStackId,
-    },
-    PanelAlreadyInTabStack {
-        panel_id: PanelInstanceId,
-        tab_stack_id: TabStackId,
-    },
-    TabStackInsertIndexOutOfBounds {
-        tab_stack_id: TabStackId,
-        index: usize,
-        len: usize,
-    },
     MissingToolSurface(ToolSurfaceInstanceId),
     DuplicatePanelInTabStacks(PanelInstanceId),
     ActivePanelNotInStack {
@@ -166,36 +151,10 @@ impl std::fmt::Display for WorkspaceStateError {
         match self {
             Self::MissingRootHost(host_id) => write!(f, "missing root host: {host_id:?}"),
             Self::MissingHost(host_id) => write!(f, "missing host: {host_id:?}"),
-            Self::DuplicateHost(host_id) => write!(f, "duplicate host id: {host_id:?}"),
             Self::MissingTabStack(tab_stack_id) => {
                 write!(f, "missing tab stack: {tab_stack_id:?}")
             }
-            Self::DuplicateTabStack(tab_stack_id) => {
-                write!(f, "duplicate tab stack id: {tab_stack_id:?}")
-            }
             Self::MissingPanel(panel_id) => write!(f, "missing panel: {panel_id:?}"),
-            Self::PanelNotInTabStack {
-                panel_id,
-                tab_stack_id,
-            } => write!(
-                f,
-                "panel {panel_id:?} not present in tab stack {tab_stack_id:?}",
-            ),
-            Self::PanelAlreadyInTabStack {
-                panel_id,
-                tab_stack_id,
-            } => write!(
-                f,
-                "panel {panel_id:?} already present in tab stack {tab_stack_id:?}",
-            ),
-            Self::TabStackInsertIndexOutOfBounds {
-                tab_stack_id,
-                index,
-                len,
-            } => write!(
-                f,
-                "tab stack {tab_stack_id:?} insert index {index} is out of bounds for len {len}",
-            ),
             Self::MissingToolSurface(tool_surface_id) => {
                 write!(f, "missing tool surface: {tool_surface_id:?}")
             }

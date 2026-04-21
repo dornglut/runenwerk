@@ -99,22 +99,6 @@ pub fn map_interactions_to_shell_commands(
                         projection_epoch: routing.projection_epoch,
                     }
                 }
-                RoutedShellAction::ActivateTab {
-                    tab_stack_id,
-                    panel_instance_id,
-                } => ShellCommand::ActivateTab {
-                    tab_stack_id: *tab_stack_id,
-                    panel_instance_id: *panel_instance_id,
-                    projection_epoch: routing.projection_epoch,
-                },
-                RoutedShellAction::FloatPanel {
-                    tab_stack_id,
-                    panel_instance_id,
-                } => ShellCommand::FloatPanel {
-                    tab_stack_id: *tab_stack_id,
-                    panel_instance_id: *panel_instance_id,
-                    projection_epoch: routing.projection_epoch,
-                },
             };
 
             commands.push(command);

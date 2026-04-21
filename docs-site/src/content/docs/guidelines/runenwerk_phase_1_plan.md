@@ -317,10 +317,10 @@ By the end of this phase, you should have:
 
 ## What Should Follow Immediately After Phase 1
 
-After this completed phase, the next active milestone is:
+Phase 1 is complete. The workspace identity hardening track is now the active follow-on milestone set.
 
-## Workspace identity contract + migration map
-Lock workspace/panel/host/tab/tool-surface identity semantics before docking/tab implementation:
+## Workspace identity hardening track (Steps 1-6)
+Status: Steps 1-6 completed; docking/tab behavior implementation is now the next phase target.
 
 - [Workspace Identity Contract and Migration Map](./workspace-identity-contract-and-migration-map.md)
 

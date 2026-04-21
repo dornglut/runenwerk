@@ -26,7 +26,7 @@ members = [
     "domain/editor/editor_inspector",
     "domain/editor/editor_persistence",
 
-    "foundation/id",
+    "domain/id",
     "domain/id_macros",
 
     "engine",
@@ -40,7 +40,7 @@ members = [
 
     "apps/runenwerk_editor",
 
-    "adapters/godot_chunking_addon", "domain/scene", "domain/ui/ui_render_data", "domain/editor/editor_shell", "foundation/id", "domain/id_macros",
+    "adapters/godot_chunking_addon", "domain/scene", "domain/ui/ui_render_data", "domain/editor/editor_shell", "domain/id", "domain/id_macros",
 ]
 
 [workspace.dependencies]

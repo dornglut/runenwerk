@@ -6,7 +6,7 @@ _Last updated: 2026-04-21_
 
 Define the workspace identity architecture before docking, tab-stack, and broader workspace features are implemented, and map the exact migration targets in the current shell/runtime code.
 
-This document is a planning contract. It is not a docking implementation spec.
+This document is the identity planning contract and migration/status map. It is not a docking implementation spec.
 
 ---
 
@@ -40,23 +40,25 @@ This document is a planning contract. It is not a docking implementation spec.
 
 ## Identity Type Contract (Exact Definitions)
 
-Target shape for workspace-visible ids:
+Implemented shape for workspace-visible ids (`domain/editor/editor_shell/src/workspace/identity.rs`):
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct WorkspaceId(pub u64);
+use id_macros::id;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct PanelHostId(pub u64);
+#[id]
+pub struct WorkspaceId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct PanelInstanceId(pub u64);
+#[id]
+pub struct PanelHostId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ToolSurfaceInstanceId(pub u64);
+#[id]
+pub struct PanelInstanceId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TabStackId(pub u64);
+#[id]
+pub struct ToolSurfaceInstanceId;
+
+#[id]
+pub struct TabStackId;
 ```
 
 Type semantics:
@@ -137,12 +139,17 @@ Allocator rules:
   - tool-surface instances (`ToolSurfaceInstanceId`)
 - `PanelHostId` owns split/dock structure and leaf hosting policy.
 - `TabStackId` owns ordered panel membership and active panel pointer.
-- `PanelInstanceId` mounts exactly one `ToolSurfaceInstanceId` at a time.
+- `PanelInstanceId` may have zero or one active `ToolSurfaceInstanceId` attachment.
 - `ToolSurfaceInstanceId` may bind to runtime entities (for example `ViewportId`) through explicit binding records.
 
 ---
 
 ## Migration Map (File + Function Targets)
+
+Progress snapshot (2026-04-21):
+
+- completed: Step 1 (typed ids + allocator), Step 2 (canonical graph), Step 3 (projection artifacts), Step 4 (structural dispatch + stale-epoch fail-closed), Step 5 (runtime binding contracts), Step 6 (guard-test expansion before docking/tab behavior)
+- next: docking/tab behavior implementation on top of locked contracts
 
 ## Shell composition and ids
 
@@ -210,7 +217,7 @@ Allocator rules:
 
 ---
 
-## Guard Tests Required Before Docking/Tab Work
+## Guard Tests Baseline Before Docking/Tab Work
 
 - identity stability across rebuilds (same structural ids after rebuild)
 - panel move between hosts preserves `PanelInstanceId`
@@ -224,13 +231,13 @@ Allocator rules:
 
 ## Sequenced Implementation Planning Order
 
-1. add identity types + allocator contract module
-2. add workspace structural state model (hosts, stacks, panels, surfaces)
-3. add shell projection map (`WidgetId` -> structural ids)
-4. migrate shell interaction mapping to structural ids
-5. migrate runtime input/frame bridging to explicit surface bindings
-6. add guard tests and architecture tests
-7. start docking/tab behavior implementation on top of the above
+1. completed: add identity types + allocator contract module
+2. completed: add workspace structural state model (hosts, stacks, panels, surfaces)
+3. completed: add shell projection map (`WidgetId` -> structural ids)
+4. completed: migrate shell interaction mapping to structural ids
+5. completed: migrate runtime input/frame bridging to explicit surface bindings
+6. completed: add guard tests and architecture tests
+7. next: start docking/tab behavior implementation on top of the above
 
 ---
 
@@ -243,3 +250,5 @@ This contract is the next architecture layer:
 - keeps viewport runtime identity distinct from workspace composition identity
 - prevents singleton leakage before docking/tab features
 - hardens host/panel/tool ownership boundaries before breadth features
+
+Status note: the workspace identity hardening track (Steps 1-6) is complete; this document now serves as the locked contract baseline for docking/tab behavior implementation.

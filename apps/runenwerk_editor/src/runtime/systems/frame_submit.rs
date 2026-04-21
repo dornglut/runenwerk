@@ -21,10 +21,10 @@ use crate::runtime::resources::{
     scaled_shell_theme,
 };
 use crate::runtime::viewport::{
-    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
-    ViewportPickingResultsResource, ViewportPresentationStateResource,
-    ViewportProductRegistryResource, ViewportSurfaceSetResource, build_surface_binding_registry,
-    initial_presentation_state, initial_product_descriptors,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportLayoutEntry, ViewportLayoutMapResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceSetResource,
+    build_surface_binding_registry, initial_presentation_state, initial_product_descriptors,
 };
 
 const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
@@ -39,6 +39,7 @@ pub fn submit_editor_frame_system(
     mut viewport_render: ResMut<EditorViewportRenderState>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
     mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
+    mut tool_surface_bindings: ResMut<ToolSurfaceRuntimeBindingRegistryResource>,
     atlas: Res<UiFontAtlasResource>,
     viewport_picking_results: Res<ViewportPickingResultsResource>,
     mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
@@ -106,6 +107,17 @@ pub fn submit_editor_frame_system(
             structural_context,
             bounds: viewport_bounds,
         });
+    }
+    tool_surface_bindings.rebuild_from_layout_map(&viewport_layout_map);
+    if app.debug_logs_enabled() {
+        for rebind in tool_surface_bindings.latest_rebinds() {
+            app.append_console_line(format!(
+                "[viewport.binding] rebind tool_surface={} from_viewport={} to_viewport={}",
+                rebind.tool_surface_id.raw(),
+                rebind.from_viewport_id.0,
+                rebind.to_viewport_id.0
+            ));
+        }
     }
     let viewport_valid = viewport_is_valid(viewport_bounds);
     let shader_loaded = true;

@@ -10,7 +10,9 @@ use crate::runtime::resources::{
     EditorHostResource, EditorViewportCamera, editor_viewport_camera,
     editor_viewport_camera_fov_y_radians,
 };
-use crate::runtime::viewport::{ViewportLayoutMapResource, ViewportPickingResultsResource};
+use crate::runtime::viewport::{
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
+};
 use crate::shell::TRANSLATE_TOOL_ID;
 
 const GRID_EPSILON: f32 = 1e-5;
@@ -35,10 +37,10 @@ pub fn produce_editor_picking_system(
     input: Res<engine::plugins::InputState>,
     mut host: ResMut<EditorHostResource>,
     mut viewport_picking_results: ResMut<ViewportPickingResultsResource>,
-    viewport_layout_map: Res<ViewportLayoutMapResource>,
+    tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
 ) {
     let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
-    let routed_viewport = routed_viewport_bounds(&host, &viewport_layout_map);
+    let routed_viewport = routed_viewport_bounds(&host, &tool_surface_bindings);
     if let Some((viewport_id, viewport_bounds)) = routed_viewport {
         let previous_hit = viewport_picking_results
             .result_for(viewport_id)
@@ -381,23 +383,22 @@ fn hit_changed(previous: EditorPickingHit, next: EditorPickingHit) -> bool {
 
 fn routed_viewport_bounds(
     host: &EditorHostResource,
-    layout_map: &ViewportLayoutMapResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
 ) -> Option<(editor_viewport::ViewportId, UiRect)> {
     let runtime_state = host.shell_state.runtime().state();
-    let viewport_id = runtime_state
+    let binding = runtime_state
         .captured_widget
         .and_then(|widget| {
             structural_context_for_widget(&host.shell_state, widget)
-                .and_then(|context| layout_map.viewport_for_structural_context(context))
+                .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
         })
         .or_else(|| {
             runtime_state.hovered_widget.and_then(|widget| {
                 structural_context_for_widget(&host.shell_state, widget)
-                    .and_then(|context| layout_map.viewport_for_structural_context(context))
+                    .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
             })
         })?;
-    let bounds = layout_map.entry_for_viewport(viewport_id)?.bounds;
-    Some((viewport_id, bounds))
+    Some((binding.viewport_id, binding.bounds))
 }
 
 fn structural_context_for_widget(

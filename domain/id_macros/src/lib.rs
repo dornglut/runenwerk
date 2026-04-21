@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Attribute, ItemStruct, Meta, Token, parse_macro_input, punctuated::Punctuated};
+use syn::{Attribute, ItemStruct, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn id(_args: TokenStream, input: TokenStream) -> TokenStream {
@@ -14,10 +14,10 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
     let attrs = &item.attrs;
     let generics = &item.generics;
 
-    if has_user_derive(attrs) {
+    if has_direct_derive(attrs) {
         return syn::Error::new_spanned(
             ident,
-            "#[id] injects derives automatically; remove any #[derive(...)] or cfg_attr(..., derive(...)) on this struct",
+            "#[id] injects derives automatically; remove any explicit #[derive(...)] on this struct",
         )
         .to_compile_error();
     }
@@ -39,15 +39,21 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
     }
 
     let tag_ident = format_ident!("__{}Tag", ident);
-    let allocator_ident = format_ident!("{}Allocator", ident);
+    let sequence_ident = format_ident!("{}Sequence", ident);
+    let debug_name = ident.to_string();
+
     quote! {
         #( #attrs )*
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
         #vis struct #ident(::id::TypedId<#tag_ident>);
 
         #[doc(hidden)]
         #vis enum #tag_ident {}
+
+        impl ::id::IdTag for #tag_ident {
+            const DEBUG_NAME: &'static str = #debug_name;
+        }
 
         impl #ident {
             pub const fn new(raw: u64) -> Self {
@@ -71,11 +77,9 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
             }
         }
 
-        impl core::convert::TryFrom<u64> for #ident {
-            type Error = ::id::InvalidRawId;
-
-            fn try_from(value: u64) -> Result<Self, Self::Error> {
-                ::id::TypedId::try_from_raw(value).map(Self)
+        impl From<u64> for #ident {
+            fn from(value: u64) -> Self {
+                Self::new(value)
             }
         }
 
@@ -97,87 +101,10 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
             }
         }
 
-        #vis type #allocator_ident = ::id::MonotonicIdAllocator<#tag_ident>;
+        #vis type #sequence_ident = ::id::MonotonicIdAllocator<#tag_ident>;
     }
 }
 
-fn has_user_derive(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(attribute_contains_derive)
-}
-
-fn attribute_contains_derive(attr: &Attribute) -> bool {
-    if attr.path().is_ident("derive") {
-        return true;
-    }
-
-    if !attr.path().is_ident("cfg_attr") {
-        return false;
-    }
-
-    // Be conservative: if cfg_attr cannot be parsed as meta list, treat it as
-    // containing a derive to avoid bypassing the duplicate-derive guard.
-    cfg_attr_meta_contains_derive(attr).unwrap_or(true)
-}
-
-fn cfg_attr_meta_contains_derive(attr: &Attribute) -> syn::Result<bool> {
-    let metas = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
-    Ok(metas.into_iter().skip(1).any(meta_contains_derive))
-}
-
-fn meta_contains_derive(meta: Meta) -> bool {
-    match meta {
-        Meta::Path(path) => path.is_ident("derive"),
-        Meta::NameValue(name_value) => name_value.path.is_ident("derive"),
-        Meta::List(list) => {
-            if list.path.is_ident("derive") {
-                return true;
-            }
-            if list.path.is_ident("cfg_attr") {
-                if let Ok(metas) =
-                    list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
-                {
-                    return metas.into_iter().skip(1).any(meta_contains_derive);
-                }
-                return true;
-            }
-            false
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use quote::quote;
-    use syn::parse_quote;
-
-    #[test]
-    fn detects_direct_derive_attribute() {
-        let attrs: Vec<Attribute> = vec![parse_quote!(#[derive(Clone, Copy)])];
-        assert!(has_user_derive(&attrs));
-    }
-
-    #[test]
-    fn detects_cfg_attr_wrapped_derive_attribute() {
-        let attrs: Vec<Attribute> = vec![parse_quote!(#[cfg_attr(feature = "x", derive(Clone))])];
-        assert!(has_user_derive(&attrs));
-    }
-
-    #[test]
-    fn ignores_non_derive_cfg_attr() {
-        let attrs: Vec<Attribute> =
-            vec![parse_quote!(#[cfg_attr(feature = "x", repr(transparent))])];
-        assert!(!has_user_derive(&attrs));
-    }
-
-    #[test]
-    fn generates_try_from_u64_instead_of_from_u64() {
-        let item: ItemStruct = parse_quote! {
-            pub struct RenderFlowId;
-        };
-        let expanded = expand_id(item);
-        let text = quote!(#expanded).to_string();
-        assert!(text.contains("TryFrom < u64 >"));
-        assert!(!text.contains("impl From < u64 >"));
-    }
+fn has_direct_derive(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident("derive"))
 }

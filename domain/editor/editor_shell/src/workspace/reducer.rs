@@ -2,34 +2,12 @@
 //! Purpose: Explicit reducer-style structural mutations for workspace graph state.
 
 use crate::{
-    PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId, SplitHostState, TabStackHostState,
-    TabStackId, TabStackState, ToolSurfaceInstanceId, ToolSurfaceMount, WorkspaceSplitAxis,
-    WorkspaceState, WorkspaceStateError,
+    PanelInstanceId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceMount, WorkspaceState,
+    WorkspaceStateError,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceMutation {
-    SetRootHost {
-        host_id: PanelHostId,
-    },
-    CreateHostNode {
-        host_id: PanelHostId,
-        kind: PanelHostKind,
-    },
-    CreateTabStack {
-        tab_stack_id: TabStackId,
-    },
-    SetHostToTabStack {
-        host_id: PanelHostId,
-        tab_stack_id: TabStackId,
-    },
-    SetHostToSplit {
-        host_id: PanelHostId,
-        axis: WorkspaceSplitAxis,
-        fraction: f32,
-        first_child: PanelHostId,
-        second_child: PanelHostId,
-    },
     SetTabStackPanels {
         tab_stack_id: TabStackId,
         ordered_panels: Vec<PanelInstanceId>,
@@ -50,13 +28,6 @@ pub enum WorkspaceMutation {
         tool_surface_id: ToolSurfaceInstanceId,
         mount: ToolSurfaceMount,
     },
-    MovePanelToTabStack {
-        panel_id: PanelInstanceId,
-        source_tab_stack_id: TabStackId,
-        destination_tab_stack_id: TabStackId,
-        destination_index: Option<usize>,
-        activate_in_destination: bool,
-    },
 }
 
 pub fn reduce_workspace(
@@ -74,70 +45,6 @@ fn apply_mutation(
     op: WorkspaceMutation,
 ) -> Result<(), WorkspaceStateError> {
     match op {
-        WorkspaceMutation::SetRootHost { host_id } => {
-            if !state.hosts_by_id.contains_key(&host_id) {
-                return Err(WorkspaceStateError::MissingHost(host_id));
-            }
-            state.root_host_id = host_id;
-        }
-        WorkspaceMutation::CreateHostNode { host_id, kind } => {
-            if state.hosts_by_id.contains_key(&host_id) {
-                return Err(WorkspaceStateError::DuplicateHost(host_id));
-            }
-            state
-                .hosts_by_id
-                .insert(host_id, PanelHostNode { id: host_id, kind });
-        }
-        WorkspaceMutation::CreateTabStack { tab_stack_id } => {
-            if state.tab_stacks_by_id.contains_key(&tab_stack_id) {
-                return Err(WorkspaceStateError::DuplicateTabStack(tab_stack_id));
-            }
-            state.tab_stacks_by_id.insert(
-                tab_stack_id,
-                TabStackState {
-                    id: tab_stack_id,
-                    ordered_panels: Vec::new(),
-                    active_panel: None,
-                },
-            );
-        }
-        WorkspaceMutation::SetHostToTabStack {
-            host_id,
-            tab_stack_id,
-        } => {
-            if !state.tab_stacks_by_id.contains_key(&tab_stack_id) {
-                return Err(WorkspaceStateError::MissingTabStack(tab_stack_id));
-            }
-            let host = state
-                .hosts_by_id
-                .get_mut(&host_id)
-                .ok_or(WorkspaceStateError::MissingHost(host_id))?;
-            host.kind = PanelHostKind::TabStackHost(TabStackHostState { tab_stack_id });
-        }
-        WorkspaceMutation::SetHostToSplit {
-            host_id,
-            axis,
-            fraction,
-            first_child,
-            second_child,
-        } => {
-            if !state.hosts_by_id.contains_key(&first_child) {
-                return Err(WorkspaceStateError::MissingHost(first_child));
-            }
-            if !state.hosts_by_id.contains_key(&second_child) {
-                return Err(WorkspaceStateError::MissingHost(second_child));
-            }
-            let host = state
-                .hosts_by_id
-                .get_mut(&host_id)
-                .ok_or(WorkspaceStateError::MissingHost(host_id))?;
-            host.kind = PanelHostKind::SplitHost(SplitHostState {
-                axis,
-                fraction,
-                first_child,
-                second_child,
-            });
-        }
         WorkspaceMutation::SetTabStackPanels {
             tab_stack_id,
             ordered_panels,
@@ -271,131 +178,7 @@ fn apply_mutation(
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?
                 .mount = mount;
         }
-        WorkspaceMutation::MovePanelToTabStack {
-            panel_id,
-            source_tab_stack_id,
-            destination_tab_stack_id,
-            destination_index,
-            activate_in_destination,
-        } => {
-            if !state.panels_by_id.contains_key(&panel_id) {
-                return Err(WorkspaceStateError::MissingPanel(panel_id));
-            }
-            move_panel_between_tab_stacks(
-                state,
-                panel_id,
-                source_tab_stack_id,
-                destination_tab_stack_id,
-                destination_index,
-                activate_in_destination,
-            )?;
-        }
     }
-    Ok(())
-}
-
-fn move_panel_between_tab_stacks(
-    state: &mut WorkspaceState,
-    panel_id: PanelInstanceId,
-    source_tab_stack_id: TabStackId,
-    destination_tab_stack_id: TabStackId,
-    destination_index: Option<usize>,
-    activate_in_destination: bool,
-) -> Result<(), WorkspaceStateError> {
-    if source_tab_stack_id == destination_tab_stack_id {
-        let stack = state
-            .tab_stacks_by_id
-            .get_mut(&source_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
-        let source_index = stack
-            .ordered_panels
-            .iter()
-            .position(|id| *id == panel_id)
-            .ok_or(WorkspaceStateError::PanelNotInTabStack {
-                panel_id,
-                tab_stack_id: source_tab_stack_id,
-            })?;
-
-        let panel = stack.ordered_panels.remove(source_index);
-        let insertion_index = destination_index.unwrap_or(stack.ordered_panels.len());
-        if insertion_index > stack.ordered_panels.len() {
-            return Err(WorkspaceStateError::TabStackInsertIndexOutOfBounds {
-                tab_stack_id: source_tab_stack_id,
-                index: insertion_index,
-                len: stack.ordered_panels.len(),
-            });
-        }
-        stack.ordered_panels.insert(insertion_index, panel);
-        if activate_in_destination || stack.active_panel == Some(panel_id) {
-            stack.active_panel = Some(panel_id);
-        }
-        return Ok(());
-    }
-
-    {
-        let source = state
-            .tab_stacks_by_id
-            .get(&source_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
-        if !source.ordered_panels.contains(&panel_id) {
-            return Err(WorkspaceStateError::PanelNotInTabStack {
-                panel_id,
-                tab_stack_id: source_tab_stack_id,
-            });
-        }
-        let destination = state
-            .tab_stacks_by_id
-            .get(&destination_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(
-                destination_tab_stack_id,
-            ))?;
-        if destination.ordered_panels.contains(&panel_id) {
-            return Err(WorkspaceStateError::PanelAlreadyInTabStack {
-                panel_id,
-                tab_stack_id: destination_tab_stack_id,
-            });
-        }
-        let insertion_index = destination_index.unwrap_or(destination.ordered_panels.len());
-        if insertion_index > destination.ordered_panels.len() {
-            return Err(WorkspaceStateError::TabStackInsertIndexOutOfBounds {
-                tab_stack_id: destination_tab_stack_id,
-                index: insertion_index,
-                len: destination.ordered_panels.len(),
-            });
-        }
-    }
-
-    {
-        let source = state
-            .tab_stacks_by_id
-            .get_mut(&source_tab_stack_id)
-            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
-        let source_index = source
-            .ordered_panels
-            .iter()
-            .position(|id| *id == panel_id)
-            .ok_or(WorkspaceStateError::PanelNotInTabStack {
-                panel_id,
-                tab_stack_id: source_tab_stack_id,
-            })?;
-        source.ordered_panels.remove(source_index);
-        if source.active_panel == Some(panel_id) {
-            source.active_panel = source.ordered_panels.first().copied();
-        }
-    }
-
-    let destination = state
-        .tab_stacks_by_id
-        .get_mut(&destination_tab_stack_id)
-        .ok_or(WorkspaceStateError::MissingTabStack(
-            destination_tab_stack_id,
-        ))?;
-    let insertion_index = destination_index.unwrap_or(destination.ordered_panels.len());
-    destination.ordered_panels.insert(insertion_index, panel_id);
-    if activate_in_destination || destination.active_panel.is_none() {
-        destination.active_panel = Some(panel_id);
-    }
-
     Ok(())
 }
 
@@ -404,7 +187,7 @@ mod tests {
     use super::*;
     use crate::{
         PanelHostId, PanelInstanceId, PanelKind, TabStackId, ToolSurfaceInstanceId, WorkspaceId,
-        WorkspaceIdentityAllocator, WorkspaceSplitAxis,
+        WorkspaceIdentityAllocator,
     };
     use editor_viewport::ViewportId;
 
@@ -656,139 +439,6 @@ mod tests {
                 .expect("moved panel should still exist")
                 .id,
             outliner_panel
-        );
-    }
-
-    #[test]
-    fn move_panel_to_existing_stack_preserves_panel_and_tool_surface_identity() {
-        let workspace = bootstrap_workspace();
-        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
-        let inspector_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Inspector);
-        let outliner_panel = panel_id_by_kind(&workspace, PanelKind::Outliner);
-        let outliner_surface = workspace
-            .panel(outliner_panel)
-            .expect("outliner panel should exist")
-            .active_tool_surface;
-
-        let moved = reduce_workspace(
-            &workspace,
-            WorkspaceMutation::MovePanelToTabStack {
-                panel_id: outliner_panel,
-                source_tab_stack_id: outliner_stack,
-                destination_tab_stack_id: inspector_stack,
-                destination_index: None,
-                activate_in_destination: true,
-            },
-        )
-        .expect("moving panel to destination stack should succeed");
-
-        let destination = moved
-            .tab_stack(inspector_stack)
-            .expect("destination stack should exist");
-        assert!(
-            destination.ordered_panels.contains(&outliner_panel),
-            "destination stack should contain moved panel",
-        );
-        assert_eq!(
-            moved
-                .panel(outliner_panel)
-                .expect("outliner panel should still exist")
-                .active_tool_surface,
-            outliner_surface,
-            "moving tab stack membership must not rewrite tool-surface identity",
-        );
-    }
-
-    #[test]
-    fn create_tab_stack_and_rehome_host_to_split_keeps_existing_identity_stable() {
-        let workspace = bootstrap_workspace();
-        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
-        let outliner_panel = panel_id_by_kind(&workspace, PanelKind::Outliner);
-        let viewport_panel = panel_id_by_kind(&workspace, PanelKind::Viewport);
-        let viewport_surface_before = workspace
-            .panel(viewport_panel)
-            .expect("viewport panel should exist")
-            .active_tool_surface;
-        let outliner_surface_before = workspace
-            .panel(outliner_panel)
-            .expect("outliner panel should exist")
-            .active_tool_surface;
-
-        let new_host_id = PanelHostId::new(700);
-        let new_stack_id = TabStackId::new(800);
-        let root_split = match workspace
-            .host(workspace.root_host_id())
-            .expect("root host should exist")
-            .kind
-        {
-            PanelHostKind::SplitHost(split) => split,
-            _ => panic!("bootstrap root host should be a split"),
-        };
-
-        let with_new_host = reduce_workspace(
-            &workspace,
-            WorkspaceMutation::CreateHostNode {
-                host_id: new_host_id,
-                kind: PanelHostKind::FloatingHostPlaceholder(crate::FloatingHostPlaceholderState {
-                    tab_stack_id: None,
-                }),
-            },
-        )
-        .expect("creating host node should succeed");
-        let with_new_stack = reduce_workspace(
-            &with_new_host,
-            WorkspaceMutation::CreateTabStack {
-                tab_stack_id: new_stack_id,
-            },
-        )
-        .expect("creating tab stack should succeed");
-        let rehomed_host = reduce_workspace(
-            &with_new_stack,
-            WorkspaceMutation::SetHostToTabStack {
-                host_id: new_host_id,
-                tab_stack_id: new_stack_id,
-            },
-        )
-        .expect("tab stack host rehome should succeed");
-        let reconfigured_root = reduce_workspace(
-            &rehomed_host,
-            WorkspaceMutation::SetHostToSplit {
-                host_id: workspace.root_host_id(),
-                axis: WorkspaceSplitAxis::Horizontal,
-                fraction: 0.5,
-                first_child: new_host_id,
-                second_child: root_split.first_child,
-            },
-        )
-        .expect("root split rehome should succeed");
-
-        let moved = reduce_workspace(
-            &reconfigured_root,
-            WorkspaceMutation::MovePanelToTabStack {
-                panel_id: outliner_panel,
-                source_tab_stack_id: outliner_stack,
-                destination_tab_stack_id: new_stack_id,
-                destination_index: Some(0),
-                activate_in_destination: true,
-            },
-        )
-        .expect("moving panel into new stack should succeed");
-
-        assert_eq!(
-            moved
-                .panel(viewport_panel)
-                .expect("viewport panel should still exist")
-                .active_tool_surface,
-            viewport_surface_before,
-            "split/tab host rehome must not rewrite unrelated viewport surface identity",
-        );
-        assert_eq!(
-            moved
-                .panel(outliner_panel)
-                .expect("outliner panel should still exist")
-                .active_tool_surface,
-            outliner_surface_before,
-            "moved panel must retain tool-surface identity",
         );
     }
 }

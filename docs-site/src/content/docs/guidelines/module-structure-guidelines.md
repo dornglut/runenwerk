@@ -290,10 +290,10 @@ Examples:
 - ECS/plugin integration for networking  
   -> `engine/src/plugins/net`
 
-- Cavern Hunt replication/correction/smoothing  
-  -> `domain/` (for shared contracts) or `engine/src/plugins/net` (for engine runtime wiring)
+- Gameplay replication/correction/smoothing policy  
+  -> the owning gameplay domain module (or `apps/*` if app-local) plus `engine/src/plugins/net` for engine runtime wiring
 
-- Cavern Hunt gameplay rule or entity behavior  
+- Gameplay rule or entity behavior  
   -> the owning module under `domain/`
 
 - App bootstrap/config/runtime wiring  
@@ -315,7 +315,7 @@ Examples:
   -> `engine/src/plugins/scene/lifecycle/`
 
 - Client-side net prediction  
-  -> `games/cavern_hunt/src/net/` or `engine/src/plugins/net/` depending on whether it is game-specific or engine-generic
+  -> the owning gameplay module (`domain/*` or `apps/*`) or `engine/src/plugins/net/` depending on whether it is game-specific or engine-generic
 
 Prefer extending an existing subsystem over creating a new bucket.
 
@@ -375,11 +375,11 @@ Owner:
 - crate: `net/engine_net_quic`
 - subsystem: `transport/`
 
-### Example C: add remote player smoothing for Cavern Hunt
+### Example C: add remote player smoothing for current gameplay module
 Owner:
-- top-level domain: `games`
-- crate: `games/cavern_hunt`
-- subsystem: `src/net/`
+- top-level domain: `domain` or `apps` (depending on gameplay ownership)
+- crate: the owning gameplay crate
+- subsystem: the crate's net/gameplay integration module
 
 ### Example D: add generic engine-side network schedules
 Owner:

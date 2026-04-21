@@ -14,12 +14,13 @@ This page remains the workspace boundary and placement guide.
 
 ## Top-Level Domains
 
+- `foundation/`: low-level shared primitives reused across domains (for example typed ids)
 - `domain/`: engine-agnostic reusable gameplay/runtime logic (`ecs`, `scheduler`, `scene`, editor domains)
 - `engine/`: runtime loop, plugin system, rendering, input, scene, time integration
 - `net/`: transport/session/replication infrastructure (`engine_net`, `engine_net_quic`)
 - `apps/`: runnable applications and tooling (`runenwerk_editor`, other app binaries)
 - `adapters/`: external engine/runtime bridges (for example Godot adapters)
-- `assets/`: data assets consumed by engine/games/apps
+- `assets/`: data assets consumed by engine/domain/apps/adapters
 - `docs-site/`: documentation source tree
 
 ## Dependency Direction
@@ -27,10 +28,11 @@ This page remains the workspace boundary and placement guide.
 Keep dependency flow unidirectional:
 
 - `domain` -> no project-internal dependency on higher domains
-- `engine` -> `domain`
-- `net` -> `domain` (and self-contained net crates)
-- `apps` -> `engine` + `net` + `domain` contracts as needed
-- `adapters` -> `domain` (+ targeted integration crates as needed)
+- `domain` -> `foundation`
+- `engine` -> `foundation` + `domain`
+- `net` -> `foundation` + `domain` (and self-contained net crates)
+- `apps` -> `foundation` + `domain` + `engine` + `net` contracts as needed
+- `adapters` -> `foundation` + `domain` (+ targeted integration crates as needed)
 
 Avoid sideways coupling between app crates via private internals.
 

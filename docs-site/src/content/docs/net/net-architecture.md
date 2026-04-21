@@ -13,7 +13,7 @@ It explains how networking flows through the following domains:
     engine_sim
     engine_net
     engine_net_quic
-    games/*/src/net
+    gameplay domain/app networking modules
 
 The goal is to maintain a **clean separation between simulation,
 replication, and transport** while supporting a **server-authoritative
@@ -38,7 +38,7 @@ The networking stack follows these rules:
 
 The system is split into **four layers**.
 
-    Game Domain
+    Gameplay Domain/App Modules
          │
          ▼
     engine_net (Replication + Runtime)
@@ -130,11 +130,11 @@ This layer does **not know about gameplay replication**.
 
 ------------------------------------------------------------------------
 
-## Game Domains
+## Gameplay Domain/App Modules
 
 Located in:
 
-    games/*/src/net
+    the owning gameplay domain/app crates
 
 Responsibilities:
 
@@ -158,7 +158,7 @@ pub struct PlayerState {
 }
 ```
 
-Game domains declare **what replicates**, not **how replication works**.
+Gameplay modules declare **what replicates**, not **how replication works**.
 
 ------------------------------------------------------------------------
 

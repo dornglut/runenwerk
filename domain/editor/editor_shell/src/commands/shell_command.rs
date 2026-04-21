@@ -39,16 +39,6 @@ pub enum ShellCommand {
         target: StructuralCommandTarget,
         projection_epoch: u64,
     },
-    ActivateTab {
-        tab_stack_id: TabStackId,
-        panel_instance_id: PanelInstanceId,
-        projection_epoch: u64,
-    },
-    FloatPanel {
-        tab_stack_id: TabStackId,
-        panel_instance_id: PanelInstanceId,
-        projection_epoch: u64,
-    },
     NoOp,
 }
 
@@ -62,12 +52,6 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::ActivateInspectorField {
-                projection_epoch, ..
-            }
-            | Self::ActivateTab {
-                projection_epoch, ..
-            }
-            | Self::FloatPanel {
                 projection_epoch, ..
             } => Some(*projection_epoch),
             _ => None,

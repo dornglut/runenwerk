@@ -23,7 +23,7 @@ The roadmap assumes the current crate structure:
 engine_net/
 engine_net_quic/
 engine_sim/
-games/*/src/net
+gameplay domain/app networking modules
 ```
 
 ------------------------------------------------------------------------
@@ -53,7 +53,7 @@ prediction
 
 `engine_net_quic`                   QUIC transport runtime
 
-`games/*/net`                       gameplay replication mapping
+gameplay domain/app modules         gameplay replication mapping
 -----------------------------------------------------------------------
 
 Additional boundary rule:
@@ -457,7 +457,7 @@ Game domain responsibilities:
 Location:
 
 ``` text
-games/*/src/net
+owning gameplay domain/app networking module
 ```
 
 ------------------------------------------------------------------------

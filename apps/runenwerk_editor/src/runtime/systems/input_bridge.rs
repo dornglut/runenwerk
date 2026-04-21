@@ -13,8 +13,8 @@ use crate::runtime::app::{
 };
 use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scaled_shell_theme};
 use crate::runtime::viewport::{
-    ViewportArtifactObservationResource, ViewportLayoutMapResource, ViewportPickingResultsResource,
-    ViewportPresentationStateResource,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportPickingResultsResource, ViewportPresentationStateResource,
 };
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
 use crate::shell::RunenwerkEditorShellState;
@@ -36,13 +36,14 @@ pub fn dispatch_editor_input_system(
     picking_results: Res<ViewportPickingResultsResource>,
     mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
-    viewport_layout_map: Res<ViewportLayoutMapResource>,
+    tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
 ) {
     dispatch_shortcuts(
         &input,
         &mut host,
         &mut viewport_presentations,
         &viewport_observations,
+        &tool_surface_bindings,
     );
 
     let bounds = window_bounds(&window);
@@ -67,6 +68,7 @@ pub fn dispatch_editor_input_system(
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
+            Some(&tool_surface_bindings),
         );
     }
 
@@ -82,6 +84,7 @@ pub fn dispatch_editor_input_system(
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
+            Some(&tool_surface_bindings),
         );
     }
 
@@ -97,12 +100,13 @@ pub fn dispatch_editor_input_system(
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
+            Some(&tool_surface_bindings),
         );
 
         let pointer_route = outcome.as_ref().and_then(|value| {
             viewport_pointer_route(
                 &host.shell_state,
-                &viewport_layout_map,
+                &tool_surface_bindings,
                 &value.dispatch,
                 position,
             )
@@ -120,7 +124,7 @@ pub fn dispatch_editor_input_system(
     if input.left_mouse_down()
         && host.app.viewport_interaction_state().drag_in_progress()
         && position != previous
-        && viewport_capture_active(&host.shell_state, &viewport_layout_map)
+        && viewport_capture_active(&host.shell_state, &tool_surface_bindings)
     {
         let amount = position.x - previous.x;
         if amount != 0.0
@@ -144,13 +148,14 @@ pub fn dispatch_editor_input_system(
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
+            Some(&tool_surface_bindings),
         );
         let routed_release = outcome
             .as_ref()
             .and_then(|value| {
                 viewport_pointer_route(
                     &host.shell_state,
-                    &viewport_layout_map,
+                    &tool_surface_bindings,
                     &value.dispatch,
                     position,
                 )
@@ -175,14 +180,15 @@ fn dispatch_shortcuts(
     host: &mut EditorHostResource,
     viewport_presentations: &mut ViewportPresentationStateResource,
     viewport_observations: &ViewportArtifactObservationResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
 ) {
     if input.action_pressed(ACTION_EDITOR_UNDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
-            Some(&mut host.shell_state),
             ShellCommand::Undo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            Some(tool_surface_bindings),
             None,
         )
     {
@@ -192,10 +198,10 @@ fn dispatch_shortcuts(
     if input.action_pressed(ACTION_EDITOR_REDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
-            Some(&mut host.shell_state),
             ShellCommand::Redo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            Some(tool_surface_bindings),
             None,
         )
     {
@@ -207,10 +213,10 @@ fn dispatch_shortcuts(
     {
         if let Err(error) = dispatch_shell_command(
             &mut host.app,
-            Some(&mut host.shell_state),
             ShellCommand::ActivateSelectTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            Some(tool_surface_bindings),
             None,
         ) {
             eprintln!("select-tool shortcut failed: {error}");
@@ -222,10 +228,10 @@ fn dispatch_shortcuts(
     {
         if let Err(error) = dispatch_shell_command(
             &mut host.app,
-            Some(&mut host.shell_state),
             ShellCommand::ActivateTranslateTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            Some(tool_surface_bindings),
             None,
         ) {
             eprintln!("translate-tool shortcut failed: {error}");
@@ -244,6 +250,7 @@ fn dispatch_pointer_event(
     viewport_products: Option<&editor_viewport::ArtifactObservationFrame>,
     viewport_presentations: Option<&mut ViewportPresentationStateResource>,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
+    tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
 ) -> Option<editor_shell::UiInputOutcome> {
     let event = UiInputEvent::Pointer(PointerEvent {
         kind,
@@ -262,6 +269,7 @@ fn dispatch_pointer_event(
         viewport_products,
         viewport_presentations,
         viewport_observations,
+        tool_surface_bindings,
     ) {
         Ok(outcome) => Some(outcome),
         Err(error) => {
@@ -273,28 +281,24 @@ fn dispatch_pointer_event(
 
 fn viewport_pointer_route(
     shell_state: &RunenwerkEditorShellState,
-    layout_map: &ViewportLayoutMapResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     dispatch: &editor_shell::UiInputDispatchResult,
     position: UiPoint,
 ) -> Option<ViewportPointerRoute> {
     let host_widget_id = dispatch.target?;
     let structural_context = structural_context_for_widget(shell_state, host_widget_id)?;
-    let viewport_id = layout_map.viewport_for_structural_context(structural_context)?;
-    let entry = layout_map.entry_for_viewport(viewport_id)?;
-    if entry.structural_context != structural_context {
-        return None;
-    }
+    let binding = tool_surface_bindings.resolve_structural_context(structural_context)?;
     Some(ViewportPointerRoute {
-        viewport_id,
+        viewport_id: binding.viewport_id,
         host_widget_id,
         structural_context,
-        local_position: UiPoint::new(position.x - entry.bounds.x, position.y - entry.bounds.y),
+        local_position: UiPoint::new(position.x - binding.bounds.x, position.y - binding.bounds.y),
     })
 }
 
 fn viewport_capture_active(
     shell_state: &RunenwerkEditorShellState,
-    layout_map: &ViewportLayoutMapResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
 ) -> bool {
     shell_state
         .runtime()
@@ -302,7 +306,7 @@ fn viewport_capture_active(
         .captured_widget
         .and_then(|widget_id| {
             structural_context_for_widget(shell_state, widget_id)
-                .and_then(|context| layout_map.viewport_for_structural_context(context))
+                .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
         })
         .is_some()
 }

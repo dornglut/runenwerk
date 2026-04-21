@@ -33,29 +33,14 @@ What is now true:
 
 What is now the immediate architecture gap:
 
-- workspace/panel/host/tab/tool-surface identity is not yet formalized as first-class workspace architecture contracts
-- shell/runtime routing still leans on widget-level projection ids instead of explicit workspace structural ids
-- docking/tab implementation would risk singleton leakage without an identity hardening pass first
+- Step 1 completed: typed workspace identity families + allocator and bootstrap ownership
+- Step 2 completed: canonical `WorkspaceState` graph + reducer-style structural mutations
+- Step 3 completed: canonical projection artifacts and structural-id-driven routing metadata
+- Step 4 completed: structural-context dispatch with stale-artifact fail-closed behavior
+- Step 5 completed: explicit structural tool-surface to runtime binding contracts
+- Step 6 completed: guard-test and architecture-test expansion before docking/tab behavior
 
-Because of that, the next order should prioritize identity doctrine and migration mapping before docking/tab feature work, then continue substrate and broader surface expansion.
-
----
-
-## Workspace Identity Migration Branch Roadmap
-
-Branch scope: `workspace identity contract + migration map` implementation.
-
-### Completed in this branch
-- canonical `WorkspaceState` projection/reducer identity foundation
-- Step 7 identity-safe docking/tab structural behavior
-
-### Current post-Step-7 target track
-- drag/drop UX behavior over structural-id routing
-- floating host behavior over canonical workspace graph
-- workspace layout persistence workflows (save/load) without singleton fallback routing
-
-### Merge target
-- merge this branch into `main` after compile/test/build checks pass for `editor_shell` and `runenwerk_editor`
+Because of that, the next order should begin docking/tab behavior implementation on top of the now-locked identity/routing/binding contracts, then continue substrate and broader surface expansion.
 
 ---
 
@@ -71,23 +56,28 @@ Completed: viewport backend/render ownership was aligned with the established ar
 ### Completion record
 See:
 
-- [Runenwerk - Phase 1 Plan (Completed)](./completed/runenwerk_phase_1_plan.md)
+- [Runenwerk - Phase 1 Plan (Completed)](./runenwerk_phase_1_plan.md)
 
 ---
 
-## Immediate post-Phase 1 task — Workspace identity contract + migration map
+## Immediate post-Phase 1 track — Workspace identity hardening (Steps 1-6)
 
 ### Goal
-Freeze the workspace identity doctrine and concrete migration targets before docking/tab implementation begins.
+Complete the full workspace identity hardening track before docking/tab implementation begins.
 
-### Artifact
+### Artifacts
 - [Workspace Identity Contract and Migration Map](./workspace-identity-contract-and-migration-map.md)
+- Step implementation sequence: identity foundation -> structural graph -> projection artifacts -> structural dispatch -> runtime bindings -> guard tests
 
 ### Why now
-Without this step, upcoming docking/tab and multi-surface workspace work will likely inherit widget-position identity coupling and reintroduce singleton assumptions.
+Without finishing this track, upcoming docking/tab and multi-surface workspace work will likely inherit identity leakage and runtime ownership coupling.
 
 ### Success condition
-The workspace identity model is explicit enough to support panel/host/tab/surface movement and persistence semantics without architectural redesign.
+Workspace structural identity, routing identity, and runtime binding identity are explicitly separated and test-guarded.
+
+### Current status
+- completed: Steps 1-6
+- next target: docking/tab behavior implementation on top of the locked workspace identity contracts
 
 ---
 
@@ -268,16 +258,17 @@ Gameplay runtime architecture grows on top of stable platform seams rather than 
 
 ### Immediate
 1. Phase 1 viewport backend cleanup (completed)
-2. Workspace identity contract + migration map
+2. Workspace identity hardening track (Steps 1-6 completed)
+3. Docking/tab behavior implementation (next)
 
 ### Then
-3. Build core UI substrate
-4. Add one more serious non-viewport surface
-5. Harden workspace / tool-surface host model
-6. Use substrate for editor, game, and diagnostics UI
-7. Define the expression producer architecture
-8. Push field world producer implementation
-9. Design gameplay runtime architecture
+4. Build core UI substrate
+5. Add one more serious non-viewport surface
+6. Harden workspace / tool-surface host model
+7. Use substrate for editor, game, and diagnostics UI
+8. Define the expression producer architecture
+9. Push field world producer implementation
+10. Design gameplay runtime architecture
 
 ---
 
@@ -286,13 +277,13 @@ Gameplay runtime architecture grows on top of stable platform seams rather than 
 If reduced to one concrete milestone:
 
 ### Next milestone
-**Workspace identity contract + migration map**
+**Docking/tab behavior implementation (identity-safe)**
 
 ### Why
-This locks the structural identity doctrine required before docking/tab implementation and before broader host/panel/surface expansion.
+Steps 1-6 are complete, including structural-to-runtime binding contracts and guard tests. The next risk-reducing move is implementing docking/tab behavior against the existing `WorkspaceState` + reducer + projection + structural routing contracts.
 
 ### Next milestone after that
-**UI substrate bring-up**
+**UI substrate bring-up**.
 
 Then: **Entity Table / Query Surface** as non-viewport proof.
 
@@ -303,12 +294,13 @@ Then: **Entity Table / Query Surface** as non-viewport proof.
 Do not jump straight into docking/tab productization or deep field-world implementation before:
 
 1. the Phase 1 viewport backend cleanup completion is locked, and
-2. workspace identity doctrine/migration mapping is explicit.
+2. workspace identity hardening Steps 1-6 are complete.
 
 The cleanest order from the current state is:
 
 - close Phase 1 (done)
-- formalize workspace identity contracts
+- close workspace identity hardening (done)
+- implement docking/tab behavior on top of locked identity contracts
 - build the reusable UI substrate
 - prove the framework with another serious surface
 - then harden host/workspace structure

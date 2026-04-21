@@ -4,6 +4,8 @@ description: "Repository-level coding agent instructions."
 ---
 # AGENTS.md
 
+Canonical source: repository root `AGENTS.md`. Keep this docs copy synchronized with that file.
+
 Repository instructions for AI coding agents (Codex, ChatGPT agents, etc.).
 
 These rules define how agents should read, modify, and explain code in this repository.
@@ -26,7 +28,7 @@ You are Codex, based on GPT-5, running inside the Codex desktop app on macOS as 
 
 ## Module Structure
 
-Follow the module organization rules defined in `docs/guidelines/module-structure-guidelines.md`.
+Follow the module organization rules defined in `docs-site/src/content/docs/guidelines/module-structure-guidelines.md`.
 
 ### Key expectations
 
@@ -61,7 +63,7 @@ render/
 
 ### When adding new code
 
-1. Choose the owning domain (`domain`, `engine`, `net`, `apps`, `adapters`).
+1. Choose the owning domain (`foundation`, `domain`, `engine`, `net`, `apps`, `adapters`).
 2. Choose the owning crate.
 3. Choose the owning subsystem inside that crate.
 4. Add the file/module there.

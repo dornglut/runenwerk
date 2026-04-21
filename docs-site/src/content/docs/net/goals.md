@@ -32,15 +32,15 @@ The networking architecture should converge on this explicit 4-part stack:
   - Owns engine-side commands, events, resources, prediction hooks, runtime I/O, and schedules.
   - Must remain gameplay-agnostic.
 
-4. Game Networking Layer
-  - `games/*/src/net/`
-  - Owns game-specific replication mapping, correction, smoothing, interpolation, tuning, and presentation-side multiplayer behavior.
+4. Gameplay Networking Layer
+  - owning gameplay domain/app modules
+  - Owns gameplay-specific replication mapping, correction, smoothing, interpolation, tuning, and presentation-side multiplayer behavior.
 
 ## Dependency Direction
 
 Pinned direction:
 
-- `games/*/src/net/` -> `engine` + `net/engine_net`
+- gameplay domain/app networking modules -> `engine` + `net/engine_net`
 - `engine/src/plugins/net/` -> `engine` + `net/engine_net` + selected transport adapter
 - `net/engine_net_quic` -> `net/engine_net` + transport dependencies
 - `net/engine_net` -> no gameplay-specific dependency
@@ -61,7 +61,7 @@ In particular:
 - Replication remains transport-agnostic at the `engine_net` contract level.
 - Interest management controls what each client receives.
 - Client-side prediction and reconciliation are first-class paths.
-- Correction/smoothing policies are game-owned (`games/*/src/net/`), not transport-owned.
+- Correction/smoothing policies are gameplay-owned (in the owning domain/app module), not transport-owned.
 
 ## Session and Transport Goals
 
@@ -100,7 +100,7 @@ In particular:
   - Owns engine-side resources/events/commands/schedules and runtime wiring.
   - Must not own game replication semantics.
 
-- `games/*/src/net/`
+- gameplay domain/app networking modules
   - Gameplay replication mapping, correction policy, smoothing/interpolation, and presentation behavior.
 
 ## Structural Goals Inside `net/*` Crates
@@ -119,7 +119,7 @@ Avoid:
 
 Repository-wide guidance lives in:
 
-- `docs/guidelines/module-structure-guidelines.md`
+- `../guidelines/module-structure-guidelines.md`
 
 ## Non-Goals
 
@@ -141,7 +141,7 @@ The intended steady-state ownership is:
 3. `engine/src/plugins/net/`
   - bridges runtime adapters into engine scheduling/resources/events
 
-4. `games/*/src/net/`
+4. gameplay domain/app networking modules
   - defines what multiplayer means for a specific game
 
 This is the model new work in the networking domain should reinforce.

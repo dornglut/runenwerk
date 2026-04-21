@@ -1,5 +1,0 @@
-error: #[id] injects derives automatically; remove any #[derive(...)] or cfg_attr(..., derive(...)) on this struct
- --> tests/ui/cfg-attr-derive.rs:5:12
-  |
-5 | pub struct CfgAttrDeriveId;
-  |            ^^^^^^^^^^^^^^^

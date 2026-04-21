@@ -616,7 +616,7 @@ exceeded.
 -   scheduling
 -   runtime wiring
 
-`games/*/src/net`
+owning gameplay domain/app networking modules
 
 -   gameplay replication mapping
 -   correction and smoothing policies

@@ -1,4 +1,8 @@
 use editor_core::RealityVersion;
+use editor_shell::{
+    PanelInstanceId, StructuralCommandTarget, StructuralWidgetRoutingContext, TabStackId,
+    ToolSurfaceInstanceId, WidgetId,
+};
 use editor_viewport::{
     ExpressionDimensions, ExpressionProductDescriptor, ExpressionProductId, ExpressionProductKind,
     ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
@@ -9,11 +13,13 @@ use engine::plugins::render::{
 };
 use runenwerk_editor::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, PRODUCT_ID_PICKING_IDS, PRODUCT_ID_SCENE_COLOR,
+    ToolSurfaceRuntimeBindingRecord, ToolSurfaceRuntimeBindingRegistryResource,
     VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS, VIEWPORT_RESOURCE_SCENE_COLOR,
-    ViewportArtifactObservationResource, ViewportPickingResultsResource,
-    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceHandle,
-    ViewportSurfaceSetResource, ViewportSurfaceSlot, build_surface_binding_registry,
-    initial_presentation_state, initial_product_descriptors,
+    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
+    ViewportPickingResultsResource, ViewportPresentationStateResource,
+    ViewportProductRegistryResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
+    ViewportSurfaceSlot, build_surface_binding_registry, initial_presentation_state,
+    initial_product_descriptors,
 };
 use ui_render_data::{UiPrimitive, ViewportSurfaceSlot as UiViewportSurfaceSlot};
 
@@ -270,4 +276,82 @@ fn shell_frame_uses_viewport_embed_primitive_instead_of_raw_image_path() {
         !has_image,
         "viewport panel must not use generic raw image texture path",
     );
+}
+
+#[test]
+fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identity() {
+    let tool_surface_id = ToolSurfaceInstanceId::new(91);
+    let panel_instance_id = PanelInstanceId::new(41);
+    let tab_stack_id = TabStackId::new(51);
+    let mut layout = ViewportLayoutMapResource::default();
+    layout.upsert_entry(ViewportLayoutEntry {
+        viewport_id: ViewportId(1),
+        host_widget_id: WidgetId(1001),
+        structural_context: StructuralWidgetRoutingContext {
+            panel_instance_id,
+            active_tool_surface: Some(tool_surface_id),
+            tab_stack_id,
+        },
+        bounds: ui_math::UiRect::new(0.0, 0.0, 640.0, 360.0),
+    });
+
+    let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+    bindings.rebuild_from_layout_map(&layout);
+
+    layout.clear();
+    layout.upsert_entry(ViewportLayoutEntry {
+        viewport_id: ViewportId(2),
+        host_widget_id: WidgetId(1002),
+        structural_context: StructuralWidgetRoutingContext {
+            panel_instance_id,
+            active_tool_surface: Some(tool_surface_id),
+            tab_stack_id,
+        },
+        bounds: ui_math::UiRect::new(0.0, 0.0, 640.0, 360.0),
+    });
+    bindings.rebuild_from_layout_map(&layout);
+
+    let binding = bindings
+        .binding_for_tool_surface(tool_surface_id)
+        .expect("binding should exist after rebind");
+    assert_eq!(binding.viewport_id, ViewportId(2));
+    assert_eq!(binding.panel_instance_id, panel_instance_id);
+    assert_eq!(binding.tab_stack_id, tab_stack_id);
+    assert_eq!(
+        bindings
+            .latest_rebind_for_tool_surface(tool_surface_id)
+            .expect("rebind should be tracked")
+            .from_viewport_id,
+        ViewportId(1),
+    );
+}
+
+#[test]
+fn runtime_binding_resolution_rejects_structural_mismatch_even_when_viewport_matches() {
+    let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+    bindings.upsert_binding(ToolSurfaceRuntimeBindingRecord {
+        tool_surface_id: ToolSurfaceInstanceId::new(7),
+        panel_instance_id: PanelInstanceId::new(11),
+        tab_stack_id: TabStackId::new(21),
+        viewport_id: ViewportId(1),
+        host_widget_id: WidgetId(301),
+        bounds: ui_math::UiRect::new(0.0, 0.0, 320.0, 200.0),
+        generation: 1,
+    });
+
+    let error = bindings
+        .resolve_command_target(
+            StructuralCommandTarget {
+                panel_instance_id: PanelInstanceId::new(99),
+                active_tool_surface: Some(ToolSurfaceInstanceId::new(7)),
+                tab_stack_id: TabStackId::new(199),
+            },
+            ViewportId(1),
+        )
+        .expect_err("structural mismatch should fail closed");
+
+    assert!(matches!(
+        error,
+        runenwerk_editor::runtime::viewport::ToolSurfaceRuntimeBindingResolveError::StructuralBindingMismatch { .. }
+    ));
 }

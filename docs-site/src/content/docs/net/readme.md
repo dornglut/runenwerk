@@ -9,7 +9,7 @@ description: "Documentation for net."
 
 It owns the transport-agnostic multiplayer contract crate, the QUIC runtime adapter crate, simulation-facing identity and deterministic vocabulary shared with networking, and replay/history primitives used for recovery, recording, and validation.
 
-Pinned direction and architecture goals are defined in [GOALS.md](goals.md).
+Pinned direction and architecture goals are defined in [goals.md](goals.md).
 
 ## Crates
 
@@ -120,7 +120,7 @@ Within each `net/*` crate, organize code by subdomain responsibility using expli
 
 Follow the repository-wide guidance in:
 
-- `docs/guidelines/module-structure-guidelines.md`
+- `../guidelines/module-structure-guidelines.md`
 
 Preferred approach:
 
@@ -146,13 +146,12 @@ ownership-oriented submodules.
 3. Use `engine_sim` identities/ticks/hashes/seed vocabulary for deterministic interoperability.
 4. Record, restore, and validate sessions with `engine_history`.
 5. Bridge the selected runtime into engine schedules through `engine/src/plugins/net/`.
-6. Keep gameplay replication mapping, correction, smoothing, and tuning in `games/*/src/net/`.
+6. Keep gameplay replication mapping, correction, smoothing, and tuning in the owning gameplay domain/app modules, not in transport/runtime adapter crates.
 
 ## Architecture Docs
 
-- Current architecture sketch: [architecture.puml](architecture.puml)
-- Target architecture sketch: [architecture-target.puml](architecture-target.puml)
-- Goals and pinned direction: [GOALS.md](goals.md)
+- Networking architecture guide: [net-architecture.md](net-architecture.md)
+- Goals and pinned direction: [goals.md](goals.md)
 
 ## ECS Runtime Audit Docs
 

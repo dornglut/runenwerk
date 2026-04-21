@@ -9,10 +9,12 @@ This map tracks crate ownership and allowed dependency direction for the active 
 
 ## Domain Layer
 
+- `foundation/id`: shared typed-id primitives and allocation contracts
 - `domain/ecs`: entity/component/resource storage, reflection, and typed world/query APIs
 - `domain/scheduler`: schedule/stage/runtime execution graph utilities
 - `domain/scene`: scene-domain data contracts
 - `domain/editor/*`: editor-facing domain logic (inspector, scene editing, viewport)
+- `domain/id_macros`: derive/proc-macro support for id newtypes used across domains
 
 ## Engine Layer
 
@@ -50,6 +52,11 @@ Primary plugin modules live under:
 
 Preferred dependency direction:
 
+- `foundation` <- `domain`
+- `foundation` <- `engine`
+- `foundation` <- `net`
+- `foundation` <- `apps`
+- `foundation` <- `adapters`
 - `domain` <- `engine`
 - `domain` <- `net`
 - `domain` <- `apps`

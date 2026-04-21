@@ -9,6 +9,7 @@ This page is a lightweight orientation map for the active Runenwerk repository.
 
 ## Top-Level Areas
 
+- `foundation/`: shared low-level primitives used across domains (for example typed ids)
 - `domain/`: engine-agnostic gameplay/runtime contracts and logic
 - `engine/`: runtime app loop and plugins
 - `net/`: networking and replication crates

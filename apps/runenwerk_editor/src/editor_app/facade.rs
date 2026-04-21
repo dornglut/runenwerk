@@ -11,7 +11,8 @@ use crate::editor_panels::{
     ViewportPanelState, ViewportToolState,
 };
 use crate::runtime::viewport::{
-    ViewportArtifactObservationResource, ViewportPresentationStateResource,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportPresentationStateResource,
 };
 use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState};
 use editor_core::EditorMutationError;
@@ -155,6 +156,7 @@ impl RunenwerkEditorApp {
         viewport_products: Option<&ArtifactObservationFrame>,
         viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
         RunenwerkEditorShellController::dispatch_input_with_viewport_products(
             self,
@@ -165,6 +167,7 @@ impl RunenwerkEditorApp {
             viewport_products,
             viewport_presentations,
             viewport_observations,
+            tool_surface_bindings,
         )
     }
 }

@@ -33,7 +33,7 @@ Networking code should depend on contracts, not game internals:
 
 - Use `engine_net` protocol/session/replication traits as boundaries.
 - Put transport-specific runtime behavior in `engine_net_quic` rather than in game or engine code.
-- Keep payload interpretation on the game side (`games/cavern_hunt`) where gameplay state is owned.
+- Keep payload interpretation in the owning gameplay domain/app module (not in transport or engine-generic crates).
 
 ## Explicit State and Scheduling Pattern
 

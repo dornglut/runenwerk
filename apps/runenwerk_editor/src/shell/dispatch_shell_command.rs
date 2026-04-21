@@ -2,10 +2,7 @@ use std::path::PathBuf;
 
 use editor_core::{ComponentTypeId, EditorMutationError};
 use editor_inspector::{InspectorEditValue, InspectorValue};
-use editor_shell::{
-    FloatingHostPlaceholderState, PanelHostKind, ShellCommand, SplitHostState, WorkspaceMutation,
-    WorkspaceSplitAxis,
-};
+use editor_shell::ShellCommand;
 use editor_viewport::{ProductAvailabilityState, ViewportPresentationState};
 
 use crate::editor_app::RunenwerkEditorApp;
@@ -15,25 +12,24 @@ use crate::editor_runtime::{
     bootstrap_mvp_scene_if_empty, is_local_transform_component, register_mvp_component_types,
 };
 use crate::persistence::{
-    load_scene_file_into_runtime_classified, read_retained_change_log, read_workspace_state_file,
+    load_scene_file_into_runtime_classified, read_retained_change_log,
     retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
-    write_workspace_state_file,
 };
 use crate::runtime::viewport::{
-    ViewportArtifactObservationResource, ViewportPresentationStateResource,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportPresentationStateResource,
 };
 use crate::shell::{SELECT_TOOL_ID, TRANSLATE_TOOL_ID};
 
 const TRANSFORM_STEPPER_INCREMENT: f64 = 0.25;
 const DEFAULT_EDITOR_SCENE_PATH: &str = "editor-scenes/default.scene.ron";
-const DEFAULT_EDITOR_WORKSPACE_PATH: &str = "editor-scenes/default.workspace.ron";
 
 pub fn dispatch_shell_command(
     app: &mut RunenwerkEditorApp,
-    shell_state: Option<&mut crate::shell::RunenwerkEditorShellState>,
     command: ShellCommand,
     viewport_presentations: Option<&mut ViewportPresentationStateResource>,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
+    tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
     current_projection_epoch: Option<u64>,
 ) -> Result<(), EditorMutationError> {
     if let (Some(command_epoch), Some(expected_epoch)) =
@@ -79,10 +75,10 @@ pub fn dispatch_shell_command(
             }
         }
         ShellCommand::SaveScene => {
-            save_scene_to_default_path(app, shell_state.as_deref())?;
+            save_scene_to_default_path(app)?;
         }
         ShellCommand::LoadScene => {
-            load_scene_from_default_path(app, shell_state)?;
+            load_scene_from_default_path(app)?;
         }
         ShellCommand::ToggleDebugLogs => {
             app.toggle_debug_logs_enabled();
@@ -105,32 +101,54 @@ pub fn dispatch_shell_command(
         ShellCommand::SelectViewportProduct {
             viewport_id,
             product_id,
-            target: _,
+            target,
             projection_epoch: _,
-        } => match (viewport_presentations, viewport_observations) {
-            (Some(viewport_presentations), Some(viewport_observations)) => {
+        } => match (
+            viewport_presentations,
+            viewport_observations,
+            tool_surface_bindings,
+        ) {
+            (
+                Some(viewport_presentations),
+                Some(viewport_observations),
+                Some(tool_surface_bindings),
+            ) => {
+                let resolved_binding =
+                    match tool_surface_bindings.resolve_command_target(target, viewport_id) {
+                        Ok(binding) => binding,
+                        Err(error) => {
+                            app.append_console_line(format!(
+                                "[viewport.binding] product selection ignored: {error}"
+                            ));
+                            return Ok(());
+                        }
+                    };
+                let resolved_viewport_id = resolved_binding.viewport_id;
                 let selectable = viewport_observations
-                    .frame_for(viewport_id)
+                    .frame_for(resolved_viewport_id)
                     .and_then(|frame| frame.availability_by_product.get(&product_id).copied())
                     .map(|availability| availability == ProductAvailabilityState::Available)
                     .unwrap_or(false);
                 if selectable {
-                    if let Some(state) = viewport_presentations.state_for_mut(viewport_id) {
+                    if let Some(state) = viewport_presentations.state_for_mut(resolved_viewport_id)
+                    {
                         state.select_primary_product(product_id);
                     } else {
-                        viewport_presentations
-                            .upsert_state(ViewportPresentationState::new(viewport_id, product_id));
+                        viewport_presentations.upsert_state(ViewportPresentationState::new(
+                            resolved_viewport_id,
+                            product_id,
+                        ));
                     }
                 } else {
                     app.append_console_line(format!(
                         "[viewport] product selection ignored (unavailable): viewport={} product={}",
-                        viewport_id.0, product_id.0
+                        resolved_viewport_id.0, product_id.0
                     ));
                 }
             }
             _ => {
                 app.append_console_line(
-                    "[viewport] product selection ignored (missing viewport runtime context)"
+                    "[viewport.binding] product selection ignored (missing runtime binding context)"
                         .to_string(),
                 );
             }
@@ -144,33 +162,6 @@ pub fn dispatch_shell_command(
             projection_epoch: _,
         } => {
             activate_inspector_field(app, index)?;
-        }
-        ShellCommand::ActivateTab {
-            tab_stack_id,
-            panel_instance_id,
-            projection_epoch: _,
-        } => {
-            if let Some(shell_state) = shell_state {
-                shell_state
-                    .apply_workspace_mutation(WorkspaceMutation::SetTabStackActivePanel {
-                        tab_stack_id,
-                        active_panel: Some(panel_instance_id),
-                    })
-                    .map_err(|_| {
-                        EditorMutationError::runtime_rejected(
-                            "failed to activate tab in workspace state",
-                        )
-                    })?;
-            }
-        }
-        ShellCommand::FloatPanel {
-            tab_stack_id,
-            panel_instance_id,
-            projection_epoch: _,
-        } => {
-            if let Some(shell_state) = shell_state {
-                float_panel_from_tab_stack(shell_state, tab_stack_id, panel_instance_id)?;
-            }
         }
         ShellCommand::NoOp => {}
     }
@@ -191,8 +182,6 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::SelectViewportProduct { .. } => "SelectViewportProduct",
         ShellCommand::ToggleViewportDetails => "ToggleViewportDetails",
         ShellCommand::ActivateInspectorField { .. } => "ActivateInspectorField",
-        ShellCommand::ActivateTab { .. } => "ActivateTab",
-        ShellCommand::FloatPanel { .. } => "FloatPanel",
         ShellCommand::NoOp => "NoOp",
     }
 }
@@ -331,43 +320,29 @@ fn default_scene_file_path() -> PathBuf {
     PathBuf::from(DEFAULT_EDITOR_SCENE_PATH)
 }
 
-fn default_workspace_file_path() -> PathBuf {
-    PathBuf::from(DEFAULT_EDITOR_WORKSPACE_PATH)
-}
-
-fn save_scene_to_default_path(
-    app: &mut RunenwerkEditorApp,
-    shell_state: Option<&crate::shell::RunenwerkEditorShellState>,
-) -> Result<(), EditorMutationError> {
-    let scene_path = default_scene_file_path();
-    if let Some(parent) = scene_path.parent() {
+fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), EditorMutationError> {
+    let path = default_scene_file_path();
+    if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| {
             EditorMutationError::runtime_rejected("failed to create editor scene folder")
         })?;
     }
 
-    write_scene_file(&scene_path, app.runtime())
+    write_scene_file(&path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save editor scene"))?;
-    let retained_path = retained_change_log_path_for_scene(&scene_path);
+    let retained_path = retained_change_log_path_for_scene(&path);
     let entry_count = write_retained_change_log(&retained_path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save retained change log"))?;
-    let workspace_path = default_workspace_file_path();
-    if let Some(shell_state) = shell_state {
-        write_workspace_state_file(&workspace_path, shell_state.workspace_state()).map_err(
-            |_| EditorMutationError::runtime_rejected("failed to save workspace layout"),
-        )?;
-        app.append_console_line(format!("[io] saved {}", workspace_path.display()));
-    }
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneSaved {
-            path: scene_path.display().to_string(),
+            path: path.display().to_string(),
         });
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::RetainedChangesSaved {
             path: retained_path.display().to_string(),
             entry_count,
         });
-    app.append_console_line(format!("[io] saved {}", scene_path.display()));
+    app.append_console_line(format!("[io] saved {}", path.display()));
     app.append_console_line(format!(
         "[io] retained {} ratified changes at {}",
         entry_count,
@@ -376,15 +351,12 @@ fn save_scene_to_default_path(
     Ok(())
 }
 
-fn load_scene_from_default_path(
-    app: &mut RunenwerkEditorApp,
-    shell_state: Option<&mut crate::shell::RunenwerkEditorShellState>,
-) -> Result<(), EditorMutationError> {
-    let scene_path = default_scene_file_path();
-    if !scene_path.exists() {
+fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), EditorMutationError> {
+    let path = default_scene_file_path();
+    if !path.exists() {
         app.append_console_line(format!(
             "[io] scene file missing, skipping load: {}",
-            scene_path.display()
+            path.display()
         ));
         return Ok(());
     }
@@ -395,7 +367,7 @@ fn load_scene_from_default_path(
         register_mvp_component_types(runtime);
     }
 
-    let migration = match load_scene_file_into_runtime_classified(&scene_path, app.runtime_mut()) {
+    let migration = match load_scene_file_into_runtime_classified(&path, app.runtime_mut()) {
         Ok(migration) => migration,
         Err(class) => {
             app.append_console_line(format!(
@@ -407,7 +379,7 @@ fn load_scene_from_default_path(
             ));
         }
     };
-    let retained_path = retained_change_log_path_for_scene(&scene_path);
+    let retained_path = retained_change_log_path_for_scene(&path);
     let retained = if retained_path.exists() {
         Some(read_retained_change_log(&retained_path).map_err(|_| {
             EditorMutationError::runtime_rejected("failed to load retained change log")
@@ -415,24 +387,11 @@ fn load_scene_from_default_path(
     } else {
         None
     };
-    if let Some(shell_state) = shell_state {
-        let workspace_path = default_workspace_file_path();
-        if workspace_path.exists() {
-            let workspace_state = read_workspace_state_file(&workspace_path)
-                .map_err(|_| EditorMutationError::runtime_rejected("failed to load workspace"))?;
-            shell_state
-                .replace_workspace_state(workspace_state)
-                .map_err(|_| {
-                    EditorMutationError::runtime_rejected("failed to apply workspace layout")
-                })?;
-            app.append_console_line(format!("[io] loaded {}", workspace_path.display()));
-        }
-    }
     bootstrap_mvp_scene_if_empty(app.runtime_mut())?;
     app.reset_transient_editor_ui_state();
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneLoaded {
-            path: scene_path.display().to_string(),
+            path: path.display().to_string(),
             migration_path: migration,
         });
     if let Some(migration_path) = migration {
@@ -454,65 +413,7 @@ fn load_scene_from_default_path(
             retained_path.display()
         ));
     }
-    app.append_console_line(format!("[io] loaded {}", scene_path.display()));
-    Ok(())
-}
-
-fn float_panel_from_tab_stack(
-    shell_state: &mut crate::shell::RunenwerkEditorShellState,
-    tab_stack_id: editor_shell::TabStackId,
-    panel_instance_id: editor_shell::PanelInstanceId,
-) -> Result<(), EditorMutationError> {
-    let source_tab_stack = shell_state
-        .workspace_state()
-        .tab_stack(tab_stack_id)
-        .ok_or(EditorMutationError::runtime_rejected(
-            "source tab stack is missing",
-        ))?;
-    if !source_tab_stack.ordered_panels.contains(&panel_instance_id) {
-        return Err(EditorMutationError::runtime_rejected(
-            "panel is not present in source tab stack",
-        ));
-    }
-
-    let destination_tab_stack_id = shell_state.allocate_tab_stack_id();
-    let floating_host_id = shell_state.allocate_panel_host_id();
-    let new_root_host_id = shell_state.allocate_panel_host_id();
-    let existing_root_host_id = shell_state.workspace_state().root_host_id();
-
-    shell_state
-        .apply_workspace_mutations([
-            WorkspaceMutation::CreateTabStack {
-                tab_stack_id: destination_tab_stack_id,
-            },
-            WorkspaceMutation::CreateHostNode {
-                host_id: floating_host_id,
-                kind: PanelHostKind::FloatingHostPlaceholder(FloatingHostPlaceholderState {
-                    tab_stack_id: Some(destination_tab_stack_id),
-                }),
-            },
-            WorkspaceMutation::CreateHostNode {
-                host_id: new_root_host_id,
-                kind: PanelHostKind::SplitHost(SplitHostState {
-                    axis: WorkspaceSplitAxis::Horizontal,
-                    fraction: 0.80,
-                    first_child: existing_root_host_id,
-                    second_child: floating_host_id,
-                }),
-            },
-            WorkspaceMutation::SetRootHost {
-                host_id: new_root_host_id,
-            },
-            WorkspaceMutation::MovePanelToTabStack {
-                panel_id: panel_instance_id,
-                source_tab_stack_id: tab_stack_id,
-                destination_tab_stack_id,
-                destination_index: Some(0),
-                activate_in_destination: true,
-            },
-        ])
-        .map_err(|_| EditorMutationError::runtime_rejected("failed to float panel"))?;
-
+    app.append_console_line(format!("[io] loaded {}", path.display()));
     Ok(())
 }
 

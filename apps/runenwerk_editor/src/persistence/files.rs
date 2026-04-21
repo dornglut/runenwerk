@@ -6,7 +6,6 @@ use editor_persistence::{
     decode_scene_file_with_migration, encode_ron_pretty, form_scene_for_runtime,
     normalize_scene_file,
 };
-use editor_shell::{PersistedWorkspaceStateV1, WorkspaceState};
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
 use crate::persistence::{apply_formed_scene_to_runtime, scene_file_from_runtime};
@@ -85,28 +84,10 @@ pub fn read_project_file(path: &Path) -> Result<ProjectFileV1> {
     decode_ron(&source).context("failed to decode ProjectFileV1 from RON")
 }
 
-pub fn write_workspace_state_file(path: &Path, workspace_state: &WorkspaceState) -> Result<()> {
-    let persisted = workspace_state.to_persisted_v1();
-    let ron = encode_ron_pretty(&persisted).context("failed to encode workspace state as RON")?;
-    std::fs::write(path, ron)
-        .with_context(|| format!("failed to write workspace file: {}", path.display()))
-}
-
-pub fn read_workspace_state_file(path: &Path) -> Result<WorkspaceState> {
-    let source = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read workspace file: {}", path.display()))?;
-    let persisted: PersistedWorkspaceStateV1 =
-        decode_ron(&source).context("failed to decode workspace RON")?;
-    WorkspaceState::from_persisted_v1(persisted)
-        .map_err(|error| anyhow::Error::msg(error.to_string()))
-        .context("failed to restore workspace state from persisted payload")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::editor_runtime::{RunenwerkEditorRuntime, register_mvp_component_types};
-    use editor_shell::WorkspaceIdentityAllocator;
 
     fn temp_scene_path(name: &str) -> std::path::PathBuf {
         let mut path = std::env::temp_dir();
@@ -115,16 +96,6 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         path.push(format!("runenwerk_{name}_{nanos}.scene.ron"));
-        path
-    }
-
-    fn temp_workspace_path(name: &str) -> std::path::PathBuf {
-        let mut path = std::env::temp_dir();
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        path.push(format!("runenwerk_{name}_{nanos}.workspace.ron"));
         path
     }
 
@@ -266,21 +237,6 @@ mod tests {
             error.to_string().contains("failed to normalize scene file"),
             "error should surface normalization failure context"
         );
-
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn workspace_state_file_roundtrip_preserves_structural_identity() {
-        let path = temp_workspace_path("workspace_roundtrip");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let state = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
-
-        write_workspace_state_file(&path, &state).expect("workspace write should succeed");
-        let restored = read_workspace_state_file(&path).expect("workspace read should succeed");
-
-        assert_eq!(restored, state);
 
         let _ = std::fs::remove_file(path);
     }

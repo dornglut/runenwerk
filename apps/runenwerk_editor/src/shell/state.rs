@@ -1,16 +1,8 @@
 use editor_shell::{
-    PanelHostId, PanelInstanceId, ShellProjectionArtifacts, TabStackId, UiRuntime, UiTree,
-    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
-    WorkspaceStateError, reduce_workspace,
+    ShellProjectionArtifacts, UiRuntime, UiTree, WorkspaceId, WorkspaceIdentityAllocator,
+    WorkspaceMutation, WorkspaceState, WorkspaceStateError, reduce_workspace,
 };
 use ui_math::UiRect;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ShellTabDragState {
-    pub panel_instance_id: PanelInstanceId,
-    pub source_tab_stack_id: TabStackId,
-    pub hovered_tab_stack_id: Option<TabStackId>,
-}
 
 #[derive(Debug)]
 pub struct RunenwerkEditorShellState {
@@ -21,7 +13,6 @@ pub struct RunenwerkEditorShellState {
     projection_epoch: u64,
     identity_allocator: WorkspaceIdentityAllocator,
     workspace_state: WorkspaceState,
-    tab_drag_state: Option<ShellTabDragState>,
 }
 
 impl Default for RunenwerkEditorShellState {
@@ -39,7 +30,6 @@ impl Default for RunenwerkEditorShellState {
             projection_epoch: 0,
             identity_allocator,
             workspace_state,
-            tab_drag_state: None,
         }
     }
 }
@@ -103,14 +93,6 @@ impl RunenwerkEditorShellState {
         &self.identity_allocator
     }
 
-    pub fn allocate_panel_host_id(&mut self) -> PanelHostId {
-        self.identity_allocator.allocate_panel_host_id()
-    }
-
-    pub fn allocate_tab_stack_id(&mut self) -> TabStackId {
-        self.identity_allocator.allocate_tab_stack_id()
-    }
-
     pub fn current_projection_epoch(&self) -> u64 {
         self.projection_epoch
     }
@@ -127,67 +109,8 @@ impl RunenwerkEditorShellState {
         op: WorkspaceMutation,
     ) -> Result<(), WorkspaceStateError> {
         self.workspace_state = reduce_workspace(&self.workspace_state, op)?;
-        self.identity_allocator =
-            WorkspaceIdentityAllocator::from_seed(self.workspace_state.next_identity_seed());
         self.clear_cached_projection();
         Ok(())
-    }
-
-    pub fn apply_workspace_mutations(
-        &mut self,
-        ops: impl IntoIterator<Item = WorkspaceMutation>,
-    ) -> Result<(), WorkspaceStateError> {
-        let mut next = self.workspace_state.clone();
-        for op in ops {
-            next = reduce_workspace(&next, op)?;
-        }
-        self.workspace_state = next;
-        self.identity_allocator =
-            WorkspaceIdentityAllocator::from_seed(self.workspace_state.next_identity_seed());
-        self.clear_cached_projection();
-        Ok(())
-    }
-
-    pub fn replace_workspace_state(
-        &mut self,
-        workspace_state: WorkspaceState,
-    ) -> Result<(), WorkspaceStateError> {
-        workspace_state.validate_integrity()?;
-        self.workspace_state = workspace_state;
-        self.identity_allocator =
-            WorkspaceIdentityAllocator::from_seed(self.workspace_state.next_identity_seed());
-        self.clear_cached_projection();
-        Ok(())
-    }
-
-    pub fn tab_drag_state(&self) -> Option<ShellTabDragState> {
-        self.tab_drag_state
-    }
-
-    pub fn begin_tab_drag(
-        &mut self,
-        panel_instance_id: PanelInstanceId,
-        source_tab_stack_id: TabStackId,
-    ) {
-        self.tab_drag_state = Some(ShellTabDragState {
-            panel_instance_id,
-            source_tab_stack_id,
-            hovered_tab_stack_id: None,
-        });
-    }
-
-    pub fn set_tab_drag_hover_target(&mut self, tab_stack_id: Option<TabStackId>) {
-        if let Some(state) = &mut self.tab_drag_state {
-            state.hovered_tab_stack_id = tab_stack_id;
-        }
-    }
-
-    pub fn clear_tab_drag(&mut self) {
-        self.tab_drag_state = None;
-    }
-
-    pub fn end_tab_drag(&mut self) -> Option<ShellTabDragState> {
-        self.tab_drag_state.take()
     }
 
     pub fn clear_cached_projection(&mut self) {
@@ -195,6 +118,5 @@ impl RunenwerkEditorShellState {
         self.last_tree = None;
         self.last_bounds = None;
         self.last_projection_artifacts = None;
-        self.tab_drag_state = None;
     }
 }

@@ -22,7 +22,7 @@ You are Codex, based on GPT-5, running inside the Codex desktop app on macOS as 
 
 ## Module Structure
 
-Follow the module organization rules defined in `docs/guidelines/module-structure-guidelines.md`.
+Follow the module organization rules defined in `docs-site/src/content/docs/guidelines/module-structure-guidelines.md`.
 
 ### Key expectations
 
@@ -57,14 +57,14 @@ render/
 
 ### When adding new code
 
-1. Choose the owning domain (`domain`, `engine`, `net`, `games`, `apps`).
+1. Choose the owning domain (`foundation`, `domain`, `engine`, `net`, `apps`, `adapters`).
 2. Choose the owning crate.
 3. Choose the owning subsystem inside that crate.
 4. Add the file/module there.
 
-Domain is for agnostic logic that is reusable and does not depend on ecs or engine.
-Domain logic should be reusable in my custom engine bevy and Godot.
-Engine is glue for the logic in Domain.
+Foundation is for cross-domain primitives (for example typed id/runtime-neutral shared contracts).
+Domain is for engine-agnostic reusable logic that does not depend on engine runtime glue.
+Engine is glue that composes runtime behavior around domain/foundation contracts.
 
 ## Code Discovery
 
@@ -89,9 +89,12 @@ When creating or editing docs:
 
 ## Documentation Ownership
 
-Documentation should live with under docs-site/src/content/docs
+Documentation should live under `docs-site/src/content/docs`.
 
 When deciding where docs belong:
+- architecture and repository-wide guidelines: `docs-site/src/content/docs/guidelines/`
+- workspace/process docs: `docs-site/src/content/docs/workspace/`
+- domain/crate docs: their owning subtree inside `docs-site/src/content/docs/`
 
 ## Public API, Usage Ergonomics, and Examples
 
