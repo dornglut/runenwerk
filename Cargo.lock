@@ -789,6 +789,9 @@ dependencies = [
  "editor_inspector",
  "editor_scene",
  "editor_viewport",
+ "id",
+ "id_macros",
+ "serde",
  "ui_input",
  "ui_layout",
  "ui_math",
@@ -1437,6 +1440,8 @@ name = "id"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "static_assertions",
 ]
 
 [[package]]

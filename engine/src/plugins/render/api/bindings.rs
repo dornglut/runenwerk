@@ -38,8 +38,8 @@ impl ProjectedUniformSet {
 
     pub fn pass(&self, pass_id: RenderPassId) -> Option<&PassUniformProjection> {
         self.by_pass
-          .get(&pass_id)
-          .and_then(|index| self.passes.get(*index))
+            .get(&pass_id)
+            .and_then(|index| self.passes.get(*index))
     }
 
     pub fn passes(&self) -> &[PassUniformProjection] {
@@ -116,20 +116,20 @@ pub struct PassParamBinding {
 impl std::fmt::Debug for PassParamBinding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PassParamBinding")
-          .field("uniform_id", &self.uniform_id)
-          .field("state_type_name", &self.state_type_name())
-          .field("params_type_name", &self.params_type_name())
-          .field("requires_surface", &self.requires_surface())
-          .finish()
+            .field("uniform_id", &self.uniform_id)
+            .field("state_type_name", &self.state_type_name())
+            .field("params_type_name", &self.params_type_name())
+            .field("requires_surface", &self.requires_surface())
+            .finish()
     }
 }
 
 impl PassParamBinding {
     pub fn uniform_state<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      P: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> P + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        P: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> P + Send + Sync + 'static,
     {
         Self {
             uniform_id,
@@ -142,9 +142,9 @@ impl PassParamBinding {
 
     pub fn uniform_state_with_surface<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      P: GpuParams + Send + Sync + 'static,
-      F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        P: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
     {
         Self {
             uniform_id,
@@ -186,9 +186,9 @@ impl PassParamBinding {
 
 struct UniformStateProjection<S, P, F>
 where
-  S: ecs::Resource + 'static,
-  P: GpuParams + 'static,
-  F: Fn(&S) -> P + Send + Sync + 'static,
+    S: ecs::Resource + 'static,
+    P: GpuParams + 'static,
+    F: Fn(&S) -> P + Send + Sync + 'static,
 {
     build: F,
     _marker: PhantomData<fn(&S) -> P>,
@@ -196,9 +196,9 @@ where
 
 impl<S, P, F> ParamProjection for UniformStateProjection<S, P, F>
 where
-  S: ecs::Resource + Send + Sync + 'static,
-  P: GpuParams + Send + Sync + 'static,
-  F: Fn(&S) -> P + Send + Sync + 'static,
+    S: ecs::Resource + Send + Sync + 'static,
+    P: GpuParams + Send + Sync + 'static,
+    F: Fn(&S) -> P + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
         TypeId::of::<S>()
@@ -230,9 +230,9 @@ where
 
 struct UniformStateWithSurfaceProjection<S, P, F>
 where
-  S: ecs::Resource + 'static,
-  P: GpuParams + 'static,
-  F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
+    S: ecs::Resource + 'static,
+    P: GpuParams + 'static,
+    F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
 {
     build: F,
     _marker: PhantomData<fn(&S) -> P>,
@@ -240,9 +240,9 @@ where
 
 impl<S, P, F> ParamProjection for UniformStateWithSurfaceProjection<S, P, F>
 where
-  S: ecs::Resource + Send + Sync + 'static,
-  P: GpuParams + Send + Sync + 'static,
-  F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
+    S: ecs::Resource + Send + Sync + 'static,
+    P: GpuParams + Send + Sync + 'static,
+    F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
         TypeId::of::<S>()

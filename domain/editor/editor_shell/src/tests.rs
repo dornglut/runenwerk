@@ -11,8 +11,8 @@ use crate::{
     InspectorTargetViewModel, InspectorViewModel, OUTLINER_PANEL_WIDGET_ID, OutlinerRowViewModel,
     OutlinerViewModel, ShellCommand, TOOLBAR_ROOT_WIDGET_ID, ToolbarButtonViewModel,
     ToolbarViewModel, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    ViewportProductChoiceViewModel, ViewportViewModel, build_editor_shell,
-    map_interactions_to_shell_commands, viewport_product_button_widget_id,
+    ViewportProductChoiceViewModel, ViewportViewModel, WorkspaceIdentityAllocator,
+    build_editor_shell, map_interactions_to_shell_commands, viewport_product_button_widget_id,
 };
 
 #[test]
@@ -20,7 +20,7 @@ fn shell_view_model_builds_ui_tree_and_frame() {
     let theme = ThemeTokens::default();
     let shell = sample_shell_view_model();
 
-    let tree = build_editor_shell(&shell, &theme);
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state());
     let runtime = UiRuntime::new();
     let atlas_source = TestAtlasSource::ascii();
     let frame = runtime.build_frame(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0), &atlas_source);
@@ -34,7 +34,7 @@ fn shell_view_model_builds_ui_tree_and_frame() {
 fn viewport_embed_uv_rect_maps_to_canvas_screen_region() {
     let theme = ThemeTokens::default();
     let shell = sample_shell_view_model();
-    let tree = build_editor_shell(&shell, &theme);
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state());
     let runtime = UiRuntime::new();
     let atlas_source = TestAtlasSource::ascii();
     let surface_bounds = UiRect::new(0.0, 0.0, 1600.0, 900.0);
@@ -80,7 +80,7 @@ fn viewport_panel_without_viewport_identity_renders_without_embed_primitive() {
     let mut shell = sample_shell_view_model();
     shell.viewport.viewport_id = None;
     shell.viewport.product_choices.clear();
-    let tree = build_editor_shell(&shell, &theme);
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state());
     let runtime = UiRuntime::new();
     let atlas_source = TestAtlasSource::ascii();
     let frame = runtime.build_frame(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0), &atlas_source);
@@ -102,7 +102,7 @@ fn viewport_panel_without_viewport_identity_renders_without_embed_primitive() {
 fn layout_keeps_viewport_canvas_nonzero_and_inside_viewport_panel() {
     let theme = ThemeTokens::default();
     let shell = sample_shell_view_model();
-    let tree = build_editor_shell(&shell, &theme);
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state());
     let runtime = UiRuntime::new();
     let layouts = runtime.compute_layout(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0));
 
@@ -134,7 +134,7 @@ fn layout_keeps_viewport_canvas_nonzero_and_inside_viewport_panel() {
 fn layout_ensures_major_panels_do_not_overlap() {
     let theme = ThemeTokens::default();
     let shell = sample_shell_view_model();
-    let tree = build_editor_shell(&shell, &theme);
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state());
     let runtime = UiRuntime::new();
     let layouts = runtime.compute_layout(&tree, UiRect::new(0.0, 0.0, 1600.0, 900.0));
 
@@ -159,7 +159,7 @@ fn layout_ensures_major_panels_do_not_overlap() {
 fn console_scroll_offset_clamps_and_reserves_scrollbar_gutter() {
     let theme = ThemeTokens::default();
     let shell = scrollable_shell_view_model();
-    let tree = build_editor_shell(&shell, &theme);
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state());
     let mut runtime = UiRuntime::new();
     let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
 
@@ -232,7 +232,7 @@ fn console_scroll_offset_clamps_and_reserves_scrollbar_gutter() {
 fn tiny_bounds_frame_build_does_not_panic() {
     let theme = ThemeTokens::default();
     let shell = scrollable_shell_view_model();
-    let tree = build_editor_shell(&shell, &theme);
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state());
     let runtime = UiRuntime::new();
     let atlas_source = TestAtlasSource::ascii();
 
@@ -349,7 +349,9 @@ fn outliner_row_activation_maps_to_select_entity_command() {
 #[test]
 fn viewport_product_activation_maps_to_select_product_command() {
     let interactions = UiInteractionResults {
-        items: vec![UiInteraction::Activated(viewport_product_button_widget_id(0))],
+        items: vec![UiInteraction::Activated(viewport_product_button_widget_id(
+            0,
+        ))],
     };
     let view_model = EditorShellViewModel {
         toolbar: ToolbarViewModel::default(),
@@ -481,6 +483,12 @@ fn sample_shell_view_model() -> EditorShellViewModel {
             lines: vec!["boot".to_string()],
         },
     }
+}
+
+fn sample_workspace_state() -> crate::WorkspaceState {
+    let mut allocator = WorkspaceIdentityAllocator::new();
+    let workspace_id = allocator.allocate_workspace_id();
+    crate::WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator)
 }
 
 fn scrollable_shell_view_model() -> EditorShellViewModel {

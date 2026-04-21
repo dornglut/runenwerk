@@ -13,12 +13,16 @@ pub enum ShellCommand {
     SaveScene,
     LoadScene,
     ToggleDebugLogs,
-    SelectOutlinerEntity { entity: EntityId },
+    SelectOutlinerEntity {
+        entity: EntityId,
+    },
     SelectViewportProduct {
         viewport_id: ViewportId,
         product_id: ExpressionProductId,
     },
     ToggleViewportDetails,
-    ActivateInspectorField { index: usize },
+    ActivateInspectorField {
+        index: usize,
+    },
     NoOp,
 }

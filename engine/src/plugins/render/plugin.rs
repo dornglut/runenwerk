@@ -5,9 +5,8 @@ use super::features::{
     PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedProceduralWorldFeatureResource, PreparedUiFrameResource,
     PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureRegistryResource,
-    UiFontAtlasResource, UiFrameSubmissionRegistryResource,
-    ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
-    sync_render_feature_registry_system,
+    UiFontAtlasResource, UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
+    prepare_ui_feature_resource_system, sync_render_feature_registry_system,
     world::{WorldLodPolicyResource, WorldLodSelectionResource, WorldRuntimeCacheResource},
 };
 use super::frame::PreparedRenderFrameResource;

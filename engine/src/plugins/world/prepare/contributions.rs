@@ -112,9 +112,7 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         };
     }
 
-    if let Ok(procedural_feature) =
-        world.resource_mut::<PreparedProceduralWorldFeatureResource>()
-    {
+    if let Ok(procedural_feature) = world.resource_mut::<PreparedProceduralWorldFeatureResource>() {
         procedural_feature.status = FeatureContributionStatus::Missing;
         procedural_feature.fallback_policy = FeatureFallbackPolicy::SkipFeaturePasses;
         procedural_feature.payload = PreparedProceduralWorldFeatureContribution::default();

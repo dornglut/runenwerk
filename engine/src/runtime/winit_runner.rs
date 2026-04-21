@@ -21,7 +21,9 @@ pub(crate) fn run(state: WindowedAppState) -> Result<()> {
         window: None,
         fatal_error: None,
     };
-    event_loop.run_app(&mut runner).map_err(anyhow::Error::from)?;
+    event_loop
+        .run_app(&mut runner)
+        .map_err(anyhow::Error::from)?;
     if let Some(err) = runner.fatal_error {
         Err(err)
     } else {

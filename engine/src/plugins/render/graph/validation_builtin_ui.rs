@@ -48,15 +48,17 @@ pub fn validate_builtin_ui_pass_shape(
     }
 
     if !pass.sampled_textures.is_empty()
-      || !pass.write_textures.is_empty()
-      || !pass.vertex_buffers.is_empty()
-      || !pass.index_buffers.is_empty()
-      || !pass.instance_buffers.is_empty()
-      || !pass.indirect_buffers.is_empty()
+        || !pass.write_textures.is_empty()
+        || !pass.vertex_buffers.is_empty()
+        || !pass.index_buffers.is_empty()
+        || !pass.instance_buffers.is_empty()
+        || !pass.indirect_buffers.is_empty()
     {
-        issues.push(RenderFlowValidationIssue::BuiltinUiInvalidResourceBindings {
-            pass_label: pass.label.clone(),
-        });
+        issues.push(
+            RenderFlowValidationIssue::BuiltinUiInvalidResourceBindings {
+                pass_label: pass.label.clone(),
+            },
+        );
     }
 
     if !pass.reads.is_empty() {

@@ -131,10 +131,10 @@ mod tests {
         resource.publish(dummy_frame(4));
         assert_eq!(
             resource
-              .frame()
-              .expect("frame should be present after publish")
-              .context
-              .frame_index,
+                .frame()
+                .expect("frame should be present after publish")
+                .context
+                .frame_index,
             4
         );
         assert_eq!(resource.allocate_frame_index(), 5);

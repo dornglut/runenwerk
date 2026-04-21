@@ -9,10 +9,16 @@ use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
-    OUTLINER_SCROLL_WIDGET_ID, OUTLINER_TITLE_WIDGET_ID, OutlinerViewModel, outliner_row_widget_id,
+    OUTLINER_SCROLL_WIDGET_ID, OUTLINER_TITLE_WIDGET_ID, OutlinerViewModel, PanelInstanceId,
+    ToolSurfaceInstanceId, outliner_row_widget_id,
 };
 
-pub fn build_outliner_panel(view_model: &OutlinerViewModel, theme: &ThemeTokens) -> UiNode {
+pub fn build_outliner_panel(
+    view_model: &OutlinerViewModel,
+    theme: &ThemeTokens,
+    _panel_instance_id: PanelInstanceId,
+    _active_tool_surface: Option<ToolSurfaceInstanceId>,
+) -> UiNode {
     let title = label(
         OUTLINER_TITLE_WIDGET_ID,
         "Outliner",

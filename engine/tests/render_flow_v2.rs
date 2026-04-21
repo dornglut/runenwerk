@@ -1,6 +1,6 @@
 use engine::plugins::render::{
-    GpuStorage, GpuUniform, RenderFlow, RenderFrameDataRegistry, RenderPassKind,
-    RenderPassId, ShaderRegistryResource,
+    GpuStorage, GpuUniform, RenderFlow, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
+    ShaderRegistryResource,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -108,7 +108,12 @@ fn v2_flow_keeps_graph_contract_inspectable() {
     let ordered_labels = report
         .pass_order
         .iter()
-        .map(|id| pass_labels_by_id.get(id).copied().expect("pass should exist"))
+        .map(|id| {
+            pass_labels_by_id
+                .get(id)
+                .copied()
+                .expect("pass should exist")
+        })
         .collect::<Vec<_>>();
     assert_eq!(ordered_labels, vec!["simulate", "compose", "ui"]);
 
@@ -135,8 +140,16 @@ fn v2_uniform_projection_uses_state_bindings() {
     let projections = flow
         .project_uniforms(&frame_data, (1280, 720))
         .expect("projection should succeed");
-    assert!(projections.pass(pass_id_by_label(&flow, "simulate")).is_some());
-    assert!(projections.pass(pass_id_by_label(&flow, "compose")).is_some());
+    assert!(
+        projections
+            .pass(pass_id_by_label(&flow, "simulate"))
+            .is_some()
+    );
+    assert!(
+        projections
+            .pass(pass_id_by_label(&flow, "compose"))
+            .is_some()
+    );
 }
 
 #[test]
@@ -164,8 +177,16 @@ fn v2_uniform_projection_infers_types_from_method_items() {
     let projections = flow
         .project_uniforms(&frame_data, (1920, 1080))
         .expect("projection should succeed");
-    assert!(projections.pass(pass_id_by_label(&flow, "simulate")).is_some());
-    assert!(projections.pass(pass_id_by_label(&flow, "compose")).is_some());
+    assert!(
+        projections
+            .pass(pass_id_by_label(&flow, "simulate"))
+            .is_some()
+    );
+    assert!(
+        projections
+            .pass(pass_id_by_label(&flow, "compose"))
+            .is_some()
+    );
 }
 
 #[test]

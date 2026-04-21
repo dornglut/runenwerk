@@ -8,6 +8,7 @@ pub mod ids;
 pub mod observation;
 pub mod runtime;
 pub mod view_models;
+pub mod workspace;
 
 #[cfg(test)]
 mod tests;
@@ -19,3 +20,15 @@ pub use ids::*;
 pub use observation::*;
 pub use runtime::*;
 pub use view_models::*;
+pub use workspace::{
+    FixedLayoutProjection, FloatingHostPlaceholderState, PERSISTED_WORKSPACE_STATE_VERSION_V1,
+    PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId, PanelInstanceState, PanelKind,
+    PersistedPanelHostKindV1, PersistedPanelHostNodeV1, PersistedPanelInstanceStateV1,
+    PersistedPanelKindV1, PersistedTabStackStateV1, PersistedToolSurfaceKindV1,
+    PersistedToolSurfaceMountV1, PersistedToolSurfaceStateV1, PersistedWorkspaceSplitAxisV1,
+    PersistedWorkspaceStateV1, ProjectedPanelSlot, SplitHostState, TabStackHostState, TabStackId,
+    TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState,
+    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceIdentitySeed, WorkspaceMutation,
+    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError, project_fixed_layout,
+    reduce_workspace,
+};

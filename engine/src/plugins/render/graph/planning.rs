@@ -100,25 +100,25 @@ pub fn compile_flow_plan(
 ) -> Result<CompiledRenderFlowPlan, RenderFlowValidationError> {
     let report = flow.validation_report()?;
     let pass_lookup = flow
-      .graph()
-      .passes
-      .passes
-      .iter()
-      .map(|pass| (pass.id, pass.clone()))
-      .collect::<std::collections::BTreeMap<_, _>>();
+        .graph()
+        .passes
+        .passes
+        .iter()
+        .map(|pass| (pass.id, pass.clone()))
+        .collect::<std::collections::BTreeMap<_, _>>();
 
     let mut pass_order = Vec::<CompiledPassDescriptor>::with_capacity(report.pass_order.len());
 
     for (order_index, pass_id) in report.pass_order.iter().copied().enumerate() {
         let pass = pass_lookup
-          .get(&pass_id)
-          .cloned()
-          .ok_or_else(|| RenderFlowValidationError {
-              issues: vec![],
-              message: format!(
-                  "internal planning error: validated pass '{pass_id:?}' missing from flow graph"
-              ),
-          })?;
+            .get(&pass_id)
+            .cloned()
+            .ok_or_else(|| RenderFlowValidationError {
+                issues: vec![],
+                message: format!(
+                    "internal planning error: validated pass '{pass_id:?}' missing from flow graph"
+                ),
+            })?;
 
         let compiled = match pass.kind {
             RenderPassKind::Compute => CompiledPassDescriptor::Compute(CompiledComputePass {

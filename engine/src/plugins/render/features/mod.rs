@@ -271,12 +271,13 @@ impl RenderFeatureRegistryResource {
 
     pub fn descriptor_or_panic(&self, id: &RenderFeatureId) -> &RenderFeatureDescriptor {
         self.descriptors
-          .get(id)
-          .unwrap_or_else(|| panic!("missing render feature descriptor for id {:?}", id))
+            .get(id)
+            .unwrap_or_else(|| panic!("missing render feature descriptor for id {:?}", id))
     }
 
     pub fn label_of(&self, id: &RenderFeatureId) -> Option<&str> {
-        self.descriptor(id).map(|descriptor| descriptor.label.as_str())
+        self.descriptor(id)
+            .map(|descriptor| descriptor.label.as_str())
     }
 
     pub fn resolved_order(&self) -> &[RenderFeatureId] {
@@ -285,8 +286,8 @@ impl RenderFeatureRegistryResource {
 
     pub fn ordered_descriptors(&self) -> impl Iterator<Item = &RenderFeatureDescriptor> + '_ {
         self.resolved_order
-          .iter()
-          .filter_map(|id| self.descriptors.get(id))
+            .iter()
+            .filter_map(|id| self.descriptors.get(id))
     }
 
     pub fn issues(&self) -> &[String] {
@@ -304,17 +305,17 @@ impl RenderFeatureRegistryResource {
                 SCENE_ROUTE_RENDER_FEATURE_ID,
                 SCENE_ROUTE_RENDER_FEATURE_LABEL,
             )
-              .with_order_hint(-100)
-              .with_fallback_policy(FeatureFallbackPolicy::EmptyContribution),
+            .with_order_hint(-100)
+            .with_fallback_policy(FeatureFallbackPolicy::EmptyContribution),
         );
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
                 EDITOR_PICKING_RENDER_FEATURE_ID,
                 EDITOR_PICKING_RENDER_FEATURE_LABEL,
             )
-              .depends_on(SCENE_ROUTE_RENDER_FEATURE_ID)
-              .with_order_hint(-90)
-              .with_fallback_policy(FeatureFallbackPolicy::ReuseLastGood),
+            .depends_on(SCENE_ROUTE_RENDER_FEATURE_ID)
+            .with_order_hint(-90)
+            .with_fallback_policy(FeatureFallbackPolicy::ReuseLastGood),
         );
         self.upsert_descriptor(ui_render_feature_descriptor());
         self.upsert_descriptor(
@@ -322,65 +323,59 @@ impl RenderFeatureRegistryResource {
                 WORLD_DRAW_RENDER_FEATURE_ID,
                 WORLD_DRAW_RENDER_FEATURE_LABEL,
             )
-              .depends_on(SCENE_ROUTE_RENDER_FEATURE_ID)
-              .with_order_hint(10)
-              .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+            .depends_on(SCENE_ROUTE_RENDER_FEATURE_ID)
+            .with_order_hint(10)
+            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
                 CAVE_INTERIOR_RENDER_FEATURE_ID,
                 CAVE_INTERIOR_RENDER_FEATURE_LABEL,
             )
-              .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
-              .with_order_hint(12)
-              .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+            .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+            .with_order_hint(12)
+            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
                 PROCEDURAL_WORLD_RENDER_FEATURE_ID,
                 PROCEDURAL_WORLD_RENDER_FEATURE_LABEL,
             )
-              .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
-              .with_order_hint(14)
-              .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+            .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+            .with_order_hint(14)
+            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
-            RenderFeatureDescriptor::new(
-                DETAIL_RENDER_FEATURE_ID,
-                DETAIL_RENDER_FEATURE_LABEL,
-            )
-              .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
-              .with_order_hint(16)
-              .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+            RenderFeatureDescriptor::new(DETAIL_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_LABEL)
+                .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+                .with_order_hint(16)
+                .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
-            RenderFeatureDescriptor::new(
-                MATERIAL_RENDER_FEATURE_ID,
-                MATERIAL_RENDER_FEATURE_LABEL,
-            )
-              .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
-              .depends_on(DETAIL_RENDER_FEATURE_ID)
-              .depends_on(CAVE_INTERIOR_RENDER_FEATURE_ID)
-              .with_order_hint(20)
-              .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+            RenderFeatureDescriptor::new(MATERIAL_RENDER_FEATURE_ID, MATERIAL_RENDER_FEATURE_LABEL)
+                .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
+                .depends_on(DETAIL_RENDER_FEATURE_ID)
+                .depends_on(CAVE_INTERIOR_RENDER_FEATURE_ID)
+                .with_order_hint(20)
+                .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
                 DEFORMATION_RENDER_FEATURE_ID,
                 DEFORMATION_RENDER_FEATURE_LABEL,
             )
-              .depends_on(MATERIAL_RENDER_FEATURE_ID)
-              .with_order_hint(30)
-              .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+            .depends_on(MATERIAL_RENDER_FEATURE_ID)
+            .with_order_hint(30)
+            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
                 WIND_FIELDS_RENDER_FEATURE_ID,
                 WIND_FIELDS_RENDER_FEATURE_LABEL,
             )
-              .depends_on(DEFORMATION_RENDER_FEATURE_ID)
-              .with_order_hint(40)
-              .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
+            .depends_on(DEFORMATION_RENDER_FEATURE_ID)
+            .with_order_hint(40)
+            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
     }
 
@@ -424,12 +419,12 @@ fn resolve_feature_order(
                 continue;
             }
             let outgoing = edges
-              .get_mut(dependency)
-              .expect("dependency key should exist in edge graph");
+                .get_mut(dependency)
+                .expect("dependency key should exist in edge graph");
             if outgoing.insert(*id) {
                 let value = indegree
-                  .get_mut(id)
-                  .expect("feature should exist in indegree map");
+                    .get_mut(id)
+                    .expect("feature should exist in indegree map");
                 *value = value.saturating_add(1);
             }
         }
@@ -437,14 +432,14 @@ fn resolve_feature_order(
 
     let mut queue = VecDeque::<RenderFeatureId>::new();
     let mut ready = indegree
-      .iter()
-      .filter(|(_, degree)| **degree == 0)
-      .map(|(id, _)| *id)
-      .collect::<Vec<_>>();
+        .iter()
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(id, _)| *id)
+        .collect::<Vec<_>>();
     ready.sort_by_key(|id| {
         let descriptor = descriptors
-          .get(id)
-          .expect("feature should exist for ordering");
+            .get(id)
+            .expect("feature should exist for ordering");
         (descriptor.order_hint, descriptor.label.clone())
     });
     for id in ready {
@@ -460,16 +455,16 @@ fn resolve_feature_order(
         };
         for target in outgoing {
             let degree = indegree
-              .get_mut(target)
-              .expect("target feature should exist in indegree map");
+                .get_mut(target)
+                .expect("target feature should exist in indegree map");
             *degree = degree.saturating_sub(1);
             if *degree == 0 {
                 queue.push_back(*target);
                 let mut staged = queue.drain(..).collect::<Vec<_>>();
                 staged.sort_by_key(|id| {
                     let descriptor = descriptors
-                      .get(id)
-                      .expect("feature should exist for ordering");
+                        .get(id)
+                        .expect("feature should exist for ordering");
                     (descriptor.order_hint, descriptor.label.clone())
                 });
                 for id in staged {
@@ -481,15 +476,15 @@ fn resolve_feature_order(
 
     if order.len() != descriptors.len() {
         let unresolved = indegree
-          .into_iter()
-          .filter(|(_, degree)| *degree > 0)
-          .map(|(id, _)| {
-              descriptors
-                .get(&id)
-                .map(|descriptor| descriptor.label.clone())
-                .unwrap_or_else(|| format!("{id:?}"))
-          })
-          .collect::<Vec<_>>();
+            .into_iter()
+            .filter(|(_, degree)| *degree > 0)
+            .map(|(id, _)| {
+                descriptors
+                    .get(&id)
+                    .map(|descriptor| descriptor.label.clone())
+                    .unwrap_or_else(|| format!("{id:?}"))
+            })
+            .collect::<Vec<_>>();
         issues.push(format!(
             "render feature dependency cycle detected among: {}",
             unresolved.join(", ")
@@ -508,9 +503,9 @@ mod tests {
         let mut registry = RenderFeatureRegistryResource::default();
         registry.sync_order();
         let ordered = registry
-          .ordered_descriptors()
-          .map(|descriptor| descriptor.label.clone())
-          .collect::<Vec<_>>();
+            .ordered_descriptors()
+            .map(|descriptor| descriptor.label.clone())
+            .collect::<Vec<_>>();
         assert_eq!(
             ordered,
             vec![
@@ -543,20 +538,20 @@ mod tests {
         };
         registry.upsert_descriptor(
             RenderFeatureDescriptor::new(A_ID, "a")
-              .depends_on(B_ID)
-              .with_order_hint(0),
+                .depends_on(B_ID)
+                .with_order_hint(0),
         );
         registry.upsert_descriptor(
             RenderFeatureDescriptor::new(B_ID, "b")
-              .depends_on(A_ID)
-              .with_order_hint(0),
+                .depends_on(A_ID)
+                .with_order_hint(0),
         );
         registry.sync_order();
         assert!(
             registry
-              .issues()
-              .iter()
-              .any(|issue| issue.contains("dependency cycle")),
+                .issues()
+                .iter()
+                .any(|issue| issue.contains("dependency cycle")),
             "expected cycle issue, got {:?}",
             registry.issues()
         );

@@ -23,7 +23,7 @@ struct PingPongStorageRegistration {
     b_id: RenderResourceId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RenderFlow {
     graph: RenderFlowGraph,
     pass_ids_by_label: BTreeMap<String, RenderPassId>,
@@ -50,7 +50,7 @@ impl RenderFlow {
 
     pub fn with_state<T>(mut self) -> Self
     where
-      T: ecs::Resource + 'static,
+        T: ecs::Resource + 'static,
     {
         self.graph.resources.add_state_resource::<T>();
         self
@@ -81,7 +81,7 @@ impl RenderFlow {
         len: u64,
     ) -> (Self, StorageArrayHandle<T>)
     where
-      T: GpuParams + 'static,
+        T: GpuParams + 'static,
     {
         let id = self.register_storage_array::<T>(label.into(), len);
         (self, StorageArrayHandle::new(id))
@@ -89,7 +89,7 @@ impl RenderFlow {
 
     pub fn double_buffer_storage_array<T>(mut self, label: impl Into<String>, len: u64) -> Self
     where
-      T: GpuParams + 'static,
+        T: GpuParams + 'static,
     {
         self.register_double_buffer_storage_array::<T>(label.into(), len);
         self
@@ -101,7 +101,7 @@ impl RenderFlow {
         len: u64,
     ) -> (Self, DoubleBufferHandle<T>)
     where
-      T: GpuParams + 'static,
+        T: GpuParams + 'static,
     {
         let base_label = label.into();
         let (a_id, b_id) = self.register_double_buffer_storage_array::<T>(base_label.clone(), len);
@@ -121,14 +121,17 @@ impl RenderFlow {
         FullscreenPassBuilder::new(self, label.into())
     }
 
-    pub fn builtin_ui_composite_pass(self, label: impl Into<String>) -> BuiltinUiCompositePassBuilder {
+    pub fn builtin_ui_composite_pass(
+        self,
+        label: impl Into<String>,
+    ) -> BuiltinUiCompositePassBuilder {
         BuiltinUiCompositePassBuilder::new(self, label.into())
     }
 
     pub fn validate(self) -> anyhow::Result<Self> {
         self.validation_report()
-          .map_err(anyhow::Error::new)
-          .map(|_| self)
+            .map_err(anyhow::Error::new)
+            .map(|_| self)
     }
 
     pub fn validation_report(&self) -> Result<FlowValidationReport, RenderFlowValidationError> {
@@ -216,7 +219,7 @@ impl RenderFlow {
         pass_label: &str,
     ) -> UniformHandle<U>
     where
-      U: GpuParams + 'static,
+        U: GpuParams + 'static,
     {
         let mut index = 0usize;
         loop {
@@ -239,8 +242,8 @@ impl RenderFlow {
         label: &str,
     ) -> Option<(RenderResourceId, RenderResourceId)> {
         self.ping_pong_storage
-          .get(label)
-          .map(|pair| (pair.a_id, pair.b_id))
+            .get(label)
+            .map(|pair| (pair.a_id, pair.b_id))
     }
 
     pub(crate) fn ensure_surface_color_resource(&mut self) -> RenderResourceId {
@@ -283,7 +286,7 @@ impl RenderFlow {
 
     fn register_storage_array<T>(&mut self, label: String, len: u64) -> RenderResourceId
     where
-      T: GpuParams + 'static,
+        T: GpuParams + 'static,
     {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
             return id;
@@ -304,7 +307,7 @@ impl RenderFlow {
         len: u64,
     ) -> (RenderResourceId, RenderResourceId)
     where
-      T: GpuParams + 'static,
+        T: GpuParams + 'static,
     {
         if let Some(existing) = self.ping_pong_storage.get(base_label.as_str()) {
             return (existing.a_id, existing.b_id);
@@ -326,10 +329,7 @@ impl RenderFlow {
 
         self.ping_pong_storage.insert(
             base_label.clone(),
-            PingPongStorageRegistration {
-                a_id,
-                b_id,
-            },
+            PingPongStorageRegistration { a_id, b_id },
         );
 
         (a_id, b_id)
@@ -352,11 +352,11 @@ impl RenderFlow {
     fn upsert_resource(&mut self, descriptor: RenderResourceDescriptor) {
         let id = *descriptor.id();
         if self
-          .graph
-          .resources
-          .resources
-          .iter()
-          .all(|existing| *existing.id() != id)
+            .graph
+            .resources
+            .resources
+            .iter()
+            .all(|existing| *existing.id() != id)
         {
             self.graph.add_resource(descriptor);
         }

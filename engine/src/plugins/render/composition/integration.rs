@@ -1,10 +1,10 @@
+use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::graph::{CompiledRenderFlowPlan, compile_flow_plan};
-use crate::plugins::render::RenderFlowId;
 use crate::runtime::ResMut;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Default, ecs::Resource)]
+#[derive(Debug, Default, ecs::Resource)]
 pub struct RenderFlowRegistryResource {
     flows: BTreeMap<RenderFlowId, RenderFlow>,
     compiled_flows: Vec<CompiledRenderFlowPlan>,

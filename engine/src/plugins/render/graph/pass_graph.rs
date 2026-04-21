@@ -1,5 +1,5 @@
-use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
 use crate::plugins::render::api::ids::RenderFeatureId;
+use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
 use crate::plugins::render::{RenderPassId, RenderResourceId, ShaderHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,7 +42,11 @@ pub struct RenderPassNode {
 }
 
 impl RenderPassNode {
-    pub fn new(id: impl Into<RenderPassId>, label: impl Into<String>, kind: RenderPassKind) -> Self {
+    pub fn new(
+        id: impl Into<RenderPassId>,
+        label: impl Into<String>,
+        kind: RenderPassKind,
+    ) -> Self {
         Self {
             id: id.into(),
             label: label.into(),

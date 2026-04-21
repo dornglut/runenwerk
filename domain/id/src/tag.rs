@@ -1,3 +1,3 @@
 pub trait IdTag: 'static {
-	const DEBUG_NAME: &'static str;
+    const DEBUG_NAME: &'static str;
 }

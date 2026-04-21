@@ -1,8 +1,8 @@
+use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{
     ComputeDispatchBinding, ComputeDispatchDescriptor, PassParamBinding, RenderFlow,
     StorageArrayHandle, UniformHandle,
 };
-use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
     GpuParams, RenderPassId, RenderPassKind, RenderPassNode, RenderResourceId, ShaderHandle,
@@ -37,9 +37,9 @@ impl ComputePassBuilder {
 
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
         add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
@@ -48,9 +48,9 @@ impl ComputePassBuilder {
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
         self
@@ -80,7 +80,7 @@ impl ComputePassBuilder {
 
     pub fn dispatch_from_state<S>(mut self, projection: fn(&S) -> [u32; 3]) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
     {
         self.pass.compute_dispatch = Some(ComputeDispatchDescriptor::State(
             ComputeDispatchBinding::state(projection),
@@ -135,9 +135,9 @@ impl FullscreenPassBuilder {
 
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
         add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
@@ -146,9 +146,9 @@ impl FullscreenPassBuilder {
 
     pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
         add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
@@ -157,9 +157,9 @@ impl FullscreenPassBuilder {
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
     {
         add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
         self
@@ -171,15 +171,11 @@ impl FullscreenPassBuilder {
         projection: F,
     ) -> Self
     where
-      S: ecs::Resource + Send + Sync + 'static,
-      U: GpuParams + Send + Sync + 'static,
-      F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        add_uniform_state_with_surface_binding::<S, U, F>(
-            &mut self.pass,
-            *handle.id(),
-            projection,
-        );
+        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
         self
     }
 
@@ -256,11 +252,11 @@ fn new_pass(flow: &mut RenderFlow, label: String, kind: RenderPassKind) -> Rende
 
 fn allocate_uniform_id<U>(flow: &mut RenderFlow, pass: &RenderPassNode) -> RenderResourceId
 where
-  U: GpuParams + 'static,
+    U: GpuParams + 'static,
 {
     *flow
-      .allocate_uniform_resource::<U>(pass.id, pass.label.as_str())
-      .id()
+        .allocate_uniform_resource::<U>(pass.id, pass.label.as_str())
+        .id()
 }
 
 fn add_uniform_state_binding<S, U, F>(
@@ -268,12 +264,12 @@ fn add_uniform_state_binding<S, U, F>(
     uniform_id: RenderResourceId,
     projection: F,
 ) where
-  S: ecs::Resource + Send + Sync + 'static,
-  U: GpuParams + Send + Sync + 'static,
-  F: Fn(&S) -> U + Send + Sync + 'static,
+    S: ecs::Resource + Send + Sync + 'static,
+    U: GpuParams + Send + Sync + 'static,
+    F: Fn(&S) -> U + Send + Sync + 'static,
 {
     pass.uniform_bindings
-      .push(PassParamBinding::uniform_state(uniform_id, projection));
+        .push(PassParamBinding::uniform_state(uniform_id, projection));
 }
 
 fn add_uniform_state_with_surface_binding<S, U, F>(
@@ -281,14 +277,14 @@ fn add_uniform_state_with_surface_binding<S, U, F>(
     uniform_id: RenderResourceId,
     projection: F,
 ) where
-  S: ecs::Resource + Send + Sync + 'static,
-  U: GpuParams + Send + Sync + 'static,
-  F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+    S: ecs::Resource + Send + Sync + 'static,
+    U: GpuParams + Send + Sync + 'static,
+    F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
 {
     pass.uniform_bindings
-      .push(PassParamBinding::uniform_state_with_surface(
-          uniform_id, projection,
-      ));
+        .push(PassParamBinding::uniform_state_with_surface(
+            uniform_id, projection,
+        ));
 }
 
 fn add_dependency_by_label(flow: &RenderFlow, pass: &mut RenderPassNode, pass_label: &str) {
@@ -296,7 +292,10 @@ fn add_dependency_by_label(flow: &RenderFlow, pass: &mut RenderPassNode, pass_la
     push_unique_pass_dependency(&mut pass.depends_on, dependency);
 }
 
-fn require_ping_pong_storage(flow: &RenderFlow, label: &str) -> (RenderResourceId, RenderResourceId) {
+fn require_ping_pong_storage(
+    flow: &RenderFlow,
+    label: &str,
+) -> (RenderResourceId, RenderResourceId) {
     flow.ping_pong_storage_ids(label).unwrap_or_else(|| {
         panic!(
             "ping-pong storage '{}' is not registered in flow '{}'",

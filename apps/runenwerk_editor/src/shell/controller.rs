@@ -49,7 +49,7 @@ impl RunenwerkEditorShellController {
         viewport_products: Option<&ArtifactObservationFrame>,
     ) -> UiTree {
         let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
-        let tree = build_editor_shell(&view_model, theme);
+        let tree = build_editor_shell(&view_model, theme, shell_state.workspace_state());
         shell_state.set_last_tree(tree.clone());
         tree
     }
@@ -108,12 +108,8 @@ impl RunenwerkEditorShellController {
         atlas_source: &dyn FontAtlasSource,
         viewport_products: Option<&ArtifactObservationFrame>,
     ) -> ShellUiExpressionFrame {
-        let tree = Self::rebuild_tree_with_viewport_products(
-            app,
-            shell_state,
-            theme,
-            viewport_products,
-        );
+        let tree =
+            Self::rebuild_tree_with_viewport_products(app, shell_state, theme, viewport_products);
         shell_state.set_last_bounds(bounds);
         if app.console_follow_enabled()
             && let Some(max_offset) =
@@ -162,7 +158,7 @@ impl RunenwerkEditorShellController {
         viewport_observations: Option<&ViewportArtifactObservationResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
         let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
-        let tree = build_editor_shell(&view_model, theme);
+        let tree = build_editor_shell(&view_model, theme, shell_state.workspace_state());
         shell_state.set_last_tree(tree.clone());
         shell_state.set_last_bounds(bounds);
 

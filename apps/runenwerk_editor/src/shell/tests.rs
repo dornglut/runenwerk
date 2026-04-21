@@ -1,9 +1,9 @@
 use editor_core::{ChangeOrigin, EntityId, SelectionTarget, SessionChangeKind, WorkflowEventKind};
+use editor_shell::{CONSOLE_SCROLL_WIDGET_ID, ShellCommand};
 use editor_viewport::{
-    ArtifactObservationFrame, ExpressionProductId, ProductAvailabilityState, ProducerHealth,
+    ArtifactObservationFrame, ExpressionProductId, ProducerHealth, ProductAvailabilityState,
     ViewportId, ViewportPresentationState,
 };
-use editor_shell::{CONSOLE_SCROLL_WIDGET_ID, ShellCommand};
 use engine::plugins::render::UiFontAtlasResource;
 use ui_input::{Modifiers, PointerEvent, PointerEventKind, UiInputEvent};
 use ui_math::{UiPoint, UiRect, UiVector};
@@ -137,7 +137,8 @@ fn dispatch_shell_command_selects_viewport_product_when_available() {
     let mut viewport_observations = ViewportArtifactObservationResource::default();
     let viewport_id = ViewportId(1);
     let product_id = ExpressionProductId(2);
-    let mut frame = ArtifactObservationFrame::new(viewport_id, app.runtime().current_scene_reality_version());
+    let mut frame =
+        ArtifactObservationFrame::new(viewport_id, app.runtime().current_scene_reality_version());
     frame
         .availability_by_product
         .insert(product_id, ProductAvailabilityState::Available);
@@ -178,8 +179,10 @@ fn dispatch_shell_command_updates_only_target_viewport_product_selection() {
     viewport_presentations.upsert_state(ViewportPresentationState::new(viewport_b, product_scene));
 
     for viewport_id in [viewport_a, viewport_b] {
-        let mut frame =
-            ArtifactObservationFrame::new(viewport_id, app.runtime().current_scene_reality_version());
+        let mut frame = ArtifactObservationFrame::new(
+            viewport_id,
+            app.runtime().current_scene_reality_version(),
+        );
         frame
             .availability_by_product
             .insert(product_picking, ProductAvailabilityState::Available);
@@ -386,4 +389,38 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
         (offset_follow_disabled - previous_offset).abs() <= 1.0,
         "disabled follow should preserve user scroll position",
     );
+}
+
+#[test]
+fn shell_identity_is_stable_across_rebuilds() {
+    let app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+
+    let workspace_before = shell_state.workspace_id();
+    let workspace_state_before = shell_state.workspace_state().clone();
+
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+
+    assert_eq!(shell_state.workspace_id(), workspace_before);
+    assert_eq!(*shell_state.workspace_state(), workspace_state_before);
+}
+
+#[test]
+fn clear_cached_projection_keeps_shell_identity_unchanged() {
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let workspace_before = shell_state.workspace_id();
+    let workspace_state_before = shell_state.workspace_state().clone();
+
+    shell_state.clear_cached_projection();
+
+    assert_eq!(shell_state.workspace_id(), workspace_before);
+    assert_eq!(*shell_state.workspace_state(), workspace_state_before);
+    assert!(shell_state.last_tree().is_none());
+    assert!(shell_state.last_bounds().is_none());
 }

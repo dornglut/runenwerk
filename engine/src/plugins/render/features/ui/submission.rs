@@ -77,16 +77,16 @@ impl UiFrameSubmission {
 
     pub fn primitive_count_hint(&self) -> usize {
         self.frame
-          .surfaces
-          .iter()
-          .map(|surface| {
-              surface
-                .layers
-                .iter()
-                .map(|layer| layer.primitives.len())
-                .sum::<usize>()
-          })
-          .sum()
+            .surfaces
+            .iter()
+            .map(|surface| {
+                surface
+                    .layers
+                    .iter()
+                    .map(|layer| layer.primitives.len())
+                    .sum::<usize>()
+            })
+            .sum()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -114,7 +114,7 @@ impl UiFrameSubmissionRegistryResource {
 
     pub fn replace(&mut self, submission: UiFrameSubmission) -> Option<UiFrameSubmission> {
         self.submissions_by_producer
-          .insert(submission.producer_id, submission)
+            .insert(submission.producer_id, submission)
     }
 
     pub fn replace_for_producer(
@@ -143,10 +143,10 @@ impl UiFrameSubmissionRegistryResource {
         let mut values = self.submissions_by_producer.values().collect::<Vec<_>>();
         values.sort_by(|left, right| {
             left.route
-              .cmp(&right.route)
-              .then(left.order.layer.cmp(&right.order.layer))
-              .then(left.order.priority.cmp(&right.order.priority))
-              .then(left.producer_id.cmp(&right.producer_id))
+                .cmp(&right.route)
+                .then(left.order.layer.cmp(&right.order.layer))
+                .then(left.order.priority.cmp(&right.order.priority))
+                .then(left.producer_id.cmp(&right.producer_id))
         });
         values
     }
@@ -162,17 +162,17 @@ mod tests {
 
         registry.replace(
             UiFrameSubmission::new(UiFrameProducerId::new(1))
-              .with_order(UiFrameSubmissionOrder::new(10, 0)),
+                .with_order(UiFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
             UiFrameSubmission::new(UiFrameProducerId::new(1))
-              .with_order(UiFrameSubmissionOrder::new(20, 0)),
+                .with_order(UiFrameSubmissionOrder::new(20, 0)),
         );
 
         assert_eq!(registry.submission_count(), 1);
         let submission = registry
-          .get(&UiFrameProducerId::new(1))
-          .expect("producer submission should exist");
+            .get(&UiFrameProducerId::new(1))
+            .expect("producer submission should exist");
         assert_eq!(submission.order.layer, 20);
     }
 
@@ -182,25 +182,25 @@ mod tests {
 
         registry.replace(
             UiFrameSubmission::new(UiFrameProducerId::new(2))
-              .with_route(UiFrameRoute::Screen)
-              .with_order(UiFrameSubmissionOrder::new(100, 5)),
+                .with_route(UiFrameRoute::Screen)
+                .with_order(UiFrameSubmissionOrder::new(100, 5)),
         );
         registry.replace(
             UiFrameSubmission::new(UiFrameProducerId::new(1))
-              .with_route(UiFrameRoute::Screen)
-              .with_order(UiFrameSubmissionOrder::new(10, 0)),
+                .with_route(UiFrameRoute::Screen)
+                .with_order(UiFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
             UiFrameSubmission::new(UiFrameProducerId::new(3))
-              .with_route(UiFrameRoute::ViewportOverlay)
-              .with_order(UiFrameSubmissionOrder::new(0, 0)),
+                .with_route(UiFrameRoute::ViewportOverlay)
+                .with_order(UiFrameSubmissionOrder::new(0, 0)),
         );
 
         let ordered = registry
-          .ordered_submissions()
-          .into_iter()
-          .map(|value| value.producer_id)
-          .collect::<Vec<_>>();
+            .ordered_submissions()
+            .into_iter()
+            .map(|value| value.producer_id)
+            .collect::<Vec<_>>();
 
         assert_eq!(
             ordered,

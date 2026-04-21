@@ -1,13 +1,26 @@
-# Runenwerk — Phase 1 Plan: Viewport Backend Cleanup
+# Runenwerk - Phase 1 Plan (Completed): Viewport Backend Cleanup
 
-_Last updated: 2026-04-19_
+_Last updated: 2026-04-21_
+
+## Status
+
+Phase 1 is complete as of 2026-04-21.
+This document is retained as the completion record for the viewport backend cleanup phase.
+
+Confirmed completion outcomes:
+
+- viewport runtime ownership is viewport-keyed
+- `MAIN_VIEWPORT_ID` is bootstrap-only, not a runtime fallback
+- binding resolution is derived from canonical runtime state
+- picking backend ownership is per-viewport, not global
+- shell composition no longer manufactures viewport id `1`
 
 ## Purpose
 
-Finish the viewport upgrade at the backend/render ownership layer so the implementation fully matches the architectural direction already established in the viewport design and confirmed by the audit.
+Record the Phase 1 objective, scope, and acceptance contract that was used to close viewport backend cleanup.
 
 This phase is **not** another conceptual redesign.
-It is a cleanup and completion phase for the viewport architecture that already exists.
+It was a cleanup and completion phase for the viewport architecture that already existed.
 
 ---
 
@@ -304,40 +317,29 @@ By the end of this phase, you should have:
 
 ## What Should Follow Immediately After Phase 1
 
-After this phase, the best next milestone is:
+After this completed phase, the next active milestone is:
+
+## Workspace identity contract + migration map
+Lock workspace/panel/host/tab/tool-surface identity semantics before docking/tab implementation:
+
+- [Workspace Identity Contract and Migration Map](./workspace-identity-contract-and-migration-map.md)
+
+Then continue with:
 
 ## UI substrate bring-up
-Build the reusable primitives needed by:
-- outliner
-- inspector
-- console
-- game UI
-- diagnostics UI
+Build the reusable primitives needed by outliner, inspector, console, game UI, and diagnostics UI.
 
-Recommended immediate primitives:
-- HBox
-- VBox
-- stack / overlay
-- scroll container
-- panel / frame
-- button
-- text input
-- integer input
-- float input
-- checkbox
-- search field
-
-Then the next proof step after that should be:
+Then continue with:
 
 ## Entity Table / Query Surface
-This is the best non-viewport surface to prove the framework is no longer viewport-centric.
+Use this as the first strong non-viewport proof surface.
 
 ---
 
 ## Short Version
 
 ### Phase 1
-Finish the viewport backend so the upgrade is fully real, not only contractually real.
+Phase 1 is complete. The viewport backend cleanup is no longer pending.
 
 ### Main targets
 - presentation resolver
@@ -352,4 +354,4 @@ Finish the viewport backend so the upgrade is fully real, not only contractually
 - `apps/runenwerk_editor/src/runtime/expression/picking.rs`
 
 ### Exit condition
-The viewport becomes the first fully correct serious tool surface and a valid template for future surfaces.
+The viewport is now the first fully correct serious tool surface and a valid template for future surfaces.

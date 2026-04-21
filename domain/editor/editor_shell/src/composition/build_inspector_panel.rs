@@ -10,10 +10,16 @@ use ui_theme::{ThemeTokens, UiColor};
 use crate::{
     INSPECTOR_BODY_WIDGET_ID, INSPECTOR_LIST_WIDGET_ID, INSPECTOR_PANEL_WIDGET_ID,
     INSPECTOR_SCROLL_WIDGET_ID, INSPECTOR_TARGET_WIDGET_ID, INSPECTOR_TITLE_WIDGET_ID,
-    InspectorTargetViewModel, InspectorViewModel, inspector_field_widget_id,
+    InspectorTargetViewModel, InspectorViewModel, PanelInstanceId, ToolSurfaceInstanceId,
+    inspector_field_widget_id,
 };
 
-pub fn build_inspector_panel(view_model: &InspectorViewModel, theme: &ThemeTokens) -> UiNode {
+pub fn build_inspector_panel(
+    view_model: &InspectorViewModel,
+    theme: &ThemeTokens,
+    _panel_instance_id: PanelInstanceId,
+    _active_tool_surface: Option<ToolSurfaceInstanceId>,
+) -> UiNode {
     let title = label(
         INSPECTOR_TITLE_WIDGET_ID,
         "Inspector",

@@ -41,7 +41,9 @@ pub enum RenderFlowValidationIssue {
         resource_id: RenderResourceId,
     },
 
-    #[error("pass '{pass_label}' uses uniform projection for state '{state_type_name}' but with_state::<...>() was not declared")]
+    #[error(
+        "pass '{pass_label}' uses uniform projection for state '{state_type_name}' but with_state::<...>() was not declared"
+    )]
     MissingProjectedStateDeclaration {
         pass_label: String,
         state_type_name: &'static str,
@@ -53,28 +55,38 @@ pub enum RenderFlowValidationIssue {
         uniform_id: RenderResourceId,
     },
 
-    #[error("pass '{pass_label}' uses dispatch_from_state for resource '{state_type_name}' but with_state::<...>() was not declared")]
+    #[error(
+        "pass '{pass_label}' uses dispatch_from_state for resource '{state_type_name}' but with_state::<...>() was not declared"
+    )]
     MissingDispatchStateDeclaration {
         pass_label: String,
         state_type_name: &'static str,
     },
 
-    #[error("flow declares {count} present passes ({labels}); exactly zero or one present pass is allowed")]
+    #[error(
+        "flow declares {count} present passes ({labels}); exactly zero or one present pass is allowed"
+    )]
     MultiplePresentPasses { count: usize, labels: String },
 
-    #[error("present pass '{present_label}' must be terminal but is a dependency for ({dependent_labels})")]
+    #[error(
+        "present pass '{present_label}' must be terminal but is a dependency for ({dependent_labels})"
+    )]
     PresentPassNotTerminal {
         present_label: String,
         dependent_labels: String,
     },
 
-    #[error("present pass '{present_label}' must be the final execution node; add explicit depends_on edges so it orders last")]
+    #[error(
+        "present pass '{present_label}' must be the final execution node; add explicit depends_on edges so it orders last"
+    )]
     PresentPassNotLast { present_label: String },
 
     #[error("pass dependency cycle detected: {cycle_labels}")]
     PassDependencyCycleDetected { cycle_labels: String },
 
-    #[error("compute pass '{pass_label}' must declare explicit dispatch(...) or dispatch_from_state(...)")]
+    #[error(
+        "compute pass '{pass_label}' must declare explicit dispatch(...) or dispatch_from_state(...)"
+    )]
     ComputePassMissingDispatch { pass_label: String },
 
     #[error("compute pass '{pass_label}' cannot declare a depth target")]
@@ -112,7 +124,9 @@ pub enum RenderFlowValidationIssue {
     #[error("graphics pass '{pass_label}' cannot declare compute dispatch")]
     GraphicsPassHasComputeDispatch { pass_label: String },
 
-    #[error("copy pass '{pass_label}' must declare exactly one reads(...) and one writes(...) resource")]
+    #[error(
+        "copy pass '{pass_label}' must declare exactly one reads(...) and one writes(...) resource"
+    )]
     CopyPassInvalidArity { pass_label: String },
 
     #[error("copy pass '{pass_label}' only supports reads/writes/depends_on")]
@@ -127,28 +141,36 @@ pub enum RenderFlowValidationIssue {
     #[error("present pass '{pass_label}' only supports reads/depends_on")]
     PresentPassInvalidFields { pass_label: String },
 
-    #[error("pass '{pass_label}' samples resource '{resource_id:?}' which is not texture-like (kind: {resource_kind})")]
+    #[error(
+        "pass '{pass_label}' samples resource '{resource_id:?}' which is not texture-like (kind: {resource_kind})"
+    )]
     SampledNonTextureResource {
         pass_label: String,
         resource_id: RenderResourceId,
         resource_kind: &'static str,
     },
 
-    #[error("pass '{pass_label}' writes texture resource '{resource_id:?}' via write_texture(...) but kind '{resource_kind}' is not storage/history texture")]
+    #[error(
+        "pass '{pass_label}' writes texture resource '{resource_id:?}' via write_texture(...) but kind '{resource_kind}' is not storage/history texture"
+    )]
     WriteTextureOnInvalidResource {
         pass_label: String,
         resource_id: RenderResourceId,
         resource_kind: &'static str,
     },
 
-    #[error("graphics pass '{pass_label}' uses depth_target '{resource_id:?}' but kind '{resource_kind}' is not depth/surface-depth import")]
+    #[error(
+        "graphics pass '{pass_label}' uses depth_target '{resource_id:?}' but kind '{resource_kind}' is not depth/surface-depth import"
+    )]
     InvalidDepthTargetResource {
         pass_label: String,
         resource_id: RenderResourceId,
         resource_kind: &'static str,
     },
 
-    #[error("copy pass '{pass_label}' mixes incompatible resource classes: '{read_id:?}' ({read_kind}) -> '{write_id:?}' ({write_kind})")]
+    #[error(
+        "copy pass '{pass_label}' mixes incompatible resource classes: '{read_id:?}' ({read_kind}) -> '{write_id:?}' ({write_kind})"
+    )]
     CopyPassMixedResourceClasses {
         pass_label: String,
         read_id: RenderResourceId,
@@ -157,14 +179,18 @@ pub enum RenderFlowValidationIssue {
         write_kind: &'static str,
     },
 
-    #[error("present pass '{pass_label}' must read a texture-like resource; '{resource_id:?}' is '{resource_kind}'")]
+    #[error(
+        "present pass '{pass_label}' must read a texture-like resource; '{resource_id:?}' is '{resource_kind}'"
+    )]
     PresentPassReadsNonTexture {
         pass_label: String,
         resource_id: RenderResourceId,
         resource_kind: &'static str,
     },
 
-    #[error("pass '{pass_label}' writes imported texture '{resource_id:?}' with semantic '{semantic}'; only '{allowed}' is writable in core runtime")]
+    #[error(
+        "pass '{pass_label}' writes imported texture '{resource_id:?}' with semantic '{semantic}'; only '{allowed}' is writable in core runtime"
+    )]
     InvalidImportedTextureWriteSemantic {
         pass_label: String,
         resource_id: RenderResourceId,
@@ -172,14 +198,18 @@ pub enum RenderFlowValidationIssue {
         allowed: &'static str,
     },
 
-    #[error("pass '{pass_label}' writes imported texture '{resource_id:?}' but pass kind '{pass_kind:?}' is not supported for imported texture writes")]
+    #[error(
+        "pass '{pass_label}' writes imported texture '{resource_id:?}' but pass kind '{pass_kind:?}' is not supported for imported texture writes"
+    )]
     UnsupportedImportedTextureWriteKind {
         pass_label: String,
         resource_id: RenderResourceId,
         pass_kind: RenderPassKind,
     },
 
-    #[error("pass '{pass_label}' uses '{resource_id:?}' in {role}(...) but kind '{resource_kind}' is not buffer-like")]
+    #[error(
+        "pass '{pass_label}' uses '{resource_id:?}' in {role}(...) but kind '{resource_kind}' is not buffer-like"
+    )]
     InvalidBufferRoleResource {
         pass_label: String,
         resource_id: RenderResourceId,
@@ -187,19 +217,29 @@ pub enum RenderFlowValidationIssue {
         resource_kind: &'static str,
     },
 
-    #[error("resource '{resource_id:?}' uses external imported texture semantics; external imports are not supported in active runtime flows")]
+    #[error(
+        "resource '{resource_id:?}' uses external imported texture semantics; external imports are not supported in active runtime flows"
+    )]
     UnsupportedExternalImportedTexture { resource_id: RenderResourceId },
 
-    #[error("resource '{resource_id:?}' uses external imported buffer semantics; external imports are not supported in active runtime flows")]
+    #[error(
+        "resource '{resource_id:?}' uses external imported buffer semantics; external imports are not supported in active runtime flows"
+    )]
     UnsupportedExternalImportedBuffer { resource_id: RenderResourceId },
 
-    #[error("multiple imported surface-color textures detected; expected zero or one canonical '{canonical_label}' import")]
+    #[error(
+        "multiple imported surface-color textures detected; expected zero or one canonical '{canonical_label}' import"
+    )]
     MultipleSurfaceColorImports { canonical_label: &'static str },
 
-    #[error("multiple imported surface-depth textures detected; expected zero or one canonical '{canonical_label}' import")]
+    #[error(
+        "multiple imported surface-depth textures detected; expected zero or one canonical '{canonical_label}' import"
+    )]
     MultipleSurfaceDepthImports { canonical_label: &'static str },
 
-    #[error("builtin_ui_composite pass '{pass_label}' cannot declare explicit feature id; feature is fixed to 'ui'")]
+    #[error(
+        "builtin_ui_composite pass '{pass_label}' cannot declare explicit feature id; feature is fixed to 'ui'"
+    )]
     BuiltinUiExplicitFeatureId { pass_label: String },
 
     #[error("builtin_ui_composite pass '{pass_label}' cannot declare shader")]
@@ -223,10 +263,14 @@ pub enum RenderFlowValidationIssue {
     #[error("builtin_ui_composite pass '{pass_label}' only supports writes/depends_on")]
     BuiltinUiInvalidResourceBindings { pass_label: String },
 
-    #[error("builtin_ui_composite pass '{pass_label}' must not declare reads(...); UI input comes from PreparedRenderFrame::ui()")]
+    #[error(
+        "builtin_ui_composite pass '{pass_label}' must not declare reads(...); UI input comes from PreparedRenderFrame::ui()"
+    )]
     BuiltinUiHasReads { pass_label: String },
 
-    #[error("builtin_ui_composite pass '{pass_label}' must declare exactly one writes(...) resource; found {write_count}")]
+    #[error(
+        "builtin_ui_composite pass '{pass_label}' must declare exactly one writes(...) resource; found {write_count}"
+    )]
     BuiltinUiInvalidWriteArity {
         pass_label: String,
         write_count: usize,
@@ -243,10 +287,10 @@ pub struct RenderFlowValidationError {
 impl From<Vec<RenderFlowValidationIssue>> for RenderFlowValidationError {
     fn from(issues: Vec<RenderFlowValidationIssue>) -> Self {
         let message = issues
-          .iter()
-          .map(std::string::ToString::to_string)
-          .collect::<Vec<_>>()
-          .join("; ");
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ");
         Self { issues, message }
     }
 }
@@ -264,7 +308,7 @@ pub fn validate_flow_graph(
             issues.push(RenderFlowValidationIssue::DuplicateResourceId { resource_id });
         }
         if let RenderResourceDescriptor::StorageBuffer(value) = resource
-          && value.element_count == 0
+            && value.element_count == 0
         {
             issues.push(RenderFlowValidationIssue::ZeroLengthStorageBuffer { resource_id });
         }
@@ -283,11 +327,11 @@ pub fn validate_flow_graph(
     }
 
     let pass_lookup: BTreeMap<RenderPassId, &RenderPassNode> = graph
-      .passes
-      .passes
-      .iter()
-      .map(|pass| (pass.id, pass))
-      .collect();
+        .passes
+        .passes
+        .iter()
+        .map(|pass| (pass.id, pass))
+        .collect();
 
     for pass in &graph.passes.passes {
         validate_pass_shape(pass, &mut issues);
@@ -314,10 +358,12 @@ pub fn validate_flow_graph(
 
         for binding in &pass.uniform_bindings {
             if !graph.resources.has_state_resource(binding.state_type_id()) {
-                issues.push(RenderFlowValidationIssue::MissingProjectedStateDeclaration {
-                    pass_label: pass.label.clone(),
-                    state_type_name: binding.state_type_name(),
-                });
+                issues.push(
+                    RenderFlowValidationIssue::MissingProjectedStateDeclaration {
+                        pass_label: pass.label.clone(),
+                        state_type_name: binding.state_type_name(),
+                    },
+                );
             }
 
             if !graph.resources.has_uniform_buffer(binding.uniform_id()) {
@@ -329,8 +375,8 @@ pub fn validate_flow_graph(
         }
 
         if let Some(dispatch) = &pass.compute_dispatch
-          && let crate::plugins::render::api::ComputeDispatchDescriptor::State(binding) = dispatch
-          && !graph.resources.has_state_resource(binding.state_type_id())
+            && let crate::plugins::render::api::ComputeDispatchDescriptor::State(binding) = dispatch
+            && !graph.resources.has_state_resource(binding.state_type_id())
         {
             issues.push(RenderFlowValidationIssue::MissingDispatchStateDeclaration {
                 pass_label: pass.label.clone(),
@@ -340,20 +386,20 @@ pub fn validate_flow_graph(
     }
 
     let present_passes = graph
-      .passes
-      .passes
-      .iter()
-      .filter(|pass| matches!(pass.kind, RenderPassKind::Present))
-      .collect::<Vec<_>>();
+        .passes
+        .passes
+        .iter()
+        .filter(|pass| matches!(pass.kind, RenderPassKind::Present))
+        .collect::<Vec<_>>();
 
     if present_passes.len() > 1 {
         issues.push(RenderFlowValidationIssue::MultiplePresentPasses {
             count: present_passes.len(),
             labels: present_passes
-              .iter()
-              .map(|pass| pass.label.clone())
-              .collect::<Vec<_>>()
-              .join(", "),
+                .iter()
+                .map(|pass| pass.label.clone())
+                .collect::<Vec<_>>()
+                .join(", "),
         });
     }
 
@@ -362,12 +408,12 @@ pub fn validate_flow_graph(
     if present_passes.len() == 1 {
         let present_pass = present_passes[0];
         let dependent_passes = graph
-          .passes
-          .passes
-          .iter()
-          .filter(|pass| pass.depends_on.contains(&present_pass.id))
-          .map(|pass| pass.label.clone())
-          .collect::<Vec<_>>();
+            .passes
+            .passes
+            .iter()
+            .filter(|pass| pass.depends_on.contains(&present_pass.id))
+            .map(|pass| pass.label.clone())
+            .collect::<Vec<_>>();
 
         if !dependent_passes.is_empty() {
             issues.push(RenderFlowValidationIssue::PresentPassNotTerminal {
@@ -376,7 +422,11 @@ pub fn validate_flow_graph(
             });
         }
 
-        if pass_order.last().copied().is_some_and(|id| id != present_pass.id) {
+        if pass_order
+            .last()
+            .copied()
+            .is_some_and(|id| id != present_pass.id)
+        {
             issues.push(RenderFlowValidationIssue::PresentPassNotLast {
                 present_label: present_pass.label.clone(),
             });
@@ -404,9 +454,9 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 });
             }
             if !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
                 issues.push(RenderFlowValidationIssue::ComputePassHasGraphicsBuffers {
                     pass_label: pass.label.clone(),
@@ -418,8 +468,8 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 });
             }
             if let Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(dims)) =
-              &pass.compute_dispatch
-              && (dims[0] == 0 || dims[1] == 0 || dims[2] == 0)
+                &pass.compute_dispatch
+                && (dims[0] == 0 || dims[1] == 0 || dims[2] == 0)
             {
                 issues.push(RenderFlowValidationIssue::InvalidComputeDispatch {
                     pass_label: pass.label.clone(),
@@ -436,9 +486,11 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 });
             }
             if pass.compute_dispatch.is_some() {
-                issues.push(RenderFlowValidationIssue::FullscreenPassHasComputeDispatch {
-                    pass_label: pass.label.clone(),
-                });
+                issues.push(
+                    RenderFlowValidationIssue::FullscreenPassHasComputeDispatch {
+                        pass_label: pass.label.clone(),
+                    },
+                );
             }
             if pass.depth_target.is_some() {
                 issues.push(RenderFlowValidationIssue::FullscreenPassHasDepthTarget {
@@ -446,13 +498,15 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 });
             }
             if !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
-                issues.push(RenderFlowValidationIssue::FullscreenPassHasGraphicsBuffers {
-                    pass_label: pass.label.clone(),
-                });
+                issues.push(
+                    RenderFlowValidationIssue::FullscreenPassHasGraphicsBuffers {
+                        pass_label: pass.label.clone(),
+                    },
+                );
             }
         }
         RenderPassKind::BuiltinUiComposite => {
@@ -477,17 +531,17 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 });
             }
             if pass.shader.is_some()
-              || pass.workgroup_size.is_some()
-              || pass.compute_dispatch.is_some()
-              || pass.clear_color.is_some()
-              || pass.depth_target.is_some()
-              || !pass.uniform_bindings.is_empty()
-              || !pass.sampled_textures.is_empty()
-              || !pass.write_textures.is_empty()
-              || !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || pass.workgroup_size.is_some()
+                || pass.compute_dispatch.is_some()
+                || pass.clear_color.is_some()
+                || pass.depth_target.is_some()
+                || !pass.uniform_bindings.is_empty()
+                || !pass.sampled_textures.is_empty()
+                || !pass.write_textures.is_empty()
+                || !pass.vertex_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
                 issues.push(RenderFlowValidationIssue::CopyPassInvalidFields {
                     pass_label: pass.label.clone(),
@@ -506,17 +560,17 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 });
             }
             if pass.shader.is_some()
-              || pass.workgroup_size.is_some()
-              || pass.compute_dispatch.is_some()
-              || pass.clear_color.is_some()
-              || pass.depth_target.is_some()
-              || !pass.uniform_bindings.is_empty()
-              || !pass.sampled_textures.is_empty()
-              || !pass.write_textures.is_empty()
-              || !pass.vertex_buffers.is_empty()
-              || !pass.index_buffers.is_empty()
-              || !pass.instance_buffers.is_empty()
-              || !pass.indirect_buffers.is_empty()
+                || pass.workgroup_size.is_some()
+                || pass.compute_dispatch.is_some()
+                || pass.clear_color.is_some()
+                || pass.depth_target.is_some()
+                || !pass.uniform_bindings.is_empty()
+                || !pass.sampled_textures.is_empty()
+                || !pass.write_textures.is_empty()
+                || !pass.vertex_buffers.is_empty()
+                || !pass.index_buffers.is_empty()
+                || !pass.instance_buffers.is_empty()
+                || !pass.indirect_buffers.is_empty()
             {
                 issues.push(RenderFlowValidationIssue::PresentPassInvalidFields {
                     pass_label: pass.label.clone(),
@@ -583,7 +637,7 @@ fn validate_pass_resource_usage(
     }
 
     if let Some(depth_target) = &pass.depth_target
-      && let Some(resource) = resources_by_id.get(depth_target)
+        && let Some(resource) = resources_by_id.get(depth_target)
     {
         let depth_ok = match resource {
             RenderResourceDescriptor::DepthTarget(_) => true,
@@ -606,7 +660,7 @@ fn validate_pass_resource_usage(
         let read = pass.reads[0];
         let write = pass.writes[0];
         if let (Some(read_resource), Some(write_resource)) =
-          (resources_by_id.get(&read), resources_by_id.get(&write))
+            (resources_by_id.get(&read), resources_by_id.get(&write))
         {
             let read_texture = is_texture_resource(read_resource);
             let write_texture = is_texture_resource(write_resource);
@@ -627,7 +681,7 @@ fn validate_pass_resource_usage(
     if matches!(pass.kind, RenderPassKind::Present) && pass.reads.len() == 1 {
         let read = pass.reads[0];
         if let Some(resource) = resources_by_id.get(&read)
-          && !is_texture_resource(resource)
+            && !is_texture_resource(resource)
         {
             issues.push(RenderFlowValidationIssue::PresentPassReadsNonTexture {
                 pass_label: pass.label.clone(),
@@ -643,12 +697,14 @@ fn validate_pass_resource_usage(
         };
         if let RenderResourceDescriptor::ImportedTexture(value) = resource {
             if value.semantic != ImportedTextureSemantic::SurfaceColor {
-                issues.push(RenderFlowValidationIssue::InvalidImportedTextureWriteSemantic {
-                    pass_label: pass.label.clone(),
-                    resource_id: *write,
-                    semantic: value.semantic.as_str(),
-                    allowed: ImportedTextureSemantic::SurfaceColor.as_str(),
-                });
+                issues.push(
+                    RenderFlowValidationIssue::InvalidImportedTextureWriteSemantic {
+                        pass_label: pass.label.clone(),
+                        resource_id: *write,
+                        semantic: value.semantic.as_str(),
+                        allowed: ImportedTextureSemantic::SurfaceColor.as_str(),
+                    },
+                );
                 continue;
             }
             if !matches!(
@@ -658,11 +714,13 @@ fn validate_pass_resource_usage(
                     | RenderPassKind::BuiltinUiComposite
                     | RenderPassKind::Copy
             ) {
-                issues.push(RenderFlowValidationIssue::UnsupportedImportedTextureWriteKind {
-                    pass_label: pass.label.clone(),
-                    resource_id: *write,
-                    pass_kind: pass.kind,
-                });
+                issues.push(
+                    RenderFlowValidationIssue::UnsupportedImportedTextureWriteKind {
+                        pass_label: pass.label.clone(),
+                        resource_id: *write,
+                        pass_kind: pass.kind,
+                    },
+                );
             }
         }
     }
@@ -749,17 +807,21 @@ fn validate_imported_resource_descriptors(
                 }
                 ImportedTextureSemantic::HistoryTexture => {}
                 ImportedTextureSemantic::External => {
-                    issues.push(RenderFlowValidationIssue::UnsupportedExternalImportedTexture {
-                        resource_id: *id,
-                    });
+                    issues.push(
+                        RenderFlowValidationIssue::UnsupportedExternalImportedTexture {
+                            resource_id: *id,
+                        },
+                    );
                 }
             },
             RenderResourceDescriptor::ImportedBuffer(value) => match value.semantic {
                 ImportedBufferSemantic::HistoryBuffer => {}
                 ImportedBufferSemantic::External => {
-                    issues.push(RenderFlowValidationIssue::UnsupportedExternalImportedBuffer {
-                        resource_id: *id,
-                    });
+                    issues.push(
+                        RenderFlowValidationIssue::UnsupportedExternalImportedBuffer {
+                            resource_id: *id,
+                        },
+                    );
                 }
             },
             _ => {}
@@ -820,12 +882,12 @@ fn topological_sort(
 
     if order.len() != passes.len() {
         let cycle_labels = indegree
-          .iter()
-          .enumerate()
-          .filter(|(_, degree)| **degree > 0)
-          .map(|(index, _)| passes[index].label.clone())
-          .collect::<Vec<_>>()
-          .join(", ");
+            .iter()
+            .enumerate()
+            .filter(|(_, degree)| **degree > 0)
+            .map(|(index, _)| passes[index].label.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
         issues.push(RenderFlowValidationIssue::PassDependencyCycleDetected { cycle_labels });
     }
 
@@ -836,16 +898,13 @@ fn pass_resource_refs(
     pass: &RenderPassNode,
 ) -> impl Iterator<Item = &crate::plugins::render::RenderResourceId> {
     pass.reads
-      .iter()
-      .chain(pass.writes.iter())
-      .chain(pass.sampled_textures.iter())
-      .chain(pass.write_textures.iter())
-      .chain(pass.vertex_buffers.iter())
-      .chain(pass.index_buffers.iter())
-      .chain(pass.instance_buffers.iter())
-      .chain(pass.indirect_buffers.iter())
-      .chain(pass.depth_target.iter())
+        .iter()
+        .chain(pass.writes.iter())
+        .chain(pass.sampled_textures.iter())
+        .chain(pass.write_textures.iter())
+        .chain(pass.vertex_buffers.iter())
+        .chain(pass.index_buffers.iter())
+        .chain(pass.instance_buffers.iter())
+        .chain(pass.indirect_buffers.iter())
+        .chain(pass.depth_target.iter())
 }
-
-
-

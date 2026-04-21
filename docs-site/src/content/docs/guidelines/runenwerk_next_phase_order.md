@@ -1,6 +1,6 @@
-# Runenwerk — Recommended Phase Order After Viewport Upgrade
+# Runenwerk - Recommended Phase Order After Viewport Upgrade
 
-_Last updated: 2026-04-19_
+_Last updated: 2026-04-21_
 
 ## Purpose
 
@@ -17,7 +17,7 @@ This order is based on:
 
 ## Current Assessment
 
-The viewport upgrade is **architecturally real and successful as phase 1**, but it is not yet the full end-state.
+The viewport upgrade backend cleanup (Phase 1) is complete.
 
 What is now true:
 
@@ -25,39 +25,51 @@ What is now true:
 - typed viewport products and presentation state are real
 - shell embedding of viewport surfaces is real
 - viewport-local routing and interaction are real
+- viewport runtime ownership is viewport-keyed
+- `MAIN_VIEWPORT_ID` is bootstrap-only, not runtime fallback
+- binding resolution is derived from canonical runtime state
+- picking backend ownership is per-viewport
+- shell composition no longer manufactures viewport id `1`
 
-What is still incomplete:
+What is now the immediate architecture gap:
 
-- backend surface ownership is still somewhat binding-based
-- the producer side is still too centralized around the main flow
-- picking backend ownership is not yet as viewport-scoped as the long-term design wants
-- multi-viewport is structurally supported, but not yet broadly exercised
+- workspace/panel/host/tab/tool-surface identity is not yet formalized as first-class workspace architecture contracts
+- shell/runtime routing still leans on widget-level projection ids instead of explicit workspace structural ids
+- docking/tab implementation would risk singleton leakage without an identity hardening pass first
 
-Because of that, the next order should prioritize finishing the first serious surface correctly, then building the reusable substrate beneath future surfaces, then proving the framework with at least one more serious non-viewport surface.
+Because of that, the next order should prioritize identity doctrine and migration mapping before docking/tab feature work, then continue substrate and broader surface expansion.
 
 ---
 
 ## Recommended Order
 
-## Phase 1 — Finish viewport backend cleanup
+## Phase 1 — Viewport backend cleanup (completed)
 
-This remains the highest priority.
+Status: complete.
 
 ### Goal
-Finish the viewport upgrade properly at the backend/render ownership layer.
+Completed: viewport backend/render ownership was aligned with the established architecture direction.
 
-### Why first
-If this is left half-finished, the viewport becomes the first “almost-right” surface and future surfaces will inherit the wrong patterns.
+### Completion record
+See:
 
-### Focus
-- strengthen explicit per-viewport surface ownership
-- clean up presentation resolution
-- reduce hard dependence on a single main producer flow
-- make picking provenance/backend ownership more clearly viewport-scoped
-- exercise at least one additional product path beyond the narrow main one
+- [Runenwerk - Phase 1 Plan (Completed)](./runenwerk_phase_1_plan.md)
+
+---
+
+## Immediate post-Phase 1 task — Workspace identity contract + migration map
+
+### Goal
+Freeze the workspace identity doctrine and concrete migration targets before docking/tab implementation begins.
+
+### Artifact
+- [Workspace Identity Contract and Migration Map](./workspace-identity-contract-and-migration-map.md)
+
+### Why now
+Without this step, upcoming docking/tab and multi-surface workspace work will likely inherit widget-position identity coupling and reintroduce singleton assumptions.
 
 ### Success condition
-The viewport is not only correct at the contract/presentation level, but also clearly correct at the backend ownership level.
+The workspace identity model is explicit enough to support panel/host/tab/surface movement and persistence semantics without architectural redesign.
 
 ---
 
@@ -237,16 +249,17 @@ Gameplay runtime architecture grows on top of stable platform seams rather than 
 ## Condensed Version
 
 ### Immediate
-1. Finish viewport backend cleanup
+1. Phase 1 viewport backend cleanup (completed)
+2. Workspace identity contract + migration map
 
 ### Then
-2. Build core UI substrate
-3. Add one more serious non-viewport surface
-4. Harden workspace / tool-surface host model
-5. Use substrate for editor, game, and diagnostics UI
-6. Define the expression producer architecture
-7. Push field world producer implementation
-8. Design gameplay runtime architecture
+3. Build core UI substrate
+4. Add one more serious non-viewport surface
+5. Harden workspace / tool-surface host model
+6. Use substrate for editor, game, and diagnostics UI
+7. Define the expression producer architecture
+8. Push field world producer implementation
+9. Design gameplay runtime architecture
 
 ---
 
@@ -255,31 +268,29 @@ Gameplay runtime architecture grows on top of stable platform seams rather than 
 If reduced to one concrete milestone:
 
 ### Next milestone
-**Viewport backend cleanup + UI substrate bring-up**
+**Workspace identity contract + migration map**
 
 ### Why
-These two together:
-- finish the first serious surface correctly
-- prevent future surfaces from inventing bespoke UI
-- give immediate reusable value to editor, game UI, and diagnostics work
+This locks the structural identity doctrine required before docking/tab implementation and before broader host/panel/surface expansion.
 
 ### Next milestone after that
-**Entity Table / Query Surface**
+**UI substrate bring-up**
 
-That is the best proof that the framework is no longer viewport-centric.
+Then: **Entity Table / Query Surface** as non-viewport proof.
 
 ---
 
 ## Final Recommendation
 
-Do not jump straight into broader workspace abstraction or deep field-world implementation before:
+Do not jump straight into docking/tab productization or deep field-world implementation before:
 
-1. the viewport backend is fully cleaned up, and
-2. the UI substrate exists strongly enough to support more than one real surface.
+1. the Phase 1 viewport backend cleanup completion is locked, and
+2. workspace identity doctrine/migration mapping is explicit.
 
 The cleanest order from the current state is:
 
-- finish the first serious surface correctly
+- close Phase 1 (done)
+- formalize workspace identity contracts
 - build the reusable UI substrate
 - prove the framework with another serious surface
 - then harden host/workspace structure

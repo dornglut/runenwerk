@@ -8,10 +8,16 @@ use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
     CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
-    CONSOLE_SCROLL_WIDGET_ID, CONSOLE_TITLE_WIDGET_ID, ConsoleViewModel, console_line_widget_id,
+    CONSOLE_SCROLL_WIDGET_ID, CONSOLE_TITLE_WIDGET_ID, ConsoleViewModel, PanelInstanceId,
+    ToolSurfaceInstanceId, console_line_widget_id,
 };
 
-pub fn build_console_panel(view_model: &ConsoleViewModel, theme: &ThemeTokens) -> UiNode {
+pub fn build_console_panel(
+    view_model: &ConsoleViewModel,
+    theme: &ThemeTokens,
+    _panel_instance_id: PanelInstanceId,
+    _active_tool_surface: Option<ToolSurfaceInstanceId>,
+) -> UiNode {
     let title = label(
         CONSOLE_TITLE_WIDGET_ID,
         "Console",

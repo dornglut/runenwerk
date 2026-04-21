@@ -30,38 +30,36 @@ pub struct TransientAliasSlot {
 pub fn build_transient_windows(graph: &RenderFlowGraph) -> Vec<TransientResourceWindow> {
     let mut pass_usages = BTreeMap::<RenderResourceId, (usize, usize)>::new();
     let transient_ids = graph
-      .resources
-      .resources
-      .iter()
-      .filter(|resource| resource.lifetime().is_transient())
-      .map(|resource| *resource.id())
-      .collect::<BTreeSet<_>>();
+        .resources
+        .resources
+        .iter()
+        .filter(|resource| resource.lifetime().is_transient())
+        .map(|resource| *resource.id())
+        .collect::<BTreeSet<_>>();
 
     for (pass_index, pass) in graph.passes.passes.iter().enumerate() {
         for id in pass_resource_ids(pass) {
             if !transient_ids.contains(id) {
                 continue;
             }
-            let entry = pass_usages
-              .entry(*id)
-              .or_insert((pass_index, pass_index));
+            let entry = pass_usages.entry(*id).or_insert((pass_index, pass_index));
             entry.0 = entry.0.min(pass_index);
             entry.1 = entry.1.max(pass_index);
         }
     }
 
     transient_ids
-      .into_iter()
-      .filter_map(|id| {
-          pass_usages
-            .get(&id)
-            .map(|(first, last)| TransientResourceWindow {
-                resource_id: id,
-                first_pass_index: *first,
-                last_pass_index: *last,
-            })
-      })
-      .collect()
+        .into_iter()
+        .filter_map(|id| {
+            pass_usages
+                .get(&id)
+                .map(|(first, last)| TransientResourceWindow {
+                    resource_id: id,
+                    first_pass_index: *first,
+                    last_pass_index: *last,
+                })
+        })
+        .collect()
 }
 
 pub fn find_aliasable_transients(
@@ -147,13 +145,13 @@ fn pass_resource_ids(
     pass: &crate::plugins::render::RenderPassNode,
 ) -> impl Iterator<Item = &crate::plugins::render::RenderResourceId> {
     pass.reads
-      .iter()
-      .chain(pass.writes.iter())
-      .chain(pass.sampled_textures.iter())
-      .chain(pass.write_textures.iter())
-      .chain(pass.vertex_buffers.iter())
-      .chain(pass.index_buffers.iter())
-      .chain(pass.instance_buffers.iter())
-      .chain(pass.indirect_buffers.iter())
-      .chain(pass.depth_target.iter())
+        .iter()
+        .chain(pass.writes.iter())
+        .chain(pass.sampled_textures.iter())
+        .chain(pass.write_textures.iter())
+        .chain(pass.vertex_buffers.iter())
+        .chain(pass.index_buffers.iter())
+        .chain(pass.instance_buffers.iter())
+        .chain(pass.indirect_buffers.iter())
+        .chain(pass.depth_target.iter())
 }

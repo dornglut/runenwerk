@@ -25,5 +25,5 @@ pub use params::*;
 pub use plugin::RenderPlugin;
 pub use renderer::{Gfx, GfxFrameTimings, RenderFrameDataRegistry, Renderer, RendererFrameTimings};
 pub use resource::*;
-pub use shader::{ShaderHandle, ShaderRegistryResource};
 pub use runtime::*;
+pub use shader::{ShaderHandle, ShaderRegistryResource};

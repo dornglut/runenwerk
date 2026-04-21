@@ -19,9 +19,10 @@ fn external_imported_texture_is_rejected_in_active_runtime_path() {
 
     let err = validate_flow_graph(&graph).expect_err("flow must reject external imports");
     assert!(
-        err.issues
-            .iter()
-            .any(|issue| matches!(issue, RenderFlowValidationIssue::UnsupportedExternalImportedTexture { .. })),
+        err.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::UnsupportedExternalImportedTexture { .. }
+        )),
         "expected external import rejection issue, got {:?}",
         err.issues
     );
@@ -32,7 +33,9 @@ fn builtin_ui_composite_requires_canonical_read_write_contract() {
     let mut graph = RenderFlowGraph::new(RenderFlowId::new(2), "import.contract.ui");
     let surface_color = RenderResourceId::new(10);
     let ui_output = RenderResourceId::new(11);
-    graph.add_resource(RenderResourceDescriptor::imported_surface_color(surface_color));
+    graph.add_resource(RenderResourceDescriptor::imported_surface_color(
+        surface_color,
+    ));
     graph.add_resource(RenderResourceDescriptor::color_target(ui_output));
 
     let mut pass = RenderPassNode::new(

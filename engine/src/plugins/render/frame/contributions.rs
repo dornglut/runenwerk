@@ -2,9 +2,8 @@ use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::{
     CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
     FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
-    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedUiFrameContribution,
-    SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID,
-    WORLD_DRAW_RENDER_FEATURE_ID,
+    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID,
+    UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use spatial::ChunkId;
 use std::collections::BTreeMap;
@@ -25,12 +24,12 @@ impl PreparedFrameContributions {
 
     pub fn insert_missing(&mut self, id: RenderFeatureId, fallback_policy: FeatureFallbackPolicy) {
         self.by_feature
-          .entry(id)
-          .or_insert_with(|| PreparedFeatureContribution {
-              status: FeatureContributionStatus::Missing,
-              fallback_policy,
-              payload: PreparedFeaturePayload::Empty,
-          });
+            .entry(id)
+            .or_insert_with(|| PreparedFeatureContribution {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy,
+                payload: PreparedFeaturePayload::Empty,
+            });
     }
 
     pub fn insert_ui(
@@ -201,13 +200,13 @@ impl PreparedFrameContributions {
         let contribution = self.by_feature.get(&UI_RENDER_FEATURE_ID)?;
         match contribution.payload {
             PreparedFeaturePayload::Ui(ref value)
-            if !matches!(
+                if !matches!(
                     contribution.status,
                     FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
                 ) =>
-                {
-                    Some(value)
-                }
+            {
+                Some(value)
+            }
             _ => None,
         }
     }
@@ -216,16 +215,16 @@ impl PreparedFrameContributions {
         let contribution = self.by_feature.get(&SCENE_ROUTE_RENDER_FEATURE_ID)?;
         match contribution.payload {
             PreparedFeaturePayload::SceneRoute(ref value)
-            if !matches!(
+                if !matches!(
                     contribution.status,
                     FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
                 ) =>
-                {
-                    Some((
-                        value.world_scene_label.as_str(),
-                        value.overlay_scene_label.as_str(),
-                    ))
-                }
+            {
+                Some((
+                    value.world_scene_label.as_str(),
+                    value.overlay_scene_label.as_str(),
+                ))
+            }
             _ => None,
         }
     }

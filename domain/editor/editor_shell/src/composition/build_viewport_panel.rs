@@ -1,19 +1,23 @@
 //! File: domain/editor/editor_shell/src/composition/build_viewport_panel.rs
 //! Purpose: Compose viewport panel widgets.
 
-use crate::{
-    UiNode, panel, viewport_surface_embed, vstack_with_policies,
-};
-use ui_render_data::ViewportSurfaceSlot;
+use crate::{UiNode, panel, viewport_surface_embed, vstack_with_policies};
 use ui_layout::SizePolicy;
+use ui_render_data::ViewportSurfaceSlot;
 use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
-    VIEWPORT_BODY_WIDGET_ID, VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
+    PanelInstanceId, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID,
+    VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
     VIEWPORT_SURFACE_EMBED_WIDGET_ID, ViewportViewModel,
 };
 
-pub fn build_viewport_panel(view_model: &ViewportViewModel, theme: &ThemeTokens) -> UiNode {
+pub fn build_viewport_panel(
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+    _panel_instance_id: PanelInstanceId,
+    _active_tool_surface: Option<ToolSurfaceInstanceId>,
+) -> UiNode {
     let viewport_children = view_model
         .viewport_id
         .map(|viewport_id| {

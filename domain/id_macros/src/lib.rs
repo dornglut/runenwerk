@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{ItemStruct, parse_macro_input};
+use syn::{Attribute, ItemStruct, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn id(_args: TokenStream, input: TokenStream) -> TokenStream {
@@ -14,12 +14,17 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
     let attrs = &item.attrs;
     let generics = &item.generics;
 
-    if !generics.params.is_empty() {
+    if has_direct_derive(attrs) {
         return syn::Error::new_spanned(
-            generics,
-            "#[id] does not support generics",
+            ident,
+            "#[id] injects derives automatically; remove any explicit #[derive(...)] on this struct",
         )
-          .to_compile_error();
+        .to_compile_error();
+    }
+
+    if !generics.params.is_empty() {
+        return syn::Error::new_spanned(generics, "#[id] does not support generics")
+            .to_compile_error();
     }
 
     match &item.fields {
@@ -29,7 +34,7 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
                 &item.fields,
                 "#[id] can only be used on unit structs like `pub struct RenderFlowId;`",
             )
-              .to_compile_error();
+            .to_compile_error();
         }
     }
 
@@ -96,6 +101,10 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
             }
         }
 
-        #vis type #sequence_ident = ::id::TypedIdSequence<#tag_ident>;
+        #vis type #sequence_ident = ::id::MonotonicIdAllocator<#tag_ident>;
     }
+}
+
+fn has_direct_derive(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident("derive"))
 }

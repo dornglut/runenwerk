@@ -49,7 +49,7 @@ impl BackendResourceAllocatorResource {
 
     pub fn claim_transient(&mut self, id: RenderResourceId, owner_pass: RenderPassId) {
         self.transients
-          .insert(id, TransientResourceClaim { id, owner_pass });
+            .insert(id, TransientResourceClaim { id, owner_pass });
     }
 
     pub fn release_transient(&mut self, id: RenderResourceId) -> bool {

@@ -1,5 +1,5 @@
-use ui_render_data::UiFrame;
 use crate::plugins::UiFrameProducerId;
+use ui_render_data::UiFrame;
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedUiFrameContribution {
