@@ -20,7 +20,7 @@ impl PreparedUiFrameContribution {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PreparedUiFrameSubmission {
     pub producer_id: UiFrameProducerId,
     pub route: String,

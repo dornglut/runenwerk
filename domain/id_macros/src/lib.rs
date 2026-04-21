@@ -45,7 +45,7 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
     quote! {
         #( #attrs )*
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #vis struct #ident(::id::TypedId<#tag_ident>);
 
         #[doc(hidden)]

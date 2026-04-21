@@ -15,16 +15,16 @@ extern crate alloc;
 #[cfg(feature = "alloc")]
 pub mod allocator;
 pub mod error;
-pub mod generational_id;
 #[cfg(feature = "legacy")]
 pub mod legacy;
+pub mod tag;
 pub mod typed_id;
 
 #[cfg(feature = "alloc")]
-pub use allocator::{GenerationalAllocatorStats, GenerationalIdAllocator, MonotonicIdAllocator};
+pub use allocator::{GenerationalId, GenerationalIdAllocator, MonotonicIdAllocator};
 pub use error::{AllocationError, FreeError, InvalidRawId};
-pub use generational_id::GenerationalId;
 #[cfg(feature = "legacy")]
 #[allow(deprecated)]
 pub use legacy::TypedIdSequence;
+pub use tag::IdTag;
 pub use typed_id::TypedId;
