@@ -23,7 +23,6 @@ It does **not** provide registries, storage maps, ECS adapters, or authority sys
 - `std` (default): enables standard library support.
 - `alloc`: enables allocator modules.
 - `serde`: enables serde for value types.
-- `legacy`: enables deprecated compatibility façade `TypedIdSequence<Tag>`.
 
 ## Stability Notes
 
@@ -34,6 +33,18 @@ It does **not** provide registries, storage maps, ECS adapters, or authority sys
 - `MonotonicIdAllocator<Tag>` reserves `u64::MAX` as exhaustion sentinel.
 - `GenerationalIdAllocator<Tag>` retires slots on generation overflow instead of wrapping.
 
+## Semver Policy
+
+- `1.x` preserves existing public APIs unless explicitly deprecated first.
+- Breaking semantic changes to allocator contracts, liveness semantics, or
+  serialized ID representation require a major version bump.
+
+## Serialization Guarantees
+
+- `TypedId<Tag>` serializes as `u64` and rejects raw `0` on deserialization.
+- `GenerationalId<Tag>` serializes as packed `u64` (`generation<<32 | slot`).
+- Both wire formats are stable for all `1.x` releases.
+
 ## Migration Notes (2026-04-21)
 
 Breaking changes in the strict canonical surface:
@@ -43,8 +54,8 @@ Breaking changes in the strict canonical surface:
 - `TypedId<Tag>` now uses checked construction for fallible paths:
   - use `TypedId::try_from_raw(...)` or `TryFrom<u64>`.
 - `IdTag` is removed from the canonical surface.
-- `TypedIdSequence<Tag>` moved to `legacy` feature and is deprecated.
-- `#[id]` now generates `*Allocator` aliases as canonical; `*Sequence` remains deprecated compatibility.
+- Legacy scalar-allocation compatibility façade types are removed from the canonical surface.
+- `#[id]` now generates `*Allocator` aliases only.
 
 Allocator API hardening:
 

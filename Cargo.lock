@@ -1449,7 +1449,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "id"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "proptest",
  "serde",
@@ -1461,9 +1461,11 @@ dependencies = [
 name = "id_macros"
 version = "0.1.0"
 dependencies = [
+ "id",
  "proc-macro2",
  "quote",
  "syn",
+ "trybuild",
 ]
 
 [[package]]

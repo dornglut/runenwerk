@@ -1,6 +1,6 @@
 [package]
 name = "id"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Typed identity primitives and allocators for Runenwerk"
@@ -12,7 +12,6 @@ default = ["std"]
 alloc = []
 std = ["alloc", "serde?/std"]
 serde = ["dep:serde", "serde?/alloc"]
-legacy = ["alloc"]
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"], optional = true, default-features = false }

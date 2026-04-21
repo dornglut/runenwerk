@@ -167,10 +167,11 @@ impl<Tag> fmt::Debug for GenerationalIdAllocator<Tag> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::collections::BTreeSet;
+
     use super::*;
     use proptest::prelude::*;
     use static_assertions::assert_not_impl_any;
-    use std::collections::HashSet;
 
     enum EntityTag {}
 
@@ -297,7 +298,7 @@ mod tests {
             let unique = handles
                 .iter()
                 .map(|id| id.raw())
-                .collect::<HashSet<_>>();
+                .collect::<BTreeSet<_>>();
             prop_assert_eq!(unique.len(), handles.len());
             prop_assert!(handles.into_iter().all(|id| allocator.is_live(id)));
         }

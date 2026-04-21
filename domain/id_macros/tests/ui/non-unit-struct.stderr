@@ -1,0 +1,8 @@
+error: #[id] can only be used on unit structs like `pub struct RenderFlowId;`
+ --> tests/ui/non-unit-struct.rs:4:22
+  |
+4 |   pub struct NonUnitId {
+  |  ______________________^
+5 | |     raw: u64,
+6 | | }
+  | |_^

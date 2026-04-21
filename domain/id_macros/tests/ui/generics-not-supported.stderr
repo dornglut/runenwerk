@@ -1,0 +1,5 @@
+error: #[id] does not support generics
+ --> tests/ui/generics-not-supported.rs:4:21
+  |
+4 | pub struct GenericId<T>;
+  |                     ^^^
