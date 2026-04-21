@@ -1,3 +1,4 @@
+use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::backend::WgpuCtx;
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, UiFontAtlasResource,
@@ -455,8 +456,8 @@ pub(crate) struct RendererPreparedPacket {
     surface_size: (u32, u32),
     view_id: String,
     view_count: usize,
-    feature_gates: BTreeMap<String, FeatureExecutionGate>,
-    feature_runtime_signatures: BTreeMap<String, u64>,
+    feature_gates: BTreeMap<RenderFeatureId, FeatureExecutionGate>,
+    feature_runtime_signatures: BTreeMap<RenderFeatureId, u64>,
     prepared_ui: UiPreparedDraws,
     viewport_surface_bindings: ViewportSurfaceBindingRegistry,
     prepare_timings: RendererFrameTimings,
@@ -472,7 +473,7 @@ pub struct Renderer {
     viewport_embed_pass: Option<ViewportEmbedPass>,
     viewport_embed_pass_format: Option<TextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
-    flow_runtime_cache: BTreeMap<String, render_flow::FlowRuntimeResources>,
+    flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
     last_good_ui_prepared: Option<UiPreparedDraws>,
     last_pass_timings: Vec<PassTimingSample>,
@@ -555,7 +556,7 @@ mod render_flow;
 mod setup;
 
 pub mod frame_bindings;
-pub mod submit;
+use crate::plugins::RenderFeatureId;
 pub use frame_bindings::RenderFrameDataRegistry;
 
 #[cfg(test)]
