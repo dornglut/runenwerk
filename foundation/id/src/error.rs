@@ -42,8 +42,12 @@ impl std::error::Error for AllocationError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FreeError {
-    UnknownSlot { slot: u32 },
-    NotLive { slot: u32 },
+    UnknownSlot {
+        slot: u32,
+    },
+    NotLive {
+        slot: u32,
+    },
     StaleGeneration {
         slot: u32,
         expected_generation: u32,

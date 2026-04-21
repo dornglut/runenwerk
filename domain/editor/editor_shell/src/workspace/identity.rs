@@ -55,13 +55,18 @@ impl WorkspaceIdentityAllocator {
 
     pub fn from_seed(seed: WorkspaceIdentitySeed) -> Self {
         Self {
-            workspace_ids: WorkspaceIdSequence::new(seed.next_workspace_id),
-            panel_host_ids: PanelHostIdSequence::new(seed.next_panel_host_id),
-            panel_instance_ids: PanelInstanceIdSequence::new(seed.next_panel_instance_id),
+            workspace_ids: WorkspaceIdSequence::new(seed.next_workspace_id)
+                .expect("workspace seed must be non-zero"),
+            panel_host_ids: PanelHostIdSequence::new(seed.next_panel_host_id)
+                .expect("panel host seed must be non-zero"),
+            panel_instance_ids: PanelInstanceIdSequence::new(seed.next_panel_instance_id)
+                .expect("panel instance seed must be non-zero"),
             tool_surface_instance_ids: ToolSurfaceInstanceIdSequence::new(
                 seed.next_tool_surface_instance_id,
-            ),
-            tab_stack_ids: TabStackIdSequence::new(seed.next_tab_stack_id),
+            )
+            .expect("tool surface instance seed must be non-zero"),
+            tab_stack_ids: TabStackIdSequence::new(seed.next_tab_stack_id)
+                .expect("tab stack seed must be non-zero"),
         }
     }
 

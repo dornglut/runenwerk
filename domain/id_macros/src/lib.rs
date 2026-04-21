@@ -40,20 +40,14 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
 
     let tag_ident = format_ident!("__{}Tag", ident);
     let sequence_ident = format_ident!("{}Sequence", ident);
-    let debug_name = ident.to_string();
-
     quote! {
         #( #attrs )*
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #vis struct #ident(::id::TypedId<#tag_ident>);
 
         #[doc(hidden)]
         #vis enum #tag_ident {}
-
-        impl ::id::IdTag for #tag_ident {
-            const DEBUG_NAME: &'static str = #debug_name;
-        }
 
         impl #ident {
             pub const fn new(raw: u64) -> Self {
