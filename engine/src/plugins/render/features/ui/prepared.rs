@@ -1,4 +1,5 @@
 use ui_render_data::UiFrame;
+use crate::plugins::UiFrameProducerId;
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedUiFrameContribution {
@@ -21,7 +22,7 @@ impl PreparedUiFrameContribution {
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedUiFrameSubmission {
-    pub producer_id: String,
+    pub producer_id: UiFrameProducerId,
     pub route: String,
     pub layer: i32,
     pub priority: i32,

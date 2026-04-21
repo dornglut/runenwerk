@@ -1,5 +1,5 @@
 //! File: domain/editor/editor_core/src/tool.rs
-//! Purpose: Tool identity and tool descriptor contracts.
+//! Purpose: Tool id and tool descriptor contracts.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ToolId(pub u64);

@@ -1,7 +1,8 @@
 use engine::WindowState;
 use engine::plugins::render::{
     EditorPickingResultResource, EditorPickingTarget, UiFontAtlasResource,
-    UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
+    UiFrameProducerId, UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
+    UiFrameSubmissionRegistryResource,
     ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::{Res, ResMut};
@@ -26,7 +27,7 @@ use crate::runtime::viewport::{
     build_surface_binding_registry, default_presentation_state, initial_product_descriptors,
 };
 
-const EDITOR_SHELL_UI_PRODUCER_ID: &str = "editor.shell";
+const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
 const DEBUG_HARDCODED_UI_FRAME_ENV: &str = "RUNENWERK_EDITOR_DEBUG_UI_FRAME";
 const VIEWPORT_DEBUG_STAGE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_DEBUG_STAGE";
 const VIEWPORT_ROOT_OPAQUE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_ROOT_OPAQUE";

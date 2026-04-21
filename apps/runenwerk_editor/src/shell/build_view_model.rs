@@ -33,6 +33,7 @@ pub fn build_editor_shell_view_model_with_viewport_products(
     );
     let viewport_frame = build_viewport_observation_frame(
         viewport_products,
+        app.viewport_details_visible(),
         app.runtime().selected_entity(),
         app.viewport_interaction_state().drag_in_progress(),
         viewport_tool_state,

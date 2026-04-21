@@ -1,6 +1,6 @@
 use super::*;
-use crate::plugins::render::PreparedUiFrameContribution;
 use crate::plugins::render::features::{UI_RENDER_FEATURE_ID, UiFontAtlasResource};
+use crate::plugins::{PreparedUiFrameContribution, RenderFeatureId};
 use std::hash::{Hash, Hasher};
 
 impl Renderer {
@@ -178,23 +178,25 @@ impl Renderer {
         let empty_ui = PreparedUiFrameContribution::default();
         let ui = prepared_frame.ui().unwrap_or(&empty_ui);
 
-        let mut feature_gates = BTreeMap::<String, FeatureExecutionGate>::new();
-        let mut feature_runtime_signatures = BTreeMap::<String, u64>::new();
+        let mut feature_gates = BTreeMap::<RenderFeatureId, FeatureExecutionGate>::new();
+        let mut feature_runtime_signatures = BTreeMap::<RenderFeatureId, u64>::new();
+
         for (feature_id, contribution) in &prepared_frame.contributions.by_feature {
             feature_gates.insert(
-                feature_id.as_str().to_string(),
+                *feature_id,
                 FeatureExecutionGate {
                     status: contribution.status,
                     fallback_policy: contribution.fallback_policy,
                 },
             );
             feature_runtime_signatures.insert(
-                feature_id.as_str().to_string(),
+                *feature_id,
                 hash_prepared_feature_contribution(contribution),
             );
         }
+
         let ui_gate = feature_gates
-            .get(UI_RENDER_FEATURE_ID)
+            .get(&UI_RENDER_FEATURE_ID)
             .copied()
             .unwrap_or_default();
 
@@ -315,9 +317,12 @@ fn group_viewport_embed_batches_ordered(
     ViewportSurfaceSlot,
     Vec<ViewportEmbedInstanceRaw>,
 )> {
-    let mut grouped =
-        Vec::<((u32, u32, u32, u32), u64, ViewportSurfaceSlot, Vec<ViewportEmbedInstanceRaw>)>::new(
-        );
+    let mut grouped = Vec::<(
+        (u32, u32, u32, u32),
+        u64,
+        ViewportSurfaceSlot,
+        Vec<ViewportEmbedInstanceRaw>,
+    )>::new();
     for instance in flattened_instances {
         let scissor = instance
             .clip

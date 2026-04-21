@@ -1,10 +1,11 @@
 use crate::plugins::render::graph::{RenderPassNode, ResourceGraph};
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
-use crate::plugins::render::{GpuParams, RenderResourceId};
+use crate::plugins::render::{GpuParams, RenderPassId, RenderResourceId};
 use std::any::{Any, TypeId, type_name};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct ProjectedUniformBuffer {
@@ -15,29 +16,30 @@ pub struct ProjectedUniformBuffer {
 
 #[derive(Debug, Clone)]
 pub struct PassUniformProjection {
-    pub pass_id: String,
+    pub pass_id: RenderPassId,
+    pub pass_label: String,
     pub buffers: Vec<ProjectedUniformBuffer>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct ProjectedUniformSet {
     passes: Vec<PassUniformProjection>,
-    by_pass: BTreeMap<String, usize>,
+    by_pass: BTreeMap<RenderPassId, usize>,
 }
 
 impl ProjectedUniformSet {
     pub fn from_passes(passes: Vec<PassUniformProjection>) -> Self {
-        let mut by_pass = BTreeMap::<String, usize>::new();
+        let mut by_pass = BTreeMap::<RenderPassId, usize>::new();
         for (index, pass) in passes.iter().enumerate() {
-            by_pass.insert(pass.pass_id.clone(), index);
+            by_pass.insert(pass.pass_id, index);
         }
         Self { passes, by_pass }
     }
 
-    pub fn pass(&self, pass_id: &str) -> Option<&PassUniformProjection> {
+    pub fn pass(&self, pass_id: RenderPassId) -> Option<&PassUniformProjection> {
         self.by_pass
-            .get(pass_id)
-            .and_then(|index| self.passes.get(*index))
+          .get(&pass_id)
+          .and_then(|index| self.passes.get(*index))
     }
 
     pub fn passes(&self) -> &[PassUniformProjection] {
@@ -45,30 +47,56 @@ impl ProjectedUniformSet {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParamProjectionErrorKind {
-    MissingStateResourceDeclaration,
-    MissingStateResourceValue,
-    MissingUniformBuffer,
-    ProjectionFailed,
-}
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ParamProjectionError {
+    #[error(
+        "pass '{pass_label}' is missing with_state::<{state_type_name}>() declaration for uniform projection"
+    )]
+    MissingStateResourceDeclaration {
+        pass_id: RenderPassId,
+        pass_label: String,
+        state_type_name: &'static str,
+        params_type_name: &'static str,
+    },
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParamProjectionError {
-    pub pass_id: String,
-    pub state_type_name: &'static str,
-    pub params_type_name: &'static str,
-    pub kind: ParamProjectionErrorKind,
-    pub details: String,
-}
+    #[error(
+        "pass '{pass_label}' is missing state resource value for '{state_type_name}' during projection"
+    )]
+    MissingStateResourceValue {
+        pass_id: RenderPassId,
+        pass_label: String,
+        state_type_name: &'static str,
+        params_type_name: &'static str,
+    },
 
-impl std::fmt::Display for ParamProjectionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "pass '{}': {}", self.pass_id, self.details,)
-    }
-}
+    #[error("pass '{pass_label}' references missing uniform buffer '{uniform_id:?}'")]
+    MissingUniformBuffer {
+        pass_id: RenderPassId,
+        pass_label: String,
+        state_type_name: &'static str,
+        params_type_name: &'static str,
+        uniform_id: RenderResourceId,
+    },
 
-impl std::error::Error for ParamProjectionError {}
+    #[error(
+        "pass '{pass_label}' failed to project state '{state_type_name}' into params '{params_type_name}'"
+    )]
+    ProjectionFailed {
+        pass_id: RenderPassId,
+        pass_label: String,
+        state_type_name: &'static str,
+        params_type_name: &'static str,
+    },
+
+    #[error("pass '{pass_label}' wrote conflicting bytes for uniform buffer '{uniform_id:?}'")]
+    ConflictingUniformProjection {
+        pass_id: RenderPassId,
+        pass_label: String,
+        state_type_name: &'static str,
+        params_type_name: &'static str,
+        uniform_id: RenderResourceId,
+    },
+}
 
 pub trait ParamProjection: Send + Sync {
     fn state_type_id(&self) -> TypeId;
@@ -88,19 +116,20 @@ pub struct PassParamBinding {
 impl std::fmt::Debug for PassParamBinding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PassParamBinding")
-            .field("state_type_name", &self.state_type_name())
-            .field("params_type_name", &self.params_type_name())
-            .field("requires_surface", &self.requires_surface())
-            .finish()
+          .field("uniform_id", &self.uniform_id)
+          .field("state_type_name", &self.state_type_name())
+          .field("params_type_name", &self.params_type_name())
+          .field("requires_surface", &self.requires_surface())
+          .finish()
     }
 }
 
 impl PassParamBinding {
     pub fn uniform_state<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        P: GpuParams + Send + Sync + 'static,
-        F: Fn(&S) -> P + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      P: GpuParams + Send + Sync + 'static,
+      F: Fn(&S) -> P + Send + Sync + 'static,
     {
         Self {
             uniform_id,
@@ -113,9 +142,9 @@ impl PassParamBinding {
 
     pub fn uniform_state_with_surface<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        P: GpuParams + Send + Sync + 'static,
-        F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      P: GpuParams + Send + Sync + 'static,
+      F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
     {
         Self {
             uniform_id,
@@ -157,9 +186,9 @@ impl PassParamBinding {
 
 struct UniformStateProjection<S, P, F>
 where
-    S: ecs::Resource + 'static,
-    P: GpuParams + 'static,
-    F: Fn(&S) -> P + Send + Sync + 'static,
+  S: ecs::Resource + 'static,
+  P: GpuParams + 'static,
+  F: Fn(&S) -> P + Send + Sync + 'static,
 {
     build: F,
     _marker: PhantomData<fn(&S) -> P>,
@@ -167,9 +196,9 @@ where
 
 impl<S, P, F> ParamProjection for UniformStateProjection<S, P, F>
 where
-    S: ecs::Resource + Send + Sync + 'static,
-    P: GpuParams + Send + Sync + 'static,
-    F: Fn(&S) -> P + Send + Sync + 'static,
+  S: ecs::Resource + Send + Sync + 'static,
+  P: GpuParams + Send + Sync + 'static,
+  F: Fn(&S) -> P + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
         TypeId::of::<S>()
@@ -201,9 +230,9 @@ where
 
 struct UniformStateWithSurfaceProjection<S, P, F>
 where
-    S: ecs::Resource + 'static,
-    P: GpuParams + 'static,
-    F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
+  S: ecs::Resource + 'static,
+  P: GpuParams + 'static,
+  F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
 {
     build: F,
     _marker: PhantomData<fn(&S) -> P>,
@@ -211,9 +240,9 @@ where
 
 impl<S, P, F> ParamProjection for UniformStateWithSurfaceProjection<S, P, F>
 where
-    S: ecs::Resource + Send + Sync + 'static,
-    P: GpuParams + Send + Sync + 'static,
-    F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
+  S: ecs::Resource + Send + Sync + 'static,
+  P: GpuParams + Send + Sync + 'static,
+  F: Fn(&S, (u32, u32)) -> P + Send + Sync + 'static,
 {
     fn state_type_id(&self) -> TypeId {
         TypeId::of::<S>()
@@ -250,91 +279,72 @@ pub fn project_uniform_bindings_for_pass(
     surface_size: (u32, u32),
 ) -> Result<Vec<ProjectedUniformBuffer>, Vec<ParamProjectionError>> {
     let mut outputs = Vec::<ProjectedUniformBuffer>::new();
-    let mut projected_by_buffer = BTreeMap::<String, usize>::new();
+    let mut projected_by_buffer = BTreeMap::<RenderResourceId, usize>::new();
     let mut errors = Vec::<ParamProjectionError>::new();
 
     for binding in &pass.uniform_bindings {
         let state_type_name = binding.state_type_name();
         let params_type_name = binding.params_type_name();
-        let pass_id = pass.id.as_str().to_string();
+        let pass_id = pass.id;
+        let pass_label = pass.label.clone();
 
         if !resources.has_state_resource(binding.state_type_id()) {
-            errors.push(ParamProjectionError {
+            errors.push(ParamProjectionError::MissingStateResourceDeclaration {
                 pass_id,
+                pass_label: pass_label.clone(),
                 state_type_name,
                 params_type_name,
-                kind: ParamProjectionErrorKind::MissingStateResourceDeclaration,
-                details: format!(
-                    "missing with_state::<{}>() declaration for uniform projection",
-                    state_type_name
-                ),
             });
             continue;
         }
 
         let Some(state) = frame_data.get_by_type_id(binding.state_type_id()) else {
-            errors.push(ParamProjectionError {
+            errors.push(ParamProjectionError::MissingStateResourceValue {
                 pass_id,
+                pass_label: pass_label.clone(),
                 state_type_name,
                 params_type_name,
-                kind: ParamProjectionErrorKind::MissingStateResourceValue,
-                details: format!(
-                    "missing state resource value for '{}' during projection",
-                    state_type_name
-                ),
             });
             continue;
         };
 
         if !resources.has_uniform_buffer(binding.uniform_id()) {
-            errors.push(ParamProjectionError {
+            errors.push(ParamProjectionError::MissingUniformBuffer {
                 pass_id,
+                pass_label: pass_label.clone(),
                 state_type_name,
                 params_type_name,
-                kind: ParamProjectionErrorKind::MissingUniformBuffer,
-                details: format!(
-                    "pass '{}' references missing uniform buffer '{}'",
-                    pass.id.as_str(),
-                    binding.uniform_id().as_str()
-                ),
+                uniform_id: *binding.uniform_id(),
             });
             continue;
         }
 
         let Some(bytes) = binding.project_bytes(state, surface_size) else {
-            errors.push(ParamProjectionError {
+            errors.push(ParamProjectionError::ProjectionFailed {
                 pass_id,
+                pass_label: pass_label.clone(),
                 state_type_name,
                 params_type_name,
-                kind: ParamProjectionErrorKind::ProjectionFailed,
-                details: format!(
-                    "failed to project state '{}' into params '{}'",
-                    state_type_name, params_type_name
-                ),
             });
             continue;
         };
 
-        let buffer_id = binding.uniform_id().clone();
-        let key = buffer_id.as_str().to_string();
-        if let Some(existing_index) = projected_by_buffer.get(&key) {
+        let buffer_id = *binding.uniform_id();
+        if let Some(existing_index) = projected_by_buffer.get(&buffer_id) {
             let existing = &outputs[*existing_index];
             if existing.bytes != bytes {
-                errors.push(ParamProjectionError {
+                errors.push(ParamProjectionError::ConflictingUniformProjection {
                     pass_id,
+                    pass_label: pass_label.clone(),
                     state_type_name,
                     params_type_name,
-                    kind: ParamProjectionErrorKind::ProjectionFailed,
-                    details: format!(
-                        "conflicting uniform_state projections wrote different bytes for uniform buffer '{}'",
-                        buffer_id.as_str()
-                    ),
+                    uniform_id: buffer_id,
                 });
             }
             continue;
         }
 
-        projected_by_buffer.insert(key, outputs.len());
+        projected_by_buffer.insert(buffer_id, outputs.len());
         outputs.push(ProjectedUniformBuffer {
             buffer_id,
             params_type_name,

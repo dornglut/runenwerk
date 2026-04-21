@@ -204,6 +204,23 @@ fn console_scroll_offset_clamps_and_reserves_scrollbar_gutter() {
     );
 }
 
+#[test]
+fn tiny_bounds_frame_build_does_not_panic() {
+    let theme = ThemeTokens::default();
+    let shell = scrollable_shell_view_model();
+    let tree = build_editor_shell(&shell, &theme);
+    let runtime = UiRuntime::new();
+    let atlas_source = TestAtlasSource::ascii();
+
+    let frame = runtime.build_frame(&tree, UiRect::new(0.0, 0.0, 96.0, 64.0), &atlas_source);
+
+    assert_eq!(frame.surfaces.len(), 1);
+    assert!(
+        !frame.surfaces[0].layers[0].primitives.is_empty(),
+        "tiny bounds should still produce a valid frame",
+    );
+}
+
 struct TestAtlasSource {
     atlas: MsdfFontAtlas,
 }
@@ -323,6 +340,7 @@ fn viewport_product_activation_maps_to_select_product_command() {
                 selected: false,
                 enabled: true,
             }],
+            details_visible: false,
             selected_entity: None,
             hovered_entity: None,
             drag_in_progress: false,
@@ -418,6 +436,7 @@ fn sample_shell_view_model() -> EditorShellViewModel {
                     enabled: true,
                 },
             ],
+            details_visible: false,
             selected_entity: Some(editor_core::EntityId(1)),
             hovered_entity: None,
             drag_in_progress: false,

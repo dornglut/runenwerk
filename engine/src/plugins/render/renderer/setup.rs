@@ -317,11 +317,7 @@ impl Renderer {
         self.glyph_atlas_gpu.clear();
     }
 
-    pub(super) fn ensure_viewport_embed_pass(
-        &mut self,
-        device: &Device,
-        format: TextureFormat,
-    ) {
+    pub(super) fn ensure_viewport_embed_pass(&mut self, device: &Device, format: TextureFormat) {
         if self.viewport_embed_pass.is_some() && self.viewport_embed_pass_format == Some(format) {
             return;
         }

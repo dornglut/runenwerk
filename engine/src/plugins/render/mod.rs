@@ -12,6 +12,7 @@ pub mod resource;
 pub mod shader;
 
 mod plugin;
+pub mod runtime;
 
 pub use api::*;
 pub use bytemuck;
@@ -25,3 +26,4 @@ pub use plugin::RenderPlugin;
 pub use renderer::{Gfx, GfxFrameTimings, RenderFrameDataRegistry, Renderer, RendererFrameTimings};
 pub use resource::*;
 pub use shader::{ShaderHandle, ShaderRegistryResource};
+pub use runtime::*;

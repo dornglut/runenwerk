@@ -1,7 +1,8 @@
 use engine::plugins::render::{
     GpuStorage, GpuUniform, RenderFlow, RenderFrameDataRegistry, RenderPassKind,
-    ShaderRegistryResource,
+    RenderPassId, ShaderRegistryResource,
 };
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
 struct Cell {
@@ -83,33 +84,47 @@ fn build_flow() -> RenderFlow {
         .expect("flow should validate")
 }
 
+fn pass_id_by_label(flow: &RenderFlow, label: &str) -> RenderPassId {
+    flow.graph()
+        .passes
+        .passes
+        .iter()
+        .find(|pass| pass.label == label)
+        .map(|pass| pass.id)
+        .expect("pass label should exist")
+}
+
 #[test]
 fn v2_flow_keeps_graph_contract_inspectable() {
     let flow = build_flow();
     let report = flow.validation_report().expect("report should validate");
-    assert_eq!(report.pass_order, vec!["simulate", "compose", "ui"]);
-
-    let pass_ids = flow
+    let pass_labels_by_id = flow
         .graph()
         .passes
         .passes
         .iter()
-        .map(|pass| pass.id.as_str().to_string())
+        .map(|pass| (pass.id, pass.label.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let ordered_labels = report
+        .pass_order
+        .iter()
+        .map(|id| pass_labels_by_id.get(id).copied().expect("pass should exist"))
         .collect::<Vec<_>>();
-    assert_eq!(pass_ids, vec!["simulate", "compose", "ui"]);
+    assert_eq!(ordered_labels, vec!["simulate", "compose", "ui"]);
 
     let simulate = flow
         .graph()
         .passes
         .passes
         .iter()
-        .find(|pass| pass.id.as_str() == "simulate")
+        .find(|pass| pass.label == "simulate")
         .expect("simulate pass should exist");
     assert_eq!(simulate.kind, RenderPassKind::Compute);
-    assert!(simulate.reads.iter().any(|id| id.as_str() == "cells.a"));
-    assert!(simulate.reads.iter().any(|id| id.as_str() == "cells.b"));
-    assert!(simulate.writes.iter().any(|id| id.as_str() == "cells.a"));
-    assert!(simulate.writes.iter().any(|id| id.as_str() == "cells.b"));
+    let read_ids = simulate.reads.iter().copied().collect::<BTreeSet<_>>();
+    let write_ids = simulate.writes.iter().copied().collect::<BTreeSet<_>>();
+    assert_eq!(read_ids.len(), 2);
+    assert_eq!(write_ids.len(), 2);
+    assert_eq!(read_ids, write_ids);
 }
 
 #[test]
@@ -120,8 +135,8 @@ fn v2_uniform_projection_uses_state_bindings() {
     let projections = flow
         .project_uniforms(&frame_data, (1280, 720))
         .expect("projection should succeed");
-    assert!(projections.pass("simulate").is_some());
-    assert!(projections.pass("compose").is_some());
+    assert!(projections.pass(pass_id_by_label(&flow, "simulate")).is_some());
+    assert!(projections.pass(pass_id_by_label(&flow, "compose")).is_some());
 }
 
 #[test]
@@ -149,8 +164,8 @@ fn v2_uniform_projection_infers_types_from_method_items() {
     let projections = flow
         .project_uniforms(&frame_data, (1920, 1080))
         .expect("projection should succeed");
-    assert!(projections.pass("simulate").is_some());
-    assert!(projections.pass("compose").is_some());
+    assert!(projections.pass(pass_id_by_label(&flow, "simulate")).is_some());
+    assert!(projections.pass(pass_id_by_label(&flow, "compose")).is_some());
 }
 
 #[test]

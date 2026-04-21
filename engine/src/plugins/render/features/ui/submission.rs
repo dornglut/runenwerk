@@ -1,30 +1,6 @@
+use crate::plugins::render::api::ids::UiFrameProducerId;
 use std::collections::BTreeMap;
 use ui_render_data::UiFrame;
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct UiFrameProducerId(String);
-
-impl UiFrameProducerId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl From<&str> for UiFrameProducerId {
-    fn from(value: &str) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<String> for UiFrameProducerId {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum UiFrameRoute {
@@ -101,16 +77,16 @@ impl UiFrameSubmission {
 
     pub fn primitive_count_hint(&self) -> usize {
         self.frame
-            .surfaces
-            .iter()
-            .map(|surface| {
-                surface
-                    .layers
-                    .iter()
-                    .map(|layer| layer.primitives.len())
-                    .sum::<usize>()
-            })
-            .sum()
+          .surfaces
+          .iter()
+          .map(|surface| {
+              surface
+                .layers
+                .iter()
+                .map(|layer| layer.primitives.len())
+                .sum::<usize>()
+          })
+          .sum()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -138,7 +114,7 @@ impl UiFrameSubmissionRegistryResource {
 
     pub fn replace(&mut self, submission: UiFrameSubmission) -> Option<UiFrameSubmission> {
         self.submissions_by_producer
-            .insert(submission.producer_id.clone(), submission)
+          .insert(submission.producer_id, submission)
     }
 
     pub fn replace_for_producer(
@@ -147,7 +123,7 @@ impl UiFrameSubmissionRegistryResource {
         build: impl FnOnce(UiFrameProducerId) -> UiFrameSubmission,
     ) -> Option<UiFrameSubmission> {
         let producer_id = producer_id.into();
-        let submission = build(producer_id.clone());
+        let submission = build(producer_id);
         debug_assert_eq!(
             submission.producer_id, producer_id,
             "submission producer_id must match replace_for_producer key",
@@ -167,10 +143,10 @@ impl UiFrameSubmissionRegistryResource {
         let mut values = self.submissions_by_producer.values().collect::<Vec<_>>();
         values.sort_by(|left, right| {
             left.route
-                .cmp(&right.route)
-                .then(left.order.layer.cmp(&right.order.layer))
-                .then(left.order.priority.cmp(&right.order.priority))
-                .then(left.producer_id.cmp(&right.producer_id))
+              .cmp(&right.route)
+              .then(left.order.layer.cmp(&right.order.layer))
+              .then(left.order.priority.cmp(&right.order.priority))
+              .then(left.producer_id.cmp(&right.producer_id))
         });
         values
     }
@@ -185,16 +161,18 @@ mod tests {
         let mut registry = UiFrameSubmissionRegistryResource::default();
 
         registry.replace(
-            UiFrameSubmission::new("editor.shell").with_order(UiFrameSubmissionOrder::new(10, 0)),
+            UiFrameSubmission::new(UiFrameProducerId::new(1))
+              .with_order(UiFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
-            UiFrameSubmission::new("editor.shell").with_order(UiFrameSubmissionOrder::new(20, 0)),
+            UiFrameSubmission::new(UiFrameProducerId::new(1))
+              .with_order(UiFrameSubmissionOrder::new(20, 0)),
         );
 
         assert_eq!(registry.submission_count(), 1);
         let submission = registry
-            .get(&UiFrameProducerId::new("editor.shell"))
-            .expect("editor shell submission should exist");
+          .get(&UiFrameProducerId::new(1))
+          .expect("producer submission should exist");
         assert_eq!(submission.order.layer, 20);
     }
 
@@ -203,33 +181,33 @@ mod tests {
         let mut registry = UiFrameSubmissionRegistryResource::default();
 
         registry.replace(
-            UiFrameSubmission::new("debug.metrics")
-                .with_route(UiFrameRoute::Screen)
-                .with_order(UiFrameSubmissionOrder::new(100, 5)),
+            UiFrameSubmission::new(UiFrameProducerId::new(2))
+              .with_route(UiFrameRoute::Screen)
+              .with_order(UiFrameSubmissionOrder::new(100, 5)),
         );
         registry.replace(
-            UiFrameSubmission::new("editor.shell")
-                .with_route(UiFrameRoute::Screen)
-                .with_order(UiFrameSubmissionOrder::new(10, 0)),
+            UiFrameSubmission::new(UiFrameProducerId::new(1))
+              .with_route(UiFrameRoute::Screen)
+              .with_order(UiFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
-            UiFrameSubmission::new("editor.viewport")
-                .with_route(UiFrameRoute::ViewportOverlay)
-                .with_order(UiFrameSubmissionOrder::new(0, 0)),
+            UiFrameSubmission::new(UiFrameProducerId::new(3))
+              .with_route(UiFrameRoute::ViewportOverlay)
+              .with_order(UiFrameSubmissionOrder::new(0, 0)),
         );
 
         let ordered = registry
-            .ordered_submissions()
-            .into_iter()
-            .map(|value| value.producer_id.as_str().to_string())
-            .collect::<Vec<_>>();
+          .ordered_submissions()
+          .into_iter()
+          .map(|value| value.producer_id)
+          .collect::<Vec<_>>();
 
         assert_eq!(
             ordered,
             vec![
-                "editor.shell".to_string(),
-                "debug.metrics".to_string(),
-                "editor.viewport".to_string(),
+                UiFrameProducerId::new(1),
+                UiFrameProducerId::new(2),
+                UiFrameProducerId::new(3),
             ]
         );
     }

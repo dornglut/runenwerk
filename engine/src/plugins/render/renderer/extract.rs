@@ -262,13 +262,21 @@ fn flattened_viewport_embed(
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiViewportEmbedInstance> {
     let clip = effective_clip(stack_clip, local_clip, embed.rect)?;
-    if embed.rect.width <= f32::EPSILON || embed.rect.height <= f32::EPSILON || embed.tint.a <= f32::EPSILON {
+    if embed.rect.width <= f32::EPSILON
+        || embed.rect.height <= f32::EPSILON
+        || embed.tint.a <= f32::EPSILON
+    {
         return None;
     }
 
     Some(FlattenedUiViewportEmbedInstance {
         raw: ViewportEmbedInstanceRaw {
-            rect: [embed.rect.x, embed.rect.y, embed.rect.width, embed.rect.height],
+            rect: [
+                embed.rect.x,
+                embed.rect.y,
+                embed.rect.width,
+                embed.rect.height,
+            ],
             uv_rect: [
                 embed.uv_rect.x,
                 embed.uv_rect.y,

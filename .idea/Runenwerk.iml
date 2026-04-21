@@ -57,6 +57,8 @@
       <sourceFolder url="file://$MODULE_DIR$/domain/ui/ui_render_data/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/domain/ui/ui_runtime/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/domain/editor/editor_persistence/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/domain/id/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/domain/id_macros/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

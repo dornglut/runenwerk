@@ -140,9 +140,34 @@ impl ViewportPresentationStateResource {
     }
 }
 
-#[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct ViewportArtifactObservationResource {
     frames_by_viewport: BTreeMap<ViewportId, ArtifactObservationFrame>,
+}
+
+impl Default for ViewportArtifactObservationResource {
+    fn default() -> Self {
+        let source_version = RealityVersion(0);
+        let presentation_state = crate::runtime::viewport::default_presentation_state();
+        let descriptors = initial_product_descriptors(ExpressionDimensions::new(1, 1), source_version);
+        let mut frame = ArtifactObservationFrame::new(MAIN_VIEWPORT_ID, source_version);
+        frame.available_products = descriptors.clone();
+        frame.selected_primary_product_id = Some(presentation_state.selected_primary_product_id);
+        frame.selected_overlay_product_ids = presentation_state.selected_overlay_product_ids.clone();
+
+        for descriptor in &descriptors {
+            frame
+                .availability_by_product
+                .insert(descriptor.id, editor_viewport::ProductAvailabilityState::Available);
+            frame
+                .producer_health_by_product
+                .insert(descriptor.id, editor_viewport::ProducerHealth::Healthy);
+        }
+
+        let mut frames_by_viewport = BTreeMap::new();
+        frames_by_viewport.insert(MAIN_VIEWPORT_ID, frame);
+        Self { frames_by_viewport }
+    }
 }
 
 impl ViewportArtifactObservationResource {

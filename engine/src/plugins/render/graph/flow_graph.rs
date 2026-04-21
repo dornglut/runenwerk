@@ -4,14 +4,16 @@ use crate::plugins::render::{RenderFlowId, RenderPassNode, RenderResourceDescrip
 #[derive(Debug, Clone)]
 pub struct RenderFlowGraph {
     pub id: RenderFlowId,
+    pub label: String,
     pub resources: ResourceGraph,
     pub passes: PassGraph,
 }
 
 impl RenderFlowGraph {
-    pub fn new(id: impl Into<RenderFlowId>) -> Self {
+    pub fn new(id: impl Into<RenderFlowId>, label: impl Into<String>) -> Self {
         Self {
             id: id.into(),
+            label: label.into(),
             resources: ResourceGraph::default(),
             passes: PassGraph::default(),
         }

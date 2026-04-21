@@ -2,6 +2,7 @@ use super::{
     PreparedFrameContext, PreparedFrameContributions, PreparedUiFrameContribution,
     PreparedViewFrame,
 };
+use crate::plugins::render::{RenderFlowId, RenderPassId, RenderResourceId};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -48,14 +49,14 @@ pub struct PreparedRenderFrame {
     pub context: PreparedFrameContext,
     pub surface: PreparedSurfaceInfo,
     pub views: Vec<PreparedViewFrame>,
-    pub flows: BTreeMap<String, PreparedFlowInputs>,
+    pub flows: BTreeMap<RenderFlowId, PreparedFlowInputs>,
     pub contributions: PreparedFrameContributions,
     pub shader: PreparedShaderSnapshot,
 }
 
 impl PreparedRenderFrame {
-    pub fn flow_inputs(&self, flow_id: &str) -> Option<&PreparedFlowInputs> {
-        self.flows.get(flow_id)
+    pub fn flow_inputs(&self, flow_id: RenderFlowId) -> Option<&PreparedFlowInputs> {
+        self.flows.get(&flow_id)
     }
 
     pub fn main_view(&self) -> Option<&PreparedViewFrame> {
@@ -78,8 +79,8 @@ pub struct PreparedSurfaceInfo {
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedFlowInputs {
-    pub projected_uniform_bytes: BTreeMap<String, Vec<u8>>,
-    pub projected_dispatch_workgroups: BTreeMap<String, [u32; 3]>,
+    pub projected_uniform_bytes: BTreeMap<RenderResourceId, Vec<u8>>,
+    pub projected_dispatch_workgroups: BTreeMap<RenderPassId, [u32; 3]>,
     pub required_state_types: Vec<PreparedStateTypeInfo>,
 }
 
@@ -130,10 +131,10 @@ mod tests {
         resource.publish(dummy_frame(4));
         assert_eq!(
             resource
-                .frame()
-                .expect("frame should be present after publish")
-                .context
-                .frame_index,
+              .frame()
+              .expect("frame should be present after publish")
+              .context
+              .frame_index,
             4
         );
         assert_eq!(resource.allocate_frame_index(), 5);

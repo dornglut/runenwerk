@@ -154,6 +154,20 @@ fn dispatch_shell_command_selects_viewport_product_when_available() {
 }
 
 #[test]
+fn dispatch_shell_command_toggles_viewport_details_visibility() {
+    let mut app = RunenwerkEditorApp::new();
+    assert!(!app.viewport_details_visible());
+
+    dispatch_shell_command(&mut app, ShellCommand::ToggleViewportDetails, None, None)
+        .expect("viewport details toggle shell command should succeed");
+    assert!(app.viewport_details_visible());
+
+    dispatch_shell_command(&mut app, ShellCommand::ToggleViewportDetails, None, None)
+        .expect("viewport details toggle shell command should succeed");
+    assert!(!app.viewport_details_visible());
+}
+
+#[test]
 fn dispatch_shell_command_records_workflow_dispatch_event() {
     let mut app = RunenwerkEditorApp::new();
 

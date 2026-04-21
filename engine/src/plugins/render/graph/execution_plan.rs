@@ -1,8 +1,11 @@
 use super::{CompiledPassDescriptor, RenderPassKind, RenderPassNode, ResourceGraph};
+use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::ComputeDispatchDescriptor;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::resource::ImportedTextureSemantic;
-use crate::plugins::render::{RenderResourceDescriptor, RenderResourceId, RenderShaderReference};
+use crate::plugins::render::{
+    RenderPassId, RenderResourceDescriptor, RenderResourceId, RenderShaderReference,
+};
 use std::any::TypeId;
 use std::collections::BTreeSet;
 
@@ -30,9 +33,9 @@ pub enum CompiledPassExecutionPlan {
 
 #[derive(Debug, Clone)]
 pub struct CompiledComputeExecutionPlan {
-    pub pass_id: String,
+    pub pass_id: RenderPassId,
     pub order_index: usize,
-    pub feature_id: Option<String>,
+    pub feature_id: Option<RenderFeatureId>,
     pub shader: Option<RenderShaderReference>,
     pub view_mask: CompiledViewMask,
     pub bindings: CompiledPassBindings,
@@ -41,9 +44,9 @@ pub struct CompiledComputeExecutionPlan {
 
 #[derive(Debug, Clone)]
 pub struct CompiledRasterExecutionPlan {
-    pub pass_id: String,
+    pub pass_id: RenderPassId,
     pub order_index: usize,
-    pub feature_id: Option<String>,
+    pub feature_id: Option<RenderFeatureId>,
     pub shader: Option<RenderShaderReference>,
     pub view_mask: CompiledViewMask,
     pub bindings: CompiledPassBindings,
@@ -54,9 +57,9 @@ pub struct CompiledRasterExecutionPlan {
 
 #[derive(Debug, Clone)]
 pub struct CompiledCopyExecutionPlan {
-    pub pass_id: String,
+    pub pass_id: RenderPassId,
     pub order_index: usize,
-    pub feature_id: Option<String>,
+    pub feature_id: Option<RenderFeatureId>,
     pub view_mask: CompiledViewMask,
     pub source: Option<CompiledResourceRef>,
     pub destination: Option<CompiledResourceRef>,
@@ -64,18 +67,18 @@ pub struct CompiledCopyExecutionPlan {
 
 #[derive(Debug, Clone)]
 pub struct CompiledPresentExecutionPlan {
-    pub pass_id: String,
+    pub pass_id: RenderPassId,
     pub order_index: usize,
-    pub feature_id: Option<String>,
+    pub feature_id: Option<RenderFeatureId>,
     pub view_mask: CompiledViewMask,
     pub source: Option<CompiledResourceRef>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledUiCompositeExecutionPlan {
-    pub pass_id: String,
+    pub pass_id: RenderPassId,
     pub order_index: usize,
-    pub feature_id: String,
+    pub feature_id: RenderFeatureId,
     pub view_mask: CompiledViewMask,
     pub color_output: CompiledResourceRef,
 }
@@ -157,7 +160,7 @@ pub enum CompiledDispatchPlan {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompiledResourceRef {
     FlowOwned(RenderResourceId),
     ImportedBuiltin(CompiledBuiltinImport),
@@ -168,6 +171,12 @@ pub enum CompiledResourceRef {
 pub enum CompiledBuiltinImport {
     SurfaceColor,
     SurfaceDepth,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompiledStorageBinding {
+    pub resource: CompiledResourceRef,
+    pub access: CompiledStorageAccess,
 }
 
 pub fn compile_execution_plan(
@@ -201,7 +210,7 @@ fn compile_pass_execution(
     resources: &ResourceGraph,
 ) -> CompiledPassExecutionPlan {
     let node = pass.node();
-    let pass_id = node.id.as_str().to_string();
+    let pass_id = node.id;
     let order_index = pass.order_index();
 
     let bindings = compile_pass_bindings(node, resources);
@@ -274,7 +283,7 @@ fn compile_pass_execution(
             CompiledPassExecutionPlan::BuiltinUiComposite(CompiledUiCompositeExecutionPlan {
                 pass_id,
                 order_index,
-                feature_id: UI_RENDER_FEATURE_ID.to_string(),
+                feature_id: UI_RENDER_FEATURE_ID,
                 view_mask: compile_view_mask(node),
                 color_output: CompiledResourceRef::ImportedBuiltin(
                     CompiledBuiltinImport::SurfaceColor,
@@ -284,76 +293,71 @@ fn compile_pass_execution(
     }
 }
 
-fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledPassBindings {
-    let uniform_order = dedupe_ids(
-        node.uniform_bindings
-            .iter()
-            .map(|binding| binding.uniform_id()),
-    );
-    let write_ids = node
-        .writes
-        .iter()
-        .map(|id| id.as_str().to_string())
-        .collect::<BTreeSet<_>>();
-    let mut storage_order = Vec::<CompiledStorageBinding>::new();
-    let mut seen_storage = BTreeSet::<String>::new();
-    for resource_id in node.reads.iter().chain(node.writes.iter()) {
-        let Some(descriptor) = find_descriptor(resources, resource_id) else {
-            continue;
-        };
-        if !matches!(
-            descriptor,
-            RenderResourceDescriptor::StorageBuffer(_)
-                | RenderResourceDescriptor::ImportedBuffer(_)
-        ) {
-            continue;
-        }
-        let key = resource_id.as_str().to_string();
-        if !seen_storage.insert(key) {
-            continue;
-        }
-        let access = if write_ids.contains(resource_id.as_str()) {
-            CompiledStorageAccess::ReadWrite
-        } else {
-            CompiledStorageAccess::ReadOnly
-        };
-        storage_order.push(CompiledStorageBinding {
-            resource: compile_resource_ref(resource_id, resources),
-            access,
-        });
-    }
+fn compile_feature_id(node: &RenderPassNode) -> Option<RenderFeatureId> {
+    node.feature_id
+}
 
+fn compile_view_mask(_node: &RenderPassNode) -> CompiledViewMask {
+    CompiledViewMask::AllViews
+}
+
+fn compile_dispatch_plan(node: &RenderPassNode) -> Option<CompiledDispatchPlan> {
+    match node.compute_dispatch.as_ref() {
+        None => None,
+        Some(ComputeDispatchDescriptor::Fixed(value)) => Some(CompiledDispatchPlan::Fixed(*value)),
+        Some(ComputeDispatchDescriptor::State(binding)) => Some(CompiledDispatchPlan::FromState {
+            state_type_id: binding.state_type_id(),
+            state_type_name: binding.state_type_name(),
+        }),
+    }
+}
+
+fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledPassBindings {
     let mut bind_group = CompiledBindGroupPlan::default();
-    for sampled in dedupe_ids(node.sampled_textures.iter()) {
+    let mut uniform_order = Vec::<RenderResourceId>::new();
+    let mut storage_order = Vec::<CompiledStorageBinding>::new();
+    let mut seen_uniforms = BTreeSet::<RenderResourceId>::new();
+
+    for resource in &node.sampled_textures {
         bind_group
             .entries
             .push(CompiledBindingEntry::SampledTexture {
-                resource: compile_resource_ref(&sampled, resources),
+                resource: compile_resource_ref(resource, resources),
             });
         bind_group.entries.push(CompiledBindingEntry::Sampler);
     }
-    for written_texture in dedupe_ids(node.write_textures.iter()) {
+
+    for resource in &node.write_textures {
         bind_group
             .entries
             .push(CompiledBindingEntry::StorageTexture {
-                resource: compile_resource_ref(&written_texture, resources),
+                resource: compile_resource_ref(resource, resources),
                 access: CompiledStorageAccess::ReadWrite,
             });
     }
-    for uniform_id in &uniform_order {
+
+    for binding in &node.uniform_bindings {
+        let resource = *binding.uniform_id();
         bind_group
             .entries
-            .push(CompiledBindingEntry::UniformBuffer {
-                resource: uniform_id.clone(),
-            });
+            .push(CompiledBindingEntry::UniformBuffer { resource });
+        if seen_uniforms.insert(resource) {
+            uniform_order.push(resource);
+        }
     }
-    for storage in &storage_order {
+
+    for (resource, access) in collect_storage_usage(node, resources) {
+        let compiled = compile_resource_ref(&resource, resources);
         bind_group
             .entries
             .push(CompiledBindingEntry::StorageBuffer {
-                resource: storage.resource.clone(),
-                access: storage.access,
+                resource: compiled,
+                access,
             });
+        storage_order.push(CompiledStorageBinding {
+            resource: compiled,
+            access,
+        });
     }
 
     CompiledPassBindings {
@@ -363,32 +367,201 @@ fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> Co
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CompiledStorageBinding {
-    pub resource: CompiledResourceRef,
-    pub access: CompiledStorageAccess,
+fn collect_storage_usage(
+    node: &RenderPassNode,
+    resources: &ResourceGraph,
+) -> Vec<(RenderResourceId, CompiledStorageAccess)> {
+    let writable_storage = node
+        .writes
+        .iter()
+        .copied()
+        .filter(|resource| is_buffer_like_resource(resources, resource))
+        .collect::<BTreeSet<_>>();
+    let mut seen_storage = BTreeSet::<RenderResourceId>::new();
+    let mut usage = Vec::<(RenderResourceId, CompiledStorageAccess)>::new();
+    for resource in node.reads.iter().chain(node.writes.iter()).copied() {
+        if !is_buffer_like_resource(resources, &resource) {
+            continue;
+        }
+        if !seen_storage.insert(resource) {
+            continue;
+        }
+        let access = if writable_storage.contains(&resource) {
+            CompiledStorageAccess::ReadWrite
+        } else {
+            CompiledStorageAccess::ReadOnly
+        };
+        usage.push((resource, access));
+    }
+    usage
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::render::{RenderPassKind, RenderPassNode};
+
+    fn resource(id: u64) -> RenderResourceId {
+        RenderResourceId::new(id)
+    }
+
+    fn storage_read_write_pass() -> (RenderPassNode, ResourceGraph, RenderResourceId) {
+        let storage_id = resource(7);
+        let mut resources = ResourceGraph::default();
+        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(
+            storage_id,
+        ));
+        let mut pass =
+            RenderPassNode::new(RenderPassId::new(1), "test.pass", RenderPassKind::Compute);
+        pass.reads.push(storage_id);
+        pass.writes.push(storage_id);
+        (pass, resources, storage_id)
+    }
+
+    #[test]
+    fn storage_resource_in_reads_and_writes_emits_single_read_write_binding() {
+        let (pass, resources, storage_id) = storage_read_write_pass();
+        let bindings = compile_pass_bindings(&pass, &resources);
+
+        let storage_bindings = bindings
+            .bind_group
+            .entries
+            .iter()
+            .filter_map(|entry| match entry {
+                CompiledBindingEntry::StorageBuffer { resource, access } => {
+                    Some((*resource, *access))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(storage_bindings.len(), 1);
+        assert_eq!(
+            storage_bindings[0],
+            (
+                CompiledResourceRef::Imported(storage_id),
+                CompiledStorageAccess::ReadWrite
+            )
+        );
+        assert_eq!(bindings.storage_order.len(), 1);
+        assert_eq!(
+            bindings.storage_order[0],
+            CompiledStorageBinding {
+                resource: CompiledResourceRef::Imported(storage_id),
+                access: CompiledStorageAccess::ReadWrite,
+            }
+        );
+    }
+
+    #[test]
+    fn storage_binding_order_is_stable_with_read_priority_and_write_only_appends() {
+        let read_only = resource(1);
+        let shared = resource(2);
+        let write_only = resource(3);
+
+        let mut resources = ResourceGraph::default();
+        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(
+            read_only,
+        ));
+        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(shared));
+        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(
+            write_only,
+        ));
+
+        let mut pass =
+            RenderPassNode::new(RenderPassId::new(11), "test.order", RenderPassKind::Compute);
+        pass.reads.extend([read_only, shared]);
+        pass.writes.extend([shared, write_only]);
+
+        let bindings = compile_pass_bindings(&pass, &resources);
+        let storage_bindings = bindings
+            .bind_group
+            .entries
+            .iter()
+            .filter_map(|entry| match entry {
+                CompiledBindingEntry::StorageBuffer { resource, access } => {
+                    Some((*resource, *access))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            storage_bindings,
+            vec![
+                (
+                    CompiledResourceRef::Imported(read_only),
+                    CompiledStorageAccess::ReadOnly,
+                ),
+                (
+                    CompiledResourceRef::Imported(shared),
+                    CompiledStorageAccess::ReadWrite,
+                ),
+                (
+                    CompiledResourceRef::Imported(write_only),
+                    CompiledStorageAccess::ReadWrite,
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn collect_storage_usage_is_deduped_and_stable() {
+        let first = resource(1);
+        let second = resource(2);
+        let third = resource(3);
+
+        let mut resources = ResourceGraph::default();
+        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(first));
+        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(second));
+        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(third));
+
+        let mut pass =
+            RenderPassNode::new(RenderPassId::new(12), "test.usage", RenderPassKind::Compute);
+        pass.reads.extend([first, second, first]);
+        pass.writes.extend([second, third, second]);
+
+        assert_eq!(
+            collect_storage_usage(&pass, &resources),
+            vec![
+                (first, CompiledStorageAccess::ReadOnly),
+                (second, CompiledStorageAccess::ReadWrite),
+                (third, CompiledStorageAccess::ReadWrite),
+            ]
+        );
+    }
+}
+
+fn is_buffer_like_resource(resources: &ResourceGraph, resource: &RenderResourceId) -> bool {
+    matches!(
+        resources
+            .resources
+            .iter()
+            .find(|descriptor| descriptor.id() == resource),
+        Some(
+            RenderResourceDescriptor::UniformBuffer(_)
+                | RenderResourceDescriptor::StorageBuffer(_)
+                | RenderResourceDescriptor::ImportedBuffer(_)
+        )
+    )
 }
 
 fn compile_target_plan(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledTargetPlan {
-    let color_outputs = node
-        .writes
-        .iter()
-        .map(|id| compile_resource_ref(id, resources))
-        .collect();
-    let depth_output = node
-        .depth_target
-        .as_ref()
-        .map(|id| compile_resource_ref(id, resources));
-    let reads = node
-        .reads
-        .iter()
-        .map(|id| compile_resource_ref(id, resources))
-        .collect();
-
     CompiledTargetPlan {
-        color_outputs,
-        depth_output,
-        reads,
+        color_outputs: node
+            .writes
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+        depth_output: node
+            .depth_target
+            .as_ref()
+            .map(|resource| compile_resource_ref(resource, resources)),
+        reads: node
+            .reads
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
     }
 }
 
@@ -400,57 +573,36 @@ fn compile_draw_buffer_plan(
         vertex_buffers: node
             .vertex_buffers
             .iter()
-            .map(|id| compile_resource_ref(id, resources))
+            .map(|resource| compile_resource_ref(resource, resources))
             .collect(),
         instance_buffers: node
             .instance_buffers
             .iter()
-            .map(|id| compile_resource_ref(id, resources))
+            .map(|resource| compile_resource_ref(resource, resources))
             .collect(),
         index_buffers: node
             .index_buffers
             .iter()
-            .map(|id| compile_resource_ref(id, resources))
+            .map(|resource| compile_resource_ref(resource, resources))
             .collect(),
         indirect_buffers: node
             .indirect_buffers
             .iter()
-            .map(|id| compile_resource_ref(id, resources))
+            .map(|resource| compile_resource_ref(resource, resources))
             .collect(),
     }
 }
 
-fn compile_dispatch_plan(node: &RenderPassNode) -> Option<CompiledDispatchPlan> {
-    match &node.compute_dispatch {
-        Some(ComputeDispatchDescriptor::Fixed(value)) => Some(CompiledDispatchPlan::Fixed(*value)),
-        Some(ComputeDispatchDescriptor::State(binding)) => Some(CompiledDispatchPlan::FromState {
-            state_type_id: binding.state_type_id(),
-            state_type_name: binding.state_type_name(),
-        }),
-        None => None,
-    }
-}
-
-fn compile_view_mask(_node: &RenderPassNode) -> CompiledViewMask {
-    let mut values = BTreeSet::<String>::new();
-    values.insert("main".to_string());
-    CompiledViewMask::Explicit(values)
-}
-
-fn compile_feature_id(node: &RenderPassNode) -> Option<String> {
-    node.feature_id
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_string())
-}
-
-fn compile_resource_ref(id: &RenderResourceId, resources: &ResourceGraph) -> CompiledResourceRef {
-    let Some(descriptor) = find_descriptor(resources, id) else {
-        return CompiledResourceRef::FlowOwned(id.clone());
-    };
-    match descriptor {
-        RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
+fn compile_resource_ref(
+    resource: &RenderResourceId,
+    resources: &ResourceGraph,
+) -> CompiledResourceRef {
+    match resources
+        .resources
+        .iter()
+        .find(|descriptor| descriptor.id() == resource)
+    {
+        Some(RenderResourceDescriptor::ImportedTexture(value)) => match value.semantic {
             ImportedTextureSemantic::SurfaceColor => {
                 CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor)
             }
@@ -458,35 +610,12 @@ fn compile_resource_ref(id: &RenderResourceId, resources: &ResourceGraph) -> Com
                 CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceDepth)
             }
             ImportedTextureSemantic::HistoryTexture | ImportedTextureSemantic::External => {
-                CompiledResourceRef::Imported(id.clone())
+                CompiledResourceRef::Imported(*resource)
             }
         },
-        RenderResourceDescriptor::ImportedBuffer(_) => CompiledResourceRef::Imported(id.clone()),
-        _ => CompiledResourceRef::FlowOwned(id.clone()),
-    }
-}
-
-fn find_descriptor<'a>(
-    resources: &'a ResourceGraph,
-    id: &RenderResourceId,
-) -> Option<&'a RenderResourceDescriptor> {
-    resources
-        .resources
-        .iter()
-        .find(|descriptor| descriptor.id() == id)
-}
-
-fn dedupe_ids<'a, I>(ids: I) -> Vec<RenderResourceId>
-where
-    I: IntoIterator<Item = &'a RenderResourceId>,
-{
-    let mut seen = BTreeSet::<String>::new();
-    let mut ordered = Vec::<RenderResourceId>::new();
-    for id in ids {
-        let key = id.as_str().to_string();
-        if seen.insert(key) {
-            ordered.push(id.clone());
+        Some(RenderResourceDescriptor::ImportedBuffer(_)) => {
+            CompiledResourceRef::Imported(*resource)
         }
+        Some(_) | None => CompiledResourceRef::FlowOwned(*resource),
     }
-    ordered
 }

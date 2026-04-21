@@ -840,6 +840,8 @@ dependencies = [
  "engine_sim",
  "glam 0.30.10",
  "gltf",
+ "id",
+ "id_macros",
  "image",
  "pollster",
  "postcard",
@@ -849,6 +851,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spatial",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -1428,6 +1431,22 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+
+[[package]]
+name = "id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "id_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "image"

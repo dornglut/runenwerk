@@ -1,5 +1,5 @@
 //! File: domain/editor/editor_core/src/document.rs
-//! Purpose: Editor document identity and document kind contracts.
+//! Purpose: Editor document id and document kind contracts.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DocumentId(pub u64);

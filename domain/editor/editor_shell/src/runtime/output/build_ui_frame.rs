@@ -232,8 +232,9 @@ fn emit_scrollbar(
     let thumb_height = if max_offset <= f32::EPSILON {
         track_rect.height
     } else {
-        ((viewport_height / content_height) * track_rect.height)
-            .clamp(scroll.min_thumb_height, track_rect.height)
+        let min_thumb_height = scroll.min_thumb_height.min(track_rect.height).max(0.0);
+        let natural_thumb_height = (viewport_height / content_height) * track_rect.height;
+        natural_thumb_height.clamp(min_thumb_height, track_rect.height)
     };
     let thumb_range = (track_rect.height - thumb_height).max(0.0);
     let thumb_y = if max_offset <= f32::EPSILON {

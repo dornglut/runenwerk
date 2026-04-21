@@ -5,11 +5,13 @@ use editor_viewport::{
 };
 use engine::plugins::render::{RenderFlowRegistryResource, UiFrameProducerId, UiFrameSubmissionRegistryResource};
 use runenwerk_editor::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, PRODUCT_ID_SCENE_COLOR, VIEWPORT_RESOURCE_SCENE_COLOR,
+    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, PRODUCT_ID_SCENE_COLOR,
     default_presentation_state,
     initial_product_descriptors,
 };
 use ui_render_data::UiPrimitive;
+
+const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
 
 #[test]
 fn viewport_presentation_state_is_product_addressed() {
@@ -71,12 +73,12 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
     let editor_flow = flow_registry
         .compiled_flows()
         .iter()
-        .find(|flow| flow.flow_id == EDITOR_MAIN_FLOW_ID)
+        .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
         .expect("editor main flow should exist");
     let pass_ids = editor_flow
         .pass_order
         .iter()
-        .map(|pass| pass.pass_id().to_string())
+        .map(|pass| pass.pass_label().to_string())
         .collect::<Vec<_>>();
 
     assert!(
@@ -85,13 +87,15 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
             .any(|id| id == "runenwerk.editor.viewport.sdf"),
         "legacy fullscreen viewport-mask pass must not remain active",
     );
+    let color_target_count = editor_flow
+        .resources
+        .resources
+        .iter()
+        .filter(|resource| matches!(resource, engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)))
+        .count();
     assert!(
-        editor_flow
-            .resources
-            .resources
-            .iter()
-            .any(|resource| resource.id().as_str() == VIEWPORT_RESOURCE_SCENE_COLOR),
-        "editor main flow must declare typed scene product resource",
+        color_target_count >= 3,
+        "editor main flow must declare the three viewport product color targets",
     );
 }
 
@@ -105,7 +109,7 @@ fn shell_frame_uses_viewport_embed_primitive_instead_of_raw_image_path() {
         .resource::<UiFrameSubmissionRegistryResource>()
         .expect("ui submission registry should exist");
     let submission = submissions
-        .get(&UiFrameProducerId::new("editor.shell"))
+        .get(&EDITOR_SHELL_UI_PRODUCER_ID)
         .expect("editor shell submission should exist");
     let has_embed = submission
         .frame

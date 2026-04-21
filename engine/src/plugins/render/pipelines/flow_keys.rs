@@ -1,12 +1,12 @@
-use crate::plugins::render::RenderPassKind;
+use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use wgpu::TextureFormat;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FlowPassPipelineKey {
-    pub flow_id: String,
-    pub pass_id: String,
+    pub flow_id: RenderFlowId,
+    pub pass_id: RenderPassId,
     pub pass_kind: FlowPassKind,
-    pub feature_id: Option<String>,
+    pub feature_id: Option<RenderFeatureId>,
     pub shader_identity: String,
     pub shader_revision: u64,
     pub bind_group_layout_signature_hash: u64,
@@ -83,8 +83,8 @@ mod tests {
 
     fn sample_key() -> FlowPassPipelineKey {
         FlowPassPipelineKey {
-            flow_id: "flow".to_string(),
-            pass_id: "pass".to_string(),
+            flow_id: RenderFlowId::new(1),
+            pass_id: RenderPassId::new(1),
             pass_kind: FlowPassKind::Fullscreen,
             feature_id: None,
             shader_identity: "shader".to_string(),

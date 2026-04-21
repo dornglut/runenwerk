@@ -18,6 +18,7 @@ pub enum ShellCommand {
         viewport_id: ViewportId,
         product_id: ExpressionProductId,
     },
+    ToggleViewportDetails,
     ActivateInspectorField { index: usize },
     NoOp,
 }

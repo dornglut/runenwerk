@@ -69,7 +69,7 @@ fn debug_timing_state_extracts_compute_dispatch_samples() {
 
 #[test]
 fn resource_kind_label_matches_descriptor_kind() {
-    let descriptor = RenderResourceDescriptor::storage_buffer::<InspectStorage>("inspect.cells");
+    let descriptor = RenderResourceDescriptor::storage_buffer::<InspectStorage>(1u64);
     assert_eq!(resource_kind_name(&descriptor), "storage_buffer");
 }
 

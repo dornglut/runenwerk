@@ -1,5 +1,5 @@
 //! File: domain/editor/editor_shell/src/ids/mod.rs
-//! Purpose: Stable widget identity for the editor shell.
+//! Purpose: Stable widget id for the editor shell.
 
 pub mod widget_ids;
 

@@ -25,7 +25,7 @@ impl RenderCaptureSelector {
             flow_id: Some(flow_id.into()),
             pass_id: Some(pass_id.into()),
             stage: CaptureStage::After,
-            resource_id: crate::plugins::render::api::SURFACE_COLOR_RESOURCE_ID.to_string(),
+            resource_id: crate::plugins::render::api::SURFACE_COLOR_RESOURCE_LABEL.to_string(),
             texture_class: CaptureTextureClass::ImportedTexture,
         }
     }

@@ -6,7 +6,7 @@ use crate::runtime::frame_lifecycle::{
 };
 use crate::runtime::platform::{PlatformEvent, apply_platform_event};
 use crate::runtime::window::WindowState;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
@@ -19,13 +19,20 @@ pub(crate) fn run(state: WindowedAppState) -> Result<()> {
     let mut runner = WinitRunner {
         state,
         window: None,
+        fatal_error: None,
     };
-    event_loop.run_app(&mut runner).map_err(Into::into)
+    event_loop.run_app(&mut runner).map_err(anyhow::Error::from)?;
+    if let Some(err) = runner.fatal_error {
+        Err(err)
+    } else {
+        Ok(())
+    }
 }
 
 struct WinitRunner {
     state: WindowedAppState,
     window: Option<Arc<Window>>,
+    fatal_error: Option<anyhow::Error>,
 }
 
 impl WinitRunner {
@@ -119,6 +126,12 @@ impl WinitRunner {
 
         Ok(())
     }
+
+    fn exit_with_error(&mut self, event_loop: &ActiveEventLoop, err: anyhow::Error) {
+        tracing::error!(error = %format!("{err:#}"), "runtime windowed execution failed");
+        self.fatal_error = Some(err);
+        event_loop.exit();
+    }
 }
 
 impl ApplicationHandler for WinitRunner {
@@ -132,15 +145,19 @@ impl ApplicationHandler for WinitRunner {
         let window = match event_loop.create_window(attrs) {
             Ok(window) => Arc::new(window),
             Err(err) => {
-                tracing::error!(error = %err, "failed to create runtime window");
-                event_loop.exit();
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!("failed to create runtime window: {err}"),
+                );
                 return;
             }
         };
 
         if let Err(err) = self.sync_window_state(&window) {
-            tracing::error!(error = %err, "failed to sync initial window state");
-            event_loop.exit();
+            self.exit_with_error(
+                event_loop,
+                anyhow!("failed to sync initial window state: {err:#}"),
+            );
             return;
         }
 
@@ -148,22 +165,22 @@ impl ApplicationHandler for WinitRunner {
             match Gfx::new(window.clone()) {
                 Ok(gfx) => self.state.world.insert_resource(gfx),
                 Err(err) => {
-                    tracing::error!(error = %err, "failed to initialize runtime gfx");
-                    event_loop.exit();
+                    self.exit_with_error(
+                        event_loop,
+                        anyhow!("failed to initialize runtime gfx: {err:#}"),
+                    );
                     return;
                 }
             }
         }
 
         if let Err(err) = self.apply_event(PlatformEvent::Resumed) {
-            tracing::error!(error = %err, "failed to apply resume event");
-            event_loop.exit();
+            self.exit_with_error(event_loop, anyhow!("failed to apply resume event: {err:#}"));
             return;
         }
 
         if let Err(err) = self.run_startup_if_needed() {
-            tracing::error!(error = %err, "runtime startup failed");
-            event_loop.exit();
+            self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
             return;
         }
 
@@ -226,8 +243,7 @@ impl ApplicationHandler for WinitRunner {
                     .and_then(|_| self.run_frame())
                     .and_then(|_| self.apply_window_effects(event_loop));
                 if let Err(err) = frame_result {
-                    tracing::error!(error = %format!("{err:#}"), "runtime frame failed");
-                    event_loop.exit();
+                    self.exit_with_error(event_loop, anyhow!("runtime frame failed: {err:#}"));
                 }
                 return;
             }
@@ -235,8 +251,7 @@ impl ApplicationHandler for WinitRunner {
         };
 
         if let Err(err) = result.and_then(|_| self.apply_window_effects(event_loop)) {
-            tracing::error!(error = %format!("{err:#}"), "runtime window event failed");
-            event_loop.exit();
+            self.exit_with_error(event_loop, anyhow!("runtime window event failed: {err:#}"));
         }
     }
 
@@ -255,8 +270,7 @@ impl ApplicationHandler for WinitRunner {
         };
 
         if let Err(err) = result.and_then(|_| self.apply_window_effects(event_loop)) {
-            tracing::error!(error = %format!("{err:#}"), "runtime device event failed");
-            event_loop.exit();
+            self.exit_with_error(event_loop, anyhow!("runtime device event failed: {err:#}"));
         }
     }
 }
@@ -324,6 +338,7 @@ mod tests {
         let mut runner = WinitRunner {
             state: windowed.into_windowed_state(),
             window: None,
+            fatal_error: None,
         };
         runner
             .run_startup_if_needed()

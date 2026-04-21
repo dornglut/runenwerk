@@ -305,13 +305,15 @@ impl RenderResourceDescriptor {
     }
 }
 
-pub fn detect_duplicate_resource_ids(descriptors: &[RenderResourceDescriptor]) -> Vec<String> {
-    let mut seen = BTreeSet::<String>::new();
-    let mut duplicates = BTreeSet::<String>::new();
+pub fn detect_duplicate_resource_ids(
+    descriptors: &[RenderResourceDescriptor],
+) -> Vec<RenderResourceId> {
+    let mut seen = BTreeSet::<RenderResourceId>::new();
+    let mut duplicates = BTreeSet::<RenderResourceId>::new();
 
     for descriptor in descriptors {
-        let id = descriptor.id().as_str().to_string();
-        if !seen.insert(id.clone()) {
+        let id = *descriptor.id();
+        if !seen.insert(id) {
             duplicates.insert(id);
         }
     }

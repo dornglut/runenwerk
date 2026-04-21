@@ -18,12 +18,12 @@ pub fn dump_flow_graph(
     let report = flow.validation_report()?;
     let mut lines = Vec::<String>::new();
 
-    lines.push(format!("flow: {}", flow.id().as_str()));
+    lines.push(format!("flow: {}", flow.id()));
     lines.push("resources:".to_string());
     for resource in &flow.graph().resources.resources {
         lines.push(format!(
             "  - {} ({:?}, {:?})",
-            resource.id().as_str(),
+            resource.id(),
             resource,
             resource.lifetime()
         ));
@@ -31,13 +31,13 @@ pub fn dump_flow_graph(
 
     lines.push("passes:".to_string());
     for pass in &flow.graph().passes.passes {
-        lines.push(format!("  - {} [{:?}]", pass.id.as_str(), pass.kind));
+        lines.push(format!("  - {} [{:?}]", pass.id, pass.kind));
         if !pass.reads.is_empty() {
             lines.push(format!(
                 "    reads: {}",
                 pass.reads
                     .iter()
-                    .map(|id| id.as_str())
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             ));
@@ -47,7 +47,7 @@ pub fn dump_flow_graph(
                 "    writes: {}",
                 pass.writes
                     .iter()
-                    .map(|id| id.as_str())
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             ));
@@ -57,7 +57,7 @@ pub fn dump_flow_graph(
                 "    depends_on: {}",
                 pass.depends_on
                     .iter()
-                    .map(|id| id.as_str())
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             ));
@@ -66,10 +66,15 @@ pub fn dump_flow_graph(
 
     lines.push(format!(
         "execution_order: {}",
-        report.pass_order.join(" -> ")
+        report
+            .pass_order
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" -> ")
     ));
     Ok(RenderFlowGraphDump {
-        flow_id: flow.id().as_str().to_string(),
+        flow_id: flow.id().to_string(),
         lines,
     })
 }

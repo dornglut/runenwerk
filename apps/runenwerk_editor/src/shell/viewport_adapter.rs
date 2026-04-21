@@ -9,6 +9,7 @@ use editor_viewport::{ArtifactObservationFrame, ProductAvailabilityState, Produc
 
 pub fn build_viewport_observation_frame(
     products: Option<&ArtifactObservationFrame>,
+    details_visible: bool,
     selected_entity: Option<EntityId>,
     drag_in_progress: bool,
     tool_state: ViewportToolState,
@@ -59,6 +60,7 @@ pub fn build_viewport_observation_frame(
         viewport_id,
         selected_primary_product_id,
         products,
+        details_visible,
         selected_entity,
         hovered_entity: tool_state.hovered_entity,
         drag_in_progress,
@@ -84,6 +86,7 @@ pub fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportVi
                 enabled: product.availability == ProductAvailabilityState::Available,
             })
             .collect::<Vec<_>>(),
+        details_visible: frame.details_visible,
         selected_entity: frame.selected_entity,
         hovered_entity: frame.hovered_entity,
         drag_in_progress: frame.drag_in_progress,

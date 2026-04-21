@@ -237,7 +237,7 @@ pub fn prepare_ui_feature_resource_system(
         submissions: ordered
             .into_iter()
             .map(|submission| PreparedUiFrameSubmission {
-                producer_id: submission.producer_id.as_str().to_string(),
+                producer_id: submission.producer_id,
                 route: submission.route.as_str().to_string(),
                 layer: submission.order.layer,
                 priority: submission.order.priority,

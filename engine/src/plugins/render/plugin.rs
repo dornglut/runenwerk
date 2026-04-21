@@ -18,7 +18,7 @@ use super::inspect::{
     RenderTextureInspectorState, WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
-use super::renderer::submit::{
+use super::runtime::{
     collect_runtime_ui_frame_submissions_system, frame_render_prepare_system,
     frame_render_submit_system,
 };

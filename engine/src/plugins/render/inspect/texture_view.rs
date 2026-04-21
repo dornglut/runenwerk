@@ -83,7 +83,7 @@ pub fn inspect_texture_resources(flow: &RenderFlow) -> Vec<TextureResourceView> 
             }?;
 
             Some(TextureResourceView {
-                id: resource.id().as_str().to_string(),
+                id: resource.id().to_string(),
                 category: category.to_string(),
                 lifetime: resource.lifetime(),
             })

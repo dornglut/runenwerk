@@ -10,7 +10,7 @@ use crate::editor_runtime::{
     redo_last_scene_transaction_with_origin, undo_last_scene_transaction_with_origin,
 };
 
-/// Ratify a scene intent by allocating command/transaction identity and executing through the
+/// Ratify a scene intent by allocating command/transaction id and executing through the
 /// governing mutation pipeline.
 pub fn ratify_scene_intent(
     runtime: &mut RunenwerkEditorRuntime,
@@ -23,7 +23,7 @@ pub fn ratify_scene_intent(
     ratify_scene_command(runtime, transaction_label, command, origin)
 }
 
-/// Ratify a pre-built scene command by allocating transaction identity and executing through the
+/// Ratify a pre-built scene command by allocating transaction id and executing through the
 /// governing mutation pipeline.
 pub fn ratify_scene_command(
     runtime: &mut RunenwerkEditorRuntime,
@@ -58,7 +58,7 @@ pub fn ratify_scene_command_with_transaction_id(
     )
 }
 
-/// Ratify a scene transaction by allocating transaction identity and executing through the
+/// Ratify a scene transaction by allocating transaction id and executing through the
 /// governing mutation pipeline.
 pub fn ratify_scene_transaction(
     runtime: &mut RunenwerkEditorRuntime,

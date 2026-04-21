@@ -1,5 +1,5 @@
 //! File: apps/runenwerk_editor/src/editor_runtime/realities/instantiated.rs
-//! Purpose: Read-only instantiated-reality boundary for ECS and runtime identity projection.
+//! Purpose: Read-only instantiated-reality boundary for ECS and runtime id projection.
 
 use editor_core::EntityId;
 

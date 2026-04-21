@@ -1,41 +1,35 @@
+use crate::plugins::render::{RenderPassId, RenderResourceId};
 use std::collections::BTreeMap;
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TextureResourceId(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextureResourceEntry {
-    pub id: TextureResourceId,
+    pub id: RenderResourceId,
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BufferResourceId(pub String);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BufferResourceEntry {
-    pub id: BufferResourceId,
+    pub id: RenderResourceId,
     pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransientResourceClaim {
-    pub id: String,
-    pub owner_pass: String,
+    pub id: RenderResourceId,
+    pub owner_pass: RenderPassId,
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct BackendResourceAllocatorResource {
-    textures: BTreeMap<TextureResourceId, TextureResourceEntry>,
-    buffers: BTreeMap<BufferResourceId, BufferResourceEntry>,
-    transients: BTreeMap<String, TransientResourceClaim>,
+    textures: BTreeMap<RenderResourceId, TextureResourceEntry>,
+    buffers: BTreeMap<RenderResourceId, BufferResourceEntry>,
+    transients: BTreeMap<RenderResourceId, TransientResourceClaim>,
 }
 
 impl BackendResourceAllocatorResource {
-    pub fn upsert_texture(&mut self, id: impl Into<String>, label: impl Into<String>) {
-        let id = TextureResourceId(id.into());
+    pub fn upsert_texture(&mut self, id: RenderResourceId, label: impl Into<String>) {
         self.textures.insert(
-            id.clone(),
+            id,
             TextureResourceEntry {
                 id,
                 label: label.into(),
@@ -43,10 +37,9 @@ impl BackendResourceAllocatorResource {
         );
     }
 
-    pub fn upsert_buffer(&mut self, id: impl Into<String>, label: impl Into<String>) {
-        let id = BufferResourceId(id.into());
+    pub fn upsert_buffer(&mut self, id: RenderResourceId, label: impl Into<String>) {
         self.buffers.insert(
-            id.clone(),
+            id,
             BufferResourceEntry {
                 id,
                 label: label.into(),
@@ -54,31 +47,33 @@ impl BackendResourceAllocatorResource {
         );
     }
 
-    pub fn claim_transient(&mut self, id: impl Into<String>, owner_pass: impl Into<String>) {
-        let id = id.into();
-        self.transients.insert(
-            id.clone(),
-            TransientResourceClaim {
-                id,
-                owner_pass: owner_pass.into(),
-            },
-        );
+    pub fn claim_transient(&mut self, id: RenderResourceId, owner_pass: RenderPassId) {
+        self.transients
+          .insert(id, TransientResourceClaim { id, owner_pass });
     }
 
-    pub fn release_transient(&mut self, id: &str) -> bool {
-        self.transients.remove(id).is_some()
+    pub fn release_transient(&mut self, id: RenderResourceId) -> bool {
+        self.transients.remove(&id).is_some()
     }
 
-    pub fn remove_texture(&mut self, id: &str) -> bool {
-        self.textures
-            .remove(&TextureResourceId(id.to_string()))
-            .is_some()
+    pub fn remove_texture(&mut self, id: RenderResourceId) -> bool {
+        self.textures.remove(&id).is_some()
     }
 
-    pub fn remove_buffer(&mut self, id: &str) -> bool {
-        self.buffers
-            .remove(&BufferResourceId(id.to_string()))
-            .is_some()
+    pub fn remove_buffer(&mut self, id: RenderResourceId) -> bool {
+        self.buffers.remove(&id).is_some()
+    }
+
+    pub fn texture_entry(&self, id: RenderResourceId) -> Option<&TextureResourceEntry> {
+        self.textures.get(&id)
+    }
+
+    pub fn buffer_entry(&self, id: RenderResourceId) -> Option<&BufferResourceEntry> {
+        self.buffers.get(&id)
+    }
+
+    pub fn transient_claim(&self, id: RenderResourceId) -> Option<&TransientResourceClaim> {
+        self.transients.get(&id)
     }
 
     pub fn texture_entries(&self) -> Vec<TextureResourceEntry> {

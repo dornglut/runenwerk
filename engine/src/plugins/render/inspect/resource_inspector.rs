@@ -112,7 +112,7 @@ pub fn inspect_resources(flow: &RenderFlow) -> Vec<ResourceInspectionEntry> {
         .map(|resource| {
             let lifetime = resource.lifetime();
             ResourceInspectionEntry {
-                id: resource.id().as_str().to_string(),
+                id: resource.id().to_string(),
                 kind: resource_kind_name(resource).to_string(),
                 lifetime,
                 imported: lifetime.is_imported(),

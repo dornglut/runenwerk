@@ -1,5 +1,5 @@
 //! File: domain/ui/ui_text/src/font.rs
-//! Purpose: MSDF font identity and glyph metrics contracts.
+//! Purpose: MSDF font id and glyph metrics contracts.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FontId(pub u64);

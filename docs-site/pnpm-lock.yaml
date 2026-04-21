@@ -2423,7 +2423,7 @@ snapshots:
       - '@azure/app-configuration'
       - '@azure/cosmos'
       - '@azure/data-tables'
-      - '@azure/identity'
+      - '@azure/id'
       - '@azure/keyvault-secrets'
       - '@azure/storage-blob'
       - '@capacitor/preferences'

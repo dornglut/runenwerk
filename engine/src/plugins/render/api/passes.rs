@@ -1,10 +1,11 @@
 use crate::plugins::render::api::{
     ComputeDispatchBinding, ComputeDispatchDescriptor, PassParamBinding, RenderFlow,
-    SURFACE_COLOR_RESOURCE_ID, StorageArrayHandle, UniformHandle,
+    StorageArrayHandle, UniformHandle,
 };
+use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
-    GpuParams, RenderPassKind, RenderPassNode, RenderResourceId, ShaderHandle,
+    GpuParams, RenderPassId, RenderPassKind, RenderPassNode, RenderResourceId, ShaderHandle,
 };
 
 #[derive(Debug)]
@@ -14,11 +15,9 @@ pub struct ComputePassBuilder {
 }
 
 impl ComputePassBuilder {
-    pub(crate) fn new(flow: RenderFlow, id: String) -> Self {
-        Self {
-            flow,
-            pass: RenderPassNode::new(id, RenderPassKind::Compute),
-        }
+    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
+        let pass = new_pass(&mut flow, label, RenderPassKind::Compute);
+        Self { flow, pass }
     }
 
     pub fn shader(mut self, shader: ShaderHandle) -> Self {
@@ -31,62 +30,44 @@ impl ComputePassBuilder {
         self
     }
 
-    pub fn for_feature(mut self, feature_id: impl Into<String>) -> Self {
-        self.pass.feature_id = Some(feature_id.into());
+    pub fn for_feature(mut self, feature_id: RenderFeatureId) -> Self {
+        self.pass.feature_id = Some(feature_id);
         self
     }
 
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        U: GpuParams + Send + Sync + 'static,
-        F: Fn(&S) -> U + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      U: GpuParams + Send + Sync + 'static,
+      F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
-        self.pass
-            .uniform_bindings
-            .push(PassParamBinding::uniform_state(
-                uniform.id().clone(),
-                projection,
-            ));
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
         self
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        U: GpuParams + Send + Sync + 'static,
-        F: Fn(&S) -> U + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      U: GpuParams + Send + Sync + 'static,
+      F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        self.pass
-            .uniform_bindings
-            .push(PassParamBinding::uniform_state(
-                handle.id().clone(),
-                projection,
-            ));
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
         self
     }
 
     pub fn bind_storage<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
-        let id = handle.id().clone();
-        push_unique_resource(&mut self.pass.reads, id.clone());
+        let id = *handle.id();
+        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.writes, id);
         self
     }
 
-    pub fn bind_ping_pong_storage(mut self, name: impl Into<String>) -> Self {
-        let name = name.into();
-        let (a_id, b_id) = self
-            .flow
-            .ping_pong_storage_ids(name.as_str())
-            .unwrap_or_else(|| {
-                (
-                    RenderResourceId::new(format!("{name}.a")),
-                    RenderResourceId::new(format!("{name}.b")),
-                )
-            });
-        push_unique_resource(&mut self.pass.reads, a_id.clone());
-        push_unique_resource(&mut self.pass.reads, b_id.clone());
+    pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
+        let label = label.into();
+        let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
+        push_unique_resource(&mut self.pass.reads, a_id);
+        push_unique_resource(&mut self.pass.reads, b_id);
         push_unique_resource(&mut self.pass.writes, a_id);
         push_unique_resource(&mut self.pass.writes, b_id);
         self
@@ -99,7 +80,7 @@ impl ComputePassBuilder {
 
     pub fn dispatch_from_state<S>(mut self, projection: fn(&S) -> [u32; 3]) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
     {
         self.pass.compute_dispatch = Some(ComputeDispatchDescriptor::State(
             ComputeDispatchBinding::state(projection),
@@ -107,16 +88,16 @@ impl ComputePassBuilder {
         self
     }
 
-    pub fn reads_current(self, name: impl Into<String>) -> Self {
-        self.bind_ping_pong_storage(name)
+    pub fn reads_current(self, label: impl Into<String>) -> Self {
+        self.bind_ping_pong_storage(label)
     }
 
-    pub fn writes_next(self, name: impl Into<String>) -> Self {
-        self.bind_ping_pong_storage(name)
+    pub fn writes_next(self, label: impl Into<String>) -> Self {
+        self.bind_ping_pong_storage(label)
     }
 
-    pub fn depends_on(mut self, id: impl Into<String>) -> Self {
-        self.pass.depends_on.push(id.into().into());
+    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
+        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -132,11 +113,9 @@ pub struct FullscreenPassBuilder {
 }
 
 impl FullscreenPassBuilder {
-    pub(crate) fn new(flow: RenderFlow, id: String) -> Self {
-        Self {
-            flow,
-            pass: RenderPassNode::new(id, RenderPassKind::Fullscreen),
-        }
+    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
+        let pass = new_pass(&mut flow, label, RenderPassKind::Fullscreen);
+        Self { flow, pass }
     }
 
     pub fn shader(mut self, shader: ShaderHandle) -> Self {
@@ -149,55 +128,40 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn for_feature(mut self, feature_id: impl Into<String>) -> Self {
-        self.pass.feature_id = Some(feature_id.into());
+    pub fn for_feature(mut self, feature_id: RenderFeatureId) -> Self {
+        self.pass.feature_id = Some(feature_id);
         self
     }
 
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        U: GpuParams + Send + Sync + 'static,
-        F: Fn(&S) -> U + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      U: GpuParams + Send + Sync + 'static,
+      F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
-        self.pass
-            .uniform_bindings
-            .push(PassParamBinding::uniform_state(
-                uniform.id().clone(),
-                projection,
-            ));
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
         self
     }
 
     pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        U: GpuParams + Send + Sync + 'static,
-        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      U: GpuParams + Send + Sync + 'static,
+      F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        let uniform = self.flow.allocate_uniform_resource::<U>(&self.pass.id);
-        self.pass
-            .uniform_bindings
-            .push(PassParamBinding::uniform_state_with_surface(
-                uniform.id().clone(),
-                projection,
-            ));
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
         self
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        U: GpuParams + Send + Sync + 'static,
-        F: Fn(&S) -> U + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      U: GpuParams + Send + Sync + 'static,
+      F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        self.pass
-            .uniform_bindings
-            .push(PassParamBinding::uniform_state(
-                handle.id().clone(),
-                projection,
-            ));
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
         self
     }
 
@@ -207,63 +171,52 @@ impl FullscreenPassBuilder {
         projection: F,
     ) -> Self
     where
-        S: ecs::Resource + Send + Sync + 'static,
-        U: GpuParams + Send + Sync + 'static,
-        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+      S: ecs::Resource + Send + Sync + 'static,
+      U: GpuParams + Send + Sync + 'static,
+      F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        self.pass
-            .uniform_bindings
-            .push(PassParamBinding::uniform_state_with_surface(
-                handle.id().clone(),
-                projection,
-            ));
+        add_uniform_state_with_surface_binding::<S, U, F>(
+            &mut self.pass,
+            *handle.id(),
+            projection,
+        );
         self
     }
 
     pub fn bind_storage<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
-        push_unique_resource(&mut self.pass.reads, handle.id().clone());
+        push_unique_resource(&mut self.pass.reads, *handle.id());
         self
     }
 
-    pub fn sample_texture(mut self, id: impl Into<String>) -> Self {
-        let id = RenderResourceId::new(id.into());
-        push_unique_resource(&mut self.pass.reads, id.clone());
+    pub fn sample_texture(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.sampled_textures, id);
         self
     }
 
-    pub fn bind_ping_pong_storage(mut self, name: impl Into<String>) -> Self {
-        let name = name.into();
-        let (a_id, b_id) = self
-            .flow
-            .ping_pong_storage_ids(name.as_str())
-            .unwrap_or_else(|| {
-                (
-                    RenderResourceId::new(format!("{name}.a")),
-                    RenderResourceId::new(format!("{name}.b")),
-                )
-            });
+    pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
+        let label = label.into();
+        let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
         push_unique_resource(&mut self.pass.reads, a_id);
         push_unique_resource(&mut self.pass.reads, b_id);
         self
     }
 
     pub fn write_surface_color(mut self) -> Self {
-        self.flow.ensure_surface_color_resource();
-        push_unique_resource(
-            &mut self.pass.writes,
-            RenderResourceId::new(SURFACE_COLOR_RESOURCE_ID),
-        );
+        let id = self.flow.ensure_surface_color_resource();
+        push_unique_resource(&mut self.pass.writes, id);
         self
     }
 
-    pub fn write_color_target(mut self, id: impl Into<String>) -> Self {
-        push_unique_resource(&mut self.pass.writes, RenderResourceId::new(id.into()));
+    pub fn write_color_target(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        push_unique_resource(&mut self.pass.writes, id);
         self
     }
 
-    pub fn depends_on(mut self, id: impl Into<String>) -> Self {
-        self.pass.depends_on.push(id.into().into());
+    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
+        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -279,18 +232,15 @@ pub struct BuiltinUiCompositePassBuilder {
 }
 
 impl BuiltinUiCompositePassBuilder {
-    pub(crate) fn new(mut flow: RenderFlow, id: String) -> Self {
-        flow.ensure_surface_color_resource();
-        let mut pass = RenderPassNode::new(id, RenderPassKind::BuiltinUiComposite);
-        push_unique_resource(
-            &mut pass.writes,
-            RenderResourceId::new(SURFACE_COLOR_RESOURCE_ID),
-        );
+    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
+        let color_output = flow.ensure_surface_color_resource();
+        let mut pass = new_pass(&mut flow, label, RenderPassKind::BuiltinUiComposite);
+        push_unique_resource(&mut pass.writes, color_output);
         Self { flow, pass }
     }
 
-    pub fn depends_on(mut self, id: impl Into<String>) -> Self {
-        self.pass.depends_on.push(id.into().into());
+    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
+        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -299,8 +249,91 @@ impl BuiltinUiCompositePassBuilder {
     }
 }
 
+fn new_pass(flow: &mut RenderFlow, label: String, kind: RenderPassKind) -> RenderPassNode {
+    let (pass_id, pass_label) = flow.allocate_pass(label);
+    RenderPassNode::new(pass_id, pass_label, kind)
+}
+
+fn allocate_uniform_id<U>(flow: &mut RenderFlow, pass: &RenderPassNode) -> RenderResourceId
+where
+  U: GpuParams + 'static,
+{
+    *flow
+      .allocate_uniform_resource::<U>(pass.id, pass.label.as_str())
+      .id()
+}
+
+fn add_uniform_state_binding<S, U, F>(
+    pass: &mut RenderPassNode,
+    uniform_id: RenderResourceId,
+    projection: F,
+) where
+  S: ecs::Resource + Send + Sync + 'static,
+  U: GpuParams + Send + Sync + 'static,
+  F: Fn(&S) -> U + Send + Sync + 'static,
+{
+    pass.uniform_bindings
+      .push(PassParamBinding::uniform_state(uniform_id, projection));
+}
+
+fn add_uniform_state_with_surface_binding<S, U, F>(
+    pass: &mut RenderPassNode,
+    uniform_id: RenderResourceId,
+    projection: F,
+) where
+  S: ecs::Resource + Send + Sync + 'static,
+  U: GpuParams + Send + Sync + 'static,
+  F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+{
+    pass.uniform_bindings
+      .push(PassParamBinding::uniform_state_with_surface(
+          uniform_id, projection,
+      ));
+}
+
+fn add_dependency_by_label(flow: &RenderFlow, pass: &mut RenderPassNode, pass_label: &str) {
+    let dependency = require_pass_id(flow, pass_label);
+    push_unique_pass_dependency(&mut pass.depends_on, dependency);
+}
+
+fn require_ping_pong_storage(flow: &RenderFlow, label: &str) -> (RenderResourceId, RenderResourceId) {
+    flow.ping_pong_storage_ids(label).unwrap_or_else(|| {
+        panic!(
+            "ping-pong storage '{}' is not registered in flow '{}'",
+            label,
+            flow.label()
+        )
+    })
+}
+
+fn require_resource_id(flow: &RenderFlow, label: &str) -> RenderResourceId {
+    flow.resolve_resource_id(label).unwrap_or_else(|| {
+        panic!(
+            "resource label '{}' is not registered in flow '{}'",
+            label,
+            flow.label()
+        )
+    })
+}
+
+fn require_pass_id(flow: &RenderFlow, label: &str) -> RenderPassId {
+    flow.resolve_pass_id(label).unwrap_or_else(|| {
+        panic!(
+            "pass label '{}' is not registered in flow '{}'",
+            label,
+            flow.label()
+        )
+    })
+}
+
 fn push_unique_resource(resources: &mut Vec<RenderResourceId>, id: RenderResourceId) {
-    if resources.iter().all(|existing| existing != &id) {
+    if resources.iter().all(|existing| *existing != id) {
         resources.push(id);
+    }
+}
+
+fn push_unique_pass_dependency(dependencies: &mut Vec<RenderPassId>, id: RenderPassId) {
+    if dependencies.iter().all(|existing| *existing != id) {
+        dependencies.push(id);
     }
 }

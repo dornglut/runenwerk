@@ -12,6 +12,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) console_max_lines: usize,
     pub(crate) console_follow_enabled: bool,
     pub(crate) debug_logs_enabled: bool,
+    pub(crate) viewport_details_visible: bool,
 }
 
 impl RunenwerkEditorApp {
@@ -25,6 +26,7 @@ impl RunenwerkEditorApp {
             console_max_lines: 256,
             console_follow_enabled: true,
             debug_logs_enabled: true,
+            viewport_details_visible: false,
         }
     }
 
@@ -41,6 +43,7 @@ impl RunenwerkEditorApp {
         self.inspector_ui_state.clear_focus();
         self.tool_runtime_state = EditorToolRuntimeState::new();
         self.viewport_interaction_state.clear();
+        self.viewport_details_visible = false;
     }
 
     pub fn inspector_ui_state(&self) -> &EditorInspectorUiState {
@@ -97,5 +100,17 @@ impl RunenwerkEditorApp {
 
     pub fn toggle_debug_logs_enabled(&mut self) {
         self.debug_logs_enabled = !self.debug_logs_enabled;
+    }
+
+    pub fn viewport_details_visible(&self) -> bool {
+        self.viewport_details_visible
+    }
+
+    pub fn set_viewport_details_visible(&mut self, visible: bool) {
+        self.viewport_details_visible = visible;
+    }
+
+    pub fn toggle_viewport_details_visible(&mut self) {
+        self.viewport_details_visible = !self.viewport_details_visible;
     }
 }

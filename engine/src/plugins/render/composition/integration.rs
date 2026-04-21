@@ -1,11 +1,12 @@
 use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::graph::{CompiledRenderFlowPlan, compile_flow_plan};
+use crate::plugins::render::RenderFlowId;
 use crate::runtime::ResMut;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default, ecs::Resource)]
 pub struct RenderFlowRegistryResource {
-    flows: BTreeMap<String, RenderFlow>,
+    flows: BTreeMap<RenderFlowId, RenderFlow>,
     compiled_flows: Vec<CompiledRenderFlowPlan>,
     revision: u64,
     applied_compiled_revision: u64,
@@ -17,13 +18,13 @@ impl RenderFlowRegistryResource {
     }
 
     pub fn upsert_flow(&mut self, flow: RenderFlow) {
-        let key = flow.id().as_str().to_string();
+        let key = flow.id();
         self.flows.insert(key, flow);
         self.bump_revision();
     }
 
-    pub fn remove_flow(&mut self, id: &str) -> bool {
-        let removed = self.flows.remove(id).is_some();
+    pub fn remove_flow(&mut self, id: RenderFlowId) -> bool {
+        let removed = self.flows.remove(&id).is_some();
         if removed {
             self.bump_revision();
         }
@@ -57,7 +58,8 @@ impl RenderFlowRegistryResource {
             match compile_flow_plan(flow) {
                 Ok(compiled) => next_compiled.push(compiled),
                 Err(err) => tracing::warn!(
-                    flow_id = flow.id().as_str(),
+                    flow_id = ?flow.id(),
+                    flow_label = flow.label(),
                     error = %err,
                     "skipping invalid render flow during compiled planning"
                 ),

@@ -1,5 +1,5 @@
 //! File: domain/ui/ui_render_data/src/batching/draw_key.rs
-//! Purpose: Stable batching identity for UI primitives.
+//! Purpose: Stable batching id for UI primitives.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UiDrawKey {

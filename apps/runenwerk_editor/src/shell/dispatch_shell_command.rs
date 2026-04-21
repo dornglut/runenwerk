@@ -115,6 +115,9 @@ pub fn dispatch_shell_command(
                 );
             }
         },
+        ShellCommand::ToggleViewportDetails => {
+            app.toggle_viewport_details_visible();
+        }
         ShellCommand::ActivateInspectorField { index } => {
             activate_inspector_field(app, index)?;
         }
@@ -135,6 +138,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
         ShellCommand::SelectOutlinerEntity { .. } => "SelectOutlinerEntity",
         ShellCommand::SelectViewportProduct { .. } => "SelectViewportProduct",
+        ShellCommand::ToggleViewportDetails => "ToggleViewportDetails",
         ShellCommand::ActivateInspectorField { .. } => "ActivateInspectorField",
         ShellCommand::NoOp => "NoOp",
     }

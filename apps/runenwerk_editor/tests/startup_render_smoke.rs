@@ -14,6 +14,8 @@ const SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
 const OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.overlay";
 const VIEWPORT_BOUNDS_EPSILON: f32 = 0.75;
+const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
+const SCENE_OVERLAY_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1);
 
 #[test]
 fn startup_render_smoke_publishes_editor_shell_submission() {
@@ -55,7 +57,7 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     let pass_ids = flow_registry
         .compiled_flows()
         .iter()
-        .flat_map(|flow| flow.pass_order.iter().map(|pass| pass.pass_id().to_string()))
+        .flat_map(|flow| flow.pass_order.iter().map(|pass| pass.pass_label().to_string()))
         .collect::<Vec<_>>();
     assert!(
         pass_ids.iter().any(|id| id == SURFACE_CLEAR_PASS_ID),
@@ -83,22 +85,23 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     let editor_flow = flow_registry
         .compiled_flows()
         .iter()
-        .find(|flow| flow.flow_id == EDITOR_MAIN_FLOW_ID)
+        .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
         .expect("editor main flow should exist");
-    let has_scene_product_resource = editor_flow
+    let color_target_count = editor_flow
         .resources
         .resources
         .iter()
-        .any(|resource| resource.id().as_str() == VIEWPORT_RESOURCE_SCENE_COLOR);
+        .filter(|resource| matches!(resource, engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)))
+        .count();
     assert!(
-        has_scene_product_resource,
-        "editor flow resources should include scene product target resource",
+        color_target_count >= 3,
+        "editor flow resources should include the three viewport product color targets",
     );
 
     let submission = submissions
-        .get(&UiFrameProducerId::new("editor.shell"))
+        .get(&EDITOR_SHELL_UI_PRODUCER_ID)
         .expect("editor shell submission should exist");
-    let scene_overlay_submission = submissions.get(&UiFrameProducerId::new("scene.overlay"));
+    let scene_overlay_submission = submissions.get(&SCENE_OVERLAY_UI_PRODUCER_ID);
 
     assert!(
         !submission.frame.is_empty(),
