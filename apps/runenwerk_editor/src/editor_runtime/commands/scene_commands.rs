@@ -5,10 +5,10 @@ use editor_core::{
 use editor_scene::{SceneCommandIntent, SceneEditorCommand, scene_intent_to_command};
 
 use super::ratification::ratify_scene_change;
+use crate::editor_runtime::parity::assert_scene_projection_parity;
 use crate::editor_runtime::{
     RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
 };
-use crate::editor_runtime::parity::assert_scene_projection_parity;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutedSceneCommand {

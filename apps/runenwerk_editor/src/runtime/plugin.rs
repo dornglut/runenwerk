@@ -36,9 +36,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::FrameSubmit => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::FrameSubmit")
             }
-            Self::ViewportPresentationSync => SystemSetKey::of::<EditorRuntimeSet>(
-                "EditorRuntimeSet::ViewportPresentationSync",
-            ),
+            Self::ViewportPresentationSync => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportPresentationSync")
+            }
         }
     }
 }

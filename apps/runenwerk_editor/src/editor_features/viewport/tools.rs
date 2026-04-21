@@ -42,15 +42,13 @@ impl ViewportToolController {
             }
             ViewportToolCommand::BeginTranslateAxisDrag { entity, axis } => {
                 begin_translate_preview(app, entity)?;
-                app.tool_runtime_state_mut().set_translate_axis(Some(axis))?;
+                app.tool_runtime_state_mut()
+                    .set_translate_axis(Some(axis))?;
             }
             ViewportToolCommand::UpdateTranslateAxisDrag { amount } => {
-                let axis = app
-                    .tool_runtime_state()
-                    .translate_axis()
-                    .ok_or(EditorMutationError::session_rejected(
-                        "no active translate axis",
-                    ))?;
+                let axis = app.tool_runtime_state().translate_axis().ok_or(
+                    EditorMutationError::session_rejected("no active translate axis"),
+                )?;
 
                 let delta = axis_delta(axis, amount);
                 app.update_translation_preview(delta)?;

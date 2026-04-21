@@ -4,24 +4,24 @@ use crate::editor_features::inspector::dispatch_inspector_command;
 use crate::editor_features::outliner::dispatch_outliner_command;
 use crate::editor_features::tools::{dispatch_tool_action, dispatch_tool_actions};
 use crate::editor_features::viewport::{ViewportInteractionCommand, ViewportInteractionController};
-use crate::runtime::viewport::{
-    ViewportArtifactObservationResource, ViewportPresentationStateResource,
-};
 use crate::editor_panels::{
     InspectorPanelCommand, InspectorPanelCommandResult, InspectorPanelPresenter,
     InspectorPanelViewModel, OutlinerPanelCommand, OutlinerPanelCommandResult,
     OutlinerPanelPresenter, OutlinerPanelState, ViewportPanelCommand, ViewportPanelPresenter,
     ViewportPanelState, ViewportToolState,
 };
+use crate::runtime::viewport::{
+    ViewportArtifactObservationResource, ViewportPresentationStateResource,
+};
 use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState};
+use editor_core::EditorMutationError;
 use editor_shell::UiInputOutcome;
+use editor_viewport::ArtifactObservationFrame;
 use ui_input::UiInputEvent;
 use ui_math::UiRect;
 use ui_render_data::UiFrame;
 use ui_text::FontAtlasSource;
 use ui_theme::ThemeTokens;
-use editor_core::EditorMutationError;
-use editor_viewport::ArtifactObservationFrame;
 
 impl RunenwerkEditorApp {
     pub fn outliner_state(&self) -> OutlinerPanelState {

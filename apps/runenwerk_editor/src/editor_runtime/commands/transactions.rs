@@ -5,10 +5,10 @@ use editor_core::{
 use editor_scene::SceneEditorCommand;
 
 use super::ratification::ratify_scene_change;
+use crate::editor_runtime::parity::assert_scene_projection_parity;
 use crate::editor_runtime::{
     RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
 };
-use crate::editor_runtime::parity::assert_scene_projection_parity;
 
 pub(crate) fn execute_scene_transaction_and_push_history_with_origin(
     runtime: &mut RunenwerkEditorRuntime,

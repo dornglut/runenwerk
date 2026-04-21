@@ -13,12 +13,10 @@ use crate::runtime::app::{
 };
 use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scaled_shell_theme};
 use crate::runtime::viewport::{
-    ViewportArtifactObservationResource, ViewportLayoutMapResource,
-    ViewportPickingResultsResource, ViewportPresentationStateResource,
+    ViewportArtifactObservationResource, ViewportLayoutMapResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource,
 };
-use crate::runtime::{
-    build_viewport_picking_product_frame, viewport_hit_from_picking_product,
-};
+use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
 use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch_shell_command;
 
@@ -101,16 +99,14 @@ pub fn dispatch_editor_input_system(
             Some(&viewport_observations),
         );
 
-        let pointer_route = outcome
-            .as_ref()
-            .and_then(|value| {
-                viewport_pointer_route(
-                    &host.shell_state,
-                    &viewport_layout_map,
-                    &value.dispatch,
-                    position,
-                )
-            });
+        let pointer_route = outcome.as_ref().and_then(|value| {
+            viewport_pointer_route(
+                &host.shell_state,
+                &viewport_layout_map,
+                &value.dispatch,
+                position,
+            )
+        });
         if let Some(route) = pointer_route {
             dispatch_viewport_pointer_down(&mut host, &picking_results, position, route);
         } else if host.app.debug_logs_enabled() {
@@ -183,6 +179,7 @@ fn dispatch_shortcuts(
     if input.action_pressed(ACTION_EDITOR_UNDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::Undo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
@@ -195,6 +192,7 @@ fn dispatch_shortcuts(
     if input.action_pressed(ACTION_EDITOR_REDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::Redo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
@@ -209,12 +207,12 @@ fn dispatch_shortcuts(
     {
         if let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::ActivateSelectTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
             None,
-        )
-        {
+        ) {
             eprintln!("select-tool shortcut failed: {error}");
         }
     }
@@ -224,12 +222,12 @@ fn dispatch_shortcuts(
     {
         if let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::ActivateTranslateTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
             None,
-        )
-        {
+        ) {
             eprintln!("translate-tool shortcut failed: {error}");
         }
     }
@@ -256,18 +254,15 @@ fn dispatch_pointer_event(
         click_count: 1,
     });
 
-    match host
-        .app
-        .dispatch_shell_input(
-            &mut host.shell_state,
-            bounds,
-            shell_theme,
-            &event,
-            viewport_products,
-            viewport_presentations,
-            viewport_observations,
-        )
-    {
+    match host.app.dispatch_shell_input(
+        &mut host.shell_state,
+        bounds,
+        shell_theme,
+        &event,
+        viewport_products,
+        viewport_presentations,
+        viewport_observations,
+    ) {
         Ok(outcome) => Some(outcome),
         Err(error) => {
             eprintln!("editor shell input dispatch failed: {error}");

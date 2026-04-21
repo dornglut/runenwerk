@@ -3,9 +3,7 @@ use engine::plugins::render::{
     UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
 use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
-use runenwerk_editor::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR,
-};
+use runenwerk_editor::runtime::viewport::{EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR};
 use ui_render_data::{UiPrimitive, ViewportSurfaceSlot};
 
 const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
@@ -57,7 +55,11 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     let pass_ids = flow_registry
         .compiled_flows()
         .iter()
-        .flat_map(|flow| flow.pass_order.iter().map(|pass| pass.pass_label().to_string()))
+        .flat_map(|flow| {
+            flow.pass_order
+                .iter()
+                .map(|pass| pass.pass_label().to_string())
+        })
         .collect::<Vec<_>>();
     assert!(
         pass_ids.iter().any(|id| id == SURFACE_CLEAR_PASS_ID),
@@ -91,7 +93,12 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .resources
         .resources
         .iter()
-        .filter(|resource| matches!(resource, engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)))
+        .filter(|resource| {
+            matches!(
+                resource,
+                engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)
+            )
+        })
         .count();
     assert!(
         color_target_count >= 3,
@@ -157,7 +164,8 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .expect("viewport embed primitive for primary slot should exist");
 
     assert!(
-        (viewport_state.viewport_bounds_px.0 - viewport_embed.rect.x).abs() <= VIEWPORT_BOUNDS_EPSILON
+        (viewport_state.viewport_bounds_px.0 - viewport_embed.rect.x).abs()
+            <= VIEWPORT_BOUNDS_EPSILON
             && (viewport_state.viewport_bounds_px.1 - viewport_embed.rect.y).abs()
                 <= VIEWPORT_BOUNDS_EPSILON
             && (viewport_state.viewport_bounds_px.2 - viewport_embed.rect.width).abs()

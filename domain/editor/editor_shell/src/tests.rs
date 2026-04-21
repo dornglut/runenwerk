@@ -319,7 +319,11 @@ fn toolbar_activation_maps_to_shell_command() {
         console: ConsoleViewModel::default(),
     };
 
-    let composition = build_editor_shell(&view_model, &ThemeTokens::default(), &sample_workspace_state());
+    let composition = build_editor_shell(
+        &view_model,
+        &ThemeTokens::default(),
+        &sample_workspace_state(),
+    );
     let commands =
         map_interactions_to_shell_commands(&interactions, &composition.projection_artifacts);
 
@@ -346,7 +350,11 @@ fn outliner_row_activation_maps_to_select_entity_command() {
         console: ConsoleViewModel::default(),
     };
 
-    let composition = build_editor_shell(&view_model, &ThemeTokens::default(), &sample_workspace_state());
+    let composition = build_editor_shell(
+        &view_model,
+        &ThemeTokens::default(),
+        &sample_workspace_state(),
+    );
     let commands =
         map_interactions_to_shell_commands(&interactions, &composition.projection_artifacts);
 
@@ -369,8 +377,7 @@ fn outliner_row_activation_maps_to_select_entity_command() {
     ));
 
     assert_eq!(
-        composition.projection_artifacts.projection_epoch,
-        0,
+        composition.projection_artifacts.projection_epoch, 0,
         "direct build artifacts are unbound until cached in shell state",
     );
 }
@@ -405,7 +412,11 @@ fn viewport_product_activation_maps_to_select_product_command() {
         console: ConsoleViewModel::default(),
     };
 
-    let composition = build_editor_shell(&view_model, &ThemeTokens::default(), &sample_workspace_state());
+    let composition = build_editor_shell(
+        &view_model,
+        &ThemeTokens::default(),
+        &sample_workspace_state(),
+    );
     let commands =
         map_interactions_to_shell_commands(&interactions, &composition.projection_artifacts);
 
@@ -462,7 +473,11 @@ fn inspector_field_activation_maps_to_shell_edit_command() {
         console: ConsoleViewModel::default(),
     };
 
-    let composition = build_editor_shell(&view_model, &ThemeTokens::default(), &sample_workspace_state());
+    let composition = build_editor_shell(
+        &view_model,
+        &ThemeTokens::default(),
+        &sample_workspace_state(),
+    );
     let commands =
         map_interactions_to_shell_commands(&interactions, &composition.projection_artifacts);
 
@@ -586,10 +601,8 @@ fn routing_uses_projection_artifact_not_index_or_view_model_decoding() {
     unrelated_view_model.outliner.rows[0].entity = editor_core::EntityId(701);
     let _ = unrelated_view_model;
 
-    let commands = map_interactions_to_shell_commands(
-        &interactions,
-        &first_build.projection_artifacts,
-    );
+    let commands =
+        map_interactions_to_shell_commands(&interactions, &first_build.projection_artifacts);
     assert_eq!(commands.len(), 1);
     assert!(matches!(
         commands[0],

@@ -36,7 +36,10 @@ impl EditorToolRuntimeState {
         self.translate_axis
     }
 
-    pub fn set_translate_axis(&mut self, axis: Option<TranslateAxis>) -> Result<(), EditorMutationError> {
+    pub fn set_translate_axis(
+        &mut self,
+        axis: Option<TranslateAxis>,
+    ) -> Result<(), EditorMutationError> {
         if axis.is_some() && self.preview.is_none() {
             return Err(EditorMutationError::session_rejected(
                 "cannot set translate axis without active preview",
@@ -67,10 +70,16 @@ impl EditorToolRuntimeState {
         Ok(())
     }
 
-    pub fn update_translation_preview(&mut self, delta: Vec3Value) -> Result<(), EditorMutationError> {
-        let preview = self.preview.as_mut().ok_or(EditorMutationError::session_rejected(
-            "no active preview session",
-        ))?;
+    pub fn update_translation_preview(
+        &mut self,
+        delta: Vec3Value,
+    ) -> Result<(), EditorMutationError> {
+        let preview = self
+            .preview
+            .as_mut()
+            .ok_or(EditorMutationError::session_rejected(
+                "no active preview session",
+            ))?;
 
         preview.translation_delta = delta;
         Ok(())

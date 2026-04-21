@@ -56,18 +56,17 @@ pub fn map_interactions_to_shell_commands(
                     }
                 }
                 RoutedShellAction::ToggleDebugLogs => ShellCommand::ToggleDebugLogs,
-                RoutedShellAction::SelectOutlinerEntity {
-                    entity,
-                    context,
-                } => ShellCommand::SelectOutlinerEntity {
-                    entity: *entity,
-                    target: StructuralCommandTarget {
-                        panel_instance_id: context.panel_instance_id,
-                        active_tool_surface: context.active_tool_surface,
-                        tab_stack_id: context.tab_stack_id,
-                    },
-                    projection_epoch: routing.projection_epoch,
-                },
+                RoutedShellAction::SelectOutlinerEntity { entity, context } => {
+                    ShellCommand::SelectOutlinerEntity {
+                        entity: *entity,
+                        target: StructuralCommandTarget {
+                            panel_instance_id: context.panel_instance_id,
+                            active_tool_surface: context.active_tool_surface,
+                            tab_stack_id: context.tab_stack_id,
+                        },
+                        projection_epoch: routing.projection_epoch,
+                    }
+                }
                 RoutedShellAction::SelectViewportProduct {
                     viewport_id,
                     product_id,
@@ -100,6 +99,22 @@ pub fn map_interactions_to_shell_commands(
                         projection_epoch: routing.projection_epoch,
                     }
                 }
+                RoutedShellAction::ActivateTab {
+                    tab_stack_id,
+                    panel_instance_id,
+                } => ShellCommand::ActivateTab {
+                    tab_stack_id: *tab_stack_id,
+                    panel_instance_id: *panel_instance_id,
+                    projection_epoch: routing.projection_epoch,
+                },
+                RoutedShellAction::FloatPanel {
+                    tab_stack_id,
+                    panel_instance_id,
+                } => ShellCommand::FloatPanel {
+                    tab_stack_id: *tab_stack_id,
+                    panel_instance_id: *panel_instance_id,
+                    projection_epoch: routing.projection_epoch,
+                },
             };
 
             commands.push(command);
@@ -122,11 +137,13 @@ fn action_has_structural_context_match(
     };
 
     match expected {
-        Some(context) => routing
-            .widget_structural_context_by_id
-            .get(&widget_id)
-            .copied()
-            == Some(context),
+        Some(context) => {
+            routing
+                .widget_structural_context_by_id
+                .get(&widget_id)
+                .copied()
+                == Some(context)
+        }
         None => true,
     }
 }

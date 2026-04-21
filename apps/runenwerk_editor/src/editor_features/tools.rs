@@ -74,12 +74,9 @@ pub fn dispatch_tool_action(
             app.tool_runtime_state_mut().update_preview()?;
         }
         ToolAction::CommitPreview => {
-            let preview = app
-                .tool_runtime_state_mut()
-                .commit_preview()
-                .ok_or(EditorMutationError::session_rejected(
-                    "no active preview session",
-                ))?;
+            let preview = app.tool_runtime_state_mut().commit_preview().ok_or(
+                EditorMutationError::session_rejected("no active preview session"),
+            )?;
 
             commit_translation_preview_into_local_transform(
                 app.runtime_mut(),
@@ -88,12 +85,9 @@ pub fn dispatch_tool_action(
             )?;
         }
         ToolAction::CancelPreview => {
-            let _ = app
-                .tool_runtime_state_mut()
-                .cancel_preview()
-                .ok_or(EditorMutationError::session_rejected(
-                    "no active preview session",
-                ))?;
+            let _ = app.tool_runtime_state_mut().cancel_preview().ok_or(
+                EditorMutationError::session_rejected("no active preview session"),
+            )?;
         }
     }
 

@@ -5,10 +5,9 @@ use std::collections::BTreeMap;
 
 use editor_core::RealityVersion;
 use editor_viewport::{
-    ArtifactObservationFrame,
-    ExpressionDimensions, ExpressionFormat, ExpressionFreshness, ExpressionPresentationHints,
-    ExpressionProductDescriptor, ExpressionProductId, ExpressionProductKind,
-    ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
+    ArtifactObservationFrame, ExpressionDimensions, ExpressionFormat, ExpressionFreshness,
+    ExpressionPresentationHints, ExpressionProductDescriptor, ExpressionProductId,
+    ExpressionProductKind, ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
 };
 
 pub const MAIN_VIEWPORT_ID: ViewportId = ViewportId(1);
@@ -96,10 +95,14 @@ impl ViewportProductRegistryResource {
         viewport_id: ViewportId,
         descriptors: Vec<ExpressionProductDescriptor>,
     ) {
-        self.descriptors_by_viewport.insert(viewport_id, descriptors);
+        self.descriptors_by_viewport
+            .insert(viewport_id, descriptors);
     }
 
-    pub fn descriptors_for(&self, viewport_id: ViewportId) -> Option<&[ExpressionProductDescriptor]> {
+    pub fn descriptors_for(
+        &self,
+        viewport_id: ViewportId,
+    ) -> Option<&[ExpressionProductDescriptor]> {
         self.descriptors_by_viewport
             .get(&viewport_id)
             .map(Vec::as_slice)
@@ -217,8 +220,12 @@ mod tests {
 
     #[test]
     fn initial_registry_contains_locked_product_kind_subset() {
-        let products = initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
-        let kinds = products.into_iter().map(|descriptor| descriptor.kind).collect::<Vec<_>>();
+        let products =
+            initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
+        let kinds = products
+            .into_iter()
+            .map(|descriptor| descriptor.kind)
+            .collect::<Vec<_>>();
 
         assert!(kinds.contains(&ExpressionProductKind::SceneColor2D));
         assert!(kinds.contains(&ExpressionProductKind::PickingIds2D));

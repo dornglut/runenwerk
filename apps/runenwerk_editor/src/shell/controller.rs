@@ -1,6 +1,7 @@
 use editor_shell::{
     CONSOLE_SCROLL_WIDGET_ID, EditorShellViewModel, ShellCommand, ShellUiExpressionFrame,
-    UiInputOutcome, UiTree, build_editor_shell, map_interactions_to_shell_commands,
+    UiInputOutcome, UiTree, WorkspaceMutation, build_editor_shell,
+    map_interactions_to_shell_commands,
 };
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::{PointerEventKind, UiInputEvent};
@@ -197,10 +198,10 @@ impl RunenwerkEditorShellController {
             }
         }
 
-        let commands = map_interactions_to_shell_commands(
-            &outcome.interactions,
-            &projection_artifacts,
-        );
+        handle_tab_drag_event(shell_state, event, &outcome, &projection_artifacts)?;
+
+        let commands =
+            map_interactions_to_shell_commands(&outcome.interactions, &projection_artifacts);
         Self::dispatch_commands(
             app,
             shell_state,
@@ -214,7 +215,7 @@ impl RunenwerkEditorShellController {
 
     fn dispatch_commands(
         app: &mut RunenwerkEditorApp,
-        shell_state: &RunenwerkEditorShellState,
+        shell_state: &mut RunenwerkEditorShellState,
         commands: Vec<ShellCommand>,
         mut viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
@@ -225,18 +226,115 @@ impl RunenwerkEditorShellController {
             {
                 continue;
             }
+            let current_projection_epoch = shell_state.current_projection_epoch();
 
             dispatch_shell_command(
                 app,
+                Some(shell_state),
                 command,
                 viewport_presentations.as_deref_mut(),
                 viewport_observations,
-                Some(shell_state.current_projection_epoch()),
+                Some(current_projection_epoch),
             )?;
         }
 
         Ok(())
     }
+}
+
+fn handle_tab_drag_event(
+    shell_state: &mut RunenwerkEditorShellState,
+    event: &UiInputEvent,
+    outcome: &UiInputOutcome,
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+) -> Result<(), editor_core::EditorMutationError> {
+    let UiInputEvent::Pointer(pointer) = event else {
+        return Ok(());
+    };
+
+    match pointer.kind {
+        PointerEventKind::Down => {
+            let Some(widget_id) = outcome.dispatch.target else {
+                return Ok(());
+            };
+            let Some(tab) = projection_artifacts
+                .workspace
+                .tab_button_by_widget_id
+                .get(&widget_id)
+                .copied()
+            else {
+                return Ok(());
+            };
+            let Some(tab_stack_id) = projection_artifacts
+                .workspace
+                .tab_stack_drop_target_by_widget_id
+                .get(&widget_id)
+                .copied()
+            else {
+                return Ok(());
+            };
+            shell_state.begin_tab_drag(tab.panel_instance_id, tab_stack_id);
+            shell_state.set_tab_drag_hover_target(Some(tab_stack_id));
+        }
+        PointerEventKind::Move => {
+            if shell_state.tab_drag_state().is_some() {
+                let hovered = shell_state.runtime().state().hovered_widget;
+                let hovered_stack = hovered.and_then(|widget_id| {
+                    projection_artifacts
+                        .workspace
+                        .tab_stack_drop_target_by_widget_id
+                        .get(&widget_id)
+                        .copied()
+                });
+                shell_state.set_tab_drag_hover_target(hovered_stack);
+            }
+        }
+        PointerEventKind::Up => {
+            let Some(drag_state) = shell_state.end_tab_drag() else {
+                return Ok(());
+            };
+            let hovered_stack = shell_state
+                .runtime()
+                .state()
+                .hovered_widget
+                .and_then(|widget_id| {
+                    projection_artifacts
+                        .workspace
+                        .tab_stack_drop_target_by_widget_id
+                        .get(&widget_id)
+                        .copied()
+                })
+                .or(drag_state.hovered_tab_stack_id);
+            let Some(destination_tab_stack_id) = hovered_stack else {
+                return Ok(());
+            };
+            if destination_tab_stack_id == drag_state.source_tab_stack_id {
+                return Ok(());
+            }
+
+            shell_state
+                .apply_workspace_mutation(WorkspaceMutation::MovePanelToTabStack {
+                    panel_id: drag_state.panel_instance_id,
+                    source_tab_stack_id: drag_state.source_tab_stack_id,
+                    destination_tab_stack_id,
+                    destination_index: None,
+                    activate_in_destination: true,
+                })
+                .map_err(|_| {
+                    editor_core::EditorMutationError::runtime_rejected(
+                        "failed to move tab between tab stacks",
+                    )
+                })?;
+        }
+        PointerEventKind::Leave => {
+            if shell_state.tab_drag_state().is_some() {
+                shell_state.set_tab_drag_hover_target(None);
+            }
+        }
+        PointerEventKind::Enter | PointerEventKind::Scroll => {}
+    }
+
+    Ok(())
 }
 
 fn is_console_scroll_event(event: &UiInputEvent, outcome: &UiInputOutcome) -> bool {

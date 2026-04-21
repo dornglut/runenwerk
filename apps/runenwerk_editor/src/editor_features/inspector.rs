@@ -83,12 +83,9 @@ pub fn dispatch_inspector_command(
             app.inspector_ui_state_mut().update_field_draft(value)?;
         }
         InspectorPanelCommand::CommitDraftComponentField => {
-            let draft = app
-                .inspector_ui_state_mut()
-                .take_active_draft()
-                .ok_or(EditorMutationError::inspector_rejected(
-                    "no active inspector field draft",
-                ))?;
+            let draft = app.inspector_ui_state_mut().take_active_draft().ok_or(
+                EditorMutationError::inspector_rejected("no active inspector field draft"),
+            )?;
 
             commit_component_field_edit(
                 app.runtime_mut(),

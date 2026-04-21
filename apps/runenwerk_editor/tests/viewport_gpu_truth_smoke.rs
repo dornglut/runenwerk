@@ -94,10 +94,20 @@ fn viewport_gpu_truth_smoke() {
         )
         .expect("viewport pass after-capture should exist");
     let ui_before = captures
-        .find(FLOW_ID, UI_PASS_ID, CaptureStage::Before, SURFACE_RESOURCE_ID)
+        .find(
+            FLOW_ID,
+            UI_PASS_ID,
+            CaptureStage::Before,
+            SURFACE_RESOURCE_ID,
+        )
         .expect("ui pass before-capture should exist");
     let ui_after = captures
-        .find(FLOW_ID, UI_PASS_ID, CaptureStage::After, SURFACE_RESOURCE_ID)
+        .find(
+            FLOW_ID,
+            UI_PASS_ID,
+            CaptureStage::After,
+            SURFACE_RESOURCE_ID,
+        )
         .expect("ui pass after-capture should exist");
 
     assert!(

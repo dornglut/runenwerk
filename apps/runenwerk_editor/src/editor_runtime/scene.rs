@@ -1,7 +1,7 @@
 use editor_core::{ComponentTypeId, EditorMutationError, EntityId, ResourceTypeId};
 use editor_inspector::{
-    set_component_field_value, set_resource_field_value, InspectorEditError, InspectorEditValue,
-    InspectorPath, InspectorPathSegment,
+    InspectorEditError, InspectorEditValue, InspectorPath, InspectorPathSegment,
+    set_component_field_value, set_resource_field_value,
 };
 use editor_scene::{SceneComponentSnapshot, SceneEntitySnapshot, SceneRuntime};
 

@@ -12,107 +12,107 @@ use editor_viewport::ViewportId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ViewportSurfaceSlot {
-	PrimaryColor,
-	PickingIds,
-	Overlay,
+    PrimaryColor,
+    PickingIds,
+    Overlay,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ViewportSurfaceHandle {
-	pub flow_id: &'static str,
-	pub resource_id: &'static str,
+    pub flow_id: &'static str,
+    pub resource_id: &'static str,
 }
 
 impl ViewportSurfaceHandle {
-	pub const fn new(flow_id: &'static str, resource_id: &'static str) -> Self {
-		Self { flow_id, resource_id }
-	}
+    pub const fn new(flow_id: &'static str, resource_id: &'static str) -> Self {
+        Self {
+            flow_id,
+            resource_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewportSurfaceSet {
-	viewport_id: ViewportId,
-	slots: BTreeMap<ViewportSurfaceSlot, ViewportSurfaceHandle>,
+    viewport_id: ViewportId,
+    slots: BTreeMap<ViewportSurfaceSlot, ViewportSurfaceHandle>,
 }
 
 impl ViewportSurfaceSet {
-	pub fn new(viewport_id: ViewportId) -> Self {
-		Self {
-			viewport_id,
-			slots: BTreeMap::new(),
-		}
-	}
+    pub fn new(viewport_id: ViewportId) -> Self {
+        Self {
+            viewport_id,
+            slots: BTreeMap::new(),
+        }
+    }
 
-	pub fn viewport_id(&self) -> ViewportId {
-		self.viewport_id
-	}
+    pub fn viewport_id(&self) -> ViewportId {
+        self.viewport_id
+    }
 
-	pub fn insert(
-		&mut self,
-		slot: ViewportSurfaceSlot,
-		handle: ViewportSurfaceHandle,
-	) -> Option<ViewportSurfaceHandle> {
-		self.slots.insert(slot, handle)
-	}
+    pub fn insert(
+        &mut self,
+        slot: ViewportSurfaceSlot,
+        handle: ViewportSurfaceHandle,
+    ) -> Option<ViewportSurfaceHandle> {
+        self.slots.insert(slot, handle)
+    }
 
-	pub fn get(&self, slot: ViewportSurfaceSlot) -> Option<ViewportSurfaceHandle> {
-		self.slots.get(&slot).copied()
-	}
+    pub fn get(&self, slot: ViewportSurfaceSlot) -> Option<ViewportSurfaceHandle> {
+        self.slots.get(&slot).copied()
+    }
 
-	pub fn contains(&self, slot: ViewportSurfaceSlot) -> bool {
-		self.slots.contains_key(&slot)
-	}
+    pub fn contains(&self, slot: ViewportSurfaceSlot) -> bool {
+        self.slots.contains_key(&slot)
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct ViewportSurfaceSetResource {
-	sets: BTreeMap<ViewportId, ViewportSurfaceSet>,
+    sets: BTreeMap<ViewportId, ViewportSurfaceSet>,
 }
 
 impl ViewportSurfaceSetResource {
-	pub fn new() -> Self {
-		Self::default()
-	}
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-	pub fn ensure_viewport(&mut self, viewport_id: ViewportId) -> &mut ViewportSurfaceSet {
-		self.sets
-			.entry(viewport_id)
-			.or_insert_with(|| ViewportSurfaceSet::new(viewport_id))
-	}
+    pub fn ensure_viewport(&mut self, viewport_id: ViewportId) -> &mut ViewportSurfaceSet {
+        self.sets
+            .entry(viewport_id)
+            .or_insert_with(|| ViewportSurfaceSet::new(viewport_id))
+    }
 
-	pub fn set_surface(
-		&mut self,
-		viewport_id: ViewportId,
-		slot: ViewportSurfaceSlot,
-		handle: ViewportSurfaceHandle,
-	) -> Option<ViewportSurfaceHandle> {
-		self.ensure_viewport(viewport_id).insert(slot, handle)
-	}
+    pub fn set_surface(
+        &mut self,
+        viewport_id: ViewportId,
+        slot: ViewportSurfaceSlot,
+        handle: ViewportSurfaceHandle,
+    ) -> Option<ViewportSurfaceHandle> {
+        self.ensure_viewport(viewport_id).insert(slot, handle)
+    }
 
-	pub fn surface(
-		&self,
-		viewport_id: ViewportId,
-		slot: ViewportSurfaceSlot,
-	) -> Option<ViewportSurfaceHandle> {
-		self.sets.get(&viewport_id).and_then(|set| set.get(slot))
-	}
+    pub fn surface(
+        &self,
+        viewport_id: ViewportId,
+        slot: ViewportSurfaceSlot,
+    ) -> Option<ViewportSurfaceHandle> {
+        self.sets.get(&viewport_id).and_then(|set| set.get(slot))
+    }
 
-	pub fn surface_set(&self, viewport_id: ViewportId) -> Option<&ViewportSurfaceSet> {
-		self.sets.get(&viewport_id)
-	}
+    pub fn surface_set(&self, viewport_id: ViewportId) -> Option<&ViewportSurfaceSet> {
+        self.sets.get(&viewport_id)
+    }
 
-	pub fn viewport_ids(&self) -> impl Iterator<Item = ViewportId> + '_ {
-		self.sets.keys().copied()
-	}
+    pub fn viewport_ids(&self) -> impl Iterator<Item = ViewportId> + '_ {
+        self.sets.keys().copied()
+    }
 
-	pub fn surface_sets(&self) -> impl Iterator<Item = &ViewportSurfaceSet> {
-		self.sets.values()
-	}
+    pub fn surface_sets(&self) -> impl Iterator<Item = &ViewportSurfaceSet> {
+        self.sets.values()
+    }
 
-	pub fn retain_viewports(
-		&mut self,
-		mut keep: impl FnMut(ViewportId) -> bool,
-	) {
-		self.sets.retain(|viewport_id, _| keep(*viewport_id));
-	}
+    pub fn retain_viewports(&mut self, mut keep: impl FnMut(ViewportId) -> bool) {
+        self.sets.retain(|viewport_id, _| keep(*viewport_id));
+    }
 }

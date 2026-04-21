@@ -4,7 +4,7 @@ use editor_core::{EditorMutationError, EntityId};
 use editor_scene::SceneEntitySnapshot;
 
 use crate::editor_runtime::{
-    all_entity_views, build_hierarchy_snapshot, HierarchySnapshot, SceneEntityView,
+    HierarchySnapshot, SceneEntityView, all_entity_views, build_hierarchy_snapshot,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

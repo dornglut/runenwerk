@@ -2,10 +2,10 @@ use crate::editor_panels::ViewportToolState;
 use editor_core::EntityId;
 use editor_shell::{
     ObservationConsumerKind, ObservationFrameMetadata, ObservationSourceReality,
-    ViewportObservationFrame, ViewportProductObservation, ViewportProductChoiceViewModel,
+    ViewportObservationFrame, ViewportProductChoiceViewModel, ViewportProductObservation,
     ViewportViewModel,
 };
-use editor_viewport::{ArtifactObservationFrame, ProductAvailabilityState, ProducerHealth};
+use editor_viewport::{ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState};
 
 pub fn build_viewport_observation_frame(
     products: Option<&ArtifactObservationFrame>,

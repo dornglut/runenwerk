@@ -4,7 +4,7 @@ use editor_core::{ComponentTypeId, EditorMutationError};
 use editor_scene::SceneCommandIntent;
 use scene::{LocalTransform, Vec3Value};
 
-use crate::editor_runtime::{execute_scene_intent, RunenwerkEditorRuntime};
+use crate::editor_runtime::{RunenwerkEditorRuntime, execute_scene_intent};
 
 pub const LOCAL_TRANSFORM_COMPONENT_TYPE_ID: ComponentTypeId = ComponentTypeId(500);
 pub const EDITOR_PRIMITIVE_COMPONENT_TYPE_ID: ComponentTypeId = ComponentTypeId(501);

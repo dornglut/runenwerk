@@ -56,6 +56,9 @@ mod tests {
 
         assert_eq!(frame.viewport_id, ViewportId(1));
         assert_eq!(frame.source_version, RealityVersion(4));
-        assert_eq!(frame.selected_primary_product_id, Some(ExpressionProductId(12)));
+        assert_eq!(
+            frame.selected_primary_product_id,
+            Some(ExpressionProductId(12))
+        );
     }
 }

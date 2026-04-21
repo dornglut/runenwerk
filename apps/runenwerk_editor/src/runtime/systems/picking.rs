@@ -1,7 +1,5 @@
 use editor_core::{EntityId, ToolId};
-use engine::plugins::render::{
-    EditorGizmoAxis, EditorPickingHit, EditorPickingTarget,
-};
+use engine::plugins::render::{EditorGizmoAxis, EditorPickingHit, EditorPickingTarget};
 use engine::runtime::{Res, ResMut};
 use glam::{Vec2, Vec3, vec2, vec3};
 use scene::{LocalTransform, Vec3Value};
@@ -393,12 +391,10 @@ fn routed_viewport_bounds(
                 .and_then(|context| layout_map.viewport_for_structural_context(context))
         })
         .or_else(|| {
-            runtime_state
-                .hovered_widget
-                .and_then(|widget| {
-                    structural_context_for_widget(&host.shell_state, widget)
-                        .and_then(|context| layout_map.viewport_for_structural_context(context))
-                })
+            runtime_state.hovered_widget.and_then(|widget| {
+                structural_context_for_widget(&host.shell_state, widget)
+                    .and_then(|context| layout_map.viewport_for_structural_context(context))
+            })
         })?;
     let bounds = layout_map.entry_for_viewport(viewport_id)?.bounds;
     Some((viewport_id, bounds))

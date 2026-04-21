@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, punctuated::Punctuated, Attribute, ItemStruct, Meta, Token};
+use syn::{Attribute, ItemStruct, Meta, Token, parse_macro_input, punctuated::Punctuated};
 
 #[proc_macro_attribute]
 pub fn id(_args: TokenStream, input: TokenStream) -> TokenStream {

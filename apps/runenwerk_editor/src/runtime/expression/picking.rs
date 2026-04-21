@@ -12,11 +12,7 @@ pub fn build_picking_expression_frame(
     hit: EditorPickingHit,
     source_version: RealityVersion,
 ) -> PickingExpressionFrame {
-    PickingExpressionFrame::new(
-        source_version,
-        map_picking_target(hit.target),
-        hit.distance,
-    )
+    PickingExpressionFrame::new(source_version, map_picking_target(hit.target), hit.distance)
 }
 
 pub fn viewport_hit_from_picking_expression(frame: &PickingExpressionFrame) -> ViewportHitResult {

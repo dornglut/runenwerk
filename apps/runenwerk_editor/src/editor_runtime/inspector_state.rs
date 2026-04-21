@@ -63,7 +63,10 @@ impl EditorInspectorUiState {
         ));
     }
 
-    pub fn update_field_draft(&mut self, value: InspectorEditValue) -> Result<(), EditorMutationError> {
+    pub fn update_field_draft(
+        &mut self,
+        value: InspectorEditValue,
+    ) -> Result<(), EditorMutationError> {
         let draft = self
             .active_draft
             .as_mut()

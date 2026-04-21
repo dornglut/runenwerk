@@ -1,15 +1,14 @@
+use editor_viewport::{
+    ArtifactObservationFrame, ExpressionDimensions, ProducerHealth, ProductAvailabilityState,
+};
 use engine::WindowState;
 use engine::plugins::render::{
-    EditorPickingTarget, UiFontAtlasResource,
-    UiFrameProducerId, UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
-    UiFrameSubmissionRegistryResource,
+    EditorPickingTarget, UiFontAtlasResource, UiFrameProducerId, UiFrameRoute, UiFrameSubmission,
+    UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
     ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::{Res, ResMut};
 use scene::LocalTransform;
-use editor_viewport::{
-    ArtifactObservationFrame, ExpressionDimensions, ProductAvailabilityState, ProducerHealth,
-};
 use ui_math::UiRect;
 use ui_render_data::{
     RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
@@ -23,9 +22,9 @@ use crate::runtime::resources::{
 };
 use crate::runtime::viewport::{
     ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
-    ViewportPickingResultsResource, ViewportPresentationStateResource, ViewportProductRegistryResource,
-    ViewportSurfaceSetResource, build_surface_binding_registry, initial_presentation_state,
-    initial_product_descriptors,
+    ViewportPickingResultsResource, ViewportPresentationStateResource,
+    ViewportProductRegistryResource, ViewportSurfaceSetResource, build_surface_binding_registry,
+    initial_presentation_state, initial_product_descriptors,
 };
 
 const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
@@ -116,8 +115,9 @@ pub fn submit_editor_frame_system(
     let debug_stage_changed = viewport_render.set_debug_stage(debug_stage);
     let root_probe_changed = viewport_render.set_root_background_opaque(root_background_opaque);
     let shell_scale_changed = viewport_render.set_effective_shell_scale(shell_scale);
-    let contradiction_active = picking_hits_entity_or_component(&viewport_picking_results, active_viewport_id)
-        && viewport_render.scene_should_be_invisible();
+    let contradiction_active =
+        picking_hits_entity_or_component(&viewport_picking_results, active_viewport_id)
+            && viewport_render.scene_should_be_invisible();
     let should_report_contradiction =
         viewport_render.should_report_visibility_contradiction(contradiction_active);
     let branch_trace_enabled = viewport_branch_trace_enabled();
@@ -231,8 +231,11 @@ pub fn sync_viewport_presentation_products_system(
         ));
     }
 
-    let viewport_id_set = canonical_viewport_ids.into_iter().collect::<std::collections::BTreeSet<_>>();
-    viewport_products_registry.retain_viewports(|viewport_id| viewport_id_set.contains(&viewport_id));
+    let viewport_id_set = canonical_viewport_ids
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    viewport_products_registry
+        .retain_viewports(|viewport_id| viewport_id_set.contains(&viewport_id));
     viewport_presentations.retain_viewports(|viewport_id| viewport_id_set.contains(&viewport_id));
     viewport_observations.retain_viewports(|viewport_id| viewport_id_set.contains(&viewport_id));
 

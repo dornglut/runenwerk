@@ -65,12 +65,11 @@ impl ViewportInteractionController {
                     state.clear();
                 }
                 ViewportHitTarget::GizmoAxis(axis) => {
-                    let entity = app
-                        .runtime()
-                        .selected_entity()
-                        .ok_or(EditorMutationError::session_rejected(
+                    let entity = app.runtime().selected_entity().ok_or(
+                        EditorMutationError::session_rejected(
                             "cannot start gizmo drag without selected entity",
-                        ))?;
+                        ),
+                    )?;
 
                     let translate_axis = map_gizmo_axis(axis)?;
                     ViewportToolController::dispatch(
@@ -130,6 +129,8 @@ fn map_gizmo_axis(axis: &'static str) -> Result<TranslateAxis, EditorMutationErr
         "x" | "X" => Ok(TranslateAxis::X),
         "y" | "Y" => Ok(TranslateAxis::Y),
         "z" | "Z" => Ok(TranslateAxis::Z),
-        _ => Err(EditorMutationError::runtime_rejected("unsupported gizmo axis")),
+        _ => Err(EditorMutationError::runtime_rejected(
+            "unsupported gizmo axis",
+        )),
     }
 }

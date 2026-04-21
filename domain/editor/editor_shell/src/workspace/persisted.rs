@@ -32,7 +32,6 @@ pub struct PersistedPanelHostNodeV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PersistedPanelHostKindV1 {
     SplitHost {
         axis: PersistedWorkspaceSplitAxisV1,
@@ -97,7 +96,6 @@ pub enum PersistedToolSurfaceKindV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PersistedToolSurfaceMountV1 {
     Unmounted,
     Mounted { panel_id: u64 },

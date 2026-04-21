@@ -3,7 +3,8 @@
 
 use editor_viewport::{ExpressionProductId, ViewportId};
 use ui_render_data::{
-    ViewportSurfaceBinding, ViewportSurfaceBindingRegistry, ViewportSurfaceSlot as UiViewportSurfaceSlot,
+    ViewportSurfaceBinding, ViewportSurfaceBindingRegistry,
+    ViewportSurfaceSlot as UiViewportSurfaceSlot,
 };
 
 use crate::runtime::viewport::{
@@ -12,7 +13,9 @@ use crate::runtime::viewport::{
     ViewportSurfaceSlot,
 };
 
-pub fn resolve_product_to_surface_slot(product_id: ExpressionProductId) -> Option<ViewportSurfaceSlot> {
+pub fn resolve_product_to_surface_slot(
+    product_id: ExpressionProductId,
+) -> Option<ViewportSurfaceSlot> {
     if product_id == PRODUCT_ID_SCENE_COLOR {
         Some(ViewportSurfaceSlot::PrimaryColor)
     } else if product_id == PRODUCT_ID_PICKING_IDS {
@@ -91,8 +94,7 @@ mod tests {
     use super::*;
     use crate::runtime::viewport::{
         EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS,
-        VIEWPORT_RESOURCE_SCENE_COLOR, ViewportSurfaceHandle,
-        initial_presentation_state,
+        VIEWPORT_RESOURCE_SCENE_COLOR, ViewportSurfaceHandle, initial_presentation_state,
     };
 
     #[test]

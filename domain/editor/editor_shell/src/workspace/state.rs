@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     PanelHostId, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WorkspaceId,
-    WorkspaceIdentityAllocator,
+    WorkspaceIdentityAllocator, WorkspaceIdentitySeed,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,8 +112,23 @@ pub struct WorkspaceState {
 pub enum WorkspaceStateError {
     MissingRootHost(PanelHostId),
     MissingHost(PanelHostId),
+    DuplicateHost(PanelHostId),
     MissingTabStack(TabStackId),
+    DuplicateTabStack(TabStackId),
     MissingPanel(PanelInstanceId),
+    PanelNotInTabStack {
+        panel_id: PanelInstanceId,
+        tab_stack_id: TabStackId,
+    },
+    PanelAlreadyInTabStack {
+        panel_id: PanelInstanceId,
+        tab_stack_id: TabStackId,
+    },
+    TabStackInsertIndexOutOfBounds {
+        tab_stack_id: TabStackId,
+        index: usize,
+        len: usize,
+    },
     MissingToolSurface(ToolSurfaceInstanceId),
     DuplicatePanelInTabStacks(PanelInstanceId),
     ActivePanelNotInStack {
@@ -151,10 +166,36 @@ impl std::fmt::Display for WorkspaceStateError {
         match self {
             Self::MissingRootHost(host_id) => write!(f, "missing root host: {host_id:?}"),
             Self::MissingHost(host_id) => write!(f, "missing host: {host_id:?}"),
+            Self::DuplicateHost(host_id) => write!(f, "duplicate host id: {host_id:?}"),
             Self::MissingTabStack(tab_stack_id) => {
                 write!(f, "missing tab stack: {tab_stack_id:?}")
             }
+            Self::DuplicateTabStack(tab_stack_id) => {
+                write!(f, "duplicate tab stack id: {tab_stack_id:?}")
+            }
             Self::MissingPanel(panel_id) => write!(f, "missing panel: {panel_id:?}"),
+            Self::PanelNotInTabStack {
+                panel_id,
+                tab_stack_id,
+            } => write!(
+                f,
+                "panel {panel_id:?} not present in tab stack {tab_stack_id:?}",
+            ),
+            Self::PanelAlreadyInTabStack {
+                panel_id,
+                tab_stack_id,
+            } => write!(
+                f,
+                "panel {panel_id:?} already present in tab stack {tab_stack_id:?}",
+            ),
+            Self::TabStackInsertIndexOutOfBounds {
+                tab_stack_id,
+                index,
+                len,
+            } => write!(
+                f,
+                "tab stack {tab_stack_id:?} insert index {index} is out of bounds for len {len}",
+            ),
             Self::MissingToolSurface(tool_surface_id) => {
                 write!(f, "missing tool surface: {tool_surface_id:?}")
             }
@@ -466,6 +507,44 @@ impl WorkspaceState {
         tool_surface_id: ToolSurfaceInstanceId,
     ) -> Option<&ToolSurfaceState> {
         self.tool_surfaces_by_id.get(&tool_surface_id)
+    }
+
+    pub fn next_identity_seed(&self) -> WorkspaceIdentitySeed {
+        WorkspaceIdentitySeed {
+            next_workspace_id: self.workspace_id.raw().saturating_add(1).max(1),
+            next_panel_host_id: self
+                .hosts_by_id
+                .keys()
+                .map(|id| id.raw())
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1)
+                .max(1),
+            next_panel_instance_id: self
+                .panels_by_id
+                .keys()
+                .map(|id| id.raw())
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1)
+                .max(1),
+            next_tool_surface_instance_id: self
+                .tool_surfaces_by_id
+                .keys()
+                .map(|id| id.raw())
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1)
+                .max(1),
+            next_tab_stack_id: self
+                .tab_stacks_by_id
+                .keys()
+                .map(|id| id.raw())
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1)
+                .max(1),
+        }
     }
 
     pub fn validate_integrity(&self) -> Result<(), WorkspaceStateError> {

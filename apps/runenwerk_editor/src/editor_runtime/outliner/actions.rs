@@ -1,6 +1,6 @@
+use editor_core::EditorMutationError;
 use editor_core::{EntityId, SelectionTarget};
 use editor_inspector::InspectTarget;
-use editor_core::EditorMutationError;
 
 use crate::editor_runtime::{
     RunenwerkEditorRuntime, clear_selection_with_origin, select_single_entity_with_origin,

@@ -41,6 +41,24 @@ Because of that, the next order should prioritize identity doctrine and migratio
 
 ---
 
+## Workspace Identity Migration Branch Roadmap
+
+Branch scope: `workspace identity contract + migration map` implementation.
+
+### Completed in this branch
+- canonical `WorkspaceState` projection/reducer identity foundation
+- Step 7 identity-safe docking/tab structural behavior
+
+### Current post-Step-7 target track
+- drag/drop UX behavior over structural-id routing
+- floating host behavior over canonical workspace graph
+- workspace layout persistence workflows (save/load) without singleton fallback routing
+
+### Merge target
+- merge this branch into `main` after compile/test/build checks pass for `editor_shell` and `runenwerk_editor`
+
+---
+
 ## Recommended Order
 
 ## Phase 1 — Viewport backend cleanup (completed)
@@ -53,7 +71,7 @@ Completed: viewport backend/render ownership was aligned with the established ar
 ### Completion record
 See:
 
-- [Runenwerk - Phase 1 Plan (Completed)](./runenwerk_phase_1_plan.md)
+- [Runenwerk - Phase 1 Plan (Completed)](./completed/runenwerk_phase_1_plan.md)
 
 ---
 

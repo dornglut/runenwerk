@@ -2,7 +2,7 @@ use editor_core::{ChangeOrigin, GoverningChangeError, RatifiedChange, SemanticOp
 
 use crate::editor_runtime::parity::assert_scene_projection_parity;
 use crate::editor_runtime::{
-    sync_selection_after_scene_change, RetainedSceneTransaction, RunenwerkEditorRuntime,
+    RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
 };
 
 use crate::editor_runtime::commands::ratification::ratify_scene_change;

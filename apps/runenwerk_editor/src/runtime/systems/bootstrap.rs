@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use editor_core::RealityVersion;
 use editor_viewport::{
-    ArtifactObservationFrame, ExpressionDimensions, ProductAvailabilityState, ProducerHealth,
+    ArtifactObservationFrame, ExpressionDimensions, ProducerHealth, ProductAvailabilityState,
 };
 use engine::plugins::render::ShaderRegistryResource;
 use engine::runtime::ResMut;
@@ -10,10 +10,12 @@ use engine::runtime::ResMut;
 use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS,
-    VIEWPORT_RESOURCE_SCENE_COLOR, ViewportArtifactObservationResource, ViewportPickingResultsResource,
+    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, VIEWPORT_RESOURCE_OVERLAY,
+    VIEWPORT_RESOURCE_PICKING_IDS, VIEWPORT_RESOURCE_SCENE_COLOR,
+    ViewportArtifactObservationResource, ViewportPickingResultsResource,
     ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceHandle,
-    ViewportSurfaceSetResource, ViewportSurfaceSlot, initial_presentation_state, initial_product_descriptors,
+    ViewportSurfaceSetResource, ViewportSurfaceSlot, initial_presentation_state,
+    initial_product_descriptors,
 };
 
 pub fn bootstrap_editor_demo_system(
@@ -34,7 +36,10 @@ pub fn seed_viewport_runtime_contracts_system(
     mut viewport_observations: ResMut<ViewportArtifactObservationResource>,
     mut viewport_picking_results: ResMut<ViewportPickingResultsResource>,
 ) {
-    if viewport_surface_sets.surface_set(MAIN_VIEWPORT_ID).is_none() {
+    if viewport_surface_sets
+        .surface_set(MAIN_VIEWPORT_ID)
+        .is_none()
+    {
         viewport_surface_sets.set_surface(
             MAIN_VIEWPORT_ID,
             ViewportSurfaceSlot::PrimaryColor,
@@ -75,7 +80,8 @@ pub fn seed_viewport_runtime_contracts_system(
         let mut frame = ArtifactObservationFrame::new(MAIN_VIEWPORT_ID, RealityVersion(0));
         frame.available_products = descriptors.clone();
         frame.selected_primary_product_id = Some(presentation_state.selected_primary_product_id);
-        frame.selected_overlay_product_ids = presentation_state.selected_overlay_product_ids.clone();
+        frame.selected_overlay_product_ids =
+            presentation_state.selected_overlay_product_ids.clone();
 
         for descriptor in &descriptors {
             frame

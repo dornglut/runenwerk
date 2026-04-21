@@ -41,8 +41,11 @@ impl EditorViewportDebugStage {
             "viewport_uv_gradient" | "viewport-uv-gradient" | "uv_gradient" | "gradient" => {
                 Self::ViewportUvGradient
             }
-            "primitive_availability" | "primitive-availability" | "primitive_gate"
-            | "primitive-gate" | "primitivegate" => Self::PrimitiveAvailability,
+            "primitive_availability"
+            | "primitive-availability"
+            | "primitive_gate"
+            | "primitive-gate"
+            | "primitivegate" => Self::PrimitiveAvailability,
             "picking_hit_miss" | "picking-hit-miss" | "hit_miss" | "hit-miss" | "hitmiss" => {
                 Self::PickingHitMiss
             }

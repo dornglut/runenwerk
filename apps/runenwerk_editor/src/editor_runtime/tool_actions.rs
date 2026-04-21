@@ -9,24 +9,21 @@ pub fn commit_translation_preview_into_local_transform(
     entity: EntityId,
     delta: scene::Vec3Value,
 ) -> Result<(), EditorMutationError> {
-    let local_transform_type = find_registered_component_type::<LocalTransform>(runtime)
-        .ok_or(EditorMutationError::runtime_rejected(
-            "LocalTransform is not registered in editor runtime",
-        ))?;
+    let local_transform_type = find_registered_component_type::<LocalTransform>(runtime).ok_or(
+        EditorMutationError::runtime_rejected("LocalTransform is not registered in editor runtime"),
+    )?;
 
-    let ecs_entity = runtime
-        .ids()
-        .resolve_entity(entity)
-        .ok_or(EditorMutationError::runtime_rejected(
-            "editor entity is not registered",
-        ))?;
+    let ecs_entity =
+        runtime
+            .ids()
+            .resolve_entity(entity)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "editor entity is not registered",
+            ))?;
 
-    let current = runtime
-        .world()
-        .get::<LocalTransform>(ecs_entity)
-        .ok_or(EditorMutationError::runtime_rejected(
-            "entity does not have LocalTransform",
-        ))?;
+    let current = runtime.world().get::<LocalTransform>(ecs_entity).ok_or(
+        EditorMutationError::runtime_rejected("entity does not have LocalTransform"),
+    )?;
 
     let next_x = current.translation.x + delta.x;
     let next_y = current.translation.y + delta.y;

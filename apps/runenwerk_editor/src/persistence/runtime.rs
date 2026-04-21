@@ -9,8 +9,8 @@ use editor_scene::{SceneEntitySnapshot, SceneRuntime};
 use scene::{LocalTransform, QuatValue, Vec3Value};
 
 use crate::editor_runtime::{
-    EditorPrimitive, EditorPrimitiveKind, RunenwerkEditorRuntime,
-    EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, LOCAL_TRANSFORM_COMPONENT_TYPE_ID,
+    EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, EditorPrimitive, EditorPrimitiveKind,
+    LOCAL_TRANSFORM_COMPONENT_TYPE_ID, RunenwerkEditorRuntime,
 };
 
 pub fn scene_file_from_runtime(runtime: &RunenwerkEditorRuntime) -> SceneFileV2 {

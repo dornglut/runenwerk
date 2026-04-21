@@ -29,7 +29,8 @@ fn viewport_presentation_state_is_product_addressed() {
 
 #[test]
 fn phase_one_product_kind_subset_is_locked() {
-    let descriptors = initial_product_descriptors(ExpressionDimensions::new(1280, 720), RealityVersion(1));
+    let descriptors =
+        initial_product_descriptors(ExpressionDimensions::new(1280, 720), RealityVersion(1));
     let kinds = descriptors
         .iter()
         .map(|descriptor| descriptor.kind)
@@ -60,7 +61,12 @@ fn viewport_product_descriptor_requires_explicit_product_identity() {
 
 #[test]
 fn runtime_viewport_resources_start_empty_before_bootstrap() {
-    assert!(ViewportSurfaceSetResource::default().viewport_ids().next().is_none());
+    assert!(
+        ViewportSurfaceSetResource::default()
+            .viewport_ids()
+            .next()
+            .is_none()
+    );
     assert!(ViewportProductRegistryResource::default().is_empty());
     assert!(ViewportPresentationStateResource::default().is_empty());
     assert!(ViewportArtifactObservationResource::default().is_empty());
@@ -129,8 +135,14 @@ fn derived_bindings_support_multiple_viewports_without_main_fallback() {
         .get(viewport_b.0, UiViewportSurfaceSlot::Primary)
         .expect("viewport B should retain its primary binding");
 
-    assert_eq!(primary_a.resource_id.as_str(), VIEWPORT_RESOURCE_SCENE_COLOR);
-    assert_eq!(primary_b.resource_id.as_str(), VIEWPORT_RESOURCE_PICKING_IDS);
+    assert_eq!(
+        primary_a.resource_id.as_str(),
+        VIEWPORT_RESOURCE_SCENE_COLOR
+    );
+    assert_eq!(
+        primary_b.resource_id.as_str(),
+        VIEWPORT_RESOURCE_PICKING_IDS
+    );
     assert!(
         registry
             .get(MAIN_VIEWPORT_ID.0, UiViewportSurfaceSlot::Primary)
@@ -210,7 +222,12 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
         .resources
         .resources
         .iter()
-        .filter(|resource| matches!(resource, engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)))
+        .filter(|resource| {
+            matches!(
+                resource,
+                engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)
+            )
+        })
         .count();
     assert!(
         color_target_count >= 3,
