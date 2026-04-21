@@ -388,14 +388,30 @@ fn routed_viewport_bounds(
     let runtime_state = host.shell_state.runtime().state();
     let viewport_id = runtime_state
         .captured_widget
-        .and_then(|widget| layout_map.viewport_for_widget(widget))
+        .and_then(|widget| {
+            structural_context_for_widget(&host.shell_state, widget)
+                .and_then(|context| layout_map.viewport_for_structural_context(context))
+        })
         .or_else(|| {
             runtime_state
                 .hovered_widget
-                .and_then(|widget| layout_map.viewport_for_widget(widget))
+                .and_then(|widget| {
+                    structural_context_for_widget(&host.shell_state, widget)
+                        .and_then(|context| layout_map.viewport_for_structural_context(context))
+                })
         })?;
     let bounds = layout_map.entry_for_viewport(viewport_id)?.bounds;
     Some((viewport_id, bounds))
+}
+
+fn structural_context_for_widget(
+    shell_state: &crate::shell::RunenwerkEditorShellState,
+    widget_id: editor_shell::WidgetId,
+) -> Option<editor_shell::StructuralWidgetRoutingContext> {
+    shell_state
+        .last_projection_artifacts()
+        .and_then(|artifacts| artifacts.widget_structural_context_by_id.get(&widget_id))
+        .copied()
 }
 
 #[cfg(test)]

@@ -19,12 +19,14 @@ use crate::runtime::viewport::{
 use crate::runtime::{
     build_viewport_picking_product_frame, viewport_hit_from_picking_product,
 };
+use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch_shell_command;
 
 #[derive(Debug, Clone, Copy)]
 struct ViewportPointerRoute {
     viewport_id: ViewportId,
     host_widget_id: editor_shell::WidgetId,
+    structural_context: editor_shell::StructuralWidgetRoutingContext,
     local_position: UiPoint,
 }
 
@@ -101,7 +103,14 @@ pub fn dispatch_editor_input_system(
 
         let pointer_route = outcome
             .as_ref()
-            .and_then(|value| viewport_pointer_route(&viewport_layout_map, &value.dispatch, position));
+            .and_then(|value| {
+                viewport_pointer_route(
+                    &host.shell_state,
+                    &viewport_layout_map,
+                    &value.dispatch,
+                    position,
+                )
+            });
         if let Some(route) = pointer_route {
             dispatch_viewport_pointer_down(&mut host, &picking_results, position, route);
         } else if host.app.debug_logs_enabled() {
@@ -115,7 +124,7 @@ pub fn dispatch_editor_input_system(
     if input.left_mouse_down()
         && host.app.viewport_interaction_state().drag_in_progress()
         && position != previous
-        && viewport_capture_active(&host, &viewport_layout_map)
+        && viewport_capture_active(&host.shell_state, &viewport_layout_map)
     {
         let amount = position.x - previous.x;
         if amount != 0.0
@@ -142,7 +151,14 @@ pub fn dispatch_editor_input_system(
         );
         let routed_release = outcome
             .as_ref()
-            .and_then(|value| viewport_pointer_route(&viewport_layout_map, &value.dispatch, position))
+            .and_then(|value| {
+                viewport_pointer_route(
+                    &host.shell_state,
+                    &viewport_layout_map,
+                    &value.dispatch,
+                    position,
+                )
+            })
             .is_some();
 
         if host.app.viewport_interaction_state().drag_in_progress()
@@ -170,6 +186,7 @@ fn dispatch_shortcuts(
             ShellCommand::Undo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            None,
         )
     {
         eprintln!("undo shortcut failed: {error}");
@@ -181,6 +198,7 @@ fn dispatch_shortcuts(
             ShellCommand::Redo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            None,
         )
     {
         eprintln!("redo shortcut failed: {error}");
@@ -194,6 +212,7 @@ fn dispatch_shortcuts(
             ShellCommand::ActivateSelectTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            None,
         )
         {
             eprintln!("select-tool shortcut failed: {error}");
@@ -208,6 +227,7 @@ fn dispatch_shortcuts(
             ShellCommand::ActivateTranslateTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
+            None,
         )
         {
             eprintln!("translate-tool shortcut failed: {error}");
@@ -257,30 +277,49 @@ fn dispatch_pointer_event(
 }
 
 fn viewport_pointer_route(
+    shell_state: &RunenwerkEditorShellState,
     layout_map: &ViewportLayoutMapResource,
     dispatch: &editor_shell::UiInputDispatchResult,
     position: UiPoint,
 ) -> Option<ViewportPointerRoute> {
     let host_widget_id = dispatch.target?;
-    let viewport_id = layout_map.viewport_for_widget(host_widget_id)?;
+    let structural_context = structural_context_for_widget(shell_state, host_widget_id)?;
+    let viewport_id = layout_map.viewport_for_structural_context(structural_context)?;
     let entry = layout_map.entry_for_viewport(viewport_id)?;
+    if entry.structural_context != structural_context {
+        return None;
+    }
     Some(ViewportPointerRoute {
         viewport_id,
         host_widget_id,
+        structural_context,
         local_position: UiPoint::new(position.x - entry.bounds.x, position.y - entry.bounds.y),
     })
 }
 
 fn viewport_capture_active(
-    host: &EditorHostResource,
+    shell_state: &RunenwerkEditorShellState,
     layout_map: &ViewportLayoutMapResource,
 ) -> bool {
-    host.shell_state
+    shell_state
         .runtime()
         .state()
         .captured_widget
-        .and_then(|widget_id| layout_map.viewport_for_widget(widget_id))
+        .and_then(|widget_id| {
+            structural_context_for_widget(shell_state, widget_id)
+                .and_then(|context| layout_map.viewport_for_structural_context(context))
+        })
         .is_some()
+}
+
+fn structural_context_for_widget(
+    shell_state: &RunenwerkEditorShellState,
+    widget_id: editor_shell::WidgetId,
+) -> Option<editor_shell::StructuralWidgetRoutingContext> {
+    shell_state
+        .last_projection_artifacts()
+        .and_then(|artifacts| artifacts.widget_structural_context_by_id.get(&widget_id))
+        .copied()
 }
 
 fn window_bounds(window: &WindowState) -> UiRect {
@@ -306,9 +345,12 @@ fn dispatch_viewport_pointer_down(
 
     if host.app.debug_logs_enabled() {
         host.app.append_console_line(format!(
-            "[input] viewport pointer-down viewport={} widget={} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3} expr_frame={} sel_before={:?}",
+            "[input] viewport pointer-down viewport={} widget={} panel={} tab_stack={} tool_surface={:?} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3} expr_frame={} sel_before={:?}",
             route.viewport_id.0,
             route.host_widget_id.0,
+            route.structural_context.panel_instance_id.raw(),
+            route.structural_context.tab_stack_id.raw(),
+            route.structural_context.active_tool_surface.map(|value| value.raw()),
             position.x,
             position.y,
             route.local_position.x,

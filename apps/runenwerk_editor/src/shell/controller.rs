@@ -49,7 +49,9 @@ impl RunenwerkEditorShellController {
         viewport_products: Option<&ArtifactObservationFrame>,
     ) -> UiTree {
         let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
-        let tree = build_editor_shell(&view_model, theme, shell_state.workspace_state());
+        let build_result = build_editor_shell(&view_model, theme, shell_state.workspace_state());
+        let tree = build_result.tree;
+        shell_state.cache_projection_artifacts(build_result.projection_artifacts);
         shell_state.set_last_tree(tree.clone());
         tree
     }
@@ -158,7 +160,10 @@ impl RunenwerkEditorShellController {
         viewport_observations: Option<&ViewportArtifactObservationResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
         let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
-        let tree = build_editor_shell(&view_model, theme, shell_state.workspace_state());
+        let build_result = build_editor_shell(&view_model, theme, shell_state.workspace_state());
+        let tree = build_result.tree.clone();
+        let projection_artifacts =
+            shell_state.cache_projection_artifacts(build_result.projection_artifacts);
         shell_state.set_last_tree(tree.clone());
         shell_state.set_last_bounds(bounds);
 
@@ -192,9 +197,13 @@ impl RunenwerkEditorShellController {
             }
         }
 
-        let commands = map_interactions_to_shell_commands(&outcome.interactions, &view_model);
+        let commands = map_interactions_to_shell_commands(
+            &outcome.interactions,
+            &projection_artifacts,
+        );
         Self::dispatch_commands(
             app,
+            shell_state,
             commands,
             viewport_presentations.as_deref_mut(),
             viewport_observations,
@@ -205,16 +214,24 @@ impl RunenwerkEditorShellController {
 
     fn dispatch_commands(
         app: &mut RunenwerkEditorApp,
+        shell_state: &RunenwerkEditorShellState,
         commands: Vec<ShellCommand>,
         mut viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
     ) -> Result<(), editor_core::EditorMutationError> {
         for command in commands {
+            if let Some(projection_epoch) = command.projection_epoch()
+                && !shell_state.is_projection_epoch_current(projection_epoch)
+            {
+                continue;
+            }
+
             dispatch_shell_command(
                 app,
                 command,
                 viewport_presentations.as_deref_mut(),
                 viewport_observations,
+                Some(shell_state.current_projection_epoch()),
             )?;
         }
 

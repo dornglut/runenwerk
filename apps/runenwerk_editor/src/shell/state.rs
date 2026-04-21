@@ -1,6 +1,6 @@
 use editor_shell::{
-    UiRuntime, UiTree, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
-    WorkspaceStateError, reduce_workspace,
+    ShellProjectionArtifacts, UiRuntime, UiTree, WorkspaceId, WorkspaceIdentityAllocator,
+    WorkspaceMutation, WorkspaceState, WorkspaceStateError, reduce_workspace,
 };
 use ui_math::UiRect;
 
@@ -9,6 +9,8 @@ pub struct RunenwerkEditorShellState {
     runtime: UiRuntime,
     last_tree: Option<UiTree>,
     last_bounds: Option<UiRect>,
+    last_projection_artifacts: Option<ShellProjectionArtifacts>,
+    projection_epoch: u64,
     identity_allocator: WorkspaceIdentityAllocator,
     workspace_state: WorkspaceState,
 }
@@ -24,6 +26,8 @@ impl Default for RunenwerkEditorShellState {
             runtime: UiRuntime::new(),
             last_tree: None,
             last_bounds: None,
+            last_projection_artifacts: None,
+            projection_epoch: 0,
             identity_allocator,
             workspace_state,
         }
@@ -51,6 +55,24 @@ impl RunenwerkEditorShellState {
         self.last_tree = Some(tree);
     }
 
+    pub fn last_projection_artifacts(&self) -> Option<&ShellProjectionArtifacts> {
+        self.last_projection_artifacts.as_ref()
+    }
+
+    pub fn set_last_projection_artifacts(&mut self, artifacts: ShellProjectionArtifacts) {
+        let _ = self.cache_projection_artifacts(artifacts);
+    }
+
+    pub fn cache_projection_artifacts(
+        &mut self,
+        mut artifacts: ShellProjectionArtifacts,
+    ) -> ShellProjectionArtifacts {
+        self.projection_epoch = self.projection_epoch.saturating_add(1);
+        artifacts.projection_epoch = self.projection_epoch;
+        self.last_projection_artifacts = Some(artifacts.clone());
+        artifacts
+    }
+
     pub fn last_bounds(&self) -> Option<UiRect> {
         self.last_bounds
     }
@@ -71,16 +93,30 @@ impl RunenwerkEditorShellState {
         &self.identity_allocator
     }
 
+    pub fn current_projection_epoch(&self) -> u64 {
+        self.projection_epoch
+    }
+
+    pub fn is_projection_epoch_current(&self, projection_epoch: u64) -> bool {
+        self.last_projection_artifacts
+            .as_ref()
+            .map(|artifacts| artifacts.projection_epoch == projection_epoch)
+            .unwrap_or(false)
+    }
+
     pub fn apply_workspace_mutation(
         &mut self,
         op: WorkspaceMutation,
     ) -> Result<(), WorkspaceStateError> {
         self.workspace_state = reduce_workspace(&self.workspace_state, op)?;
+        self.clear_cached_projection();
         Ok(())
     }
 
     pub fn clear_cached_projection(&mut self) {
+        self.projection_epoch = self.projection_epoch.saturating_add(1);
         self.last_tree = None;
         self.last_bounds = None;
+        self.last_projection_artifacts = None;
     }
 }

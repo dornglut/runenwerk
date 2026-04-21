@@ -1,15 +1,24 @@
 //! File: domain/editor/editor_shell/src/workspace/projection.rs
 //! Purpose: Pure projection from canonical workspace graph into fixed shell composition slots.
 
+use std::collections::BTreeMap;
+
 use crate::{
+    CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
+    CONSOLE_SCROLL_WIDGET_ID, INSPECTOR_BODY_WIDGET_ID, INSPECTOR_LIST_WIDGET_ID,
+    INSPECTOR_PANEL_WIDGET_ID, INSPECTOR_SCROLL_WIDGET_ID, OUTLINER_BODY_WIDGET_ID,
+    OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID, OUTLINER_SCROLL_WIDGET_ID,
     PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId, PanelKind, TabStackHostState,
-    ToolSurfaceInstanceId, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+    TabStackId, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID, VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
+    VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+    WidgetId, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProjectedPanelSlot {
     pub panel_instance_id: PanelInstanceId,
     pub active_tool_surface: Option<ToolSurfaceInstanceId>,
+    pub tab_stack_id: TabStackId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -21,6 +30,73 @@ pub struct FixedLayoutProjection {
     pub viewport: ProjectedPanelSlot,
     pub inspector: ProjectedPanelSlot,
     pub console: ProjectedPanelSlot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StructuralWidgetRoutingContext {
+    pub panel_instance_id: PanelInstanceId,
+    pub active_tool_surface: Option<ToolSurfaceInstanceId>,
+    pub tab_stack_id: TabStackId,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkspaceProjectionArtifact {
+    pub fixed_layout: FixedLayoutProjection,
+    pub widget_context_by_id: BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
+}
+
+pub fn project_workspace_for_shell(
+    workspace_state: &WorkspaceState,
+) -> Result<WorkspaceProjectionArtifact, WorkspaceStateError> {
+    let fixed_layout = project_fixed_layout(workspace_state)?;
+    let mut widget_context_by_id = BTreeMap::new();
+
+    register_panel_widget_contexts(
+        &mut widget_context_by_id,
+        fixed_layout.outliner,
+        &[
+            OUTLINER_PANEL_WIDGET_ID,
+            OUTLINER_BODY_WIDGET_ID,
+            OUTLINER_LIST_WIDGET_ID,
+            OUTLINER_SCROLL_WIDGET_ID,
+        ],
+    );
+    register_panel_widget_contexts(
+        &mut widget_context_by_id,
+        fixed_layout.viewport,
+        &[
+            VIEWPORT_PANEL_WIDGET_ID,
+            VIEWPORT_BODY_WIDGET_ID,
+            VIEWPORT_CANVAS_WIDGET_ID,
+            VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
+            VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        ],
+    );
+    register_panel_widget_contexts(
+        &mut widget_context_by_id,
+        fixed_layout.inspector,
+        &[
+            INSPECTOR_PANEL_WIDGET_ID,
+            INSPECTOR_BODY_WIDGET_ID,
+            INSPECTOR_LIST_WIDGET_ID,
+            INSPECTOR_SCROLL_WIDGET_ID,
+        ],
+    );
+    register_panel_widget_contexts(
+        &mut widget_context_by_id,
+        fixed_layout.console,
+        &[
+            CONSOLE_PANEL_WIDGET_ID,
+            CONSOLE_BODY_WIDGET_ID,
+            CONSOLE_LIST_WIDGET_ID,
+            CONSOLE_SCROLL_WIDGET_ID,
+        ],
+    );
+
+    Ok(WorkspaceProjectionArtifact {
+        fixed_layout,
+        widget_context_by_id,
+    })
 }
 
 pub fn project_fixed_layout(
@@ -83,6 +159,22 @@ pub fn project_fixed_layout(
     })
 }
 
+fn register_panel_widget_contexts(
+    map: &mut BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
+    slot: ProjectedPanelSlot,
+    widget_ids: &[WidgetId],
+) {
+    let context = StructuralWidgetRoutingContext {
+        panel_instance_id: slot.panel_instance_id,
+        active_tool_surface: slot.active_tool_surface,
+        tab_stack_id: slot.tab_stack_id,
+    };
+
+    for widget_id in widget_ids {
+        map.insert(*widget_id, context);
+    }
+}
+
 fn split_host_with_axis(
     workspace_state: &WorkspaceState,
     host_id: PanelHostId,
@@ -107,7 +199,7 @@ fn projected_panel_from_tab_host(
     let host = workspace_state
         .host(host_id)
         .ok_or(WorkspaceStateError::MissingHost(host_id))?;
-    let tab_host = match host {
+    let tab_stack_id = match host {
         PanelHostNode {
             kind: PanelHostKind::TabStackHost(TabStackHostState { tab_stack_id }),
             ..
@@ -124,8 +216,8 @@ fn projected_panel_from_tab_host(
     };
 
     let stack = workspace_state
-        .tab_stack(tab_host)
-        .ok_or(WorkspaceStateError::MissingTabStack(tab_host))?;
+        .tab_stack(tab_stack_id)
+        .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
     let panel_id = stack
         .active_panel
         .ok_or(WorkspaceStateError::ProjectionShapeMismatch(
@@ -147,6 +239,7 @@ fn projected_panel_from_tab_host(
     Ok(ProjectedPanelSlot {
         panel_instance_id: panel.id,
         active_tool_surface: panel.active_tool_surface,
+        tab_stack_id,
     })
 }
 
@@ -176,6 +269,37 @@ mod tests {
             projection.inspector.panel_instance_id,
             projection.console.panel_instance_id
         );
+    }
+
+    #[test]
+    fn projection_artifact_contains_panel_structural_context_for_built_widgets() {
+        let workspace = bootstrap_workspace();
+        let artifact = project_workspace_for_shell(&workspace).expect("projection should succeed");
+
+        let outliner_panel = artifact
+            .widget_context_by_id
+            .get(&OUTLINER_PANEL_WIDGET_ID)
+            .expect("outliner panel context should exist");
+        let outliner_list = artifact
+            .widget_context_by_id
+            .get(&OUTLINER_LIST_WIDGET_ID)
+            .expect("outliner list context should exist");
+        assert_eq!(outliner_panel, outliner_list);
+
+        let viewport_panel = artifact
+            .widget_context_by_id
+            .get(&VIEWPORT_PANEL_WIDGET_ID)
+            .expect("viewport panel context should exist");
+        assert_ne!(outliner_panel.panel_instance_id, viewport_panel.panel_instance_id);
+    }
+
+    #[test]
+    fn projection_artifact_is_stable_for_unchanged_workspace() {
+        let workspace = bootstrap_workspace();
+        let first = project_workspace_for_shell(&workspace).expect("projection should succeed");
+        let second = project_workspace_for_shell(&workspace).expect("projection should succeed");
+
+        assert_eq!(first, second);
     }
 
     #[test]

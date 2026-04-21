@@ -9,7 +9,9 @@ pub mod build_toolbar;
 pub mod build_viewport_panel;
 
 pub use build_console_panel::build_console_panel;
-pub use build_editor_shell::build_editor_shell;
+pub use build_editor_shell::{
+    EditorShellBuildResult, RoutedShellAction, ShellProjectionArtifacts, build_editor_shell,
+};
 pub use build_inspector_panel::build_inspector_panel;
 pub use build_outliner_panel::build_outliner_panel;
 pub use build_toolbar::build_toolbar;

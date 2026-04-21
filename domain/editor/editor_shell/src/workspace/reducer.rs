@@ -210,6 +210,19 @@ mod tests {
             .id
     }
 
+    fn tab_stack_id_by_panel_kind(state: &WorkspaceState, kind: PanelKind) -> TabStackId {
+        state
+            .tab_stacks_by_id
+            .values()
+            .find(|stack| {
+                stack.ordered_panels.iter().any(|panel| {
+                    state.panel(*panel).map(|value| value.panel_kind) == Some(kind)
+                })
+            })
+            .expect("tab stack for panel kind should exist")
+            .id
+    }
+
     #[test]
     fn identity_types_stay_distinct_from_runtime_viewport_identity() {
         let workspace = bootstrap_workspace();
@@ -328,16 +341,7 @@ mod tests {
     #[test]
     fn reducer_rejects_tab_stack_active_panel_outside_stack() {
         let workspace = bootstrap_workspace();
-        let outliner_stack = workspace
-            .tab_stacks_by_id
-            .values()
-            .find(|stack| {
-                stack.ordered_panels.iter().any(|panel| {
-                    workspace.panel(*panel).map(|p| p.panel_kind) == Some(PanelKind::Outliner)
-                })
-            })
-            .expect("outliner stack should exist")
-            .id;
+        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
         let inspector_panel = panel_id_by_kind(&workspace, PanelKind::Inspector);
 
         let error = reduce_workspace(
@@ -352,5 +356,88 @@ mod tests {
             error,
             WorkspaceStateError::ActivePanelNotInStack { .. }
         ));
+    }
+
+    #[test]
+    fn selected_tab_mutation_keeps_unrelated_structural_identity_stable() {
+        let workspace = bootstrap_workspace();
+        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
+        let viewport_panel_before = panel_id_by_kind(&workspace, PanelKind::Viewport);
+        let viewport_surface_before = workspace
+            .panel(viewport_panel_before)
+            .expect("viewport panel should exist")
+            .active_tool_surface;
+
+        let collapsed = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::SetTabStackActivePanel {
+                tab_stack_id: outliner_stack,
+                active_panel: None,
+            },
+        )
+        .expect("clearing active panel should preserve valid state");
+
+        let outliner_panel = panel_id_by_kind(&collapsed, PanelKind::Outliner);
+        let restored = reduce_workspace(
+            &collapsed,
+            WorkspaceMutation::SetTabStackActivePanel {
+                tab_stack_id: outliner_stack,
+                active_panel: Some(outliner_panel),
+            },
+        )
+        .expect("restoring active panel should preserve valid state");
+
+        let viewport_panel_after = panel_id_by_kind(&restored, PanelKind::Viewport);
+        let viewport_surface_after = restored
+            .panel(viewport_panel_after)
+            .expect("viewport panel should exist")
+            .active_tool_surface;
+
+        assert_eq!(viewport_panel_after, viewport_panel_before);
+        assert_eq!(viewport_surface_after, viewport_surface_before);
+    }
+
+    #[test]
+    fn panel_move_preconditions_preserve_panel_instance_identity() {
+        let workspace = bootstrap_workspace();
+        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
+        let inspector_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Inspector);
+        let outliner_panel = panel_id_by_kind(&workspace, PanelKind::Outliner);
+        let inspector_panel = panel_id_by_kind(&workspace, PanelKind::Inspector);
+
+        let removed_from_source = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::SetTabStackPanels {
+                tab_stack_id: outliner_stack,
+                ordered_panels: Vec::new(),
+                active_panel: None,
+            },
+        )
+        .expect("source stack should allow removing the panel");
+
+        let moved = reduce_workspace(
+            &removed_from_source,
+            WorkspaceMutation::SetTabStackPanels {
+                tab_stack_id: inspector_stack,
+                ordered_panels: vec![inspector_panel, outliner_panel],
+                active_panel: Some(inspector_panel),
+            },
+        )
+        .expect("destination stack should accept moved panel without identity rewrite");
+
+        let destination = moved
+            .tab_stack(inspector_stack)
+            .expect("destination stack should exist");
+        assert!(
+            destination.ordered_panels.contains(&outliner_panel),
+            "moved panel instance id must remain stable during structural reassignment",
+        );
+        assert_eq!(
+            moved
+                .panel(outliner_panel)
+                .expect("moved panel should still exist")
+                .id,
+            outliner_panel
+        );
     }
 }

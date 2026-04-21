@@ -90,10 +90,21 @@ pub fn submit_editor_frame_system(
     let viewport_bounds_changed =
         populate_viewport_render_state(app, &mut viewport_render, viewport_bounds);
     viewport_layout_map.clear();
-    if let Some(viewport_id) = active_viewport_id {
+    if let (Some(viewport_id), Some(structural_context)) = (
+        active_viewport_id,
+        shell_state
+            .last_projection_artifacts()
+            .and_then(|artifacts| {
+                artifacts
+                    .widget_structural_context_by_id
+                    .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+                    .copied()
+            }),
+    ) {
         viewport_layout_map.upsert_entry(ViewportLayoutEntry {
             viewport_id,
             host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+            structural_context,
             bounds: viewport_bounds,
         });
     }

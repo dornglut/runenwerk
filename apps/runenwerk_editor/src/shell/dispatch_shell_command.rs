@@ -28,7 +28,15 @@ pub fn dispatch_shell_command(
     command: ShellCommand,
     viewport_presentations: Option<&mut ViewportPresentationStateResource>,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
+    current_projection_epoch: Option<u64>,
 ) -> Result<(), EditorMutationError> {
+    if let (Some(command_epoch), Some(expected_epoch)) =
+        (command.projection_epoch(), current_projection_epoch)
+        && command_epoch != expected_epoch
+    {
+        return Ok(());
+    }
+
     app.runtime_mut().record_workflow_event(
         editor_core::WorkflowEventKind::ShellCommandDispatched {
             command: shell_command_label(&command),
@@ -81,12 +89,18 @@ pub fn dispatch_shell_command(
                 }
             ));
         }
-        ShellCommand::SelectOutlinerEntity { entity } => {
+        ShellCommand::SelectOutlinerEntity {
+            entity,
+            target: _,
+            projection_epoch: _,
+        } => {
             app.dispatch_outliner_command(OutlinerPanelCommand::SelectEntity { entity })?;
         }
         ShellCommand::SelectViewportProduct {
             viewport_id,
             product_id,
+            target: _,
+            projection_epoch: _,
         } => match (viewport_presentations, viewport_observations) {
             (Some(viewport_presentations), Some(viewport_observations)) => {
                 let selectable = viewport_observations
@@ -118,7 +132,11 @@ pub fn dispatch_shell_command(
         ShellCommand::ToggleViewportDetails => {
             app.toggle_viewport_details_visible();
         }
-        ShellCommand::ActivateInspectorField { index } => {
+        ShellCommand::ActivateInspectorField {
+            index,
+            target: _,
+            projection_epoch: _,
+        } => {
             activate_inspector_field(app, index)?;
         }
         ShellCommand::NoOp => {}
