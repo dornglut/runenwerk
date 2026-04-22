@@ -1,5 +1,6 @@
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionDimensions, ProducerHealth, ProductAvailabilityState,
+    ViewportId,
 };
 use engine::WindowState;
 use engine::plugins::render::{
@@ -52,7 +53,11 @@ pub fn submit_editor_frame_system(
         theme,
     } = &mut *host;
     let shell_theme = scaled_shell_theme(theme, window.scale_factor);
-    let viewport_products = viewport_observations.first_frame();
+    let viewport_products = resolve_structural_viewport_products(
+        shell_state,
+        &viewport_observations,
+        &tool_surface_bindings,
+    );
     let active_viewport_id = viewport_products.map(|value| value.viewport_id);
     let (expression_source_version, frame) = if debug_hardcoded_ui_frame_enabled() {
         let expression = editor_shell::ShellUiExpressionFrame::new(
@@ -403,6 +408,50 @@ fn viewport_bounds(
     layouts
         .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
         .map(|layout| layout.bounds)
+}
+
+fn resolve_structural_viewport_products<'a>(
+    shell_state: &crate::shell::RunenwerkEditorShellState,
+    viewport_observations: &'a ViewportArtifactObservationResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+) -> Option<&'a ArtifactObservationFrame> {
+    let viewport_id =
+        resolve_structural_viewport_id(shell_state, tool_surface_bindings).or_else(|| {
+            if shell_state.last_projection_artifacts().is_none() {
+                bootstrap_single_viewport_id(viewport_observations)
+            } else {
+                None
+            }
+        })?;
+    viewport_observations.frame_for(viewport_id)
+}
+
+fn resolve_structural_viewport_id(
+    shell_state: &crate::shell::RunenwerkEditorShellState,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+) -> Option<ViewportId> {
+    let structural_context = shell_state
+        .last_projection_artifacts()
+        .and_then(|artifacts| {
+            artifacts
+                .widget_structural_context_by_id
+                .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+                .copied()
+        })?;
+    let binding = tool_surface_bindings.resolve_structural_context(structural_context)?;
+    Some(binding.viewport_id)
+}
+
+fn bootstrap_single_viewport_id(
+    viewport_observations: &ViewportArtifactObservationResource,
+) -> Option<ViewportId> {
+    let mut viewport_ids = viewport_observations.viewport_ids();
+    let viewport_id = viewport_ids.next()?;
+    if viewport_ids.next().is_none() {
+        Some(viewport_id)
+    } else {
+        None
+    }
 }
 
 fn populate_viewport_render_state(

@@ -2,9 +2,9 @@
 //! Purpose: Semantic UI interaction outcomes produced by runtime input handling.
 
 use crate::WidgetId;
-use ui_input::FocusChange;
+use ui_input::{FocusChange, KeyboardEvent, TextInputEvent};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UiInteraction {
     Activated(WidgetId),
     HoveredChanged {
@@ -16,9 +16,29 @@ pub enum UiInteraction {
         current: Option<WidgetId>,
     },
     FocusChanged(FocusChange),
+    KeyboardInput {
+        target: WidgetId,
+        event: KeyboardEvent,
+    },
+    TextInput {
+        target: WidgetId,
+        event: TextInputEvent,
+    },
+    Toggled {
+        target: WidgetId,
+        checked: bool,
+    },
+    NumericStepped {
+        target: WidgetId,
+        value: f64,
+    },
+    TabSelected {
+        target: WidgetId,
+        index: usize,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct UiInteractionResults {
     pub items: Vec<UiInteraction>,
 }

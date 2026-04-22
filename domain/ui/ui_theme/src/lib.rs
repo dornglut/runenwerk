@@ -12,3 +12,18 @@ pub use radius::*;
 pub use spacing::*;
 pub use theme::*;
 pub use typography::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scaled_theme_preserves_palette_and_scales_metrics() {
+        let theme = ThemeTokens::default();
+        let scaled = theme.scaled_by(1.5);
+        assert_eq!(scaled.background, theme.background);
+        assert!(scaled.spacing.md > theme.spacing.md);
+        assert!(scaled.radius.md > theme.radius.md);
+        assert!(scaled.typography.body > theme.typography.body);
+    }
+}

@@ -8,8 +8,9 @@ use ui_layout::{
 use ui_math::{Axis, UiRect, UiSize};
 
 use crate::{
-    ButtonNode, ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, ScrollNode, SplitNode,
-    StackNode, UiNode, UiNodeKind, UiRuntimeState, UiTree, ViewportSurfaceEmbedNode,
+    ButtonNode, ComputedLayout, ComputedLayoutMap, LabelNode, NumericInputNode, PanelNode,
+    ScrollNode, SplitNode, StackNode, TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind,
+    UiRuntimeState, UiTree, ViewportSurfaceEmbedNode,
 };
 
 pub fn compute_tree_layout(
@@ -32,6 +33,10 @@ fn layout_node(
         UiNodeKind::Panel(panel) => layout_panel(node, panel, bounds, state, out),
         UiNodeKind::Label(label) => layout_label(node, label, bounds, out),
         UiNodeKind::Button(button) => layout_button(node, button, bounds, out),
+        UiNodeKind::TextInput(text_input) => layout_text_input(node, text_input, bounds, out),
+        UiNodeKind::Toggle(toggle) => layout_toggle(node, toggle, bounds, out),
+        UiNodeKind::NumericInput(numeric) => layout_numeric_input(node, numeric, bounds, out),
+        UiNodeKind::Tabs(tabs) => layout_tabs(node, tabs, bounds, out),
         UiNodeKind::ViewportSurfaceEmbed(embed) => {
             layout_viewport_surface_embed(node, embed, bounds, out)
         }
@@ -152,6 +157,135 @@ fn layout_button(
         ComputedLayout::new(layout_bounds, content_bounds, measured_size),
     );
 
+    measured_size
+}
+
+fn layout_text_input(
+    node: &UiNode,
+    text_input: &TextInputNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let line_height = text_input
+        .text_style
+        .line_height_or_default(text_input.text_style.font_size * 1.2);
+    let display_text = if text_input.value.is_empty() {
+        &text_input.placeholder
+    } else {
+        &text_input.value
+    };
+    let text_width =
+        (display_text.chars().count() as f32 * text_input.text_style.font_size * 0.6).max(0.0);
+    let measured_size = UiSize::new(
+        (text_width + text_input.padding.horizontal()).max(text_input.min_size.width),
+        (line_height + text_input.padding.vertical()).max(text_input.min_size.height),
+    );
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width.min(bounds.width.max(0.0)),
+        measured_size.height.min(bounds.height.max(0.0)),
+    );
+    let content_bounds = layout_bounds.inset(text_input.padding);
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, content_bounds, measured_size),
+    );
+    measured_size
+}
+
+fn layout_toggle(
+    node: &UiNode,
+    toggle: &ToggleNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let line_height = toggle
+        .text_style
+        .line_height_or_default(toggle.text_style.font_size * 1.2);
+    let label_width =
+        (toggle.label.chars().count() as f32 * toggle.text_style.font_size * 0.6).max(0.0);
+    let measured_size = UiSize::new(
+        (label_width + toggle.padding.horizontal() + line_height).max(toggle.min_size.width),
+        (line_height + toggle.padding.vertical()).max(toggle.min_size.height),
+    );
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width.min(bounds.width.max(0.0)),
+        measured_size.height.min(bounds.height.max(0.0)),
+    );
+    let content_bounds = layout_bounds.inset(toggle.padding);
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, content_bounds, measured_size),
+    );
+    measured_size
+}
+
+fn layout_numeric_input(
+    node: &UiNode,
+    numeric: &NumericInputNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let line_height = numeric
+        .text_style
+        .line_height_or_default(numeric.text_style.font_size * 1.2);
+    let value_text = format!("{:.*}", usize::from(numeric.precision), numeric.value);
+    let text_width =
+        (value_text.chars().count() as f32 * numeric.text_style.font_size * 0.6).max(0.0);
+    let measured_size = UiSize::new(
+        (text_width + numeric.padding.horizontal() + line_height).max(numeric.min_size.width),
+        (line_height + numeric.padding.vertical()).max(numeric.min_size.height),
+    );
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width.min(bounds.width.max(0.0)),
+        measured_size.height.min(bounds.height.max(0.0)),
+    );
+    let content_bounds = layout_bounds.inset(numeric.padding);
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, content_bounds, measured_size),
+    );
+    measured_size
+}
+
+fn layout_tabs(
+    node: &UiNode,
+    tabs: &TabsNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let line_height = tabs
+        .text_style
+        .line_height_or_default(tabs.text_style.font_size * 1.2);
+    let width = tabs
+        .labels
+        .iter()
+        .map(|label| {
+            label.chars().count() as f32 * tabs.text_style.font_size * 0.6
+                + tabs.padding.horizontal()
+        })
+        .sum::<f32>()
+        .max(tabs.min_size.width);
+    let measured_size = UiSize::new(
+        width,
+        (line_height + tabs.padding.vertical()).max(tabs.min_size.height),
+    );
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width.min(bounds.width.max(0.0)),
+        measured_size.height.min(bounds.height.max(0.0)),
+    );
+    let content_bounds = layout_bounds.inset(tabs.padding);
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, content_bounds, measured_size),
+    );
     measured_size
 }
 
@@ -328,6 +462,66 @@ fn measure_node(node: &UiNode) -> UiSize {
             UiSize::new(
                 (text_width + button.padding.horizontal()).max(button.min_size.width),
                 (line_height + button.padding.vertical()).max(button.min_size.height),
+            )
+        }
+        UiNodeKind::TextInput(text_input) => {
+            let line_height = text_input
+                .text_style
+                .line_height_or_default(text_input.text_style.font_size * 1.2);
+            let display_text = if text_input.value.is_empty() {
+                &text_input.placeholder
+            } else {
+                &text_input.value
+            };
+            let text_width =
+                (display_text.chars().count() as f32 * text_input.text_style.font_size * 0.6)
+                    .max(0.0);
+            UiSize::new(
+                (text_width + text_input.padding.horizontal()).max(text_input.min_size.width),
+                (line_height + text_input.padding.vertical()).max(text_input.min_size.height),
+            )
+        }
+        UiNodeKind::Toggle(toggle) => {
+            let line_height = toggle
+                .text_style
+                .line_height_or_default(toggle.text_style.font_size * 1.2);
+            let label_width =
+                (toggle.label.chars().count() as f32 * toggle.text_style.font_size * 0.6).max(0.0);
+            UiSize::new(
+                (label_width + toggle.padding.horizontal() + line_height)
+                    .max(toggle.min_size.width),
+                (line_height + toggle.padding.vertical()).max(toggle.min_size.height),
+            )
+        }
+        UiNodeKind::NumericInput(numeric) => {
+            let line_height = numeric
+                .text_style
+                .line_height_or_default(numeric.text_style.font_size * 1.2);
+            let value_text = format!("{:.*}", usize::from(numeric.precision), numeric.value);
+            let text_width =
+                (value_text.chars().count() as f32 * numeric.text_style.font_size * 0.6).max(0.0);
+            UiSize::new(
+                (text_width + numeric.padding.horizontal() + line_height)
+                    .max(numeric.min_size.width),
+                (line_height + numeric.padding.vertical()).max(numeric.min_size.height),
+            )
+        }
+        UiNodeKind::Tabs(tabs) => {
+            let line_height = tabs
+                .text_style
+                .line_height_or_default(tabs.text_style.font_size * 1.2);
+            let width = tabs
+                .labels
+                .iter()
+                .map(|label| {
+                    label.chars().count() as f32 * tabs.text_style.font_size * 0.6
+                        + tabs.padding.horizontal()
+                })
+                .sum::<f32>()
+                .max(tabs.min_size.width);
+            UiSize::new(
+                width,
+                (line_height + tabs.padding.vertical()).max(tabs.min_size.height),
             )
         }
         UiNodeKind::ViewportSurfaceEmbed(embed) => embed.min_size,

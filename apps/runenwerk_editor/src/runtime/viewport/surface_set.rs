@@ -9,13 +9,7 @@ use editor_viewport::ViewportId;
 /// Viewports consume typed expression products, resolve them through
 /// viewport-scoped presentation state, and embed viewport-owned
 /// presentation surfaces into the shell.
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ViewportSurfaceSlot {
-    PrimaryColor,
-    PickingIds,
-    Overlay,
-}
+pub use editor_viewport::ViewportSurfaceSlot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ViewportSurfaceHandle {

@@ -355,3 +355,32 @@ fn runtime_binding_resolution_rejects_structural_mismatch_even_when_viewport_mat
         runenwerk_editor::runtime::viewport::ToolSurfaceRuntimeBindingResolveError::StructuralBindingMismatch { .. }
     ));
 }
+
+#[test]
+fn runtime_systems_do_not_route_viewports_through_first_frame_fallback() {
+    let frame_submit = include_str!("../src/runtime/systems/frame_submit.rs");
+    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let product_registry = include_str!("../src/runtime/viewport/product_registry.rs");
+
+    assert!(
+        !frame_submit.contains("first_frame("),
+        "frame_submit routing must not depend on first_frame fallback selection",
+    );
+    assert!(
+        !input_bridge.contains("first_frame("),
+        "input bridge routing must not depend on first_frame fallback selection",
+    );
+    assert!(
+        !product_registry.contains("pub fn first_frame"),
+        "viewport observation resource must not expose first_frame fallback helpers",
+    );
+}
+
+#[test]
+fn viewport_adapter_does_not_use_viewport_id_zero_fallback() {
+    let viewport_adapter = include_str!("../src/shell/viewport_adapter.rs");
+    assert!(
+        !viewport_adapter.contains("ViewportId(0)"),
+        "viewport adapter must not synthesize ViewportId(0) fallback identities",
+    );
+}

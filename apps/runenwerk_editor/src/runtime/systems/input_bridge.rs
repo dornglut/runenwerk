@@ -1,5 +1,5 @@
 use editor_shell::ShellCommand;
-use editor_viewport::ViewportId;
+use editor_viewport::{ArtifactObservationFrame, ViewportId};
 use engine::WindowState;
 use engine::plugins::input::domain::action;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingTarget};
@@ -48,7 +48,11 @@ pub fn dispatch_editor_input_system(
 
     let bounds = window_bounds(&window);
     let shell_theme = scaled_shell_theme(&host.theme, window.scale_factor);
-    let viewport_products = viewport_observations.first_frame();
+    let viewport_products = resolve_structural_viewport_products(
+        &host.shell_state,
+        &viewport_observations,
+        &tool_surface_bindings,
+    );
     let position = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
     let previous = UiPoint::new(bridge.last_mouse_position.0, bridge.last_mouse_position.1);
 
@@ -280,6 +284,44 @@ fn dispatch_pointer_event(
             eprintln!("editor shell input dispatch failed: {error}");
             None
         }
+    }
+}
+
+fn resolve_structural_viewport_products<'a>(
+    shell_state: &RunenwerkEditorShellState,
+    viewport_observations: &'a ViewportArtifactObservationResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+) -> Option<&'a ArtifactObservationFrame> {
+    let structural_context = shell_state
+        .last_projection_artifacts()
+        .and_then(|artifacts| {
+            artifacts
+                .widget_structural_context_by_id
+                .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+                .copied()
+        });
+    let viewport_id = structural_context
+        .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
+        .map(|binding| binding.viewport_id)
+        .or_else(|| {
+            if shell_state.last_projection_artifacts().is_none() {
+                bootstrap_single_viewport_id(viewport_observations)
+            } else {
+                None
+            }
+        })?;
+    viewport_observations.frame_for(viewport_id)
+}
+
+fn bootstrap_single_viewport_id(
+    viewport_observations: &ViewportArtifactObservationResource,
+) -> Option<ViewportId> {
+    let mut viewport_ids = viewport_observations.viewport_ids();
+    let viewport_id = viewport_ids.next()?;
+    if viewport_ids.next().is_none() {
+        Some(viewport_id)
+    } else {
+        None
     }
 }
 

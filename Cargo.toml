@@ -18,6 +18,10 @@ members = [
     "domain/ui/ui_layout",
     "domain/ui/ui_text",
     "domain/ui/ui_theme",
+    "domain/ui/ui_render_data",
+    "domain/ui/ui_tree",
+    "domain/ui/ui_runtime",
+    "domain/ui/ui_widgets",
 
     "domain/editor/editor_core",
     "domain/editor/editor_shell",
@@ -40,7 +44,7 @@ members = [
 
     "apps/runenwerk_editor",
 
-    "adapters/godot_chunking_addon", "domain/scene", "domain/ui/ui_render_data", "domain/editor/editor_shell", "foundation/id", "domain/id_macros",
+    "adapters/godot_chunking_addon",
 ]
 
 [workspace.dependencies]
@@ -54,6 +58,9 @@ ui_layout = { path = "domain/ui/ui_layout" }
 ui_text = { path = "domain/ui/ui_text" }
 ui_theme = { path = "domain/ui/ui_theme" }
 ui_render_data = { path = "domain/ui/ui_render_data" }
+ui_tree = { path = "domain/ui/ui_tree" }
+ui_runtime = { path = "domain/ui/ui_runtime" }
+ui_widgets = { path = "domain/ui/ui_widgets" }
 
 editor_core = { path = "domain/editor/editor_core" }
 editor_shell = { path = "domain/editor/editor_shell" }

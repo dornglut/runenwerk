@@ -24,7 +24,7 @@ pub struct ViewportProductObservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewportObservationFrame {
     pub metadata: ObservationFrameMetadata,
-    pub viewport_id: ViewportId,
+    pub viewport_id: Option<ViewportId>,
     pub selected_primary_product_id: Option<ExpressionProductId>,
     pub products: Vec<ViewportProductObservation>,
     pub details_visible: bool,

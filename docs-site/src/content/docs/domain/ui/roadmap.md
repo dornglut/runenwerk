@@ -12,13 +12,16 @@ This roadmap is not a speculative product roadmap. It is an architecture and imp
 
 ## Current Status Summary
 
-- `domain/ui/*` is currently a solid primitive/contract layer.
-- A real retained runtime exists but is currently owned by `domain/editor/editor_shell/src/runtime/*`.
+- `domain/ui/*` now contains both primitive and runtime substrate crates:
+  - `ui_tree`
+  - `ui_runtime`
+  - `ui_widgets`
 - `editor_shell` correctly owns workspace/tool-surface host architecture.
 - `runenwerk_editor` owns app/runtime glue and viewport runtime bindings.
 - engine render integration for `UiFrame` submission/extraction is in place.
-- fallback seams still exist (`first_frame`, `ViewportId(0)`), so fallback removal is not complete.
-- docs previously lacked a canonical UI architecture page and local UI entrypoint; those are now being established.
+- fallback seams (`first_frame`, `ViewportId(0)`) are removed from active routing paths.
+- interaction substrate coverage now includes keyboard/text routing, Tab/Shift-Tab traversal, and explicit invalidation contract output.
+- baseline unit coverage now exists across UI primitive/substrate crates.
 
 ## Architectural Constraints
 
@@ -31,6 +34,9 @@ This roadmap is not a speculative product roadmap. It is an architecture and imp
 ## Phased Roadmap
 
 ## Phase 1 - Ownership correction and runtime extraction
+
+### Status
+Complete
 
 ### Goal
 Move reusable retained runtime ownership from `editor_shell` into `domain/ui` runtime-oriented crates/modules while preserving behavior.
@@ -63,6 +69,9 @@ Every downstream substrate improvement depends on correct ownership boundaries. 
 
 ## Phase 2 - Contract normalization and fallback removal
 
+### Status
+Complete (with explicit bootstrap-only single-viewport seam before first structural binding).
+
 ### Goal
 Remove fallback seams and normalize duplicated UI/viewport binding contracts.
 
@@ -94,6 +103,9 @@ After ownership is corrected, contract clarity must be enforced before adding be
 
 ## Phase 3 - Interaction completeness (keyboard/text/focus/invalidation)
 
+### Status
+Complete for baseline routing/traversal/invalidation contracts.
+
 ### Goal
 Complete core retained-runtime interaction model beyond pointer-only behavior.
 
@@ -103,18 +115,18 @@ Interaction completeness should come after ownership and contracts are stable; o
 ### Concrete target areas/files/modules
 
 - runtime dispatch and state:
-  - retained runtime `dispatch_input` keyboard/text path (currently ignored behavior)
-  - runtime focus state/scoping structures
+  - retained runtime `dispatch_input` keyboard/text path
+  - runtime focus traversal baseline (Tab/Shift-Tab)
 - input contracts:
   - `domain/ui/ui_input/src/*`
 - invalidation semantics:
-  - current `InputResponse` repaint/relayout contract and runtime scheduling behavior
+  - explicit `UiInputOutcome.invalidation` result contract
 
 ### Done-when criteria
 
 - keyboard and text input route through retained runtime tree paths.
-- focus traversal/scoping behavior is explicit and test-covered.
-- relayout/repaint invalidation semantics are documented and verified in runtime tests.
+- focus traversal behavior is explicit and test-covered.
+- relayout/repaint invalidation semantics are explicit and verified in runtime tests.
 
 ### Phase non-goals
 
@@ -122,6 +134,9 @@ Interaction completeness should come after ownership and contracts are stable; o
 - no accessibility productization beyond foundational hooks.
 
 ## Phase 4 - Reusable controls needed by existing surfaces
+
+### Status
+In progress (substrate control primitives implemented; broad editor-surface migration still pending).
 
 ### Goal
 Introduce and migrate the minimum reusable control set required by current editor surfaces.
@@ -140,9 +155,13 @@ Controls should be built after core interaction model is complete, so control be
 
 ### Done-when criteria
 
-- current editor surfaces use reusable control abstractions where appropriate.
-- control behavior is not panel-specific ad hoc logic where generic control semantics are expected.
-- interaction and layout behavior for migrated controls is test-covered.
+- reusable control primitives exist for:
+  - text input
+  - toggle/checkbox
+  - numeric input
+  - tabs
+- control interaction/layout/render behavior is test-covered.
+- current editor surfaces use these controls where ad hoc equivalents remain.
 
 ### Phase non-goals
 
@@ -150,6 +169,9 @@ Controls should be built after core interaction model is complete, so control be
 - no broad UX productization beyond current surface needs.
 
 ## Phase 5 - Converge duplicated UI stacks where justified
+
+### Status
+Pending
 
 ### Goal
 Reduce duplicated ad hoc UI runtime paths by reusing shared substrate where practical.
@@ -179,6 +201,9 @@ Convergence should happen only after substrate ownership and core behavior are s
 
 ## Phase 6 - Testing/gallery/docs hardening
 
+### Status
+In progress (baseline unit coverage and docs alignment added; gallery target pending).
+
 ### Goal
 Establish durable verification and documentation support for ongoing UI substrate evolution.
 
@@ -203,9 +228,10 @@ Hardening should follow architectural and behavior stabilization so tests/docs l
 
 ### Done-when criteria
 
-- missing baseline unit coverage is added for core UI primitive crates.
-- interaction and frame-level verification are codified in repeatable tests.
-- docs remain aligned with implemented state and no longer claim unresolved work as complete.
+- baseline unit coverage is added for core UI primitive/substrate crates.
+- interaction-level verification is codified in repeatable runtime tests.
+- docs remain aligned with implemented state and no longer claim removed fallback seams as unresolved.
+- lightweight gallery target is added for substrate scenarios.
 
 ### Phase non-goals
 
@@ -218,4 +244,3 @@ Hardening should follow architectural and behavior stabilization so tests/docs l
 - do not restart sequencing from stale assumptions that contradict current code.
 - do not prioritize broad feature breadth over ownership and contract correctness.
 - do not present fallback seam removal as already done until tests and code confirm it.
-

@@ -10,5 +10,5 @@ pub mod pointer;
 pub use dispatch::UiInputDispatchResult;
 pub use hit_test::hit_test_widget;
 pub use interaction_result::{UiInteraction, UiInteractionResults};
-pub use outcome::UiInputOutcome;
+pub use outcome::{UiInputOutcome, UiInvalidation};
 pub use pointer::dispatch_pointer_event;

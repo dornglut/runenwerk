@@ -6,15 +6,15 @@ description: Current-state architecture, ownership boundaries, and migration dir
 # UI Substrate Architecture
 
 ## Purpose
-Establish the factual, current-state architecture for Runenwerk UI, define correct ownership boundaries, and document the migration direction from current implementation placement to target domain ownership.
+Establish the factual, current-state architecture for Runenwerk UI, define correct ownership boundaries, and document remaining migration direction from implemented substrate extraction to full editor/runtime convergence.
 
-This page is intentionally current-state-first. It does not treat planned ownership extraction as already complete.
+This page is intentionally current-state-first.
 
 ## Scope
 This document covers:
 
 - `domain/ui/*` crates
-- retained UI runtime placement currently under `domain/editor/editor_shell/src/runtime/*`
+- retained UI runtime crates under `domain/ui/*`
 - workspace/tool-surface host ownership in `editor_shell`
 - runtime/app glue in `apps/runenwerk_editor`
 - engine render/UI integration paths used to submit and draw UI frames
@@ -24,14 +24,14 @@ This document does not define visual design direction, docking product UX, or au
 ## Current Reality
 As of the audited repository state:
 
-- `domain/ui/*` is a strong primitive/contract layer.
-- A real retained tree runtime (tree/layout/input/output/widgets) exists, but it currently lives in `domain/editor/editor_shell/src/runtime/*`.
+- `domain/ui/*` now owns both primitive crates and retained runtime crates (`ui_tree`, `ui_runtime`, `ui_widgets`).
 - Workspace identity/projection/reducer/tool-surface host infrastructure is implemented and belongs to `editor_shell`.
 - `apps/runenwerk_editor` owns app runtime bridging and viewport runtime resources/bindings.
 - Engine render integration for UI frame submission/extraction is implemented.
-- Fallback seams still exist and are not resolved:
-  - `first_frame()` usage in editor runtime systems.
-  - `ViewportId(0)` fallback in shell viewport adapter.
+- Prior fallback seams removed:
+  - no `first_frame()`-based routing in editor runtime systems
+  - no `ViewportId(0)` fallback in shell viewport adapter
+- The runtime still has an explicit bootstrap-only single-viewport selection seam before first structural binding exists.
 
 ## Current Crate Map
 
@@ -47,11 +47,17 @@ As of the audited repository state:
   - theme token scales and defaults (colors, spacing, radius, typography).
 - `domain/ui/ui_render_data`
   - renderer-facing `UiFrame`/surface/layer/primitive contracts used by engine renderer extraction.
+- `domain/ui/ui_tree`
+  - retained tree contracts (`WidgetId`, node kinds/payloads, tree traversal, computed layout records).
+- `domain/ui/ui_runtime`
+  - retained runtime orchestration (layout engine, input routing, runtime state, frame output generation).
+- `domain/ui/ui_widgets`
+  - ergonomic widget/control constructors over `ui_tree` node contracts.
 
 Related non-`domain/ui` owners currently in the runtime path:
 
 - `domain/editor/editor_shell`
-  - retained runtime implementation (`src/runtime/*`), shell composition, workspace host model, command routing.
+  - shell composition, workspace host model, command routing, compatibility re-exports for substrate types.
 - `apps/runenwerk_editor`
   - app runtime resource wiring, viewport presentation/product runtime resources, tool-surface runtime binding registry.
 - `engine/src/plugins/render`
@@ -62,23 +68,16 @@ Related non-`domain/ui` owners currently in the runtime path:
 - reusable primitive contracts for UI math, input, layout, text, theme, and render-data payloads
 - text atlas and layouter contracts plus concrete atlas layouter implementation
 - renderer-facing UI frame/primitive data model consumed by engine render feature code
+- retained runtime ownership via:
+  - `ui_tree` (retained nodes/tree/layout records)
+  - `ui_runtime` (tree orchestration, input routing, frame generation)
+  - `ui_widgets` (control/widget constructors)
 
 ## What `domain/ui/*` Does Not Yet Own
 
-- retained runtime/tree/layout orchestration implementation
-- widget/control runtime behavior (button/label/panel/scroll/split/stack/viewport-embed node runtime)
-- tree-level keyboard/text routing and focus-scope orchestration
-- invalidation scheduler semantics beyond low-level response flags
-- reusable control library beyond current primitive-layer contracts
-- dedicated UI testing/gallery harness crates
-
-## Current Runtime Ownership Mismatch
-The reusable retained runtime substrate is implemented, but currently owned by `editor_shell`:
-
-- current location: `domain/editor/editor_shell/src/runtime/*`
-- expected long-term owner: `domain/ui/*` runtime-oriented crate/module
-
-This mismatch is the central architecture gap between current reality and target ownership.
+- fully converged app-side usage of all reusable controls
+- dedicated UI gallery target (a focused harness app still needs to be introduced)
+- convergence of duplicated overlay UI stacks in engine/runtime paths
 
 ## Relationship Between `domain/ui`, `editor_shell`, `runenwerk_editor`, and Engine Render Integration
 
@@ -91,8 +90,6 @@ Correct owner for:
 - workspace structural identity and graph state
 - host/panel/tab/tool-surface composition logic
 - shell command routing from UI interactions
-
-Currently also owns retained runtime implementation that should become domain-owned.
 
 ### `runenwerk_editor`
 Owns app/runtime glue:
@@ -112,14 +109,13 @@ This layer should continue consuming UI frame contracts, not owning UI semantics
 
 ## Current Boundary Violations
 
-1. Generic runtime implementation located under `editor_shell` instead of `domain/ui`.
-2. Viewport-specific embed/binding semantics present in generic `ui_render_data` contracts, increasing product-specific coupling in a shared crate.
-3. Slot taxonomy duplication across `ui_render_data`, `editor_viewport`, and app runtime viewport resources.
-4. Parallel ad hoc UI stacks in engine scene/debug overlay paths instead of shared substrate reuse.
-5. Runtime fallback seams (`first_frame`, `ViewportId(0)`) still active despite stricter structural identity direction.
+1. Engine overlay UI paths still build ad hoc `UiFrame` primitives directly instead of consuming substrate runtime where justified.
+2. `ui_render_data::ViewportSurfaceSlot` remains a rendering-level slot taxonomy separate from `editor_viewport::ViewportSurfaceSlot`; mapping is explicit but still duplicated by design across layers.
+3. Existing shell surfaces still rely primarily on button/label primitives; newer reusable controls (`TextInput`, `Toggle`, `NumericInput`, `Tabs`) are present but not yet broadly adopted.
+4. Bootstrap single-viewport routing exists before first structural tool-surface binding generation.
 
 ## Target Ownership Model
-Target ownership (not yet fully implemented):
+Target ownership (partially implemented):
 
 - `domain/ui/*` owns reusable UI substrate runtime layers:
   - retained tree/runtime orchestration
@@ -133,20 +129,15 @@ Target ownership (not yet fully implemented):
 ## Migration Direction
 The migration direction should remain dependency-aware and incremental:
 
-1. extract retained runtime modules from `editor_shell` into domain-owned UI runtime crate/module without behavior changes.
-2. normalize contracts and remove fallback seams (`first_frame` routing assumptions, `ViewportId(0)` fallback).
-3. complete interaction substrate behavior (keyboard/text routing, focus scopes, invalidation semantics).
-4. expand reusable controls needed by existing editor surfaces.
-5. converge duplicated UI paths where practical onto shared substrate.
-6. harden with dedicated UI testing/gallery docs and verification model.
-
-This is a migration path; it is not complete in the current repository state.
+1. complete broader adoption of reusable controls across editor surfaces where ad hoc assembly remains.
+2. converge duplicated overlay/debug UI assembly paths onto substrate where justified.
+3. add a lightweight UI gallery harness and keep substrate docs aligned per phase completion.
 
 ## Testing and Verification Expectations
 
 - Keep architecture guard tests that enforce structural identity and fail-closed routing behavior.
-- Add missing unit coverage in under-tested UI primitive crates.
-- Add retained-runtime interaction coverage for keyboard/text/focus paths as those capabilities are implemented.
+- Keep baseline unit coverage in primitive crates (`ui_math`, `ui_input`, `ui_layout`, `ui_theme`, `ui_render_data`, `ui_tree`, `ui_widgets`).
+- Keep retained-runtime interaction coverage for keyboard/text/focus/invalidation and control interactions.
 - Add UI frame snapshot/fixture verification for stable render-data expectations.
 - Preserve smoke/architecture tests proving no fallback regression for viewport/tool-surface binding behavior.
 

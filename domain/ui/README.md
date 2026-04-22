@@ -19,6 +19,12 @@ This subtree is currently a strong primitive layer, not yet the full retained UI
   - theme token scales and defaults (color, spacing, radius, typography).
 - `ui_render_data`
   - renderer-facing UI frame/surface/layer/primitive data contracts.
+- `ui_tree`
+  - retained tree contracts (`WidgetId`, node kinds/payloads, tree traversal, computed layout records).
+- `ui_runtime`
+  - retained runtime orchestration (layout, input routing, frame generation, runtime interaction state).
+- `ui_widgets`
+  - ergonomic control constructors/builders over `ui_tree` node contracts.
 
 ## What belongs here
 
@@ -34,13 +40,11 @@ This subtree is currently a strong primitive layer, not yet the full retained UI
 - tool/product semantics specific to one editor surface unless intentionally abstracted at domain level
 
 ## Current status note
-The retained runtime/tree/layout/input/output implementation currently lives under:
+The retained runtime extraction is now performed: retained tree/runtime/widget constructor ownership is under `domain/ui`.
 
-- `domain/editor/editor_shell/src/runtime/*`
+`editor_shell` still owns workspace/tool-surface host semantics and re-exports substrate types for compatibility.
 
-That placement is a known current-state ownership mismatch. Do not treat runtime extraction to `domain/ui` as already complete.
-
-Fallback seams also still exist in the current app runtime path (`first_frame`/`ViewportId(0)` usage), so docs and plans should not state those are fully resolved yet.
+Viewport routing no longer uses `first_frame` or `ViewportId(0)` fallback seams; runtime selection is structural, with an explicit single-viewport bootstrap path before first structural binding is established.
 
 ## Canonical docs and architecture links
 

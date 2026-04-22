@@ -2,8 +2,8 @@
 //! Purpose: Convert retained tree + computed layout into UiFrame.
 
 use crate::{
-    ButtonNode, ComputedLayoutMap, LabelNode, PanelNode, ScrollNode, UiNode, UiNodeKind, UiTree,
-    ViewportSurfaceEmbedNode,
+    ButtonNode, ComputedLayoutMap, LabelNode, NumericInputNode, PanelNode, ScrollNode, TabsNode,
+    TextInputNode, ToggleNode, UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode,
 };
 use ui_math::{UiRect, UiSize};
 use ui_render_data::{
@@ -83,6 +83,46 @@ fn emit_node(
             depth,
             primitive_order,
         ),
+        UiNodeKind::TextInput(text_input) => emit_text_input(
+            text_input,
+            layout.bounds,
+            layout.content_bounds,
+            layer,
+            atlas_source,
+            layouter,
+            depth,
+            primitive_order,
+        ),
+        UiNodeKind::Toggle(toggle) => emit_toggle(
+            toggle,
+            layout.bounds,
+            layout.content_bounds,
+            layer,
+            atlas_source,
+            layouter,
+            depth,
+            primitive_order,
+        ),
+        UiNodeKind::NumericInput(numeric) => emit_numeric_input(
+            numeric,
+            layout.bounds,
+            layout.content_bounds,
+            layer,
+            atlas_source,
+            layouter,
+            depth,
+            primitive_order,
+        ),
+        UiNodeKind::Tabs(tabs) => emit_tabs(
+            tabs,
+            layout.bounds,
+            layout.content_bounds,
+            layer,
+            atlas_source,
+            layouter,
+            depth,
+            primitive_order,
+        ),
         UiNodeKind::ViewportSurfaceEmbed(embed) => emit_viewport_surface_embed(
             embed,
             layout.bounds,
@@ -116,7 +156,11 @@ fn emit_node(
     }
 
     match &node.kind {
-        UiNodeKind::Panel(_) | UiNodeKind::Button(_) => {
+        UiNodeKind::Panel(_)
+        | UiNodeKind::Button(_)
+        | UiNodeKind::TextInput(_)
+        | UiNodeKind::NumericInput(_)
+        | UiNodeKind::Tabs(_) => {
             layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
                 sort_key: sort_key(depth, *primitive_order),
             }));
@@ -140,6 +184,7 @@ fn emit_node(
             );
         }
         UiNodeKind::Label(_)
+        | UiNodeKind::Toggle(_)
         | UiNodeKind::ViewportSurfaceEmbed(_)
         | UiNodeKind::Stack(_)
         | UiNodeKind::Split(_) => {}
@@ -365,6 +410,268 @@ fn emit_button(
         depth + 1,
         primitive_order,
     );
+}
+
+fn emit_text_input(
+    text_input: &TextInputNode,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        bounds,
+        text_input.theme.radius.sm,
+        paint_from_color(text_input.theme.background_panel),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        bounds,
+        text_input.theme.radius.sm,
+        text_input.theme.border_width,
+        paint_from_color(text_input.theme.border),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+        rect: content_bounds,
+        sort_key: sort_key(depth, *primitive_order),
+    }));
+    *primitive_order += 1;
+
+    let mut text_style = text_input.text_style.clone();
+    let text = if text_input.value.is_empty() {
+        text_style.color[3] = (text_style.color[3] * 0.6).clamp(0.0, 1.0);
+        text_input.placeholder.clone()
+    } else {
+        text_input.value.clone()
+    };
+    let label = LabelNode {
+        text,
+        text_style,
+        constraints: ui_layout::LayoutConstraints::tight(content_bounds.size()),
+    };
+    emit_label(
+        &label,
+        content_bounds,
+        layer,
+        atlas_source,
+        layouter,
+        depth + 1,
+        primitive_order,
+    );
+}
+
+fn emit_toggle(
+    toggle: &ToggleNode,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        bounds,
+        toggle.theme.radius.sm,
+        paint_from_color(toggle.theme.background_panel),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        bounds,
+        toggle.theme.radius.sm,
+        toggle.theme.border_width,
+        paint_from_color(toggle.theme.border),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    let indicator_size = content_bounds.height.min(content_bounds.width).max(0.0);
+    let indicator_rect = UiRect::new(
+        content_bounds.x,
+        content_bounds.y,
+        indicator_size,
+        indicator_size,
+    );
+    let mut indicator_color = if toggle.checked {
+        toggle.theme.accent
+    } else {
+        toggle.theme.border
+    };
+    if !toggle.enabled {
+        indicator_color.a = (indicator_color.a * 0.5).clamp(0.0, 1.0);
+    }
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        indicator_rect,
+        toggle.theme.radius.sm.min(indicator_size * 0.4),
+        paint_from_color(indicator_color),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    let text_bounds = UiRect::new(
+        indicator_rect.x + indicator_rect.width + toggle.theme.spacing.sm,
+        content_bounds.y,
+        (content_bounds.width - indicator_rect.width - toggle.theme.spacing.sm).max(0.0),
+        content_bounds.height,
+    );
+    let label = LabelNode {
+        text: toggle.label.clone(),
+        text_style: toggle.text_style.clone(),
+        constraints: ui_layout::LayoutConstraints::tight(text_bounds.size()),
+    };
+    emit_label(
+        &label,
+        text_bounds,
+        layer,
+        atlas_source,
+        layouter,
+        depth + 1,
+        primitive_order,
+    );
+}
+
+fn emit_numeric_input(
+    numeric: &NumericInputNode,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        bounds,
+        numeric.theme.radius.sm,
+        paint_from_color(numeric.theme.background_panel),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        bounds,
+        numeric.theme.radius.sm,
+        numeric.theme.border_width,
+        paint_from_color(numeric.theme.border),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+        rect: content_bounds,
+        sort_key: sort_key(depth, *primitive_order),
+    }));
+    *primitive_order += 1;
+
+    let value_text = format!("{:.*}", usize::from(numeric.precision), numeric.value);
+    let label = LabelNode {
+        text: value_text,
+        text_style: numeric.text_style.clone(),
+        constraints: ui_layout::LayoutConstraints::tight(content_bounds.size()),
+    };
+    emit_label(
+        &label,
+        content_bounds,
+        layer,
+        atlas_source,
+        layouter,
+        depth + 1,
+        primitive_order,
+    );
+}
+
+fn emit_tabs(
+    tabs: &TabsNode,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        bounds,
+        tabs.theme.radius.sm,
+        paint_from_color(tabs.theme.background_panel),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        bounds,
+        tabs.theme.radius.sm,
+        tabs.theme.border_width,
+        paint_from_color(tabs.theme.border),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+        rect: content_bounds,
+        sort_key: sort_key(depth, *primitive_order),
+    }));
+    *primitive_order += 1;
+
+    if tabs.labels.is_empty() {
+        return;
+    }
+
+    let segment_width = content_bounds.width / tabs.labels.len() as f32;
+    let selected = tabs.selected_index.min(tabs.labels.len() - 1);
+    let selected_rect = UiRect::new(
+        content_bounds.x + segment_width * selected as f32,
+        content_bounds.y,
+        segment_width.max(0.0),
+        content_bounds.height.max(0.0),
+    );
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        selected_rect,
+        tabs.theme.radius.sm.min(selected_rect.height * 0.5),
+        paint_from_color(tabs.theme.accent),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    for (index, label_text) in tabs.labels.iter().enumerate() {
+        let tab_bounds = UiRect::new(
+            content_bounds.x + segment_width * index as f32,
+            content_bounds.y,
+            segment_width.max(0.0),
+            content_bounds.height.max(0.0),
+        );
+        let mut style = tabs.text_style.clone();
+        if index != selected {
+            style.color[3] = (style.color[3] * 0.7).clamp(0.0, 1.0);
+        }
+        let label = LabelNode {
+            text: label_text.clone(),
+            text_style: style,
+            constraints: ui_layout::LayoutConstraints::tight(tab_bounds.size()),
+        };
+        emit_label(
+            &label,
+            tab_bounds,
+            layer,
+            atlas_source,
+            layouter,
+            depth + 1,
+            primitive_order,
+        );
+    }
 }
 
 fn emit_label(

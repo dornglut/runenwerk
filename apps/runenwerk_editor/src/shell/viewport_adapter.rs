@@ -15,9 +15,7 @@ pub fn build_viewport_observation_frame(
     tool_state: ViewportToolState,
     source_version: editor_core::RealityVersion,
 ) -> ViewportObservationFrame {
-    let viewport_id = products
-        .map(|value| value.viewport_id)
-        .unwrap_or(editor_viewport::ViewportId(0));
+    let viewport_id = products.map(|value| value.viewport_id);
     let selected_primary_product_id = products.and_then(|value| value.selected_primary_product_id);
     let products = products
         .map(|value| {
@@ -70,11 +68,7 @@ pub fn build_viewport_observation_frame(
 
 pub fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportViewModel {
     ViewportViewModel {
-        viewport_id: if frame.products.is_empty() {
-            None
-        } else {
-            Some(frame.viewport_id)
-        },
+        viewport_id: frame.viewport_id,
         selected_primary_product_id: frame.selected_primary_product_id,
         product_choices: frame
             .products

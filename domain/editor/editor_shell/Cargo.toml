@@ -14,6 +14,9 @@ ui_render_data.workspace = true
 ui_theme.workspace = true
 ui_text.workspace = true
 ui_math.workspace = true
+ui_tree.workspace = true
+ui_runtime.workspace = true
+ui_widgets.workspace = true
 id = { path = "../../../foundation/id" }
 id_macros = { path = "../../id_macros" }
 serde = { version = "1.0.228", features = ["derive"] }

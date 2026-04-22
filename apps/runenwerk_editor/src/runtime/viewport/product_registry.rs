@@ -191,10 +191,6 @@ impl ViewportArtifactObservationResource {
         self.frames_by_viewport.insert(frame.viewport_id, frame);
     }
 
-    pub fn first_frame(&self) -> Option<&ArtifactObservationFrame> {
-        self.frames_by_viewport.values().next()
-    }
-
     pub fn viewport_ids(&self) -> impl Iterator<Item = ViewportId> + '_ {
         self.frames_by_viewport.keys().copied()
     }
