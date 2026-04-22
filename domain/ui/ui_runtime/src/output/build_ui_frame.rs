@@ -725,3 +725,179 @@ fn default_draw_key() -> UiDrawKey {
 fn sort_key(depth: u32, primitive_order: u32) -> UiSortKey {
     UiSortKey::new(0, depth, primitive_order)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::{UiRuntimeState, WidgetId, compute_tree_layout};
+    use ui_render_data::ViewportSurfaceSlot;
+    use ui_text::{
+        FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle,
+        TextWrap,
+    };
+    use ui_theme::ThemeTokens;
+
+    #[derive(Debug, Clone)]
+    struct TestAtlasSource {
+        atlas: MsdfFontAtlas,
+    }
+
+    impl FontAtlasSource for TestAtlasSource {
+        fn atlas(&self, font_id: FontId) -> Option<&MsdfFontAtlas> {
+            (self.atlas.font_id == font_id).then_some(&self.atlas)
+        }
+    }
+
+    #[test]
+    fn build_ui_frame_panel_label_snapshot_signature() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle {
+            font_id: FontId(1),
+            font_size: 14.0,
+            color: [0.9, 0.95, 1.0, 1.0],
+            line_height: Some(18.0),
+            align: TextAlign::Start,
+            wrap: TextWrap::NoWrap,
+            overflow: TextOverflow::Clip,
+        };
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme)),
+            vec![UiNode::new(
+                WidgetId(2),
+                UiNodeKind::Label(LabelNode::new("Overlay", text_style)),
+            )],
+        ));
+        let bounds = UiRect::new(12.0, 16.0, 240.0, 96.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+
+        let frame = build_ui_frame(&tree, &layouts, UiSize::new(320.0, 180.0), &atlas_source);
+        let signature = frame_signature(&frame);
+        let expected = [
+            "Rect(x=12.0 y=16.0 w=240.0 h=96.0)",
+            "Border(x=12.0 y=16.0 w=240.0 h=96.0)",
+            "ClipPush(x=20.0 y=24.0 w=224.0 h=80.0)",
+            "GlyphRun(text=\"Overl\" clip=true)",
+            "ClipPop",
+        ]
+        .join("\n");
+        assert_eq!(signature, expected);
+    }
+
+    #[test]
+    fn build_ui_frame_emits_viewport_embed_with_normalized_uv() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let tree = UiTree::new(UiNode::new(
+            WidgetId(7),
+            UiNodeKind::ViewportSurfaceEmbed(ViewportSurfaceEmbedNode::new(
+                9,
+                ViewportSurfaceSlot::Primary,
+            )),
+        ));
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(10.0, 20.0, 100.0, 50.0),
+            &UiRuntimeState::default(),
+        );
+
+        let frame = build_ui_frame(&tree, &layouts, UiSize::new(200.0, 100.0), &atlas_source);
+        let layer = &frame.surfaces[0].layers[0];
+        let embed = layer
+            .primitives
+            .iter()
+            .find_map(|primitive| match primitive {
+                UiPrimitive::ViewportSurfaceEmbed(value) => Some(value),
+                _ => None,
+            })
+            .expect("viewport embed primitive should exist");
+
+        assert!((embed.uv_rect.x - 0.05).abs() < 0.000_1);
+        assert!((embed.uv_rect.y - 0.20).abs() < 0.000_1);
+        assert!((embed.uv_rect.width - 0.50).abs() < 0.000_1);
+        assert!((embed.uv_rect.height - 0.50).abs() < 0.000_1);
+    }
+
+    fn frame_signature(frame: &UiFrame) -> String {
+        let layer = &frame.surfaces[0].layers[0];
+        layer
+            .primitives
+            .iter()
+            .map(|primitive| match primitive {
+                UiPrimitive::Rect(value) => format!(
+                    "Rect(x={:.1} y={:.1} w={:.1} h={:.1})",
+                    value.rect.x, value.rect.y, value.rect.width, value.rect.height
+                ),
+                UiPrimitive::Border(value) => format!(
+                    "Border(x={:.1} y={:.1} w={:.1} h={:.1})",
+                    value.rect.x, value.rect.y, value.rect.width, value.rect.height
+                ),
+                UiPrimitive::Clip(ClipPrimitive::Push { rect, .. }) => format!(
+                    "ClipPush(x={:.1} y={:.1} w={:.1} h={:.1})",
+                    rect.x, rect.y, rect.width, rect.height
+                ),
+                UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => "ClipPop".to_string(),
+                UiPrimitive::GlyphRun(value) => {
+                    let text = value
+                        .glyph_run
+                        .glyphs
+                        .iter()
+                        .map(|glyph| glyph.ch)
+                        .collect::<String>();
+                    format!(
+                        "GlyphRun(text=\"{}\" clip={})",
+                        text,
+                        value.baseline_origin_clip.is_some()
+                    )
+                }
+                UiPrimitive::ViewportSurfaceEmbed(value) => format!(
+                    "ViewportSurfaceEmbed(viewport={} slot={:?})",
+                    value.viewport_id, value.slot
+                ),
+                UiPrimitive::Image(value) => format!(
+                    "Image(x={:.1} y={:.1} w={:.1} h={:.1})",
+                    value.rect.x, value.rect.y, value.rect.width, value.rect.height
+                ),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn atlas_with_ascii(font_id: FontId) -> MsdfFontAtlas {
+        let mut glyphs = HashMap::new();
+        for ch in 32_u8..=126_u8 {
+            glyphs.insert(
+                char::from(ch),
+                GlyphMetrics {
+                    advance: 10.0,
+                    plane_left: 0.0,
+                    plane_top: 8.0,
+                    plane_right: 8.0,
+                    plane_bottom: -2.0,
+                    atlas_left: 0.0,
+                    atlas_top: 0.0,
+                    atlas_right: 0.1,
+                    atlas_bottom: 0.1,
+                },
+            );
+        }
+        MsdfFontAtlas {
+            font_id,
+            texture_width: 256,
+            texture_height: 256,
+            metrics: FontFaceMetrics {
+                ascender: 9.0,
+                descender: -3.0,
+                line_height: 12.0,
+                base_size: 12.0,
+            },
+            glyphs,
+        }
+    }
+}

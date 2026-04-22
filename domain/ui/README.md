@@ -3,7 +3,7 @@
 ## What this subtree is
 `domain/ui` contains engine-agnostic UI primitives and contracts that are reusable across editor/runtime contexts.
 
-This subtree is currently a strong primitive layer, not yet the full retained UI runtime ownership boundary.
+This subtree now includes both primitive crates and retained runtime ownership (`ui_tree`, `ui_runtime`, `ui_widgets`).
 
 ## Crate map
 
@@ -29,8 +29,8 @@ This subtree is currently a strong primitive layer, not yet the full retained UI
 ## What belongs here
 
 - reusable engine-agnostic UI primitives and contracts
-- reusable retained UI runtime layers once ownership extraction is performed
-- shared UI testing helpers/harnesses (when introduced)
+- reusable retained UI runtime layers
+- shared UI testing helpers/harnesses and gallery scenarios
 
 ## What does not belong here
 
@@ -40,11 +40,15 @@ This subtree is currently a strong primitive layer, not yet the full retained UI
 - tool/product semantics specific to one editor surface unless intentionally abstracted at domain level
 
 ## Current status note
-The retained runtime extraction is now performed: retained tree/runtime/widget constructor ownership is under `domain/ui`.
+Retained tree/runtime/widget constructor ownership is under `domain/ui`.
 
 `editor_shell` still owns workspace/tool-surface host semantics and re-exports substrate types for compatibility.
 
 Viewport routing no longer uses `first_frame` or `ViewportId(0)` fallback seams; runtime selection is structural, with an explicit single-viewport bootstrap path before first structural binding is established.
+
+Engine debug metrics and scene overlay paths now build frames through substrate contracts instead of ad hoc primitive assembly.
+
+Broad shell-surface migration to all reusable controls (`TextInput`, `Toggle`, `NumericInput`, `Tabs`) is still in progress.
 
 ## Canonical docs and architecture links
 
@@ -52,6 +56,8 @@ Viewport routing no longer uses `first_frame` or `ViewportId(0)` fallback seams;
   - [UI Substrate Architecture](../../docs-site/src/content/docs/domain/ui/architecture.md)
 - UI roadmap:
   - [UI Substrate Roadmap](../../docs-site/src/content/docs/domain/ui/roadmap.md)
+- Substrate gallery harness example:
+  - [`domain/ui/ui_runtime/examples/substrate_gallery.rs`](./ui_runtime/examples/substrate_gallery.rs)
 - Workspace/domain architecture boundaries:
   - [Architecture](../../docs-site/src/content/docs/guidelines/architecture.md)
 - Module structure guidelines:

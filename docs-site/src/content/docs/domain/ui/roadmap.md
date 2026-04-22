@@ -22,6 +22,8 @@ This roadmap is not a speculative product roadmap. It is an architecture and imp
 - fallback seams (`first_frame`, `ViewportId(0)`) are removed from active routing paths.
 - interaction substrate coverage now includes keyboard/text routing, Tab/Shift-Tab traversal, and explicit invalidation contract output.
 - baseline unit coverage now exists across UI primitive/substrate crates.
+- duplicated engine overlay/debug UI stacks now route through substrate frame generation.
+- substrate frame snapshot tests and a lightweight gallery harness target are now present.
 
 ## Architectural Constraints
 
@@ -171,7 +173,7 @@ Controls should be built after core interaction model is complete, so control be
 ## Phase 5 - Converge duplicated UI stacks where justified
 
 ### Status
-Pending
+Complete
 
 ### Goal
 Reduce duplicated ad hoc UI runtime paths by reusing shared substrate where practical.
@@ -182,15 +184,16 @@ Convergence should happen only after substrate ownership and core behavior are s
 ### Concrete target areas/files/modules
 
 - duplicate stack sites:
-  - `engine/src/plugins/scene/ui/mod.rs`
-  - `engine/src/plugins/scene/runtime/overlay_ui.rs`
   - `engine/src/plugins/debug_metrics/mod.rs`
+  - `engine/src/plugins/scene/runtime/overlay_ui.rs`
 - shared integration seam:
+  - `ui_runtime::build_ui_frame` and retained node/layout contracts
   - engine UI submission/render feature paths under `engine/src/plugins/render/features/ui/*`
 
 ### Done-when criteria
 
 - duplicated ad hoc text/layout/frame assembly paths are reduced where feasible.
+- duplicated debug metrics and scene overlay ad hoc text/layout/frame assembly paths are removed in favor of substrate frame generation.
 - shared substrate is used for common behavior while feature-specific semantics stay local.
 - render submission behavior remains stable under existing smoke tests.
 
@@ -202,7 +205,7 @@ Convergence should happen only after substrate ownership and core behavior are s
 ## Phase 6 - Testing/gallery/docs hardening
 
 ### Status
-In progress (baseline unit coverage and docs alignment added; gallery target pending).
+Complete
 
 ### Goal
 Establish durable verification and documentation support for ongoing UI substrate evolution.
@@ -221,6 +224,8 @@ Hardening should follow architectural and behavior stabilization so tests/docs l
 - runtime/substrate integration test targets:
   - retained runtime interaction paths
   - frame snapshot expectations
+- gallery/harness target:
+  - `domain/ui/ui_runtime/examples/substrate_gallery.rs`
 - docs:
   - `docs-site/src/content/docs/domain/ui/architecture.md`
   - `docs-site/src/content/docs/domain/ui/roadmap.md`
@@ -230,6 +235,7 @@ Hardening should follow architectural and behavior stabilization so tests/docs l
 
 - baseline unit coverage is added for core UI primitive/substrate crates.
 - interaction-level verification is codified in repeatable runtime tests.
+- frame output snapshot expectations exist in substrate output tests.
 - docs remain aligned with implemented state and no longer claim removed fallback seams as unresolved.
 - lightweight gallery target is added for substrate scenarios.
 

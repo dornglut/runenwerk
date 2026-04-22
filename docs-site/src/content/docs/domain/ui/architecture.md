@@ -28,10 +28,12 @@ As of the audited repository state:
 - Workspace identity/projection/reducer/tool-surface host infrastructure is implemented and belongs to `editor_shell`.
 - `apps/runenwerk_editor` owns app runtime bridging and viewport runtime resources/bindings.
 - Engine render integration for UI frame submission/extraction is implemented.
+- Engine overlay/debug UI paths now route through substrate frame generation (`ui_runtime::build_ui_frame`) instead of ad hoc primitive assembly.
 - Prior fallback seams removed:
   - no `first_frame()`-based routing in editor runtime systems
   - no `ViewportId(0)` fallback in shell viewport adapter
 - The runtime still has an explicit bootstrap-only single-viewport selection seam before first structural binding exists.
+- Substrate output now has baseline snapshot tests and a lightweight gallery harness example (`domain/ui/ui_runtime/examples/substrate_gallery.rs`).
 
 ## Current Crate Map
 
@@ -75,9 +77,9 @@ Related non-`domain/ui` owners currently in the runtime path:
 
 ## What `domain/ui/*` Does Not Yet Own
 
-- fully converged app-side usage of all reusable controls
-- dedicated UI gallery target (a focused harness app still needs to be introduced)
-- convergence of duplicated overlay UI stacks in engine/runtime paths
+- fully converged app-side usage of all reusable controls in editor shell surfaces
+- shell workspace host semantics (correctly owned by `editor_shell`)
+- app/runtime glue and viewport product orchestration (correctly owned by `runenwerk_editor`)
 
 ## Relationship Between `domain/ui`, `editor_shell`, `runenwerk_editor`, and Engine Render Integration
 
@@ -109,10 +111,9 @@ This layer should continue consuming UI frame contracts, not owning UI semantics
 
 ## Current Boundary Violations
 
-1. Engine overlay UI paths still build ad hoc `UiFrame` primitives directly instead of consuming substrate runtime where justified.
-2. `ui_render_data::ViewportSurfaceSlot` remains a rendering-level slot taxonomy separate from `editor_viewport::ViewportSurfaceSlot`; mapping is explicit but still duplicated by design across layers.
-3. Existing shell surfaces still rely primarily on button/label primitives; newer reusable controls (`TextInput`, `Toggle`, `NumericInput`, `Tabs`) are present but not yet broadly adopted.
-4. Bootstrap single-viewport routing exists before first structural tool-surface binding generation.
+1. `ui_render_data::ViewportSurfaceSlot` remains a rendering-level slot taxonomy separate from `editor_viewport::ViewportSurfaceSlot`; mapping is explicit but still duplicated by design across layers.
+2. Existing shell surfaces still rely primarily on button/label primitives; newer reusable controls (`TextInput`, `Toggle`, `NumericInput`, `Tabs`) are present but not yet broadly adopted.
+3. Bootstrap single-viewport routing exists before first structural tool-surface binding generation.
 
 ## Target Ownership Model
 Target ownership (partially implemented):
@@ -130,15 +131,16 @@ Target ownership (partially implemented):
 The migration direction should remain dependency-aware and incremental:
 
 1. complete broader adoption of reusable controls across editor surfaces where ad hoc assembly remains.
-2. converge duplicated overlay/debug UI assembly paths onto substrate where justified.
-3. add a lightweight UI gallery harness and keep substrate docs aligned per phase completion.
+2. keep render-data slot/domain slot mapping explicit at integration edges while avoiding cross-layer ownership leakage.
+3. keep substrate docs and tests aligned with implemented behavior per phase completion.
 
 ## Testing and Verification Expectations
 
 - Keep architecture guard tests that enforce structural identity and fail-closed routing behavior.
 - Keep baseline unit coverage in primitive crates (`ui_math`, `ui_input`, `ui_layout`, `ui_theme`, `ui_render_data`, `ui_tree`, `ui_widgets`).
 - Keep retained-runtime interaction coverage for keyboard/text/focus/invalidation and control interactions.
-- Add UI frame snapshot/fixture verification for stable render-data expectations.
+- Keep UI frame snapshot/fixture verification for stable render-data expectations (`domain/ui/ui_runtime/src/output/build_ui_frame.rs` tests).
+- Keep the lightweight substrate gallery harness runnable (`domain/ui/ui_runtime/examples/substrate_gallery.rs`).
 - Preserve smoke/architecture tests proving no fallback regression for viewport/tool-surface binding behavior.
 
 ## Explicit Non-Goals

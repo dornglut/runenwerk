@@ -1,23 +1,33 @@
+use std::sync::OnceLock;
+
 use super::template_flow::{
     SceneTemplateButtonSlot, SceneTemplateButtonSpec, SceneTemplateFlowResource,
     SceneTemplateSceneSpec,
 };
+use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
 use crate::plugins::scene::ui::{
-    ConsoleUiRuntimeState, UiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
+    ConsoleUiRuntimeState, UiNode as SceneUiNode, UiPresentationMode, UiStyle, UiText, UiTransform,
     reload_console_template_if_changed,
 };
 use crate::plugins::time::domain::Time;
 use crate::plugins::{InputState, SceneManager};
-use ui_math::{UiPoint, UiRect, UiSize};
-use ui_render_data::{
-    BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer,
-    UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
+use ui_math::{UiInsets, UiRect, UiSize};
+use ui_runtime::{
+    ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, UiNode, UiNodeKind, UiTree, WidgetId,
+    build_ui_frame,
 };
-use ui_text::{FontId, GlyphRun, PositionedGlyph};
+use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextWrap};
+use ui_theme::{ThemeTokens, UiColor};
 
 const TEXT_PADDING_X: f32 = 10.0;
 const TEXT_PADDING_Y: f32 = 8.0;
 const MIN_INPUT_WIDTH: f32 = 120.0;
+
+const SCENE_OVERLAY_ROOT_WIDGET_ID: u64 = 70_000;
+const SCENE_OVERLAY_SCROLLBACK_WIDGET_ID: u64 = 70_001;
+const SCENE_OVERLAY_INPUT_WIDGET_ID: u64 = 70_002;
+const SCENE_OVERLAY_CONFIRM_WIDGET_ID: u64 = 70_003;
+const SCENE_OVERLAY_LABEL_BASE_WIDGET_ID: u64 = 70_100;
 
 pub(crate) fn rebuild_overlay_ui_frame(
     manager: &mut SceneManager,
@@ -43,71 +53,11 @@ pub(crate) fn rebuild_overlay_ui_frame(
     apply_runtime_layout(world, ui);
 
     if !overlay_visible {
-        ui.frame = UiFrame::default();
+        ui.frame = ui_render_data::UiFrame::default();
         return Ok(());
     }
 
-    let mut layer = UiLayer::new(UiLayerId(0));
-    let mut primitive_order = 0u32;
-    push_panel_primitives(world, ui.root, &mut layer, &mut primitive_order);
-    if template_mode {
-        push_text_block_primitives(
-            world,
-            ui.scrollback,
-            false,
-            false,
-            &mut layer,
-            &mut primitive_order,
-        );
-        push_text_block_primitives(
-            world,
-            ui.input,
-            false,
-            true,
-            &mut layer,
-            &mut primitive_order,
-        );
-        push_text_block_primitives(
-            world,
-            ui.confirm_button,
-            false,
-            true,
-            &mut layer,
-            &mut primitive_order,
-        );
-    } else {
-        push_text_block_primitives(
-            world,
-            ui.scrollback,
-            true,
-            false,
-            &mut layer,
-            &mut primitive_order,
-        );
-        push_text_block_primitives(
-            world,
-            ui.input,
-            true,
-            false,
-            &mut layer,
-            &mut primitive_order,
-        );
-        push_text_block_primitives(
-            world,
-            ui.confirm_button,
-            false,
-            true,
-            &mut layer,
-            &mut primitive_order,
-        );
-    }
-
-    let surface_size = UiSize::new(ui.screen_size.0.max(1.0), ui.screen_size.1.max(1.0));
-    ui.frame = UiFrame::with_surfaces(vec![UiSurface::with_layers(
-        UiSurfaceId(0),
-        surface_size,
-        vec![layer],
-    )]);
+    ui.frame = build_overlay_frame_via_substrate(world, ui, template_mode);
     Ok(())
 }
 
@@ -186,7 +136,7 @@ fn hit_test_button_slot(
 }
 
 fn contains_point(world: &ecs::World, entity: ecs::Entity, pointer: (f32, f32)) -> bool {
-    let Some(node) = world.get::<UiNode>(entity) else {
+    let Some(node) = world.get::<SceneUiNode>(entity) else {
         return false;
     };
     if !node.visible {
@@ -210,7 +160,7 @@ fn apply_scene_template_visuals(
     ui.layout_dirty = true;
 
     if let Ok(mut entity_ref) = world.entity_mut(ui.root) {
-        if let Some(mut node) = entity_ref.get_mut::<UiNode>() {
+        if let Some(mut node) = entity_ref.get_mut::<SceneUiNode>() {
             node.visible = true;
         }
         if let Some(mut style) = entity_ref.get_mut::<UiStyle>() {
@@ -218,7 +168,7 @@ fn apply_scene_template_visuals(
         }
     }
     if let Ok(mut entity_ref) = world.entity_mut(ui.scrollback) {
-        if let Some(mut node) = entity_ref.get_mut::<UiNode>() {
+        if let Some(mut node) = entity_ref.get_mut::<SceneUiNode>() {
             node.visible = true;
         }
         if let Some(mut text) = entity_ref.get_mut::<UiText>() {
@@ -238,7 +188,7 @@ fn apply_template_button(
     button: Option<&SceneTemplateButtonSpec>,
 ) {
     if let Ok(mut entity_ref) = world.entity_mut(entity) {
-        if let Some(mut node) = entity_ref.get_mut::<UiNode>() {
+        if let Some(mut node) = entity_ref.get_mut::<SceneUiNode>() {
             node.visible = button.is_some();
         }
         if let Some(button) = button {
@@ -385,204 +335,207 @@ fn sync_runtime_text(world: &mut ecs::World, ui: &mut ConsoleUiRuntimeState) {
     }
 }
 
-fn push_panel_primitives(
+fn build_overlay_frame_via_substrate(
     world: &ecs::World,
-    entity: ecs::Entity,
-    layer: &mut UiLayer,
-    primitive_order: &mut u32,
-) {
-    let Some(node) = world.get::<UiNode>(entity) else {
-        return;
+    ui: &ConsoleUiRuntimeState,
+    template_mode: bool,
+) -> ui_render_data::UiFrame {
+    let surface_size = UiSize::new(ui.screen_size.0.max(1.0), ui.screen_size.1.max(1.0));
+    let Some(root_node) = world.get::<SceneUiNode>(ui.root) else {
+        return ui_render_data::UiFrame::default();
     };
-    if !node.visible {
-        return;
+    if !root_node.visible {
+        return ui_render_data::UiFrame::default();
     }
-    let Some(transform) = world.get::<UiTransform>(entity) else {
-        return;
-    };
-    let Some(style) = world.get::<UiStyle>(entity) else {
-        return;
-    };
 
-    push_rect(
-        layer,
-        primitive_order,
-        UiRect::new(
-            transform.x,
-            transform.y,
-            transform.w.max(0.0),
-            transform.h.max(0.0),
-        ),
-        style.bg_color,
-        style.radius.max(0.0),
+    let Some(root_transform) = world.get::<UiTransform>(ui.root).copied() else {
+        return ui_render_data::UiFrame::default();
+    };
+    let root_style = world.get::<UiStyle>(ui.root).copied().unwrap_or_default();
+
+    let root_bounds = rect_from_transform(root_transform);
+    let mut layouts = ComputedLayoutMap::new();
+    let mut children = Vec::new();
+    let mut next_label_id = SCENE_OVERLAY_LABEL_BASE_WIDGET_ID;
+
+    if let Some(node) = append_text_panel_node(
+        world,
+        ui.scrollback,
+        WidgetId(SCENE_OVERLAY_SCROLLBACK_WIDGET_ID),
+        !template_mode,
+        false,
+        surface_size,
+        ui.scale,
+        &mut next_label_id,
+        &mut layouts,
+    ) {
+        children.push(node);
+    }
+
+    if let Some(node) = append_text_panel_node(
+        world,
+        ui.input,
+        WidgetId(SCENE_OVERLAY_INPUT_WIDGET_ID),
+        !template_mode,
+        template_mode,
+        surface_size,
+        ui.scale,
+        &mut next_label_id,
+        &mut layouts,
+    ) {
+        children.push(node);
+    }
+
+    if let Some(node) = append_text_panel_node(
+        world,
+        ui.confirm_button,
+        WidgetId(SCENE_OVERLAY_CONFIRM_WIDGET_ID),
+        false,
+        true,
+        surface_size,
+        ui.scale,
+        &mut next_label_id,
+        &mut layouts,
+    ) {
+        children.push(node);
+    }
+
+    let mut root_panel = PanelNode::new(theme_from_scene_style(root_style, ui.scale));
+    root_panel.padding = UiInsets::ZERO;
+    root_panel.gap = 0.0;
+    let root_id = WidgetId(SCENE_OVERLAY_ROOT_WIDGET_ID);
+    let root = UiNode::with_children(root_id, UiNodeKind::Panel(root_panel), children);
+    layouts.insert(
+        root_id,
+        ComputedLayout::new(root_bounds, root_bounds, root_bounds.size()),
     );
-    push_border(
-        layer,
-        primitive_order,
-        UiRect::new(
-            transform.x,
-            transform.y,
-            transform.w.max(0.0),
-            transform.h.max(0.0),
-        ),
-        style.border_color,
-        style.border_width.max(0.0),
-        style.radius.max(0.0),
-    );
+
+    build_ui_frame(
+        &UiTree::new(root),
+        &layouts,
+        surface_size,
+        overlay_font_atlas(),
+    )
 }
 
-fn push_text_block_primitives(
+fn append_text_panel_node(
     world: &ecs::World,
     entity: ecs::Entity,
+    panel_id: WidgetId,
     clip_text: bool,
     center_text: bool,
-    layer: &mut UiLayer,
-    primitive_order: &mut u32,
-) {
-    let Some(node) = world.get::<UiNode>(entity) else {
-        return;
-    };
+    surface_size: UiSize,
+    scale: f32,
+    next_label_id: &mut u64,
+    layouts: &mut ComputedLayoutMap,
+) -> Option<UiNode> {
+    let node = world.get::<SceneUiNode>(entity)?;
     if !node.visible {
-        return;
+        return None;
     }
-    let Some(transform) = world.get::<UiTransform>(entity) else {
-        return;
+    let transform = world.get::<UiTransform>(entity).copied()?;
+    let style = world.get::<UiStyle>(entity).copied().unwrap_or_default();
+    let text = world.get::<UiText>(entity).cloned().unwrap_or_default();
+
+    let bounds = rect_from_transform(transform);
+    let clip_bounds = if clip_text {
+        bounds
+    } else {
+        UiRect::new(0.0, 0.0, surface_size.width, surface_size.height)
     };
 
-    let rect = UiRect::new(
+    let text_style = text_style_from_scene_text(&text);
+    let line_height = text_style
+        .line_height
+        .unwrap_or((text.size.max(1.0) * 1.25).max(1.0));
+    let lines = if text.content.is_empty() {
+        vec![String::new()]
+    } else {
+        text.content
+            .lines()
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>()
+    };
+
+    let mut label_children = Vec::with_capacity(lines.len());
+    for (index, line) in lines.iter().enumerate() {
+        let label_id = WidgetId(*next_label_id);
+        *next_label_id = next_label_id.saturating_add(1);
+
+        let x = if center_text {
+            let approx_width = line.chars().count() as f32 * text_style.font_size * 0.55;
+            bounds.x + (bounds.width - approx_width).max(0.0) * 0.5
+        } else {
+            bounds.x + TEXT_PADDING_X
+        };
+        let y = bounds.y + TEXT_PADDING_Y + line_height * index as f32;
+        let available_width = (bounds.x + bounds.width - x - TEXT_PADDING_X).max(0.0);
+        let label_bounds = UiRect::new(x, y, available_width, line_height.max(1.0));
+
+        layouts.insert(
+            label_id,
+            ComputedLayout::new(label_bounds, label_bounds, label_bounds.size()),
+        );
+        label_children.push(UiNode::new(
+            label_id,
+            UiNodeKind::Label(LabelNode::new(line, text_style.clone())),
+        ));
+    }
+
+    let mut panel = PanelNode::new(theme_from_scene_style(style, scale));
+    panel.padding = UiInsets::ZERO;
+    panel.gap = 0.0;
+
+    layouts.insert(
+        panel_id,
+        ComputedLayout::new(bounds, clip_bounds, bounds.size()),
+    );
+
+    Some(UiNode::with_children(
+        panel_id,
+        UiNodeKind::Panel(panel),
+        label_children,
+    ))
+}
+
+fn rect_from_transform(transform: UiTransform) -> UiRect {
+    UiRect::new(
         transform.x,
         transform.y,
         transform.w.max(0.0),
         transform.h.max(0.0),
-    );
+    )
+}
 
-    if let Some(style) = world.get::<UiStyle>(entity) {
-        push_rect(
-            layer,
-            primitive_order,
-            rect,
-            style.bg_color,
-            style.radius.max(0.0),
-        );
-        push_border(
-            layer,
-            primitive_order,
-            rect,
-            style.border_color,
-            style.border_width.max(0.0),
-            style.radius.max(0.0),
-        );
-    }
+fn theme_from_scene_style(style: UiStyle, scale: f32) -> ThemeTokens {
+    let mut theme = ThemeTokens::default().scaled_by(scale.max(0.5));
+    theme.background_panel = to_ui_color(style.bg_color);
+    theme.border = to_ui_color(style.border_color);
+    theme.border_width = style.border_width.max(0.0);
+    let radius = style.radius.max(0.0);
+    theme.radius.sm = radius;
+    theme.radius.md = radius;
+    theme.radius.lg = radius;
+    theme
+}
 
-    let Some(text) = world.get::<UiText>(entity) else {
-        return;
-    };
+fn to_ui_color(color: [f32; 4]) -> UiColor {
+    UiColor::new(color[0], color[1], color[2], color[3])
+}
 
-    let clip_rect = clip_text.then_some(rect);
-    if let Some(clip) = clip_rect {
-        layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
-            rect: clip,
-            sort_key: next_sort_key(primitive_order),
-        }));
-    }
-
-    let line_height = (text.size.max(1.0) * 1.25).max(1.0);
-    for (index, line) in text.content.split('\n').enumerate() {
-        let y = transform.y + TEXT_PADDING_Y + line_height * index as f32;
-        let x = if center_text {
-            let approx_text_w = line.chars().count() as f32 * text.size.max(1.0) * 0.55;
-            transform.x + (transform.w - approx_text_w).max(0.0) * 0.5
-        } else {
-            transform.x + TEXT_PADDING_X
-        };
-        let glyph_run = estimate_glyph_run(line, x, y, text.size.max(1.0));
-        layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
-            glyph_run,
-            clip_rect,
-            UiPaint::rgba(text.color[0], text.color[1], text.color[2], text.color[3]),
-            default_draw_key(),
-            next_sort_key(primitive_order),
-        )));
-    }
-
-    if clip_rect.is_some() {
-        layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
-            sort_key: next_sort_key(primitive_order),
-        }));
+fn text_style_from_scene_text(text: &UiText) -> TextStyle {
+    TextStyle {
+        font_id: FontId(DEFAULT_EDITOR_FONT_ID.0),
+        font_size: text.size.max(1.0),
+        color: text.color,
+        line_height: Some((text.size.max(1.0) * 1.25).max(1.0)),
+        align: TextAlign::Start,
+        wrap: TextWrap::NoWrap,
+        overflow: TextOverflow::Clip,
     }
 }
 
-fn estimate_glyph_run(line: &str, x: f32, y: f32, font_size: f32) -> GlyphRun {
-    let advance = font_size.max(1.0) * 0.55;
-    let baseline_y = y + font_size.max(1.0);
-    let glyphs = line
-        .chars()
-        .enumerate()
-        .map(|(index, ch)| PositionedGlyph {
-            ch,
-            origin: UiPoint::new(x + advance * index as f32, baseline_y),
-            advance,
-        })
-        .collect::<Vec<_>>();
-
-    GlyphRun {
-        font_id: FontId(0),
-        font_size,
-        glyphs,
-        size: UiSize::new(advance * line.chars().count() as f32, font_size * 1.25),
-    }
-}
-
-fn push_rect(
-    layer: &mut UiLayer,
-    primitive_order: &mut u32,
-    rect: UiRect,
-    color: [f32; 4],
-    radius: f32,
-) {
-    if color[3] <= f32::EPSILON || rect.width <= f32::EPSILON || rect.height <= f32::EPSILON {
-        return;
-    }
-    layer.push(UiPrimitive::Rect(RectPrimitive::new(
-        rect,
-        radius,
-        UiPaint::rgba(color[0], color[1], color[2], color[3]),
-        default_draw_key(),
-        next_sort_key(primitive_order),
-    )));
-}
-
-fn push_border(
-    layer: &mut UiLayer,
-    primitive_order: &mut u32,
-    rect: UiRect,
-    color: [f32; 4],
-    width: f32,
-    radius: f32,
-) {
-    if color[3] <= f32::EPSILON
-        || width <= f32::EPSILON
-        || rect.width <= f32::EPSILON
-        || rect.height <= f32::EPSILON
-    {
-        return;
-    }
-    layer.push(UiPrimitive::Border(BorderPrimitive::new(
-        rect,
-        radius,
-        width,
-        UiPaint::rgba(color[0], color[1], color[2], color[3]),
-        default_draw_key(),
-        next_sort_key(primitive_order),
-    )));
-}
-
-fn default_draw_key() -> UiDrawKey {
-    UiDrawKey::new(0, None)
-}
-
-fn next_sort_key(primitive_order: &mut u32) -> UiSortKey {
-    let key = UiSortKey::new(0, 0, *primitive_order);
-    *primitive_order = primitive_order.saturating_add(1);
-    key
+fn overlay_font_atlas() -> &'static UiFontAtlasResource {
+    static ATLAS: OnceLock<UiFontAtlasResource> = OnceLock::new();
+    ATLAS.get_or_init(UiFontAtlasResource::default)
 }

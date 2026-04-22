@@ -34,7 +34,9 @@ world_ops = { path = "../domain/world_ops" }
 world_sdf = { path = "../domain/world_sdf" }
 ui_math = { path = "../domain/ui/ui_math" }
 ui_render_data = { path = "../domain/ui/ui_render_data" }
+ui_runtime = { path = "../domain/ui/ui_runtime" }
 ui_text = { path = "../domain/ui/ui_text" }
+ui_theme = { path = "../domain/ui/ui_theme" }
 engine_render_macros = { path = "../engine_render_macros" }
 engine_replay = { path = "../net/engine_history" }
 engine_net = { path = "../net/engine_net" }

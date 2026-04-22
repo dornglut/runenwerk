@@ -24,6 +24,11 @@ const BANNED_PATTERNS: &[&str] = &[
     "engine::legacy",
 ];
 
+const SUBSTRATE_OVERLAY_PATHS: &[&str] = &[
+    "src/plugins/debug_metrics/mod.rs",
+    "src/plugins/scene/runtime/overlay_ui.rs",
+];
+
 #[test]
 fn runtime_surface_stays_free_of_legacy_runtime_imports() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -67,4 +72,38 @@ fn collect_offenders(path: &Path, root: &Path, offenders: &mut Vec<String>) {
             offenders.push(format!("{} contains `{pattern}`", relative.display()));
         }
     }
+}
+
+#[test]
+fn overlay_runtime_paths_route_through_ui_substrate_frame_builder() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut missing_substrate_calls = Vec::new();
+    let mut banned_manual_primitives = Vec::new();
+
+    for relative_path in SUBSTRATE_OVERLAY_PATHS {
+        let path = manifest_dir.join(relative_path);
+        let contents = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+
+        if !contents.contains("build_ui_frame(") {
+            missing_substrate_calls.push(relative_path.to_string());
+        }
+        if contents.contains("GlyphRunPrimitive::new(")
+            || contents.contains("RectPrimitive::new(")
+            || contents.contains("estimate_glyph_run(")
+        {
+            banned_manual_primitives.push(relative_path.to_string());
+        }
+    }
+
+    assert!(
+        missing_substrate_calls.is_empty(),
+        "expected overlay runtime paths to call ui_runtime::build_ui_frame:\n{}",
+        missing_substrate_calls.join("\n")
+    );
+    assert!(
+        banned_manual_primitives.is_empty(),
+        "expected overlay runtime paths to avoid ad-hoc primitive assembly:\n{}",
+        banned_manual_primitives.join("\n")
+    );
 }

@@ -1,18 +1,22 @@
+use std::sync::OnceLock;
+
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::InputState;
+use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
 use crate::plugins::render::inspect::WorldRuntimeInspectorSnapshot;
 use crate::plugins::time::domain::Time;
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup};
 use crate::state::{
     DebugMetricsState, SceneRuntimeState, StartupPhase, StartupState, UiOverlayState,
 };
-use ui_math::{UiPoint, UiRect, UiSize};
-use ui_render_data::{
-    ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId,
-    UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
+use ui_math::{UiInsets, UiRect, UiSize};
+use ui_runtime::{
+    ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, UiNode, UiNodeKind, UiTree, WidgetId,
+    build_ui_frame,
 };
-use ui_text::{FontId, GlyphRun, PositionedGlyph};
+use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextWrap};
+use ui_theme::{ThemeTokens, UiColor};
 use winit::keyboard::KeyCode;
 
 pub struct DebugMetricsPlugin;
@@ -49,7 +53,7 @@ fn debug_metrics_overlay_system(
     }
 
     debug_metrics.observe_frame_delta(time.delta_seconds);
-    ui.debug_frame = UiFrame::default();
+    ui.debug_frame = ui_render_data::UiFrame::default();
 
     if !debug_metrics.visible {
         return;
@@ -145,94 +149,71 @@ fn build_debug_metrics_frame(
     panel_h: f32,
     scale: f32,
     lines: &[String],
-) -> UiFrame {
-    let mut layer = UiLayer::new(UiLayerId(0));
-    let mut primitive_order = 0u32;
-    let panel_rect = UiRect::new(panel_x, panel_y, panel_w, panel_h);
+) -> ui_render_data::UiFrame {
+    let panel_rect = UiRect::new(panel_x, panel_y, panel_w.max(0.0), panel_h.max(0.0));
+    let text_padding = UiInsets::all(10.0 * scale);
+    let content_bounds = panel_rect.inset(text_padding);
 
-    push_rect(
-        &mut layer,
-        &mut primitive_order,
-        panel_rect,
-        [0.03, 0.05, 0.08, 0.9],
-        8.0 * scale,
+    let mut panel_theme = ThemeTokens::default().scaled_by(scale);
+    panel_theme.background_panel = UiColor::new(0.03, 0.05, 0.08, 0.90);
+    panel_theme.border = UiColor::new(0.24, 0.30, 0.40, 0.90);
+    panel_theme.border_width = scale.max(0.5);
+    panel_theme.radius.sm = 8.0 * scale;
+    panel_theme.radius.md = 8.0 * scale;
+    panel_theme.radius.lg = 8.0 * scale;
+
+    let line_height = 16.0 * scale;
+    let text_style = TextStyle {
+        font_id: FontId(DEFAULT_EDITOR_FONT_ID.0),
+        font_size: (12.0 * scale).max(1.0),
+        color: [0.84, 0.92, 0.98, 1.0],
+        line_height: Some(line_height.max(1.0)),
+        align: TextAlign::Start,
+        wrap: TextWrap::NoWrap,
+        overflow: TextOverflow::Clip,
+    };
+
+    let mut children = Vec::with_capacity(lines.len());
+    let mut layouts = ComputedLayoutMap::new();
+    let mut next_id = 2_u64;
+
+    for (index, line) in lines.iter().enumerate() {
+        let id = WidgetId(next_id);
+        next_id = next_id.saturating_add(1);
+        children.push(UiNode::new(
+            id,
+            UiNodeKind::Label(LabelNode::new(line, text_style.clone())),
+        ));
+
+        let y = content_bounds.y + line_height * index as f32;
+        let bounds = UiRect::new(
+            content_bounds.x,
+            y,
+            content_bounds.width.max(0.0),
+            line_height,
+        );
+        layouts.insert(id, ComputedLayout::new(bounds, bounds, bounds.size()));
+    }
+
+    let root_id = WidgetId(1);
+    let panel_node = UiNode::with_children(
+        root_id,
+        UiNodeKind::Panel(PanelNode::new(panel_theme)),
+        children,
     );
-    layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
-        rect: panel_rect,
-        sort_key: next_sort_key(&mut primitive_order),
-    }));
+    layouts.insert(
+        root_id,
+        ComputedLayout::new(panel_rect, content_bounds, panel_rect.size()),
+    );
 
-    let line_h = 16.0 * scale;
-    for (idx, line) in lines.iter().enumerate() {
-        let text_x = panel_x + 10.0 * scale;
-        let text_y = panel_y + 10.0 * scale + line_h * idx as f32;
-        let glyph_run = estimate_glyph_run(line, text_x, text_y, 12.0 * scale);
-        layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
-            glyph_run,
-            Some(panel_rect),
-            UiPaint::rgba(0.84, 0.92, 0.98, 1.0),
-            default_draw_key(),
-            next_sort_key(&mut primitive_order),
-        )));
-    }
-
-    layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
-        sort_key: next_sort_key(&mut primitive_order),
-    }));
-
+    let tree = UiTree::new(panel_node);
     let surface_size = UiSize::new(screen_size.0.max(1.0), screen_size.1.max(1.0));
-    UiFrame::with_surfaces(vec![UiSurface::with_layers(
-        UiSurfaceId(0),
-        surface_size,
-        vec![layer],
-    )])
+    build_ui_frame(&tree, &layouts, surface_size, debug_overlay_font_atlas())
 }
 
-fn push_rect(
-    layer: &mut UiLayer,
-    primitive_order: &mut u32,
-    rect: UiRect,
-    color: [f32; 4],
-    radius: f32,
-) {
-    layer.push(UiPrimitive::Rect(RectPrimitive::new(
-        rect,
-        radius.max(0.0),
-        UiPaint::rgba(color[0], color[1], color[2], color[3]),
-        default_draw_key(),
-        next_sort_key(primitive_order),
-    )));
-}
-
-fn estimate_glyph_run(text: &str, x: f32, y: f32, font_size: f32) -> GlyphRun {
-    let advance = font_size.max(1.0) * 0.55;
-    let baseline_y = y + font_size.max(1.0);
-    let glyphs = text
-        .chars()
-        .enumerate()
-        .map(|(index, ch)| PositionedGlyph {
-            ch,
-            origin: UiPoint::new(x + advance * index as f32, baseline_y),
-            advance,
-        })
-        .collect::<Vec<_>>();
-
-    GlyphRun {
-        font_id: FontId(0),
-        font_size,
-        size: UiSize::new(advance * text.chars().count() as f32, font_size * 1.25),
-        glyphs,
-    }
-}
-
-fn default_draw_key() -> UiDrawKey {
-    UiDrawKey::new(0, None)
-}
-
-fn next_sort_key(primitive_order: &mut u32) -> UiSortKey {
-    let key = UiSortKey::new(0, 0, *primitive_order);
-    *primitive_order = primitive_order.saturating_add(1);
-    key
+fn debug_overlay_font_atlas() -> &'static UiFontAtlasResource {
+    static ATLAS: OnceLock<UiFontAtlasResource> = OnceLock::new();
+    ATLAS.get_or_init(UiFontAtlasResource::default)
 }
 
 #[cfg(test)]
