@@ -53,5 +53,8 @@ Explain how execution order respects domain invariants.
 - Known limitations or constraints for future developers
 
 ## References & Links
-- Related domain modules: ECS, Scheduler, SDF, Geometry
+- Related domain modules: ECS, Scheduler, SDF, Geometry, UI
+- UI domain docs:
+  - [UI Substrate Architecture](./ui/architecture.md)
+  - [UI Substrate Roadmap](./ui/roadmap.md)
 - External references for DDD, ECS patterns, or spatial math
