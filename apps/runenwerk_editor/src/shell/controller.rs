@@ -1,6 +1,7 @@
 use editor_shell::{
-    CONSOLE_SCROLL_WIDGET_ID, EditorShellViewModel, ShellCommand, ShellUiExpressionFrame,
-    UiInputOutcome, UiTree, build_editor_shell, map_interactions_to_shell_commands,
+    CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockingPreviewDropTarget, EditorShellViewModel,
+    ShellCommand, ShellUiExpressionFrame, TabDropDestination, UiInputOutcome, UiTree,
+    build_editor_shell_with_docking_visual_state, map_interactions_to_shell_commands,
 };
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::{PointerEventKind, UiInputEvent};
@@ -50,7 +51,13 @@ impl RunenwerkEditorShellController {
         viewport_products: Option<&ArtifactObservationFrame>,
     ) -> UiTree {
         let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
-        let build_result = build_editor_shell(&view_model, theme, shell_state.workspace_state());
+        let docking_visual_state = shell_state.docking_visual_state();
+        let build_result = build_editor_shell_with_docking_visual_state(
+            &view_model,
+            theme,
+            shell_state.workspace_state(),
+            Some(&docking_visual_state),
+        );
         let tree = build_result.tree;
         shell_state.cache_projection_artifacts(build_result.projection_artifacts);
         shell_state.set_last_tree(tree.clone());
@@ -163,7 +170,13 @@ impl RunenwerkEditorShellController {
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
         let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
-        let build_result = build_editor_shell(&view_model, theme, shell_state.workspace_state());
+        let docking_visual_state = shell_state.docking_visual_state();
+        let build_result = build_editor_shell_with_docking_visual_state(
+            &view_model,
+            theme,
+            shell_state.workspace_state(),
+            Some(&docking_visual_state),
+        );
         let tree = build_result.tree.clone();
         let projection_artifacts =
             shell_state.cache_projection_artifacts(build_result.projection_artifacts);
@@ -200,8 +213,22 @@ impl RunenwerkEditorShellController {
             }
         }
 
-        let commands =
+        let (mut docking_commands, suppress_tab_activation) = Self::collect_docking_commands(
+            shell_state,
+            event,
+            &tree,
+            &layouts,
+            &projection_artifacts,
+        );
+
+        let mut commands =
             map_interactions_to_shell_commands(&outcome.interactions, &projection_artifacts);
+        if suppress_tab_activation {
+            commands
+                .retain(|command| !matches!(command, ShellCommand::SetTabStackActivePanel { .. }));
+        }
+        commands.append(&mut docking_commands);
+
         Self::dispatch_commands(
             app,
             shell_state,
@@ -214,9 +241,110 @@ impl RunenwerkEditorShellController {
         Ok(outcome)
     }
 
+    fn collect_docking_commands(
+        shell_state: &mut RunenwerkEditorShellState,
+        event: &UiInputEvent,
+        tree: &UiTree,
+        layouts: &ComputedLayoutMap,
+        projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    ) -> (Vec<ShellCommand>, bool) {
+        let mut commands = Vec::new();
+        let mut suppress_tab_activation = false;
+
+        let UiInputEvent::Pointer(pointer) = event else {
+            return (commands, suppress_tab_activation);
+        };
+
+        match pointer.kind {
+            PointerEventKind::Down => {
+                let pressed = shell_state.runtime().state().pressed_widget;
+                let Some(pressed_widget) = pressed else {
+                    shell_state.clear_tab_drag();
+                    return (commands, suppress_tab_activation);
+                };
+                if let Some(route) = projection_artifacts
+                    .workspace
+                    .tab_button_route_by_widget_id
+                    .get(&pressed_widget)
+                {
+                    shell_state.begin_tab_drag_candidate(
+                        route.panel_instance_id,
+                        route.tab_stack_id,
+                        pointer.position,
+                        projection_artifacts.projection_epoch,
+                    );
+                } else {
+                    shell_state.clear_tab_drag();
+                }
+            }
+            PointerEventKind::Move | PointerEventKind::Enter => {
+                let became_active = shell_state.update_tab_drag_pointer(
+                    pointer.position,
+                    projection_artifacts.projection_epoch,
+                );
+                if became_active || shell_state.docking_visual_state().active_tab_drag.is_some() {
+                    let preview_target = resolve_tab_drop_preview_target(
+                        projection_artifacts,
+                        tree,
+                        layouts,
+                        pointer.position,
+                    );
+                    shell_state.set_tab_drag_preview_target(
+                        preview_target,
+                        projection_artifacts.projection_epoch,
+                    );
+                }
+            }
+            PointerEventKind::Leave => {
+                shell_state
+                    .set_tab_drag_preview_target(None, projection_artifacts.projection_epoch);
+            }
+            PointerEventKind::Up => {
+                let preview_target = resolve_tab_drop_preview_target(
+                    projection_artifacts,
+                    tree,
+                    layouts,
+                    pointer.position,
+                );
+                shell_state.set_tab_drag_preview_target(
+                    preview_target,
+                    projection_artifacts.projection_epoch,
+                );
+                let finished = shell_state.finish_tab_drag(projection_artifacts.projection_epoch);
+                if let Some((panel_instance_id, source_tab_stack_id, preview_target, drag_epoch)) =
+                    finished
+                {
+                    suppress_tab_activation = true;
+                    if let Some(destination) = preview_target.map(|target| match target {
+                        DockingPreviewDropTarget::TabStack {
+                            tab_stack_id,
+                            insert_index,
+                        } => TabDropDestination::TabStack {
+                            tab_stack_id,
+                            insert_index,
+                        },
+                        DockingPreviewDropTarget::NewFloatingHost => {
+                            TabDropDestination::NewFloatingHost
+                        }
+                    }) {
+                        commands.push(ShellCommand::CommitTabDrop {
+                            panel_instance_id,
+                            source_tab_stack_id,
+                            destination,
+                            projection_epoch: drag_epoch,
+                        });
+                    }
+                }
+            }
+            PointerEventKind::Scroll => {}
+        }
+
+        (commands, suppress_tab_activation)
+    }
+
     fn dispatch_commands(
         app: &mut RunenwerkEditorApp,
-        shell_state: &RunenwerkEditorShellState,
+        shell_state: &mut RunenwerkEditorShellState,
         commands: Vec<ShellCommand>,
         mut viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
@@ -228,14 +356,16 @@ impl RunenwerkEditorShellController {
             {
                 continue;
             }
+            let current_epoch = shell_state.current_projection_epoch();
 
             dispatch_shell_command(
                 app,
+                Some(shell_state),
                 command,
                 viewport_presentations.as_deref_mut(),
                 viewport_observations,
                 tool_surface_bindings,
-                Some(shell_state.current_projection_epoch()),
+                Some(current_epoch),
             )?;
         }
 
@@ -248,6 +378,40 @@ fn is_console_scroll_event(event: &UiInputEvent, outcome: &UiInputOutcome) -> bo
         event,
         UiInputEvent::Pointer(pointer) if pointer.kind == PointerEventKind::Scroll
     ) && outcome.dispatch.target == Some(CONSOLE_SCROLL_WIDGET_ID)
+}
+
+fn resolve_tab_drop_preview_target(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Option<DockingPreviewDropTarget> {
+    editor_shell::hit_test_widget(tree, layouts, pointer_position)
+        .and_then(|widget_id| {
+            projection_artifacts
+                .workspace
+                .tab_drop_route_by_widget_id
+                .get(&widget_id)
+                .copied()
+        })
+        .map(map_projected_tab_drop_target)
+}
+
+fn map_projected_tab_drop_target(
+    route: editor_shell::ProjectedTabDropRoute,
+) -> DockingPreviewDropTarget {
+    match route.target {
+        editor_shell::ProjectedTabDropTarget::TabStack {
+            tab_stack_id,
+            insert_index,
+        } => DockingPreviewDropTarget::TabStack {
+            tab_stack_id,
+            insert_index,
+        },
+        editor_shell::ProjectedTabDropTarget::NewFloatingHost => {
+            DockingPreviewDropTarget::NewFloatingHost
+        }
+    }
 }
 
 fn is_at_bottom(offset: f32, max_offset: f32) -> bool {

@@ -9,7 +9,7 @@ use editor_viewport::{
     ViewportId, ViewportPresentationState,
 };
 use engine::plugins::render::UiFontAtlasResource;
-use ui_input::{Modifiers, PointerEvent, PointerEventKind, UiInputEvent};
+use ui_input::{Modifiers, PointerButton, PointerEvent, PointerEventKind, UiInputEvent};
 use ui_math::{UiPoint, UiRect, UiVector};
 use ui_theme::ThemeTokens;
 
@@ -108,6 +108,7 @@ fn dispatch_shell_command_updates_active_tool() {
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::ActivateSelectTool,
         None,
         None,
@@ -119,6 +120,7 @@ fn dispatch_shell_command_updates_active_tool() {
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::ActivateTranslateTool,
         None,
         None,
@@ -141,6 +143,7 @@ fn dispatch_shell_command_selects_outliner_entity() {
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::SelectOutlinerEntity {
             entity: EntityId(1),
             target: StructuralCommandTarget {
@@ -206,6 +209,7 @@ fn dispatch_shell_command_selects_viewport_product_when_available() {
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::SelectViewportProduct {
             viewport_id,
             product_id,
@@ -266,6 +270,7 @@ fn dispatch_shell_command_updates_only_target_viewport_product_selection() {
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::SelectViewportProduct {
             viewport_id: viewport_b,
             product_id: product_picking,
@@ -311,6 +316,7 @@ fn dispatch_shell_command_viewport_product_fails_closed_without_runtime_binding(
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::SelectViewportProduct {
             viewport_id,
             product_id,
@@ -367,6 +373,7 @@ fn dispatch_shell_command_viewport_product_rejects_stale_binding_viewport_mismat
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::SelectViewportProduct {
             viewport_id: requested_viewport,
             product_id,
@@ -415,6 +422,7 @@ fn dispatch_shell_command_viewport_product_requires_structural_tool_surface_targ
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::SelectViewportProduct {
             viewport_id,
             product_id,
@@ -466,6 +474,7 @@ fn dispatch_shell_command_viewport_product_rejects_structural_binding_mismatch()
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::SelectViewportProduct {
             viewport_id,
             product_id,
@@ -492,6 +501,7 @@ fn dispatch_shell_command_toggles_viewport_details_visibility() {
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::ToggleViewportDetails,
         None,
         None,
@@ -503,6 +513,7 @@ fn dispatch_shell_command_toggles_viewport_details_visibility() {
 
     dispatch_shell_command(
         &mut app,
+        None,
         ShellCommand::ToggleViewportDetails,
         None,
         None,
@@ -517,7 +528,7 @@ fn dispatch_shell_command_toggles_viewport_details_visibility() {
 fn dispatch_shell_command_records_workflow_dispatch_event() {
     let mut app = RunenwerkEditorApp::new();
 
-    dispatch_shell_command(&mut app, ShellCommand::NoOp, None, None, None, None)
+    dispatch_shell_command(&mut app, None, ShellCommand::NoOp, None, None, None, None)
         .expect("no-op shell command should succeed");
 
     assert!(matches!(
@@ -821,10 +832,283 @@ fn stale_projection_commands_fail_closed_after_rebuild() {
 
     let workflow_log_len_before = app.runtime().workflow_log().len();
     for command in commands {
-        dispatch_shell_command(&mut app, command, None, None, None, Some(current_epoch))
-            .expect("stale command dispatch should fail closed without error");
+        dispatch_shell_command(
+            &mut app,
+            None,
+            command,
+            None,
+            None,
+            None,
+            Some(current_epoch),
+        )
+        .expect("stale command dispatch should fail closed without error");
     }
 
     assert_eq!(app.outliner_state().selected_entity, None);
     assert_eq!(app.runtime().workflow_log().len(), workflow_log_len_before);
+}
+
+#[test]
+fn drag_drop_tab_rehomes_panel_with_stable_structural_identity() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let artifacts = shell_state
+        .last_projection_artifacts()
+        .expect("projection artifacts should exist")
+        .clone();
+
+    let workspace_before = shell_state.workspace_state().clone();
+    let outliner_stack_id = workspace_before
+        .tab_stacks()
+        .find(|stack| {
+            stack.ordered_panels.iter().any(|panel| {
+                workspace_before
+                    .panel(*panel)
+                    .map(|value| value.panel_kind == editor_shell::PanelKind::Outliner)
+                    .unwrap_or(false)
+            })
+        })
+        .expect("outliner stack should exist")
+        .id;
+    let (viewport_panel_id, viewport_stack_id) = artifacts
+        .workspace
+        .tab_button_route_by_widget_id
+        .values()
+        .find_map(|route| {
+            workspace_before
+                .panel(route.panel_instance_id)
+                .filter(|panel| panel.panel_kind == editor_shell::PanelKind::Viewport)
+                .map(|_| (route.panel_instance_id, route.tab_stack_id))
+        })
+        .expect("viewport tab route should exist");
+    let viewport_surface_before = workspace_before
+        .panel(viewport_panel_id)
+        .expect("viewport panel should exist")
+        .active_tool_surface;
+
+    let source_widget = artifacts
+        .workspace
+        .tab_button_route_by_widget_id
+        .iter()
+        .find_map(|(widget_id, route)| {
+            (route.panel_instance_id == viewport_panel_id).then_some(*widget_id)
+        })
+        .expect("source tab widget should exist");
+    let target_drop_widget = artifacts
+        .workspace
+        .tab_drop_route_by_widget_id
+        .iter()
+        .find_map(|(widget_id, route)| {
+            matches!(
+                route.target,
+                editor_shell::ProjectedTabDropTarget::TabStack {
+                    tab_stack_id,
+                    insert_index: 1
+                } if tab_stack_id == outliner_stack_id
+            )
+            .then_some(*widget_id)
+        })
+        .expect("target tab drop widget should exist");
+
+    let tree = shell_state
+        .last_tree()
+        .expect("shell tree should exist")
+        .clone();
+    let layouts = shell_state.runtime().compute_layout(&tree, bounds);
+    let source_position = center_of_widget(&layouts, source_widget);
+    let target_position = center_of_widget(&layouts, target_drop_widget);
+    let mid_position = UiPoint::new(
+        source_position.x + (target_position.x - source_position.x) * 0.25,
+        source_position.y + (target_position.y - source_position.y) * 0.25,
+    );
+
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Down,
+        source_position,
+        Some(PointerButton::Primary),
+    );
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Move,
+        mid_position,
+        None,
+    );
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Move,
+        target_position,
+        None,
+    );
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Up,
+        target_position,
+        Some(PointerButton::Primary),
+    );
+
+    let workspace_after = shell_state.workspace_state();
+    let outliner_stack_after = workspace_after
+        .tab_stack(outliner_stack_id)
+        .expect("outliner stack should exist");
+    assert!(
+        outliner_stack_after
+            .ordered_panels
+            .contains(&viewport_panel_id),
+        "viewport panel should be rehomed into outliner tab stack",
+    );
+    assert_eq!(
+        workspace_after
+            .panel(viewport_panel_id)
+            .expect("viewport panel should exist")
+            .active_tool_surface,
+        viewport_surface_before,
+        "tab drag/drop must preserve panel tool-surface identity",
+    );
+    assert!(
+        !workspace_after
+            .tab_stack(viewport_stack_id)
+            .expect("source stack should exist")
+            .ordered_panels
+            .contains(&viewport_panel_id),
+        "source stack should no longer contain moved panel",
+    );
+}
+
+#[test]
+fn workspace_layout_roundtrip_preserves_identity_after_float_cycle() {
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let workspace_before = shell_state.workspace_state().clone();
+    let viewport_stack_id = workspace_before
+        .tab_stacks()
+        .find(|stack| {
+            stack.ordered_panels.iter().any(|panel| {
+                workspace_before
+                    .panel(*panel)
+                    .map(|value| value.panel_kind == editor_shell::PanelKind::Viewport)
+                    .unwrap_or(false)
+            })
+        })
+        .expect("viewport stack should exist")
+        .id;
+    let viewport_panel_id = workspace_before
+        .tab_stack(viewport_stack_id)
+        .and_then(|stack| stack.ordered_panels.first().copied())
+        .expect("viewport panel should exist");
+    let viewport_surface_before = workspace_before
+        .panel(viewport_panel_id)
+        .expect("viewport panel should exist")
+        .active_tool_surface;
+
+    let floating_host_id = shell_state.allocate_panel_host_id();
+    let floating_stack_id = shell_state.allocate_tab_stack_id();
+    shell_state
+        .apply_workspace_mutation(WorkspaceMutation::MovePanelToNewFloatingHost {
+            panel_id: viewport_panel_id,
+            source_tab_stack_id: viewport_stack_id,
+            floating_host_id,
+            floating_tab_stack_id: floating_stack_id,
+            bounds: editor_shell::FloatingHostBounds::new(120.0, 88.0, 540.0, 360.0),
+        })
+        .expect("floating move should succeed");
+
+    let path = {
+        let mut value = std::env::temp_dir();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        value.push(format!("runenwerk_shell_workspace_cycle_{nanos}.ron"));
+        value
+    };
+    crate::persistence::write_workspace_layout(&path, shell_state.workspace_state())
+        .expect("workspace layout should write");
+    let loaded = crate::persistence::read_workspace_layout(&path).expect("workspace should load");
+    let _ = std::fs::remove_file(path);
+
+    let mut restored_shell_state = RunenwerkEditorShellState::new();
+    restored_shell_state.replace_workspace_state(loaded);
+    let restored = restored_shell_state.workspace_state();
+
+    assert_eq!(
+        restored.workspace_id(),
+        shell_state.workspace_state().workspace_id(),
+        "workspace id should survive workspace layout persistence",
+    );
+    assert_eq!(
+        restored
+            .panel(viewport_panel_id)
+            .expect("viewport panel should remain")
+            .active_tool_surface,
+        viewport_surface_before,
+        "panel/tool-surface identity should survive workspace layout persistence",
+    );
+    assert!(
+        matches!(
+            restored
+                .host(floating_host_id)
+                .expect("floating host should remain")
+                .kind,
+            editor_shell::PanelHostKind::FloatingHostPlaceholder(
+                editor_shell::FloatingHostPlaceholderState {
+                    tab_stack_id: Some(id),
+                    ..
+                }
+            ) if id == floating_stack_id
+        ),
+        "floating host stack identity should survive workspace layout persistence",
+    );
+}
+
+fn dispatch_pointer(
+    app: &mut RunenwerkEditorApp,
+    shell_state: &mut RunenwerkEditorShellState,
+    bounds: UiRect,
+    theme: &ThemeTokens,
+    kind: PointerEventKind,
+    position: UiPoint,
+    button: Option<PointerButton>,
+) {
+    let event = UiInputEvent::Pointer(PointerEvent {
+        kind,
+        position,
+        delta: UiVector::ZERO,
+        button,
+        modifiers: Modifiers::default(),
+        click_count: 1,
+    });
+    RunenwerkEditorShellController::dispatch_input(app, shell_state, bounds, theme, &event)
+        .expect("pointer dispatch should succeed");
+}
+
+fn center_of_widget(
+    layouts: &editor_shell::ComputedLayoutMap,
+    widget_id: editor_shell::WidgetId,
+) -> UiPoint {
+    let bounds = layouts
+        .get(&widget_id)
+        .expect("widget layout should exist")
+        .bounds;
+    UiPoint::new(
+        bounds.x + bounds.width * 0.5,
+        bounds.y + bounds.height * 0.5,
+    )
 }

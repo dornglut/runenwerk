@@ -2,11 +2,12 @@
 //! Purpose: Explicit reducer-style structural mutations for workspace graph state.
 
 use crate::{
-    PanelInstanceId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceMount, WorkspaceState,
-    WorkspaceStateError,
+    FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
+    PanelInstanceId, TabStackId, TabStackState, ToolSurfaceInstanceId, ToolSurfaceMount,
+    WorkspaceState, WorkspaceStateError,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WorkspaceMutation {
     SetTabStackPanels {
         tab_stack_id: TabStackId,
@@ -27,6 +28,30 @@ pub enum WorkspaceMutation {
     SetToolSurfaceMount {
         tool_surface_id: ToolSurfaceInstanceId,
         mount: ToolSurfaceMount,
+    },
+    ReorderPanelInTabStack {
+        tab_stack_id: TabStackId,
+        panel_id: PanelInstanceId,
+        target_index: usize,
+        activate_panel: bool,
+    },
+    MovePanelBetweenTabStacks {
+        panel_id: PanelInstanceId,
+        source_tab_stack_id: TabStackId,
+        destination_tab_stack_id: TabStackId,
+        destination_index: usize,
+        activate_panel: bool,
+    },
+    MovePanelToNewFloatingHost {
+        panel_id: PanelInstanceId,
+        source_tab_stack_id: TabStackId,
+        floating_host_id: PanelHostId,
+        floating_tab_stack_id: TabStackId,
+        bounds: FloatingHostBounds,
+    },
+    SetFloatingHostBounds {
+        floating_host_id: PanelHostId,
+        bounds: FloatingHostBounds,
     },
 }
 
@@ -178,15 +203,264 @@ fn apply_mutation(
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?
                 .mount = mount;
         }
+        WorkspaceMutation::ReorderPanelInTabStack {
+            tab_stack_id,
+            panel_id,
+            target_index,
+            activate_panel,
+        } => {
+            reorder_panel_in_stack(state, tab_stack_id, panel_id, target_index, activate_panel)?;
+        }
+        WorkspaceMutation::MovePanelBetweenTabStacks {
+            panel_id,
+            source_tab_stack_id,
+            destination_tab_stack_id,
+            destination_index,
+            activate_panel,
+        } => {
+            move_panel_between_tab_stacks(
+                state,
+                panel_id,
+                source_tab_stack_id,
+                destination_tab_stack_id,
+                destination_index,
+                activate_panel,
+            )?;
+        }
+        WorkspaceMutation::MovePanelToNewFloatingHost {
+            panel_id,
+            source_tab_stack_id,
+            floating_host_id,
+            floating_tab_stack_id,
+            bounds,
+        } => {
+            move_panel_to_new_floating_host(
+                state,
+                panel_id,
+                source_tab_stack_id,
+                floating_host_id,
+                floating_tab_stack_id,
+                bounds,
+            )?;
+        }
+        WorkspaceMutation::SetFloatingHostBounds {
+            floating_host_id,
+            bounds,
+        } => {
+            set_floating_host_bounds(state, floating_host_id, bounds)?;
+        }
     }
     Ok(())
+}
+
+fn reorder_panel_in_stack(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+    panel_id: PanelInstanceId,
+    target_index: usize,
+    activate_panel: bool,
+) -> Result<(), WorkspaceStateError> {
+    let stack = state
+        .tab_stacks_by_id
+        .get_mut(&tab_stack_id)
+        .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
+    let source_index = stack
+        .ordered_panels
+        .iter()
+        .position(|candidate| *candidate == panel_id)
+        .ok_or(WorkspaceStateError::PanelNotInTabStack {
+            tab_stack_id,
+            panel_id,
+        })?;
+    let panel = stack.ordered_panels.remove(source_index);
+    let insert_index = target_index.min(stack.ordered_panels.len());
+    stack.ordered_panels.insert(insert_index, panel);
+    if activate_panel {
+        stack.active_panel = Some(panel_id);
+    }
+    Ok(())
+}
+
+fn move_panel_between_tab_stacks(
+    state: &mut WorkspaceState,
+    panel_id: PanelInstanceId,
+    source_tab_stack_id: TabStackId,
+    destination_tab_stack_id: TabStackId,
+    destination_index: usize,
+    activate_panel: bool,
+) -> Result<(), WorkspaceStateError> {
+    if source_tab_stack_id == destination_tab_stack_id {
+        return reorder_panel_in_stack(
+            state,
+            source_tab_stack_id,
+            panel_id,
+            destination_index,
+            activate_panel,
+        );
+    }
+
+    {
+        let source = state
+            .tab_stacks_by_id
+            .get_mut(&source_tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
+        let source_index = source
+            .ordered_panels
+            .iter()
+            .position(|candidate| *candidate == panel_id)
+            .ok_or(WorkspaceStateError::PanelNotInTabStack {
+                tab_stack_id: source_tab_stack_id,
+                panel_id,
+            })?;
+        source.ordered_panels.remove(source_index);
+        if source.active_panel == Some(panel_id) {
+            source.active_panel = source.ordered_panels.last().copied();
+        }
+    }
+
+    {
+        let destination = state
+            .tab_stacks_by_id
+            .get_mut(&destination_tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(
+                destination_tab_stack_id,
+            ))?;
+        let insert_index = destination_index.min(destination.ordered_panels.len());
+        destination.ordered_panels.insert(insert_index, panel_id);
+        if activate_panel || destination.active_panel.is_none() {
+            destination.active_panel = Some(panel_id);
+        }
+    }
+
+    cleanup_empty_floating_stack(state, source_tab_stack_id);
+    Ok(())
+}
+
+fn move_panel_to_new_floating_host(
+    state: &mut WorkspaceState,
+    panel_id: PanelInstanceId,
+    source_tab_stack_id: TabStackId,
+    floating_host_id: PanelHostId,
+    floating_tab_stack_id: TabStackId,
+    bounds: FloatingHostBounds,
+) -> Result<(), WorkspaceStateError> {
+    if !bounds.is_valid() {
+        return Err(WorkspaceStateError::InvalidFloatingHostBounds {
+            host_id: floating_host_id,
+            bounds,
+        });
+    }
+    if state.hosts_by_id.contains_key(&floating_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(floating_host_id));
+    }
+    if state.tab_stacks_by_id.contains_key(&floating_tab_stack_id) {
+        return Err(WorkspaceStateError::DuplicateTabStackId(
+            floating_tab_stack_id,
+        ));
+    }
+
+    {
+        let source = state
+            .tab_stacks_by_id
+            .get_mut(&source_tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
+        let source_index = source
+            .ordered_panels
+            .iter()
+            .position(|candidate| *candidate == panel_id)
+            .ok_or(WorkspaceStateError::PanelNotInTabStack {
+                tab_stack_id: source_tab_stack_id,
+                panel_id,
+            })?;
+        source.ordered_panels.remove(source_index);
+        if source.active_panel == Some(panel_id) {
+            source.active_panel = source.ordered_panels.last().copied();
+        }
+    }
+
+    state.tab_stacks_by_id.insert(
+        floating_tab_stack_id,
+        TabStackState {
+            id: floating_tab_stack_id,
+            ordered_panels: vec![panel_id],
+            active_panel: Some(panel_id),
+        },
+    );
+    state.hosts_by_id.insert(
+        floating_host_id,
+        PanelHostNode {
+            id: floating_host_id,
+            kind: PanelHostKind::FloatingHostPlaceholder(FloatingHostPlaceholderState {
+                tab_stack_id: Some(floating_tab_stack_id),
+                bounds,
+            }),
+        },
+    );
+    cleanup_empty_floating_stack(state, source_tab_stack_id);
+    Ok(())
+}
+
+fn set_floating_host_bounds(
+    state: &mut WorkspaceState,
+    floating_host_id: PanelHostId,
+    bounds: FloatingHostBounds,
+) -> Result<(), WorkspaceStateError> {
+    if !bounds.is_valid() {
+        return Err(WorkspaceStateError::InvalidFloatingHostBounds {
+            host_id: floating_host_id,
+            bounds,
+        });
+    }
+    let host = state
+        .hosts_by_id
+        .get_mut(&floating_host_id)
+        .ok_or(WorkspaceStateError::MissingHost(floating_host_id))?;
+    let PanelHostKind::FloatingHostPlaceholder(placeholder) = &mut host.kind else {
+        return Err(WorkspaceStateError::ProjectionShapeMismatch(
+            "target host is not a floating placeholder",
+        ));
+    };
+    placeholder.bounds = bounds;
+    Ok(())
+}
+
+fn cleanup_empty_floating_stack(state: &mut WorkspaceState, tab_stack_id: TabStackId) {
+    let is_empty = state
+        .tab_stacks_by_id
+        .get(&tab_stack_id)
+        .map(|stack| stack.ordered_panels.is_empty())
+        .unwrap_or(false);
+    if !is_empty {
+        return;
+    }
+
+    let mut hosted_by_floating = None;
+    for host in state.hosts_by_id.values() {
+        if let PanelHostKind::FloatingHostPlaceholder(placeholder) = host.kind
+            && placeholder.tab_stack_id == Some(tab_stack_id)
+        {
+            hosted_by_floating = Some(host.id);
+            break;
+        }
+    }
+    let Some(host_id) = hosted_by_floating else {
+        return;
+    };
+
+    if let Some(host) = state.hosts_by_id.get_mut(&host_id)
+        && let PanelHostKind::FloatingHostPlaceholder(placeholder) = &mut host.kind
+    {
+        placeholder.tab_stack_id = None;
+    }
+    let _ = state.tab_stacks_by_id.remove(&tab_stack_id);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        PanelHostId, PanelInstanceId, PanelKind, TabStackId, ToolSurfaceInstanceId, WorkspaceId,
+        FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind,
+        PanelInstanceId, PanelKind, TabStackId, ToolSurfaceInstanceId, WorkspaceId,
         WorkspaceIdentityAllocator,
     };
     use editor_viewport::ViewportId;
@@ -439,6 +713,121 @@ mod tests {
                 .expect("moved panel should still exist")
                 .id,
             outliner_panel
+        );
+    }
+
+    #[test]
+    fn move_panel_to_new_floating_host_preserves_panel_and_surface_identity() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let viewport_panel = panel_id_by_kind(&workspace, PanelKind::Viewport);
+        let viewport_surface = workspace
+            .panel(viewport_panel)
+            .expect("viewport panel should exist")
+            .active_tool_surface;
+
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let floating_host_id = allocator.allocate_panel_host_id();
+        let floating_stack_id = allocator.allocate_tab_stack_id();
+        let moved = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::MovePanelToNewFloatingHost {
+                panel_id: viewport_panel,
+                source_tab_stack_id: viewport_stack,
+                floating_host_id,
+                floating_tab_stack_id: floating_stack_id,
+                bounds: FloatingHostBounds::new(128.0, 96.0, 520.0, 340.0),
+            },
+        )
+        .expect("moving panel to floating host should succeed");
+
+        let floating_host = moved
+            .host(floating_host_id)
+            .expect("floating host should exist");
+        assert!(matches!(
+            floating_host.kind,
+            PanelHostKind::FloatingHostPlaceholder(FloatingHostPlaceholderState {
+                tab_stack_id: Some(id),
+                ..
+            }) if id == floating_stack_id
+        ));
+        assert_eq!(
+            moved
+                .tab_stack(floating_stack_id)
+                .expect("floating stack should exist")
+                .ordered_panels,
+            vec![viewport_panel]
+        );
+        assert_eq!(
+            moved
+                .panel(viewport_panel)
+                .expect("viewport panel should still exist")
+                .active_tool_surface,
+            viewport_surface
+        );
+        assert!(
+            !moved
+                .tab_stack(viewport_stack)
+                .expect("source stack should still exist")
+                .ordered_panels
+                .contains(&viewport_panel)
+        );
+    }
+
+    #[test]
+    fn moving_panel_out_of_floating_stack_clears_empty_floating_host() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
+        let viewport_panel = panel_id_by_kind(&workspace, PanelKind::Viewport);
+
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let floating_host_id = allocator.allocate_panel_host_id();
+        let floating_stack_id = allocator.allocate_tab_stack_id();
+        let floated = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::MovePanelToNewFloatingHost {
+                panel_id: viewport_panel,
+                source_tab_stack_id: viewport_stack,
+                floating_host_id,
+                floating_tab_stack_id: floating_stack_id,
+                bounds: FloatingHostBounds::new(64.0, 64.0, 480.0, 300.0),
+            },
+        )
+        .expect("floating move should succeed");
+
+        let restored = reduce_workspace(
+            &floated,
+            WorkspaceMutation::MovePanelBetweenTabStacks {
+                panel_id: viewport_panel,
+                source_tab_stack_id: floating_stack_id,
+                destination_tab_stack_id: outliner_stack,
+                destination_index: 1,
+                activate_panel: true,
+            },
+        )
+        .expect("moving panel back into docked stack should succeed");
+
+        assert!(
+            restored.tab_stack(floating_stack_id).is_none(),
+            "empty floating stack should be removed after move-out",
+        );
+        assert!(matches!(
+            restored
+                .host(floating_host_id)
+                .expect("floating host should remain")
+                .kind,
+            PanelHostKind::FloatingHostPlaceholder(FloatingHostPlaceholderState {
+                tab_stack_id: None,
+                ..
+            })
+        ));
+        assert!(
+            restored
+                .tab_stack(outliner_stack)
+                .expect("outliner stack should exist")
+                .ordered_panels
+                .contains(&viewport_panel)
         );
     }
 }

@@ -185,6 +185,7 @@ fn dispatch_shortcuts(
     if input.action_pressed(ACTION_EDITOR_UNDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::Undo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
@@ -198,6 +199,7 @@ fn dispatch_shortcuts(
     if input.action_pressed(ACTION_EDITOR_REDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::Redo,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
@@ -213,6 +215,7 @@ fn dispatch_shortcuts(
     {
         if let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::ActivateSelectTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),
@@ -228,6 +231,7 @@ fn dispatch_shortcuts(
     {
         if let Err(error) = dispatch_shell_command(
             &mut host.app,
+            Some(&mut host.shell_state),
             ShellCommand::ActivateTranslateTool,
             Some(&mut *viewport_presentations),
             Some(viewport_observations),

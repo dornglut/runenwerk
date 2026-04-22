@@ -13,6 +13,15 @@ pub struct StructuralCommandTarget {
     pub tab_stack_id: TabStackId,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabDropDestination {
+    TabStack {
+        tab_stack_id: TabStackId,
+        insert_index: usize,
+    },
+    NewFloatingHost,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShellCommand {
     ActivateSelectTool,
@@ -22,6 +31,17 @@ pub enum ShellCommand {
     SaveScene,
     LoadScene,
     ToggleDebugLogs,
+    SetTabStackActivePanel {
+        tab_stack_id: TabStackId,
+        panel_instance_id: PanelInstanceId,
+        projection_epoch: u64,
+    },
+    CommitTabDrop {
+        panel_instance_id: PanelInstanceId,
+        source_tab_stack_id: TabStackId,
+        destination: TabDropDestination,
+        projection_epoch: u64,
+    },
     SelectOutlinerEntity {
         entity: EntityId,
         target: StructuralCommandTarget,
@@ -46,6 +66,12 @@ impl ShellCommand {
     pub fn projection_epoch(&self) -> Option<u64> {
         match self {
             Self::SelectOutlinerEntity {
+                projection_epoch, ..
+            }
+            | Self::SetTabStackActivePanel {
+                projection_epoch, ..
+            }
+            | Self::CommitTabDrop {
                 projection_epoch, ..
             }
             | Self::SelectViewportProduct {

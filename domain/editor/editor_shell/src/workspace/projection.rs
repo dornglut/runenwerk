@@ -5,31 +5,64 @@ use std::collections::BTreeMap;
 
 use crate::{
     CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
-    CONSOLE_SCROLL_WIDGET_ID, INSPECTOR_BODY_WIDGET_ID, INSPECTOR_LIST_WIDGET_ID,
-    INSPECTOR_PANEL_WIDGET_ID, INSPECTOR_SCROLL_WIDGET_ID, OUTLINER_BODY_WIDGET_ID,
-    OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID, OUTLINER_SCROLL_WIDGET_ID, PanelHostId,
-    PanelHostKind, PanelHostNode, PanelInstanceId, PanelKind, TabStackHostState, TabStackId,
-    ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID, VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
-    VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-    WidgetId, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+    CONSOLE_SCROLL_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, INSPECTOR_BODY_WIDGET_ID,
+    INSPECTOR_LIST_WIDGET_ID, INSPECTOR_PANEL_WIDGET_ID, INSPECTOR_SCROLL_WIDGET_ID,
+    OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
+    OUTLINER_SCROLL_WIDGET_ID, PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId,
+    PanelKind, TabStackHostState, TabStackId, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID,
+    VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
+    VIEWPORT_SURFACE_EMBED_WIDGET_ID, WidgetId, WorkspaceSplitAxis, WorkspaceState,
+    WorkspaceStateError, floating_host_widget_id, tab_button_widget_id, tab_drop_zone_widget_id,
+    tab_strip_widget_id,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProjectedPanelSlot {
     pub panel_instance_id: PanelInstanceId,
+    pub panel_kind: PanelKind,
     pub active_tool_surface: Option<ToolSurfaceInstanceId>,
     pub tab_stack_id: TabStackId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectedTabButton {
+    pub widget_id: WidgetId,
+    pub panel: ProjectedPanelSlot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectedTabDropSlot {
+    pub widget_id: WidgetId,
+    pub insert_index: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectedTabStackSlot {
+    pub tab_strip_widget_id: WidgetId,
+    pub tab_stack_id: TabStackId,
+    pub tabs: Vec<ProjectedTabButton>,
+    pub drop_slots: Vec<ProjectedTabDropSlot>,
+    pub active_panel: Option<ProjectedPanelSlot>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectedFloatingHostSlot {
+    pub host_id: PanelHostId,
+    pub host_widget_id: WidgetId,
+    pub bounds: crate::FloatingHostBounds,
+    pub tab_stack: ProjectedTabStackSlot,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct FixedLayoutProjection {
     pub body_console_fraction: f32,
     pub left_right_fraction: f32,
     pub center_right_fraction: f32,
-    pub outliner: ProjectedPanelSlot,
-    pub viewport: ProjectedPanelSlot,
-    pub inspector: ProjectedPanelSlot,
-    pub console: ProjectedPanelSlot,
+    pub outliner: ProjectedTabStackSlot,
+    pub viewport: ProjectedTabStackSlot,
+    pub inspector: ProjectedTabStackSlot,
+    pub console: ProjectedTabStackSlot,
+    pub floating_hosts: Vec<ProjectedFloatingHostSlot>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -39,10 +72,32 @@ pub struct StructuralWidgetRoutingContext {
     pub tab_stack_id: TabStackId,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectedTabButtonRoute {
+    pub panel_instance_id: PanelInstanceId,
+    pub tab_stack_id: TabStackId,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectedTabDropTarget {
+    TabStack {
+        tab_stack_id: TabStackId,
+        insert_index: usize,
+    },
+    NewFloatingHost,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectedTabDropRoute {
+    pub target: ProjectedTabDropTarget,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceProjectionArtifact {
     pub fixed_layout: FixedLayoutProjection,
     pub widget_context_by_id: BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
+    pub tab_button_route_by_widget_id: BTreeMap<WidgetId, ProjectedTabButtonRoute>,
+    pub tab_drop_route_by_widget_id: BTreeMap<WidgetId, ProjectedTabDropRoute>,
 }
 
 pub fn project_workspace_for_shell(
@@ -50,52 +105,47 @@ pub fn project_workspace_for_shell(
 ) -> Result<WorkspaceProjectionArtifact, WorkspaceStateError> {
     let fixed_layout = project_fixed_layout(workspace_state)?;
     let mut widget_context_by_id = BTreeMap::new();
+    let mut tab_button_route_by_widget_id = BTreeMap::new();
+    let mut tab_drop_route_by_widget_id = BTreeMap::new();
 
-    register_panel_widget_contexts(
-        &mut widget_context_by_id,
-        fixed_layout.outliner,
-        &[
-            OUTLINER_PANEL_WIDGET_ID,
-            OUTLINER_BODY_WIDGET_ID,
-            OUTLINER_LIST_WIDGET_ID,
-            OUTLINER_SCROLL_WIDGET_ID,
-        ],
-    );
-    register_panel_widget_contexts(
-        &mut widget_context_by_id,
-        fixed_layout.viewport,
-        &[
-            VIEWPORT_PANEL_WIDGET_ID,
-            VIEWPORT_BODY_WIDGET_ID,
-            VIEWPORT_CANVAS_WIDGET_ID,
-            VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
-            VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-        ],
-    );
-    register_panel_widget_contexts(
-        &mut widget_context_by_id,
-        fixed_layout.inspector,
-        &[
-            INSPECTOR_PANEL_WIDGET_ID,
-            INSPECTOR_BODY_WIDGET_ID,
-            INSPECTOR_LIST_WIDGET_ID,
-            INSPECTOR_SCROLL_WIDGET_ID,
-        ],
-    );
-    register_panel_widget_contexts(
-        &mut widget_context_by_id,
-        fixed_layout.console,
-        &[
-            CONSOLE_PANEL_WIDGET_ID,
-            CONSOLE_BODY_WIDGET_ID,
-            CONSOLE_LIST_WIDGET_ID,
-            CONSOLE_SCROLL_WIDGET_ID,
-        ],
+    for stack_slot in [
+        &fixed_layout.outliner,
+        &fixed_layout.viewport,
+        &fixed_layout.inspector,
+        &fixed_layout.console,
+    ] {
+        register_tab_stack_routes(
+            stack_slot,
+            &mut tab_button_route_by_widget_id,
+            &mut tab_drop_route_by_widget_id,
+        );
+        register_active_panel_widget_contexts(&mut widget_context_by_id, stack_slot.active_panel);
+    }
+
+    for floating in &fixed_layout.floating_hosts {
+        register_tab_stack_routes(
+            &floating.tab_stack,
+            &mut tab_button_route_by_widget_id,
+            &mut tab_drop_route_by_widget_id,
+        );
+        register_active_panel_widget_contexts(
+            &mut widget_context_by_id,
+            floating.tab_stack.active_panel,
+        );
+    }
+
+    tab_drop_route_by_widget_id.insert(
+        FLOATING_DROP_ZONE_WIDGET_ID,
+        ProjectedTabDropRoute {
+            target: ProjectedTabDropTarget::NewFloatingHost,
+        },
     );
 
     Ok(WorkspaceProjectionArtifact {
         fixed_layout,
         widget_context_by_id,
+        tab_button_route_by_widget_id,
+        tab_drop_route_by_widget_id,
     })
 }
 
@@ -123,30 +173,29 @@ pub fn project_fixed_layout(
         "center-right host must be a horizontal split",
     )?;
 
-    let outliner = projected_panel_from_tab_host(
-        workspace_state,
-        left_right.first_child,
-        PanelKind::Outliner,
-        "outliner",
-    )?;
-    let viewport = projected_panel_from_tab_host(
-        workspace_state,
-        center_right.first_child,
-        PanelKind::Viewport,
-        "viewport",
-    )?;
-    let inspector = projected_panel_from_tab_host(
-        workspace_state,
-        center_right.second_child,
-        PanelKind::Inspector,
-        "inspector",
-    )?;
-    let console = projected_panel_from_tab_host(
-        workspace_state,
-        root.second_child,
-        PanelKind::Console,
-        "console",
-    )?;
+    let outliner =
+        projected_tab_stack_from_host(workspace_state, left_right.first_child, "outliner")?;
+    let viewport =
+        projected_tab_stack_from_host(workspace_state, center_right.first_child, "viewport")?;
+    let inspector =
+        projected_tab_stack_from_host(workspace_state, center_right.second_child, "inspector")?;
+    let console = projected_tab_stack_from_host(workspace_state, root.second_child, "console")?;
+
+    let mut floating_hosts = Vec::new();
+    for host in workspace_state.hosts_by_id.values() {
+        let PanelHostKind::FloatingHostPlaceholder(placeholder) = host.kind else {
+            continue;
+        };
+        let Some(tab_stack_id) = placeholder.tab_stack_id else {
+            continue;
+        };
+        floating_hosts.push(ProjectedFloatingHostSlot {
+            host_id: host.id,
+            host_widget_id: floating_host_widget_id(host.id),
+            bounds: placeholder.bounds,
+            tab_stack: project_tab_stack_slot_by_id(workspace_state, tab_stack_id)?,
+        });
+    }
 
     Ok(FixedLayoutProjection {
         body_console_fraction: root.fraction,
@@ -156,22 +205,85 @@ pub fn project_fixed_layout(
         viewport,
         inspector,
         console,
+        floating_hosts,
     })
 }
 
-fn register_panel_widget_contexts(
-    map: &mut BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
-    slot: ProjectedPanelSlot,
-    widget_ids: &[WidgetId],
+fn register_tab_stack_routes(
+    stack_slot: &ProjectedTabStackSlot,
+    tab_button_routes: &mut BTreeMap<WidgetId, ProjectedTabButtonRoute>,
+    tab_drop_routes: &mut BTreeMap<WidgetId, ProjectedTabDropRoute>,
 ) {
-    let context = StructuralWidgetRoutingContext {
-        panel_instance_id: slot.panel_instance_id,
-        active_tool_surface: slot.active_tool_surface,
-        tab_stack_id: slot.tab_stack_id,
+    for tab in &stack_slot.tabs {
+        tab_button_routes.insert(
+            tab.widget_id,
+            ProjectedTabButtonRoute {
+                panel_instance_id: tab.panel.panel_instance_id,
+                tab_stack_id: tab.panel.tab_stack_id,
+            },
+        );
+    }
+
+    for slot in &stack_slot.drop_slots {
+        tab_drop_routes.insert(
+            slot.widget_id,
+            ProjectedTabDropRoute {
+                target: ProjectedTabDropTarget::TabStack {
+                    tab_stack_id: stack_slot.tab_stack_id,
+                    insert_index: slot.insert_index,
+                },
+            },
+        );
+    }
+}
+
+fn register_active_panel_widget_contexts(
+    map: &mut BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
+    active_panel: Option<ProjectedPanelSlot>,
+) {
+    let Some(panel) = active_panel else {
+        return;
     };
 
-    for widget_id in widget_ids {
+    let context = StructuralWidgetRoutingContext {
+        panel_instance_id: panel.panel_instance_id,
+        active_tool_surface: panel.active_tool_surface,
+        tab_stack_id: panel.tab_stack_id,
+    };
+
+    for widget_id in panel_widget_ids(panel.panel_kind) {
         map.insert(*widget_id, context);
+    }
+}
+
+fn panel_widget_ids(panel_kind: PanelKind) -> &'static [WidgetId] {
+    match panel_kind {
+        PanelKind::Outliner => &[
+            OUTLINER_PANEL_WIDGET_ID,
+            OUTLINER_BODY_WIDGET_ID,
+            OUTLINER_LIST_WIDGET_ID,
+            OUTLINER_SCROLL_WIDGET_ID,
+        ],
+        PanelKind::Viewport => &[
+            VIEWPORT_PANEL_WIDGET_ID,
+            VIEWPORT_BODY_WIDGET_ID,
+            VIEWPORT_CANVAS_WIDGET_ID,
+            VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
+            VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        ],
+        PanelKind::Inspector => &[
+            INSPECTOR_PANEL_WIDGET_ID,
+            INSPECTOR_BODY_WIDGET_ID,
+            INSPECTOR_LIST_WIDGET_ID,
+            INSPECTOR_SCROLL_WIDGET_ID,
+        ],
+        PanelKind::Console => &[
+            CONSOLE_PANEL_WIDGET_ID,
+            CONSOLE_BODY_WIDGET_ID,
+            CONSOLE_LIST_WIDGET_ID,
+            CONSOLE_SCROLL_WIDGET_ID,
+        ],
+        PanelKind::Placeholder => &[],
     }
 }
 
@@ -190,12 +302,11 @@ fn split_host_with_axis(
     }
 }
 
-fn projected_panel_from_tab_host(
+fn projected_tab_stack_from_host(
     workspace_state: &WorkspaceState,
     host_id: PanelHostId,
-    expected_kind: PanelKind,
     label: &'static str,
-) -> Result<ProjectedPanelSlot, WorkspaceStateError> {
+) -> Result<ProjectedTabStackSlot, WorkspaceStateError> {
     let host = workspace_state
         .host(host_id)
         .ok_or(WorkspaceStateError::MissingHost(host_id))?;
@@ -215,38 +326,62 @@ fn projected_panel_from_tab_host(
         }
     };
 
+    project_tab_stack_slot_by_id(workspace_state, tab_stack_id)
+}
+
+fn project_tab_stack_slot_by_id(
+    workspace_state: &WorkspaceState,
+    tab_stack_id: TabStackId,
+) -> Result<ProjectedTabStackSlot, WorkspaceStateError> {
     let stack = workspace_state
         .tab_stack(tab_stack_id)
         .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
-    let panel_id = stack
-        .active_panel
-        .ok_or(WorkspaceStateError::ProjectionShapeMismatch(
-            "fixed layout tab stack must have an active panel",
-        ))?;
-    let panel = workspace_state
-        .panel(panel_id)
-        .ok_or(WorkspaceStateError::MissingPanel(panel_id))?;
-    if panel.panel_kind != expected_kind {
-        return Err(WorkspaceStateError::ProjectionShapeMismatch(match label {
-            "outliner" => "outliner slot must contain an outliner panel",
-            "viewport" => "viewport slot must contain a viewport panel",
-            "inspector" => "inspector slot must contain an inspector panel",
-            "console" => "console slot must contain a console panel",
-            _ => "slot contains unexpected panel kind",
-        }));
+
+    let mut tabs = Vec::with_capacity(stack.ordered_panels.len());
+    for (index, panel_id) in stack.ordered_panels.iter().copied().enumerate() {
+        let panel = workspace_state
+            .panel(panel_id)
+            .ok_or(WorkspaceStateError::MissingPanel(panel_id))?;
+        let panel_slot = ProjectedPanelSlot {
+            panel_instance_id: panel.id,
+            panel_kind: panel.panel_kind,
+            active_tool_surface: panel.active_tool_surface,
+            tab_stack_id,
+        };
+        tabs.push(ProjectedTabButton {
+            widget_id: tab_button_widget_id(tab_stack_id, index),
+            panel: panel_slot,
+        });
     }
 
-    Ok(ProjectedPanelSlot {
-        panel_instance_id: panel.id,
-        active_tool_surface: panel.active_tool_surface,
+    let active_panel = stack.active_panel.and_then(|active_id| {
+        tabs.iter()
+            .find(|tab| tab.panel.panel_instance_id == active_id)
+            .map(|tab| tab.panel)
+    });
+
+    let drop_slots = (0..=tabs.len())
+        .map(|insert_index| ProjectedTabDropSlot {
+            widget_id: tab_drop_zone_widget_id(tab_stack_id, insert_index),
+            insert_index,
+        })
+        .collect::<Vec<_>>();
+
+    Ok(ProjectedTabStackSlot {
+        tab_strip_widget_id: tab_strip_widget_id(tab_stack_id),
         tab_stack_id,
+        tabs,
+        drop_slots,
+        active_panel,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PanelHostKind, WorkspaceIdentityAllocator, WorkspaceSplitAxis};
+    use crate::{
+        FloatingHostBounds, WorkspaceIdentityAllocator, WorkspaceMutation, reduce_workspace,
+    };
 
     fn bootstrap_workspace() -> WorkspaceState {
         let mut allocator = WorkspaceIdentityAllocator::new();
@@ -261,18 +396,14 @@ mod tests {
         assert!(projection.body_console_fraction > 0.0);
         assert!(projection.left_right_fraction > 0.0);
         assert!(projection.center_right_fraction > 0.0);
-        assert_ne!(
-            projection.outliner.panel_instance_id,
-            projection.viewport.panel_instance_id
-        );
-        assert_ne!(
-            projection.inspector.panel_instance_id,
-            projection.console.panel_instance_id
-        );
+        assert_eq!(projection.outliner.tabs.len(), 1);
+        assert_eq!(projection.viewport.tabs.len(), 1);
+        assert_eq!(projection.inspector.tabs.len(), 1);
+        assert_eq!(projection.console.tabs.len(), 1);
     }
 
     #[test]
-    fn projection_artifact_contains_panel_structural_context_for_built_widgets() {
+    fn projection_artifact_contains_panel_structural_context_for_active_widgets() {
         let workspace = bootstrap_workspace();
         let artifact = project_workspace_for_shell(&workspace).expect("projection should succeed");
 
@@ -293,6 +424,102 @@ mod tests {
         assert_ne!(
             outliner_panel.panel_instance_id,
             viewport_panel.panel_instance_id
+        );
+
+        assert_eq!(
+            artifact.tab_button_route_by_widget_id.len(),
+            4,
+            "default layout should expose one tab button route per stack"
+        );
+    }
+
+    #[test]
+    fn projection_supports_cross_stack_panel_rehome_without_kind_assumptions() {
+        let workspace = bootstrap_workspace();
+        let outliner_stack = workspace
+            .tab_stacks_by_id
+            .values()
+            .find(|stack| {
+                stack.ordered_panels.iter().any(|panel| {
+                    workspace.panel(*panel).map(|value| value.panel_kind)
+                        == Some(PanelKind::Outliner)
+                })
+            })
+            .expect("outliner stack should exist")
+            .id;
+        let viewport_stack = workspace
+            .tab_stacks_by_id
+            .values()
+            .find(|stack| {
+                stack.ordered_panels.iter().any(|panel| {
+                    workspace.panel(*panel).map(|value| value.panel_kind)
+                        == Some(PanelKind::Viewport)
+                })
+            })
+            .expect("viewport stack should exist")
+            .id;
+        let outliner_panel = workspace
+            .tab_stack(outliner_stack)
+            .and_then(|stack| stack.ordered_panels.first().copied())
+            .expect("outliner panel should exist");
+
+        let moved = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::MovePanelBetweenTabStacks {
+                panel_id: outliner_panel,
+                source_tab_stack_id: outliner_stack,
+                destination_tab_stack_id: viewport_stack,
+                destination_index: 1,
+                activate_panel: true,
+            },
+        )
+        .expect("cross-stack move should produce a valid workspace");
+
+        let projection = project_fixed_layout(&moved).expect("projection should succeed");
+        assert_eq!(projection.outliner.tabs.len(), 0);
+        assert_eq!(projection.viewport.tabs.len(), 2);
+    }
+
+    #[test]
+    fn projection_includes_floating_hosts_from_workspace_graph() {
+        let workspace = bootstrap_workspace();
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let floating_host_id = allocator.allocate_panel_host_id();
+        let floating_stack_id = allocator.allocate_tab_stack_id();
+        let viewport_stack_id = workspace
+            .tab_stacks_by_id
+            .values()
+            .find(|stack| {
+                stack.ordered_panels.iter().any(|panel| {
+                    workspace.panel(*panel).map(|value| value.panel_kind)
+                        == Some(PanelKind::Viewport)
+                })
+            })
+            .expect("viewport stack should exist")
+            .id;
+        let viewport_panel_id = workspace
+            .tab_stack(viewport_stack_id)
+            .and_then(|stack| stack.ordered_panels.first().copied())
+            .expect("viewport panel should exist");
+
+        let moved = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::MovePanelToNewFloatingHost {
+                panel_id: viewport_panel_id,
+                source_tab_stack_id: viewport_stack_id,
+                floating_host_id,
+                floating_tab_stack_id: floating_stack_id,
+                bounds: FloatingHostBounds::new(128.0, 96.0, 520.0, 340.0),
+            },
+        )
+        .expect("floating move should succeed");
+
+        let projection = project_fixed_layout(&moved).expect("projection should succeed");
+        assert_eq!(projection.floating_hosts.len(), 1);
+        assert_eq!(projection.floating_hosts[0].host_id, floating_host_id);
+        assert_eq!(
+            projection.floating_hosts[0].tab_stack.tab_stack_id,
+            floating_stack_id
         );
     }
 
@@ -318,9 +545,10 @@ mod tests {
         }
 
         let projected = project_fixed_layout(&workspace);
-        assert!(
-            projected.is_err(),
-            "projection must fail fast on invalid fixed-layout shape",
-        );
+
+        assert!(matches!(
+            projected,
+            Err(WorkspaceStateError::ProjectionShapeMismatch(_))
+        ));
     }
 }

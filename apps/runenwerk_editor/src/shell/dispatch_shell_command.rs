@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use editor_core::{ComponentTypeId, EditorMutationError};
 use editor_inspector::{InspectorEditValue, InspectorValue};
-use editor_shell::ShellCommand;
+use editor_shell::{FloatingHostBounds, ShellCommand, TabDropDestination, WorkspaceMutation};
 use editor_viewport::{ProductAvailabilityState, ViewportPresentationState};
 
 use crate::editor_app::RunenwerkEditorApp;
@@ -12,20 +12,22 @@ use crate::editor_runtime::{
     bootstrap_mvp_scene_if_empty, is_local_transform_component, register_mvp_component_types,
 };
 use crate::persistence::{
-    load_scene_file_into_runtime_classified, read_retained_change_log,
-    retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
+    load_scene_file_into_runtime_classified, read_retained_change_log, read_workspace_layout,
+    retained_change_log_path_for_scene, workspace_layout_path_for_scene, write_retained_change_log,
+    write_scene_file, write_workspace_layout,
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportPresentationStateResource,
 };
-use crate::shell::{SELECT_TOOL_ID, TRANSLATE_TOOL_ID};
+use crate::shell::{RunenwerkEditorShellState, SELECT_TOOL_ID, TRANSLATE_TOOL_ID};
 
 const TRANSFORM_STEPPER_INCREMENT: f64 = 0.25;
 const DEFAULT_EDITOR_SCENE_PATH: &str = "editor-scenes/default.scene.ron";
 
 pub fn dispatch_shell_command(
     app: &mut RunenwerkEditorApp,
+    mut shell_state: Option<&mut RunenwerkEditorShellState>,
     command: ShellCommand,
     viewport_presentations: Option<&mut ViewportPresentationStateResource>,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
@@ -75,10 +77,22 @@ pub fn dispatch_shell_command(
             }
         }
         ShellCommand::SaveScene => {
-            save_scene_to_default_path(app)?;
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for save command",
+                    ))?;
+            save_scene_to_default_path(app, shell_state)?;
         }
         ShellCommand::LoadScene => {
-            load_scene_from_default_path(app)?;
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for load command",
+                    ))?;
+            load_scene_from_default_path(app, shell_state)?;
         }
         ShellCommand::ToggleDebugLogs => {
             app.toggle_debug_logs_enabled();
@@ -90,6 +104,44 @@ pub fn dispatch_shell_command(
                     "disabled"
                 }
             ));
+        }
+        ShellCommand::SetTabStackActivePanel {
+            tab_stack_id,
+            panel_instance_id,
+            projection_epoch: _,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workspace command",
+                    ))?;
+            shell_state
+                .apply_workspace_mutation(WorkspaceMutation::SetTabStackActivePanel {
+                    tab_stack_id,
+                    active_panel: Some(panel_instance_id),
+                })
+                .map_err(|_| EditorMutationError::runtime_rejected("workspace mutation failed"))?;
+        }
+        ShellCommand::CommitTabDrop {
+            panel_instance_id,
+            source_tab_stack_id,
+            destination,
+            projection_epoch: _,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workspace command",
+                    ))?;
+            apply_tab_drop(
+                shell_state,
+                panel_instance_id,
+                source_tab_stack_id,
+                destination,
+            )
+            .map_err(|_| EditorMutationError::runtime_rejected("workspace tab drop failed"))?;
         }
         ShellCommand::SelectOutlinerEntity {
             entity,
@@ -178,6 +230,8 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::SaveScene => "SaveScene",
         ShellCommand::LoadScene => "LoadScene",
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
+        ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
+        ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
         ShellCommand::SelectOutlinerEntity { .. } => "SelectOutlinerEntity",
         ShellCommand::SelectViewportProduct { .. } => "SelectViewportProduct",
         ShellCommand::ToggleViewportDetails => "ToggleViewportDetails",
@@ -320,7 +374,52 @@ fn default_scene_file_path() -> PathBuf {
     PathBuf::from(DEFAULT_EDITOR_SCENE_PATH)
 }
 
-fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), EditorMutationError> {
+fn apply_tab_drop(
+    shell_state: &mut RunenwerkEditorShellState,
+    panel_instance_id: editor_shell::PanelInstanceId,
+    source_tab_stack_id: editor_shell::TabStackId,
+    destination: TabDropDestination,
+) -> Result<(), editor_shell::WorkspaceStateError> {
+    match destination {
+        TabDropDestination::TabStack {
+            tab_stack_id,
+            insert_index,
+        } => shell_state.apply_workspace_mutation(WorkspaceMutation::MovePanelBetweenTabStacks {
+            panel_id: panel_instance_id,
+            source_tab_stack_id,
+            destination_tab_stack_id: tab_stack_id,
+            destination_index: insert_index,
+            activate_panel: true,
+        }),
+        TabDropDestination::NewFloatingHost => {
+            let floating_host_id = shell_state.allocate_panel_host_id();
+            let floating_tab_stack_id = shell_state.allocate_tab_stack_id();
+            shell_state.apply_workspace_mutation(WorkspaceMutation::MovePanelToNewFloatingHost {
+                panel_id: panel_instance_id,
+                source_tab_stack_id,
+                floating_host_id,
+                floating_tab_stack_id,
+                bounds: default_floating_host_bounds(shell_state),
+            })
+        }
+    }
+}
+
+fn default_floating_host_bounds(shell_state: &RunenwerkEditorShellState) -> FloatingHostBounds {
+    let bounds = shell_state
+        .last_bounds()
+        .unwrap_or(ui_math::UiRect::new(0.0, 0.0, 1280.0, 720.0));
+    let width = (bounds.width * 0.46).clamp(360.0, 920.0);
+    let height = (bounds.height * 0.42).clamp(240.0, 680.0);
+    let x = (bounds.width - width).max(0.0) * 0.5;
+    let y = (bounds.height - height).max(0.0) * 0.33;
+    FloatingHostBounds::new(x, y, width, height)
+}
+
+fn save_scene_to_default_path(
+    app: &mut RunenwerkEditorApp,
+    shell_state: &RunenwerkEditorShellState,
+) -> Result<(), EditorMutationError> {
     let path = default_scene_file_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| {
@@ -331,8 +430,11 @@ fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), Editor
     write_scene_file(&path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save editor scene"))?;
     let retained_path = retained_change_log_path_for_scene(&path);
+    let workspace_layout_path = workspace_layout_path_for_scene(&path);
     let entry_count = write_retained_change_log(&retained_path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save retained change log"))?;
+    write_workspace_layout(&workspace_layout_path, shell_state.workspace_state())
+        .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneSaved {
             path: path.display().to_string(),
@@ -348,10 +450,17 @@ fn save_scene_to_default_path(app: &mut RunenwerkEditorApp) -> Result<(), Editor
         entry_count,
         retained_path.display()
     ));
+    app.append_console_line(format!(
+        "[io] saved workspace layout {}",
+        workspace_layout_path.display()
+    ));
     Ok(())
 }
 
-fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), EditorMutationError> {
+fn load_scene_from_default_path(
+    app: &mut RunenwerkEditorApp,
+    shell_state: &mut RunenwerkEditorShellState,
+) -> Result<(), EditorMutationError> {
     let path = default_scene_file_path();
     if !path.exists() {
         app.append_console_line(format!(
@@ -380,6 +489,7 @@ fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), Edit
         }
     };
     let retained_path = retained_change_log_path_for_scene(&path);
+    let workspace_layout_path = workspace_layout_path_for_scene(&path);
     let retained = if retained_path.exists() {
         Some(read_retained_change_log(&retained_path).map_err(|_| {
             EditorMutationError::runtime_rejected("failed to load retained change log")
@@ -411,6 +521,28 @@ fn load_scene_from_default_path(app: &mut RunenwerkEditorApp) -> Result<(), Edit
             "[io] loaded retained change log: {} entries ({})",
             retained.entries.len(),
             retained_path.display()
+        ));
+    }
+    if workspace_layout_path.exists() {
+        match read_workspace_layout(&workspace_layout_path) {
+            Ok(workspace_state) => {
+                shell_state.replace_workspace_state(workspace_state);
+                app.append_console_line(format!(
+                    "[io] loaded workspace layout {}",
+                    workspace_layout_path.display()
+                ));
+            }
+            Err(error) => {
+                app.append_console_line(format!(
+                    "[io] workspace layout load failed, keeping current layout: {} ({error})",
+                    workspace_layout_path.display()
+                ));
+            }
+        }
+    } else {
+        app.append_console_line(format!(
+            "[io] workspace layout missing, keeping current layout: {}",
+            workspace_layout_path.display()
         ));
     }
     app.append_console_line(format!("[io] loaded {}", path.display()));

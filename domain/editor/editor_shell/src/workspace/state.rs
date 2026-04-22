@@ -35,9 +35,38 @@ pub struct TabStackHostState {
     pub tab_stack_id: TabStackId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FloatingHostPlaceholderState {
     pub tab_stack_id: Option<TabStackId>,
+    pub bounds: FloatingHostBounds,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FloatingHostBounds {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl FloatingHostBounds {
+    pub const fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    pub fn is_valid(self) -> bool {
+        self.x.is_finite()
+            && self.y.is_finite()
+            && self.width.is_finite()
+            && self.height.is_finite()
+            && self.width > 0.0
+            && self.height > 0.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -115,7 +144,14 @@ pub enum WorkspaceStateError {
     MissingTabStack(TabStackId),
     MissingPanel(PanelInstanceId),
     MissingToolSurface(ToolSurfaceInstanceId),
+    DuplicateHostId(PanelHostId),
+    DuplicateTabStackId(TabStackId),
     DuplicatePanelInTabStacks(PanelInstanceId),
+    DuplicateTabStackHost(TabStackId),
+    PanelNotInTabStack {
+        tab_stack_id: TabStackId,
+        panel_id: PanelInstanceId,
+    },
     ActivePanelNotInStack {
         tab_stack_id: TabStackId,
         panel_id: PanelInstanceId,
@@ -123,6 +159,10 @@ pub enum WorkspaceStateError {
     InvalidSplitFraction {
         host_id: PanelHostId,
         fraction: f32,
+    },
+    InvalidFloatingHostBounds {
+        host_id: PanelHostId,
+        bounds: FloatingHostBounds,
     },
     PanelSurfaceMismatch {
         panel_id: PanelInstanceId,
@@ -158,9 +198,23 @@ impl std::fmt::Display for WorkspaceStateError {
             Self::MissingToolSurface(tool_surface_id) => {
                 write!(f, "missing tool surface: {tool_surface_id:?}")
             }
+            Self::DuplicateHostId(host_id) => write!(f, "duplicate host id: {host_id:?}"),
+            Self::DuplicateTabStackId(tab_stack_id) => {
+                write!(f, "duplicate tab stack id: {tab_stack_id:?}")
+            }
             Self::DuplicatePanelInTabStacks(panel_id) => {
                 write!(f, "panel appears in multiple tab stacks: {panel_id:?}")
             }
+            Self::DuplicateTabStackHost(tab_stack_id) => {
+                write!(f, "tab stack appears in multiple hosts: {tab_stack_id:?}")
+            }
+            Self::PanelNotInTabStack {
+                tab_stack_id,
+                panel_id,
+            } => write!(
+                f,
+                "panel {panel_id:?} is not present in tab stack {tab_stack_id:?}",
+            ),
             Self::ActivePanelNotInStack {
                 tab_stack_id,
                 panel_id,
@@ -171,6 +225,11 @@ impl std::fmt::Display for WorkspaceStateError {
             Self::InvalidSplitFraction { host_id, fraction } => {
                 write!(f, "split host {host_id:?} has invalid fraction {fraction}",)
             }
+            Self::InvalidFloatingHostBounds { host_id, bounds } => write!(
+                f,
+                "floating host {host_id:?} has invalid bounds ({:.1},{:.1},{:.1},{:.1})",
+                bounds.x, bounds.y, bounds.width, bounds.height
+            ),
             Self::PanelSurfaceMismatch {
                 panel_id,
                 tool_surface_id,
@@ -453,12 +512,24 @@ impl WorkspaceState {
         self.hosts_by_id.get(&host_id)
     }
 
+    pub fn hosts(&self) -> impl Iterator<Item = &PanelHostNode> {
+        self.hosts_by_id.values()
+    }
+
     pub fn tab_stack(&self, tab_stack_id: TabStackId) -> Option<&TabStackState> {
         self.tab_stacks_by_id.get(&tab_stack_id)
     }
 
+    pub fn tab_stacks(&self) -> impl Iterator<Item = &TabStackState> {
+        self.tab_stacks_by_id.values()
+    }
+
     pub fn panel(&self, panel_id: PanelInstanceId) -> Option<&PanelInstanceState> {
         self.panels_by_id.get(&panel_id)
+    }
+
+    pub fn panels(&self) -> impl Iterator<Item = &PanelInstanceState> {
+        self.panels_by_id.values()
     }
 
     pub fn tool_surface(
@@ -466,6 +537,10 @@ impl WorkspaceState {
         tool_surface_id: ToolSurfaceInstanceId,
     ) -> Option<&ToolSurfaceState> {
         self.tool_surfaces_by_id.get(&tool_surface_id)
+    }
+
+    pub fn tool_surfaces(&self) -> impl Iterator<Item = &ToolSurfaceState> {
+        self.tool_surfaces_by_id.values()
     }
 
     pub fn next_identity_seed(&self) -> WorkspaceIdentitySeed {
@@ -511,6 +586,7 @@ impl WorkspaceState {
             return Err(WorkspaceStateError::MissingRootHost(self.root_host_id));
         }
 
+        let mut tab_stacks_seen_in_hosts = BTreeSet::new();
         for host in self.hosts_by_id.values() {
             match host.kind {
                 PanelHostKind::SplitHost(split) => {
@@ -532,12 +608,28 @@ impl WorkspaceState {
                     if !self.tab_stacks_by_id.contains_key(&tab_host.tab_stack_id) {
                         return Err(WorkspaceStateError::MissingTabStack(tab_host.tab_stack_id));
                     }
+                    if !tab_stacks_seen_in_hosts.insert(tab_host.tab_stack_id) {
+                        return Err(WorkspaceStateError::DuplicateTabStackHost(
+                            tab_host.tab_stack_id,
+                        ));
+                    }
                 }
                 PanelHostKind::FloatingHostPlaceholder(placeholder) => {
+                    if !placeholder.bounds.is_valid() {
+                        return Err(WorkspaceStateError::InvalidFloatingHostBounds {
+                            host_id: host.id,
+                            bounds: placeholder.bounds,
+                        });
+                    }
                     if let Some(tab_stack_id) = placeholder.tab_stack_id
                         && !self.tab_stacks_by_id.contains_key(&tab_stack_id)
                     {
                         return Err(WorkspaceStateError::MissingTabStack(tab_stack_id));
+                    }
+                    if let Some(tab_stack_id) = placeholder.tab_stack_id
+                        && !tab_stacks_seen_in_hosts.insert(tab_stack_id)
+                    {
+                        return Err(WorkspaceStateError::DuplicateTabStackHost(tab_stack_id));
                     }
                 }
             }

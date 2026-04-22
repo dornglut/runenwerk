@@ -6,10 +6,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId,
-    PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId, TabStackState,
-    ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceId,
-    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+    FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
+    PanelInstanceId, PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId,
+    TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState,
+    WorkspaceId, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
 };
 
 pub const PERSISTED_WORKSPACE_STATE_VERSION_V1: u32 = 1;
@@ -45,11 +45,21 @@ pub enum PersistedPanelHostKindV1 {
     },
     FloatingHostPlaceholder {
         tab_stack_id: Option<u64>,
+        #[serde(default = "default_floating_host_bounds_v1")]
+        bounds: PersistedFloatingHostBoundsV1,
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PersistedFloatingHostBoundsV1 {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(try_from = "String", into = "String")]
 pub enum PersistedWorkspaceSplitAxisV1 {
     Horizontal,
     Vertical,
@@ -70,7 +80,7 @@ pub struct PersistedPanelInstanceStateV1 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(try_from = "String", into = "String")]
 pub enum PersistedPanelKindV1 {
     Outliner,
     Viewport,
@@ -87,7 +97,7 @@ pub struct PersistedToolSurfaceStateV1 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(try_from = "String", into = "String")]
 pub enum PersistedToolSurfaceKindV1 {
     Outliner,
     Viewport,
@@ -233,6 +243,7 @@ fn persisted_host_kind(kind: PanelHostKind) -> PersistedPanelHostKindV1 {
         PanelHostKind::FloatingHostPlaceholder(placeholder) => {
             PersistedPanelHostKindV1::FloatingHostPlaceholder {
                 tab_stack_id: placeholder.tab_stack_id.map(|id| id.raw()),
+                bounds: persisted_floating_bounds(placeholder.bounds),
             }
         }
     }
@@ -256,12 +267,27 @@ fn workspace_host_kind(kind: PersistedPanelHostKindV1) -> PanelHostKind {
                 tab_stack_id: TabStackId::new(tab_stack_id),
             })
         }
-        PersistedPanelHostKindV1::FloatingHostPlaceholder { tab_stack_id } => {
-            PanelHostKind::FloatingHostPlaceholder(FloatingHostPlaceholderState {
-                tab_stack_id: tab_stack_id.map(TabStackId::new),
-            })
-        }
+        PersistedPanelHostKindV1::FloatingHostPlaceholder {
+            tab_stack_id,
+            bounds,
+        } => PanelHostKind::FloatingHostPlaceholder(FloatingHostPlaceholderState {
+            tab_stack_id: tab_stack_id.map(TabStackId::new),
+            bounds: workspace_floating_bounds(bounds),
+        }),
     }
+}
+
+fn persisted_floating_bounds(bounds: FloatingHostBounds) -> PersistedFloatingHostBoundsV1 {
+    PersistedFloatingHostBoundsV1 {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+    }
+}
+
+fn workspace_floating_bounds(bounds: PersistedFloatingHostBoundsV1) -> FloatingHostBounds {
+    FloatingHostBounds::new(bounds.x, bounds.y, bounds.width, bounds.height)
 }
 
 fn persisted_axis(axis: WorkspaceSplitAxis) -> PersistedWorkspaceSplitAxisV1 {
@@ -275,6 +301,27 @@ fn workspace_axis(axis: PersistedWorkspaceSplitAxisV1) -> WorkspaceSplitAxis {
     match axis {
         PersistedWorkspaceSplitAxisV1::Horizontal => WorkspaceSplitAxis::Horizontal,
         PersistedWorkspaceSplitAxisV1::Vertical => WorkspaceSplitAxis::Vertical,
+    }
+}
+
+impl From<PersistedWorkspaceSplitAxisV1> for String {
+    fn from(value: PersistedWorkspaceSplitAxisV1) -> Self {
+        match value {
+            PersistedWorkspaceSplitAxisV1::Horizontal => "horizontal".to_string(),
+            PersistedWorkspaceSplitAxisV1::Vertical => "vertical".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedWorkspaceSplitAxisV1 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "horizontal" => Ok(Self::Horizontal),
+            "vertical" => Ok(Self::Vertical),
+            other => Err(format!("unsupported workspace split axis: {other}")),
+        }
     }
 }
 
@@ -298,6 +345,33 @@ fn workspace_panel_kind(kind: PersistedPanelKindV1) -> PanelKind {
     }
 }
 
+impl From<PersistedPanelKindV1> for String {
+    fn from(value: PersistedPanelKindV1) -> Self {
+        match value {
+            PersistedPanelKindV1::Outliner => "outliner".to_string(),
+            PersistedPanelKindV1::Viewport => "viewport".to_string(),
+            PersistedPanelKindV1::Inspector => "inspector".to_string(),
+            PersistedPanelKindV1::Console => "console".to_string(),
+            PersistedPanelKindV1::Placeholder => "placeholder".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedPanelKindV1 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "outliner" => Ok(Self::Outliner),
+            "viewport" => Ok(Self::Viewport),
+            "inspector" => Ok(Self::Inspector),
+            "console" => Ok(Self::Console),
+            "placeholder" => Ok(Self::Placeholder),
+            other => Err(format!("unsupported panel kind: {other}")),
+        }
+    }
+}
+
 fn persisted_tool_surface_kind(kind: ToolSurfaceKind) -> PersistedToolSurfaceKindV1 {
     match kind {
         ToolSurfaceKind::Outliner => PersistedToolSurfaceKindV1::Outliner,
@@ -318,6 +392,33 @@ fn workspace_tool_surface_kind(kind: PersistedToolSurfaceKindV1) -> ToolSurfaceK
     }
 }
 
+impl From<PersistedToolSurfaceKindV1> for String {
+    fn from(value: PersistedToolSurfaceKindV1) -> Self {
+        match value {
+            PersistedToolSurfaceKindV1::Outliner => "outliner".to_string(),
+            PersistedToolSurfaceKindV1::Viewport => "viewport".to_string(),
+            PersistedToolSurfaceKindV1::Inspector => "inspector".to_string(),
+            PersistedToolSurfaceKindV1::Console => "console".to_string(),
+            PersistedToolSurfaceKindV1::Placeholder => "placeholder".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedToolSurfaceKindV1 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "outliner" => Ok(Self::Outliner),
+            "viewport" => Ok(Self::Viewport),
+            "inspector" => Ok(Self::Inspector),
+            "console" => Ok(Self::Console),
+            "placeholder" => Ok(Self::Placeholder),
+            other => Err(format!("unsupported tool-surface kind: {other}")),
+        }
+    }
+}
+
 fn persisted_mount(mount: ToolSurfaceMount) -> PersistedToolSurfaceMountV1 {
     match mount {
         ToolSurfaceMount::Unmounted => PersistedToolSurfaceMountV1::Unmounted,
@@ -333,6 +434,15 @@ fn workspace_mount(mount: PersistedToolSurfaceMountV1) -> ToolSurfaceMount {
         PersistedToolSurfaceMountV1::Mounted { panel_id } => ToolSurfaceMount::Mounted {
             panel_id: PanelInstanceId::new(panel_id),
         },
+    }
+}
+
+fn default_floating_host_bounds_v1() -> PersistedFloatingHostBoundsV1 {
+    PersistedFloatingHostBoundsV1 {
+        x: 96.0,
+        y: 96.0,
+        width: 560.0,
+        height: 360.0,
     }
 }
 

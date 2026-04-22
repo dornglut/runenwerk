@@ -10,7 +10,9 @@ pub mod build_viewport_panel;
 
 pub use build_console_panel::build_console_panel;
 pub use build_editor_shell::{
+    ActiveTabDragVisualState, DockingInteractionVisualState, DockingPreviewDropTarget,
     EditorShellBuildResult, RoutedShellAction, ShellProjectionArtifacts, build_editor_shell,
+    build_editor_shell_with_docking_visual_state,
 };
 pub use build_inspector_panel::build_inspector_panel;
 pub use build_outliner_panel::build_outliner_panel;

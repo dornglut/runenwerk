@@ -56,6 +56,14 @@ pub fn map_interactions_to_shell_commands(
                     }
                 }
                 RoutedShellAction::ToggleDebugLogs => ShellCommand::ToggleDebugLogs,
+                RoutedShellAction::ActivateTab {
+                    tab_stack_id,
+                    panel_instance_id,
+                } => ShellCommand::SetTabStackActivePanel {
+                    tab_stack_id: *tab_stack_id,
+                    panel_instance_id: *panel_instance_id,
+                    projection_epoch: routing.projection_epoch,
+                },
                 RoutedShellAction::SelectOutlinerEntity { entity, context } => {
                     ShellCommand::SelectOutlinerEntity {
                         entity: *entity,
