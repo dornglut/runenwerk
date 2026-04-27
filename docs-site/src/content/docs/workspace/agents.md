@@ -1,10 +1,13 @@
 ---
 title: "Agents Instructions"
 description: "Repository-level coding agent instructions."
+status: active
+owner: workspace
+layer: workspace
+canonical: false
+last_reviewed: 2026-04-27
 ---
 # AGENTS.md
-
-Canonical source: repository root `AGENTS.md`. Keep this docs copy synchronized with that file.
 
 Repository instructions for AI coding agents (Codex, ChatGPT agents, etc.).
 
@@ -68,6 +71,10 @@ render/
 3. Choose the owning subsystem inside that crate.
 4. Add the file/module there.
 
+Foundation is for cross-domain primitives (for example typed id/runtime-neutral shared contracts).
+Domain is for engine-agnostic reusable logic that does not depend on engine runtime glue.
+Engine is glue that composes runtime behavior around domain/foundation contracts.
+
 ## Code Discovery
 
 Before implementing new functionality:
@@ -80,56 +87,35 @@ Before implementing new functionality:
 ## Documentation Structure
 
 Documentation should be organized intentionally, not scattered opportunistically.
+The docs live in the astro docs site under docs-site/src/content/docs
 
-Use the following structure when applicable:
+For full documentation placement, lifecycle states, frontmatter, refactor update rules, naming, and archival policy, follow `docs-site/src/content/docs/workspace/documentation-structure.md`.
 
-- `README.md`
-  - concise entry point for a crate or subsystem
-  - should explain what it is, how to get started, and where deeper docs live
-  - should not become the full manual when a docs tree exists
-- `docs/index.md`
-  - navigation hub for substantial crate-level documentation
-  - should link clearly to user guides, advanced guides, architecture docs, roadmaps, benchmark docs, examples, and test maps where relevant
-- `docs/reference/`
-  - user-facing guides and reference material
-  - separate by audience where useful, e.g.:
-    - `usage-guide.md`
-    - `advanced-guide.md`
-    - `architecture.md`
-- `docs/roadmaps/`
-  - implementation plans, phase docs, migration plans, closeout roadmaps
-- `docs/benchmarks/`
-  - human-readable benchmark and profiling reports
+For documentation moves, renames, pruning, or restructuring, follow `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md`.
+
+For documentation-only validation, run:
+
+```text
+python3 tools/docs/validate_docs.py
+```
 
 Raw benchmark artifacts should live in dedicated artifact folders near the owning crate, not mixed into prose docs.
 
 When creating or editing docs:
 
-- Keep filenames in docs trees in kebab-case unless an existing local convention intentionally differs.
-- Keep usage guides, advanced guides, and architecture docs distinct by audience and purpose.
-- Avoid duplicating the same material across `README.md`, `usage-guide.md`, and `architecture.md` unless there is a clear reason.
+- Keep regular docs-site filenames in kebab-case.
+- Use `README.md` for docs-site section landing pages.
+- Do not introduce new docs-site `readme.md` files.
 - Update internal links whenever files move or are renamed.
-- If a crate has multiple substantial docs, maintain a `docs/index.md` navigation page when useful.
 
 ## Documentation Ownership
 
-Documentation should live with its owning crate or subsystem.
+Documentation should live under `docs-site/src/content/docs`.
 
 When deciding where docs belong:
-
-1. Choose the owning domain.
-2. Choose the owning crate.
-3. Choose the owning subsystem.
-4. Place the doc where users or contributors would naturally look for it.
-
-Guidelines:
-
-- Crate-level usage docs belong with the crate.
-- Subsystem-specific docs belong with the subsystem.
-- Roadmaps and migration docs belong under the owning crate's roadmap area.
-- Benchmark reports belong with the owning crate's benchmark docs.
-- Colocated docs beside subsystem code are acceptable when that subsystem already uses colocated documentation intentionally.
-- Do not scatter markdown files across unrelated folders without a clear navigation story.
+- architecture and repository-wide guidelines: `docs-site/src/content/docs/guidelines/`
+- workspace/process docs: `docs-site/src/content/docs/workspace/`
+- domain/crate docs: their owning subtree inside `docs-site/src/content/docs/`
 
 ## Public API, Usage Ergonomics, and Examples
 
@@ -158,18 +144,12 @@ Documentation should support easy usage:
 
 - A crate with a meaningful public surface should have a practical usage guide.
 - Usage guides should teach normal workflows first and use complete, realistic examples.
-- Keep usage guides, advanced guides, and architecture docs distinct:
+- Keep usage guides for features and architecture docs distinct:
   - usage guide = normal users
-  - advanced guide = advanced/extensibility topics
-  - architecture doc = internals and invariants
-- `README.md` should be a concise entry point, not the full manual.
-- If a crate has multiple substantial docs, maintain a `docs/index.md` navigation page when useful.
-
 Examples are part of the public API experience:
 
 - Examples should demonstrate the preferred public usage style.
 - Avoid examples that rely on internal shortcuts when public APIs are available.
-- If a crate has multiple substantial examples, maintain an examples index or map when useful.
 - Keep example docs and links in sync with the current public API.
 - If docs and examples disagree, treat that as a real usability issue.
 

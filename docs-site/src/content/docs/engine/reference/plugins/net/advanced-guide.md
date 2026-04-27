@@ -1,6 +1,11 @@
 ---
 title: "Net Plugin Advanced Guide"
 description: "Documentation for Net Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Net Plugin Advanced Guide

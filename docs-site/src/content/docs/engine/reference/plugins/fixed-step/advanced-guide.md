@@ -1,6 +1,11 @@
 ---
 title: "Fixed Step Plugin Advanced Guide"
 description: "Documentation for Fixed Step Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Fixed Step Plugin Advanced Guide

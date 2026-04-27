@@ -1,6 +1,11 @@
 ---
 title: "ECS Runtime Feature Inventory (April 2026)"
 description: "Current implemented ECS/runtime/network foundations relevant to multiplayer and editor sequencing."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Runtime Feature Inventory (April 2026)

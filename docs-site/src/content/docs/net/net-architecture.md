@@ -1,6 +1,11 @@
 ---
 title: "Networking Architecture"
 description: "Runtime architecture of the Runenwerk multiplayer stack."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Runenwerk Networking Architecture

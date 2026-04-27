@@ -1,6 +1,11 @@
 ---
 title: "ECS Runtime Gap Summary (Capability Model Cross-Check)"
 description: "Implemented vs partial vs missing capability audit for ECS/runtime/multiplayer foundations."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Runtime Gap Summary (Capability Model Cross-Check)

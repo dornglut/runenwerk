@@ -1,6 +1,11 @@
 ---
 title: "ECS Runtime Prioritized Roadmap (Post-Runtime Rewrite)"
 description: "Implementation-ordered roadmap for ECS/runtime/network convergence work after the runtime/network rewrite."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Runtime Prioritized Roadmap (Post-Runtime Rewrite)

@@ -1,6 +1,11 @@
 ---
 title: "Numerics"
 description: "Documentation for Numerics."
+status: active
+owner: sdf
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Numerics

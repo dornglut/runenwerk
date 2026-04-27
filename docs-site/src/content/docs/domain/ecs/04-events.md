@@ -1,6 +1,11 @@
 ---
 title: Events
 description: Engine-agnostic guide for ecs events and reactive systems.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Events
@@ -16,7 +21,7 @@ Events are typed signals exchanged between systems through world-managed channel
 ## Key Concepts
 
 - World APIs: `publish_broadcast<T>`, `read_broadcast<T>`, `drain_broadcast_admin<T>`, `clear_broadcast_admin<T>`.
-- Param APIs: `BroadcastReader<T>`, `BroadcastWriter<T>`, `BroadcastReader<T>`.
+- Param APIs: `BroadcastReader<T>`, `BroadcastWriter<T>`.
 - Channel config: `BroadcastStreamConfig` (`capacity`, `overflow`, `lifetime`, `tracing`).
 - Observers: `observe_events` with `ObserverTrigger::{OnEmit, OnDrain, EndOfFrame}`.
 

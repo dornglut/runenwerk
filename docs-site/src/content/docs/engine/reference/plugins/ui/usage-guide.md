@@ -1,6 +1,11 @@
 ---
 title: "UI Domain Surface Usage Guide"
 description: "Documentation for UI Domain Surface Usage Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # UI Domain Surface Usage Guide
@@ -32,4 +37,4 @@ use engine::plugins::ui::domain::*;
 ## Related
 
 - Plugin guides index: [../index.md](../index.md)
-- Plugin source map: [../../../../src/plugins/README.md](../../../plugins/readme.md)
+- Plugin source map: [../../../../src/plugins/README.md](../../../plugins/README.md)

@@ -1,6 +1,11 @@
 ---
 title: "Debug Metrics Plugin Architecture"
 description: "Documentation for Debug Metrics Plugin Architecture."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Debug Metrics Plugin Architecture

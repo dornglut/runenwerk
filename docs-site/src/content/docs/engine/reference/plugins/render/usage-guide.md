@@ -1,6 +1,11 @@
 ---
 title: "Render Plugin Usage Guide"
 description: "Documentation for Render Plugin Usage Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Render Plugin Usage Guide

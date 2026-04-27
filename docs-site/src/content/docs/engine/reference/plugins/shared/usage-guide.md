@@ -1,6 +1,11 @@
 ---
 title: "Shared Plugin Utilities Usage Guide"
 description: "Documentation for Shared Plugin Utilities Usage Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Shared Plugin Utilities Usage Guide
@@ -32,4 +37,4 @@ use engine::plugins::shared::{watch_status_line, ReloadStatusPayload};
 ## Related
 
 - Plugin guides index: [../index.md](../index.md)
-- Plugin source map: [../../../../src/plugins/README.md](../../../plugins/readme.md)
+- Plugin source map: [../../../../src/plugins/README.md](../../../plugins/README.md)

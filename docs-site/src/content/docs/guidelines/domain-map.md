@@ -1,6 +1,11 @@
 ---
 title: Domain Map
 description: Domain Map
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Domain Map

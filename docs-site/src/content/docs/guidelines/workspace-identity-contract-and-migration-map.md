@@ -1,3 +1,13 @@
+---
+title: Workspace Identity Contract and Migration Map
+description: Identity planning contract and migration map for workspace, panel, tab-stack, and tool-surface identities.
+status: active
+owner: editor
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
+---
+
 # Runenwerk - Workspace Identity Contract and Migration Map
 
 _Last updated: 2026-04-21_

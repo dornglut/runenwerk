@@ -1,6 +1,11 @@
 ---
 title: Code Patterns
 description: Code Patterns
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Code Patterns

@@ -1,6 +1,11 @@
 ---
 title: "Phase 6 Archetype Full Switch Plan"
 description: "Detailed plan for completing the ECS archetype full switch."
+status: implemented
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Phase 6 Archetype Full Switch Plan

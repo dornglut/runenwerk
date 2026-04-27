@@ -1,6 +1,11 @@
 ---
 title: "Input Plugin Advanced Guide"
 description: "Documentation for Input Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Input Plugin Advanced Guide

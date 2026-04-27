@@ -1,6 +1,11 @@
 ---
 title: "World Plugin Docs"
 description: "Documentation for World Plugin Docs."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # World Plugin Docs

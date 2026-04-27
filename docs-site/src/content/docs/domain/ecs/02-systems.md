@@ -1,6 +1,11 @@
 ---
 title: Systems
 description: Engine-agnostic guide to defining and using ecs systems in the domain layer.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Systems
@@ -97,3 +102,11 @@ Queues a new entity safely:
 - Declare explicit access for components/resources.
 - Use queries for gameplay logic; use history or telemetry only for diagnostics.
 - Stages and sets should define ordering to ensure deterministic behavior.
+
+
+## References & Links
+
+- [usage-guide.md](usage-guide.md) – Normal ECS usage.
+- [advanced-guide.md](advanced-guide.md) – Deferred commands, events, and runtime integration.
+- [architecture.md](architecture.md) – Internal scheduling and runtime invariants.
+- [05-commands.md](05-commands.md) – Deferred command behavior.

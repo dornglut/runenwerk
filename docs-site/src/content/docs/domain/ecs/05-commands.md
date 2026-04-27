@@ -1,6 +1,11 @@
 ---
 title: Commands
 description: Engine-agnostic guide for deferred ecs commands.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Commands

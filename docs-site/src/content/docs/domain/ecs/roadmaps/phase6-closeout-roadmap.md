@@ -1,6 +1,11 @@
 ---
 title: "Phase 6 Closeout Roadmap"
 description: "Canonical closeout roadmap for ECS Phase 6."
+status: completed
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Phase 6 Closeout Roadmap

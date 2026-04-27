@@ -1,6 +1,11 @@
 ---
 title: Overview
 description: Engine-agnostic documentation for the ecs domain module.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS (Entity-Component-System) Domain Overview
@@ -54,7 +59,7 @@ The ECS foundation currently includes:
 
 ## References
 
-- [readme.md](./readme.md)
+- [README.md](./README.md)
 - [usage-guide.md](./usage-guide.md)
 - [advanced-guide.md](./advanced-guide.md)
 - [architecture.md](./architecture.md)

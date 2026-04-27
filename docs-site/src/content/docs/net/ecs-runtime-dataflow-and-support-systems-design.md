@@ -1,6 +1,11 @@
 ---
 title: "ECS Runtime Dataflow and Support Systems Design"
 description: "Layered model for ECS truth, runtime flow primitives, registries, extractors, diagnostics, history, and observation systems."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Runtime Dataflow and Support Systems Design

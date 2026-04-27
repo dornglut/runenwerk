@@ -1,6 +1,11 @@
 ---
 title: "Engine Advanced Guide"
 description: "Documentation for Engine Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Engine Advanced Guide
@@ -76,7 +81,7 @@ Avoid performing long-running runtime work in `build`.
 
 Plugin map:
 
-- [`../../src/plugins/README.md`](../plugins/readme.md)
+- [`../../src/plugins/README.md`](../plugins/README.md)
 - [`plugins/index.md`](plugins/index.md)
 
 ## Network and Replay Integration

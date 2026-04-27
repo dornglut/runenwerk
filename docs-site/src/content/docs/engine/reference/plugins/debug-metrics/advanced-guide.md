@@ -1,6 +1,11 @@
 ---
 title: "Debug Metrics Plugin Advanced Guide"
 description: "Documentation for Debug Metrics Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Debug Metrics Plugin Advanced Guide

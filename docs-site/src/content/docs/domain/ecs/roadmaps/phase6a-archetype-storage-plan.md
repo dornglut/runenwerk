@@ -1,6 +1,11 @@
 ---
 title: "Phase 6A Archetype Storage Plan"
 description: "Plan for ECS archetype-owned storage completion and invariants."
+status: implemented
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Phase 6A Archetype Storage Plan

@@ -1,6 +1,11 @@
 ---
 title: "Foundation SDF Implementation Roadmap"
 description: "Documentation for Foundation SDF Implementation Roadmap."
+status: implemented
+owner: sdf
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Foundation SDF Implementation Roadmap

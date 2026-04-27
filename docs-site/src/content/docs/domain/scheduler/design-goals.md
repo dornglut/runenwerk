@@ -1,6 +1,11 @@
 ---
 title: "Scheduler Design Goals"
 description: "Documentation for Scheduler Design Goals."
+status: active
+owner: scheduler
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Scheduler Design Goals

@@ -1,6 +1,11 @@
 ---
 title: "Render Final Architecture Migration Roadmap"
 description: "Documentation for Render Final Architecture Migration Roadmap."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Render Final Architecture Migration Roadmap

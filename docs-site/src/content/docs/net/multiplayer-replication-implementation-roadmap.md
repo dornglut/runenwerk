@@ -1,6 +1,11 @@
 ---
 title: "Multiplayer Replication Implementation Roadmap (Revised)"
 description: "Documentation for Multiplayer Replication Implementation Roadmap (Revised)."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Multiplayer Replication Implementation Roadmap (Revised)

@@ -1,6 +1,11 @@
 ---
 title: "Scheduler Diagnostics Plugin Advanced Guide"
 description: "Documentation for Scheduler Diagnostics Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Scheduler Diagnostics Plugin Advanced Guide

@@ -1,6 +1,11 @@
 ---
 title: Roadmap
 description: Roadmap
+status: active
+owner: geometry
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Foundation Geometry Implementation Roadmap

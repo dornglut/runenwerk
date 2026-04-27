@@ -1,6 +1,11 @@
 ---
 title: "Networking Usage Guide"
 description: "Documentation for Networking Usage Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Networking Usage Guide

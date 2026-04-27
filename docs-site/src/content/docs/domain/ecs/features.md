@@ -1,6 +1,11 @@
 ---
 title: Feature Map
 description: Current capability map for the ecs crate.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 - ✅ Core-supported

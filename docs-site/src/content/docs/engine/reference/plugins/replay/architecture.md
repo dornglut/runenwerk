@@ -1,6 +1,11 @@
 ---
 title: "Replay Plugin Architecture"
 description: "Documentation for Replay Plugin Architecture."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Replay Plugin Architecture

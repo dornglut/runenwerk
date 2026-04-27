@@ -1,6 +1,11 @@
 ---
 title: "Render Docs Index"
 description: "Documentation for Render Docs Index."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Render Docs Index

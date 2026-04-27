@@ -1,6 +1,11 @@
 ---
 title: "Render Flow Usage Guide"
 description: "Documentation for Render Flow Usage Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Render Flow Usage Guide

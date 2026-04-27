@@ -1,6 +1,11 @@
 ---
 title: "Engine Architecture"
 description: "Documentation for Engine Architecture."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Engine Architecture
@@ -93,6 +98,6 @@ This contract is shared by headless and windowed runners.
 - Runtime schedules:
   - [`../../src/runtime/schedules.rs`](../../src/runtime/schedules.rs)
 - Plugin map:
-  - [`../../src/plugins/README.md`](../plugins/readme.md)
+  - [`../../src/plugins/README.md`](../plugins/README.md)
 - Plugin guides:
   - [`plugins/index.md`](plugins/index.md)

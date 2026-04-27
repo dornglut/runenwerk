@@ -1,6 +1,11 @@
 ---
 title: "Network Runtime Flow"
 description: "Documentation for Network Runtime Flow."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Network Runtime Flow

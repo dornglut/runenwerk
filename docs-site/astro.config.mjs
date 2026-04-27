@@ -7,7 +7,6 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'Runenwerk Docs',
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/withastro/starlight' }],
 			sidebar: [
 				{
 					label: 'Workspace',
@@ -26,20 +25,20 @@ export default defineConfig({
 					autogenerate: { directory: 'net' },
 				},
 				{
-					label: 'Games',
-					autogenerate: { directory: 'games' },
-				},
-				{
 					label: 'Apps',
 					autogenerate: { directory: 'apps' },
 				},
 				{
-					label: 'Assets',
-					autogenerate: { directory: 'assets' },
+					label: 'ADRs',
+					autogenerate: { directory: 'adr' },
 				},
 				{
-					label: 'Reference',
-					autogenerate: { directory: 'reference' },
+					label: 'Design',
+					autogenerate: { directory: 'design' },
+				},
+				{
+					label: 'Multiplayer',
+					autogenerate: { directory: 'multiplayer' },
 				},
 				{
 					label: 'Guidelines',

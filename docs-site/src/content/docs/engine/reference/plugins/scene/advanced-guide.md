@@ -1,6 +1,11 @@
 ---
 title: "Scene Plugin Advanced Guide"
 description: "Documentation for Scene Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Scene Plugin Advanced Guide

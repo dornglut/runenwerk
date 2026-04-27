@@ -1,6 +1,11 @@
 ---
 title: "World Runtime Final Architecture Migration"
 description: "Documentation for World Runtime Final Architecture Migration."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # World Runtime Final Architecture Migration

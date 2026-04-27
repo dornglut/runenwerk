@@ -1,6 +1,11 @@
 ---
 title: "Query Model"
 description: "Documentation for Query Model."
+status: active
+owner: sdf
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Query Model

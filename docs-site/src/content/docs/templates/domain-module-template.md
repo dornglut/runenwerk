@@ -1,6 +1,11 @@
 ---
 title: Module
 description: Engine-agnostic documentation for the module domain module.
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # [Module Name] Module

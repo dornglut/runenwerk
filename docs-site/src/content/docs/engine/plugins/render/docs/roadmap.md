@@ -1,6 +1,11 @@
 ---
 title: "Render Remaining Features Roadmap"
 description: "Documentation for Render Remaining Features Roadmap."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Render Remaining Features Roadmap

@@ -1,6 +1,11 @@
 ---
 title: "Multiplayer Replication Model"
 description: "Documentation for Multiplayer Replication Model."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Multiplayer Replication Model

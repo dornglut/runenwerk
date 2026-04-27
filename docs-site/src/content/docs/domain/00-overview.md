@@ -1,60 +1,105 @@
 ---
-title: Overview
-description: Overview of the engine-agnostic domain layer and its core concepts.
+title: Domain Layer Overview
+description: Overview of Runenwerk's engine-agnostic domain layer, ownership rules, and domain documentation map.
+status: active
+owner: domain
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Domain Layer Overview
 
 ## Purpose
-- The domain layer represents the core logic and concepts of the system.
-- It is engine-agnostic and reusable across different applications.
-- Defines the rules, abstractions, and behaviors that are central to your system.
-- Provides a clear separation between pure domain logic and engine/runtime concerns.
 
-## Key Concepts (Domain Model)
-- Entities, components, and systems (for ECS modules)
-- Scheduler concepts and deterministic execution patterns
-- Spatial math, geometry, and SDF operations
-- Invariants and rules that define valid states
-- Interactions between domain modules without reference to engine specifics
+The domain layer contains engine-agnostic reusable contracts, models, invariants, and domain logic.
 
-## Implementation / API (Domain-Level)
-- Domain modules map concepts to types, interfaces, or functions
-- Must maintain constraints and domain-level guarantees
-- Implementation should not rely on rendering, networking, or engine-specific APIs
+Domain crates define what concepts mean and what rules they must obey. They do not own app wiring, backend integration, renderer execution, editor application policy, or runtime orchestration.
 
-## Invariants & Rules
-- Domain-level rules that must always hold
-- Relationships between entities, components, and systems
-- Guarantees that enable engine-independent reasoning
+## Dependency Rule
 
-## Usage Examples (Domain-Level)
-### Example 1: ECS interaction
-Describe how entities, components, and systems interact in a pure domain context.
-Explain expected outcomes of operations, such as queries or system updates.
+Domain crates may depend on foundation crates and carefully selected lower-level domain contract crates.
 
-### Example 2: Scheduler tick
-Illustrate a deterministic scheduling tick with dependency resolution.
-Explain how execution order respects domain invariants.
+Domain crates must not depend on:
 
-## Design Guidelines
-- Follow naming conventions and module boundaries consistently
-- Avoid engine, rendering, or networking dependencies
-- Keep modules cohesive and focused on a single domain concern
+- runtime/app code;
+- backend adapters;
+- editor application wiring;
+- AI integrations;
+- concrete rendering, windowing, input, or audio backends unless the domain explicitly owns that backend.
 
-## Integration Notes
-- Engine adapters consume domain modules via well-defined interfaces
-- Domain modules remain reusable across different engines or runtime contexts
-- Links to engine-level docs can be added when available
+## Current Domain Areas
 
-## Future Considerations
-- Potential enhancements to domain abstractions
-- Optimizations or extensions to ECS, Scheduler, SDF, or Geometry modules
-- Known limitations or constraints for future developers
+| Area | Crates | Primary docs |
+| --- | --- | --- |
+| ECS | `domain/ecs`, `domain/ecs_macros` | [`ecs/00-overview.md`](./ecs/00-overview.md), [`ecs/README.md`](./ecs/README.md), [`ecs-macros/README.md`](./ecs-macros/README.md) |
+| Scheduler | `domain/scheduler` | [`scheduler/README.md`](./scheduler/README.md), [`scheduler/design-goals.md`](./scheduler/design-goals.md) |
+| Scene | `domain/scene` | Add docs when scene domain documentation is expanded. |
+| Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
+| SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
+| Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | Add current docs as these crates mature. |
+| UI substrate | `domain/ui/*` | [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
+| Editor domains | `domain/editor/*` | Editor-domain docs are currently tracked through app/editor and design docs; split crate-level docs as needed. |
 
-## References & Links
-- Related domain modules: ECS, Scheduler, SDF, Geometry, UI
-- UI domain docs:
-  - [UI Substrate Architecture](./ui/architecture.md)
-  - [UI Substrate Roadmap](./ui/roadmap.md)
-- External references for DDD, ECS patterns, or spatial math
+## What Belongs in Domain
+
+Domain documentation should define:
+
+- ownership boundaries;
+- domain concepts;
+- invariants;
+- allowed dependencies;
+- command or mutation contracts;
+- ratification and validation rules;
+- data model semantics;
+- engine-agnostic usage examples;
+- integration contracts consumed by engine/runtime or apps.
+
+## What Does Not Belong in Domain
+
+Domain documentation should not own:
+
+- renderer backend details;
+- windowing details;
+- app startup wiring;
+- editor UI implementation policy;
+- transport backend configuration;
+- LLM, prompt, or agent behavior;
+- production runtime orchestration unless the domain explicitly owns the abstraction.
+
+## Documentation Map
+
+Start here when working in the domain layer:
+
+- ECS: [`ecs/00-overview.md`](./ecs/00-overview.md)
+- ECS usage: [`ecs/usage-guide.md`](./ecs/usage-guide.md)
+- ECS advanced guide: [`ecs/advanced-guide.md`](./ecs/advanced-guide.md)
+- Scheduler: [`scheduler/README.md`](./scheduler/README.md)
+- Geometry: [`geometry/README.md`](./geometry/README.md)
+- SDF: [`sdf/index.md`](./sdf/index.md)
+- UI substrate: [`ui/architecture.md`](./ui/architecture.md)
+
+For workspace-wide ownership, see:
+
+- [`../../../../DOMAIN_MAP.md`](../../../../DOMAIN_MAP.md)
+- [`../../../../CRATES.md`](../../../../CRATES.md)
+- [`../workspace/crate-docs-status.md`](../workspace/crate-docs-status.md)
+
+## Known Gaps
+
+The following domain areas need stronger crate-level docs:
+
+- `domain/scene`
+- `domain/spatial`
+- `domain/spatial_index`
+- `domain/chunking`
+- `domain/world_ops`
+- `domain/world_sdf`
+- `domain/editor/editor_core`
+- `domain/editor/editor_shell`
+- `domain/editor/editor_viewport`
+- `domain/editor/editor_scene`
+- `domain/editor/editor_inspector`
+- `domain/editor/editor_persistence`
+
+These gaps should be filled with crate-level `README.md`, architecture, usage, and ownership-boundary docs only when the implementation is stable enough to document truthfully.

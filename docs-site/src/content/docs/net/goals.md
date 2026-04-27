@@ -1,6 +1,11 @@
 ---
 title: "net Goals"
 description: "Documentation for net Goals."
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # net Goals

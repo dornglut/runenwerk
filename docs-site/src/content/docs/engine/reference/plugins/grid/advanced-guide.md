@@ -1,6 +1,11 @@
 ---
 title: "Grid Plugin Advanced Guide"
 description: "Documentation for Grid Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Grid Plugin Advanced Guide

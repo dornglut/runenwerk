@@ -1,6 +1,11 @@
 ---
 title: Components
 description: Engine-agnostic guide to defining and using ecs components in the domain layer.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Components
@@ -27,16 +32,12 @@ Components derive `ecs::Component`. Resources derive `ecs::Resource`. Bundles de
 ### Basic Component
 
 Example of a per-entity component:
-```rust
-struct Position {
-x: f32,
-y: f32,
-}
 
+```rust
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
 struct Position {
-x: f32,
-y: f32,
+    x: f32,
+    y: f32,
 }
 ```
 ### Tag / Marker Component
@@ -121,4 +122,4 @@ world.resource_mut::<Frame>().unwrap().0 += 1;
 - [usage-guide.md](usage-guide.md) – Basic ECS API usage.
 - [advanced-guide.md](advanced-guide.md) – Deferred commands, events, and runtime integration.
 - [architecture.md](architecture.md) – Internal invariants and unsafe boundaries.
-- [Domain roadmap](../01-roadmap.md) – ECS feature roadmap and prioritization.
+- [features.md](features.md) – ECS feature map.

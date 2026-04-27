@@ -1,6 +1,11 @@
 ---
 title: Module Structure
 description: Module Structure
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Intra‑Crate Module Structure Guidelines

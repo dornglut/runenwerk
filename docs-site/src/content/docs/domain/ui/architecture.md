@@ -1,6 +1,11 @@
 ---
 title: UI Substrate Architecture
 description: Current-state architecture, ownership boundaries, and migration direction for Runenwerk UI.
+status: active
+owner: ui
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # UI Substrate Architecture
@@ -28,6 +33,8 @@ As of the audited repository state:
 - Workspace identity/projection/reducer/tool-surface host infrastructure is implemented and belongs to `editor_shell`.
 - `apps/runenwerk_editor` owns app runtime bridging and viewport runtime resources/bindings.
 - Engine render integration for UI frame submission/extraction is implemented.
+- Viewport slot semantic ownership is in `editor_viewport`; renderer-facing embed payload slots are opaque IDs in `ui_render_data`, mapped through integration adapters.
+- Core shell control flows (outliner entity selection, viewport product selection, inspector field activation) now route through prepared `SurfacePresentationModel` + typed `SurfaceIntent` + host-side ratification adapters.
 - Engine overlay/debug UI paths now route through substrate frame generation (`ui_runtime::build_ui_frame`) instead of ad hoc primitive assembly.
 - Prior fallback seams removed:
   - no `first_frame()`-based routing in editor runtime systems
@@ -111,7 +118,7 @@ This layer should continue consuming UI frame contracts, not owning UI semantics
 
 ## Current Boundary Violations
 
-1. `ui_render_data::ViewportSurfaceSlot` remains a rendering-level slot taxonomy separate from `editor_viewport::ViewportSurfaceSlot`; mapping is explicit but still duplicated by design across layers.
+1. Viewport semantic-to-render payload slot mapping is intentionally adapter-based and must remain centralized; avoid introducing parallel semantic taxonomies in runtime or renderer layers.
 2. Existing shell surfaces still rely primarily on button/label primitives; newer reusable controls (`TextInput`, `Toggle`, `NumericInput`, `Tabs`) are present but not yet broadly adopted.
 3. Bootstrap single-viewport routing exists before first structural tool-surface binding generation.
 
@@ -131,8 +138,8 @@ Target ownership (partially implemented):
 The migration direction should remain dependency-aware and incremental:
 
 1. complete broader adoption of reusable controls across editor surfaces where ad hoc assembly remains.
-2. keep render-data slot/domain slot mapping explicit at integration edges while avoiding cross-layer ownership leakage.
-3. keep substrate docs and tests aligned with implemented behavior per phase completion.
+2. keep render-data embed slot IDs opaque and generic while preserving semantic slot taxonomy in `editor_viewport`, with explicit mapping at integration edges.
+3. keep substrate docs and tests aligned with implemented behavior per phase completion, including surface-flow tracing from observation to ratification.
 
 ## Testing and Verification Expectations
 
@@ -155,7 +162,7 @@ The migration direction should remain dependency-aware and incremental:
 - [Workspace Architecture Boundaries](../../guidelines/architecture.md)
 - [Runenwerk Architecture Doctrine](../../guidelines/runenwerk-architecture.md)
 - [Module Structure Guidelines](../../guidelines/module-structure-guidelines.md)
-- [Editor / UI / Workspace / Tool-Surface Architecture](../../guidelines/editor_ui_workspace_tool_surface_architecture.md)
-- [Viewport Expression Upgrade Design](../../guidelines/viewport_expression_upgrade_design.md)
+- [Editor / UI / Workspace / Tool-Surface Architecture](../../guidelines/editor-ui-workspace-tool-surface-architecture.md)
+- [Viewport Expression Upgrade Design](../../guidelines/viewport-expression-upgrade-design.md)
 - [Workspace Identity Contract and Migration Map](../../guidelines/workspace-identity-contract-and-migration-map.md)
 - [UI Substrate Roadmap](./roadmap.md)

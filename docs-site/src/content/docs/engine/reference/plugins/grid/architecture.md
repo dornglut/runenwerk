@@ -1,6 +1,11 @@
 ---
 title: "Grid Plugin Architecture"
 description: "Documentation for Grid Plugin Architecture."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Grid Plugin Architecture

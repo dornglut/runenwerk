@@ -1,6 +1,11 @@
 ---
 title: Advanced Guide
 description: Engine-agnostic guide for ecs usage.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Advanced Guide

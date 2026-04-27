@@ -1,6 +1,11 @@
 ---
 title: "Engine Usage Guide"
 description: "Documentation for Engine Usage Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Engine Usage Guide
@@ -113,6 +118,6 @@ fn main() -> Result<()> {
 - Default plugin stack helper:
   - [`../../src/plugins/mod.rs`](../../src/plugins/mod.rs)
 - Plugin index:
-  - [`../../src/plugins/README.md`](../plugins/readme.md)
+  - [`../../src/plugins/README.md`](../plugins/README.md)
 - Plugin guides:
   - [`plugins/index.md`](plugins/index.md)

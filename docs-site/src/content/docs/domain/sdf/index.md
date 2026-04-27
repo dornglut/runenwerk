@@ -1,6 +1,11 @@
 ---
 title: "SDF Documentation"
 description: "Documentation for SDF Documentation."
+status: active
+owner: sdf
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # SDF Documentation

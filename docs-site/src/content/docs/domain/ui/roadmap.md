@@ -1,252 +1,236 @@
 ---
-title: UI Substrate Roadmap
-description: Phased roadmap for Runenwerk UI substrate ownership correction and maturation from the current audited state.
+title: UI Substrate and Surface Roadmap
+description: Doctrine-aligned, dependency-aware roadmap for Runenwerk UI substrate hardening and surface-semantic maturation.
+status: active
+owner: ui
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
-# UI Substrate Roadmap
-
-## Purpose
-Define the implementation roadmap for Runenwerk UI substrate work from the audited current repository state, with explicit ownership correction and dependency-aware sequencing.
-
-This roadmap is not a speculative product roadmap. It is an architecture and implementation sequencing document grounded in current code reality.
-
-## Current Status Summary
-
-- `domain/ui/*` now contains both primitive and runtime substrate crates:
-  - `ui_tree`
-  - `ui_runtime`
-  - `ui_widgets`
-- `editor_shell` correctly owns workspace/tool-surface host architecture.
-- `runenwerk_editor` owns app/runtime glue and viewport runtime bindings.
-- engine render integration for `UiFrame` submission/extraction is in place.
-- fallback seams (`first_frame`, `ViewportId(0)`) are removed from active routing paths.
-- interaction substrate coverage now includes keyboard/text routing, Tab/Shift-Tab traversal, and explicit invalidation contract output.
-- baseline unit coverage now exists across UI primitive/substrate crates.
-- duplicated engine overlay/debug UI stacks now route through substrate frame generation.
-- substrate frame snapshot tests and a lightweight gallery harness target are now present.
-
-## Architectural Constraints
-
-- preserve domain boundary direction from repository architecture doctrine.
-- keep workspace host semantics in `editor_shell`; do not move host semantics into generic substrate crates.
-- move reusable retained runtime ownership under `domain/ui` without changing semantic ownership of editor-specific logic.
-- avoid documenting or coding fallback-based routing as final architecture.
-- prefer contract normalization and verification before broad feature expansion.
-
-## Phased Roadmap
-
-## Phase 1 - Ownership correction and runtime extraction
-
-### Status
-Complete
-
-### Goal
-Move reusable retained runtime ownership from `editor_shell` into `domain/ui` runtime-oriented crates/modules while preserving behavior.
-
-### Why this order
-Every downstream substrate improvement depends on correct ownership boundaries. Without this extraction, new work keeps accumulating in the wrong owner.
-
-### Concrete target areas/files/modules
-
-- source owner now:
-  - `domain/editor/editor_shell/src/runtime/*`
-- target owner direction:
-  - new runtime-oriented crate/module under `domain/ui` (for retained tree/runtime/layout/input/output/widgets)
-- touch points requiring compatibility checks:
-  - `domain/editor/editor_shell/src/lib.rs`
-  - `apps/runenwerk_editor/src/shell/state.rs`
-  - `apps/runenwerk_editor/src/shell/controller.rs`
-
-### Done-when criteria
-
-- reusable runtime modules no longer live under `editor_shell` runtime subtree.
-- `editor_shell` composes/consumes runtime substrate rather than owning it.
-- existing editor shell runtime tests/smokes remain green after extraction.
-
-### Phase non-goals
-
-- no redesign of workspace host semantics.
-- no new broad control set introduction in this phase.
-- no docking/floating UX feature expansion.
-
-## Phase 2 - Contract normalization and fallback removal
-
-### Status
-Complete (with explicit bootstrap-only single-viewport seam before first structural binding).
-
-### Goal
-Remove fallback seams and normalize duplicated UI/viewport binding contracts.
-
-### Why this order
-After ownership is corrected, contract clarity must be enforced before adding behavior breadth. Otherwise new behavior builds on inconsistent identity/binding assumptions.
-
-### Concrete target areas/files/modules
-
-- fallback seams:
-  - `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs`
-  - `apps/runenwerk_editor/src/runtime/systems/input_bridge.rs`
-  - `apps/runenwerk_editor/src/shell/viewport_adapter.rs`
-- duplicate slot/binding contract surfaces:
-  - `domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs`
-  - `domain/editor/editor_viewport/src/expression/surface_set.rs`
-  - `apps/runenwerk_editor/src/runtime/viewport/surface_set.rs`
-  - `apps/runenwerk_editor/src/runtime/viewport/presentation_resolver.rs`
-
-### Done-when criteria
-
-- no active `first_frame`-driven routing fallback in editor runtime systems.
-- no active `ViewportId(0)` fallback in viewport observation/view-model path.
-- slot/binding mapping path is canonicalized and tested with clear owner boundaries.
-
-### Phase non-goals
-
-- no keyboard/focus behavior expansion yet.
-- no full renderer architecture redesign.
-
-## Phase 3 - Interaction completeness (keyboard/text/focus/invalidation)
-
-### Status
-Complete for baseline routing/traversal/invalidation contracts.
-
-### Goal
-Complete core retained-runtime interaction model beyond pointer-only behavior.
-
-### Why this order
-Interaction completeness should come after ownership and contracts are stable; otherwise interaction features are implemented against unstable boundaries.
-
-### Concrete target areas/files/modules
-
-- runtime dispatch and state:
-  - retained runtime `dispatch_input` keyboard/text path
-  - runtime focus traversal baseline (Tab/Shift-Tab)
-- input contracts:
-  - `domain/ui/ui_input/src/*`
-- invalidation semantics:
-  - explicit `UiInputOutcome.invalidation` result contract
-
-### Done-when criteria
-
-- keyboard and text input route through retained runtime tree paths.
-- focus traversal behavior is explicit and test-covered.
-- relayout/repaint invalidation semantics are explicit and verified in runtime tests.
-
-### Phase non-goals
-
-- no broad visual styling system expansion.
-- no accessibility productization beyond foundational hooks.
-
-## Phase 4 - Reusable controls needed by existing surfaces
-
-### Status
-In progress (substrate control primitives implemented; broad editor-surface migration still pending).
-
-### Goal
-Introduce and migrate the minimum reusable control set required by current editor surfaces.
-
-### Why this order
-Controls should be built after core interaction model is complete, so control behavior does not require rework from missing focus/keyboard/invalidation infrastructure.
-
-### Concrete target areas/files/modules
-
-- control construction/runtime modules in domain-owned UI substrate (target owner)
-- existing shell composition consumers:
-  - `domain/editor/editor_shell/src/composition/build_outliner_panel.rs`
-  - `domain/editor/editor_shell/src/composition/build_inspector_panel.rs`
-  - `domain/editor/editor_shell/src/composition/build_viewport_panel.rs`
-  - `domain/editor/editor_shell/src/composition/build_console_panel.rs`
-
-### Done-when criteria
-
-- reusable control primitives exist for:
-  - text input
-  - toggle/checkbox
-  - numeric input
-  - tabs
-- control interaction/layout/render behavior is test-covered.
-- current editor surfaces use these controls where ad hoc equivalents remain.
-
-### Phase non-goals
-
-- no speculative full widget catalog.
-- no broad UX productization beyond current surface needs.
-
-## Phase 5 - Converge duplicated UI stacks where justified
-
-### Status
-Complete
-
-### Goal
-Reduce duplicated ad hoc UI runtime paths by reusing shared substrate where practical.
-
-### Why this order
-Convergence should happen only after substrate ownership and core behavior are stable, to avoid coupling scene/debug flows to moving internals.
-
-### Concrete target areas/files/modules
-
-- duplicate stack sites:
-  - `engine/src/plugins/debug_metrics/mod.rs`
-  - `engine/src/plugins/scene/runtime/overlay_ui.rs`
-- shared integration seam:
-  - `ui_runtime::build_ui_frame` and retained node/layout contracts
-  - engine UI submission/render feature paths under `engine/src/plugins/render/features/ui/*`
-
-### Done-when criteria
-
-- duplicated ad hoc text/layout/frame assembly paths are reduced where feasible.
-- duplicated debug metrics and scene overlay ad hoc text/layout/frame assembly paths are removed in favor of substrate frame generation.
-- shared substrate is used for common behavior while feature-specific semantics stay local.
-- render submission behavior remains stable under existing smoke tests.
-
-### Phase non-goals
-
-- no forced migration of every runtime overlay path in one step.
-- no disruption of feature-local semantics to satisfy abstraction purity.
-
-## Phase 6 - Testing/gallery/docs hardening
-
-### Status
-Complete
-
-### Goal
-Establish durable verification and documentation support for ongoing UI substrate evolution.
-
-### Why this order
-Hardening should follow architectural and behavior stabilization so tests/docs lock in a coherent model.
-
-### Concrete target areas/files/modules
-
-- UI primitive crates currently under-tested:
-  - `domain/ui/ui_math`
-  - `domain/ui/ui_input`
-  - `domain/ui/ui_layout`
-  - `domain/ui/ui_theme`
-  - `domain/ui/ui_render_data`
-- runtime/substrate integration test targets:
-  - retained runtime interaction paths
-  - frame snapshot expectations
-- gallery/harness target:
-  - `domain/ui/ui_runtime/examples/substrate_gallery.rs`
-- docs:
-  - `docs-site/src/content/docs/domain/ui/architecture.md`
-  - `docs-site/src/content/docs/domain/ui/roadmap.md`
-  - `domain/ui/README.md`
-
-### Done-when criteria
-
-- baseline unit coverage is added for core UI primitive/substrate crates.
-- interaction-level verification is codified in repeatable runtime tests.
-- frame output snapshot expectations exist in substrate output tests.
-- docs remain aligned with implemented state and no longer claim removed fallback seams as unresolved.
-- lightweight gallery target is added for substrate scenarios.
-
-### Phase non-goals
-
-- no broad documentation tree refactor outside UI area.
-- no speculative roadmap expansion into unrelated product tracks.
-
-## Explicit Roadmap Non-Goals
-
-- do not treat ownership extraction as complete before code moves.
-- do not restart sequencing from stale assumptions that contradict current code.
-- do not prioritize broad feature breadth over ownership and contract correctness.
-- do not present fallback seam removal as already done until tests and code confirm it.
+# Runenwerk UI Substrate and Surface Roadmap
+
+## 1. Title and Purpose
+This document is the working architecture roadmap for the next major Runenwerk UI cycle.
+
+Target file: `docs-site/src/content/docs/domain/ui/roadmap.md`.
+
+Its purpose is to sequence implementation work from current repository truth toward doctrine-aligned surface semantics, without speculative feature promises or short-term architectural shortcuts.
+
+## 2. Current Reality Summary
+Implemented state:
+- Foundation and substrate crates exist and are active: `domain/ui/ui_math`, `domain/ui/ui_input`, `domain/ui/ui_layout`, `domain/ui/ui_text`, `domain/ui/ui_theme`, `domain/ui/ui_render_data`, `domain/ui/ui_tree`, `domain/ui/ui_runtime`, `domain/ui/ui_widgets`.
+- `domain/ui/ui_surface` exists as a first-class crate with definition, mount, observation/session/presentation/intent/ratification contracts.
+- Retained runtime extraction is real: input dispatch, focus traversal, invalidation signaling, tree/layout/frame build, and render submission contracts are in place.
+- Early reusable controls and runtime nodes exist and are used in editor composition paths.
+- Frame build path and gallery harness exist (`domain/ui/ui_runtime/examples/substrate_gallery.rs`).
+- Shell/runtime/engine seams are operational and already guarded by architecture tests in `apps/runenwerk_editor/tests/*`.
+
+Current weaknesses:
+- Surface semantics are still partially distributed across `editor_shell`, `editor_viewport`, and app/runtime glue; `ui_surface` is now integrated for core control flows but full semantic centralization is ongoing.
+- Observation, session, presentation, intent, and ratification boundaries now exist for core paths, but broader surface families and advanced interactions still need migration coverage.
+- Viewport slot semantic ownership is now enforced on current viewport seams, but must remain guard-tested as additional surfaces integrate.
+- Some runtime bootstrapping seams remain intentionally transitional and must stay explicitly bounded.
+
+## 3. Architectural Stance
+Settled decisions:
+- Doctrine alignment is mandatory.
+- Retained tree/runtime (`ui_tree`, `ui_runtime`) remain technical substrate, not semantic center.
+- Surfaces are the semantic center.
+- `ui_surface` is created now as its own crate, not as a temporary module.
+- `SurfacePresentationModel` is central: surfaces render from prepared presentation models, not directly from raw observation.
+- Observation/session/presentation/intent/ratification boundaries become explicit and enforced.
+- Ratification remains outside UI crates where domain authority or trust elevation is required.
+- Hosts mount surfaces but do not own surface semantics.
+- `editor_viewport` owns viewport slot meaning.
+- `ui_render_data` stays renderer-facing and generic; it owns render/embed payload form, not viewport semantic meaning.
+- Mapping between viewport semantics and renderer payload form happens at integration edges (`runenwerk_editor` and engine adapters).
+- Crate splitting strategy is conservative: create `ui_surface` now, defer further micro-splitting until contracts stabilize.
+
+## 4. Guiding Constraints
+- Keep doctrine invariants explicit: observation frames, session reality, expressed reality, explicit ratification boundaries.
+- Prevent god-object drift by keeping contracts narrow and compositional.
+- Require capability/trust-aware semantics at mount and intent boundaries with explicit classes:
+- `observe`: read observation and presentation data.
+- `interact`: local UI/session interaction without domain mutation authority.
+- `request_mutation`: emit `SurfaceIntent` for host/domain adjudication.
+- `ratify`: privileged mutation approval path outside UI substrate where appropriate.
+- Make `SessionScopeHandle` retention classes explicit and first-class:
+- `Ephemeral`
+- `Restorable`
+- `Persistent`
+- `Shareable`
+- Preserve domain ownership direction; avoid semantic leakage into renderer-facing crates.
+- Use dependency-correct sequencing; do not finalize downstream semantic ownership in earlier substrate phases.
+
+## 5. Critical Weaknesses / Risks
+- Risk: semantic authority remains fragmented across shell/app/runtime modules. Mitigation: establish `ui_surface` as semantic center before broad behavior expansion.
+- Risk: viewport semantic meaning leaks into renderer contracts or is duplicated in parallel owners. Mitigation: keep semantic taxonomy in `editor_viewport`, keep payload form in `ui_render_data`, enforce adapter-only mapping.
+- Risk: `Surface` becomes a catch-all object. Mitigation: enforce strict split between observation, session, presentation, intent, and ratification contracts.
+- Risk: surfaces consume raw observation directly and accumulate transformation logic ad hoc. Mitigation: require prepared `SurfacePresentationModel` as standard surface input.
+- Risk: ratification logic drifts into UI runtime for convenience. Mitigation: isolate ratification adapters outside UI substrate and enforce through tests.
+- Risk: retention behavior is implicit and inconsistent. Mitigation: formalize and test `Ephemeral/Restorable/Persistent/Shareable` semantics.
+- Risk: premature expansion into 3D/collab/database surface families before core contracts stabilize. Mitigation: explicit wait gates and anti-goals.
+
+## 6. Dependency-Aware Phased Roadmap
+Execution order is strict: Phase 1 -> Phase 2 -> Phase 3 -> Phase 4 -> Phase 5 -> Phase 6.
+
+### Phase 1 - Substrate Ownership Hardening
+Goal:
+- Harden ownership and lifecycle boundaries for retained substrate without locking viewport semantic ownership in the wrong layer.
+
+Why this phase comes here:
+- Later semantic consolidation depends on stable substrate contracts and explicit transitional seam boundaries.
+
+Concrete target areas:
+- `domain/ui/ui_tree`
+- `domain/ui/ui_runtime`
+- `domain/ui/ui_widgets`
+- `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs`
+- `apps/runenwerk_editor/src/runtime/systems/input_bridge.rs`
+- `apps/runenwerk_editor/src/runtime/viewport/*`
+- Existing guard tests in `apps/runenwerk_editor/tests/*`
+
+Done-when criteria:
+- Runtime substrate crates are free of editor-domain semantic ownership.
+- Transitional bootstrap paths are explicit, bounded, and test-guarded.
+- No new viewport semantic taxonomy is declared in `ui_render_data` during this phase.
+- Ownership and lifecycle boundaries are documented and aligned with current implemented seams.
+
+Explicit non-goals:
+- Do not canonicalize viewport slot meaning in renderer-facing crates.
+- Do not introduce `ui_surface` full contract stack yet.
+- Do not expand surface families.
+
+### Phase 2 - Introduce `ui_surface` Crate as Semantic Kernel
+Goal:
+- Establish `domain/ui/ui_surface` with minimal surface lifecycle primitives and mount contracts.
+
+Why this phase comes here:
+- Semantic authority must be centralized before contract formalization and viewport seam consolidation.
+
+Concrete target areas:
+- New crate `domain/ui/ui_surface`
+- Initial contracts: `SurfaceDefinition`, `MountedSurfaceInstance`, mount/unmount containment and lifecycle boundaries
+- Host integration points in `domain/editor/editor_shell` and `apps/runenwerk_editor` where mounting occurs
+
+Done-when criteria:
+- At least one production surface is mounted through `ui_surface` contracts.
+- Mount ownership is explicit: host mounts, surface semantics remain in surface layer.
+- Lifecycle boundaries are testable without embedding domain mutation logic in substrate runtime paths.
+
+Explicit non-goals:
+- Do not split `ui_surface` into multiple crates yet.
+- Do not attempt full surface migration in one pass.
+
+### Phase 3 - Formalize Observation/Session/Presentation/Intent/Ratification Contracts
+Goal:
+- Define and adopt doctrine-aligned semantic contracts with `SurfacePresentationModel` as the central build input.
+
+Why this phase comes here:
+- Prevents god-object collapse and clarifies authority before viewport/render seam migration.
+
+Concrete target areas:
+- `ui_surface` contract modules for `ObservationFrame`, `SessionScopeHandle`, `SurfacePresentationModel`, `SurfaceIntent`
+- Capability/trust contract expression for `observe/interact/request_mutation/ratify`
+- Host-side `RatificationAdapter` boundaries in editor/app domain integration layers
+
+Done-when criteria:
+- Surface build paths consume prepared `SurfacePresentationModel`, not raw observation directly.
+- `SessionScopeHandle` semantics explicitly encode `Ephemeral`, `Restorable`, `Persistent`, `Shareable`.
+- `SurfaceIntent` emission and ratification are explicit and test-covered across at least one end-to-end flow.
+- Ratification remains outside UI substrate for privileged mutation paths.
+
+Explicit non-goals:
+- Do not redesign persistence infrastructure.
+- Do not implement collaboration protocol or sharing backend.
+
+### Phase 4 - Viewport/Embed/Render-Data Seam Consolidation (Corrected Ownership Model)
+Goal:
+- Consolidate viewport embedding seams while preserving semantic ownership in `editor_viewport` and renderer payload ownership in `ui_render_data`.
+
+Why this phase comes here:
+- Requires stable semantic contracts from Phases 2 and 3 to avoid semantic drift into renderer layers.
+
+Concrete target areas:
+- `domain/editor/editor_viewport/src/expression/*` as semantic owner of viewport slot meaning
+- `domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs` and related render payload contracts as generic renderer-facing forms
+- Integration adapters in `apps/runenwerk_editor/src/runtime/viewport/*`
+- Engine consumption paths under `engine/src/plugins/render/features/ui/*`
+
+Done-when criteria:
+- Viewport slot semantic taxonomy is defined in `editor_viewport` only.
+- `ui_render_data` carries renderer-facing payload shape without owning viewport semantic meaning.
+- Adapter mapping from viewport semantics to render payload form is explicit and test-covered.
+- `runenwerk_editor` and engine consume/adapt mappings without introducing parallel semantic taxonomies.
+
+Explicit non-goals:
+- Do not redesign the renderer architecture.
+- Do not implement 3D/world-space UI features.
+
+### Phase 5 - Control Semantics Hardening (Surface-Centered, Not Widget-Centered)
+Goal:
+- Strengthen control semantics through surface-level intent and presentation contracts without regressing to widget-centric ownership.
+
+Why this phase comes here:
+- Control semantics should be upgraded only after semantic contracts and viewport seams are stable.
+
+Concrete target areas:
+- Surface composition paths in `domain/editor/editor_shell/src/composition/*`
+- Reusable control usage in `domain/ui/ui_widgets` aligned with surface contracts
+- Intent routing and reducer integration in app/shell integration seams
+
+Done-when criteria:
+- Core editor surfaces route behavior through typed `SurfaceIntent` and prepared presentation models.
+- Control interactions reflect capability/trust distinctions instead of direct mutation shortcuts.
+- Behavior regressions are covered by interaction and architecture guard tests.
+
+Explicit non-goals:
+- Do not build a broad speculative widget catalog.
+- Do not perform a visual redesign unrelated to architecture boundaries.
+
+### Phase 6 - Verification, Reflector/Debugging, Gallery, and Docs Hardening
+Goal:
+- Lock architecture correctness with durable verification and operational introspection.
+
+Why this phase comes here:
+- Enforcement is most valuable after core ownership and semantic boundaries are implemented.
+
+Concrete target areas:
+- Architecture and seam guard suites in `apps/runenwerk_editor/tests/*` and UI crate tests
+- Gallery scenarios in `domain/ui/ui_runtime/examples/substrate_gallery.rs` expanded for surface lifecycle cases
+- Reflector/debugging traces for observation -> presentation -> intent -> ratification flow
+- Documentation alignment in:
+- `docs-site/src/content/docs/domain/ui/architecture.md`
+- `docs-site/src/content/docs/domain/ui/roadmap.md`
+- `domain/ui/README.md`
+
+Done-when criteria:
+- Boundary regressions fail fast in CI.
+- Debug artifacts can trace capability gates and ratification boundaries.
+- Gallery scenarios cover multi-surface and viewport embed lifecycle cases.
+- Docs and tests describe the same architecture, with no stale ownership claims.
+
+Explicit non-goals:
+- Do not create unrelated documentation refactors.
+- Do not treat instrumentation as a substitute for boundary design.
+
+## 8. Expansion Paths That Should Wait
+- World-surface and 3D UI surface families wait until Phase 4 and Phase 6 stability gates pass.
+- SDF-backed UI rendering paths wait until semantic-to-render adaptation seams are stable.
+- Database/editor-authoring surfaces wait until session retention classes and ratification boundaries are proven in existing surfaces.
+- Collaborative/shared surfaces wait until capability and ratification flows are validated in single-user architecture.
+- Broad external/plugin-authored surface API waits until `ui_surface` contracts survive at least one full migration cycle.
+
+## 9. Explicit Anti-Goals
+- Do not recenter semantics in host shells.
+- Do not treat retained runtime as semantic authority.
+- Do not place viewport slot semantic ownership in `ui_render_data`.
+- Do not allow direct raw-observation-to-surface rendering as default architecture.
+- Do not collapse observation/session/presentation/intent/ratification into one monolithic `Surface` type.
+- Do not pull privileged ratification responsibilities into generic UI substrate code.
+- Do not over-split crates before contracts prove stable.
+- Do not front-load speculative future feature systems.
+
+## 10. Final Sequencing Rationale
+The sequence is intentionally conservative and dependency-correct. Phase 1 stabilizes substrate ownership without making downstream semantic ownership decisions. Phase 2 establishes `ui_surface` as semantic center. Phase 3 defines explicit doctrine contracts, with `SurfacePresentationModel` and capability/ratification boundaries preventing god-object drift. Phase 4 then consolidates viewport/embed/render seams with corrected ownership (`editor_viewport` semantics, `ui_render_data` payload form, adapter mapping at integration edges). Phase 5 hardens control semantics against that foundation. Phase 6 turns the architecture into an enforceable system through tests, reflector/debugging, gallery scenarios, and aligned documentation. This order minimizes architectural backtracking while keeping room for future surface families without premature overbuilding.

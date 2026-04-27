@@ -1,6 +1,11 @@
 ---
 title: "Render Public API Reference"
 description: "Documentation for Render Public API Reference."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Render Public API Reference

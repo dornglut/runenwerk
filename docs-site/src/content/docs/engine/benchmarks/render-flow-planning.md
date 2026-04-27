@@ -1,6 +1,11 @@
 ---
 title: "Render Flow Planning Benchmarks"
 description: "Documentation for Render Flow Planning Benchmarks."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Render Flow Planning Benchmarks

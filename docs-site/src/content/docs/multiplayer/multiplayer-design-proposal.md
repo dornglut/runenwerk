@@ -1,7 +1,12 @@
 ---
-title: "Multiplayer Design Proposal"
+title: Multiplayer Design Proposal
+description: Multiplayer architecture proposal for Runenwerk networking, replication, and runtime integration.
+status: active
+owner: net
+layer: net
+canonical: true
+last_reviewed: 2026-04-27
 ---
-
 # Multiplayer Integration Design
 
 ## Goal

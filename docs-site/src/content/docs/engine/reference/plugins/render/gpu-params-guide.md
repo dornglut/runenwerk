@@ -1,6 +1,11 @@
 ---
 title: "GPU Params Guide"
 description: "Documentation for GPU Params Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # GPU Params Guide

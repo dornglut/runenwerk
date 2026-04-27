@@ -1,6 +1,11 @@
 ---
 title: Queries
 description: Engine-agnostic guide for ecs queries.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Queries

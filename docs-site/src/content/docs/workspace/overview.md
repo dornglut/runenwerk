@@ -1,6 +1,11 @@
 ---
 title: "Runenwerk Workspace"
 description: "High-level map of the active Runenwerk workspace."
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Runenwerk Workspace
@@ -24,6 +29,7 @@ This page is a lightweight orientation map for the active Runenwerk repository.
 - Docs root index: [`../index.mdx`](../index.mdx)
 - Canonical architecture doctrine: [`../guidelines/runenwerk-architecture.md`](../guidelines/runenwerk-architecture.md)
 - Workspace architecture boundaries: [`../guidelines/architecture.md`](../guidelines/architecture.md)
+- Crate documentation status: [`crate-docs-status.md`](crate-docs-status.md)
 - Domain docs: [`../domain/00-overview.md`](../domain/00-overview.md)
 - Engine docs: [`../engine/index.md`](../engine/index.md)
-- Net docs: [`../net/readme.md`](../net/readme.md)
+- Net docs: [`../net/README.md`](../net/README.md)

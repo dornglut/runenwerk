@@ -1,6 +1,11 @@
 ---
 title: "Shared Plugin Utilities Advanced Guide"
 description: "Documentation for Shared Plugin Utilities Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Shared Plugin Utilities Advanced Guide

@@ -1,6 +1,11 @@
 ---
 title: "Engine Examples"
 description: "Documentation for Engine Examples."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Engine Examples

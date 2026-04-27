@@ -1,6 +1,11 @@
 ---
 title: "Time Plugin Architecture"
 description: "Documentation for Time Plugin Architecture."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Time Plugin Architecture

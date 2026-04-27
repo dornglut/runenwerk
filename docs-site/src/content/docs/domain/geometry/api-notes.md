@@ -1,6 +1,11 @@
 ---
 title: API
 description: API semantics and invariants for domain geometry.
+status: active
+owner: geometry
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # API Notes

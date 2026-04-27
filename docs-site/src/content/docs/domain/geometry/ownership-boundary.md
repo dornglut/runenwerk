@@ -1,6 +1,11 @@
 ---
 title: Boundary
 description: Boundary
+status: active
+owner: geometry
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Ownership Boundary

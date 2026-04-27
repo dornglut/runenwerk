@@ -1,6 +1,11 @@
 ---
 title: "UI Domain Surface Advanced Guide"
 description: "Documentation for UI Domain Surface Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # UI Domain Surface Advanced Guide

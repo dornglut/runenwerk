@@ -1,6 +1,11 @@
 ---
 title: Architecture
 description: Architecture
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Architecture
@@ -53,7 +58,7 @@ When adding code:
 1. Choose the owning domain first (`domain`, `engine`, `net`, `apps`, or `adapters`).
 2. Reuse local helpers in that domain before adding new abstractions.
 3. Expose narrow public interfaces instead of reaching into internals across crates.
-4. Add or update local docs (`readme.md`, `usage-guide.md`, `architecture.md`) when behavior or scope changes.
+4. Add or update local docs (`README.md`, `usage-guide.md`, `architecture.md`) when behavior or scope changes.
 
 ## Architecture Guardrails
 

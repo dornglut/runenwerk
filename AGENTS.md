@@ -80,11 +80,23 @@ Before implementing new functionality:
 Documentation should be organized intentionally, not scattered opportunistically.
 The docs live in the astro docs site under docs-site/src/content/docs
 
+For full documentation placement, lifecycle states, frontmatter, refactor update rules, naming, and archival policy, follow `docs-site/src/content/docs/workspace/documentation-structure.md`.
+
+For documentation moves, renames, pruning, or restructuring, follow `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md`.
+
+For documentation-only validation, run:
+
+```text
+python3 tools/docs/validate_docs.py
+```
+
 Raw benchmark artifacts should live in dedicated artifact folders near the owning crate, not mixed into prose docs.
 
 When creating or editing docs:
 
-- Keep filenames in docs trees in kebab-case unless an existing local convention intentionally differs.
+- Keep regular docs-site filenames in kebab-case.
+- Use `README.md` for docs-site section landing pages.
+- Do not introduce new docs-site `readme.md` files.
 - Update internal links whenever files move or are renamed.
 
 ## Documentation Ownership

@@ -1,6 +1,11 @@
 ---
 title: Runenwerk 9-Layer Architecture Doctrine
 description: Canonical governing architecture doctrine for Runenwerk.
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Runenwerk Architecture Doctrine

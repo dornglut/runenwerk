@@ -1,6 +1,11 @@
 ---
 title: "Ownership Boundary"
 description: "Documentation for Ownership Boundary."
+status: active
+owner: sdf
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Ownership Boundary

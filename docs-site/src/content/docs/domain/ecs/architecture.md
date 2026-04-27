@@ -1,6 +1,11 @@
 ---
 title: Architecture
 description: Internal architecture and invariants for the ecs runtime.
+status: active
+owner: ecs
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # ECS Architecture

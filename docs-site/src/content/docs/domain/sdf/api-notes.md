@@ -1,6 +1,11 @@
 ---
 title: "API Notes"
 description: "Documentation for API Notes."
+status: active
+owner: sdf
+layer: domain
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # API Notes

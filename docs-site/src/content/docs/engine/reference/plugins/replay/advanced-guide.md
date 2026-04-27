@@ -1,6 +1,11 @@
 ---
 title: "Replay Plugin Advanced Guide"
 description: "Documentation for Replay Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Replay Plugin Advanced Guide

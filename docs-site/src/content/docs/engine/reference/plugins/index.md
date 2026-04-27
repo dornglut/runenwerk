@@ -1,6 +1,11 @@
 ---
 title: "Plugin Guides Index"
 description: "Documentation for Plugin Guides Index."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Plugin Guides Index

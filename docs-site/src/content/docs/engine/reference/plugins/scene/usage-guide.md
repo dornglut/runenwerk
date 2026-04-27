@@ -1,6 +1,11 @@
 ---
 title: "Scene Plugin Usage Guide"
 description: "Documentation for Scene Plugin Usage Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Scene Plugin Usage Guide
@@ -32,4 +37,4 @@ app.add_plugin(ScenePlugin);
 ## Related
 
 - Plugin guides index: [../index.md](../index.md)
-- Plugin source map: [../../../../src/plugins/README.md](../../../plugins/readme.md)
+- Plugin source map: [../../../../src/plugins/README.md](../../../plugins/README.md)

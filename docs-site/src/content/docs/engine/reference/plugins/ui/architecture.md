@@ -1,6 +1,11 @@
 ---
 title: "UI Domain Surface Architecture"
 description: "Documentation for UI Domain Surface Architecture."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # UI Domain Surface Architecture

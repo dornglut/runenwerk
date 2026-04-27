@@ -1,6 +1,11 @@
 ---
 title: "Time Plugin Advanced Guide"
 description: "Documentation for Time Plugin Advanced Guide."
+status: active
+owner: engine
+layer: engine-runtime
+canonical: true
+last_reviewed: 2026-04-27
 ---
 
 # Time Plugin Advanced Guide
