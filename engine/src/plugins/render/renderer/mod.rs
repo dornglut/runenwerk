@@ -16,7 +16,7 @@ use bytemuck::{Pod, Zeroable};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
-use ui_render_data::{ViewportSurfaceBindingRegistry, ViewportSurfaceSlot};
+use ui_render_data::{ViewportSurfaceBindingRegistry, ViewportSurfaceEmbedSlotId};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 use winit::window::Window;
@@ -361,7 +361,7 @@ struct FlattenedUiViewportEmbedInstance {
     raw: ViewportEmbedInstanceRaw,
     clip: Option<[f32; 4]>,
     viewport_id: u64,
-    slot: ViewportSurfaceSlot,
+    slot: ViewportSurfaceEmbedSlotId,
 }
 
 #[repr(C)]
@@ -417,7 +417,7 @@ struct UiViewportEmbedBatch {
     instance_count: u32,
     instance_buffer: Buffer,
     viewport_id: u64,
-    slot: ViewportSurfaceSlot,
+    slot: ViewportSurfaceEmbedSlotId,
 }
 
 #[derive(Debug)]

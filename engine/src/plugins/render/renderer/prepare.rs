@@ -313,13 +313,13 @@ fn group_viewport_embed_batches_ordered(
 ) -> Vec<(
     (u32, u32, u32, u32),
     u64,
-    ViewportSurfaceSlot,
+    ViewportSurfaceEmbedSlotId,
     Vec<ViewportEmbedInstanceRaw>,
 )> {
     let mut grouped = Vec::<(
         (u32, u32, u32, u32),
         u64,
-        ViewportSurfaceSlot,
+        ViewportSurfaceEmbedSlotId,
         Vec<ViewportEmbedInstanceRaw>,
     )>::new();
     for instance in flattened_instances {
