@@ -41,7 +41,7 @@ engine_render_macros = { path = "../engine_render_macros" }
 engine_replay = { path = "../net/engine_history" }
 engine_net = { path = "../net/engine_net" }
 engine_sim = { path = "../net/engine_sim" }
-id_macros = { path = "../domain/id_macros" }
+id_macros = { path = "../foundation/id_macros" }
 id = { path = "../foundation/id" }
 
 crossbeam-channel = "0.5.15"

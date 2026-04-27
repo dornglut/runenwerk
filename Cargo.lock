@@ -673,6 +673,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "diagnostics"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -797,6 +805,7 @@ dependencies = [
  "ui_math",
  "ui_render_data",
  "ui_runtime",
+ "ui_surface",
  "ui_text",
  "ui_theme",
  "ui_tree",
@@ -2659,6 +2668,7 @@ dependencies = [
  "ui_input",
  "ui_math",
  "ui_render_data",
+ "ui_surface",
  "ui_text",
  "ui_theme",
  "winit",
@@ -3556,6 +3566,13 @@ dependencies = [
  "ui_text",
  "ui_theme",
  "ui_tree",
+]
+
+[[package]]
+name = "ui_surface"
+version = "0.1.0"
+dependencies = [
+ "diagnostics",
 ]
 
 [[package]]

@@ -19,6 +19,8 @@ This subtree now includes both primitive crates and retained runtime ownership (
   - theme token scales and defaults (color, spacing, radius, typography).
 - `ui_render_data`
   - renderer-facing UI frame/surface/layer/primitive data contracts.
+- `ui_surface`
+  - surface-semantic contracts (definitions, mounted lifecycle, capability/session/presentation/intent/ratification boundaries).
 - `ui_tree`
   - retained tree contracts (`WidgetId`, node kinds/payloads, tree traversal, computed layout records).
 - `ui_runtime`
@@ -50,6 +52,15 @@ Engine debug metrics and scene overlay paths now build frames through substrate 
 
 Broad shell-surface migration to all reusable controls (`TextInput`, `Toggle`, `NumericInput`, `Tabs`) is still in progress.
 
+`ui_surface` now owns the base contracts for surface definitions and mounted-surface lifecycle records; host shells mount surfaces through these contracts while retaining shell-specific workspace semantics.
+
+Viewport slot semantics stay in `editor_viewport`; `ui_render_data` now carries only opaque embed slot IDs for renderer-facing payload shape, with mapping handled at integration edges.
+
+Core shell command flows now use surface contracts end-to-end:
+- observation -> prepared `SurfacePresentationModel`
+- typed `SurfaceIntent` emission
+- host-side ratification adapter dispatch
+
 ## Canonical docs and architecture links
 
 - Canonical UI architecture:
@@ -63,6 +74,6 @@ Broad shell-surface migration to all reusable controls (`TextInput`, `Toggle`, `
 - Module structure guidelines:
   - [Module Structure Guidelines](../../docs-site/src/content/docs/guidelines/module-structure-guidelines.md)
 - Editor/UI/workspace/tool-surface architecture:
-  - [Editor / UI / Workspace / Tool-Surface Architecture](../../docs-site/src/content/docs/guidelines/editor_ui_workspace_tool_surface_architecture.md)
+  - [Editor / UI / Workspace / Tool-Surface Architecture](../../docs-site/src/content/docs/guidelines/editor-ui-workspace-tool-surface-architecture.md)
 - Workspace identity contract:
   - [Workspace Identity Contract and Migration Map](../../docs-site/src/content/docs/guidelines/workspace-identity-contract-and-migration-map.md)
