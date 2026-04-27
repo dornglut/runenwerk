@@ -1,11 +1,9 @@
 //! File: apps/runenwerk_editor/src/runtime/viewport/presentation_resolver.rs
 //! Purpose: Resolve viewport presentation selection into producer-owned surfaces.
 
-use editor_viewport::{ExpressionProductId, ViewportId};
-use ui_render_data::{
-    ViewportSurfaceBinding, ViewportSurfaceBindingRegistry,
-    ViewportSurfaceSlot as UiViewportSurfaceSlot,
-};
+use editor_shell::viewport_embed_slot_for;
+use editor_viewport::{ExpressionProductId, ViewportId, ViewportSurfacePresentationSlot};
+use ui_render_data::{ViewportSurfaceBinding, ViewportSurfaceBindingRegistry};
 
 use crate::runtime::viewport::{
     PRODUCT_ID_OVERLAY, PRODUCT_ID_PICKING_IDS, PRODUCT_ID_SCENE_COLOR,
@@ -32,14 +30,14 @@ fn bind_surface_slot(
     viewport_id: ViewportId,
     surface_set: &ViewportSurfaceSet,
     source_slot: ViewportSurfaceSlot,
-    target_slot: UiViewportSurfaceSlot,
+    target_slot: ViewportSurfacePresentationSlot,
 ) {
     let Some(surface_handle) = surface_set.get(source_slot) else {
         return;
     };
     registry.bind(
         viewport_id.0,
-        target_slot,
+        viewport_embed_slot_for(target_slot),
         ViewportSurfaceBinding::new(surface_handle.flow_id, surface_handle.resource_id),
     );
 }
@@ -68,21 +66,21 @@ pub fn build_surface_binding_registry(
             viewport_id,
             surface_set,
             primary_slot,
-            UiViewportSurfaceSlot::Primary,
+            ViewportSurfacePresentationSlot::Primary,
         );
         bind_surface_slot(
             &mut registry,
             viewport_id,
             surface_set,
             ViewportSurfaceSlot::PickingIds,
-            UiViewportSurfaceSlot::Picking,
+            ViewportSurfacePresentationSlot::Picking,
         );
         bind_surface_slot(
             &mut registry,
             viewport_id,
             surface_set,
             ViewportSurfaceSlot::Overlay,
-            UiViewportSurfaceSlot::Overlay,
+            ViewportSurfacePresentationSlot::Overlay,
         );
     }
 
@@ -129,7 +127,10 @@ mod tests {
 
         let registry = build_surface_binding_registry(&surface_sets, &presentations);
         let binding = registry
-            .get(viewport_id.0, UiViewportSurfaceSlot::Primary)
+            .get(
+                viewport_id.0,
+                viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
+            )
             .expect("primary binding should exist for selected product");
 
         assert_eq!(binding.flow_id.as_str(), EDITOR_MAIN_FLOW_ID);
@@ -159,13 +160,19 @@ mod tests {
 
         assert!(
             registry
-                .get(owned_viewport.0, UiViewportSurfaceSlot::Primary)
+                .get(
+                    owned_viewport.0,
+                    viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
+                )
                 .is_some(),
             "owned viewport with presentation state should produce a primary binding",
         );
         assert!(
             registry
-                .get(unselected_viewport.0, UiViewportSurfaceSlot::Primary)
+                .get(
+                    unselected_viewport.0,
+                    viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
+                )
                 .is_none(),
             "viewport without presentation state must not fallback to another viewport",
         );

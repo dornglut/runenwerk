@@ -14,6 +14,7 @@ pub const TOOLBAR_REDO_BUTTON_WIDGET_ID: WidgetId = WidgetId(15);
 pub const TOOLBAR_SAVE_BUTTON_WIDGET_ID: WidgetId = WidgetId(16);
 pub const TOOLBAR_LOAD_BUTTON_WIDGET_ID: WidgetId = WidgetId(17);
 pub const TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID: WidgetId = WidgetId(18);
+pub const TOOLBAR_SCROLL_WIDGET_ID: WidgetId = WidgetId(19);
 
 pub const BODY_ROOT_WIDGET_ID: WidgetId = WidgetId(20);
 pub const LEFT_RIGHT_SPLIT_WIDGET_ID: WidgetId = WidgetId(21);
@@ -59,6 +60,7 @@ pub const INSPECTOR_FIELD_WIDGET_ID_BASE: u64 = 10_000;
 pub const VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE: u64 = 30_000;
 pub const TAB_STRIP_WIDGET_ID_BASE: u64 = 1_000_000;
 pub const TAB_STACK_CONTAINER_WIDGET_ID_BASE: u64 = 1_050_000;
+pub const TAB_STRIP_SCROLL_WIDGET_ID_BASE: u64 = 1_100_000;
 pub const TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_200_000;
 pub const TAB_DROP_ZONE_WIDGET_ID_BASE: u64 = 1_400_000;
 pub const FLOATING_HOST_WIDGET_ID_BASE: u64 = 1_600_000;
@@ -90,6 +92,10 @@ pub fn tab_strip_widget_id(tab_stack_id: TabStackId) -> WidgetId {
 
 pub fn tab_stack_container_widget_id(tab_stack_id: TabStackId) -> WidgetId {
     WidgetId(TAB_STACK_CONTAINER_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_strip_scroll_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STRIP_SCROLL_WIDGET_ID_BASE + tab_stack_id.raw())
 }
 
 pub fn tab_button_widget_id(tab_stack_id: TabStackId, tab_index: usize) -> WidgetId {

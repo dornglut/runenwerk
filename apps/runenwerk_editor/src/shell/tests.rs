@@ -148,7 +148,7 @@ fn dispatch_shell_command_selects_outliner_entity() {
             entity: EntityId(1),
             target: StructuralCommandTarget {
                 panel_instance_id: editor_shell::PanelInstanceId::new(1),
-                active_tool_surface: None,
+                active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::new(1)),
                 tab_stack_id: editor_shell::TabStackId::new(1),
             },
             projection_epoch: 0,

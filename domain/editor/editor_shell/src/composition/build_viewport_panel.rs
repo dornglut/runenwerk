@@ -2,14 +2,14 @@
 //! Purpose: Compose viewport panel widgets.
 
 use crate::{UiNode, panel, viewport_surface_embed, vstack_with_policies};
+use editor_viewport::ViewportSurfacePresentationSlot;
 use ui_layout::SizePolicy;
-use ui_render_data::ViewportSurfaceSlot;
 use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
     PanelInstanceId, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID,
     VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    VIEWPORT_SURFACE_EMBED_WIDGET_ID, ViewportViewModel,
+    VIEWPORT_SURFACE_EMBED_WIDGET_ID, ViewportViewModel, viewport_embed_slot_for,
 };
 
 pub fn build_viewport_panel(
@@ -24,7 +24,7 @@ pub fn build_viewport_panel(
             vec![viewport_surface_embed(
                 VIEWPORT_SURFACE_EMBED_WIDGET_ID,
                 viewport_id.0,
-                ViewportSurfaceSlot::Primary,
+                viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
             )]
         })
         .unwrap_or_default();

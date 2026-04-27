@@ -1,10 +1,12 @@
+use editor_shell::viewport_embed_slot_for;
+use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
     UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
 use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
 use runenwerk_editor::runtime::viewport::{EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR};
-use ui_render_data::{UiPrimitive, ViewportSurfaceSlot};
+use ui_render_data::UiPrimitive;
 
 const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
 const SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
@@ -137,7 +139,10 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
 
     let primary_binding = viewport_bindings
         .registry()
-        .get(1, ViewportSurfaceSlot::Primary)
+        .get(
+            1,
+            viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
+        )
         .expect("viewport primary surface binding should exist");
     assert_eq!(primary_binding.flow_id.as_str(), EDITOR_MAIN_FLOW_ID);
     assert_eq!(
@@ -155,7 +160,9 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
             let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
                 return None;
             };
-            if embed.viewport_id == 1 && embed.slot == ViewportSurfaceSlot::Primary {
+            if embed.viewport_id == 1
+                && embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary)
+            {
                 Some(embed)
             } else {
                 None

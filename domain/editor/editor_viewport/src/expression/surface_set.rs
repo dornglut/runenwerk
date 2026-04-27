@@ -13,6 +13,13 @@ pub enum ViewportSurfaceSlot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ViewportSurfacePresentationSlot {
+    Primary,
+    Picking,
+    Overlay,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ViewportSurfaceBindingId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

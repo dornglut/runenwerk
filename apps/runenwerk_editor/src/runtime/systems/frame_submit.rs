@@ -1,6 +1,7 @@
+use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionDimensions, ProducerHealth, ProductAvailabilityState,
-    ViewportId,
+    ViewportSurfacePresentationSlot,
 };
 use engine::WindowState;
 use engine::plugins::render::{
@@ -13,7 +14,7 @@ use scene::LocalTransform;
 use ui_math::UiRect;
 use ui_render_data::{
     RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
-    UiSurface, UiSurfaceId, ViewportSurfaceSlot,
+    UiSurface, UiSurfaceId,
 };
 
 use crate::editor_runtime::EditorPrimitive;
@@ -22,10 +23,11 @@ use crate::runtime::resources::{
     scaled_shell_theme,
 };
 use crate::runtime::viewport::{
-    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportLayoutEntry, ViewportLayoutMapResource, ViewportPickingResultsResource,
-    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceSetResource,
-    build_surface_binding_registry, initial_presentation_state, initial_product_descriptors,
+    MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRegistryResource,
+    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
+    ViewportPickingResultsResource, ViewportPresentationStateResource,
+    ViewportProductRegistryResource, ViewportSurfaceSetResource, build_surface_binding_registry,
+    initial_presentation_state, initial_product_descriptors, resolve_structural_viewport_products,
 };
 
 const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
@@ -41,6 +43,7 @@ pub fn submit_editor_frame_system(
     viewport_observations: Res<ViewportArtifactObservationResource>,
     mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
     mut tool_surface_bindings: ResMut<ToolSurfaceRuntimeBindingRegistryResource>,
+    mut mounted_surfaces: ResMut<MountedSurfaceRegistryResource>,
     atlas: Res<UiFontAtlasResource>,
     viewport_picking_results: Res<ViewportPickingResultsResource>,
     mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
@@ -114,6 +117,7 @@ pub fn submit_editor_frame_system(
         });
     }
     tool_surface_bindings.rebuild_from_layout_map(&viewport_layout_map);
+    mounted_surfaces.sync_from_workspace_state(shell_state.workspace_state());
     if app.debug_logs_enabled() {
         for rebind in tool_surface_bindings.latest_rebinds() {
             app.append_console_line(format!(
@@ -340,7 +344,9 @@ fn viewport_bounds_from_frame(frame: &UiFrame, viewport_id: u64) -> Option<UiRec
             let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
                 return None;
             };
-            if embed.viewport_id == viewport_id && embed.slot == ViewportSurfaceSlot::Primary {
+            if embed.viewport_id == viewport_id
+                && embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary)
+            {
                 Some(embed.rect)
             } else {
                 None
@@ -408,50 +414,6 @@ fn viewport_bounds(
     layouts
         .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
         .map(|layout| layout.bounds)
-}
-
-fn resolve_structural_viewport_products<'a>(
-    shell_state: &crate::shell::RunenwerkEditorShellState,
-    viewport_observations: &'a ViewportArtifactObservationResource,
-    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-) -> Option<&'a ArtifactObservationFrame> {
-    let viewport_id =
-        resolve_structural_viewport_id(shell_state, tool_surface_bindings).or_else(|| {
-            if shell_state.last_projection_artifacts().is_none() {
-                bootstrap_single_viewport_id(viewport_observations)
-            } else {
-                None
-            }
-        })?;
-    viewport_observations.frame_for(viewport_id)
-}
-
-fn resolve_structural_viewport_id(
-    shell_state: &crate::shell::RunenwerkEditorShellState,
-    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-) -> Option<ViewportId> {
-    let structural_context = shell_state
-        .last_projection_artifacts()
-        .and_then(|artifacts| {
-            artifacts
-                .widget_structural_context_by_id
-                .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
-                .copied()
-        })?;
-    let binding = tool_surface_bindings.resolve_structural_context(structural_context)?;
-    Some(binding.viewport_id)
-}
-
-fn bootstrap_single_viewport_id(
-    viewport_observations: &ViewportArtifactObservationResource,
-) -> Option<ViewportId> {
-    let mut viewport_ids = viewport_observations.viewport_ids();
-    let viewport_id = viewport_ids.next()?;
-    if viewport_ids.next().is_none() {
-        Some(viewport_id)
-    } else {
-        None
-    }
 }
 
 fn populate_viewport_render_state(

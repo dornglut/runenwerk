@@ -12,6 +12,7 @@ use crate::runtime::systems::{
     sync_viewport_presentation_products_system,
 };
 use crate::runtime::viewport::{
+    MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportLayoutMapResource, ViewportPickingResultsResource, ViewportPresentationStateResource,
     ViewportProductRegistryResource, ViewportSurfaceSetResource,
@@ -54,6 +55,8 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportArtifactObservationResource>();
         app.init_resource::<ViewportLayoutMapResource>();
         app.init_resource::<ToolSurfaceRuntimeBindingRegistryResource>();
+        app.init_resource::<SurfaceDefinitionRegistryResource>();
+        app.init_resource::<MountedSurfaceRegistryResource>();
         app.init_resource::<ViewportSurfaceSetResource>();
         app.init_resource::<ViewportPickingResultsResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();

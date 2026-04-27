@@ -10,9 +10,11 @@ use crate::{
     EditorShellViewModel, INSPECTOR_PANEL_WIDGET_ID, InspectorFieldViewModel,
     InspectorTargetViewModel, InspectorViewModel, OUTLINER_PANEL_WIDGET_ID, OutlinerRowViewModel,
     OutlinerViewModel, RoutedShellAction, ShellCommand, TOOLBAR_ROOT_WIDGET_ID,
-    ToolbarButtonViewModel, ToolbarViewModel, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    ViewportProductChoiceViewModel, ViewportViewModel, WorkspaceIdentityAllocator,
-    build_editor_shell, map_interactions_to_shell_commands, viewport_product_button_widget_id,
+    TOOLBAR_ROW_WIDGET_ID, TOOLBAR_SCROLL_WIDGET_ID, ToolbarButtonViewModel, ToolbarViewModel,
+    VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportProductChoiceViewModel,
+    ViewportViewModel, WorkspaceIdentityAllocator, build_editor_shell,
+    map_interactions_to_shell_commands, tab_strip_scroll_widget_id,
+    viewport_product_button_widget_id,
 };
 
 #[test]
@@ -153,6 +155,117 @@ fn layout_ensures_major_panels_do_not_overlap() {
     assert!(!intersects(outliner, console));
     assert!(!intersects(viewport, console));
     assert!(!intersects(inspector, console));
+}
+
+#[test]
+fn tab_strips_use_horizontal_scroll_containers_in_narrow_bounds() {
+    let theme = ThemeTokens::default();
+    let shell = sample_shell_view_model();
+    let build = build_editor_shell(&shell, &theme, &sample_workspace_state());
+
+    let fixed = &build.projection_artifacts.workspace.fixed_layout;
+    let tab_stacks = [
+        (
+            fixed.outliner.tab_stack_id,
+            fixed.outliner.tab_strip_widget_id,
+        ),
+        (
+            fixed.viewport.tab_stack_id,
+            fixed.viewport.tab_strip_widget_id,
+        ),
+        (
+            fixed.inspector.tab_stack_id,
+            fixed.inspector.tab_strip_widget_id,
+        ),
+        (
+            fixed.console.tab_stack_id,
+            fixed.console.tab_strip_widget_id,
+        ),
+    ];
+
+    for (tab_stack_id, strip_row_id) in tab_stacks {
+        let strip_scroll_id = tab_strip_scroll_widget_id(tab_stack_id);
+        let strip_scroll = build
+            .tree
+            .walk()
+            .find(|node| node.id == strip_scroll_id)
+            .expect("tab strip horizontal scroll node should exist");
+        let strip_row = build
+            .tree
+            .walk()
+            .find(|node| node.id == strip_row_id)
+            .expect("tab strip row node should exist");
+        assert!(
+            matches!(&strip_scroll.kind, crate::UiNodeKind::Scroll(scroll) if scroll.axis == ui_math::Axis::Horizontal),
+            "tab strip should be wrapped by a horizontal scroll container",
+        );
+        assert!(
+            strip_scroll
+                .children
+                .iter()
+                .any(|child| child.id == strip_row_id),
+            "tab strip row should be direct content of the horizontal scroll container",
+        );
+        assert!(matches!(strip_row.kind, crate::UiNodeKind::Stack(_)));
+    }
+}
+
+#[test]
+fn toolbar_uses_horizontal_scroll_container_for_overflow() {
+    let theme = ThemeTokens::default();
+    let shell = sample_shell_view_model();
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state()).tree;
+    let toolbar_scroll = tree
+        .walk()
+        .find(|node| node.id == TOOLBAR_SCROLL_WIDGET_ID)
+        .expect("toolbar horizontal scroll node should exist");
+    let toolbar_row = tree
+        .walk()
+        .find(|node| node.id == TOOLBAR_ROW_WIDGET_ID)
+        .expect("toolbar row node should exist");
+
+    assert!(
+        matches!(&toolbar_scroll.kind, crate::UiNodeKind::Scroll(scroll) if scroll.axis == ui_math::Axis::Horizontal),
+        "toolbar should use a horizontal scroll container",
+    );
+    assert!(
+        toolbar_scroll
+            .children
+            .iter()
+            .any(|child| child.id == TOOLBAR_ROW_WIDGET_ID),
+        "toolbar row should be direct content of the horizontal scroll container",
+    );
+    assert!(matches!(toolbar_row.kind, crate::UiNodeKind::Stack(_)));
+}
+
+#[test]
+fn console_scroll_stays_within_console_panel_on_tight_vertical_bounds() {
+    let theme = ThemeTokens::default();
+    let shell = scrollable_shell_view_model();
+    let tree = build_editor_shell(&shell, &theme, &sample_workspace_state()).tree;
+    let runtime = UiRuntime::new();
+    let layouts = runtime.compute_layout(&tree, UiRect::new(0.0, 0.0, 420.0, 120.0));
+
+    let console_panel = layout_bounds(&layouts, CONSOLE_PANEL_WIDGET_ID);
+    let console_scroll = layout_bounds(&layouts, CONSOLE_SCROLL_WIDGET_ID);
+
+    assert!(
+        console_scroll.x >= console_panel.x && console_scroll.y >= console_panel.y,
+        "console scroll origin should remain inside panel bounds even in tight vertical sizes",
+    );
+    if console_panel.width <= f32::EPSILON || console_panel.height <= f32::EPSILON {
+        assert!(
+            console_scroll.width <= f32::EPSILON || console_scroll.height <= f32::EPSILON,
+            "zero-sized console panel should collapse scroll viewport instead of producing visible overflow",
+        );
+        return;
+    }
+    assert!(
+        console_scroll.x + console_scroll.width <= console_panel.x + console_panel.width + 0.001
+            && console_scroll.y + console_scroll.height
+                <= console_panel.y + console_panel.height + 0.001,
+        "console scroll area should remain contained within panel bounds in tight vertical sizes",
+    );
 }
 
 #[test]

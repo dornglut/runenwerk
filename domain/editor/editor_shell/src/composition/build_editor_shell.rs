@@ -11,7 +11,8 @@ use ui_text::FontId;
 use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
-    UiNode, UiTree, button, hstack_with_policies, label, panel, split, vstack_with_policies,
+    UiNode, UiTree, button, hscroll, hstack_with_policies, label, panel, split,
+    vstack_with_policies,
 };
 
 use crate::workspace::{
@@ -26,7 +27,7 @@ use crate::{
     ROOT_WIDGET_ID, TabStackId, VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceState,
     build_console_panel, build_inspector_panel, build_outliner_panel, build_toolbar,
     build_viewport_panel, outliner_row_widget_id, tab_stack_container_widget_id,
-    viewport_product_button_widget_id,
+    tab_strip_scroll_widget_id, viewport_product_button_widget_id,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -234,7 +235,7 @@ fn build_tab_stack_host(
     empty_widget_id: WidgetId,
 ) -> UiNode {
     let tab_strip = build_tab_strip(tab_stack, theme, docking_visual_state);
-    let panel = tab_stack
+    let panel_content = tab_stack
         .active_panel
         .map(|panel| match panel.panel_kind {
             PanelKind::Outliner => build_outliner_panel(
@@ -268,12 +269,11 @@ fn build_tab_stack_host(
         .unwrap_or_else(|| {
             build_empty_stack_placeholder(empty_widget_id, "Drop a tab here", theme)
         });
-
     vstack_with_policies(
         tab_stack_container_widget_id(tab_stack.tab_stack_id),
         theme.spacing.xs,
         vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
-        vec![tab_strip, panel],
+        vec![tab_strip, panel_content],
     )
 }
 
@@ -337,11 +337,16 @@ fn build_tab_strip(
         }
     }
 
-    hstack_with_policies(
+    let strip_row = hstack_with_policies(
         tab_stack.tab_strip_widget_id,
         theme.spacing.xs * 0.5,
         vec![SizePolicy::Auto; children.len()],
         children,
+    );
+    hscroll(
+        tab_strip_scroll_widget_id(tab_stack.tab_stack_id),
+        theme.clone(),
+        vec![strip_row],
     )
 }
 

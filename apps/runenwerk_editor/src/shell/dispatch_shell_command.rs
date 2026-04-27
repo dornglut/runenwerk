@@ -2,8 +2,19 @@ use std::path::PathBuf;
 
 use editor_core::{ComponentTypeId, EditorMutationError};
 use editor_inspector::{InspectorEditValue, InspectorValue};
-use editor_shell::{FloatingHostBounds, ShellCommand, TabDropDestination, WorkspaceMutation};
-use editor_viewport::{ProductAvailabilityState, ViewportPresentationState};
+use editor_shell::{
+    FloatingHostBounds, ShellCommand, StructuralCommandTarget, TabDropDestination, ToolSurfaceKind,
+    WorkspaceMutation, tool_surface_capability_set, tool_surface_session_retention_class,
+};
+use editor_viewport::{
+    ArtifactObservationFrame, ExpressionProductId, ViewportId, ViewportPresentationState,
+};
+use ui_surface::{
+    ObservationFrame, RatificationAdapter, RatificationDispatchError, RatificationOutcome,
+    SessionRetentionClass, SessionScopeHandle, SurfaceCapability, SurfaceCapabilitySet,
+    SurfaceInstanceId, SurfaceIntent, SurfaceIntentKind, SurfacePresentationModel,
+    ratify_surface_intent,
+};
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
@@ -145,10 +156,100 @@ pub fn dispatch_shell_command(
         }
         ShellCommand::SelectOutlinerEntity {
             entity,
-            target: _,
+            target,
             projection_epoch: _,
         } => {
-            app.dispatch_outliner_command(OutlinerPanelCommand::SelectEntity { entity })?;
+            let Some(surface_contract) = resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Outliner,
+            ) else {
+                app.append_console_line(
+                    "[outliner] entity selection ignored (missing structural tool-surface target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            if surface_contract.tool_surface_kind != ToolSurfaceKind::Outliner {
+                app.append_console_line(format!(
+                    "[outliner] entity selection ignored (surface-kind mismatch): expected=outliner actual={}",
+                    tool_surface_kind_label(surface_contract.tool_surface_kind),
+                ));
+                return Ok(());
+            }
+            for required_capability in [SurfaceCapability::Observe, SurfaceCapability::Interact] {
+                if !surface_contract.capabilities.allows(required_capability) {
+                    app.append_console_line(format!(
+                        "[outliner] entity selection ignored (missing capability): entity={} capability={}",
+                        entity.0,
+                        surface_capability_label(required_capability),
+                    ));
+                    return Ok(());
+                }
+            }
+
+            let outliner_state = app.outliner_state();
+            let presentation_model = build_outliner_surface_presentation_model(&outliner_state);
+            if app.debug_logs_enabled() {
+                app.append_console_line(format!(
+                    "[surface.flow] observation outliner selected={:?}",
+                    outliner_state.selected_entity.map(|value| value.0),
+                ));
+                app.append_console_line(format!(
+                    "[surface.flow] presentation outliner selectable={:?}",
+                    presentation_model
+                        .selectable_primary_items()
+                        .collect::<Vec<_>>(),
+                ));
+            }
+            if !presentation_model.is_primary_selectable(entity.0) {
+                app.append_console_line(format!(
+                    "[outliner] entity selection ignored (unavailable): entity={}",
+                    entity.0,
+                ));
+                return Ok(());
+            }
+
+            let _session_scope = SessionScopeHandle::new(
+                surface_contract.surface_instance_id,
+                target.panel_instance_id.raw(),
+                surface_contract.retention_class,
+            );
+            let intent =
+                SurfaceIntent::select_entity(surface_contract.surface_instance_id, entity.0);
+            if app.debug_logs_enabled() {
+                app.append_console_line(format!(
+                    "[surface.flow] intent outliner surface_instance={} kind=SelectEntity entity_id={}",
+                    intent.surface_instance_id.raw(),
+                    entity.0,
+                ));
+            }
+            let mut ratification_adapter =
+                OutlinerEntitySelectionRatificationAdapter::new(app, surface_contract.capabilities);
+            match ratify_surface_intent(&mut ratification_adapter, intent) {
+                Ok(RatificationOutcome::Applied) => {
+                    if app.debug_logs_enabled() {
+                        app.append_console_line(
+                            "[surface.flow] ratification outliner outcome=applied".to_string(),
+                        );
+                    }
+                }
+                Ok(RatificationOutcome::Ignored) => {
+                    if app.debug_logs_enabled() {
+                        app.append_console_line(
+                            "[surface.flow] ratification outliner outcome=ignored".to_string(),
+                        );
+                    }
+                }
+                Err(RatificationDispatchError::MissingCapability(capability)) => {
+                    app.append_console_line(format!(
+                        "[outliner] entity selection ignored (missing capability): entity={} capability={}",
+                        entity.0,
+                        surface_capability_label(capability),
+                    ));
+                }
+                Err(RatificationDispatchError::Adapter(error)) => return Err(error),
+            }
         }
         ShellCommand::SelectViewportProduct {
             viewport_id,
@@ -176,26 +277,122 @@ pub fn dispatch_shell_command(
                         }
                     };
                 let resolved_viewport_id = resolved_binding.viewport_id;
-                let selectable = viewport_observations
-                    .frame_for(resolved_viewport_id)
-                    .and_then(|frame| frame.availability_by_product.get(&product_id).copied())
-                    .map(|availability| availability == ProductAvailabilityState::Available)
-                    .unwrap_or(false);
-                if selectable {
-                    if let Some(state) = viewport_presentations.state_for_mut(resolved_viewport_id)
-                    {
-                        state.select_primary_product(product_id);
-                    } else {
-                        viewport_presentations.upsert_state(ViewportPresentationState::new(
-                            resolved_viewport_id,
-                            product_id,
+                let Some(observation_frame) = viewport_observations.frame_for(resolved_viewport_id)
+                else {
+                    app.append_console_line(format!(
+                        "[viewport] product selection ignored (missing observation frame): viewport={}",
+                        resolved_viewport_id.0
+                    ));
+                    return Ok(());
+                };
+                let Some(surface_contract) = resolve_surface_command_contract(
+                    shell_state.as_deref(),
+                    target,
+                    ToolSurfaceKind::Viewport,
+                ) else {
+                    app.append_console_line(
+                        "[viewport] product selection ignored (missing structural tool-surface target)"
+                            .to_string(),
+                    );
+                    return Ok(());
+                };
+                if surface_contract.tool_surface_kind != ToolSurfaceKind::Viewport {
+                    app.append_console_line(format!(
+                        "[viewport] product selection ignored (surface-kind mismatch): expected=viewport actual={}",
+                        tool_surface_kind_label(surface_contract.tool_surface_kind),
+                    ));
+                    return Ok(());
+                }
+                let capabilities = surface_contract.capabilities;
+                for required_capability in [SurfaceCapability::Observe, SurfaceCapability::Interact]
+                {
+                    if !capabilities.allows(required_capability) {
+                        app.append_console_line(format!(
+                            "[viewport] product selection ignored (missing capability): viewport={} product={} capability={}",
+                            resolved_viewport_id.0,
+                            product_id.0,
+                            surface_capability_label(required_capability),
                         ));
+                        return Ok(());
                     }
-                } else {
+                }
+
+                let presentation_model =
+                    build_viewport_surface_presentation_model(observation_frame);
+                if app.debug_logs_enabled() {
+                    app.append_console_line(format!(
+                        "[surface.flow] observation viewport={} selected={:?}",
+                        resolved_viewport_id.0,
+                        observation_frame
+                            .selected_primary_product_id
+                            .map(|value| value.0),
+                    ));
+                    app.append_console_line(format!(
+                        "[surface.flow] presentation viewport={} selectable={:?}",
+                        resolved_viewport_id.0,
+                        presentation_model
+                            .selectable_primary_items()
+                            .map(|value| value.0)
+                            .collect::<Vec<_>>(),
+                    ));
+                }
+                if !presentation_model.is_primary_selectable(product_id) {
                     app.append_console_line(format!(
                         "[viewport] product selection ignored (unavailable): viewport={} product={}",
                         resolved_viewport_id.0, product_id.0
                     ));
+                    return Ok(());
+                }
+
+                let _session_scope = SessionScopeHandle::new(
+                    surface_contract.surface_instance_id,
+                    resolved_viewport_id.0,
+                    surface_contract.retention_class,
+                );
+                let mut ratification_adapter = ViewportProductSelectionRatificationAdapter::new(
+                    viewport_presentations,
+                    resolved_viewport_id,
+                    capabilities,
+                );
+                let intent = SurfaceIntent::select_primary_item(
+                    surface_contract.surface_instance_id,
+                    product_id.0,
+                );
+                if app.debug_logs_enabled() {
+                    app.append_console_line(format!(
+                        "[surface.flow] intent viewport={} surface_instance={} kind=SelectPrimaryItem item_id={}",
+                        resolved_viewport_id.0,
+                        intent.surface_instance_id.raw(),
+                        product_id.0,
+                    ));
+                }
+
+                match ratify_surface_intent(&mut ratification_adapter, intent) {
+                    Ok(RatificationOutcome::Applied) => {
+                        if app.debug_logs_enabled() {
+                            app.append_console_line(format!(
+                                "[surface.flow] ratification viewport={} outcome=applied",
+                                resolved_viewport_id.0
+                            ));
+                        }
+                    }
+                    Ok(RatificationOutcome::Ignored) => {
+                        if app.debug_logs_enabled() {
+                            app.append_console_line(format!(
+                                "[surface.flow] ratification viewport={} outcome=ignored",
+                                resolved_viewport_id.0
+                            ));
+                        }
+                    }
+                    Err(RatificationDispatchError::MissingCapability(capability)) => {
+                        app.append_console_line(format!(
+                            "[viewport] product selection ignored (missing capability): viewport={} product={} capability={}",
+                            resolved_viewport_id.0,
+                            product_id.0,
+                            surface_capability_label(capability),
+                        ));
+                    }
+                    Err(RatificationDispatchError::Adapter(error)) => return Err(error),
                 }
             }
             _ => {
@@ -210,15 +407,373 @@ pub fn dispatch_shell_command(
         }
         ShellCommand::ActivateInspectorField {
             index,
-            target: _,
+            target,
             projection_epoch: _,
         } => {
-            activate_inspector_field(app, index)?;
+            let Some(surface_contract) = resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Inspector,
+            ) else {
+                app.append_console_line(
+                    "[inspector] field activation ignored (missing structural tool-surface target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            if surface_contract.tool_surface_kind != ToolSurfaceKind::Inspector {
+                app.append_console_line(format!(
+                    "[inspector] field activation ignored (surface-kind mismatch): expected=inspector actual={}",
+                    tool_surface_kind_label(surface_contract.tool_surface_kind),
+                ));
+                return Ok(());
+            }
+            for required_capability in [SurfaceCapability::Observe, SurfaceCapability::Interact] {
+                if !surface_contract.capabilities.allows(required_capability) {
+                    app.append_console_line(format!(
+                        "[inspector] field activation ignored (missing capability): index={} capability={}",
+                        index,
+                        surface_capability_label(required_capability),
+                    ));
+                    return Ok(());
+                }
+            }
+
+            let inspector_view = app.inspector_view_model();
+            let presentation_model =
+                build_inspector_surface_presentation_model(app.runtime(), &inspector_view);
+            if app.debug_logs_enabled() {
+                app.append_console_line(format!(
+                    "[surface.flow] observation inspector selected_field={:?}",
+                    presentation_model.selected_primary_item,
+                ));
+                app.append_console_line(format!(
+                    "[surface.flow] presentation inspector selectable={:?}",
+                    presentation_model
+                        .selectable_primary_items()
+                        .collect::<Vec<_>>(),
+                ));
+            }
+            let field_index = index as u64;
+            if !presentation_model.is_primary_selectable(field_index) {
+                app.append_console_line(format!(
+                    "[inspector] field activation ignored (unavailable): index={}",
+                    index,
+                ));
+                return Ok(());
+            }
+
+            let _session_scope = SessionScopeHandle::new(
+                surface_contract.surface_instance_id,
+                target.panel_instance_id.raw(),
+                surface_contract.retention_class,
+            );
+            let intent =
+                SurfaceIntent::activate_field(surface_contract.surface_instance_id, field_index);
+            if app.debug_logs_enabled() {
+                app.append_console_line(format!(
+                    "[surface.flow] intent inspector surface_instance={} kind=ActivateField field_index={}",
+                    intent.surface_instance_id.raw(),
+                    field_index,
+                ));
+            }
+            let mut ratification_adapter = InspectorFieldActivationRatificationAdapter::new(
+                app,
+                surface_contract.capabilities,
+            );
+            match ratify_surface_intent(&mut ratification_adapter, intent) {
+                Ok(RatificationOutcome::Applied) => {
+                    if app.debug_logs_enabled() {
+                        app.append_console_line(
+                            "[surface.flow] ratification inspector outcome=applied".to_string(),
+                        );
+                    }
+                }
+                Ok(RatificationOutcome::Ignored) => {
+                    if app.debug_logs_enabled() {
+                        app.append_console_line(
+                            "[surface.flow] ratification inspector outcome=ignored".to_string(),
+                        );
+                    }
+                }
+                Err(RatificationDispatchError::MissingCapability(capability)) => {
+                    app.append_console_line(format!(
+                        "[inspector] field activation ignored (missing capability): index={} capability={}",
+                        index,
+                        surface_capability_label(capability),
+                    ));
+                }
+                Err(RatificationDispatchError::Adapter(error)) => return Err(error),
+            }
         }
         ShellCommand::NoOp => {}
     }
 
     Ok(())
+}
+
+struct ArtifactObservationFrameAdapter<'a> {
+    frame: &'a ArtifactObservationFrame,
+}
+
+impl ObservationFrame<ExpressionProductId> for ArtifactObservationFrameAdapter<'_> {
+    fn selected_primary_item(&self) -> Option<ExpressionProductId> {
+        self.frame.selected_primary_product_id
+    }
+
+    fn is_item_available(&self, item_id: ExpressionProductId) -> bool {
+        self.frame
+            .availability_by_product
+            .get(&item_id)
+            .copied()
+            .map(|availability| {
+                availability == editor_viewport::ProductAvailabilityState::Available
+            })
+            .unwrap_or(false)
+    }
+}
+
+fn build_viewport_surface_presentation_model(
+    observation_frame: &ArtifactObservationFrame,
+) -> SurfacePresentationModel<ExpressionProductId> {
+    let adapter = ArtifactObservationFrameAdapter {
+        frame: observation_frame,
+    };
+    SurfacePresentationModel::from_observation_frame(
+        &adapter,
+        observation_frame.availability_by_product.keys().copied(),
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+struct OutlinerObservationFrameAdapter {
+    selected_entity_id: Option<u64>,
+}
+
+impl ObservationFrame<u64> for OutlinerObservationFrameAdapter {
+    fn selected_primary_item(&self) -> Option<u64> {
+        self.selected_entity_id
+    }
+
+    fn is_item_available(&self, _item_id: u64) -> bool {
+        true
+    }
+}
+
+fn build_outliner_surface_presentation_model(
+    outliner_state: &crate::editor_panels::OutlinerPanelState,
+) -> SurfacePresentationModel<u64> {
+    let adapter = OutlinerObservationFrameAdapter {
+        selected_entity_id: outliner_state.selected_entity.map(|value| value.0),
+    };
+    SurfacePresentationModel::from_observation_frame(
+        &adapter,
+        outliner_state.rows.iter().map(|row| row.entity.0),
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+struct InspectorObservationFrameAdapter {
+    selected_field_index: Option<u64>,
+}
+
+impl ObservationFrame<u64> for InspectorObservationFrameAdapter {
+    fn selected_primary_item(&self) -> Option<u64> {
+        self.selected_field_index
+    }
+
+    fn is_item_available(&self, _item_id: u64) -> bool {
+        true
+    }
+}
+
+fn build_inspector_surface_presentation_model(
+    runtime: &crate::editor_runtime::RunenwerkEditorRuntime,
+    inspector_view: &InspectorPanelViewModel,
+) -> SurfacePresentationModel<u64> {
+    let selectable_indices: Vec<u64> = match inspector_view {
+        InspectorPanelViewModel::Entity {
+            components,
+            available_component_types,
+            ..
+        } => (0..components.len() + available_component_types.len())
+            .map(|index| index as u64)
+            .collect(),
+        InspectorPanelViewModel::Component {
+            component_type,
+            widget_fields,
+            ..
+        } => widget_fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                next_shell_edit_value(runtime, *component_type, field).map(|_| index as u64)
+            })
+            .collect(),
+        InspectorPanelViewModel::Empty
+        | InspectorPanelViewModel::Resource { .. }
+        | InspectorPanelViewModel::Unsupported { .. }
+        | InspectorPanelViewModel::Error { .. } => Vec::new(),
+    };
+
+    let adapter = InspectorObservationFrameAdapter {
+        selected_field_index: None,
+    };
+    SurfacePresentationModel::from_observation_frame(&adapter, selectable_indices)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ResolvedSurfaceCommandContract {
+    surface_instance_id: SurfaceInstanceId,
+    tool_surface_kind: ToolSurfaceKind,
+    capabilities: SurfaceCapabilitySet,
+    retention_class: SessionRetentionClass,
+}
+
+fn resolve_surface_command_contract(
+    shell_state: Option<&RunenwerkEditorShellState>,
+    target: StructuralCommandTarget,
+    fallback_kind: ToolSurfaceKind,
+) -> Option<ResolvedSurfaceCommandContract> {
+    let tool_surface_id = target.active_tool_surface?;
+    let resolved_kind = if let Some(state) = shell_state {
+        let surface = state.workspace_state().tool_surface(tool_surface_id)?;
+        surface.tool_surface_kind
+    } else {
+        fallback_kind
+    };
+    Some(ResolvedSurfaceCommandContract {
+        surface_instance_id: SurfaceInstanceId::new(tool_surface_id.raw()),
+        tool_surface_kind: resolved_kind,
+        capabilities: tool_surface_capability_set(resolved_kind),
+        retention_class: tool_surface_session_retention_class(resolved_kind),
+    })
+}
+
+fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
+    match kind {
+        ToolSurfaceKind::Outliner => "outliner",
+        ToolSurfaceKind::Viewport => "viewport",
+        ToolSurfaceKind::Inspector => "inspector",
+        ToolSurfaceKind::Console => "console",
+        ToolSurfaceKind::Placeholder => "placeholder",
+    }
+}
+
+fn surface_capability_label(capability: SurfaceCapability) -> &'static str {
+    match capability {
+        SurfaceCapability::Observe => "observe",
+        SurfaceCapability::Interact => "interact",
+        SurfaceCapability::RequestMutation => "request_mutation",
+        SurfaceCapability::Ratify => "ratify",
+    }
+}
+
+struct ViewportProductSelectionRatificationAdapter<'a> {
+    viewport_presentations: &'a mut ViewportPresentationStateResource,
+    viewport_id: ViewportId,
+    capabilities: SurfaceCapabilitySet,
+}
+
+impl<'a> ViewportProductSelectionRatificationAdapter<'a> {
+    fn new(
+        viewport_presentations: &'a mut ViewportPresentationStateResource,
+        viewport_id: ViewportId,
+        capabilities: SurfaceCapabilitySet,
+    ) -> Self {
+        Self {
+            viewport_presentations,
+            viewport_id,
+            capabilities,
+        }
+    }
+}
+
+struct OutlinerEntitySelectionRatificationAdapter<'a> {
+    app: &'a mut RunenwerkEditorApp,
+    capabilities: SurfaceCapabilitySet,
+}
+
+impl<'a> OutlinerEntitySelectionRatificationAdapter<'a> {
+    fn new(app: &'a mut RunenwerkEditorApp, capabilities: SurfaceCapabilitySet) -> Self {
+        Self { app, capabilities }
+    }
+}
+
+impl RatificationAdapter for OutlinerEntitySelectionRatificationAdapter<'_> {
+    type Error = EditorMutationError;
+
+    fn has_capability(&self, capability: SurfaceCapability) -> bool {
+        self.capabilities.allows(capability)
+    }
+
+    fn ratify_intent(&mut self, intent: SurfaceIntent) -> Result<RatificationOutcome, Self::Error> {
+        let entity_id = match intent.kind {
+            SurfaceIntentKind::SelectEntity { entity_id } => entity_id,
+            _ => return Ok(RatificationOutcome::Ignored),
+        };
+        self.app
+            .dispatch_outliner_command(OutlinerPanelCommand::SelectEntity {
+                entity: editor_core::EntityId(entity_id),
+            })?;
+        Ok(RatificationOutcome::Applied)
+    }
+}
+
+struct InspectorFieldActivationRatificationAdapter<'a> {
+    app: &'a mut RunenwerkEditorApp,
+    capabilities: SurfaceCapabilitySet,
+}
+
+impl<'a> InspectorFieldActivationRatificationAdapter<'a> {
+    fn new(app: &'a mut RunenwerkEditorApp, capabilities: SurfaceCapabilitySet) -> Self {
+        Self { app, capabilities }
+    }
+}
+
+impl RatificationAdapter for InspectorFieldActivationRatificationAdapter<'_> {
+    type Error = EditorMutationError;
+
+    fn has_capability(&self, capability: SurfaceCapability) -> bool {
+        self.capabilities.allows(capability)
+    }
+
+    fn ratify_intent(&mut self, intent: SurfaceIntent) -> Result<RatificationOutcome, Self::Error> {
+        let field_index = match intent.kind {
+            SurfaceIntentKind::ActivateField { field_index } => field_index,
+            _ => return Ok(RatificationOutcome::Ignored),
+        };
+        let index = usize::try_from(field_index).map_err(|_| {
+            EditorMutationError::inspector_rejected("inspector field index overflow")
+        })?;
+        activate_inspector_field(self.app, index)?;
+        Ok(RatificationOutcome::Applied)
+    }
+}
+
+impl RatificationAdapter for ViewportProductSelectionRatificationAdapter<'_> {
+    type Error = EditorMutationError;
+
+    fn has_capability(&self, capability: SurfaceCapability) -> bool {
+        self.capabilities.allows(capability)
+    }
+
+    fn ratify_intent(&mut self, intent: SurfaceIntent) -> Result<RatificationOutcome, Self::Error> {
+        let item_id = match intent.kind {
+            SurfaceIntentKind::SelectPrimaryItem { item_id } => item_id,
+            SurfaceIntentKind::SelectEntity { .. } | SurfaceIntentKind::ActivateField { .. } => {
+                return Ok(RatificationOutcome::Ignored);
+            }
+        };
+        let product_id = ExpressionProductId(item_id);
+        if let Some(state) = self.viewport_presentations.state_for_mut(self.viewport_id) {
+            state.select_primary_product(product_id);
+        } else {
+            self.viewport_presentations
+                .upsert_state(ViewportPresentationState::new(self.viewport_id, product_id));
+        }
+        Ok(RatificationOutcome::Applied)
+    }
 }
 
 fn shell_command_label(command: &ShellCommand) -> &'static str {

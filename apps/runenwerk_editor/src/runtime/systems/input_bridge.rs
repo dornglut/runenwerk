@@ -1,5 +1,5 @@
 use editor_shell::ShellCommand;
-use editor_viewport::{ArtifactObservationFrame, ViewportId};
+use editor_viewport::ViewportId;
 use engine::WindowState;
 use engine::plugins::input::domain::action;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingTarget};
@@ -15,6 +15,7 @@ use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scal
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportPickingResultsResource, ViewportPresentationStateResource,
+    resolve_structural_viewport_products,
 };
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
 use crate::shell::RunenwerkEditorShellState;
@@ -55,6 +56,12 @@ pub fn dispatch_editor_input_system(
     );
     let position = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
     let previous = UiPoint::new(bridge.last_mouse_position.0, bridge.last_mouse_position.1);
+    let modifiers = Modifiers {
+        shift: input.shift_down(),
+        ctrl: false,
+        alt: false,
+        meta: false,
+    };
 
     if picking_results.global_revision() != bridge.last_logged_picking_revision {
         bridge.last_logged_picking_revision = picking_results.global_revision();
@@ -69,6 +76,7 @@ pub fn dispatch_editor_input_system(
             position,
             position - previous,
             None,
+            modifiers,
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
@@ -85,6 +93,7 @@ pub fn dispatch_editor_input_system(
             position,
             UiVector::new(0.0, input.scroll_delta),
             None,
+            modifiers,
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
@@ -101,6 +110,7 @@ pub fn dispatch_editor_input_system(
             position,
             UiVector::ZERO,
             Some(PointerButton::Primary),
+            modifiers,
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
@@ -149,6 +159,7 @@ pub fn dispatch_editor_input_system(
             position,
             UiVector::ZERO,
             Some(PointerButton::Primary),
+            modifiers,
             viewport_products,
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
@@ -255,6 +266,7 @@ fn dispatch_pointer_event(
     position: UiPoint,
     delta: UiVector,
     button: Option<PointerButton>,
+    modifiers: Modifiers,
     viewport_products: Option<&editor_viewport::ArtifactObservationFrame>,
     viewport_presentations: Option<&mut ViewportPresentationStateResource>,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
@@ -265,7 +277,7 @@ fn dispatch_pointer_event(
         position,
         delta,
         button,
-        modifiers: Modifiers::default(),
+        modifiers,
         click_count: 1,
     });
 
@@ -284,44 +296,6 @@ fn dispatch_pointer_event(
             eprintln!("editor shell input dispatch failed: {error}");
             None
         }
-    }
-}
-
-fn resolve_structural_viewport_products<'a>(
-    shell_state: &RunenwerkEditorShellState,
-    viewport_observations: &'a ViewportArtifactObservationResource,
-    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-) -> Option<&'a ArtifactObservationFrame> {
-    let structural_context = shell_state
-        .last_projection_artifacts()
-        .and_then(|artifacts| {
-            artifacts
-                .widget_structural_context_by_id
-                .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
-                .copied()
-        });
-    let viewport_id = structural_context
-        .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
-        .map(|binding| binding.viewport_id)
-        .or_else(|| {
-            if shell_state.last_projection_artifacts().is_none() {
-                bootstrap_single_viewport_id(viewport_observations)
-            } else {
-                None
-            }
-        })?;
-    viewport_observations.frame_for(viewport_id)
-}
-
-fn bootstrap_single_viewport_id(
-    viewport_observations: &ViewportArtifactObservationResource,
-) -> Option<ViewportId> {
-    let mut viewport_ids = viewport_observations.viewport_ids();
-    let viewport_id = viewport_ids.next()?;
-    if viewport_ids.next().is_none() {
-        Some(viewport_id)
-    } else {
-        None
     }
 }
 

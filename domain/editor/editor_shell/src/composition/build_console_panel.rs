@@ -8,8 +8,8 @@ use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
     CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
-    CONSOLE_SCROLL_WIDGET_ID, CONSOLE_TITLE_WIDGET_ID, ConsoleViewModel, PanelInstanceId,
-    ToolSurfaceInstanceId, console_line_widget_id,
+    CONSOLE_SCROLL_WIDGET_ID, ConsoleViewModel, PanelInstanceId, ToolSurfaceInstanceId,
+    console_line_widget_id,
 };
 
 pub fn build_console_panel(
@@ -18,12 +18,6 @@ pub fn build_console_panel(
     _panel_instance_id: PanelInstanceId,
     _active_tool_surface: Option<ToolSurfaceInstanceId>,
 ) -> UiNode {
-    let title = label(
-        CONSOLE_TITLE_WIDGET_ID,
-        "Console",
-        theme.heading_text_style(FontId(1)),
-    );
-
     let row_style = theme.body_small_text_style(FontId(1));
     let mut rows = Vec::with_capacity(view_model.lines.len());
     for (index, line) in view_model.lines.iter().enumerate() {
@@ -43,8 +37,8 @@ pub fn build_console_panel(
     let body = vstack_with_policies(
         CONSOLE_BODY_WIDGET_ID,
         theme.spacing.xs,
-        vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
-        vec![title, scroll],
+        vec![SizePolicy::flex(1.0)],
+        vec![scroll],
     );
     let mut panel_theme = theme.clone();
     panel_theme.background_panel = UiColor::new(
