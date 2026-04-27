@@ -17,7 +17,9 @@ Use this to export repository source and documentation into a single line-number
 ```bash
 python3 tools/context/export_repo_context.py
 ```
+
 Optional output path:
-```bash 
+
+```bash
 python3 tools/context/export_repo_context.py --output ./Runenwerk-content.txt
 ```
