@@ -250,45 +250,78 @@ fn emit_scrollbar(
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let track_width = (bounds.width - content_bounds.width).max(0.0);
-    if track_width <= f32::EPSILON || content_bounds.height <= f32::EPSILON {
-        return;
-    }
-
-    let track_rect = UiRect::new(
-        content_bounds.x + content_bounds.width,
-        content_bounds.y,
-        track_width,
-        content_bounds.height,
-    );
-
     let Some(child) = node.children.first() else {
         return;
     };
     let Some(child_layout) = layouts.get(&child.id) else {
         return;
     };
-
-    let viewport_height = content_bounds.height.max(0.0);
-    let content_height = child_layout.measured_size.height.max(viewport_height);
-    let max_offset = (content_height - viewport_height).max(0.0);
-    let scroll_offset = (content_bounds.y - child_layout.bounds.y).clamp(0.0, max_offset);
-
-    let thumb_height = if max_offset <= f32::EPSILON {
-        track_rect.height
-    } else {
-        let min_thumb_height = scroll.min_thumb_height.min(track_rect.height).max(0.0);
-        let natural_thumb_height = (viewport_height / content_height) * track_rect.height;
-        natural_thumb_height.clamp(min_thumb_height, track_rect.height)
+    let (track_rect, thumb_rect, radius) = match scroll.axis {
+        ui_math::Axis::Vertical => {
+            let track_width = (bounds.width - content_bounds.width).max(0.0);
+            if track_width <= f32::EPSILON || content_bounds.height <= f32::EPSILON {
+                return;
+            }
+            let track_rect = UiRect::new(
+                content_bounds.x + content_bounds.width,
+                content_bounds.y,
+                track_width,
+                content_bounds.height,
+            );
+            let viewport_extent = content_bounds.height.max(0.0);
+            let content_extent = child_layout.measured_size.height.max(viewport_extent);
+            let max_offset = (content_extent - viewport_extent).max(0.0);
+            let scroll_offset = (content_bounds.y - child_layout.bounds.y).clamp(0.0, max_offset);
+            let thumb_extent = if max_offset <= f32::EPSILON {
+                track_rect.height
+            } else {
+                let min_thumb = scroll.min_thumb_main_size.min(track_rect.height).max(0.0);
+                let natural = (viewport_extent / content_extent) * track_rect.height;
+                natural.clamp(min_thumb, track_rect.height)
+            };
+            let thumb_range = (track_rect.height - thumb_extent).max(0.0);
+            let thumb_y = if max_offset <= f32::EPSILON {
+                track_rect.y
+            } else {
+                track_rect.y + thumb_range * (scroll_offset / max_offset)
+            };
+            let thumb_rect = UiRect::new(track_rect.x, thumb_y, track_rect.width, thumb_extent);
+            let radius = scroll.theme.radius.sm.min(track_rect.width * 0.5);
+            (track_rect, thumb_rect, radius)
+        }
+        ui_math::Axis::Horizontal => {
+            let track_height = (bounds.height - content_bounds.height).max(0.0);
+            if track_height <= f32::EPSILON || content_bounds.width <= f32::EPSILON {
+                return;
+            }
+            let track_rect = UiRect::new(
+                content_bounds.x,
+                content_bounds.y + content_bounds.height,
+                content_bounds.width,
+                track_height,
+            );
+            let viewport_extent = content_bounds.width.max(0.0);
+            let content_extent = child_layout.measured_size.width.max(viewport_extent);
+            let max_offset = (content_extent - viewport_extent).max(0.0);
+            let scroll_offset = (content_bounds.x - child_layout.bounds.x).clamp(0.0, max_offset);
+            let thumb_extent = if max_offset <= f32::EPSILON {
+                track_rect.width
+            } else {
+                let min_thumb = scroll.min_thumb_main_size.min(track_rect.width).max(0.0);
+                let natural = (viewport_extent / content_extent) * track_rect.width;
+                natural.clamp(min_thumb, track_rect.width)
+            };
+            let thumb_range = (track_rect.width - thumb_extent).max(0.0);
+            let thumb_x = if max_offset <= f32::EPSILON {
+                track_rect.x
+            } else {
+                track_rect.x + thumb_range * (scroll_offset / max_offset)
+            };
+            let thumb_rect = UiRect::new(thumb_x, track_rect.y, thumb_extent, track_rect.height);
+            let radius = scroll.theme.radius.sm.min(track_rect.height * 0.5);
+            (track_rect, thumb_rect, radius)
+        }
     };
-    let thumb_range = (track_rect.height - thumb_height).max(0.0);
-    let thumb_y = if max_offset <= f32::EPSILON {
-        track_rect.y
-    } else {
-        track_rect.y + thumb_range * (scroll_offset / max_offset)
-    };
-    let thumb_rect = UiRect::new(track_rect.x, thumb_y, track_rect.width, thumb_height);
-    let radius = scroll.theme.radius.sm.min(track_rect.width * 0.5);
 
     let mut track_color = scroll.theme.border;
     track_color.a = (track_color.a * 0.35).clamp(0.0, 1.0);
@@ -732,7 +765,7 @@ mod tests {
 
     use super::*;
     use crate::{UiRuntimeState, WidgetId, compute_tree_layout};
-    use ui_render_data::ViewportSurfaceSlot;
+    use ui_render_data::ViewportSurfaceEmbedSlotId;
     use ui_text::{
         FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle,
         TextWrap,
@@ -798,7 +831,7 @@ mod tests {
             WidgetId(7),
             UiNodeKind::ViewportSurfaceEmbed(ViewportSurfaceEmbedNode::new(
                 9,
-                ViewportSurfaceSlot::Primary,
+                ViewportSurfaceEmbedSlotId::new(1),
             )),
         ));
         let layouts = compute_tree_layout(

@@ -3,7 +3,7 @@
 
 use ui_layout::{LayoutConstraints, SizePolicy};
 use ui_math::{Axis, UiInsets, UiSize};
-use ui_render_data::ViewportSurfaceSlot;
+use ui_render_data::ViewportSurfaceEmbedSlotId;
 use ui_text::TextStyle;
 use ui_theme::ThemeTokens;
 
@@ -296,12 +296,12 @@ impl TabsNode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ViewportSurfaceEmbedNode {
     pub viewport_id: u64,
-    pub slot: ViewportSurfaceSlot,
+    pub slot: ViewportSurfaceEmbedSlotId,
     pub min_size: UiSize,
 }
 
 impl ViewportSurfaceEmbedNode {
-    pub fn new(viewport_id: u64, slot: ViewportSurfaceSlot) -> Self {
+    pub fn new(viewport_id: u64, slot: ViewportSurfaceEmbedSlotId) -> Self {
         Self {
             viewport_id,
             slot,
@@ -312,16 +312,31 @@ impl ViewportSurfaceEmbedNode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrollNode {
-    pub bar_width: f32,
-    pub min_thumb_height: f32,
+    pub axis: Axis,
+    pub bar_thickness: f32,
+    pub min_thumb_main_size: f32,
     pub theme: ThemeTokens,
 }
 
 impl ScrollNode {
     pub fn new(theme: ThemeTokens) -> Self {
+        Self::vertical(theme)
+    }
+
+    pub fn vertical(theme: ThemeTokens) -> Self {
         Self {
-            bar_width: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
-            min_thumb_height: (theme.spacing.lg + theme.spacing.xs).max(18.0),
+            axis: Axis::Vertical,
+            bar_thickness: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
+            min_thumb_main_size: (theme.spacing.lg + theme.spacing.xs).max(18.0),
+            theme,
+        }
+    }
+
+    pub fn horizontal(theme: ThemeTokens) -> Self {
+        Self {
+            axis: Axis::Horizontal,
+            bar_thickness: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
+            min_thumb_main_size: (theme.spacing.lg + theme.spacing.xs).max(18.0),
             theme,
         }
     }

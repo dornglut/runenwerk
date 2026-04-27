@@ -8,16 +8,22 @@ use ui_math::UiRect;
 use crate::{UiPaint, UiSortKey};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ViewportSurfaceSlot {
-    Primary,
-    Picking,
-    Overlay,
+pub struct ViewportSurfaceEmbedSlotId(pub u16);
+
+impl ViewportSurfaceEmbedSlotId {
+    pub const fn new(raw: u16) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u16 {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ViewportSurfaceEmbedPrimitive {
     pub viewport_id: u64,
-    pub slot: ViewportSurfaceSlot,
+    pub slot: ViewportSurfaceEmbedSlotId,
     pub rect: UiRect,
     pub uv_rect: UiRect,
     pub tint: UiPaint,
@@ -27,7 +33,7 @@ pub struct ViewportSurfaceEmbedPrimitive {
 impl ViewportSurfaceEmbedPrimitive {
     pub fn new(
         viewport_id: u64,
-        slot: ViewportSurfaceSlot,
+        slot: ViewportSurfaceEmbedSlotId,
         rect: UiRect,
         uv_rect: UiRect,
         tint: UiPaint,
@@ -61,7 +67,7 @@ impl ViewportSurfaceBinding {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ViewportSurfaceBindingRegistry {
-    bindings: BTreeMap<(u64, ViewportSurfaceSlot), ViewportSurfaceBinding>,
+    bindings: BTreeMap<(u64, ViewportSurfaceEmbedSlotId), ViewportSurfaceBinding>,
 }
 
 impl ViewportSurfaceBindingRegistry {
@@ -72,7 +78,7 @@ impl ViewportSurfaceBindingRegistry {
     pub fn bind(
         &mut self,
         viewport_id: u64,
-        slot: ViewportSurfaceSlot,
+        slot: ViewportSurfaceEmbedSlotId,
         binding: ViewportSurfaceBinding,
     ) {
         self.bindings.insert((viewport_id, slot), binding);
@@ -81,14 +87,14 @@ impl ViewportSurfaceBindingRegistry {
     pub fn get(
         &self,
         viewport_id: u64,
-        slot: ViewportSurfaceSlot,
+        slot: ViewportSurfaceEmbedSlotId,
     ) -> Option<&ViewportSurfaceBinding> {
         self.bindings.get(&(viewport_id, slot))
     }
 
     pub fn iter(
         &self,
-    ) -> impl Iterator<Item = (&(u64, ViewportSurfaceSlot), &ViewportSurfaceBinding)> {
+    ) -> impl Iterator<Item = (&(u64, ViewportSurfaceEmbedSlotId), &ViewportSurfaceBinding)> {
         self.bindings.iter()
     }
 }

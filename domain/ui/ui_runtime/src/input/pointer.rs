@@ -164,11 +164,13 @@ pub fn dispatch_pointer_event(
             let Some(scroll_owner) = scroll_owner else {
                 return outcome(target, InputResponse::ignored(), interactions);
             };
+            let Some(raw_delta) = scroll_primary_delta(tree, scroll_owner, event) else {
+                return outcome(target, InputResponse::ignored(), interactions);
+            };
 
             let max_offset = scroll_max_offset(tree, layouts, scroll_owner).unwrap_or(0.0);
             let current_offset = state.scroll_offset(scroll_owner).clamp(0.0, max_offset);
-            let next_offset =
-                (current_offset - scroll_pixels(event.delta.y)).clamp(0.0, max_offset);
+            let next_offset = (current_offset - scroll_pixels(raw_delta)).clamp(0.0, max_offset);
             let changed = (next_offset - current_offset).abs() > f32::EPSILON;
             if changed {
                 state.set_scroll_offset(scroll_owner, next_offset);
@@ -273,11 +275,55 @@ fn scroll_max_offset(
 ) -> Option<f32> {
     let scroll_layout = layouts.get(&scroll_widget)?;
     let scroll_node = find_node(tree, scroll_widget)?;
+    let UiNodeKind::Scroll(scroll) = &scroll_node.kind else {
+        return None;
+    };
     let child_id = scroll_node.children.first()?.id;
     let child_layout = layouts.get(&child_id)?;
-    let viewport_height = scroll_layout.content_bounds.height.max(0.0);
-    let content_height = child_layout.measured_size.height.max(viewport_height);
-    Some((content_height - viewport_height).max(0.0))
+    match scroll.axis {
+        ui_math::Axis::Vertical => {
+            let viewport_height = scroll_layout.content_bounds.height.max(0.0);
+            let content_height = child_layout.measured_size.height.max(viewport_height);
+            Some((content_height - viewport_height).max(0.0))
+        }
+        ui_math::Axis::Horizontal => {
+            let viewport_width = scroll_layout.content_bounds.width.max(0.0);
+            let content_width = child_layout.measured_size.width.max(viewport_width);
+            Some((content_width - viewport_width).max(0.0))
+        }
+    }
+}
+
+fn scroll_primary_delta(
+    tree: &UiTree,
+    scroll_widget: WidgetId,
+    event: &PointerEvent,
+) -> Option<f32> {
+    let scroll_node = find_node(tree, scroll_widget)?;
+    let UiNodeKind::Scroll(scroll) = &scroll_node.kind else {
+        return None;
+    };
+
+    match scroll.axis {
+        ui_math::Axis::Vertical => {
+            if event.delta.y.abs() > f32::EPSILON {
+                Some(event.delta.y)
+            } else if event.delta.x.abs() > f32::EPSILON {
+                Some(-event.delta.x)
+            } else {
+                None
+            }
+        }
+        ui_math::Axis::Horizontal => {
+            if event.delta.x.abs() > f32::EPSILON {
+                Some(-event.delta.x)
+            } else if event.delta.y.abs() > f32::EPSILON {
+                Some(event.delta.y)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 fn stepped_numeric_value(tree: &UiTree, widget_id: WidgetId, delta_y: f32) -> Option<f64> {

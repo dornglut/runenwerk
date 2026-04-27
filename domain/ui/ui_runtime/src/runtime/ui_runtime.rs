@@ -97,11 +97,23 @@ impl UiRuntime {
     ) -> Option<f32> {
         let scroll_layout = layouts.get(&scroll_widget)?;
         let scroll_node = tree.walk().find(|node| node.id == scroll_widget)?;
+        let UiNodeKind::Scroll(scroll) = &scroll_node.kind else {
+            return None;
+        };
         let child_id = scroll_node.children.first()?.id;
         let child_layout = layouts.get(&child_id)?;
-        let viewport_height = scroll_layout.content_bounds.height.max(0.0);
-        let content_height = child_layout.measured_size.height.max(viewport_height);
-        Some((content_height - viewport_height).max(0.0))
+        match scroll.axis {
+            ui_math::Axis::Vertical => {
+                let viewport_height = scroll_layout.content_bounds.height.max(0.0);
+                let content_height = child_layout.measured_size.height.max(viewport_height);
+                Some((content_height - viewport_height).max(0.0))
+            }
+            ui_math::Axis::Horizontal => {
+                let viewport_width = scroll_layout.content_bounds.width.max(0.0);
+                let content_width = child_layout.measured_size.width.max(viewport_width);
+                Some((content_width - viewport_width).max(0.0))
+            }
+        }
     }
 
     fn dispatch_keyboard_event(
@@ -280,8 +292,8 @@ fn outcome(
 mod tests {
     use super::*;
     use crate::{
-        ButtonNode, NumericInputNode, PanelNode, StackNode, TabsNode, ToggleNode, UiNode,
-        UiNodeKind,
+        ButtonNode, NumericInputNode, PanelNode, ScrollNode, StackNode, TabsNode, ToggleNode,
+        UiNode, UiNodeKind,
     };
     use ui_input::{
         FocusChange, FocusTargetId, Key, KeyState, KeyboardEvent, Modifiers, PointerEvent,
@@ -653,6 +665,80 @@ mod tests {
                     index: 2,
                 }),
             "tab click should emit selected index interaction",
+        );
+    }
+
+    #[test]
+    fn horizontal_scroll_clamps_offset_on_narrow_bounds() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let scroll_id = WidgetId(41);
+        let row_id = WidgetId(42);
+        let mut row_children = Vec::new();
+        for index in 0..8 {
+            row_children.push(UiNode::new(
+                WidgetId(50 + index),
+                UiNodeKind::Button(ButtonNode::new(
+                    format!("Button {index}"),
+                    text_style.clone(),
+                    theme.clone(),
+                )),
+            ));
+        }
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                scroll_id,
+                UiNodeKind::Scroll(ScrollNode::horizontal(theme)),
+                vec![UiNode::with_children(
+                    row_id,
+                    UiNodeKind::Stack(StackNode::horizontal(4.0)),
+                    row_children,
+                )],
+            )],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 96.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let scroll_layout = layouts
+            .get(&scroll_id)
+            .expect("horizontal scroll layout should exist");
+        assert!(
+            scroll_layout.content_bounds.height < scroll_layout.bounds.height,
+            "horizontal scroll should reserve a visible scrollbar gutter",
+        );
+
+        let max_offset = runtime
+            .max_scroll_offset_for_layout(&tree, &layouts, scroll_id)
+            .expect("horizontal max offset should be computed");
+        assert!(max_offset > 0.0, "row should overflow narrow bounds");
+
+        let scroll_point = UiPoint::new(
+            scroll_layout.content_bounds.x + scroll_layout.content_bounds.width * 0.5,
+            scroll_layout.content_bounds.y + scroll_layout.content_bounds.height * 0.5,
+        );
+        for _ in 0..32 {
+            let layouts = runtime.compute_layout(&tree, bounds);
+            runtime.dispatch_input(
+                &tree,
+                &layouts,
+                &UiInputEvent::Pointer(PointerEvent {
+                    kind: PointerEventKind::Scroll,
+                    position: scroll_point,
+                    delta: UiVector::new(0.0, -8.0),
+                    button: None,
+                    modifiers: Modifiers::default(),
+                    click_count: 0,
+                }),
+            );
+        }
+
+        let offset = runtime.state().scroll_offset(scroll_id);
+        assert!(offset > 0.0, "horizontal scroll should advance offset");
+        assert!(
+            offset <= max_offset + 0.001,
+            "horizontal scroll offset should clamp to measured content range",
         );
     }
 }

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use ui_math::UiRect;
+use ui_render_data::{UiPrimitive, ViewportSurfaceEmbedSlotId};
 use ui_runtime::{
     ButtonNode, PanelNode, ScrollNode, StackNode, TextInputNode, UiNode, UiNodeKind,
     UiRuntimeState, UiTree, WidgetId, build_ui_frame, compute_tree_layout,
@@ -72,16 +73,85 @@ fn main() {
                 )],
             )),
         ),
+        (
+            "viewport_embed_lifecycle",
+            UiTree::new(UiNode::with_children(
+                WidgetId(20),
+                UiNodeKind::Panel(PanelNode::new(theme.clone())),
+                vec![UiNode::with_children(
+                    WidgetId(21),
+                    UiNodeKind::Stack(StackNode::vertical(theme.spacing.xs)),
+                    vec![
+                        UiNode::new(
+                            WidgetId(22),
+                            UiNodeKind::ViewportSurfaceEmbed(
+                                ui_runtime::ViewportSurfaceEmbedNode::new(
+                                    1,
+                                    ViewportSurfaceEmbedSlotId::new(1),
+                                ),
+                            ),
+                        ),
+                        UiNode::new(
+                            WidgetId(23),
+                            UiNodeKind::ViewportSurfaceEmbed(
+                                ui_runtime::ViewportSurfaceEmbedNode::new(
+                                    1,
+                                    ViewportSurfaceEmbedSlotId::new(2),
+                                ),
+                            ),
+                        ),
+                        UiNode::new(
+                            WidgetId(24),
+                            UiNodeKind::ViewportSurfaceEmbed(
+                                ui_runtime::ViewportSurfaceEmbedNode::new(
+                                    1,
+                                    ViewportSurfaceEmbedSlotId::new(3),
+                                ),
+                            ),
+                        ),
+                    ],
+                )],
+            )),
+        ),
+        (
+            "multi_surface_embeds",
+            UiTree::new(UiNode::with_children(
+                WidgetId(30),
+                UiNodeKind::Stack(StackNode::horizontal(theme.spacing.sm)),
+                vec![
+                    UiNode::new(
+                        WidgetId(31),
+                        UiNodeKind::ViewportSurfaceEmbed(
+                            ui_runtime::ViewportSurfaceEmbedNode::new(
+                                1,
+                                ViewportSurfaceEmbedSlotId::new(1),
+                            ),
+                        ),
+                    ),
+                    UiNode::new(
+                        WidgetId(32),
+                        UiNodeKind::ViewportSurfaceEmbed(
+                            ui_runtime::ViewportSurfaceEmbedNode::new(
+                                2,
+                                ViewportSurfaceEmbedSlotId::new(1),
+                            ),
+                        ),
+                    ),
+                ],
+            )),
+        ),
     ];
 
     for (name, tree) in scenarios {
         let bounds = UiRect::new(0.0, 0.0, 360.0, 220.0);
         let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
         let frame = build_ui_frame(&tree, &layouts, bounds.size(), &atlas);
+        let viewport_slots = viewport_embed_slot_ids(&frame);
         println!(
-            "scenario={name} surfaces={} primitives={}",
+            "scenario={name} surfaces={} primitives={} viewport_embed_slots={:?}",
             frame.surfaces.len(),
-            primitive_count(&frame)
+            primitive_count(&frame),
+            viewport_slots
         );
     }
 }
@@ -98,6 +168,19 @@ fn primitive_count(frame: &ui_render_data::UiFrame) -> usize {
                 .sum::<usize>()
         })
         .sum()
+}
+
+fn viewport_embed_slot_ids(frame: &ui_render_data::UiFrame) -> Vec<u16> {
+    frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .filter_map(|primitive| match primitive {
+            UiPrimitive::ViewportSurfaceEmbed(embed) => Some(embed.slot.raw()),
+            _ => None,
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]

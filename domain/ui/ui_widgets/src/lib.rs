@@ -20,7 +20,7 @@ pub use button::button;
 pub use label::label;
 pub use numeric_input::numeric_input;
 pub use panel::panel;
-pub use scroll::vscroll;
+pub use scroll::{hscroll, scroll, vscroll};
 pub use split::split;
 pub use stack::{hstack, hstack_with_policies, stack, vstack, vstack_with_policies};
 pub use tabs::tabs;
@@ -74,6 +74,14 @@ mod tests {
         assert!(matches!(
             tabs(WidgetId(5), ["A", "B"], 0, style, theme).kind,
             UiNodeKind::Tabs(_)
+        ));
+        assert!(matches!(
+            hscroll(WidgetId(6), ThemeTokens::default(), Vec::new()).kind,
+            UiNodeKind::Scroll(_)
+        ));
+        assert!(matches!(
+            vscroll(WidgetId(7), ThemeTokens::default(), Vec::new()).kind,
+            UiNodeKind::Scroll(_)
         ));
     }
 }
