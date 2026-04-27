@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-04-28
 ---
 
 # Workspace Routines
@@ -16,4 +16,23 @@ Use routines when a task needs repeated inspection, patching, validation, and re
 
 ## Available Routines
 
+- [Code Refactor Routine](./code-refactor-routine.md)
+- [Commit Splitting Routine](./commit-splitting-routine.md)
+- [Crate Implementation Routine](./crate-implementation-routine.md)
 - [Documentation Refactor Routine](./docs-refactor-routine.md)
+- [Public API Review Routine](./public-api-review-routine.md)
+
+## Routine Rules
+
+- Routines are bounded.
+- Routines must have explicit stop conditions.
+- Routines must identify validation commands.
+- Routines must not use unbounded loops.
+- Routines must preserve unrelated work.
+- Routines must report what was changed, skipped, blocked, or left for follow-up.
+
+## Related Docs
+
+- [`../prompt-templates/README.md`](../prompt-templates/README.md)
+- [`../agents.md`](../agents.md)
+- [`../documentation-structure.md`](../documentation-structure.md)

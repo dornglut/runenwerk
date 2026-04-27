@@ -82,6 +82,10 @@ The docs live in the astro docs site under docs-site/src/content/docs
 
 For full documentation placement, lifecycle states, frontmatter, refactor update rules, naming, and archival policy, follow `docs-site/src/content/docs/workspace/documentation-structure.md`.
 
+For bounded repository workflows, follow `docs-site/src/content/docs/workspace/routines/README.md`.
+
+For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
+
 For documentation moves, renames, pruning, or restructuring, follow `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md`.
 
 For documentation-only validation, run:
