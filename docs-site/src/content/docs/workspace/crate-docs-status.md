@@ -49,10 +49,10 @@ Status labels:
 | Crate | Path | Status | Primary docs |
 | --- | --- | --- | --- |
 | `engine` | `engine` | current | [`../engine/index.md`](../engine/index.md) |
-| `engine_render_macros` | `engine_render_macros` | missing | none |
-| `engine_sim` | `net/engine_sim` | thin | [`../net/engine-sim/README.md`](../net/engine-sim/README.md) |
+| `engine_render_macros` | `engine_render_macros` | current | [`../engine/reference/plugins/render/render-macros.md`](../engine/reference/plugins/render/render-macros.md) |
+| `engine_sim` | `net/engine_sim` | current | [`../net/engine-sim/README.md`](../net/engine-sim/README.md) |
 | `engine_net` | `net/engine_net` | current | [`../net/engine-net/README.md`](../net/engine-net/README.md) |
-| `engine_net_macros` | `net/engine_net_macros` | thin | [`../net/engine-net-macros/README.md`](../net/engine-net-macros/README.md) |
+| `engine_net_macros` | `net/engine_net_macros` | current | [`../net/engine-net-macros/README.md`](../net/engine-net-macros/README.md) |
 | `engine_net_quic` | `net/engine_net_quic` | current | [`../net/engine-net-quic/README.md`](../net/engine-net-quic/README.md) |
 | `engine_replay` | `net/engine_history` | current | [`../net/engine-history/README.md`](../net/engine-history/README.md) |
 
@@ -61,7 +61,7 @@ Status labels:
 | Crate | Path | Status | Primary docs |
 | --- | --- | --- | --- |
 | `runenwerk_editor` | `apps/runenwerk_editor` | current | [`../apps/runenwerk-editor/current-architecture.md`](../apps/runenwerk-editor/current-architecture.md) |
-| `godot_chunking_addon` | `adapters/godot_chunking_addon` | thin | [`../adapters/godot-chunking-addon/README.md`](../adapters/godot-chunking-addon/README.md) |
+| `godot_chunking_addon` | `adapters/godot_chunking_addon` | current | [`../adapters/godot-chunking-addon/README.md`](../adapters/godot-chunking-addon/README.md) |
 
 ## Long-Term Maintenance
 
