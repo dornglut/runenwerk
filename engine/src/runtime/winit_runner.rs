@@ -59,13 +59,13 @@ impl WinitRunner {
             | PlatformEvent::Resized { .. }
             | PlatformEvent::ScaleFactorChanged { .. }
             | PlatformEvent::RedrawRequested => {
-                let mut window_state = self
+                let window_state = self
                     .state
                     .world
                     .resource_mut::<WindowState>()
                     .context("missing WindowState resource")?;
                 let mut input = InputState::new();
-                apply_platform_event(&mut window_state, &mut input, &event);
+                apply_platform_event(window_state, &mut input, &event);
             }
             PlatformEvent::KeyboardInput { .. }
             | PlatformEvent::MouseWheel { .. }
@@ -73,12 +73,12 @@ impl WinitRunner {
             | PlatformEvent::MouseInput { .. }
             | PlatformEvent::MouseMotion { .. } => {
                 let mut window_state = WindowState::headless("");
-                let mut input = self
+                let input = self
                     .state
                     .world
                     .resource_mut::<InputState>()
                     .context("missing InputState resource")?;
-                apply_platform_event(&mut window_state, &mut input, &event);
+                apply_platform_event(&mut window_state, input, &event);
             }
         }
         Ok(())
@@ -303,11 +303,11 @@ mod tests {
     }
 
     fn set_frame_delta(mut time: ResMut<crate::plugins::time::domain::Time>) {
-        (*time).delta_seconds = 0.05;
+        time.delta_seconds = 0.05;
     }
 
     fn log_tick(tick: Res<SimulationTick>, mut log: ResMut<FixedTickLog>) {
-        (*log).0.push(tick.0);
+        log.0.push(tick.0);
     }
 
     #[test]

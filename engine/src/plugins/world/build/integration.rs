@@ -27,6 +27,7 @@ pub struct WorldCompletedBuildQueueResource {
     pub outputs: VecDeque<WorldCompletedBuildOutput>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn integrate_completed_build_outputs_system(
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,

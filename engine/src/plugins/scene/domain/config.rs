@@ -165,7 +165,7 @@ pub fn load_gameplay_config() -> GameplayConfig {
 pub fn gameplay_config_modified() -> Option<SystemTime> {
     gameplay_config_paths()
         .iter()
-        .map(|path| Path::new(path))
+        .map(Path::new)
         .find(|path| path.exists())
         .and_then(file_modified)
 }

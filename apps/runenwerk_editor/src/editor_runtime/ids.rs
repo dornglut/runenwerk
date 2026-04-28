@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use editor_core::{ComponentTypeId, EditorMutationError, EntityId, ResourceTypeId};
 
 type RemovedComponentKey = (EntityId, ComponentTypeId);
+type RemovedComponentStore = HashMap<RemovedComponentKey, Box<dyn RemovedComponentValue>>;
 
 trait RemovedComponentValue {
     fn restore(
@@ -43,7 +44,7 @@ struct ComponentRegistration {
     remove_and_capture: fn(
         &mut ecs::World,
         ecs::Entity,
-        &mut HashMap<RemovedComponentKey, Box<dyn RemovedComponentValue>>,
+        &mut RemovedComponentStore,
         RemovedComponentKey,
     ) -> Result<(), EditorMutationError>,
 }
@@ -54,7 +55,7 @@ pub struct EditorRuntimeIdRegistry {
     entities: HashMap<EntityId, SceneEntityRecord>,
     component_types: HashMap<ComponentTypeId, ComponentRegistration>,
     resource_type_ids: HashMap<ResourceTypeId, TypeId>,
-    removed_components: HashMap<RemovedComponentKey, Box<dyn RemovedComponentValue>>,
+    removed_components: RemovedComponentStore,
 }
 
 impl EditorRuntimeIdRegistry {

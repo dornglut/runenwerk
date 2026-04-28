@@ -328,9 +328,7 @@ fn effective_clip(
             Some(existing) => existing.intersect(local),
             None => Some(local),
         };
-        if clip.is_none() {
-            return None;
-        }
+        clip?;
     }
 
     if let Some(active_clip) = clip

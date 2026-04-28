@@ -3,6 +3,14 @@ use crate::plugins::render::features::{UI_RENDER_FEATURE_ID, UiFontAtlasResource
 use crate::plugins::{PreparedUiFrameContribution, RenderFeatureId};
 use std::hash::{Hash, Hasher};
 
+type ScissoredRectBatch = ((u32, u32, u32, u32), Vec<RectInstanceRaw>);
+type ScissoredViewportEmbedBatch = (
+    (u32, u32, u32, u32),
+    u64,
+    ViewportSurfaceEmbedSlotId,
+    Vec<ViewportEmbedInstanceRaw>,
+);
+
 impl Renderer {
     pub(super) fn prepare_ui_draws(
         &mut self,
@@ -157,6 +165,7 @@ impl Renderer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn prepare_packet(
         &mut self,
         device: &Device,
@@ -280,8 +289,8 @@ fn group_rect_batches_ordered(
     flattened_rect_instances: Vec<FlattenedUiRectInstance>,
     surface_width_u32: u32,
     surface_height_u32: u32,
-) -> Vec<((u32, u32, u32, u32), Vec<RectInstanceRaw>)> {
-    let mut grouped = Vec::<((u32, u32, u32, u32), Vec<RectInstanceRaw>)>::new();
+) -> Vec<ScissoredRectBatch> {
+    let mut grouped = Vec::<ScissoredRectBatch>::new();
     for instance in flattened_rect_instances {
         let scissor = instance
             .clip
@@ -310,18 +319,8 @@ fn group_viewport_embed_batches_ordered(
     flattened_instances: Vec<FlattenedUiViewportEmbedInstance>,
     surface_width_u32: u32,
     surface_height_u32: u32,
-) -> Vec<(
-    (u32, u32, u32, u32),
-    u64,
-    ViewportSurfaceEmbedSlotId,
-    Vec<ViewportEmbedInstanceRaw>,
-)> {
-    let mut grouped = Vec::<(
-        (u32, u32, u32, u32),
-        u64,
-        ViewportSurfaceEmbedSlotId,
-        Vec<ViewportEmbedInstanceRaw>,
-    )>::new();
+) -> Vec<ScissoredViewportEmbedBatch> {
+    let mut grouped = Vec::<ScissoredViewportEmbedBatch>::new();
     for instance in flattened_instances {
         let scissor = instance
             .clip
@@ -351,47 +350,6 @@ fn group_viewport_embed_batches_ordered(
         }
     }
     grouped
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rect_batch_grouping_preserves_non_consecutive_order() {
-        let a = FlattenedUiRectInstance {
-            raw: RectInstanceRaw {
-                rect: [0.0, 0.0, 10.0, 10.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-                radius: 0.0,
-                _pad: [0.0; 3],
-            },
-            clip: Some([0.0, 0.0, 10.0, 10.0]),
-        };
-        let b = FlattenedUiRectInstance {
-            raw: RectInstanceRaw {
-                rect: [20.0, 0.0, 10.0, 10.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-                radius: 0.0,
-                _pad: [0.0; 3],
-            },
-            clip: Some([20.0, 0.0, 10.0, 10.0]),
-        };
-        let c = FlattenedUiRectInstance {
-            raw: RectInstanceRaw {
-                rect: [1.0, 1.0, 8.0, 8.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-                radius: 0.0,
-                _pad: [0.0; 3],
-            },
-            clip: Some([0.0, 0.0, 10.0, 10.0]),
-        };
-        let grouped = group_rect_batches_ordered(vec![a, b, c], 100, 100);
-        assert_eq!(grouped.len(), 3);
-        assert_eq!(grouped[0].1.len(), 1);
-        assert_eq!(grouped[1].1.len(), 1);
-        assert_eq!(grouped[2].1.len(), 1);
-    }
 }
 
 fn hash_prepared_feature_contribution(
@@ -498,4 +456,45 @@ fn hash_prepared_feature_contribution(
         }
     }
     hasher.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rect_batch_grouping_preserves_non_consecutive_order() {
+        let a = FlattenedUiRectInstance {
+            raw: RectInstanceRaw {
+                rect: [0.0, 0.0, 10.0, 10.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+                radius: 0.0,
+                _pad: [0.0; 3],
+            },
+            clip: Some([0.0, 0.0, 10.0, 10.0]),
+        };
+        let b = FlattenedUiRectInstance {
+            raw: RectInstanceRaw {
+                rect: [20.0, 0.0, 10.0, 10.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+                radius: 0.0,
+                _pad: [0.0; 3],
+            },
+            clip: Some([20.0, 0.0, 10.0, 10.0]),
+        };
+        let c = FlattenedUiRectInstance {
+            raw: RectInstanceRaw {
+                rect: [1.0, 1.0, 8.0, 8.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+                radius: 0.0,
+                _pad: [0.0; 3],
+            },
+            clip: Some([0.0, 0.0, 10.0, 10.0]),
+        };
+        let grouped = group_rect_batches_ordered(vec![a, b, c], 100, 100);
+        assert_eq!(grouped.len(), 3);
+        assert_eq!(grouped[0].1.len(), 1);
+        assert_eq!(grouped[1].1.len(), 1);
+        assert_eq!(grouped[2].1.len(), 1);
+    }
 }

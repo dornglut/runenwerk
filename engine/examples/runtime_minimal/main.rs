@@ -35,7 +35,7 @@ fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<Fra
         position.x += velocity.x;
         position.y += velocity.y;
     }
-    (*frames).0 += 1;
+    frames.0 += 1;
 }
 
 fn main() -> Result<()> {

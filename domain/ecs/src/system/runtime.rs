@@ -413,8 +413,8 @@ trait SystemParamState: Sized {
     fn access(state: &Self::State) -> QueryAccess;
     fn slot_descriptor() -> ParamSlotDescriptor;
 
-    unsafe fn extract<'w>(
-        state: &'w mut Self::State,
+    unsafe fn extract(
+        state: &mut Self::State,
         world: *mut World,
         commands: *mut Commands,
     ) -> std::result::Result<Self, SystemParamError>;
@@ -438,15 +438,15 @@ where
         <T as SystemParam<'static>>::slot_descriptor()
     }
 
-    unsafe fn extract<'w>(
-        state: &'w mut Self::State,
+    unsafe fn extract(
+        state: &mut Self::State,
         world: *mut World,
         commands: *mut Commands,
     ) -> std::result::Result<Self, SystemParamError> {
         // Safety: `SystemParam` implementors are required to keep `State` lifetime-independent.
         // This cast converts the cached `'static` state type view into the extraction lifetime view.
-        let state_ptr = state as *mut Self::State as *mut <T as SystemParam<'w>>::State;
-        unsafe { <T as SystemParam<'w>>::extract(&mut *state_ptr, world, commands) }
+        let state_ptr = state as *mut Self::State as *mut <T as SystemParam<'_>>::State;
+        unsafe { <T as SystemParam<'_>>::extract(&mut *state_ptr, world, commands) }
     }
 }
 
@@ -894,6 +894,7 @@ mod tests {
     struct MaxTupleSchedule;
     impl ScheduleLabel for MaxTupleSchedule {}
 
+    #[allow(clippy::too_many_arguments)]
     fn max_arity_system(
         r0: Res<R0>,
         r1: Res<R1>,

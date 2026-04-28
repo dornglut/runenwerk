@@ -266,6 +266,7 @@ pub struct TextureReadbackFormat {
     pub mode: TextureReadbackMode,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn enqueue_texture_capture_copy(
     device: &Device,
     encoder: &mut CommandEncoder,

@@ -5,6 +5,28 @@ fn read(path: &str) -> String {
     fs::read_to_string(Path::new(path)).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
 }
 
+fn read_render_flow_sources() -> String {
+    let mut combined = String::new();
+    let mut entries = fs::read_dir("src/plugins/render/renderer/render_flow")
+        .expect("failed to read render_flow source directory")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("failed to collect render_flow source files");
+    entries.sort_by_key(|entry| entry.path());
+
+    for entry in entries {
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+            combined.push_str(
+                &fs::read_to_string(&path)
+                    .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display())),
+            );
+            combined.push('\n');
+        }
+    }
+
+    combined
+}
+
 fn function_body(source: &str, signature: &str) -> String {
     let start = source
         .find(signature)
@@ -28,8 +50,7 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         "src/plugins/render/plugin.rs",
         "src/plugins/render/api/passes.rs",
         "src/plugins/render/composition/integration.rs",
-        "src/plugins/render/renderer/submit.rs",
-        "src/plugins/render/renderer/render_flow.rs",
+        "src/plugins/render/runtime/frame_submit.rs",
     ];
 
     for file in files {
@@ -42,7 +63,7 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         }
     }
 
-    let render_flow = read("src/plugins/render/renderer/render_flow.rs");
+    let render_flow = read_render_flow_sources();
     assert!(
         render_flow.contains("missing prepared dispatch for pass"),
         "compute runtime path should consume prepare-projected dispatch values"
@@ -72,7 +93,7 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         "single-view deferred contract must remain explicit and fail-fast for multi-view packets"
     );
 
-    let submit = read("src/plugins/render/renderer/submit.rs");
+    let submit = read("src/plugins/render/runtime/frame_submit.rs");
     let submit_fn = function_body(&submit, "pub(crate) fn frame_render_submit_system(");
     assert!(
         !submit_fn.contains("collect_flow_declared_frame_resources"),

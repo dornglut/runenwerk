@@ -509,6 +509,7 @@ impl Gfx {
         self.ctx.resize(width, height);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
         prepared_frame: &PreparedRenderFrame,

@@ -8,6 +8,7 @@ pub enum FeaturePassAction {
 }
 
 impl Renderer {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn render_packet(
         &mut self,
         device: &Device,
@@ -50,8 +51,7 @@ impl Renderer {
                 .map(|flow| flow.flow_id)
                 .collect::<Vec<_>>();
 
-            flow_runtime_cache
-                .retain(|flow_id, _| active_flow_ids.iter().any(|id| *id == *flow_id));
+            flow_runtime_cache.retain(|flow_id, _| active_flow_ids.contains(flow_id));
             self.flow_pipeline_cache.retain_flows(&active_flow_ids);
 
             for flow in compiled_flows {
@@ -237,6 +237,7 @@ impl Renderer {
         Ok(timings)
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,

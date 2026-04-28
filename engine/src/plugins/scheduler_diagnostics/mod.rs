@@ -47,7 +47,7 @@ struct SchedulerDiagnosticsEntryDto {
 
 fn scheduler_diagnostics_system(mut world: WorldMut) {
     let frame = DIAGNOSTIC_FRAME_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-    if frame % LOG_INTERVAL_FRAMES != 0 {
+    if !frame.is_multiple_of(LOG_INTERVAL_FRAMES) {
         return;
     }
 

@@ -76,17 +76,9 @@ pub fn initial_product_descriptors(
     ]
 }
 
-#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct ViewportProductRegistryResource {
     descriptors_by_viewport: BTreeMap<ViewportId, Vec<ExpressionProductDescriptor>>,
-}
-
-impl Default for ViewportProductRegistryResource {
-    fn default() -> Self {
-        Self {
-            descriptors_by_viewport: BTreeMap::new(),
-        }
-    }
 }
 
 impl ViewportProductRegistryResource {
@@ -122,17 +114,9 @@ impl ViewportProductRegistryResource {
     }
 }
 
-#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct ViewportPresentationStateResource {
     states_by_viewport: BTreeMap<ViewportId, ViewportPresentationState>,
-}
-
-impl Default for ViewportPresentationStateResource {
-    fn default() -> Self {
-        Self {
-            states_by_viewport: BTreeMap::new(),
-        }
-    }
 }
 
 impl ViewportPresentationStateResource {
@@ -169,17 +153,9 @@ impl ViewportPresentationStateResource {
     }
 }
 
-#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct ViewportArtifactObservationResource {
     frames_by_viewport: BTreeMap<ViewportId, ArtifactObservationFrame>,
-}
-
-impl Default for ViewportArtifactObservationResource {
-    fn default() -> Self {
-        Self {
-            frames_by_viewport: BTreeMap::new(),
-        }
-    }
 }
 
 impl ViewportArtifactObservationResource {

@@ -147,6 +147,7 @@ impl RunenwerkEditorApp {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn dispatch_shell_input(
         &mut self,
         shell_state: &mut RunenwerkEditorShellState,

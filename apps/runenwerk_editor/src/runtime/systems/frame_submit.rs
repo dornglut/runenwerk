@@ -36,6 +36,7 @@ const VIEWPORT_DEBUG_STAGE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_DEBUG_STAGE";
 const VIEWPORT_ROOT_OPAQUE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_ROOT_OPAQUE";
 const VIEWPORT_BRANCH_TRACE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_BRANCH_TRACE";
 
+#[allow(clippy::too_many_arguments)]
 pub fn submit_editor_frame_system(
     window: Res<WindowState>,
     mut host: ResMut<EditorHostResource>,
@@ -485,14 +486,11 @@ fn build_artifact_observation_frame(
             .insert(descriptor.id, ProducerHealth::Healthy);
     }
 
-    if !frame
+    if let std::collections::btree_map::Entry::Vacant(e) = frame
         .availability_by_product
-        .contains_key(&presentation_state.selected_primary_product_id)
+        .entry(presentation_state.selected_primary_product_id)
     {
-        frame.availability_by_product.insert(
-            presentation_state.selected_primary_product_id,
-            ProductAvailabilityState::Unavailable,
-        );
+        e.insert(ProductAvailabilityState::Unavailable);
         frame.producer_health_by_product.insert(
             presentation_state.selected_primary_product_id,
             ProducerHealth::Unavailable,

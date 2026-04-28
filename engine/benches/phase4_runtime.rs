@@ -61,6 +61,7 @@ impl Plugin for Phase4RuntimeBenchPlugin {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn movement(mut query: Query<(&mut Position, &Velocity), (With<Simulated>, Without<Disabled>)>) {
     for (position, velocity) in query.iter() {
         position.x += velocity.x;
@@ -78,7 +79,7 @@ fn read_broadcast(reader: BroadcastReader<PerfEvent>, mut frame: ResMut<FrameAcc
     let sum = reader
         .iter()
         .fold(0_u64, |acc, event| acc.wrapping_add(event.0 as u64));
-    (*frame).0 = (*frame).0.wrapping_add(sum);
+    frame.0 = frame.0.wrapping_add(sum);
 }
 
 fn workload_engine_runtime(c: &mut Criterion) {

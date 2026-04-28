@@ -32,16 +32,11 @@ use super::{
 use crate::plugins::world::adapters::WorldFrameResource;
 use world_ops::WorldRevision;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource, Default)]
 pub enum WorldRuntimeMode {
     Writable,
+    #[default]
     ReadOnly,
-}
-
-impl Default for WorldRuntimeMode {
-    fn default() -> Self {
-        Self::ReadOnly
-    }
 }
 
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]

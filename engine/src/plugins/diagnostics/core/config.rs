@@ -1,20 +1,10 @@
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct DiagnosticsAdapterConfig {
     pub stdout_enabled: bool,
     pub file_json_enabled: bool,
     pub console_enabled: bool,
-}
-
-impl Default for DiagnosticsAdapterConfig {
-    fn default() -> Self {
-        Self {
-            stdout_enabled: false,
-            file_json_enabled: false,
-            console_enabled: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]

@@ -158,6 +158,7 @@ impl RunenwerkEditorShellController {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn dispatch_input_with_viewport_products(
         app: &mut RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
@@ -165,7 +166,7 @@ impl RunenwerkEditorShellController {
         theme: &ThemeTokens,
         event: &UiInputEvent,
         viewport_products: Option<&ArtifactObservationFrame>,
-        mut viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+        viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
@@ -233,7 +234,7 @@ impl RunenwerkEditorShellController {
             app,
             shell_state,
             commands,
-            viewport_presentations.as_deref_mut(),
+            viewport_presentations,
             viewport_observations,
             tool_surface_bindings,
         )?;

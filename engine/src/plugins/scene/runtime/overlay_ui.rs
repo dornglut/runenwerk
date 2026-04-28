@@ -88,15 +88,14 @@ pub(crate) fn process_overlay_pointer_input(
         hovered_slot,
         input.left_mouse_down(),
         time.delta_seconds.max(0.0) * 1000.0,
-    ) {
-        if let Some(action) = scene_templates.hold_action_for(slot).cloned() {
-            scene_templates.apply_action(
-                &action,
-                manager,
-                hold_trigger_name(slot),
-                Some(slot.button_name()),
-            )?;
-        }
+    ) && let Some(action) = scene_templates.hold_action_for(slot).cloned()
+    {
+        scene_templates.apply_action(
+            &action,
+            manager,
+            hold_trigger_name(slot),
+            Some(slot.button_name()),
+        )?;
     }
 
     if input.left_mouse_released()
@@ -418,6 +417,7 @@ fn build_overlay_frame_via_substrate(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_text_panel_node(
     world: &ecs::World,
     entity: ecs::Entity,

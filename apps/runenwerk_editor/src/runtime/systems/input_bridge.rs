@@ -29,6 +29,7 @@ struct ViewportPointerRoute {
     local_position: UiPoint,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn dispatch_editor_input_system(
     input: Res<engine::plugins::InputState>,
     window: Res<WindowState>,
@@ -225,10 +226,9 @@ fn dispatch_shortcuts(
         eprintln!("redo shortcut failed: {error}");
     }
 
-    if input.action_pressed(ACTION_EDITOR_TOOL_SELECT)
-        || input.action_pressed(action::UI_EDITOR_RESTORE_ALL)
-    {
-        if let Err(error) = dispatch_shell_command(
+    if (input.action_pressed(ACTION_EDITOR_TOOL_SELECT)
+        || input.action_pressed(action::UI_EDITOR_RESTORE_ALL))
+        && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
             ShellCommand::ActivateSelectTool,
@@ -236,15 +236,14 @@ fn dispatch_shortcuts(
             Some(viewport_observations),
             Some(tool_surface_bindings),
             None,
-        ) {
-            eprintln!("select-tool shortcut failed: {error}");
-        }
+        )
+    {
+        eprintln!("select-tool shortcut failed: {error}");
     }
 
-    if input.action_pressed(ACTION_EDITOR_TOOL_TRANSLATE)
-        || input.action_pressed(action::UI_EDITOR_HIDE_SELECTED)
-    {
-        if let Err(error) = dispatch_shell_command(
+    if (input.action_pressed(ACTION_EDITOR_TOOL_TRANSLATE)
+        || input.action_pressed(action::UI_EDITOR_HIDE_SELECTED))
+        && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
             ShellCommand::ActivateTranslateTool,
@@ -252,12 +251,13 @@ fn dispatch_shortcuts(
             Some(viewport_observations),
             Some(tool_surface_bindings),
             None,
-        ) {
-            eprintln!("translate-tool shortcut failed: {error}");
-        }
+        )
+    {
+        eprintln!("translate-tool shortcut failed: {error}");
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn dispatch_pointer_event(
     host: &mut EditorHostResource,
     shell_theme: &ui_theme::ThemeTokens,

@@ -48,7 +48,7 @@ impl QuicTransport {
         server_name: &str,
     ) -> Result<QuicServerEndpoint> {
         let cert = rcgen::generate_simple_self_signed(vec![server_name.to_string()])?;
-        let cert_der = CertificateDer::from(cert.cert.der().clone());
+        let cert_der = cert.cert.der().clone();
         let priv_key = PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der());
         let mut server_config =
             ServerConfig::with_single_cert(vec![cert_der.clone()], priv_key.into())?;

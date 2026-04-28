@@ -57,6 +57,7 @@ fn runtime_executes_1_2_and_8_param_systems() {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn full_tick(
         mut query: Query<(&mut Position, Option<&Velocity>)>,
         dt: Res<DeltaTime>,

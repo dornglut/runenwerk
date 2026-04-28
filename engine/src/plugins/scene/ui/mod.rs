@@ -68,7 +68,7 @@ impl Default for UiNode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ecs::Component)]
 pub struct UiDirty;
 
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, Default)]
 pub struct UiStyleTemplate {
     pub bg_color: Option<[f32; 4]>,
     pub border_color: Option<[f32; 4]>,
@@ -76,32 +76,11 @@ pub struct UiStyleTemplate {
     pub radius: Option<f32>,
 }
 
-impl Default for UiStyleTemplate {
-    fn default() -> Self {
-        Self {
-            bg_color: None,
-            border_color: None,
-            border_width: None,
-            radius: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, Default)]
 pub struct UiTextTemplate {
     pub content: Option<String>,
     pub color: Option<[f32; 4]>,
     pub size: Option<f32>,
-}
-
-impl Default for UiTextTemplate {
-    fn default() -> Self {
-        Self {
-            content: None,
-            color: None,
-            size: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ecs::Resource)]
@@ -109,17 +88,9 @@ pub struct UiRenderShaderConfig {
     pub rect_shader_asset_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConsoleInputEditorState {
     pub text: String,
-}
-
-impl Default for ConsoleInputEditorState {
-    fn default() -> Self {
-        Self {
-            text: String::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

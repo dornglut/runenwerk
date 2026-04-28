@@ -7,19 +7,24 @@ fn read(path: &str) -> String {
 
 #[test]
 fn render_submit_consumes_prepared_world_resources_only() {
-    let submit_source = read("src/plugins/render/renderer/submit.rs");
+    let prepare_source = read("src/plugins/render/runtime/frame_prepare.rs");
+    let submit_source = read("src/plugins/render/runtime/frame_submit.rs");
 
     assert!(
-        submit_source.contains("PreparedWorldFeatureResource"),
-        "submit path must ingest world prepared contributions"
+        prepare_source.contains("PreparedWorldFeatureResource"),
+        "prepare path must ingest world prepared contributions"
     );
     assert!(
-        submit_source.contains("PreparedCaveFeatureResource"),
-        "submit path must ingest cave prepared contributions"
+        prepare_source.contains("PreparedCaveFeatureResource"),
+        "prepare path must ingest cave prepared contributions"
     );
     assert!(
-        submit_source.contains("PreparedDetailFeatureResource"),
-        "submit path must ingest detail prepared contributions"
+        prepare_source.contains("PreparedDetailFeatureResource"),
+        "prepare path must ingest detail prepared contributions"
+    );
+    assert!(
+        submit_source.contains("PreparedRenderFrameResource"),
+        "submit path must consume the prepared render frame"
     );
 
     for forbidden in [

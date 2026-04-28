@@ -396,6 +396,94 @@ fn collect_storage_usage(
     usage
 }
 
+fn is_buffer_like_resource(resources: &ResourceGraph, resource: &RenderResourceId) -> bool {
+    matches!(
+        resources
+            .resources
+            .iter()
+            .find(|descriptor| descriptor.id() == resource),
+        Some(
+            RenderResourceDescriptor::UniformBuffer(_)
+                | RenderResourceDescriptor::StorageBuffer(_)
+                | RenderResourceDescriptor::ImportedBuffer(_)
+        )
+    )
+}
+
+fn compile_target_plan(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledTargetPlan {
+    CompiledTargetPlan {
+        color_outputs: node
+            .writes
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+        depth_output: node
+            .depth_target
+            .as_ref()
+            .map(|resource| compile_resource_ref(resource, resources)),
+        reads: node
+            .reads
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+    }
+}
+
+fn compile_draw_buffer_plan(
+    node: &RenderPassNode,
+    resources: &ResourceGraph,
+) -> CompiledDrawBufferPlan {
+    CompiledDrawBufferPlan {
+        vertex_buffers: node
+            .vertex_buffers
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+        instance_buffers: node
+            .instance_buffers
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+        index_buffers: node
+            .index_buffers
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+        indirect_buffers: node
+            .indirect_buffers
+            .iter()
+            .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+    }
+}
+
+fn compile_resource_ref(
+    resource: &RenderResourceId,
+    resources: &ResourceGraph,
+) -> CompiledResourceRef {
+    match resources
+        .resources
+        .iter()
+        .find(|descriptor| descriptor.id() == resource)
+    {
+        Some(RenderResourceDescriptor::ImportedTexture(value)) => match value.semantic {
+            ImportedTextureSemantic::SurfaceColor => {
+                CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor)
+            }
+            ImportedTextureSemantic::SurfaceDepth => {
+                CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceDepth)
+            }
+            ImportedTextureSemantic::HistoryTexture | ImportedTextureSemantic::External => {
+                CompiledResourceRef::Imported(*resource)
+            }
+        },
+        Some(RenderResourceDescriptor::ImportedBuffer(_)) => {
+            CompiledResourceRef::Imported(*resource)
+        }
+        Some(_) | None => CompiledResourceRef::FlowOwned(*resource),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -529,93 +617,5 @@ mod tests {
                 (third, CompiledStorageAccess::ReadWrite),
             ]
         );
-    }
-}
-
-fn is_buffer_like_resource(resources: &ResourceGraph, resource: &RenderResourceId) -> bool {
-    matches!(
-        resources
-            .resources
-            .iter()
-            .find(|descriptor| descriptor.id() == resource),
-        Some(
-            RenderResourceDescriptor::UniformBuffer(_)
-                | RenderResourceDescriptor::StorageBuffer(_)
-                | RenderResourceDescriptor::ImportedBuffer(_)
-        )
-    )
-}
-
-fn compile_target_plan(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledTargetPlan {
-    CompiledTargetPlan {
-        color_outputs: node
-            .writes
-            .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
-            .collect(),
-        depth_output: node
-            .depth_target
-            .as_ref()
-            .map(|resource| compile_resource_ref(resource, resources)),
-        reads: node
-            .reads
-            .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
-            .collect(),
-    }
-}
-
-fn compile_draw_buffer_plan(
-    node: &RenderPassNode,
-    resources: &ResourceGraph,
-) -> CompiledDrawBufferPlan {
-    CompiledDrawBufferPlan {
-        vertex_buffers: node
-            .vertex_buffers
-            .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
-            .collect(),
-        instance_buffers: node
-            .instance_buffers
-            .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
-            .collect(),
-        index_buffers: node
-            .index_buffers
-            .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
-            .collect(),
-        indirect_buffers: node
-            .indirect_buffers
-            .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
-            .collect(),
-    }
-}
-
-fn compile_resource_ref(
-    resource: &RenderResourceId,
-    resources: &ResourceGraph,
-) -> CompiledResourceRef {
-    match resources
-        .resources
-        .iter()
-        .find(|descriptor| descriptor.id() == resource)
-    {
-        Some(RenderResourceDescriptor::ImportedTexture(value)) => match value.semantic {
-            ImportedTextureSemantic::SurfaceColor => {
-                CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor)
-            }
-            ImportedTextureSemantic::SurfaceDepth => {
-                CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceDepth)
-            }
-            ImportedTextureSemantic::HistoryTexture | ImportedTextureSemantic::External => {
-                CompiledResourceRef::Imported(*resource)
-            }
-        },
-        Some(RenderResourceDescriptor::ImportedBuffer(_)) => {
-            CompiledResourceRef::Imported(*resource)
-        }
-        Some(_) | None => CompiledResourceRef::FlowOwned(*resource),
     }
 }

@@ -88,7 +88,7 @@ fn build_default_editor_font_atlas() -> anyhow::Result<(MsdfFontAtlas, UiFontAtl
                 } else {
                     let mut data = vec![0_u8; (width * height) as usize];
                     positioned.draw(|x, y, value| {
-                        let index = (y as u32 * width + x as u32) as usize;
+                        let index = (y * width + x) as usize;
                         data[index] = (value.clamp(0.0, 1.0) * 255.0) as u8;
                     });
                     (width, height, data)
@@ -271,7 +271,7 @@ impl ViewportSurfaceBindingRegistryResource {
 mod tests {
     use super::*;
 
-    fn glyph_metrics<'a>(atlas: &'a MsdfFontAtlas, ch: char) -> &'a GlyphMetrics {
+    fn glyph_metrics(atlas: &MsdfFontAtlas, ch: char) -> &GlyphMetrics {
         atlas
             .glyphs
             .get(&ch)

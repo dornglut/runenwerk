@@ -872,10 +872,10 @@ fn next_shell_edit_value(
     component_type: ComponentTypeId,
     field: &crate::editor_panels::InspectorWidgetField,
 ) -> Option<InspectorEditValue> {
-    if is_local_transform_component(runtime, component_type) {
-        if let Some(stepper_value) = transform_stepper_value(field) {
-            return Some(stepper_value);
-        }
+    if is_local_transform_component(runtime, component_type)
+        && let Some(stepper_value) = transform_stepper_value(field)
+    {
+        return Some(stepper_value);
     }
 
     if let Some(draft) = &field.draft_value {

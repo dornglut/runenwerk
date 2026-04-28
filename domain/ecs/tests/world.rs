@@ -499,10 +499,8 @@ fn query_support_matrix_required_forms_work() {
     assert_eq!(opt_read, vec![Some(11), None, Some(32)]);
 
     let q_opt_mut = world.query_state::<Option<&mut B>, ()>();
-    for maybe_b in q_opt_mut.iter(&mut world) {
-        if let Some(b) = maybe_b {
-            b.0 += 10;
-        }
+    for b in q_opt_mut.iter(&mut world).flatten() {
+        b.0 += 10;
     }
 
     let q_mut_opt = world.query_state::<(&mut A, Option<&B>), ()>();

@@ -97,12 +97,12 @@ fn client_bootstrap_session_queues_join_handshake() {
     let mut app = App::headless();
     app.add_plugin(NetworkClientPlugin);
     let messages = {
-        let mut session = app
+        let session = app
             .world_mut()
             .resource_mut::<ClientSessionState>()
             .unwrap();
         begin_client_session(
-            &mut session,
+            session,
             ClientSessionTarget {
                 server_id: "srv-local".to_string(),
                 server_endpoint: "127.0.0.1:7000".to_string(),

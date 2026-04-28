@@ -52,6 +52,12 @@ pub struct RunenwerkEditorRuntime {
     scene_reality_version: u64,
 }
 
+impl Default for RunenwerkEditorRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RunenwerkEditorRuntime {
     pub fn new() -> Self {
         Self {
@@ -247,14 +253,15 @@ impl RunenwerkEditorRuntime {
     }
 
     pub(crate) fn capture_scene_snapshot(&self) -> SceneRuntimeSnapshot {
-        let mut snapshot = SceneRuntimeSnapshot::default();
-
-        snapshot.entities = self
-            .scene_realities
-            .authored
-            .entity_ids()
-            .filter_map(|entity| self.scene_realities.authored.entity_snapshot(entity))
-            .collect();
+        let mut snapshot = SceneRuntimeSnapshot {
+            entities: self
+                .scene_realities
+                .authored
+                .entity_ids()
+                .filter_map(|entity| self.scene_realities.authored.entity_snapshot(entity))
+                .collect(),
+            ..SceneRuntimeSnapshot::default()
+        };
 
         for entity in self.scene_realities.authored.entity_ids() {
             for component_type in self.scene_realities.identities.component_type_ids() {
@@ -352,11 +359,11 @@ impl RunenwerkEditorRuntime {
             let mut remaining = Vec::new();
 
             for entity in pending_entities {
-                if let Some(parent) = entity.parent {
-                    if !self.scene_realities.authored.contains(parent) {
-                        remaining.push(entity);
-                        continue;
-                    }
+                if let Some(parent) = entity.parent
+                    && !self.scene_realities.authored.contains(parent)
+                {
+                    remaining.push(entity);
+                    continue;
                 }
 
                 self.scene_runtime()
@@ -598,16 +605,16 @@ impl RunenwerkEditorRuntime {
         self.session_changes
             .push(editor_core::SessionChange::new(id, origin, kind.clone()));
 
-        if self.session_share_policy == editor_core::SessionSharePolicy::ObservationSafe {
-            if let Some(shared_kind) = map_session_change_to_share(&kind) {
-                let sequence = editor_core::SessionShareSequence(self.next_session_share_sequence);
-                self.next_session_share_sequence += 1;
-                self.session_share_outbox
-                    .enqueue(editor_core::SessionShareEnvelope::new(
-                        sequence,
-                        editor_core::SessionShareEntry::new(origin, shared_kind),
-                    ));
-            }
+        if self.session_share_policy == editor_core::SessionSharePolicy::ObservationSafe
+            && let Some(shared_kind) = map_session_change_to_share(&kind)
+        {
+            let sequence = editor_core::SessionShareSequence(self.next_session_share_sequence);
+            self.next_session_share_sequence += 1;
+            self.session_share_outbox
+                .enqueue(editor_core::SessionShareEnvelope::new(
+                    sequence,
+                    editor_core::SessionShareEntry::new(origin, shared_kind),
+                ));
         }
     }
 

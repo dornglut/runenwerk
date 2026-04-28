@@ -49,12 +49,12 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         parent: Option<EntityId>,
         display_name: &str,
     ) -> Result<EntityId, EditorMutationError> {
-        if let Some(parent) = parent {
-            if !self.document.contains(parent) {
-                return Err(EditorMutationError::runtime_rejected(
-                    "new parent entity is not registered",
-                ));
-            }
+        if let Some(parent) = parent
+            && !self.document.contains(parent)
+        {
+            return Err(EditorMutationError::runtime_rejected(
+                "new parent entity is not registered",
+            ));
         }
 
         let ecs_entity = self.world.spawn(EmptyEntityBundle);
@@ -67,12 +67,12 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
     }
 
     fn restore_entity(&mut self, snapshot: SceneEntitySnapshot) -> Result<(), EditorMutationError> {
-        if let Some(parent) = snapshot.parent {
-            if !self.document.contains(parent) {
-                return Err(EditorMutationError::runtime_rejected(
-                    "new parent entity is not registered",
-                ));
-            }
+        if let Some(parent) = snapshot.parent
+            && !self.document.contains(parent)
+        {
+            return Err(EditorMutationError::runtime_rejected(
+                "new parent entity is not registered",
+            ));
         }
 
         self.document.restore_entity(snapshot.clone())?;

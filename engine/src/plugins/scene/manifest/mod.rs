@@ -13,15 +13,11 @@ pub enum SceneLayerDescriptor {
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum FramePassKindDescriptor {
     Compute,
+    #[default]
     Render,
-}
-
-impl Default for FramePassKindDescriptor {
-    fn default() -> Self {
-        Self::Render
-    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]

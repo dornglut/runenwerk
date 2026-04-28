@@ -1,5 +1,11 @@
 use super::*;
 
+impl Default for Renderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Renderer {
     // Owner: Engine Renderer - UI Pipeline Setup and Encoding
     pub fn new() -> Self {
@@ -553,6 +559,7 @@ impl Renderer {
         Some((x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn encode_ui_pass(
         &self,
         device: &Device,

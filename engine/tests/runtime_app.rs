@@ -37,7 +37,7 @@ fn movement(mut query: Query<(&mut Position, &Velocity)>, mut frames: ResMut<Fra
         position.x += velocity.x;
         position.y += velocity.y;
     }
-    (*frames).0 += 1;
+    frames.0 += 1;
 }
 
 #[test]
@@ -75,8 +75,8 @@ fn capture_startup_resources(
     _input: Res<InputState>,
     mut snapshot: ResMut<StartupSnapshot>,
 ) {
-    (*snapshot).saw_headless_window = window.is_headless();
-    (*snapshot).saw_title = window.title.clone();
+    snapshot.saw_headless_window = window.is_headless();
+    snapshot.saw_title = window.title.clone();
 }
 
 #[test]
@@ -122,15 +122,15 @@ impl Plugin for OrderingPlugin {
 }
 
 fn ordered_before(mut log: ResMut<OrderLog>) {
-    (*log).0.push("before");
+    log.0.push("before");
 }
 
 fn ordered_root(mut log: ResMut<OrderLog>) {
-    (*log).0.push("root");
+    log.0.push("root");
 }
 
 fn ordered_after(mut log: ResMut<OrderLog>) {
-    (*log).0.push("after");
+    log.0.push("after");
 }
 
 #[test]
@@ -173,11 +173,11 @@ fn setup_demo_player(mut commands: Commands) {
 }
 
 fn inject_demo_input(mut input: ResMut<InputState>, mut frames: ResMut<DemoFrames>) {
-    if (*frames).0 == 0 {
+    if frames.0 == 0 {
         input.handle_keyboard_input(KeyCode::KeyD, ElementState::Pressed, None);
         input.handle_keyboard_input(KeyCode::Escape, ElementState::Pressed, None);
     }
-    (*frames).0 += 1;
+    frames.0 += 1;
 }
 
 fn update_demo_title(
@@ -236,19 +236,19 @@ impl Plugin for FixedTickPlugin {
 }
 
 fn log_pre_update(mut log: ResMut<FixedScheduleLog>) {
-    (*log).0.push("pre");
+    log.0.push("pre");
 }
 
 fn log_fixed_update(mut log: ResMut<FixedScheduleLog>) {
-    (*log).0.push("fixed");
+    log.0.push("fixed");
 }
 
 fn log_update(mut log: ResMut<FixedScheduleLog>) {
-    (*log).0.push("update");
+    log.0.push("update");
 }
 
 fn log_frame_end(mut log: ResMut<FixedScheduleLog>) {
-    (*log).0.push("frame_end");
+    log.0.push("frame_end");
 }
 
 #[test]
@@ -304,12 +304,12 @@ impl Plugin for ScriptedDeltaPlugin {
 }
 
 fn scripted_delta(mut time: ResMut<Time>, mut state: ResMut<ScriptedDeltaState>) {
-    (*time).delta_seconds = if (*state).next_frame == 0 { 0.0 } else { 0.35 };
-    (*state).next_frame += 1;
+    time.delta_seconds = if state.next_frame == 0 { 0.0 } else { 0.35 };
+    state.next_frame += 1;
 }
 
 fn count_fixed_update(mut state: ResMut<ScriptedDeltaState>) {
-    (*state).fixed_updates += 1;
+    state.fixed_updates += 1;
 }
 
 #[test]
@@ -349,11 +349,11 @@ impl Plugin for TickVisibilityPlugin {
 }
 
 fn force_large_delta(mut time: ResMut<Time>) {
-    (*time).delta_seconds = 0.05;
+    time.delta_seconds = 0.05;
 }
 
 fn observe_tick_during_fixed_update(tick: Res<SimulationTick>, mut log: ResMut<TickVisibilityLog>) {
-    (*log).0.push(tick.0);
+    log.0.push(tick.0);
 }
 
 #[test]
@@ -396,11 +396,11 @@ impl Plugin for SaturationPlugin {
 }
 
 fn force_saturating_delta(mut time: ResMut<Time>) {
-    (*time).delta_seconds = 0.25;
+    time.delta_seconds = 0.25;
 }
 
 fn count_saturation_fixed_step(mut count: ResMut<SaturationFixedStepCounter>) {
-    (*count).0 += 1;
+    count.0 += 1;
 }
 
 #[test]
@@ -449,31 +449,31 @@ impl Plugin for RuntimeLifecyclePlugin {
 }
 
 fn lifecycle_log_startup(mut log: ResMut<RuntimeLifecycleLog>) {
-    (*log).0.push("startup");
+    log.0.push("startup");
 }
 
 fn lifecycle_log_pre_update(mut log: ResMut<RuntimeLifecycleLog>) {
-    (*log).0.push("pre_update");
+    log.0.push("pre_update");
 }
 
 fn lifecycle_log_fixed_update(mut log: ResMut<RuntimeLifecycleLog>) {
-    (*log).0.push("fixed_update");
+    log.0.push("fixed_update");
 }
 
 fn lifecycle_log_update(mut log: ResMut<RuntimeLifecycleLog>) {
-    (*log).0.push("update");
+    log.0.push("update");
 }
 
 fn lifecycle_log_render_prepare(mut log: ResMut<RuntimeLifecycleLog>) {
-    (*log).0.push("render_prepare");
+    log.0.push("render_prepare");
 }
 
 fn lifecycle_log_render_submit(mut log: ResMut<RuntimeLifecycleLog>) {
-    (*log).0.push("render_submit");
+    log.0.push("render_submit");
 }
 
 fn lifecycle_log_frame_end(mut log: ResMut<RuntimeLifecycleLog>) {
-    (*log).0.push("frame_end");
+    log.0.push("frame_end");
 }
 
 #[test]
@@ -538,7 +538,7 @@ impl Plugin for ZeroDeltaPlugin {
 }
 
 fn force_zero_delta_for_finalization_check(mut time: ResMut<Time>) {
-    (*time).delta_seconds = 0.0;
+    time.delta_seconds = 0.0;
 }
 
 #[test]

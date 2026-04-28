@@ -149,18 +149,18 @@ impl FlowPipelineArtifactCache {
 
     pub fn retain_flows(&mut self, active_flow_ids: &[RenderFlowId]) {
         self.shader_modules
-            .retain(|key, _| active_flow_ids.iter().any(|id| *id == key.flow_id));
+            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.bind_group_layouts
-            .retain(|key, _| active_flow_ids.iter().any(|id| *id == key.flow_id));
+            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.pipeline_layouts
-            .retain(|key, _| active_flow_ids.iter().any(|id| *id == key.flow_id));
+            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.compute_pipelines
-            .retain(|key, _| active_flow_ids.iter().any(|id| *id == key.flow_id));
+            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.render_pipelines
-            .retain(|key, _| active_flow_ids.iter().any(|id| *id == key.flow_id));
+            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.samplers
-            .retain(|key, _| active_flow_ids.iter().any(|id| *id == key.flow_id));
+            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.bind_groups
-            .retain(|key, _| active_flow_ids.iter().any(|id| *id == key.pipeline.flow_id));
+            .retain(|key, _| active_flow_ids.contains(&key.pipeline.flow_id));
     }
 }

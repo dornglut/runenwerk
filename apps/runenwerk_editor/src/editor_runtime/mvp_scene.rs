@@ -9,17 +9,12 @@ use crate::editor_runtime::{RunenwerkEditorRuntime, execute_scene_intent};
 pub const LOCAL_TRANSFORM_COMPONENT_TYPE_ID: ComponentTypeId = ComponentTypeId(500);
 pub const EDITOR_PRIMITIVE_COMPONENT_TYPE_ID: ComponentTypeId = ComponentTypeId(501);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EditorPrimitiveKind {
+    #[default]
     Box,
     Sphere,
     Capsule,
-}
-
-impl Default for EditorPrimitiveKind {
-    fn default() -> Self {
-        Self::Box
-    }
 }
 
 impl EditorPrimitiveKind {

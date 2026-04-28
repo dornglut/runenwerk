@@ -69,11 +69,11 @@ fn apply_scene_entities_to_runtime(
         let mut progressed = false;
 
         for entity in pending {
-            if let Some(parent) = entity.parent {
-                if !restored.contains(&parent) {
-                    next_pending.push(entity);
-                    continue;
-                }
+            if let Some(parent) = entity.parent
+                && !restored.contains(&parent)
+            {
+                next_pending.push(entity);
+                continue;
             }
 
             runtime

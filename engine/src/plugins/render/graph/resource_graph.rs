@@ -42,7 +42,7 @@ impl ResourceGraph {
                 RenderResourceDescriptor::UniformBuffer(value)
                     if value.params_type_id == type_id =>
                 {
-                    Some(value.id.clone())
+                    Some(value.id)
                 }
                 _ => None,
             })

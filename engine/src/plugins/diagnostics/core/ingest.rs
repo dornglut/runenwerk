@@ -93,7 +93,7 @@ fn resolved_plan_snapshot(world: &ecs::World) -> ResolvedDiagnosticsPlan {
 
     world
         .resource::<DiagnosticsConfigResource>()
-        .map(|config| ResolvedDiagnosticsPlan::from_config(&config))
+        .map(ResolvedDiagnosticsPlan::from_config)
         .unwrap_or_default()
 }
 

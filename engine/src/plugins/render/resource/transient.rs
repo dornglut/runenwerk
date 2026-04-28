@@ -74,8 +74,8 @@ pub fn find_aliasable_transients(
                 || right.last_pass_index < left.first_pass_index;
             if disjoint {
                 candidates.push(TransientAliasCandidate {
-                    left: left.resource_id.clone(),
-                    right: right.resource_id.clone(),
+                    left: left.resource_id,
+                    right: right.resource_id,
                 });
             }
         }
@@ -113,7 +113,7 @@ pub fn build_transient_alias_assignments(
         };
 
         assignments.push(TransientAliasAssignment {
-            resource_id: window.resource_id.clone(),
+            resource_id: window.resource_id,
             slot_index,
         });
     }
@@ -129,7 +129,7 @@ pub fn build_transient_alias_slots(
         slots
             .entry(assignment.slot_index)
             .or_default()
-            .push(assignment.resource_id.clone());
+            .push(assignment.resource_id);
     }
 
     slots

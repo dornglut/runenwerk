@@ -13,6 +13,7 @@ use crate::{
 };
 
 // Owner: Grotto Engine Net - QUIC Runtime
+#[allow(clippy::too_many_arguments)]
 pub async fn run_client_runtime_task(
     transport: QuicTransport,
     bind_addr: SocketAddr,

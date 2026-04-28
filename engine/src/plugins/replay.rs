@@ -48,21 +48,11 @@ pub struct ReplayState {
     pub last_loaded_tick: Option<SimulationTick>,
 }
 
-#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct ReplayRecorderResource {
     pub recorder: Option<ReplayRecorder<SceneSimulationSnapshotV2, SceneReplayInputFrameV2>>,
     pub checkpoint_policy: CheckpointPolicy,
     pub storage_policy: ReplayStoragePolicy,
-}
-
-impl Default for ReplayRecorderResource {
-    fn default() -> Self {
-        Self {
-            recorder: None,
-            checkpoint_policy: CheckpointPolicy::default(),
-            storage_policy: ReplayStoragePolicy::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]

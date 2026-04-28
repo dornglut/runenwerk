@@ -433,7 +433,7 @@ where
 {
     let config = world
         .resource::<ServerSessionConfig>()
-        .map(|resource| resource.clone())
+        .cloned()
         .unwrap_or_default();
 
     if let Ok(session) = world.resource_mut::<ServerSessionState>()
@@ -499,10 +499,10 @@ where
                     tracing::warn!(?error, "failed to enqueue remote input into tick buffer");
                 }
             }
-            if lagged > 0 {
-                if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
-                    diagnostics.lagged = diagnostics.lagged.saturating_add(lagged);
-                }
+            if lagged > 0
+                && let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>()
+            {
+                diagnostics.lagged = diagnostics.lagged.saturating_add(lagged);
             }
         }
 
@@ -669,7 +669,7 @@ pub fn client_flush_system(
         }
     }
 
-    if let Some(handle) = world.resource::<NetworkRuntimeHandle>().ok() {
+    if let Ok(handle) = world.resource::<NetworkRuntimeHandle>() {
         let mut dropped = 0usize;
         for message in &messages {
             if handle
@@ -715,7 +715,7 @@ pub fn server_flush_system(
         }
     }
 
-    if let Some(handle) = world.resource::<NetworkRuntimeHandle>().ok() {
+    if let Ok(handle) = world.resource::<NetworkRuntimeHandle>() {
         let mut dropped = 0usize;
         for message in &messages {
             let command = match message {

@@ -33,32 +33,22 @@ pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(8);
 pub const DEFORMATION_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(9);
 pub const WIND_FIELDS_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(10);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FeatureContributionStatus {
+    #[default]
     Ready,
     Stale,
     Disabled,
     Missing,
 }
 
-impl Default for FeatureContributionStatus {
-    fn default() -> Self {
-        Self::Ready
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FeatureFallbackPolicy {
     ReuseLastGood,
     EmptyContribution,
+    #[default]
     SkipFeaturePasses,
     FailFrame,
-}
-
-impl Default for FeatureFallbackPolicy {
-    fn default() -> Self {
-        Self::SkipFeaturePasses
-    }
 }
 
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]

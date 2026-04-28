@@ -69,12 +69,12 @@ impl SceneDocumentState {
         display_name: impl Into<String>,
         parent: Option<EntityId>,
     ) -> Result<(), EditorMutationError> {
-        if let Some(parent) = parent {
-            if !self.contains(parent) {
-                return Err(EditorMutationError::runtime_rejected(
-                    "new parent entity is not registered",
-                ));
-            }
+        if let Some(parent) = parent
+            && !self.contains(parent)
+        {
+            return Err(EditorMutationError::runtime_rejected(
+                "new parent entity is not registered",
+            ));
         }
 
         self.entities.insert(

@@ -228,10 +228,12 @@ mod tests {
             atlas: Some(test_atlas_with_chars(&['A', '?', '…', '.'])),
         };
 
-        let mut style = TextStyle::default();
-        style.font_id = FontId(1);
-        style.font_size = 12.0;
-        style.overflow = TextOverflow::Ellipsis;
+        let style = TextStyle {
+            font_id: FontId(1),
+            font_size: 12.0,
+            overflow: TextOverflow::Ellipsis,
+            ..TextStyle::default()
+        };
 
         let run = AtlasTextLayouter
             .layout(
@@ -254,10 +256,12 @@ mod tests {
             atlas: Some(test_atlas_with_chars(&['A', '?', '.'])),
         };
 
-        let mut style = TextStyle::default();
-        style.font_id = FontId(1);
-        style.font_size = 12.0;
-        style.overflow = TextOverflow::Ellipsis;
+        let style = TextStyle {
+            font_id: FontId(1),
+            font_size: 12.0,
+            overflow: TextOverflow::Ellipsis,
+            ..TextStyle::default()
+        };
 
         let run = AtlasTextLayouter
             .layout(

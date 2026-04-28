@@ -205,6 +205,7 @@ fn workload_c4_broad_double_mut(c: &mut Criterion) {
     group.finish();
 }
 
+#[allow(clippy::type_complexity)]
 fn w2_move(mut query: Query<(&mut Position, &Velocity), (With<Simulated>, Without<Disabled>)>) {
     for (position, velocity) in query.iter() {
         position.x += velocity.x;
@@ -226,7 +227,7 @@ fn w2_scan_changed(
     for _ in query.iter() {
         seen = seen.saturating_add(1);
     }
-    (*stats).0 = (*stats).0.wrapping_add(seen);
+    stats.0 = stats.0.wrapping_add(seen);
 }
 
 fn w2_scan_added(
@@ -237,7 +238,7 @@ fn w2_scan_added(
     for _ in query.iter() {
         seen = seen.saturating_add(1);
     }
-    (*stats).0 = (*stats).0.wrapping_add(seen);
+    stats.0 = stats.0.wrapping_add(seen);
 }
 
 fn build_runtime_for_w2(entity_count: usize) -> (World, Runtime) {
@@ -363,7 +364,7 @@ fn w4_read_broadcast(
         .iter()
         .fold(0_u64, |acc, event| acc.wrapping_add(event.0 as u64));
     let entities_seen = query.iter().count() as u64;
-    (*stats).0 = (*stats)
+    stats.0 = stats
         .0
         .wrapping_add(events_seen)
         .wrapping_add(entities_seen);
@@ -403,31 +404,31 @@ fn workload_w4(c: &mut Criterion) {
 }
 
 fn w5_write_r0(mut r0: ResMut<R0>) {
-    (*r0).0 = (*r0).0.wrapping_add(1);
+    r0.0 = r0.0.wrapping_add(1);
 }
 
 fn w5_write_r1(mut r1: ResMut<R1>) {
-    (*r1).0 = (*r1).0.wrapping_add(1);
+    r1.0 = r1.0.wrapping_add(1);
 }
 
 fn w5_write_r2(mut r2: ResMut<R2>) {
-    (*r2).0 = (*r2).0.wrapping_add(1);
+    r2.0 = r2.0.wrapping_add(1);
 }
 
 fn w5_write_r3(mut r3: ResMut<R3>) {
-    (*r3).0 = (*r3).0.wrapping_add(1);
+    r3.0 = r3.0.wrapping_add(1);
 }
 
 fn w5_read_mix(r0: Res<R0>, r1: Res<R1>, r2: Res<R2>, mut sink: ResMut<Sink>) {
-    (*sink).0 = (*sink)
+    sink.0 = sink
         .0
-        .wrapping_add((*r0).0)
-        .wrapping_add((*r1).0)
-        .wrapping_add((*r2).0);
+        .wrapping_add(r0.0)
+        .wrapping_add(r1.0)
+        .wrapping_add(r2.0);
 }
 
 fn w5_read_mix_alt(r1: Res<R1>, r3: Res<R3>, mut sink: ResMut<Sink>) {
-    (*sink).0 = (*sink).0.wrapping_add((*r1).0).wrapping_add((*r3).0);
+    sink.0 = sink.0.wrapping_add(r1.0).wrapping_add(r3.0);
 }
 
 fn register_w5_systems(runtime: &mut Runtime, world: &mut World, repeats: usize) {

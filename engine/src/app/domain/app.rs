@@ -154,8 +154,8 @@ impl App {
         F: FnOnce(&mut RenderDebugControlResource),
     {
         self.init_resource::<RenderDebugControlResource>();
-        if let Ok(mut control) = self.world.resource_mut::<RenderDebugControlResource>() {
-            update(&mut control);
+        if let Ok(control) = self.world.resource_mut::<RenderDebugControlResource>() {
+            update(control);
         }
         self
     }
@@ -165,8 +165,8 @@ impl App {
         F: FnOnce(&mut RenderDebugConfigResource),
     {
         self.init_resource::<RenderDebugConfigResource>();
-        if let Ok(mut config) = self.world.resource_mut::<RenderDebugConfigResource>() {
-            update(&mut config);
+        if let Ok(config) = self.world.resource_mut::<RenderDebugConfigResource>() {
+            update(config);
         }
         self
     }

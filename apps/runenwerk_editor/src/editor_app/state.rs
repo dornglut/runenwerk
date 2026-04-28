@@ -15,6 +15,12 @@ pub struct RunenwerkEditorApp {
     pub(crate) viewport_details_visible: bool,
 }
 
+impl Default for RunenwerkEditorApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RunenwerkEditorApp {
     pub fn new() -> Self {
         Self {
