@@ -34,7 +34,7 @@ Domain diagnostic codes          -> owning domain
 Ratification vocabulary          -> foundation/ratification
 Ratification reports             -> foundation/ratification plus owning domain issue codes
 Domain validation rules          -> owning domain ratifier
-Command vocabulary               -> owning domain or future foundation command crate
+Command vocabulary               -> foundation/commands
 Concrete command enums           -> owning domain
 Schema vocabulary                -> foundation/schema or owning domain
 Concrete schemas                 -> owning domain

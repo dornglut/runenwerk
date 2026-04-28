@@ -61,6 +61,53 @@ future UI-surface command-like operations
 
 Each owner should keep its concrete command enum and execution path. The foundation crate only supplies shared descriptor/proposal vocabulary.
 
+## Current implementation status
+
+Phase 0 and Phase 1 are complete.
+
+Implemented Phase 1 crate:
+
+```text
+foundation/commands
+```
+
+Implemented Phase 1 vocabulary:
+
+```text
+contract ids
+contract versions
+contract refs
+schema refs
+descriptors
+proposals
+target/effect/reversibility hints
+metadata
+issues
+prelude
+serde feature
+no_std/alloc/std features
+tests
+```
+
+Next phase:
+
+```text
+Phase 2: optional diagnostics bridge
+```
+
+Not yet implemented:
+
+```text
+diagnostics bridge
+consumers
+registries
+proposal-to-domain-intent mapping
+top-level proposal target paths
+proposal-carried parameter schema claims
+ratification dependency
+command execution
+```
+
 ## Current repo evidence
 
 ### Architecture doctrine
@@ -1261,6 +1308,8 @@ CommandProposal carrying permission authority
 
 ### Phase 0: Design accepted
 
+Status: complete.
+
 Create and review:
 
 ```text
@@ -1270,6 +1319,8 @@ docs-site/src/content/docs/design/active/foundation-commands.md
 No code.
 
 ### Phase 1: Core command descriptor/proposal vocabulary
+
+Status: complete.
 
 Implement `foundation/commands` with:
 
@@ -1302,6 +1353,8 @@ Do not add top-level proposal target paths.
 Do not add proposal-carried parameter schema claims.
 
 ### Phase 2: Optional diagnostics bridge
+
+Status: next.
 
 Add optional diagnostics projection for command descriptor/proposal issues.
 
@@ -1468,9 +1521,11 @@ python3 tools/docs/validate_docs.py
 
 ## Final recommendation
 
-Create `docs-site/src/content/docs/design/active/foundation-commands.md` with this design.
+Keep `docs-site/src/content/docs/design/active/foundation-commands.md` as the active phase roadmap for `foundation/commands`.
 
-Proceed to implementation only after review.
+Phase 0 and Phase 1 are complete.
+
+Proceed to Phase 2 only after reviewing the Phase 1 implementation and confirming a diagnostics bridge is still useful.
 
 The clean Phase 1 target is:
 

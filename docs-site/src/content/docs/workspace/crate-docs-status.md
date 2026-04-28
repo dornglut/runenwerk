@@ -24,6 +24,11 @@ Status labels:
 | Crate | Path | Status | Primary docs |
 | --- | --- | --- | --- |
 | `id` | `foundation/id` | current | `foundation/id/README.md` |
+| `id_macros` | `foundation/id_macros` | missing | none |
+| `diagnostics` | `foundation/diagnostics` | thin | `foundation/diagnostics/foundation_diagnostics_implementation_roadmap.md` |
+| `ratification` | `foundation/ratification` | thin | [`../design/active/foundation-ratification.md`](../design/active/foundation-ratification.md) |
+| `schema` | `foundation/schema` | thin | [`../design/active/foundation-schema.md`](../design/active/foundation-schema.md) |
+| `commands` | `foundation/commands` | thin | [`../design/active/foundation-commands.md`](../design/active/foundation-commands.md) |
 
 ## Domain
 
@@ -31,7 +36,6 @@ Status labels:
 | --- | --- | --- | --- |
 | `ecs` | `domain/ecs` | current | [`../domain/ecs/README.md`](../domain/ecs/README.md) |
 | `ecs_macros` | `domain/ecs_macros` | thin | [`../domain/ecs-macros/README.md`](../domain/ecs-macros/README.md) |
-| `id_macros` | `domain/id_macros` | missing | none |
 | `geometry` | `domain/geometry` | current | [`../domain/geometry/README.md`](../domain/geometry/README.md) |
 | `spatial` | `domain/spatial` | thin | [`../domain/spatial/README.md`](../domain/spatial/README.md) |
 | `spatial_index` | `domain/spatial_index` | thin | [`../domain/spatial-index/README.md`](../domain/spatial-index/README.md) |

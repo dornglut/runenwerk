@@ -42,11 +42,6 @@ foundation/id_macros
 foundation/diagnostics
 foundation/ratification
 foundation/schema
-```
-
-Next:
-
-```text
 foundation/commands
 ```
 
@@ -110,18 +105,26 @@ Phase 1 core vocabulary implemented
 Phase 2 optional diagnostics bridge implemented
 Phase 3 first low-risk consumer implemented
 Phase 4 scene LocalTransform descriptor publication implemented
-Phase 5 foundation/commands design preparation is next
+Phase 5 foundation/commands design preparation completed
 ```
 
 It still must not own runtime behavior, command execution, editor policy, ECS reflection, registries, domain validation, AI behavior, or generic `SchemaValue`-against-`SchemaShape` validation.
 
 ### `foundation/commands`
 
-Owns command descriptor, proposal, and outcome vocabulary.
+Owns command descriptor and inert proposal vocabulary.
 
-It may define how commands are described, discovered, proposed, and reported.
+It defines how command contracts are described and how portable command proposals are represented.
 
 It must not own concrete command enums, command executors, editor command buses, global command registries, undo/redo engines, AI runners, or domain mutation logic.
+
+Current status:
+
+```text
+Phase 0 design accepted
+Phase 1 core descriptor/proposal vocabulary implemented
+Phase 2 optional diagnostics bridge is next
+```
 
 ## Relationship Between Core Vocabulary Crates
 
@@ -253,24 +256,20 @@ Phase 3: editor_inspector path/value interoperability helpers
 Phase 4: scene LocalTransform descriptor publication
 ```
 
-Next:
-
-```text
-Phase 5: prepare foundation/commands design
-```
-
 Schema describes reusable shapes and value contracts. It must not become a serialization framework, ECS reflection system, editor inspector engine, runtime object model, command executor, registry, AI path, or domain validator.
 
 ### Phase 5: Design `foundation/commands`
 
-Design command vocabulary only after schema Phase 1 through Phase 4 have proven stable and the owning schema design explicitly allows moving on.
+Status: complete.
 
-Command descriptors will likely depend conceptually on schema and ratification:
+The accepted command design lives at `docs-site/src/content/docs/design/active/foundation-commands.md`, and Phase 1 is implemented at `foundation/commands`.
 
 ```text
 CommandDescriptor uses schema for parameters.
-CommandOutcome uses ratification and diagnostics for results.
+CommandProposal carries SchemaValue parameters.
 ```
+
+Do not add command execution, global registries, proposal-to-domain adapters, diagnostics projection, ratification dependencies, provenance, permission, transaction, or patch semantics in Phase 1.
 
 ### Phase 6: Re-evaluate Later Candidates
 

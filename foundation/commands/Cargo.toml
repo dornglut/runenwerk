@@ -1,0 +1,18 @@
+[package]
+name = "commands"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["std"]
+std = ["alloc", "schema/std"]
+alloc = ["schema/alloc"]
+serde = ["dep:serde", "alloc", "schema/serde"]
+
+[dependencies]
+schema = { path = "../schema", default-features = false }
+serde = { version = "1", features = ["alloc", "derive"], optional = true, default-features = false }
+
+[dev-dependencies]
+serde_json = "1"

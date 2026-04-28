@@ -75,10 +75,10 @@ Phase 1: complete - crate skeleton and core vocabulary
 Phase 2: complete - optional diagnostics bridge for schema-definition issues
 Phase 3: complete - editor_inspector path/value interoperability helpers
 Phase 4: complete - scene LocalTransform descriptor publication
-Phase 5: next - prepare foundation/commands design
+Phase 5: complete - foundation/commands design accepted and Phase 1 vocabulary implemented separately
 ```
 
-Phase 5 must not add command execution, global registries, broad schema catalogs, editor inspector rewrites, reflection-driven mutation, schema macros, or generic `SchemaValue`-against-`SchemaShape` validation.
+The separate `foundation/commands` crate now owns command descriptor/proposal vocabulary. Schema still must not add command execution, global registries, broad schema catalogs, editor inspector rewrites, reflection-driven mutation, schema macros, or generic `SchemaValue`-against-`SchemaShape` validation.
 
 ## Current repo evidence
 
@@ -609,7 +609,7 @@ A later optional integration is allowed only if real duplication appears in mult
 
 ## Relationship to commands
 
-Future `foundation/commands` should use schema vocabulary for command parameter and result description.
+`foundation/commands` uses schema vocabulary for command parameter and result description.
 
 Expected relationship:
 
@@ -619,22 +619,19 @@ CommandDescriptor
   display_name
   parameter_schema: SchemaId + SchemaVersion
   result_schema: Option<SchemaId + SchemaVersion>
-  outcome vocabulary
 ```
 
-Future command descriptors should primarily reference `SchemaId` plus `SchemaVersion`. Inline `SchemaDescriptor` usage should be limited to tests, generated documentation, explicitly local/private descriptors, or cases justified by the future `foundation/commands` design.
+Command descriptors should primarily reference `SchemaId` plus `SchemaVersion`. Inline `SchemaDescriptor` usage should be limited to tests, generated documentation, explicitly local/private descriptors, or cases justified by the `foundation/commands` design.
 
 Command proposals may carry:
 
 ```text
-command id
-schema id/version for parameters
+command contract id/version
 parameter values as SchemaValue
-optional target path as SchemaPath
 origin/provenance handled elsewhere if designed
 ```
 
-But `foundation/schema` must not define command descriptors, command proposal types, command outcomes, or command execution APIs. That belongs to future `foundation/commands` or owning domains until that crate exists.
+But `foundation/schema` must not define command descriptors, command proposal types, command outcomes, or command execution APIs. Shared descriptor/proposal vocabulary belongs to `foundation/commands`; concrete command meaning remains owned by domains.
 
 Concrete command enums remain domain-owned:
 
@@ -1439,11 +1436,9 @@ The owning domain publishes the descriptor. Foundation does not register it glob
 
 ### Phase 5: Prepare `foundation/commands` design
 
-Status: next.
+Status: complete.
 
-Only after Phase 1-4 prove stable, design `foundation/commands`.
-
-The commands design can then reference `SchemaId`, `SchemaDescriptor`, `SchemaPath`, and `SchemaValue`.
+The accepted commands design references `SchemaId`, `SchemaVersion`, and `SchemaValue`. Phase 1 of the separate commands crate intentionally does not add a top-level proposal `SchemaPath`; target identity belongs in schema-described parameters unless a future consumer proves otherwise.
 
 ## Testing strategy
 
@@ -1574,7 +1569,7 @@ Deferred questions:
 4. Should schema include generic structural validation of `SchemaValue` against `SchemaShape`?
    - Defer. Phase 1 through Phase 4 did not include it. It can be reconsidered later only if its API, naming, and documentation cannot be mistaken for domain ratification, command acceptance, or editor governance.
 5. Should `foundation/commands` depend directly on `foundation/schema`?
-   - Ready to evaluate during Phase 5 design. Phase 1 through Phase 4 are now implemented and validated.
+   - Yes for Phase 1 of the separate commands crate. It depends on schema for schema references and proposal parameter values.
 6. Should schema metadata include provenance?
    - Defer to a future provenance design if repeated cross-domain pressure appears.
 
@@ -1582,9 +1577,9 @@ Deferred questions:
 
 Keep `docs-site/src/content/docs/design/active/foundation-schema.md` as the active phase roadmap for `foundation/schema`.
 
-Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 are complete.
+Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 are complete.
 
-The next implementation step is Phase 5: prepare the `foundation/commands` design. Do not implement command descriptors or execution until that design is accepted. Do not add registries, broad schema catalogs, editor inspector rewrites, reflection-driven mutation, schema macros, or generic `SchemaValue`-against-`SchemaShape` validation.
+The next schema-specific step is maintenance only. Command descriptor/proposal vocabulary now lives in `foundation/commands`; do not add command execution, registries, broad schema catalogs, editor inspector rewrites, reflection-driven mutation, schema macros, or generic `SchemaValue`-against-`SchemaShape` validation to `foundation/schema`.
 
 Do not include runtime behavior, command execution, editor inspector policy, ECS reflection, global registries, domain validation, AI behavior, or persistence backends.
 
@@ -1595,14 +1590,14 @@ foundation/schema = portable shape vocabulary
 optional diagnostics projection for schema-definition issues
 one narrow editor_inspector path/value interop consumer
 one domain-owned scene.local_transform descriptor publication
-foundation/commands design preparation next
+foundation/commands design accepted; Phase 1 vocabulary implemented separately
 ```
 
 The long-term shape remains:
 
 ```text
 foundation/schema describes typed shape
-foundation/commands later describes requestable mutations
+foundation/commands describes requestable mutation contracts and inert proposals
 owning domains publish concrete descriptors and execute commands
 owning ratifiers decide acceptance
 diagnostics explain observations
