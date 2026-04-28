@@ -25,6 +25,12 @@ impl InspectorPath {
         Self { segments }
     }
 
+    pub fn child_index(&self, index: usize) -> Self {
+        let mut segments = self.segments.clone();
+        segments.push(InspectorPathSegment::Index(index));
+        Self { segments }
+    }
+
     pub fn segments(&self) -> &[InspectorPathSegment] {
         &self.segments
     }

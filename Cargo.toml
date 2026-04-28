@@ -35,6 +35,7 @@ members = [
     "foundation/id_macros",
     "foundation/diagnostics",
     "foundation/ratification",
+    "foundation/schema",
 
     "engine",
     "engine_render_macros",
@@ -74,3 +75,4 @@ editor_inspector = { path = "domain/editor/editor_inspector" }
 editor_persistence = { path = "domain/editor/editor_persistence" }
 
 ecs = { path = "domain/ecs" }
+schema = { path = "foundation/schema" }

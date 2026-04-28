@@ -41,12 +41,12 @@ foundation/id
 foundation/id_macros
 foundation/diagnostics
 foundation/ratification
+foundation/schema
 ```
 
 Next:
 
 ```text
-foundation/schema
 foundation/commands
 ```
 
@@ -101,6 +101,18 @@ Owns schema and descriptor vocabulary for describing data shapes.
 Schema describes values, fields, parameters, component surfaces, command parameters, asset structures, and tool-facing descriptors.
 
 It must not own concrete schemas. Concrete schemas are published by the owning domain.
+
+Current status:
+
+```text
+Phase 0 design accepted
+Phase 1 core vocabulary implemented
+Phase 2 optional diagnostics bridge implemented
+Phase 3 first low-risk consumer implemented
+Phase 4 descriptor publication for one domain shape is next
+```
+
+It still must not own runtime behavior, command execution, editor policy, ECS reflection, registries, domain validation, AI behavior, or generic `SchemaValue`-against-`SchemaShape` validation.
 
 ### `foundation/commands`
 
@@ -161,7 +173,9 @@ The editor may orchestrate command routing, but it must not own every command fo
 
 ### Phase 1: Stabilize Current Foundation Crates
 
-Keep the existing foundation crates focused:
+Status: complete.
+
+The initial foundation crates were kept focused:
 
 ```text
 foundation/id
@@ -189,6 +203,8 @@ The remaining `editor_persistence` consumer should be handled when normalized sc
 Do not start by rewriting every validation error in the workspace.
 
 ### Phase 3: Diagnostics Completion Gate
+
+Status: complete.
 
 Before schema or command vocabulary work starts, `foundation/diagnostics` and `foundation/ratification` must be warning-free under their relevant feature sets.
 
@@ -222,15 +238,30 @@ wire diagnostics into tracing/logging
 create a global diagnostic registry
 ```
 
-### Phase 4: Design `foundation/schema`
+### Phase 4: Implement `foundation/schema`
 
-Design schema after ratification vocabulary is stable.
+Status: in progress, with Phase 0 through Phase 3 complete.
 
-Schema should describe reusable shapes and value contracts. It should not become a serialization framework, ECS reflection system, editor inspector engine, or runtime object model.
+Completed:
+
+```text
+Phase 0: accepted design
+Phase 1: crate skeleton and core vocabulary
+Phase 2: optional diagnostics bridge for schema-definition issues
+Phase 3: editor_inspector path/value interoperability helpers
+```
+
+Next:
+
+```text
+Phase 4: descriptor publication for one domain shape
+```
+
+Schema describes reusable shapes and value contracts. It must not become a serialization framework, ECS reflection system, editor inspector engine, runtime object model, command executor, registry, AI path, or domain validator.
 
 ### Phase 5: Design `foundation/commands`
 
-Design command vocabulary after schema and ratification are clear enough.
+Design command vocabulary only after schema Phase 1 through Phase 4 have proven stable and the owning schema design explicitly allows moving on.
 
 Command descriptors will likely depend conceptually on schema and ratification:
 

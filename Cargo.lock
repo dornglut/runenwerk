@@ -769,6 +769,7 @@ version = "0.1.0"
 dependencies = [
  "ecs",
  "editor_core",
+ "schema",
  "ui_text",
  "ui_theme",
 ]
@@ -2869,6 +2870,15 @@ dependencies = [
  "anyhow",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "schema"
+version = "0.1.0"
+dependencies = [
+ "diagnostics",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

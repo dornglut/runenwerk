@@ -36,7 +36,7 @@ Ratification reports             -> foundation/ratification plus owning domain i
 Domain validation rules          -> owning domain ratifier
 Command vocabulary               -> owning domain or future foundation command crate
 Concrete command enums           -> owning domain
-Schema vocabulary                -> owning domain or future foundation schema crate
+Schema vocabulary                -> foundation/schema or owning domain
 Concrete schemas                 -> owning domain
 Editor workspace concepts        -> domain/editor/editor_shell
 UI surface mounting concepts     -> domain/ui/ui_surface
@@ -59,6 +59,8 @@ AI integrations                  -> apps/tools/adapters
 ## Patch Expectations
 
 Significant patches should state changed files, reason, affected domains, expected invariant impact, tests to run, and documentation impact.
+
+After completing a phased implementation, run the phase completion drift-check routine before starting the next phase.
 
 ## Validation
 

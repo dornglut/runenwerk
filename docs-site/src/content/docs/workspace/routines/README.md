@@ -20,6 +20,7 @@ Use routines when a task needs repeated inspection, patching, validation, and re
 - [Commit Splitting Routine](./commit-splitting-routine.md)
 - [Crate Implementation Routine](./crate-implementation-routine.md)
 - [Documentation Refactor Routine](./docs-refactor-routine.md)
+- [Phase Completion Drift Check Routine](./phase-completion-drift-check-routine.md)
 - [Public API Review Routine](./public-api-review-routine.md)
 
 ## Routine Rules

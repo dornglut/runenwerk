@@ -25,6 +25,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `id_macros` | `foundation/id_macros` | foundation | Attribute macro support for typed ID wrappers. | evolving |
 | `diagnostics` | `foundation/diagnostics` | foundation | Structured diagnostic reporting vocabulary. | evolving |
 | `ratification` | `foundation/ratification` | foundation | Shared ratification report, issue, status, ratifier, and diagnostics-bridge vocabulary. | evolving |
+| `schema` | `foundation/schema` | foundation | Portable schema identity, version, path, value, shape, field, constraint, metadata, and descriptor vocabulary. | evolving |
 | `geometry` | `domain/geometry` | domain | Explicit geometric primitives and geometric queries. | evolving |
 | `spatial` | `domain/spatial` | domain | World/grid/chunk/clipmap/ring spatial coordinate contracts. | evolving |
 | `spatial_index` | `domain/spatial_index` | domain | Spatial index traits and spatial hash implementation. | evolving |
@@ -45,7 +46,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ui_runtime` | `domain/ui/ui_runtime` | domain | Retained UI runtime orchestration, input dispatch, layout, frame output, and runtime state. | evolving |
 | `ui_widgets` | `domain/ui/ui_widgets` | domain | Widget constructors over `ui_tree` contracts. | evolving |
 | `editor_core` | `domain/editor/editor_core` | domain | Editor command, capability, transaction, ratification, migration, selection, session, sharing, and workflow contracts. | evolving |
-| `editor_inspector` | `domain/editor/editor_inspector` | domain | Inspector model, editing, target, resolution, bridge, session, and validation contracts. | evolving |
+| `editor_inspector` | `domain/editor/editor_inspector` | domain | Inspector model, editing, target, resolution, bridge, schema interop, session, and validation contracts. | evolving |
 | `editor_scene` | `domain/editor/editor_scene` | domain | Editor scene model, commands, command bridge, and scene command contracts. | evolving |
 | `editor_viewport` | `domain/editor/editor_viewport` | domain | Editor viewport camera, expression, hit, overlay, snap, and viewport contracts. | evolving |
 | `editor_shell` | `domain/editor/editor_shell` | domain | Editor shell composition, workspace identity, observation, expression, command routing, and view models. | evolving |

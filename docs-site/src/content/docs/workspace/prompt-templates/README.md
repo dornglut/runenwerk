@@ -24,6 +24,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - [Crate Design](./crate-design.md)
 - [Documentation Refactor](./docs-refactor.md)
 - [Implementation Batch](./implementation-batch.md)
+- [Phase Completion Drift Check](./phase-completion-drift-check.md)
 
 ## Rules
 

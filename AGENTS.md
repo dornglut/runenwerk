@@ -86,6 +86,8 @@ For bounded repository workflows, follow `docs-site/src/content/docs/workspace/r
 
 For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
 
+After completing any phased implementation, run the phase completion drift-check routine before starting the next phase.
+
 For documentation moves, renames, pruning, or restructuring, follow `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md`.
 
 For documentation-only validation, run:
