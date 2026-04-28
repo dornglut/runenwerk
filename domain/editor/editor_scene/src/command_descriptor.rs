@@ -74,18 +74,16 @@ fn edit_component_field_parameters_shape() -> SchemaShape {
         editor_id_field("component_type", "ComponentTypeId")
             .with_display_name("Component Type")
             .with_description("Editor component type id for the component being edited."),
-        required_field(
-            "path",
-            SchemaShape::opaque("InspectorPath").expect("static opaque kind is valid"),
-        )
-        .with_display_name("Inspector Path")
-        .with_description("Inspector field path within the component."),
-        required_field(
-            "value",
-            SchemaShape::opaque("InspectorEditValue").expect("static opaque kind is valid"),
-        )
-        .with_display_name("Inspector Edit Value")
-        .with_description("Portable inspector edit value to write at the path."),
+        required_field("path", SchemaShape::list(path_segment_shape()))
+            .with_display_name("Inspector Path")
+            .with_description(
+                "Ordered inspector path segments. Each segment uses either field or index.",
+            ),
+        required_field("value", inspector_edit_value_shape())
+            .with_display_name("Inspector Edit Value")
+            .with_description(
+                "Inspector edit value object with exactly one supported value field.",
+            ),
     ])
     .expect("static field names are unique")
 }
@@ -103,6 +101,36 @@ fn editor_id_field(name: &'static str, rust_type: &'static str) -> SchemaField {
                 .expect("static metadata key is valid"),
         )
         .expect("static metadata key is unique")
+}
+
+fn path_segment_shape() -> SchemaShape {
+    SchemaShape::object([
+        SchemaField::new("field", SchemaShape::string())
+            .expect("static field name is valid")
+            .with_description("Field-name segment when present."),
+        SchemaField::new("index", SchemaShape::integer())
+            .expect("static field name is valid")
+            .with_description("Index segment when present."),
+    ])
+    .expect("static field names are unique")
+}
+
+fn inspector_edit_value_shape() -> SchemaShape {
+    SchemaShape::object([
+        SchemaField::new("bool", SchemaShape::bool())
+            .expect("static field name is valid")
+            .with_description("Boolean edit value when present."),
+        SchemaField::new("integer", SchemaShape::integer())
+            .expect("static field name is valid")
+            .with_description("Integer edit value when present."),
+        SchemaField::new("float", SchemaShape::float())
+            .expect("static field name is valid")
+            .with_description("Float edit value when present."),
+        SchemaField::new("text", SchemaShape::string())
+            .expect("static field name is valid")
+            .with_description("Text edit value when present."),
+    ])
+    .expect("static field names are unique")
 }
 
 #[cfg(test)]

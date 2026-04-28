@@ -133,6 +133,19 @@ mod tests {
     }
 
     #[test]
+    fn schema_value_accessors_preserve_scalar_and_list_kinds() {
+        let bool_value = SchemaValue::bool(true);
+        let float_value = SchemaValue::float(1.5).unwrap();
+        let string_value = SchemaValue::string("text");
+        let list_value = SchemaValue::list([SchemaValue::integer(1), SchemaValue::integer(2)]);
+
+        assert_eq!(bool_value.as_bool(), Some(true));
+        assert_eq!(float_value.as_float(), Some(1.5));
+        assert_eq!(string_value.as_string(), Some("text"));
+        assert_eq!(list_value.as_list().unwrap()[1].as_integer(), Some(2));
+    }
+
+    #[test]
     fn schema_value_object_rejects_duplicate_keys() {
         let result = SchemaValue::object([
             SchemaValueObjectField::new("name", SchemaValue::string("A")).unwrap(),

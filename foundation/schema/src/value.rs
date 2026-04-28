@@ -150,6 +150,13 @@ impl SchemaValue {
         }
     }
 
+    pub fn as_bool(&self) -> Option<bool> {
+        match &self.kind {
+            SchemaValueKind::Bool(value) => Some(*value),
+            _ => None,
+        }
+    }
+
     pub fn as_integer(&self) -> Option<i64> {
         match &self.kind {
             SchemaValueKind::Integer(value) => Some(*value),
@@ -160,6 +167,27 @@ impl SchemaValue {
     pub fn as_unsigned_integer(&self) -> Option<u64> {
         match &self.kind {
             SchemaValueKind::UnsignedInteger(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match &self.kind {
+            SchemaValueKind::Float(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match &self.kind {
+            SchemaValueKind::String(value) => Some(value.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_list(&self) -> Option<&[SchemaValue]> {
+        match &self.kind {
+            SchemaValueKind::List(values) => Some(values.as_slice()),
             _ => None,
         }
     }

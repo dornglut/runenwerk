@@ -63,7 +63,7 @@ Each owner should keep its concrete command enum and execution path. The foundat
 
 ## Current implementation status
 
-Phase 0, Phase 1, Phase 2, and Phase 3 are complete.
+Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 are complete.
 
 Implemented Phase 1 crate:
 
@@ -96,17 +96,22 @@ Implemented Phase 3 descriptor:
 domain/editor/editor_scene publishes editor.scene.edit_component_field
 ```
 
+Implemented Phase 4 adapter:
+
+```text
+CommandProposal -> editor_scene::SceneCommandIntent::EditComponentField
+```
+
 Next phase:
 
 ```text
-Phase 4: one explicit proposal-to-domain-intent adapter
+Phase 5: ratification/diagnostics integration evaluation
 ```
 
 Not yet implemented:
 
 ```text
 registries
-proposal-to-domain-intent mapping
 top-level proposal target paths
 proposal-carried parameter schema claims
 ratification dependency
@@ -1383,6 +1388,8 @@ Do not map proposals yet.
 
 ### Phase 4: One explicit proposal-to-domain-intent adapter
 
+Status: complete.
+
 Add a narrow adapter in the owning domain or app boundary for one command descriptor.
 
 Recommended candidate after re-inspection:
@@ -1528,9 +1535,9 @@ python3 tools/docs/validate_docs.py
 
 Keep `docs-site/src/content/docs/design/active/foundation-commands.md` as the active phase roadmap for `foundation/commands`.
 
-Phase 0, Phase 1, Phase 2, and Phase 3 are complete.
+Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 are complete.
 
-Proceed to Phase 4 only after reviewing the descriptor and keeping the adapter explicit, narrow, tested, and non-reflective.
+Proceed to Phase 5 only to evaluate whether repeated command-proposal rejection flows need optional helper vocabulary.
 
 The clean Phase 1 target is:
 
