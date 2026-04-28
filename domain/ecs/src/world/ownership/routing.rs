@@ -1,6 +1,6 @@
 use super::model::{OwnerId, OwnerRole, OwnershipTarget, ResourceOwnerKey};
 use crate::entity::Entity;
-use crate::world::world::World;
+use crate::world::World;
 
 impl World {
     pub fn route_owner_entities(&self, owner: OwnerId) -> Vec<Entity> {

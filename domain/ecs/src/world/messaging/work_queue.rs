@@ -1,17 +1,11 @@
 use super::diagnostics::WorkQueueKey;
-use crate::world::world::World;
+use crate::world::World;
 use std::any::{Any, TypeId, type_name};
 use std::collections::VecDeque;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct WorkQueueConfig {
     pub capacity: Option<usize>,
-}
-
-impl Default for WorkQueueConfig {
-    fn default() -> Self {
-        Self { capacity: None }
-    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -153,14 +147,14 @@ impl World {
             .get_mut(&type_id)
             .expect("queue should exist after ensure");
 
-        if let Some(capacity) = queue.config.capacity {
-            if queue.messages_ref::<T>().len() >= capacity {
-                queue.rejected = queue.rejected.saturating_add(1);
-                return Err(WorkQueueEnqueueError::Backpressure {
-                    work_queue_type: queue.work_queue_type_name,
-                    capacity,
-                });
-            }
+        if let Some(capacity) = queue.config.capacity
+            && queue.messages_ref::<T>().len() >= capacity
+        {
+            queue.rejected = queue.rejected.saturating_add(1);
+            return Err(WorkQueueEnqueueError::Backpressure {
+                work_queue_type: queue.work_queue_type_name,
+                capacity,
+            });
         }
 
         queue.messages_mut::<T>().push_back(message);

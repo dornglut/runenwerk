@@ -31,7 +31,8 @@ Typed identity vocabulary        -> foundation/id or owning domain
 Typed ID macro support           -> foundation/id_macros
 Diagnostics vocabulary           -> foundation/diagnostics
 Domain diagnostic codes          -> owning domain
-Ratification vocabulary          -> owning domain or future foundation ratification crate
+Ratification vocabulary          -> foundation/ratification
+Ratification reports             -> foundation/ratification plus owning domain issue codes
 Domain validation rules          -> owning domain ratifier
 Command vocabulary               -> owning domain or future foundation command crate
 Concrete command enums           -> owning domain

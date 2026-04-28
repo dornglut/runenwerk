@@ -1,5 +1,5 @@
 // Owner: ecs World - Runtime and Query Entry APIs
-use super::world::World;
+use super::World;
 use crate::commands::Commands;
 use crate::query::{QueryFilter, QueryOrphanedState, QuerySpec, QueryState};
 

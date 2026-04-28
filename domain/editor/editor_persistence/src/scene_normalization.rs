@@ -71,13 +71,13 @@ pub fn normalize_scene_file(
         .collect::<BTreeMap<_, _>>();
 
     for entity in &scene_file.entities {
-        if let Some(parent) = entity.parent {
-            if !parent_by_entity.contains_key(&parent) {
-                return Err(SceneNormalizationError::MissingParent {
-                    entity_id: entity.id,
-                    parent_id: parent,
-                });
-            }
+        if let Some(parent) = entity.parent
+            && !parent_by_entity.contains_key(&parent)
+        {
+            return Err(SceneNormalizationError::MissingParent {
+                entity_id: entity.id,
+                parent_id: parent,
+            });
         }
 
         if has_parent_cycle(entity.id, &parent_by_entity) {

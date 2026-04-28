@@ -1,10 +1,10 @@
 // Owner: ecs World Component - Registration and Secondary Index APIs
 use crate::component::Component;
 use crate::entity::Entity;
+use crate::world::World;
 use crate::world::component_indexes::{
     ComponentIndexKey, ComponentSecondaryIndex, DEFAULT_COMPONENT_INDEX_NAME,
 };
-use crate::world::world::World;
 use std::any::TypeId;
 
 impl World {
@@ -68,9 +68,7 @@ impl World {
     ) -> Option<Entity> {
         let index_key = ComponentIndexKey::new(TypeId::of::<T>(), TypeId::of::<K>(), name);
         let mut indexes = self.component_indexes.borrow_mut();
-        let Some(index) = indexes.get_mut(&index_key) else {
-            return None;
-        };
+        let index = indexes.get_mut(&index_key)?;
         index.rebuild(self);
         index
             .as_any()

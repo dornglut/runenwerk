@@ -122,19 +122,17 @@ impl AuthoritativeServerRuntime {
             (state.force_full_snapshot, state.last_acknowledged)
         };
 
-        if !force_full_snapshot {
-            if let Some(base_cursor) = last_acknowledged {
-                if let Some(delta) = self.build_delta_snapshot(tick, base_cursor, payload)? {
-                    return Ok(ServerSnapshotMessage::Delta(delta));
-                }
-                self.queue_full_resync(
-                    connection_id,
-                    format!(
-                        "baseline cursor {} unavailable, forcing full snapshot",
-                        base_cursor.0
-                    ),
-                );
+        if !force_full_snapshot && let Some(base_cursor) = last_acknowledged {
+            if let Some(delta) = self.build_delta_snapshot(tick, base_cursor, payload)? {
+                return Ok(ServerSnapshotMessage::Delta(delta));
             }
+            self.queue_full_resync(
+                connection_id,
+                format!(
+                    "baseline cursor {} unavailable, forcing full snapshot",
+                    base_cursor.0
+                ),
+            );
         }
 
         let snapshot = self.build_full_snapshot(tick, payload.clone())?;

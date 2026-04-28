@@ -517,9 +517,7 @@ impl<'w, Q: QuerySpec> Iterator for QueryIter<'w, Q> {
             return None;
         }
 
-        let Some(entities) = self.entities.as_ref() else {
-            return None;
-        };
+        let entities = self.entities.as_ref()?;
         let entities_ptr = entities.as_ptr();
         let entities_len = entities.len();
 

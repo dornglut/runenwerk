@@ -687,3 +687,18 @@ Phase 5:
 ```text
 Evaluate whether editor_core governance wants optional precondition reports, without moving RatifiedChange into foundation.
 ```
+
+
+## Phase 5 Evaluation Outcome
+
+Phase 5 is closed by `foundation-ratification-phase5-evaluation.md`.
+
+Outcome:
+
+```text
+Do not move RatifiedChange into foundation.
+Do not replace GoverningChangeError.
+Do not change editor_core governance yet.
+Keep foundation/ratification as shared report vocabulary.
+Complete diagnostics hygiene before starting schema.
+```

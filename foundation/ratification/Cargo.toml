@@ -1,0 +1,19 @@
+[package]
+name = "ratification"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+diagnostics = ["dep:diagnostics", "alloc"]
+serde = ["dep:serde", "alloc"]
+
+[dependencies]
+diagnostics = { path = "../diagnostics", optional = true, default-features = false, features = ["alloc"] }
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json = "1"

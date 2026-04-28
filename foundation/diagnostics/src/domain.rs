@@ -1,7 +1,7 @@
 use core::fmt;
 
 #[cfg(feature = "alloc")]
-use alloc::string::{String, ToString};
+use alloc::string::String;
 
 /// Identifies the conceptual owner of a diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -15,7 +15,7 @@ pub struct SdfPageCoord3 {
     pub z: i16,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SdfBrickMetadata {
     pub min_distance: i16,
     pub max_distance: i16,
@@ -24,20 +24,6 @@ pub struct SdfBrickMetadata {
     pub last_touched_op_id: OperationId,
     pub surface_band_present: bool,
     pub compression_scheme: u8,
-}
-
-impl Default for SdfBrickMetadata {
-    fn default() -> Self {
-        Self {
-            min_distance: 0,
-            max_distance: 0,
-            occupancy_mask: 0,
-            material_channel_mask: 0,
-            last_touched_op_id: OperationId::default(),
-            surface_band_present: false,
-            compression_scheme: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]

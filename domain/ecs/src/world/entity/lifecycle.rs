@@ -2,9 +2,9 @@
 use crate::bundle::Bundle;
 use crate::entity::Entity;
 use crate::errors::EntityError;
+use crate::world::World;
 use crate::world::change_tracking::ComponentChangeKind;
 use crate::world::messaging::{EntityDespawnedEvent, EntitySpawnedEvent};
-use crate::world::world::World;
 
 impl World {
     pub fn contains(&self, entity: Entity) -> bool {

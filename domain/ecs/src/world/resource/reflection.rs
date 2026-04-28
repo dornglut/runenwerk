@@ -1,7 +1,7 @@
 // Owner: ecs World Resource - Reflection Registration APIs
 use crate::component::Resource;
 use crate::reflect::Reflect;
-use crate::world::world::World;
+use crate::world::World;
 use std::any::TypeId;
 
 impl World {

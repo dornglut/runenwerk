@@ -33,7 +33,11 @@ pub trait SystemParam<'w>: Sized {
     /// `State` must be lifetime-independent for all `'w` implementations of the same
     /// parameter type. Runtime state caching relies on this invariant.
     ///
-    /// Safety: `world` and `commands` must point to live values for `'w`.
+    /// # Safety
+    ///
+    /// `world` and `commands` must point to live values for `'w`. Implementors must only
+    /// access world data described by `Self::access(state)` and must preserve the aliasing
+    /// guarantees encoded by the scheduler access model.
     unsafe fn extract(
         state: &'w mut Self::State,
         world: *mut World,

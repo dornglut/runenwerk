@@ -24,6 +24,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ecs_macros` | `domain/ecs_macros` | domain | Derive macros for ECS component/resource/bundle/reflection contracts. | evolving |
 | `id_macros` | `foundation/id_macros` | foundation | Attribute macro support for typed ID wrappers. | evolving |
 | `diagnostics` | `foundation/diagnostics` | foundation | Structured diagnostic reporting vocabulary. | evolving |
+| `ratification` | `foundation/ratification` | foundation | Shared ratification report, issue, status, ratifier, and diagnostics-bridge vocabulary. | evolving |
 | `geometry` | `domain/geometry` | domain | Explicit geometric primitives and geometric queries. | evolving |
 | `spatial` | `domain/spatial` | domain | World/grid/chunk/clipmap/ring spatial coordinate contracts. | evolving |
 | `spatial_index` | `domain/spatial_index` | domain | Spatial index traits and spatial hash implementation. | evolving |

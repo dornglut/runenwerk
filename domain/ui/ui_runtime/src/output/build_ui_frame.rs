@@ -41,6 +41,10 @@ pub fn build_ui_frame(
     )])
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "private render-emission helpers keep explicit render state at each emission boundary"
+)]
 fn emit_node(
     node: &UiNode,
     layouts: &ComputedLayoutMap,
@@ -240,6 +244,10 @@ fn emit_scroll_begin(
     *primitive_order += 1;
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "private render-emission helpers keep explicit render state at each emission boundary"
+)]
 fn emit_scrollbar(
     node: &UiNode,
     scroll: &ScrollNode,
@@ -380,6 +388,10 @@ fn normalized_uv_rect(bounds: UiRect, surface_size: UiSize) -> UiRect {
     UiRect::new(u0, v0, (u1 - u0).max(0.0), (v1 - v0).max(0.0))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "private render-emission helpers keep explicit render state at each emission boundary"
+)]
 fn emit_button(
     button: &ButtonNode,
     bounds: UiRect,
@@ -445,6 +457,10 @@ fn emit_button(
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "private render-emission helpers keep explicit render state at each emission boundary"
+)]
 fn emit_text_input(
     text_input: &TextInputNode,
     bounds: UiRect,
@@ -501,6 +517,10 @@ fn emit_text_input(
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "private render-emission helpers keep explicit render state at each emission boundary"
+)]
 fn emit_toggle(
     toggle: &ToggleNode,
     bounds: UiRect,
@@ -575,6 +595,10 @@ fn emit_toggle(
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "private render-emission helpers keep explicit render state at each emission boundary"
+)]
 fn emit_numeric_input(
     numeric: &NumericInputNode,
     bounds: UiRect,
@@ -625,6 +649,10 @@ fn emit_numeric_input(
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "private render-emission helpers keep explicit render state at each emission boundary"
+)]
 fn emit_tabs(
     tabs: &TabsNode,
     bounds: UiRect,

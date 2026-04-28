@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum SimulationProfile {
+    #[default]
     LocalSinglePlayer,
     DeterministicLockstep,
     RollbackSession,
@@ -9,37 +10,21 @@ pub enum SimulationProfile {
     HighThroughputAuthority,
 }
 
-impl Default for SimulationProfile {
-    fn default() -> Self {
-        Self::LocalSinglePlayer
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum AuthorityRole {
+    #[default]
     Local,
     Client,
     Server,
     Peer,
 }
 
-impl Default for AuthorityRole {
-    fn default() -> Self {
-        Self::Local
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum DeterminismLevel {
     Strict,
+    #[default]
     Validated,
     BestEffort,
-}
-
-impl Default for DeterminismLevel {
-    fn default() -> Self {
-        Self::Validated
-    }
 }
 
 #[derive(

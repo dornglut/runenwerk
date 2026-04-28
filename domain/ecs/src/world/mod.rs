@@ -4,7 +4,7 @@ mod component_indexes;
 mod entity_handles;
 pub mod messaging;
 mod runtime;
-mod world;
+mod state;
 
 pub mod component;
 pub mod entity;
@@ -34,4 +34,4 @@ pub use ownership::{
     OwnerId, OwnerRole, OwnerState, OwnershipTarget, OwnershipTransferRecord, ResourceOwnerKey,
     ResourceOwnershipDescriptor,
 };
-pub use world::World;
+pub use state::World;

@@ -1,9 +1,9 @@
 use crate::entity::Entity;
+use crate::world::World;
 use crate::world::change_tracking::{
     ComponentChangeKind, ComponentTypeKey, ResourceChangeKind, ResourceTypeKey,
 };
 use crate::world::ownership::OwnerState;
-use crate::world::world::World;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ChangeExtractionWindow {

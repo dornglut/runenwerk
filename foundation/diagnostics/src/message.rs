@@ -1,7 +1,7 @@
 use core::fmt;
 
 #[cfg(feature = "alloc")]
-use alloc::string::{String, ToString};
+use alloc::string::String;
 
 /// Human-readable diagnostic message.
 ///

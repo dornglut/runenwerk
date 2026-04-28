@@ -48,9 +48,10 @@ pub struct QueryAccess {
 
 impl QueryAccess {
     pub fn structural_mutation() -> Self {
-        let mut access = Self::default();
-        access.deferred_structural_mutation = true;
-        access
+        Self {
+            deferred_structural_mutation: true,
+            ..Self::default()
+        }
     }
 
     pub fn component_reads(&self) -> &[QueryTypeAccess] {
@@ -305,9 +306,21 @@ macro_rules! impl_query_filter_tuple {
 
 impl_query_filter_tuple!((A, B, C), (A, B, C, D), (A, B, C, D, E), (A, B, C, D, E, F));
 
+impl<T: Component> Default for With<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Component> With<T> {
     pub fn new() -> Self {
         Self(PhantomData)
+    }
+}
+
+impl<T: Component> Default for Without<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -317,9 +330,21 @@ impl<T: Component> Without<T> {
     }
 }
 
+impl<T: Component> Default for Changed<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Component> Changed<T> {
     pub fn new() -> Self {
         Self(PhantomData)
+    }
+}
+
+impl<T: Component> Default for Added<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

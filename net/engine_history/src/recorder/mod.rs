@@ -69,7 +69,7 @@ where
     }
 
     pub fn should_checkpoint(&self, tick: SimulationTick) -> bool {
-        tick.0 == 0 || tick.0 % self.checkpoint_policy.interval_ticks == 0
+        tick.0 == 0 || tick.0.is_multiple_of(self.checkpoint_policy.interval_ticks)
     }
 
     pub fn into_archive(self) -> ReplayArchive<S, C> {

@@ -1,8 +1,8 @@
 mod batch;
-mod commands;
+mod command_buffer;
 mod deferred;
 mod queue;
 
 pub use batch::BatchCommands;
-pub use commands::Commands;
+pub use command_buffer::Commands;
 pub use deferred::DeferredCommand;

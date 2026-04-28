@@ -4,9 +4,9 @@ use crate::entity::Entity;
 use crate::errors::EntityError;
 use crate::storage::ArchetypeExecutionBinding;
 use crate::telemetry;
+use crate::world::World;
 use crate::world::change_tracking::ComponentTypeKey;
 use crate::world::entity_handles::Mut;
-use crate::world::world::World;
 use std::any::{TypeId, type_name};
 use std::time::Instant;
 

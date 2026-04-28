@@ -1,21 +1,12 @@
 use super::diagnostics::TickBufferKey;
-use crate::world::world::World;
+use crate::world::World;
 use std::any::{Any, TypeId, type_name};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct TickBufferConfig {
     pub capacity: Option<usize>,
     pub retain_finalized_ticks: bool,
-}
-
-impl Default for TickBufferConfig {
-    fn default() -> Self {
-        Self {
-            capacity: None,
-            retain_finalized_ticks: false,
-        }
-    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -86,13 +77,14 @@ pub enum TickBufferPushError {
 }
 
 type TickBufferDedupHook = Box<dyn Fn(&dyn Any, &dyn Any) -> bool + Send + Sync + 'static>;
+type FinalizeTickFn = fn(&mut Box<dyn Any>, &mut BTreeMap<u64, Vec<TickBufferMeta>>, u64) -> usize;
 
 pub(crate) struct TickBufferStorage {
     pub(super) buffer_key: TickBufferKey,
     pub(super) buffer_type_name: &'static str,
     buckets: Box<dyn Any>,
     bucket_count_fn: fn(&Box<dyn Any>) -> usize,
-    finalize_tick_fn: fn(&mut Box<dyn Any>, &mut BTreeMap<u64, Vec<TickBufferMeta>>, u64) -> usize,
+    finalize_tick_fn: FinalizeTickFn,
     metadata: BTreeMap<u64, Vec<TickBufferMeta>>,
     dedup_hook: Option<TickBufferDedupHook>,
     pub(super) config: TickBufferConfig,

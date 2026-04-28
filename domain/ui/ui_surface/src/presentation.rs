@@ -59,7 +59,7 @@ mod tests {
         }
 
         fn is_item_available(&self, item_id: u64) -> bool {
-            item_id % 2 == 0
+            item_id.is_multiple_of(2)
         }
     }
 

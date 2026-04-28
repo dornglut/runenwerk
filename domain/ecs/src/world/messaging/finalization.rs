@@ -1,5 +1,5 @@
 use super::broadcast::{BroadcastLifetime, BroadcastObserverTrigger};
-use crate::world::world::World;
+use crate::world::World;
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct MessagingFinalizationCounters {

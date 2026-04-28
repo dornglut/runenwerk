@@ -1,7 +1,7 @@
 // Owner: ecs World Component - Introspection APIs
 use crate::entity::Entity;
 use crate::reflect::{ReflectValueMut, ReflectValueRef, TypeInfo};
-use crate::world::world::World;
+use crate::world::World;
 use std::any::TypeId;
 
 impl World {

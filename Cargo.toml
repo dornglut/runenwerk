@@ -34,6 +34,7 @@ members = [
     "foundation/id",
     "foundation/id_macros",
     "foundation/diagnostics",
+    "foundation/ratification",
 
     "engine",
     "engine_render_macros",

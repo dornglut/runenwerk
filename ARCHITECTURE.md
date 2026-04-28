@@ -34,6 +34,7 @@ Current foundation crates:
 - `foundation/id`: typed identity primitives and allocators.
 - `foundation/id_macros`: attribute macro support for typed ID wrappers.
 - `foundation/diagnostics`: structured diagnostic reporting vocabulary.
+- `foundation/ratification`: shared ratification report vocabulary.
 
 Foundation must not own LLM clients, prompt logic, app policy, editor policy, runtime orchestration, or backend integrations.
 

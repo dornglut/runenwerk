@@ -22,6 +22,8 @@ Crate inventory                    -> CRATES.md
 Typed ID primitives                -> foundation/id
 Typed ID macro support             -> foundation/id_macros
 Diagnostics vocabulary             -> foundation/diagnostics
+Ratification vocabulary           -> foundation/ratification
+Domain ratification rules         -> owning domain ratifier
 ECS world/query/system runtime      -> domain/ecs
 Schedule planning/execution         -> domain/scheduler
 Scene transform contracts           -> domain/scene

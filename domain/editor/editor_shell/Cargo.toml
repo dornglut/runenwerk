@@ -20,4 +20,5 @@ ui_runtime.workspace = true
 ui_widgets.workspace = true
 id = { path = "../../../foundation/id" }
 id_macros = { path = "../../../foundation/id_macros" }
+foundation_ratification = { package = "ratification", path = "../../../foundation/ratification" }
 serde = { version = "1.0.228", features = ["derive"] }

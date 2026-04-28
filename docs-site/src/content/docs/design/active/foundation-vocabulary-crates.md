@@ -1,0 +1,305 @@
+---
+title: Foundation Vocabulary Crates
+description: Design direction for Runenwerk foundation vocabulary crates and their implementation order.
+status: active
+owner: foundation
+layer: foundation
+canonical: true
+last_reviewed: 2026-04-28
+related_adrs: []
+---
+
+# Foundation Vocabulary Crates
+
+## Purpose
+
+This document records the intended foundation vocabulary crates for Runenwerk.
+
+A vocabulary crate defines shared language and stable contract types. It does not own domain behavior, runtime execution, editor policy, backend integration, AI behavior, or concrete domain invariants.
+
+The goal is to keep foundational concepts reusable without turning foundation into a global framework.
+
+## Architectural Rule
+
+Foundation crates may define common vocabulary.
+
+Owning domains still define and enforce their own rules.
+
+```text
+Foundation defines words.
+Domains define meaning.
+Runtime composes execution.
+Apps and tools orchestrate workflows.
+```
+
+## Final Foundation Vocabulary Set
+
+Immediate and active:
+
+```text
+foundation/id
+foundation/id_macros
+foundation/diagnostics
+foundation/ratification
+```
+
+Next:
+
+```text
+foundation/schema
+foundation/commands
+```
+
+Later candidates:
+
+```text
+foundation/capabilities
+foundation/provenance
+```
+
+Not planned now:
+
+```text
+foundation/time
+foundation/units
+foundation/reflection
+foundation/inspection
+```
+
+## Crate Decisions
+
+### `foundation/id`
+
+Owns typed identity primitives and allocation vocabulary.
+
+It must not own domain registries, ECS-specific APIs, database adapters, editor identity policy, or global object identity.
+
+### `foundation/id_macros`
+
+Owns proc-macro support for typed ID wrappers.
+
+It remains separate from `foundation/id` because proc-macro crates have different compilation and dependency constraints.
+
+### `foundation/diagnostics`
+
+Owns structured diagnostic reporting vocabulary.
+
+Diagnostics explain issues. They do not decide acceptance, execute commands, mutate state, or own domain validation rules.
+
+### `foundation/ratification`
+
+Owns reusable candidate acceptance-report vocabulary.
+
+Ratification answers whether a candidate was accepted, accepted with warnings, rejected, or fatally invalid.
+
+It must not own editor history, undo/redo, reconciliation, command execution, or concrete domain invariants.
+
+### `foundation/schema`
+
+Owns schema and descriptor vocabulary for describing data shapes.
+
+Schema describes values, fields, parameters, component surfaces, command parameters, asset structures, and tool-facing descriptors.
+
+It must not own concrete schemas. Concrete schemas are published by the owning domain.
+
+### `foundation/commands`
+
+Owns command descriptor, proposal, and outcome vocabulary.
+
+It may define how commands are described, discovered, proposed, and reported.
+
+It must not own concrete command enums, command executors, editor command buses, global command registries, undo/redo engines, AI runners, or domain mutation logic.
+
+## Relationship Between Core Vocabulary Crates
+
+```text
+commands     = what can be requested
+schema       = what shape the request/data has
+ratification = whether a candidate/request is accepted
+diagnostics  = what explains warnings, errors, and failures
+```
+
+Example:
+
+```text
+CommandDescriptor:
+  scene.rename_entity requires entity_id and new_name
+
+Schema:
+  entity_id is an entity identifier
+  new_name is a non-empty string
+
+CommandProposal:
+  rename entity 12 to Player
+
+Ratification:
+  rejected
+
+Diagnostic:
+  entity 12 does not exist
+```
+
+## AI and Tooling Boundary
+
+AI integrations must not live in foundation or pure domain crates.
+
+AI and editor tooling may consume command descriptors, schemas, ratification reports, and diagnostics.
+
+The expected flow is:
+
+```text
+AI/tooling proposes
+  -> app/editor router resolves
+  -> owning domain command boundary executes
+  -> owning domain ratifies
+  -> diagnostics explain result
+```
+
+The editor may orchestrate command routing, but it must not own every command for ECS, network, replay, UI, scene, or other domains.
+
+## Implementation Order
+
+### Phase 1: Stabilize Current Foundation Crates
+
+Keep the existing foundation crates focused:
+
+```text
+foundation/id
+foundation/id_macros
+foundation/diagnostics
+```
+
+Do not widen them to absorb commands, schemas, reflection, or runtime policy.
+
+### Phase 2: Implement `foundation/ratification`
+
+Status: complete for the current foundation-vocabulary milestone.
+
+The crate now owns shared ratification status, severity, issue, report, ratifier, and optional diagnostics-bridge vocabulary.
+
+Completed first consumers:
+
+```text
+domain/ui/ui_surface
+domain/editor/editor_shell
+```
+
+The remaining `editor_persistence` consumer should be handled when normalized scene validation reporting is actively worked, not as a blocker for schema design.
+
+Do not start by rewriting every validation error in the workspace.
+
+### Phase 3: Diagnostics Completion Gate
+
+Before schema or command vocabulary work starts, `foundation/diagnostics` and `foundation/ratification` must be warning-free under their relevant feature sets.
+
+Required:
+
+```text
+cargo test -p diagnostics
+cargo test -p diagnostics --features serde
+cargo test -p ratification
+cargo test -p ratification --features diagnostics
+cargo test -p ratification --features serde,diagnostics
+cargo fmt --all -- --check
+python3 tools/docs/validate_docs.py
+```
+
+Recommended before committing the milestone:
+
+```text
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+```
+
+Not required:
+
+```text
+rewrite every domain error as diagnostics
+replace EditorMutationError
+replace GoverningChangeError
+wire diagnostics into editor UI
+wire diagnostics into tracing/logging
+create a global diagnostic registry
+```
+
+### Phase 4: Design `foundation/schema`
+
+Design schema after ratification vocabulary is stable.
+
+Schema should describe reusable shapes and value contracts. It should not become a serialization framework, ECS reflection system, editor inspector engine, or runtime object model.
+
+### Phase 5: Design `foundation/commands`
+
+Design command vocabulary after schema and ratification are clear enough.
+
+Command descriptors will likely depend conceptually on schema and ratification:
+
+```text
+CommandDescriptor uses schema for parameters.
+CommandOutcome uses ratification and diagnostics for results.
+```
+
+### Phase 6: Re-evaluate Later Candidates
+
+Consider `foundation/capabilities` only when there is real enforcement.
+
+Consider `foundation/provenance` only when origin, actor, trust, causality, AI proposal, replay, editor history, and multiplayer concepts start duplicating across domains.
+
+## Non-Goals
+
+This foundation vocabulary set must not introduce:
+
+```text
+UniversalCommand
+GlobalCommandExecutor
+GlobalRegistry
+EngineObject
+AnyDomainState
+AiCommandRunner
+EditorCommandBus
+reflection-based mutation backdoors
+runtime scheduling policy
+backend adapters
+LLM clients
+```
+
+## Acceptance Criteria for New Foundation Vocabulary Crates
+
+A new foundation vocabulary crate is allowed only when all of these are true:
+
+1. At least two independent domains need the same vocabulary.
+2. The vocabulary can be defined without depending on domain, runtime, app, adapter, backend, or AI crates.
+3. The crate can remain small and non-executing.
+4. The owning domains keep their own invariants.
+5. The crate improves discoverability and consistency instead of hiding behavior behind generic abstractions.
+
+## Summary
+
+The intended foundation vocabulary set is:
+
+```text
+foundation/id
+foundation/id_macros
+foundation/diagnostics
+foundation/ratification
+foundation/schema
+foundation/commands
+```
+
+The strongest later candidates are:
+
+```text
+foundation/capabilities
+foundation/provenance
+```
+
+The rejected or deferred candidates are:
+
+```text
+foundation/time
+foundation/units
+foundation/reflection
+foundation/inspection
+```
+
+Reflection remains important, but it should come after schema, commands, diagnostics, and ratification are stable. It must not become an alternative mutation path around commands and ratification.

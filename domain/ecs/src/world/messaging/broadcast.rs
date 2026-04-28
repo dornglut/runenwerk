@@ -1,6 +1,6 @@
 use super::diagnostics::BroadcastKey;
 use crate::entity::Entity;
-use crate::world::world::World;
+use crate::world::World;
 use std::any::{Any, TypeId, type_name};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

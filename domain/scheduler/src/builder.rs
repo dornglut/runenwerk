@@ -11,6 +11,12 @@ pub struct SchedulerBuilder<C> {
     errors: Vec<String>,
 }
 
+impl<C> Default for SchedulerBuilder<C> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<C> SchedulerBuilder<C> {
     /// Create a new builder.
     pub fn new() -> Self {

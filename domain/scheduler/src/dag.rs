@@ -11,6 +11,12 @@ pub struct DAG<C> {
     next_id: u64,
 }
 
+impl<C> Default for DAG<C> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<C> DAG<C> {
     pub fn new() -> Self {
         Self {

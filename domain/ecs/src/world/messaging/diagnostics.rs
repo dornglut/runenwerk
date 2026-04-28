@@ -1,4 +1,4 @@
-use crate::world::world::World;
+use crate::world::World;
 use std::any::TypeId;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]

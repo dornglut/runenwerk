@@ -1,5 +1,5 @@
 // Owner: ecs World - Component Secondary Index Types
-use super::world::World;
+use super::World;
 use crate::component::Component;
 use crate::entity::Entity;
 use std::any::{Any, TypeId};

@@ -4,7 +4,7 @@ use super::model::{
 };
 use crate::component::Resource;
 use crate::entity::Entity;
-use crate::world::world::World;
+use crate::world::World;
 use std::any::TypeId;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

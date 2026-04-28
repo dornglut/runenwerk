@@ -69,14 +69,14 @@ impl ClientReplicationRuntime {
             self.stats.record_stale_snapshot_drop();
             return Err(ClientApplyError::StaleSnapshot);
         }
-        if let Some(last_cursor) = self.last_cursor {
-            if snapshot.cursor <= last_cursor {
-                self.stats.record_stale_snapshot_drop();
-                return Err(ClientApplyError::OutOfOrderCursor {
-                    previous: last_cursor,
-                    received: snapshot.cursor,
-                });
-            }
+        if let Some(last_cursor) = self.last_cursor
+            && snapshot.cursor <= last_cursor
+        {
+            self.stats.record_stale_snapshot_drop();
+            return Err(ClientApplyError::OutOfOrderCursor {
+                previous: last_cursor,
+                received: snapshot.cursor,
+            });
         }
         let payload = decode_snapshot_payload(&snapshot.payload)
             .map_err(|err| ClientApplyError::DecodeError(err.to_string()))?;
@@ -96,14 +96,14 @@ impl ClientReplicationRuntime {
             self.stats.record_stale_snapshot_drop();
             return Err(ClientApplyError::StaleSnapshot);
         }
-        if let Some(last_cursor) = self.last_cursor {
-            if delta.cursor <= last_cursor {
-                self.stats.record_stale_snapshot_drop();
-                return Err(ClientApplyError::OutOfOrderCursor {
-                    previous: last_cursor,
-                    received: delta.cursor,
-                });
-            }
+        if let Some(last_cursor) = self.last_cursor
+            && delta.cursor <= last_cursor
+        {
+            self.stats.record_stale_snapshot_drop();
+            return Err(ClientApplyError::OutOfOrderCursor {
+                previous: last_cursor,
+                received: delta.cursor,
+            });
         }
         let Some(base) = self.snapshots.get(&delta.base) else {
             self.needs_full_resync = true;

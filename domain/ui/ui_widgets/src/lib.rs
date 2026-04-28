@@ -18,7 +18,7 @@ mod viewport_surface_embed;
 
 pub use button::button;
 pub use label::label;
-pub use numeric_input::numeric_input;
+pub use numeric_input::{NumericInputConfig, numeric_input};
 pub use panel::panel;
 pub use scroll::{hscroll, scroll, vscroll};
 pub use split::split;
@@ -60,11 +60,7 @@ mod tests {
         assert!(matches!(
             numeric_input(
                 WidgetId(4),
-                1.0,
-                0.1,
-                Some(0.0),
-                Some(2.0),
-                2,
+                NumericInputConfig::new(1.0, 0.1, Some(0.0), Some(2.0), 2),
                 style.clone(),
                 theme.clone()
             )

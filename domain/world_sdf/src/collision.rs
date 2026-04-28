@@ -163,17 +163,16 @@ impl CollisionQueryService {
             });
         }
 
+        let refinement = CollisionSweepRefinement::new(self, partition, store, planet_id, &query);
         let mut clear_t = 0.0_f32;
         for step in 1..=sweep_steps {
             let test_t = step as f32 / sweep_steps as f32;
-            if !collides_at_sweep_t(self, partition, store, planet_id, &query, test_t) {
+            if !refinement.collides_at(test_t) {
                 clear_t = test_t;
                 continue;
             }
 
-            let hit_t = refine_collision_hit_t(
-                self, partition, store, planet_id, &query, clear_t, test_t, 8,
-            );
+            let hit_t = refine_collision_hit_t(&refinement, clear_t, test_t, 8);
             let hit_position = lerp3(query.start, query.end, hit_t);
             let hit_sample = self
                 .sample_signed_distance(partition, store, planet_id, hit_position)
@@ -435,6 +434,43 @@ fn cube_sample_index(dim: usize, x: usize, y: usize, z: usize) -> usize {
     z * dim * dim + y * dim + x
 }
 
+struct CollisionSweepRefinement<'a> {
+    service: &'a CollisionQueryService,
+    partition: &'a GridPartitionConfig,
+    store: &'a SdfChunkStore,
+    planet_id: WorldId,
+    query: &'a SphereSweep,
+}
+
+impl<'a> CollisionSweepRefinement<'a> {
+    fn new(
+        service: &'a CollisionQueryService,
+        partition: &'a GridPartitionConfig,
+        store: &'a SdfChunkStore,
+        planet_id: WorldId,
+        query: &'a SphereSweep,
+    ) -> Self {
+        Self {
+            service,
+            partition,
+            store,
+            planet_id,
+            query,
+        }
+    }
+
+    fn collides_at(&self, t: f32) -> bool {
+        collides_at_sweep_t(
+            self.service,
+            self.partition,
+            self.store,
+            self.planet_id,
+            self.query,
+            t,
+        )
+    }
+}
+
 fn collides_at_sweep_t(
     service: &CollisionQueryService,
     partition: &GridPartitionConfig,
@@ -452,18 +488,14 @@ fn collides_at_sweep_t(
 }
 
 fn refine_collision_hit_t(
-    service: &CollisionQueryService,
-    partition: &GridPartitionConfig,
-    store: &SdfChunkStore,
-    planet_id: WorldId,
-    query: &SphereSweep,
+    refinement: &CollisionSweepRefinement<'_>,
     mut clear_t: f32,
     mut colliding_t: f32,
     iterations: usize,
 ) -> f32 {
     for _ in 0..iterations {
         let mid = (clear_t + colliding_t) * 0.5;
-        if collides_at_sweep_t(service, partition, store, planet_id, query, mid) {
+        if refinement.collides_at(mid) {
             colliding_t = mid;
         } else {
             clear_t = mid;

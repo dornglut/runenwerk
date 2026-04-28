@@ -1,8 +1,8 @@
 // Owner: ecs World Resource - Resource Access APIs
 use crate::component::Resource;
 use crate::errors::ResourceError;
+use crate::world::World;
 use crate::world::change_tracking::ResourceTypeKey;
-use crate::world::world::World;
 use std::any::{Any, TypeId, type_name};
 
 impl World {

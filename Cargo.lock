@@ -799,6 +799,7 @@ dependencies = [
  "editor_viewport",
  "id",
  "id_macros",
+ "ratification",
  "serde",
  "ui_input",
  "ui_layout",
@@ -2522,6 +2523,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d6831663a5098ea164f89cff59c6284e95f4e3c76ce9848d4529f5ccca9bde"
 
 [[package]]
+name = "ratification"
+version = "0.1.0"
+dependencies = [
+ "diagnostics",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3573,6 +3583,7 @@ name = "ui_surface"
 version = "0.1.0"
 dependencies = [
  "diagnostics",
+ "ratification",
 ]
 
 [[package]]

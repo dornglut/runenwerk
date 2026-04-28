@@ -1,5 +1,5 @@
 // Owner: ecs World - Borrow Wrappers and Entity Views
-use super::world::World;
+use super::World;
 use crate::bundle::Bundle;
 use crate::component::Component;
 use crate::entity::Entity;

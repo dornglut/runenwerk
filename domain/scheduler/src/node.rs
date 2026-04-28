@@ -1,8 +1,10 @@
 use anyhow::Result;
 
+pub type NodeFunction<C> = Box<dyn FnMut(&mut C) -> Result<()> + Send>;
+
 pub struct Node<C> {
     pub name: String,
-    pub func: Box<dyn FnMut(&mut C) -> Result<()> + Send>,
+    pub func: NodeFunction<C>,
 }
 
 impl<C> Node<C> {

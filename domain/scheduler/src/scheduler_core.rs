@@ -17,9 +17,7 @@ pub fn set_slow_node_logging_enabled(enabled: bool) {
 }
 
 fn is_wall_time_log_excluded(node_name: &str) -> bool {
-    WALL_TIME_LOG_EXCLUDED_NODES
-        .iter()
-        .any(|excluded| *excluded == node_name)
+    WALL_TIME_LOG_EXCLUDED_NODES.contains(&node_name)
 }
 
 pub struct Scheduler<C> {

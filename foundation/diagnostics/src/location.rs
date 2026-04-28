@@ -1,7 +1,7 @@
 use core::fmt;
 
 #[cfg(feature = "alloc")]
-use alloc::string::{String, ToString};
+use alloc::string::String;
 
 /// Structured diagnostic location.
 ///
@@ -12,13 +12,13 @@ pub enum DiagnosticLocation {
     TextRange(DiagnosticTextRange),
 
     FilePath {
-        path: LocationStorage,
+        path: DiagnosticLocationPath,
         range: Option<DiagnosticTextRange>,
     },
 
-    LogicalPath(LocationStorage),
+    LogicalPath(DiagnosticLocationPath),
 
-    FieldPath(LocationStorage),
+    FieldPath(DiagnosticLocationPath),
 }
 
 /// One-based text position.
@@ -33,6 +33,16 @@ pub struct DiagnosticTextPosition {
 pub struct DiagnosticTextRange {
     start: DiagnosticTextPosition,
     end: DiagnosticTextPosition,
+}
+
+/// Public diagnostic path value.
+///
+/// This keeps `DiagnosticLocation` variants public without exposing the
+/// internal storage representation used for static versus owned paths.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DiagnosticLocationPath {
+    value: LocationStorage,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -65,7 +75,7 @@ impl DiagnosticLocation {
         }
 
         Ok(Self::FilePath {
-            path: LocationStorage::Static(path),
+            path: DiagnosticLocationPath::from_static_unchecked(path),
             range,
         })
     }
@@ -82,7 +92,7 @@ impl DiagnosticLocation {
         }
 
         Ok(Self::FilePath {
-            path: LocationStorage::Owned(path),
+            path: DiagnosticLocationPath::from_owned_unchecked(path),
             range,
         })
     }
@@ -92,7 +102,9 @@ impl DiagnosticLocation {
             return Err(DiagnosticLocationError::EmptyPath);
         }
 
-        Ok(Self::LogicalPath(LocationStorage::Static(path)))
+        Ok(Self::LogicalPath(
+            DiagnosticLocationPath::from_static_unchecked(path),
+        ))
     }
 
     #[cfg(feature = "alloc")]
@@ -103,7 +115,9 @@ impl DiagnosticLocation {
             return Err(DiagnosticLocationError::EmptyPath);
         }
 
-        Ok(Self::LogicalPath(LocationStorage::Owned(path)))
+        Ok(Self::LogicalPath(
+            DiagnosticLocationPath::from_owned_unchecked(path),
+        ))
     }
 
     pub fn field_path_static(path: &'static str) -> Result<Self, DiagnosticLocationError> {
@@ -111,7 +125,9 @@ impl DiagnosticLocation {
             return Err(DiagnosticLocationError::EmptyPath);
         }
 
-        Ok(Self::FieldPath(LocationStorage::Static(path)))
+        Ok(Self::FieldPath(
+            DiagnosticLocationPath::from_static_unchecked(path),
+        ))
     }
 
     #[cfg(feature = "alloc")]
@@ -122,7 +138,9 @@ impl DiagnosticLocation {
             return Err(DiagnosticLocationError::EmptyPath);
         }
 
-        Ok(Self::FieldPath(LocationStorage::Owned(path)))
+        Ok(Self::FieldPath(
+            DiagnosticLocationPath::from_owned_unchecked(path),
+        ))
     }
 }
 
@@ -175,6 +193,44 @@ impl LocationStorage {
             LocationStorage::Static(value) => value,
             #[cfg(feature = "alloc")]
             LocationStorage::Owned(value) => value.as_str(),
+        }
+    }
+}
+
+impl DiagnosticLocationPath {
+    pub fn from_static(path: &'static str) -> Result<Self, DiagnosticLocationError> {
+        if path.is_empty() {
+            return Err(DiagnosticLocationError::EmptyPath);
+        }
+
+        Ok(Self::from_static_unchecked(path))
+    }
+
+    #[cfg(feature = "alloc")]
+    pub fn new(path: impl Into<String>) -> Result<Self, DiagnosticLocationError> {
+        let path = path.into();
+
+        if path.is_empty() {
+            return Err(DiagnosticLocationError::EmptyPath);
+        }
+
+        Ok(Self::from_owned_unchecked(path))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
+
+    fn from_static_unchecked(path: &'static str) -> Self {
+        Self {
+            value: LocationStorage::Static(path),
+        }
+    }
+
+    #[cfg(feature = "alloc")]
+    fn from_owned_unchecked(path: String) -> Self {
+        Self {
+            value: LocationStorage::Owned(path),
         }
     }
 }
@@ -306,7 +362,8 @@ impl<'de> serde::Deserialize<'de> for LocationStorage {
 #[cfg(test)]
 mod tests {
     use super::{
-        DiagnosticLocation, DiagnosticLocationError, DiagnosticTextPosition, DiagnosticTextRange,
+        DiagnosticLocation, DiagnosticLocationError, DiagnosticLocationPath,
+        DiagnosticTextPosition, DiagnosticTextRange,
     };
 
     #[test]
@@ -361,5 +418,20 @@ mod tests {
             DiagnosticLocation::field_path_static(""),
             Err(DiagnosticLocationError::EmptyPath)
         );
+    }
+
+    #[test]
+    fn diagnostic_location_path_rejects_empty_path() {
+        assert_eq!(
+            DiagnosticLocationPath::from_static(""),
+            Err(DiagnosticLocationError::EmptyPath)
+        );
+    }
+
+    #[test]
+    fn diagnostic_location_path_preserves_public_path_access() {
+        let path = DiagnosticLocationPath::from_static("workspace.tool_surfaces[2]").unwrap();
+
+        assert_eq!(path.as_str(), "workspace.tool_surfaces[2]");
     }
 }

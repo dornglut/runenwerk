@@ -27,7 +27,8 @@ pub use code::{DiagnosticCode, DiagnosticCodeError};
 pub use diagnostic::Diagnostic;
 pub use domain::{DiagnosticDomain, DiagnosticDomainError};
 pub use location::{
-    DiagnosticLocation, DiagnosticLocationError, DiagnosticTextPosition, DiagnosticTextRange,
+    DiagnosticLocation, DiagnosticLocationError, DiagnosticLocationPath, DiagnosticTextPosition,
+    DiagnosticTextRange,
 };
 pub use message::{DiagnosticMessage, DiagnosticNote};
 #[cfg(feature = "alloc")]

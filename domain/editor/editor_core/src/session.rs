@@ -7,8 +7,9 @@ use crate::{
     DocumentDescriptor, DocumentId, EditorMutationError, HistoryStack, SelectionSet, ToolId,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum EditorMode {
+    #[default]
     Edit,
     Play,
     Simulate,
@@ -22,12 +23,6 @@ pub struct EditorSession {
     mode: EditorMode,
     selection: SelectionSet,
     history: HistoryStack,
-}
-
-impl Default for EditorMode {
-    fn default() -> Self {
-        Self::Edit
-    }
 }
 
 impl EditorSession {

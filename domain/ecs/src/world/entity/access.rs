@@ -3,8 +3,8 @@ use crate::bundle::Bundle;
 use crate::component::Component;
 use crate::entity::Entity;
 use crate::errors::EntityError;
+use crate::world::World;
 use crate::world::entity_handles::{EntityMut, EntityRef};
-use crate::world::world::World;
 
 impl World {
     pub fn insert<B: Bundle>(&mut self, entity: Entity, bundle: B) -> Result<(), EntityError> {

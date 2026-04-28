@@ -273,24 +273,27 @@ impl SystemAccess {
     }
 
     pub fn validate_internal(&self) -> Result<(), AccessConflict> {
-        for key in self.reads.intersection(&self.writes) {
+        if let Some(key) = self.reads.intersection(&self.writes).next() {
             return Err(AccessConflict {
                 key: *key,
                 kind: ConflictKind::ReadWrite,
             });
         }
-        for key in self.reads.intersection(&self.drains) {
+
+        if let Some(key) = self.reads.intersection(&self.drains).next() {
             return Err(AccessConflict {
                 key: *key,
                 kind: ConflictKind::ReadDrain,
             });
         }
-        for key in self.writes.intersection(&self.drains) {
+
+        if let Some(key) = self.writes.intersection(&self.drains).next() {
             return Err(AccessConflict {
                 key: *key,
                 kind: ConflictKind::WriteDrain,
             });
         }
+
         Ok(())
     }
 }
