@@ -1,6 +1,6 @@
 //! Engine plugin registry and default plugin stack helpers.
 //!
-//! See `engine/src/plugins/README.md` for plugin geometry-old/navigation.
+//! See `docs-site/src/content/docs/engine/plugins/README.md` for plugin navigation.
 
 pub mod debug_metrics;
 pub mod diagnostics;

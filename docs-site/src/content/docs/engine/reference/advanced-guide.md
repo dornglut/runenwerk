@@ -67,7 +67,7 @@ Inspect runtime fixed-step status through `FixedTimeState`:
 
 Primary runner implementations:
 
-- [`../../src/app/domain/runner.rs`](../../src/app/domain/runner.rs)
+- `engine/src/app/domain/runner.rs`
 
 ## Plugin Authoring Boundaries
 
@@ -81,7 +81,7 @@ Avoid performing long-running runtime work in `build`.
 
 Plugin map:
 
-- [`../../src/plugins/README.md`](../plugins/README.md)
+- [`../plugins/README.md`](../plugins/README.md)
 - [`plugins/index.md`](plugins/index.md)
 
 ## Network and Replay Integration
@@ -89,8 +89,8 @@ Plugin map:
 For network-heavy or replay-heavy stacks, use the dedicated docs:
 
 - Net usage:
-  - [`../../src/plugins/net/NETWORKING_USAGE_GUIDE.md`](../plugins/net/networking-usage-guide.md)
+  - [`../plugins/net/networking-usage-guide.md`](../plugins/net/networking-usage-guide.md)
 - Net runtime flow:
-  - [`../../src/plugins/net/NETWORK_RUNTIME_FLOW.md`](../plugins/net/network-runtime-flow.md)
+  - [`../plugins/net/network-runtime-flow.md`](../plugins/net/network-runtime-flow.md)
 - Replay plugin entry:
-  - [`../../src/plugins/replay.rs`](../../src/plugins/replay.rs)
+  - `engine/src/plugins/replay.rs`

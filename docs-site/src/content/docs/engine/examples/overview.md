@@ -18,8 +18,6 @@ Use this map to pick an entry point quickly.
   - `runtime_minimal`
 - Verify windowed runtime + input behavior:
   - `window_input_demo`
-- Explore scene/UI orchestration:
-  - `scene_manager_ui`
 - Explore the canonical RenderFlow v2 sample:
   - `game_of_life_sdf`
 - Explore boids-style compute simulation + compose rendering:
@@ -45,11 +43,6 @@ Use this map to pick an entry point quickly.
   - Entry: `engine/examples/window_input_demo/main.rs`
   - Focus: windowed runtime path, default plugin stack, action-mapped input.
   - Run: `cargo run -p engine --example window_input_demo`
-- `scene_manager_ui`
-  - Entry: `engine/examples/scene_manager_ui/main.rs`
-  - Focus: scene registration, UI template assets, scene transitions.
-  - Assets: `engine/examples/scene_manager_ui/assets/`
-  - Run: `cargo run -p engine --example scene_manager_ui`
 - `game_of_life_sdf`
   - Entry: `engine/examples/game_of_life_sdf/main.rs`
   - Focus: semantic state + ping-pong simulation on the RenderFlow v2 path.
@@ -91,8 +84,7 @@ Use this map to pick an entry point quickly.
 
 ## Related
 
-- Crate navigation: `engine/README.md`
-- Crate docs hub: `engine/docs/index.md`
-- Usage guide: `engine/docs/reference/usage-guide.md`
-- Plugin map: `engine/src/plugins/README.md`
-- Integration tests: `engine/tests/README.md`
+- Crate docs hub: [`../index.md`](../index.md)
+- Usage guide: [`../reference/usage-guide.md`](../reference/usage-guide.md)
+- Plugin map: [`../plugins/README.md`](../plugins/README.md)
+- Integration tests: [`../tests/README.md`](../tests/README.md)

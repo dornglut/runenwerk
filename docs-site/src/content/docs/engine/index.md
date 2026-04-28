@@ -52,4 +52,4 @@ Navigation hub for crate-level engine documentation.
 - Scene:
   - [`plugins/scene/README.md`](plugins/scene/README.md)
 - UI:
-  - [`plugins/ui/README.md`](plugins/ui/README.md)
+  - [`../domain/ui/architecture.md`](../domain/ui/architecture.md)

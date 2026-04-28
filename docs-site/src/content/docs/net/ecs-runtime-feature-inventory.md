@@ -117,9 +117,9 @@ Audit coverage spans:
 | Capability | Status | Evidence | Notes |
 | --- | --- | --- | --- |
 | MSDF atlas/glyph metric data contracts | Implemented | `domain/ui/ui_text/src/atlas.rs`, `domain/ui/ui_text/src/font.rs` | Domain types exist for atlas + glyph metrics. |
-| Text layouter abstraction | Implied | `domain/ui/ui_text/src/layout.rs` (`TextLayouter`) | Trait exists; no implementation found. |
-| Runtime/editor text shaping from atlas metrics | Missing | Search shows no `impl TextLayouter` | Current UI paths approximate glyphs with fixed advance. |
-| Current runtime/editor glyph placement | Implemented (approximation) | `engine/src/plugins/scene/runtime/overlay_ui.rs`, `domain/editor/editor_shell/src/runtime/output/build_ui_frame.rs` | Uses `estimate_glyph_run` heuristics (not full MSDF shaping). |
+| Text layouter abstraction | Implemented | `domain/ui/ui_text/src/layout.rs` (`TextLayouter`, `AtlasTextLayouter`) | Trait and atlas-backed implementation exist. |
+| Runtime/editor text shaping from atlas metrics | Implemented in UI runtime output | `domain/ui/ui_runtime/src/output/build_ui_frame.rs` | UI frame construction uses `AtlasTextLayouter` and `FontAtlasSource`. |
+| Current runtime/editor glyph placement | Implemented | `domain/ui/ui_runtime/src/output/build_ui_frame.rs` | Glyph runs are emitted from atlas metrics before render extraction. |
 | Render backend support for real MSDF sampling | Missing in current path | `engine/src/plugins/render/renderer/extract.rs` | Glyph runs are flattened into rects; no atlas sampling stage in this path. |
 
 ## Inventory Takeaway

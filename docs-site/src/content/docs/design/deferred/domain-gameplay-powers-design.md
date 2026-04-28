@@ -105,7 +105,7 @@ Correct dependency shape:
 
 ```text
 foundation/diagnostics
-foundation/ids
+foundation/id
         ↓
 domain/gameplay/actions
         ↓

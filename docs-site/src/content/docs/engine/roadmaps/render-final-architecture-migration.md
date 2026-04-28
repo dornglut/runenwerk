@@ -162,7 +162,7 @@ This roadmap is the implementation contract for the final render architecture:
 - Core files:
   - `engine/src/plugins/render/renderer/frame_bindings.rs`
   - `engine/tests/render_cutoff_guard.rs`
-  - render docs in `engine/docs/reference/plugins/render/`
+  - render docs in `docs-site/src/content/docs/engine/reference/plugins/render/`
 - Gate:
   - compatibility coverage stays green (`render_flow_v2`), cutoff guards prevent reintroduction.
 

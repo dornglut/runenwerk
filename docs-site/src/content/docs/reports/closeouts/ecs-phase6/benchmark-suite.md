@@ -10,7 +10,7 @@ last_reviewed: 2026-04-27
 
 # ECS Phase 6 Benchmark Artifacts
 
-Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../roadmaps/phase6-closeout-roadmap.md)
+Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../../domain/ecs/roadmaps/phase6-closeout-roadmap.md)
 
 This folder stores the final Phase 6 measurement set, including required command outputs, same-session comparison refreshes, and the closeout reports.
 

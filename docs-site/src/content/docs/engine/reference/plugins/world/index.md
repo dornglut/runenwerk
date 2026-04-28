@@ -68,5 +68,5 @@ This section tracks the final world/runtime architecture migration for `engine/s
 
 ## Related Docs
 
-- Render plugin architecture: `engine/docs/reference/plugins/render/architecture.md`
-- Migration roadmap: `engine/docs/roadmaps/world-runtime-final-architecture-migration.md`
+- Render plugin architecture: [`../render/architecture.md`](../render/architecture.md)
+- Migration roadmap: [`../../../roadmaps/world-runtime-final-architecture-migration.md`](../../../roadmaps/world-runtime-final-architecture-migration.md)

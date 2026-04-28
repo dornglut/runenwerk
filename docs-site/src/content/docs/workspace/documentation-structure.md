@@ -1053,12 +1053,12 @@ Example:
 title: Moved Document
 status: superseded
 canonical: false
-replaced_by: ../new/path.md
+replaced_by: ../workspace/new-path-example.md
 ---
 
 # Moved
 
-This document moved to [New Path](../new/path.md).
+This document moved to `../workspace/new-path-example.md`.
 ```
 
 Use stubs temporarily. Remove them only after links and references are stable.

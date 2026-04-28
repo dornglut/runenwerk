@@ -30,7 +30,9 @@ It implements client/server endpoint bootstrap, handshake framing, live datagram
 - `src/transport/`
   - `endpoint_factory.rs`, `trust.rs`, `certificates.rs`, `framing.rs`, `lanes.rs`
 - `src/runtime/`
-  - `handles.rs`, `connection.rs`, `helpers.rs`, `command_bus.rs`, `event_bus.rs`, `reconnect.rs`, `routing.rs`, `utils.rs`
+  - `command_bus.rs`, `connection.rs`, `event_bus.rs`, `event_dispatch.rs`,
+    `handles.rs`, `join_rejection.rs`, `message_transport.rs`, `reconnect.rs`,
+    `reconnect_backoff.rs`, `routing.rs`
 - `src/client/`
   - `bootstrap.rs`, `policy.rs`, `runtime.rs`
 - `src/server/`

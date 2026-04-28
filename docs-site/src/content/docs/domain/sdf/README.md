@@ -53,7 +53,7 @@ Does not own:
 `geometry` owns explicit primitives and explicit intersections (`Aabb3`, `Ray3`,
 `Sphere`, `Plane`, etc). `sdf` owns implicit fields and signed-distance queries.
 
-## Relation to future `domain/spatial`
+## Relation to `domain/spatial`
 
 `spatial` should own indexing/runtime organization concerns (BVH, chunking,
 clipmaps, LOD helpers). `sdf` remains focused on field math and field queries.
@@ -82,9 +82,9 @@ assert!(hit.is_some());
 
 ## Documentation
 
-- `docs/index.md`
-- `docs/implementation-roadmap.md`
-- `docs/ownership-boundary.md`
-- `docs/api-notes.md`
-- `docs/QUERY_MODEL.md`
-- `docs/NUMERICS.md`
+- [`index.md`](index.md)
+- [`implementation-roadmap.md`](implementation-roadmap.md)
+- [`ownership-boundary.md`](ownership-boundary.md)
+- [`api-notes.md`](api-notes.md)
+- [`query-model.md`](query-model.md)
+- [`numerics.md`](numerics.md)

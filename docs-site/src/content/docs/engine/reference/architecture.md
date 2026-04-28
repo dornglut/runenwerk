@@ -19,7 +19,7 @@ Internal architecture and runtime contracts for the `engine` crate.
 - Runtime domain: `engine/src/runtime/` and `engine/src/app/runtime/`
   - schedules, fixed-step semantics, lifecycle execution, platform adapters
 - Plugin domain: `engine/src/plugins/`
-  - feature-owned runtime behavior (scene/render/input/net/ui/etc.)
+  - feature-owned runtime behavior (scene/render/input/net/world/etc.)
 
 ## Runtime Lifecycle Contract
 
@@ -92,12 +92,12 @@ This contract is shared by headless and windowed runners.
 ## Related Source Entrypoints
 
 - Public crate surface:
-  - [`../../src/lib.rs`](../../src/lib.rs)
+  - `engine/src/lib.rs`
 - Prelude surface:
-  - [`../../src/prelude.rs`](../../src/prelude.rs)
+  - `engine/src/prelude.rs`
 - Runtime schedules:
-  - [`../../src/runtime/schedules.rs`](../../src/runtime/schedules.rs)
+  - `engine/src/runtime/schedules.rs`
 - Plugin map:
-  - [`../../src/plugins/README.md`](../plugins/README.md)
+  - [`../plugins/README.md`](../plugins/README.md)
 - Plugin guides:
   - [`plugins/index.md`](plugins/index.md)

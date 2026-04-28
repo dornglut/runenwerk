@@ -10,7 +10,7 @@ last_reviewed: 2026-04-27
 
 # Phase 6 Final Decision Report
 
-Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../roadmaps/phase6-closeout-roadmap.md)
+Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../../domain/ecs/roadmaps/phase6-closeout-roadmap.md)
 
 ## 1. Decision
 

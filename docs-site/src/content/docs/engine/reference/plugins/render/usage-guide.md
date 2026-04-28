@@ -12,8 +12,8 @@ last_reviewed: 2026-04-27
 
 This page covers plugin/runtime wiring. For `RenderFlow` authoring, use:
 
-- `engine/docs/reference/plugins/render/render-flow-usage-guide.md`
-- `engine/docs/reference/plugins/render/gpu-params-guide.md`
+- [`render-flow-usage-guide.md`](render-flow-usage-guide.md)
+- [`gpu-params-guide.md`](gpu-params-guide.md)
 
 ## Purpose
 

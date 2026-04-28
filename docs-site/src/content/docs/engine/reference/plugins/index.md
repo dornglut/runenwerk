@@ -60,9 +60,8 @@ Canonical guide map for engine plugin modules.
   - [Advanced](time/advanced-guide.md)
   - [Architecture](time/architecture.md)
 - UI Domain Surface
-  - [Usage](ui/usage-guide.md)
-  - [Advanced](ui/advanced-guide.md)
-  - [Architecture](ui/architecture.md)
+  - [Domain UI Architecture](../../../domain/ui/architecture.md)
+  - [Domain UI Roadmap](../../../domain/ui/roadmap.md)
 
 ## Internal Shared Utilities
 

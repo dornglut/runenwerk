@@ -60,9 +60,9 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
 - Net
   - `src/net/` and `src/plugins/net/`
   - Public net prelude + ECS/runtime bridge to `engine_net`.
-- UI
-  - `src/plugins/ui/`
-  - UI data model, template runtime, text rendering support types.
+- UI integration
+  - `src/plugins/scene/ui/` and `domain/ui/*`
+  - Scene overlay integration and renderer-independent UI data contracts.
 - Examples and tests
   - `examples/`
   - `tests/`
@@ -82,7 +82,7 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
 ## Plugin Entry Points
 
 - Plugin trait: `src/plugin.rs`
-- Plugin index and docs map: `src/plugins/README.md`
+- Plugin index and docs map: `docs-site/src/content/docs/engine/plugins/README.md`
 - Default stack: `engine::plugins::default_plugins()`
   - `TimePlugin`
   - `FixedStepPlugin`
@@ -101,11 +101,10 @@ plugin wiring, and integrated engine-facing systems (scene, render, input, repla
 
 ## Example Map
 
-See `examples/README.md` for the full map.
+See [`examples/overview.md`](examples/overview.md) for the full map.
 
 - `runtime_minimal`: smallest headless runtime flow.
 - `window_input_demo`: windowed input loop + default plugins.
-- `scene_manager_ui`: template-driven scene/UI flow.
 - `game_of_life_sdf`: windowed public `RenderFlow` example on builtin compiled execution.
 - `boids_render_flow`: windowed boids compute+compose flow on the builtin compiled path.
 - `sdf_render_flow`: windowed 3D SDF raymarch flow rendered through a fullscreen compose pass.

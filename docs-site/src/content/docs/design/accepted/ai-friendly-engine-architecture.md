@@ -302,7 +302,7 @@ AI-friendliness benefits from several reusable foundational crates, but they sho
 Recommended priority:
 
 ```text
-1. foundation/ids
+1. foundation/id
 2. foundation/diagnostics
 3. foundation/ratification
 4. foundation/schema
@@ -314,7 +314,7 @@ These should not all be created prematurely. Each should be introduced when ther
 
 ---
 
-## `foundation/ids`
+## `foundation/id`
 
 ### Purpose
 
@@ -887,11 +887,11 @@ Large architectural changes should begin with a design note.
 Examples:
 
 ```text
-docs/design/editor_surface_routing.md
-docs/design/foundation_diagnostics.md
-docs/design/scene_identity.md
-docs/design/asset_graph.md
-docs/design/render_graph_ratification.md
+docs-site/src/content/docs/design/editor-surface-routing.md
+docs-site/src/content/docs/design/foundation-diagnostics.md
+docs-site/src/content/docs/design/scene-identity.md
+docs-site/src/content/docs/design/asset-graph.md
+docs-site/src/content/docs/design/render-graph-ratification.md
 ```
 
 Each design note should include:
@@ -1031,7 +1031,7 @@ This phase should happen before adding AI-specific features.
 Introduce or formalize:
 
 ```text
-foundation/ids
+foundation/id
 foundation/diagnostics
 ```
 

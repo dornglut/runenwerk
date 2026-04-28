@@ -10,7 +10,7 @@ last_reviewed: 2026-04-27
 
 # Phase 6A Archetype Storage Plan
 
-Roadmap reference (workspace): [Domain roadmap](../../01-roadmap.md)
+Roadmap reference: domain ECS archetype storage plan.
 Companion full-switch plan: [`phase6-archetype-full-switch-plan.md`](./phase6-archetype-full-switch-plan.md)
 Closeout roadmap: [`phase6-closeout-roadmap.md`](./phase6-closeout-roadmap.md)
 

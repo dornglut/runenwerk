@@ -211,8 +211,7 @@ Why:
 Primary ownership locations:
 
 - `domain/ui/ui_text/src/layout.rs` (`TextLayouter` implementation),
-- `engine/src/plugins/scene/runtime/overlay_ui.rs` (replace `estimate_glyph_run` path),
-- `domain/editor/editor_shell/src/runtime/output/build_ui_frame.rs` (replace `estimate_glyph_run` path),
+- `domain/ui/ui_runtime/src/output/build_ui_frame.rs` (UI frame glyph run emission),
 - `engine/src/plugins/render/renderer/extract.rs` (move from glyph-as-rect approximation to atlas-backed glyph rendering path).
 
 Incremental steps:

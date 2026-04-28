@@ -89,7 +89,6 @@ assert_eq!(ground.signed_distance(Vec3::new(0.0, 2.0, 0.0)), 2.0);
 
 ## Additional Docs
 
-- `docs/index.md`
-- `docs/implementation-roadmap.md`
-- `docs/api-notes.md`
-- `docs/ownership-boundary.md`
+- [`implementation-roadmap.md`](implementation-roadmap.md)
+- [`api-notes.md`](api-notes.md)
+- [`ownership-boundary.md`](ownership-boundary.md)

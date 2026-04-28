@@ -33,7 +33,7 @@ Rule of thumb:
 
 ## SDF vs Spatial
 
-`domain/spatial` (future) should own:
+`domain/spatial` owns:
 
 - BVH/chunk/clipmap/LOD indexing/runtime structures
 - field residency, streaming, and region addressing systems

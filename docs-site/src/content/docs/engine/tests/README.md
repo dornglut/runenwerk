@@ -39,6 +39,6 @@ Integration coverage is organized by behavior area.
 
 ## Related
 
-- Crate docs hub: `engine/docs/index.md`
-- Usage guide: `engine/docs/reference/usage-guide.md`
-- Architecture guide: `engine/docs/reference/architecture.md`
+- Crate docs hub: [`../index.md`](../index.md)
+- Usage guide: [`../reference/usage-guide.md`](../reference/usage-guide.md)
+- Architecture guide: [`../reference/architecture.md`](../reference/architecture.md)

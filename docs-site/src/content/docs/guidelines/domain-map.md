@@ -31,7 +31,7 @@ Primary plugin modules live under:
 - `engine/src/plugins/render`
 - `engine/src/plugins/input`
 - `engine/src/plugins/time`
-- `engine/src/plugins/ui`
+- `domain/ui/*` with engine scene/render integration
 - `engine/src/plugins/grid`
 - `engine/src/plugins/shared`
 - `engine/src/plugins/debug_metrics`

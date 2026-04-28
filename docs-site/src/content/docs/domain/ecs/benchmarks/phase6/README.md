@@ -13,6 +13,6 @@ replaced_by: ../../../reports/closeouts/ecs-phase6/
 
 The ECS Phase 6 benchmark and closeout reports moved to:
 
-- [`benchmark-suite.md`](../../../reports/closeouts/ecs-phase6/benchmark-suite.md)
-- [`progress-report.md`](../../../reports/closeouts/ecs-phase6/progress-report.md)
-- [`final-decision-report.md`](../../../reports/closeouts/ecs-phase6/final-decision-report.md)
+- [`benchmark-suite.md`](../../../../reports/closeouts/ecs-phase6/benchmark-suite.md)
+- [`progress-report.md`](../../../../reports/closeouts/ecs-phase6/progress-report.md)
+- [`final-decision-report.md`](../../../../reports/closeouts/ecs-phase6/final-decision-report.md)

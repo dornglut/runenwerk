@@ -2,8 +2,10 @@
 from pathlib import Path
 import re
 import sys
+import urllib.parse
 
 DOCS_ROOT = Path("docs-site/src/content/docs")
+REPO_ROOT = Path(".")
 ALLOWED_STATUS = {
     "draft",
     "active",
@@ -15,6 +17,35 @@ ALLOWED_STATUS = {
     "rejected",
     "archived",
 }
+STALE_PATTERNS = {
+    "engine/docs/": "engine docs moved under docs-site/src/content/docs/engine",
+    "engine/README.md": "engine crate docs moved under docs-site/src/content/docs/engine/README.md",
+    "engine/src/plugins/README.md": "engine plugin docs moved under docs-site/src/content/docs/engine/plugins/README.md",
+    "engine/examples/README.md": "engine examples docs moved under docs-site/src/content/docs/engine/examples/overview.md",
+    "engine/tests/README.md": "engine tests docs moved under docs-site/src/content/docs/engine/tests/README.md",
+    "engine/src/plugins/ui": "engine has no standalone ui plugin; use domain/ui docs and scene/render integration docs",
+    "src/plugins/ui/": "engine has no standalone ui plugin; use domain/ui docs and scene/render integration docs",
+    "plugins/ui/README.md": "engine has no standalone ui plugin docs",
+    "foundation/ids": "the current identity crate is foundation/id",
+    "docs/design/": "design docs live under docs-site/src/content/docs/design",
+    "docs/adr/": "ADRs live under docs-site/src/content/docs/adr",
+    "scene_manager_ui": "the scene_manager_ui example is not present",
+    "engine_net_quic/src/runtime/helpers.rs": "engine_net_quic runtime helpers.rs was removed",
+    "engine_net_quic/src/runtime/utils.rs": "engine_net_quic runtime utils.rs was removed",
+    "domain/editor/editor_shell/src/runtime/output/build_ui_frame.rs": "UI frame output moved to domain/ui/ui_runtime/src/output/build_ui_frame.rs",
+    "no `impl TextLayouter`": "AtlasTextLayouter now implements TextLayouter",
+}
+
+MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+
+def contains_stale_pattern(text: str, stale: str) -> bool:
+    if stale == "docs/design/":
+        text = text.replace("docs-site/src/content/docs/design/", "")
+        text = text.replace("content/docs/design/", "")
+    elif stale == "docs/adr/":
+        text = text.replace("docs-site/src/content/docs/adr/", "")
+        text = text.replace("content/docs/adr/", "")
+    return stale in text
 
 def has_frontmatter(text: str) -> bool:
     return text.startswith("---\n") and "\n---\n" in text[4:]
@@ -36,6 +67,31 @@ def is_valid_docs_filename(path: Path) -> bool:
         return False
 
     return bool(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*\.(md|mdx)", name))
+
+def link_candidates(source: Path, raw_target: str) -> list[Path]:
+    cleaned = raw_target.strip().split()[0].strip("<>")
+    if cleaned.startswith(("http://", "https://", "mailto:")):
+        return []
+    target = urllib.parse.unquote(cleaned.split("#", 1)[0])
+    if not target:
+        return []
+
+    base = (source.parent / target).resolve()
+    if base.suffix:
+        return [base]
+    return [
+        base,
+        base.with_suffix(".md"),
+        base.with_suffix(".mdx"),
+        base / "README.md",
+        base / "index.md",
+        base / "index.mdx",
+    ]
+
+def repo_path_exists(path_text: str) -> bool:
+    if path_text.startswith(("http://", "https://")):
+        return True
+    return (REPO_ROOT / path_text).exists()
 
 def main() -> int:
     errors: list[str] = []
@@ -62,6 +118,16 @@ def main() -> int:
                         errors.append(f"missing status: {path}")
                     elif status not in ALLOWED_STATUS:
                         errors.append(f"invalid status '{status}': {path}")
+
+            for stale, reason in STALE_PATTERNS.items():
+                if contains_stale_pattern(text, stale):
+                    errors.append(f"stale docs reference '{stale}' in {path}: {reason}")
+
+            for match in MARKDOWN_LINK.finditer(text):
+                raw_target = match.group(1)
+                candidates = link_candidates(path, raw_target)
+                if candidates and not any(candidate.exists() for candidate in candidates):
+                    errors.append(f"broken markdown link in {path}: {raw_target}")
 
     return report(errors)
 

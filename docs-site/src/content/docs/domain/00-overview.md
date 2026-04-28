@@ -34,12 +34,12 @@ Domain crates must not depend on:
 | --- | --- | --- |
 | ECS | `domain/ecs`, `domain/ecs_macros` | [`ecs/00-overview.md`](./ecs/00-overview.md), [`ecs/README.md`](./ecs/README.md), [`ecs-macros/README.md`](./ecs-macros/README.md) |
 | Scheduler | `domain/scheduler` | [`scheduler/README.md`](./scheduler/README.md), [`scheduler/design-goals.md`](./scheduler/design-goals.md) |
-| Scene | `domain/scene` | Add docs when scene domain documentation is expanded. |
+| Scene | `domain/scene` | [`scene/README.md`](./scene/README.md) |
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
 | SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
-| Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | Add current docs as these crates mature. |
+| Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
 | UI substrate | `domain/ui/*` | [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
-| Editor domains | `domain/editor/*` | Editor-domain docs are currently tracked through app/editor and design docs; split crate-level docs as needed. |
+| Editor domains | `domain/editor/*` | [`editor/README.md`](./editor/README.md) |
 
 ## What Belongs in Domain
 
@@ -81,13 +81,13 @@ Start here when working in the domain layer:
 
 For workspace-wide ownership, see:
 
-- [`../../../../DOMAIN_MAP.md`](../../../../DOMAIN_MAP.md)
-- [`../../../../CRATES.md`](../../../../CRATES.md)
+- `DOMAIN_MAP.md`
+- `CRATES.md`
 - [`../workspace/crate-docs-status.md`](../workspace/crate-docs-status.md)
 
 ## Known Gaps
 
-The following domain areas need stronger crate-level docs:
+The following domain areas still need deeper crate-level usage and architecture docs beyond the current landing pages:
 
 - `domain/scene`
 - `domain/spatial`

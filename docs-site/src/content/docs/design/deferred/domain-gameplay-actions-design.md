@@ -102,7 +102,7 @@ Correct dependency shape:
 
 ```text
 foundation/diagnostics
-foundation/ids
+foundation/id
 foundation/tags?       optional later
 foundation/time?       optional later
         ↓

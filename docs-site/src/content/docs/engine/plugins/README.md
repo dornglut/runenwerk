@@ -57,10 +57,6 @@ This directory is the feature composition layer for `engine`.
   - README: [`net/README.md`](net/README.md)
   - Guides: [`../../docs/reference/plugins/net/usage-guide.md`](../reference/plugins/net/usage-guide.md)
   - Purpose: network runtime and replication bridge.
-- `ui/`
-  - README: [`ui/README.md`](ui/README.md)
-  - Guides: [`../../docs/reference/plugins/ui/usage-guide.md`](../reference/plugins/ui/usage-guide.md)
-  - Purpose: UI domain data and template/text flows.
 - `grid/`
   - README: [`grid/README.md`](grid/README.md)
   - Guides: [`../../docs/reference/plugins/grid/usage-guide.md`](../reference/plugins/grid/usage-guide.md)
@@ -87,5 +83,5 @@ This directory is the feature composition layer for `engine`.
 - Plugin trait: `engine/src/plugin.rs`
 - Plugin registry module: `engine/src/plugins/mod.rs`
 - Default plugin stack helper: `engine::plugins::default_plugins()`
-- Crate advanced docs: `engine/docs/reference/advanced-guide.md`
-- Crate architecture docs: `engine/docs/reference/architecture.md`
+- Crate advanced docs: [`../reference/advanced-guide.md`](../reference/advanced-guide.md)
+- Crate architecture docs: [`../reference/architecture.md`](../reference/architecture.md)

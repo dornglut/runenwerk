@@ -13,11 +13,11 @@ last_reviewed: 2026-04-27
 ## Primary Architecture Docs
 
 - Target architecture summary:
-  - `engine/docs/reference/plugins/render/render-target-architecture.md`
+  - [`render-target-architecture.md`](render-target-architecture.md)
 - Final migration roadmap:
-  - `engine/docs/roadmaps/render-final-architecture-migration.md`
+  - [`../../../roadmaps/render-final-architecture-migration.md`](../../../roadmaps/render-final-architecture-migration.md)
 - Internal roadmap/backlog:
-  - `engine/src/plugins/render/docs/roadmap.md`
+  - [`../../../plugins/render/docs/roadmap.md`](../../../plugins/render/docs/roadmap.md)
 
 ## Current Public Surface
 

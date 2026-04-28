@@ -57,7 +57,7 @@ This shape remains correct.
 
 ```text
 foundation/diagnostics
-foundation/ids
+foundation/id
 foundation/tags? optional
 foundation/time? optional
 
@@ -226,7 +226,7 @@ apps/editor/power_editor
 Before coding `domain/gameplay/actions`, decide:
 
 1. Where doctrine policy enums live.
-2. Whether `foundation/ids` exists or IDs are local newtypes.
+2. Whether `foundation/id` exists or IDs are local newtypes.
 3. Exact diagnostics subject model.
 4. Whether schema versions are local newtypes or shared foundation values.
 5. Whether capability markers are implemented now or left as design contracts.

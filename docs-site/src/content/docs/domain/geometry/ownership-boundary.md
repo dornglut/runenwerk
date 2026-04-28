@@ -20,7 +20,7 @@ other domains/crates.
 - explicit primitive/bounds data structures
 - geometric relationships and queries between those primitives
 
-`domain/spatial` (future) should own:
+`domain/spatial` owns:
 
 - spatial indexing (BVH, octree, quadtree)
 - runtime broad-phase culling/indexing strategies

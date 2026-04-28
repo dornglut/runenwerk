@@ -10,7 +10,7 @@ last_reviewed: 2026-04-27
 
 # Phase 6 Progress Report
 
-Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../roadmaps/phase6-closeout-roadmap.md)
+Roadmap source of truth: [`phase6-closeout-roadmap.md`](../../../domain/ecs/roadmaps/phase6-closeout-roadmap.md)
 
 Run date: 2026-03-12
 

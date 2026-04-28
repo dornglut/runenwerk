@@ -424,7 +424,7 @@ This phase makes it pleasant.
 - `engine/src/plugins/render/api/resources.rs`
 - `engine/src/plugins/render/api/bindings.rs`
 - `engine/src/plugins/render/README.md`
-- `engine/docs/reference/plugins/render/render-flow-usage-guide.md`
+- `docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md`
 
 ## Required implementation
 

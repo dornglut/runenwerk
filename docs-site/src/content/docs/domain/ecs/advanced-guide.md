@@ -188,6 +188,6 @@ Suggested workflow:
 
 Related benchmark docs:
 
-- [`../benchmarks/phase6/benchmark-suite.md`](./benchmarks/phase6/benchmark-suite.md)
-- [`../benchmarks/phase6/progress-report.md`](./benchmarks/phase6/progress-report.md)
-- [`../benchmarks/phase6/final-decision-report.md`](./benchmarks/phase6/final-decision-report.md)
+- [`benchmark-suite.md`](../../reports/closeouts/ecs-phase6/benchmark-suite.md)
+- [`progress-report.md`](../../reports/closeouts/ecs-phase6/progress-report.md)
+- [`final-decision-report.md`](../../reports/closeouts/ecs-phase6/final-decision-report.md)

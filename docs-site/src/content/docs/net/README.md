@@ -100,7 +100,10 @@ The `net/` subtree is organized around explicit subdomain modules.
   - Server accept/admission/peer/policy/runtime concerns
 - `engine_net_quic/src/runtime/`
   - Command/event buses, connection lifecycle, reconnect, routing, handles
-  - Transitional helper modules currently present: `helpers.rs`, `utils.rs`
+  - Current modules: `command_bus.rs`, `connection.rs`, `event_bus.rs`,
+    `event_dispatch.rs`, `handles.rs`, `join_rejection.rs`,
+    `message_transport.rs`, `reconnect.rs`, `reconnect_backoff.rs`, and
+    `routing.rs`
 - `engine_net_quic/src/transport/`
   - QUIC framing, certificates, trust, lane mapping, endpoint creation
 - `engine_net_quic/src/driver/`
@@ -139,10 +142,9 @@ Avoid:
 - `_internal` module suffixes
 - catch-all files such as `utils.rs`, `helpers.rs`, or `misc.rs` when a more specific name is possible
 
-Note: `engine_net_quic/src/runtime/helpers.rs` and
-`engine_net_quic/src/runtime/utils.rs` currently exist as transitional
-modules and should be treated as refactor targets toward explicit
-ownership-oriented submodules.
+The QUIC runtime no longer keeps broad transitional runtime buckets. New
+runtime code should go into explicit ownership modules such as connection,
+transport, routing, reconnect, command bus, or event dispatch.
 
 ## Typical Flow
 

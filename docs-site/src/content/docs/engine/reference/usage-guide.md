@@ -112,12 +112,12 @@ fn main() -> Result<()> {
 ## Common Workflow References
 
 - Minimal runtime flow:
-  - [`../../examples/runtime_minimal/main.rs`](../../examples/runtime_minimal/main.rs)
+  - `engine/examples/runtime_minimal/main.rs`
 - Window + input flow:
-  - [`../../examples/window_input_demo/main.rs`](../../examples/window_input_demo/main.rs)
+  - `engine/examples/window_input_demo/main.rs`
 - Default plugin stack helper:
-  - [`../../src/plugins/mod.rs`](../../src/plugins/mod.rs)
+  - `engine/src/plugins/mod.rs`
 - Plugin index:
-  - [`../../src/plugins/README.md`](../plugins/README.md)
+  - [`../plugins/README.md`](../plugins/README.md)
 - Plugin guides:
   - [`plugins/index.md`](plugins/index.md)

@@ -29,6 +29,10 @@ export default defineConfig({
 					autogenerate: { directory: 'apps' },
 				},
 				{
+					label: 'Adapters',
+					autogenerate: { directory: 'adapters' },
+				},
+				{
 					label: 'ADRs',
 					autogenerate: { directory: 'adr' },
 				},
