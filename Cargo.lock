@@ -796,8 +796,10 @@ dependencies = [
 name = "editor_scene"
 version = "0.1.0"
 dependencies = [
+ "commands",
  "editor_core",
  "editor_inspector",
+ "schema",
 ]
 
 [[package]]

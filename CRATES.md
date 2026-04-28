@@ -48,7 +48,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ui_widgets` | `domain/ui/ui_widgets` | domain | Widget constructors over `ui_tree` contracts. | evolving |
 | `editor_core` | `domain/editor/editor_core` | domain | Editor command, capability, transaction, ratification, migration, selection, session, sharing, and workflow contracts. | evolving |
 | `editor_inspector` | `domain/editor/editor_inspector` | domain | Inspector model, editing, target, resolution, bridge, schema interop, session, and validation contracts. | evolving |
-| `editor_scene` | `domain/editor/editor_scene` | domain | Editor scene model, commands, command bridge, and scene command contracts. | evolving |
+| `editor_scene` | `domain/editor/editor_scene` | domain | Editor scene model, commands, command descriptors, command bridge, and scene command contracts. | evolving |
 | `editor_viewport` | `domain/editor/editor_viewport` | domain | Editor viewport camera, expression, hit, overlay, snap, and viewport contracts. | evolving |
 | `editor_shell` | `domain/editor/editor_shell` | domain | Editor shell composition, workspace identity, observation, expression, command routing, and view models. | evolving |
 | `editor_persistence` | `domain/editor/editor_persistence` | domain | Editor persistence formats, RON codec, scene migration/normalization/formation, and change-log contracts. | evolving |

@@ -63,7 +63,7 @@ Each owner should keep its concrete command enum and execution path. The foundat
 
 ## Current implementation status
 
-Phase 0, Phase 1, and Phase 2 are complete.
+Phase 0, Phase 1, Phase 2, and Phase 3 are complete.
 
 Implemented Phase 1 crate:
 
@@ -90,16 +90,21 @@ tests
 optional diagnostics bridge
 ```
 
+Implemented Phase 3 descriptor:
+
+```text
+domain/editor/editor_scene publishes editor.scene.edit_component_field
+```
+
 Next phase:
 
 ```text
-Phase 3: one domain-owned command descriptor
+Phase 4: one explicit proposal-to-domain-intent adapter
 ```
 
 Not yet implemented:
 
 ```text
-consumers
 registries
 proposal-to-domain-intent mapping
 top-level proposal target paths
@@ -956,7 +961,7 @@ AddComponent
 RemoveComponent
 ```
 
-Recommended candidate after current inspection:
+Implemented descriptor:
 
 ```text
 editor_scene publishes descriptor for EditComponentField
@@ -971,7 +976,7 @@ scene.local_transform descriptor already exists
 it proves descriptor usefulness without changing execution
 ```
 
-This candidate must be re-inspected before implementation. No implementation should convert proposals to `SceneCommandIntent` until descriptor publication is stable.
+The descriptor is published without changing execution and without converting proposals to `SceneCommandIntent`.
 
 ## Relationship to ECS
 
@@ -1362,7 +1367,7 @@ Do not decide acceptance.
 
 ### Phase 3: One domain-owned command descriptor
 
-Status: next.
+Status: complete.
 
 Recommended candidate after re-inspection:
 
@@ -1523,9 +1528,9 @@ python3 tools/docs/validate_docs.py
 
 Keep `docs-site/src/content/docs/design/active/foundation-commands.md` as the active phase roadmap for `foundation/commands`.
 
-Phase 0, Phase 1, and Phase 2 are complete.
+Phase 0, Phase 1, Phase 2, and Phase 3 are complete.
 
-Proceed to Phase 3 only after re-inspecting the recommended descriptor candidate and keeping execution unchanged.
+Proceed to Phase 4 only after reviewing the descriptor and keeping the adapter explicit, narrow, tested, and non-reflective.
 
 The clean Phase 1 target is:
 
