@@ -13,6 +13,8 @@ extern crate alloc;
 
 #[cfg(feature = "alloc")]
 pub mod descriptor;
+#[cfg(all(feature = "alloc", feature = "diagnostics"))]
+pub mod diagnostic;
 #[cfg(feature = "alloc")]
 pub mod hint;
 pub mod id;
@@ -27,6 +29,14 @@ pub mod version;
 
 #[cfg(feature = "alloc")]
 pub use descriptor::{CommandDescriptor, CommandDescriptorError};
+#[cfg(all(feature = "alloc", feature = "diagnostics"))]
+pub use diagnostic::{
+    command_contract_id_error_to_diagnostic, command_contract_version_error_to_diagnostic,
+    command_descriptor_error_to_diagnostic, command_issue_to_diagnostic,
+    command_issues_to_diagnostic_report, command_metadata_error_to_diagnostic,
+    command_proposal_error_to_diagnostic, command_proposal_id_error_to_diagnostic,
+    command_schema_ref_error_to_diagnostic,
+};
 #[cfg(feature = "alloc")]
 pub use hint::{CommandEffectHint, CommandReversibilityHint, CommandTargetHint};
 pub use id::{

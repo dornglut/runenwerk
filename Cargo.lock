@@ -475,6 +475,7 @@ dependencies = [
 name = "commands"
 version = "0.1.0"
 dependencies = [
+ "diagnostics",
  "schema",
  "serde",
  "serde_json",

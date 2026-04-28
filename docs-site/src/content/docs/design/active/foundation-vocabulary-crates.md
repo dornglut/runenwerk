@@ -123,7 +123,8 @@ Current status:
 ```text
 Phase 0 design accepted
 Phase 1 core descriptor/proposal vocabulary implemented
-Phase 2 optional diagnostics bridge is next
+Phase 2 optional diagnostics bridge implemented
+Phase 3 one domain-owned command descriptor is next
 ```
 
 ## Relationship Between Core Vocabulary Crates
@@ -262,14 +263,14 @@ Schema describes reusable shapes and value contracts. It must not become a seria
 
 Status: complete.
 
-The accepted command design lives at `docs-site/src/content/docs/design/active/foundation-commands.md`, and Phase 1 is implemented at `foundation/commands`.
+The accepted command design lives at `docs-site/src/content/docs/design/active/foundation-commands.md`, and Phase 1 and Phase 2 are implemented at `foundation/commands`.
 
 ```text
 CommandDescriptor uses schema for parameters.
 CommandProposal carries SchemaValue parameters.
 ```
 
-Do not add command execution, global registries, proposal-to-domain adapters, diagnostics projection, ratification dependencies, provenance, permission, transaction, or patch semantics in Phase 1.
+Do not add command execution, global registries, proposal-to-domain adapters, ratification dependencies, provenance, permission, transaction, or patch semantics before the owning design phase allows them.
 
 ### Phase 6: Re-evaluate Later Candidates
 

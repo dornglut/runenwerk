@@ -9,8 +9,10 @@ default = ["std"]
 std = ["alloc", "schema/std"]
 alloc = ["schema/alloc"]
 serde = ["dep:serde", "alloc", "schema/serde"]
+diagnostics = ["dep:diagnostics", "alloc"]
 
 [dependencies]
+diagnostics = { path = "../diagnostics", optional = true, default-features = false, features = ["alloc"] }
 schema = { path = "../schema", default-features = false }
 serde = { version = "1", features = ["alloc", "derive"], optional = true, default-features = false }
 

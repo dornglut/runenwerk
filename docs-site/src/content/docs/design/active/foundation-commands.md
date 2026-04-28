@@ -63,7 +63,7 @@ Each owner should keep its concrete command enum and execution path. The foundat
 
 ## Current implementation status
 
-Phase 0 and Phase 1 are complete.
+Phase 0, Phase 1, and Phase 2 are complete.
 
 Implemented Phase 1 crate:
 
@@ -87,18 +87,18 @@ prelude
 serde feature
 no_std/alloc/std features
 tests
+optional diagnostics bridge
 ```
 
 Next phase:
 
 ```text
-Phase 2: optional diagnostics bridge
+Phase 3: one domain-owned command descriptor
 ```
 
 Not yet implemented:
 
 ```text
-diagnostics bridge
 consumers
 registries
 proposal-to-domain-intent mapping
@@ -872,7 +872,7 @@ Diagnostics explain command-description or proposal-shape issues.
 
 Phase 1 should not require diagnostics.
 
-Phase 2 may add an optional diagnostics feature that projects command issues into diagnostic reports by explicit caller action.
+Phase 2 adds an optional diagnostics feature that projects command issues into diagnostic reports by explicit caller action.
 
 Correct relationship:
 
@@ -1203,7 +1203,7 @@ CommandMetadataError
 CommandIssueError
 ```
 
-Optional diagnostics bridge later:
+Optional diagnostics bridge:
 
 ```text
 CommandIssue -> Diagnostic
@@ -1340,8 +1340,6 @@ no_std/alloc/std features
 tests
 ```
 
-Do not add diagnostics bridge yet.
-
 Do not add consumers.
 
 Do not add registry.
@@ -1354,7 +1352,7 @@ Do not add proposal-carried parameter schema claims.
 
 ### Phase 2: Optional diagnostics bridge
 
-Status: next.
+Status: complete.
 
 Add optional diagnostics projection for command descriptor/proposal issues.
 
@@ -1363,6 +1361,8 @@ Do not add ratification dependency.
 Do not decide acceptance.
 
 ### Phase 3: One domain-owned command descriptor
+
+Status: next.
 
 Recommended candidate after re-inspection:
 
@@ -1523,9 +1523,9 @@ python3 tools/docs/validate_docs.py
 
 Keep `docs-site/src/content/docs/design/active/foundation-commands.md` as the active phase roadmap for `foundation/commands`.
 
-Phase 0 and Phase 1 are complete.
+Phase 0, Phase 1, and Phase 2 are complete.
 
-Proceed to Phase 2 only after reviewing the Phase 1 implementation and confirming a diagnostics bridge is still useful.
+Proceed to Phase 3 only after re-inspecting the recommended descriptor candidate and keeping execution unchanged.
 
 The clean Phase 1 target is:
 
@@ -1539,7 +1539,7 @@ no execution
 no registry
 no domain mapping
 no ratification dependency
-no diagnostics dependency by default
+diagnostics dependency optional only
 no top-level proposal target path
 no proposal-carried parameter schema claim
 ```

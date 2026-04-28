@@ -26,7 +26,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `diagnostics` | `foundation/diagnostics` | foundation | Structured diagnostic reporting vocabulary. | evolving |
 | `ratification` | `foundation/ratification` | foundation | Shared ratification report, issue, status, ratifier, and diagnostics-bridge vocabulary. | evolving |
 | `schema` | `foundation/schema` | foundation | Portable schema identity, version, path, value, shape, field, constraint, metadata, and descriptor vocabulary. | evolving |
-| `commands` | `foundation/commands` | foundation | Portable command contract identity, schema reference, descriptor, proposal, metadata, hint, and issue vocabulary. | evolving |
+| `commands` | `foundation/commands` | foundation | Portable command contract identity, schema reference, descriptor, proposal, metadata, hint, issue, and optional diagnostics-bridge vocabulary. | evolving |
 | `geometry` | `domain/geometry` | domain | Explicit geometric primitives and geometric queries. | evolving |
 | `spatial` | `domain/spatial` | domain | World/grid/chunk/clipmap/ring spatial coordinate contracts. | evolving |
 | `spatial_index` | `domain/spatial_index` | domain | Spatial index traits and spatial hash implementation. | evolving |
