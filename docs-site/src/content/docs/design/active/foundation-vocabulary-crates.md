@@ -109,7 +109,8 @@ Phase 0 design accepted
 Phase 1 core vocabulary implemented
 Phase 2 optional diagnostics bridge implemented
 Phase 3 first low-risk consumer implemented
-Phase 4 descriptor publication for one domain shape is next
+Phase 4 scene LocalTransform descriptor publication implemented
+Phase 5 foundation/commands design preparation is next
 ```
 
 It still must not own runtime behavior, command execution, editor policy, ECS reflection, registries, domain validation, AI behavior, or generic `SchemaValue`-against-`SchemaShape` validation.
@@ -240,7 +241,7 @@ create a global diagnostic registry
 
 ### Phase 4: Implement `foundation/schema`
 
-Status: in progress, with Phase 0 through Phase 3 complete.
+Status: complete for the schema-vocabulary stabilization milestone, with Phase 0 through Phase 4 complete.
 
 Completed:
 
@@ -249,12 +250,13 @@ Phase 0: accepted design
 Phase 1: crate skeleton and core vocabulary
 Phase 2: optional diagnostics bridge for schema-definition issues
 Phase 3: editor_inspector path/value interoperability helpers
+Phase 4: scene LocalTransform descriptor publication
 ```
 
 Next:
 
 ```text
-Phase 4: descriptor publication for one domain shape
+Phase 5: prepare foundation/commands design
 ```
 
 Schema describes reusable shapes and value contracts. It must not become a serialization framework, ECS reflection system, editor inspector engine, runtime object model, command executor, registry, AI path, or domain validator.

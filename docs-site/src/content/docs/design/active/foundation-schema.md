@@ -15,7 +15,7 @@ related_adrs: []
 
 This design was revised through bounded review passes that focused on repository evidence, foundation-layer boundaries, dependency direction, diagnostics and ratification separation, command descriptor preparation, and migration realism.
 
-The main review pressure was to keep `foundation/schema` as portable description vocabulary only. Earlier drafts drifted too close to editor inspector behavior, ECS reflection, generic validation, and future command execution. The accepted design keeps those concerns out of the crate. Phase 1, Phase 2, and Phase 3 now implement the foundation-only vocabulary, optional diagnostics projection, and one narrow editor-inspector interoperability consumer while leaving descriptor publication for Phase 4.
+The main review pressure was to keep `foundation/schema` as portable description vocabulary only. Earlier drafts drifted too close to editor inspector behavior, ECS reflection, generic validation, and future command execution. The accepted design keeps those concerns out of the crate. Phase 1 through Phase 4 now implement the foundation-only vocabulary, optional diagnostics projection, one narrow editor-inspector interoperability consumer, and one domain-owned descriptor publication while leaving command vocabulary design for Phase 5.
 
 ## Purpose
 
@@ -74,10 +74,11 @@ Phase 0: complete - accepted design
 Phase 1: complete - crate skeleton and core vocabulary
 Phase 2: complete - optional diagnostics bridge for schema-definition issues
 Phase 3: complete - editor_inspector path/value interoperability helpers
-Phase 4: next - descriptor publication for one domain shape
+Phase 4: complete - scene LocalTransform descriptor publication
+Phase 5: next - prepare foundation/commands design
 ```
 
-Phase 4 must not start by designing `foundation/commands`, adding registries, rewriting editor inspector, replacing inspector edit flow, adding reflection-driven mutation, or adding generic `SchemaValue`-against-`SchemaShape` validation.
+Phase 5 must not add command execution, global registries, broad schema catalogs, editor inspector rewrites, reflection-driven mutation, schema macros, or generic `SchemaValue`-against-`SchemaShape` validation.
 
 ## Current repo evidence
 
@@ -115,6 +116,8 @@ foundation/schema
 
 `editor_inspector` now depends on `foundation/schema` for one narrow consumer: explicit path/value interoperability helpers. The helpers project `InspectorPath` and supported inspector values into schema vocabulary, project supported schema paths back into inspector paths, and reject unsupported schema path segments clearly. They do not replace inspector editing, publish descriptors, validate values against shapes, mutate ECS state, or use reflection.
 
+`scene` now depends on `foundation/schema` for one domain-owned descriptor publication: `scene.local_transform` version `1`. The descriptor is explicit and deterministic, describes `LocalTransform` as translation, rotation, and scale object fields, and does not register itself globally, validate runtime values, mutate state, or call ECS reflection.
+
 ### Existing schema-like code
 
 `editor_inspector` currently owns inspector-specific models:
@@ -145,7 +148,7 @@ ECS reflection exposes field metadata and accessors. That is reflection behavior
 
 ### Docs/code disagreement or drift
 
-Current code implements `foundation/schema` Phase 1, Phase 2, and Phase 3. The crate is present at `foundation/schema`, and the first consumer is present in `domain/editor/editor_inspector`.
+Current code implements `foundation/schema` Phase 1, Phase 2, Phase 3, and Phase 4. The crate is present at `foundation/schema`, the first consumer is present in `domain/editor/editor_inspector`, and the first domain-owned descriptor set is present in `domain/scene`.
 
 The docs and code agree on the broad direction:
 
@@ -1401,21 +1404,42 @@ The implementation intentionally did not rewrite the inspector, replace inspecto
 
 ### Phase 4: Descriptor publication for one domain shape
 
-Status: next.
+Status: complete.
 
-Publish one domain-owned descriptor set, likely for:
+Published one domain-owned descriptor set:
 
 ```text
 scene local transform
-editor primitive component
-ui_surface definition
 ```
 
-The owning domain publishes descriptors.
+Implemented:
 
-Foundation does not register them globally.
+```text
+domain/scene/src/schema.rs
+local_transform_schema_descriptor
+LOCAL_TRANSFORM_SCHEMA_ID = "scene.local_transform"
+```
+
+The descriptor root shape is an object with deterministic field order:
+
+```text
+translation
+rotation
+scale
+```
+
+Nested value shapes preserve deterministic order:
+
+```text
+Vec3Value: x, y, z
+QuatValue: x, y, z, w
+```
+
+The owning domain publishes the descriptor. Foundation does not register it globally. The descriptor does not validate domain values, mutate state, call ECS reflection, or participate in command execution.
 
 ### Phase 5: Prepare `foundation/commands` design
+
+Status: next.
 
 Only after Phase 1-4 prove stable, design `foundation/commands`.
 
@@ -1513,6 +1537,16 @@ cargo test -p editor_inspector
 cargo clippy -p editor_inspector --all-targets --all-features -- -D warnings
 ```
 
+### Phase 4 validation
+
+Validated:
+
+```text
+cargo fmt --all
+cargo test -p scene
+cargo clippy -p scene --all-targets --all-features -- -D warnings
+```
+
 ### Workspace gates
 
 After implementation:
@@ -1527,7 +1561,7 @@ python3 tools/docs/validate_docs.py
 
 ## Open questions
 
-No blocking open questions remain for Phase 4.
+No blocking open questions remain for Phase 5 design preparation.
 
 Deferred questions:
 
@@ -1538,9 +1572,9 @@ Deferred questions:
 3. Should schema include aliases/migrations?
    - Defer. Owning domains should first publish versioned descriptors manually.
 4. Should schema include generic structural validation of `SchemaValue` against `SchemaShape`?
-   - Defer. Phase 1, Phase 2, and Phase 3 did not include it. It can be reconsidered later only if its API, naming, and documentation cannot be mistaken for domain ratification, command acceptance, or editor governance.
+   - Defer. Phase 1 through Phase 4 did not include it. It can be reconsidered later only if its API, naming, and documentation cannot be mistaken for domain ratification, command acceptance, or editor governance.
 5. Should `foundation/commands` depend directly on `foundation/schema`?
-   - Defer. Decide only after schema Phase 1 through Phase 4 prove stable and the commands design starts.
+   - Ready to evaluate during Phase 5 design. Phase 1 through Phase 4 are now implemented and validated.
 6. Should schema metadata include provenance?
    - Defer to a future provenance design if repeated cross-domain pressure appears.
 
@@ -1548,9 +1582,9 @@ Deferred questions:
 
 Keep `docs-site/src/content/docs/design/active/foundation-schema.md` as the active phase roadmap for `foundation/schema`.
 
-Phase 0, Phase 1, Phase 2, and Phase 3 are complete.
+Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 are complete.
 
-The next implementation step is Phase 4: descriptor publication for one domain shape. Prefer a small domain-owned descriptor set, likely scene local transform, editor primitive component, or `ui_surface` definition, only after checking current code. Do not start `foundation/commands`, add registries, rewrite the inspector, replace inspector edit flow, add reflection-driven mutation, or add generic `SchemaValue`-against-`SchemaShape` validation.
+The next implementation step is Phase 5: prepare the `foundation/commands` design. Do not implement command descriptors or execution until that design is accepted. Do not add registries, broad schema catalogs, editor inspector rewrites, reflection-driven mutation, schema macros, or generic `SchemaValue`-against-`SchemaShape` validation.
 
 Do not include runtime behavior, command execution, editor inspector policy, ECS reflection, global registries, domain validation, AI behavior, or persistence backends.
 
@@ -1560,7 +1594,8 @@ The current implementation milestone is:
 foundation/schema = portable shape vocabulary
 optional diagnostics projection for schema-definition issues
 one narrow editor_inspector path/value interop consumer
-one domain descriptor publication next
+one domain-owned scene.local_transform descriptor publication
+foundation/commands design preparation next
 ```
 
 The long-term shape remains:

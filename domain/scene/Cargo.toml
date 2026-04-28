@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 ecs.workspace = true
 glam.workspace = true
+schema.workspace = true

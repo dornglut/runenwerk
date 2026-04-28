@@ -34,7 +34,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `world_ops` | `domain/world_ops` | domain | Chunk/world operation logs, dirty tracking, build queues, invalidation, and replication deltas. | evolving |
 | `world_sdf` | `domain/world_sdf` | domain | SDF chunk payloads, collision query contracts, and cave/sector storage summaries. | evolving |
 | `scheduler` | `domain/scheduler` | domain | Deterministic schedule planning, graph validation, labels, access, and system execution plans. | evolving |
-| `scene` | `domain/scene` | domain | Scene transform value contracts. | evolving |
+| `scene` | `domain/scene` | domain | Scene transform value contracts and domain-owned transform schema descriptors. | evolving |
 | `ui_math` | `domain/ui/ui_math` | domain | UI geometry primitives. | evolving |
 | `ui_input` | `domain/ui/ui_input` | domain | UI input, focus, routing, keyboard, pointer, and shortcut contracts. | evolving |
 | `ui_layout` | `domain/ui/ui_layout` | domain | Stateless UI layout algorithms and constraints. | evolving |
