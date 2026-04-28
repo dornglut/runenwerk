@@ -126,7 +126,7 @@ Phase 1 core descriptor/proposal vocabulary implemented
 Phase 2 optional diagnostics bridge implemented
 Phase 3 one domain-owned command descriptor implemented
 Phase 4 one explicit proposal-to-domain-intent adapter implemented
-Phase 5 ratification/diagnostics integration evaluation is next
+Phase 5 ratification/diagnostics integration evaluation completed
 ```
 
 ## Relationship Between Core Vocabulary Crates
@@ -265,7 +265,7 @@ Schema describes reusable shapes and value contracts. It must not become a seria
 
 Status: complete.
 
-The accepted command design lives at `docs-site/src/content/docs/design/active/foundation-commands.md`. Phase 1 and Phase 2 are implemented at `foundation/commands`; Phase 3 and Phase 4 are implemented in `domain/editor/editor_scene`.
+The accepted command design lives at `docs-site/src/content/docs/design/active/foundation-commands.md`. Phase 1 and Phase 2 are implemented at `foundation/commands`; Phase 3 and Phase 4 are implemented in `domain/editor/editor_scene`. Phase 5 found no repeated proposal rejection pattern that justifies new shared helper vocabulary.
 
 ```text
 CommandDescriptor uses schema for parameters.

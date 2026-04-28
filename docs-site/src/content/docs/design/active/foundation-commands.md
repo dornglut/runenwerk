@@ -63,7 +63,7 @@ Each owner should keep its concrete command enum and execution path. The foundat
 
 ## Current implementation status
 
-Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 are complete.
+Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 are complete.
 
 Implemented Phase 1 crate:
 
@@ -102,10 +102,10 @@ Implemented Phase 4 adapter:
 CommandProposal -> editor_scene::SceneCommandIntent::EditComponentField
 ```
 
-Next phase:
+Phase 5 evaluation:
 
 ```text
-Phase 5: ratification/diagnostics integration evaluation
+no shared ratification or diagnostics helper is justified yet
 ```
 
 Not yet implemented:
@@ -116,6 +116,7 @@ top-level proposal target paths
 proposal-carried parameter schema claims
 ratification dependency
 command execution
+adapter rejection diagnostics
 ```
 
 ## Current repo evidence
@@ -1406,7 +1407,28 @@ Do not add AI runtime.
 
 ### Phase 5: Ratification/diagnostics integration evaluation
 
+Status: complete.
+
 Evaluate whether repeated command-proposal rejection flows need optional helper vocabulary.
+
+Current verdict: no new helper vocabulary is justified yet.
+
+Reason:
+
+```text
+only one explicit proposal-to-domain-intent adapter exists
+only one adapter rejection enum exists
+the rejection shape is still domain-owned
+no repeated cross-domain conversion/reporting pattern exists
+```
+
+Keep `EditComponentFieldProposalError` in `editor_scene`.
+
+Do not add a `foundation/commands -> foundation/ratification` dependency.
+
+Do not add a generic command proposal rejection report.
+
+Do not add adapter rejection diagnostics until at least two owning domains duplicate the same reporting shape.
 
 Do not move:
 
@@ -1535,9 +1557,9 @@ python3 tools/docs/validate_docs.py
 
 Keep `docs-site/src/content/docs/design/active/foundation-commands.md` as the active phase roadmap for `foundation/commands`.
 
-Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 are complete.
+Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 are complete.
 
-Proceed to Phase 5 only to evaluate whether repeated command-proposal rejection flows need optional helper vocabulary.
+No further command phase should start until a concrete duplicated need appears.
 
 The clean Phase 1 target is:
 
