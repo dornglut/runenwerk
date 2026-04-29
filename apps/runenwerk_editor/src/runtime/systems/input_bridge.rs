@@ -136,6 +136,23 @@ pub fn dispatch_editor_input_system(
         }
     }
 
+    if input.middle_mouse_pressed() {
+        let _ = dispatch_pointer_event(
+            &mut host,
+            &shell_theme,
+            bounds,
+            PointerEventKind::Down,
+            position,
+            UiVector::ZERO,
+            Some(PointerButton::Middle),
+            modifiers,
+            viewport_products,
+            Some(&mut *viewport_presentations),
+            Some(&viewport_observations),
+            Some(&tool_surface_bindings),
+        );
+    }
+
     if input.left_mouse_down()
         && host.app.viewport_interaction_state().drag_in_progress()
         && position != previous
@@ -187,6 +204,35 @@ pub fn dispatch_editor_input_system(
             eprintln!("viewport pointer-up failed: {error}");
         }
     }
+
+    if input.middle_mouse_released() {
+        let _ = dispatch_pointer_event(
+            &mut host,
+            &shell_theme,
+            bounds,
+            PointerEventKind::Up,
+            position,
+            UiVector::ZERO,
+            Some(PointerButton::Middle),
+            modifiers,
+            viewport_products,
+            Some(&mut *viewport_presentations),
+            Some(&viewport_observations),
+            Some(&tool_surface_bindings),
+        );
+    }
+
+    dispatch_shell_keyboard_and_text(
+        &input,
+        &mut host,
+        &shell_theme,
+        bounds,
+        modifiers,
+        viewport_products,
+        Some(&mut *viewport_presentations),
+        Some(&viewport_observations),
+        Some(&tool_surface_bindings),
+    );
 
     bridge.last_mouse_position = (position.x, position.y);
 }
@@ -299,6 +345,86 @@ fn dispatch_pointer_event(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn dispatch_shell_keyboard_and_text(
+    input: &engine::plugins::InputState,
+    host: &mut EditorHostResource,
+    shell_theme: &ui_theme::ThemeTokens,
+    bounds: UiRect,
+    modifiers: Modifiers,
+    viewport_products: Option<&editor_viewport::ArtifactObservationFrame>,
+    viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+    viewport_observations: Option<&ViewportArtifactObservationResource>,
+    tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+) {
+    let mut viewport_presentations = viewport_presentations;
+    let send_key =
+        |key: ui_input::Key,
+         host: &mut EditorHostResource,
+         viewport_presentations: Option<&mut ViewportPresentationStateResource>| {
+            let event = UiInputEvent::Keyboard(ui_input::KeyboardEvent {
+                key,
+                state: ui_input::KeyState::Pressed,
+                modifiers,
+            });
+            let _ = host.app.dispatch_shell_input(
+                &mut host.shell_state,
+                bounds,
+                shell_theme,
+                &event,
+                viewport_products,
+                viewport_presentations,
+                viewport_observations,
+                tool_surface_bindings,
+            );
+        };
+
+    if input.backspace {
+        send_key(
+            ui_input::Key::Backspace,
+            host,
+            viewport_presentations.as_deref_mut(),
+        );
+    }
+    if input.delete {
+        send_key(
+            ui_input::Key::Delete,
+            host,
+            viewport_presentations.as_deref_mut(),
+        );
+    }
+    if input.submitted {
+        send_key(
+            ui_input::Key::Enter,
+            host,
+            viewport_presentations.as_deref_mut(),
+        );
+    }
+    if input.toggle_pause_menu {
+        send_key(
+            ui_input::Key::Escape,
+            host,
+            viewport_presentations.as_deref_mut(),
+        );
+    }
+
+    if !input.typed_text.is_empty() {
+        let event = UiInputEvent::Text(ui_input::TextInputEvent {
+            text: input.typed_text.clone(),
+        });
+        let _ = host.app.dispatch_shell_input(
+            &mut host.shell_state,
+            bounds,
+            shell_theme,
+            &event,
+            viewport_products,
+            viewport_presentations,
+            viewport_observations,
+            tool_surface_bindings,
+        );
+    }
+}
+
 fn viewport_pointer_route(
     shell_state: &RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
@@ -362,7 +488,9 @@ fn fallback_viewport_binding(
         shell_state,
         tool_surface_bindings,
         editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-    ) {
+    )
+    .filter(|binding| binding.bounds.contains(cursor))
+    {
         return Some(binding);
     }
 
@@ -541,8 +669,30 @@ mod tests {
         .expect("fallback routing should resolve viewport route");
 
         assert_eq!(route.viewport_id, ViewportId(5));
-        assert_eq!(route.host_widget_id, editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID);
+        assert_eq!(
+            route.host_widget_id,
+            editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID
+        );
         assert!((route.local_position.x - 120.0).abs() <= 0.001);
         assert!((route.local_position.y - 220.0).abs() <= 0.001);
+    }
+
+    #[test]
+    fn viewport_pointer_route_does_not_fallback_outside_viewport_bounds() {
+        let shell_state = seeded_shell_state_with_projection();
+        let viewport_bounds = UiRect::new(100.0, 80.0, 900.0, 560.0);
+        let bindings = seeded_bindings(&shell_state, ViewportId(5), viewport_bounds);
+        let dispatch = editor_shell::UiInputDispatchResult {
+            target: None,
+            response: InputResponse::ignored(),
+        };
+
+        let route =
+            viewport_pointer_route(&shell_state, &bindings, &dispatch, UiPoint::new(20.0, 20.0));
+
+        assert!(
+            route.is_none(),
+            "outside viewport clicks must not route to viewport fallback",
+        );
     }
 }

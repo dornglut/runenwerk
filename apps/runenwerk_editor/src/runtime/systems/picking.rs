@@ -386,7 +386,9 @@ fn routed_viewport_bounds(
         &host.shell_state,
         tool_surface_bindings,
         editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-    ) {
+    )
+    .filter(|binding| binding.bounds.contains(cursor))
+    {
         return Some((binding.viewport_id, binding.bounds));
     }
 
@@ -583,7 +585,7 @@ mod tests {
         let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
         let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
 
-        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(12.0, 24.0));
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(120.0, 240.0));
 
         assert_eq!(routed, Some((ViewportId(7), expected_bounds)));
     }
@@ -608,5 +610,18 @@ mod tests {
             routed,
             Some((ViewportId(9), UiRect::new(100.0, 200.0, 300.0, 250.0))),
         );
+    }
+
+    #[test]
+    fn routed_viewport_returns_none_when_cursor_is_outside_viewport_bounds() {
+        let mut host = seeded_host_with_projection();
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget = None;
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(8.0, 8.0));
+
+        assert_eq!(routed, None);
     }
 }

@@ -99,6 +99,6 @@ mod tests {
         mounts.sync_from_workspace_state(&workspace_state);
 
         assert_eq!(mounts.generation(), 1);
-        assert_eq!(mounts.mounted_surfaces().count(), 4);
+        assert_eq!(mounts.mounted_surfaces().count(), 5);
     }
 }

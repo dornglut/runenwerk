@@ -11,15 +11,15 @@ impl Renderer {
         let mut instances = Vec::new();
         for surface in &frame.surfaces {
             for layer in &surface.layers {
-                let mut clip_stack: Vec<Option<UiRect>> = Vec::new();
+                let mut clip_stack: Vec<ClipRegion> = Vec::new();
                 for primitive in &layer.primitives {
                     match primitive {
                         UiPrimitive::Clip(ClipPrimitive::Push { rect, .. }) => {
-                            let next = match clip_stack.last().copied() {
-                                Some(Some(parent)) => parent.intersect(*rect),
-                                Some(None) => None,
-                                None => Some(*rect),
-                            };
+                            let next = clip_stack
+                                .last()
+                                .copied()
+                                .unwrap_or(ClipRegion::Unbounded)
+                                .intersect(*rect);
                             clip_stack.push(next);
                         }
                         UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => {
@@ -27,21 +27,21 @@ impl Renderer {
                         }
                         UiPrimitive::Rect(rect) => {
                             if let Some(entry) =
-                                flattened_rect(rect, current_clip(&clip_stack), None)
+                                flattened_rect(rect, current_clip_region(&clip_stack), None)
                             {
                                 instances.push(entry);
                             }
                         }
                         UiPrimitive::Border(border) => {
                             if let Some(entry) =
-                                flattened_border(border, current_clip(&clip_stack), None)
+                                flattened_border(border, current_clip_region(&clip_stack), None)
                             {
                                 instances.push(entry);
                             }
                         }
                         UiPrimitive::Image(image) => {
                             if let Some(entry) =
-                                flattened_image(image, current_clip(&clip_stack), None)
+                                flattened_image(image, current_clip_region(&clip_stack), None)
                             {
                                 instances.push(entry);
                             }
@@ -62,15 +62,15 @@ impl Renderer {
         let mut instances = Vec::new();
         for surface in &frame.surfaces {
             for layer in &surface.layers {
-                let mut clip_stack: Vec<Option<UiRect>> = Vec::new();
+                let mut clip_stack: Vec<ClipRegion> = Vec::new();
                 for primitive in &layer.primitives {
                     match primitive {
                         UiPrimitive::Clip(ClipPrimitive::Push { rect, .. }) => {
-                            let next = match clip_stack.last().copied() {
-                                Some(Some(parent)) => parent.intersect(*rect),
-                                Some(None) => None,
-                                None => Some(*rect),
-                            };
+                            let next = clip_stack
+                                .last()
+                                .copied()
+                                .unwrap_or(ClipRegion::Unbounded)
+                                .intersect(*rect);
                             clip_stack.push(next);
                         }
                         UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => {
@@ -79,7 +79,7 @@ impl Renderer {
                         UiPrimitive::GlyphRun(run) => {
                             flatten_glyph_run(
                                 run,
-                                current_clip(&clip_stack),
+                                current_clip_region(&clip_stack),
                                 atlas_resource,
                                 &mut instances,
                             );
@@ -101,24 +101,26 @@ impl Renderer {
         let mut instances = Vec::new();
         for surface in &frame.surfaces {
             for layer in &surface.layers {
-                let mut clip_stack: Vec<Option<UiRect>> = Vec::new();
+                let mut clip_stack: Vec<ClipRegion> = Vec::new();
                 for primitive in &layer.primitives {
                     match primitive {
                         UiPrimitive::Clip(ClipPrimitive::Push { rect, .. }) => {
-                            let next = match clip_stack.last().copied() {
-                                Some(Some(parent)) => parent.intersect(*rect),
-                                Some(None) => None,
-                                None => Some(*rect),
-                            };
+                            let next = clip_stack
+                                .last()
+                                .copied()
+                                .unwrap_or(ClipRegion::Unbounded)
+                                .intersect(*rect);
                             clip_stack.push(next);
                         }
                         UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => {
                             let _ = clip_stack.pop();
                         }
                         UiPrimitive::ViewportSurfaceEmbed(embed) => {
-                            if let Some(entry) =
-                                flattened_viewport_embed(embed, current_clip(&clip_stack), None)
-                            {
+                            if let Some(entry) = flattened_viewport_embed(
+                                embed,
+                                current_clip_region(&clip_stack),
+                                None,
+                            ) {
                                 instances.push(entry);
                             }
                         }
@@ -136,7 +138,7 @@ impl Renderer {
 
 fn flatten_glyph_run(
     run: &GlyphRunPrimitive,
-    stack_clip: Option<UiRect>,
+    stack_clip: ClipRegion,
     atlas_resource: &UiFontAtlasResource,
     instances: &mut Vec<FlattenedUiGlyphInstance>,
 ) {
@@ -211,7 +213,7 @@ fn flatten_glyph_run(
 
 fn flattened_rect(
     rect: &RectPrimitive,
-    stack_clip: Option<UiRect>,
+    stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiRectInstance> {
     let clip = effective_clip(stack_clip, local_clip, rect.rect)?;
@@ -225,7 +227,7 @@ fn flattened_rect(
 
 fn flattened_border(
     border: &BorderPrimitive,
-    stack_clip: Option<UiRect>,
+    stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiRectInstance> {
     let clip = effective_clip(stack_clip, local_clip, border.rect)?;
@@ -244,7 +246,7 @@ fn flattened_border(
 
 fn flattened_image(
     image: &ImagePrimitive,
-    stack_clip: Option<UiRect>,
+    stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiRectInstance> {
     let clip = effective_clip(stack_clip, local_clip, image.rect)?;
@@ -258,7 +260,7 @@ fn flattened_image(
 
 fn flattened_viewport_embed(
     embed: &ViewportSurfaceEmbedPrimitive,
-    stack_clip: Option<UiRect>,
+    stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiViewportEmbedInstance> {
     let clip = effective_clip(stack_clip, local_clip, embed.rect)?;
@@ -312,32 +314,59 @@ fn flattened_rect_raw(
     })
 }
 
-fn current_clip(clip_stack: &[Option<UiRect>]) -> Option<UiRect> {
-    clip_stack.last().copied().flatten()
+fn current_clip_region(clip_stack: &[ClipRegion]) -> ClipRegion {
+    clip_stack.last().copied().unwrap_or(ClipRegion::Unbounded)
 }
 
 fn effective_clip(
-    stack_clip: Option<UiRect>,
+    stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
     primitive_rect: UiRect,
 ) -> Option<Option<UiRect>> {
     let mut clip = stack_clip;
 
-    if let Some(local) = local_clip {
-        clip = match clip {
-            Some(existing) => existing.intersect(local),
-            None => Some(local),
-        };
-        clip?;
-    }
+    clip = match (clip, local_clip) {
+        (ClipRegion::Empty, _) => ClipRegion::Empty,
+        (ClipRegion::Unbounded, Some(local)) => ClipRegion::Rect(local),
+        (ClipRegion::Unbounded, None) => ClipRegion::Unbounded,
+        (ClipRegion::Rect(existing), Some(local)) => match existing.intersect(local) {
+            Some(intersection) => ClipRegion::Rect(intersection),
+            None => ClipRegion::Empty,
+        },
+        (ClipRegion::Rect(existing), None) => ClipRegion::Rect(existing),
+    };
 
-    if let Some(active_clip) = clip
-        && active_clip.intersect(primitive_rect).is_none()
-    {
-        return None;
+    match clip {
+        ClipRegion::Empty => None,
+        ClipRegion::Unbounded => Some(None),
+        ClipRegion::Rect(active_clip) => {
+            if active_clip.intersect(primitive_rect).is_none() {
+                None
+            } else {
+                Some(Some(active_clip))
+            }
+        }
     }
+}
 
-    Some(clip)
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ClipRegion {
+    Unbounded,
+    Rect(UiRect),
+    Empty,
+}
+
+impl ClipRegion {
+    fn intersect(self, rect: UiRect) -> Self {
+        match self {
+            Self::Unbounded => Self::Rect(rect),
+            Self::Rect(existing) => match existing.intersect(rect) {
+                Some(intersection) => Self::Rect(intersection),
+                None => Self::Empty,
+            },
+            Self::Empty => Self::Empty,
+        }
+    }
 }
 
 fn glyph_diagnostics_enabled() -> bool {
@@ -412,6 +441,47 @@ mod tests {
     }
 
     #[test]
+    fn extract_rect_instances_culls_primitives_when_nested_clip_intersection_is_empty() {
+        let layer = UiLayer::with_primitives(
+            UiLayerId(0),
+            vec![
+                UiPrimitive::Clip(ClipPrimitive::Push {
+                    rect: UiRect::new(0.0, 0.0, 20.0, 20.0),
+                    sort_key: UiSortKey::new(0, 0, 0),
+                }),
+                UiPrimitive::Clip(ClipPrimitive::Push {
+                    rect: UiRect::new(100.0, 100.0, 20.0, 20.0),
+                    sort_key: UiSortKey::new(0, 1, 1),
+                }),
+                UiPrimitive::Rect(RectPrimitive::new(
+                    UiRect::new(0.0, 0.0, 200.0, 200.0),
+                    0.0,
+                    UiPaint::rgba(1.0, 0.2, 0.2, 1.0),
+                    UiDrawKey::new(0, None),
+                    UiSortKey::new(0, 2, 2),
+                )),
+                UiPrimitive::Clip(ClipPrimitive::Pop {
+                    sort_key: UiSortKey::new(0, 1, 3),
+                }),
+                UiPrimitive::Clip(ClipPrimitive::Pop {
+                    sort_key: UiSortKey::new(0, 0, 4),
+                }),
+            ],
+        );
+        let frame = UiFrame::with_surfaces(vec![UiSurface::with_layers(
+            UiSurfaceId(0),
+            UiSize::new(256.0, 256.0),
+            vec![layer],
+        )]);
+
+        let instances = Renderer::extract_rect_instances(&frame);
+        assert!(
+            instances.is_empty(),
+            "rect should be culled when nested clip intersection is empty",
+        );
+    }
+
+    #[test]
     fn flatten_glyph_run_preserves_baseline_origin_and_quad_formula() {
         let atlas = UiFontAtlasResource::default();
         let style = TextStyle {
@@ -450,7 +520,7 @@ mod tests {
             UiSortKey::new(0, 0, 0),
         );
         let mut instances = Vec::new();
-        flatten_glyph_run(&run, None, &atlas, &mut instances);
+        flatten_glyph_run(&run, ClipRegion::Unbounded, &atlas, &mut instances);
         assert_eq!(instances.len(), glyph_run.glyphs.len());
 
         let (atlas_metrics, _) = atlas
@@ -513,7 +583,7 @@ mod tests {
             UiSortKey::new(0, 0, 0),
         );
         let mut instances = Vec::new();
-        flatten_glyph_run(&run, None, &atlas, &mut instances);
+        flatten_glyph_run(&run, ClipRegion::Unbounded, &atlas, &mut instances);
         assert_eq!(instances.len(), glyph_run.glyphs.len());
 
         let mut by_char = std::collections::HashMap::new();

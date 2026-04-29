@@ -12,8 +12,8 @@ use crate::state::{
 };
 use ui_math::{UiInsets, UiRect, UiSize};
 use ui_runtime::{
-    ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, UiNode, UiNodeKind, UiTree, WidgetId,
-    build_ui_frame,
+    ComputedLayout, ComputedLayoutMap, InteractionVisualState, LabelNode, PanelNode, UiNode,
+    UiNodeKind, UiTree, WidgetId, build_ui_frame,
 };
 use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextWrap};
 use ui_theme::{ThemeTokens, UiColor};
@@ -208,7 +208,13 @@ fn build_debug_metrics_frame(
 
     let tree = UiTree::new(panel_node);
     let surface_size = UiSize::new(screen_size.0.max(1.0), screen_size.1.max(1.0));
-    build_ui_frame(&tree, &layouts, surface_size, debug_overlay_font_atlas())
+    build_ui_frame(
+        &tree,
+        &layouts,
+        surface_size,
+        InteractionVisualState::default(),
+        debug_overlay_font_atlas(),
+    )
 }
 
 fn debug_overlay_font_atlas() -> &'static UiFontAtlasResource {

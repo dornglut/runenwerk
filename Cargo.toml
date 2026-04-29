@@ -12,6 +12,7 @@ members = [
     "domain/world_sdf",
     "domain/scheduler",
     "domain/scene",
+    "domain/graph",
 
     "domain/ui/ui_math",
     "domain/ui/ui_input",
@@ -76,5 +77,6 @@ editor_inspector = { path = "domain/editor/editor_inspector" }
 editor_persistence = { path = "domain/editor/editor_persistence" }
 
 ecs = { path = "domain/ecs" }
+graph = { path = "domain/graph" }
 schema = { path = "foundation/schema" }
 commands = { path = "foundation/commands" }

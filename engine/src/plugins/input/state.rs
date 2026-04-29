@@ -47,6 +47,8 @@ pub struct InputState {
     mouse_buttons_down: HashSet<MouseButton>,
     left_mouse_pressed: bool,
     left_mouse_released: bool,
+    middle_mouse_pressed: bool,
+    middle_mouse_released: bool,
 }
 
 impl Default for InputState {
@@ -91,6 +93,8 @@ impl Default for InputState {
             mouse_buttons_down: HashSet::new(),
             left_mouse_pressed: false,
             left_mouse_released: false,
+            middle_mouse_pressed: false,
+            middle_mouse_released: false,
         }
     }
 }
@@ -254,12 +258,16 @@ impl InputState {
                 self.mouse_buttons_down.insert(button);
                 if button == MouseButton::Left {
                     self.left_mouse_pressed = true;
+                } else if button == MouseButton::Middle {
+                    self.middle_mouse_pressed = true;
                 }
             }
             ElementState::Released => {
                 self.mouse_buttons_down.remove(&button);
                 if button == MouseButton::Left {
                     self.left_mouse_released = true;
+                } else if button == MouseButton::Middle {
+                    self.middle_mouse_released = true;
                 }
             }
         }
@@ -278,6 +286,8 @@ impl InputState {
         self.scroll_delta = 0.0;
         self.left_mouse_pressed = false;
         self.left_mouse_released = false;
+        self.middle_mouse_pressed = false;
+        self.middle_mouse_released = false;
         self.refresh_action_state_from_bindings();
     }
 
@@ -289,12 +299,24 @@ impl InputState {
         self.mouse_buttons_down.contains(&MouseButton::Right)
     }
 
+    pub fn middle_mouse_down(&self) -> bool {
+        self.mouse_buttons_down.contains(&MouseButton::Middle)
+    }
+
     pub fn left_mouse_pressed(&self) -> bool {
         self.left_mouse_pressed
     }
 
     pub fn left_mouse_released(&self) -> bool {
         self.left_mouse_released
+    }
+
+    pub fn middle_mouse_pressed(&self) -> bool {
+        self.middle_mouse_pressed
+    }
+
+    pub fn middle_mouse_released(&self) -> bool {
+        self.middle_mouse_released
     }
 
     pub fn shift_down(&self) -> bool {

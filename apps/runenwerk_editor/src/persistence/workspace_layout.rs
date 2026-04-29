@@ -2,8 +2,17 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use editor_persistence::{decode_ron, encode_ron_pretty};
+use serde::Deserialize;
 
-use editor_shell::{PersistedWorkspaceStateV1, WorkspaceState};
+use editor_shell::{
+    PERSISTED_WORKSPACE_STATE_VERSION_V1, PERSISTED_WORKSPACE_STATE_VERSION_V2,
+    PersistedWorkspaceStateV1, PersistedWorkspaceStateV2, WorkspaceState,
+};
+
+#[derive(Debug, Deserialize)]
+struct PersistedWorkspaceVersionProbe {
+    version: u32,
+}
 
 pub fn workspace_layout_path_for_scene(scene_path: &Path) -> PathBuf {
     let file_name = scene_path
@@ -15,7 +24,7 @@ pub fn workspace_layout_path_for_scene(scene_path: &Path) -> PathBuf {
 }
 
 pub fn write_workspace_layout(path: &Path, workspace_state: &WorkspaceState) -> Result<()> {
-    let persisted = workspace_state.to_persisted_v1();
+    let persisted = workspace_state.to_persisted_v2();
     let ron =
         encode_ron_pretty(&persisted).context("failed to encode persisted workspace layout")?;
     std::fs::write(path, ron)
@@ -25,9 +34,22 @@ pub fn write_workspace_layout(path: &Path, workspace_state: &WorkspaceState) -> 
 pub fn read_workspace_layout(path: &Path) -> Result<WorkspaceState> {
     let source = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read workspace layout: {}", path.display()))?;
-    let persisted: PersistedWorkspaceStateV1 =
-        decode_ron(&source).context("failed to decode persisted workspace layout")?;
-    WorkspaceState::from_persisted_v1(persisted)
+    let probe: PersistedWorkspaceVersionProbe =
+        decode_ron(&source).context("failed to decode persisted workspace layout version")?;
+    let workspace_state = match probe.version {
+        PERSISTED_WORKSPACE_STATE_VERSION_V1 => {
+            let persisted: PersistedWorkspaceStateV1 =
+                decode_ron(&source).context("failed to decode v1 persisted workspace layout")?;
+            WorkspaceState::from_persisted_v1(persisted)
+        }
+        PERSISTED_WORKSPACE_STATE_VERSION_V2 => {
+            let persisted: PersistedWorkspaceStateV2 =
+                decode_ron(&source).context("failed to decode v2 persisted workspace layout")?;
+            WorkspaceState::from_persisted_v2(persisted)
+        }
+        version => Err(editor_shell::WorkspaceStateError::PersistedVersionUnsupported(version)),
+    };
+    workspace_state
         .map_err(|error| anyhow::Error::msg(error.to_string()))
         .context("failed to validate persisted workspace layout")
 }

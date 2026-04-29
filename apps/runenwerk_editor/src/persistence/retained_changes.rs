@@ -94,6 +94,7 @@ fn change_origin_label(origin: editor_core::ChangeOrigin) -> &'static str {
         editor_core::ChangeOrigin::Shortcut => "Shortcut",
         editor_core::ChangeOrigin::InspectorPanel => "InspectorPanel",
         editor_core::ChangeOrigin::OutlinerPanel => "OutlinerPanel",
+        editor_core::ChangeOrigin::EntityTablePanel => "EntityTablePanel",
         editor_core::ChangeOrigin::ToolInteraction => "ToolInteraction",
         editor_core::ChangeOrigin::ViewportInteraction => "ViewportInteraction",
         editor_core::ChangeOrigin::Runtime => "Runtime",
