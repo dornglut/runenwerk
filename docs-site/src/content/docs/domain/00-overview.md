@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-04-29
 ---
 
 # Domain Layer Overview
@@ -38,7 +38,7 @@ Domain crates must not depend on:
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
 | SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
 | Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
-| UI substrate | `domain/ui/*` | [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
+| UI substrate | `domain/ui/*` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
 | Editor domains | `domain/editor/*` | [`editor/README.md`](./editor/README.md) |
 
 ## What Belongs in Domain
@@ -77,7 +77,7 @@ Start here when working in the domain layer:
 - Scheduler: [`scheduler/README.md`](./scheduler/README.md)
 - Geometry: [`geometry/README.md`](./geometry/README.md)
 - SDF: [`sdf/index.md`](./sdf/index.md)
-- UI substrate: [`ui/architecture.md`](./ui/architecture.md)
+- UI substrate: [`ui/README.md`](./ui/README.md)
 
 For workspace-wide ownership, see:
 

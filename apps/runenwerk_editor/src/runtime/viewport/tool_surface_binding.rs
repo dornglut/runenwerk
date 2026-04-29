@@ -137,6 +137,10 @@ impl ToolSurfaceRuntimeBindingRegistryResource {
         self.latest_rebind_by_tool_surface.values().copied()
     }
 
+    pub fn bindings(&self) -> impl Iterator<Item = ToolSurfaceRuntimeBindingRecord> + '_ {
+        self.bindings_by_tool_surface.values().copied()
+    }
+
     pub fn upsert_binding(&mut self, mut binding: ToolSurfaceRuntimeBindingRecord) {
         if binding.generation == 0 {
             binding.generation = self.generation.max(1);
