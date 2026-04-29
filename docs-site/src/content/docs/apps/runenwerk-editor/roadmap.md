@@ -5,11 +5,13 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-04-29
 related:
   - ./mvp/first-3d-editor-mvp.md
   - ./mvp/acceptance-criteria.md
   - ./mvp/implementation-sequence.md
+  - ../../domain/ui/roadmap.md
+  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
 ---
 
 # Runenwerk Editor Roadmap
@@ -17,6 +19,8 @@ related:
 ## Purpose
 
 This document tracks editor expansion after the first 3D scene authoring MVP is stable.
+
+This page tracks app-level feature scope. UI substrate/surface architecture sequencing is owned by domain and design roadmap documents.
 
 ## Post-MVP Expansion
 
@@ -43,3 +47,5 @@ The first milestone remains a 3D SDF scene authoring MVP with readable text, fix
 - [`mvp/first-3d-editor-mvp.md`](./mvp/first-3d-editor-mvp.md)
 - [`mvp/acceptance-criteria.md`](./mvp/acceptance-criteria.md)
 - [`mvp/implementation-sequence.md`](./mvp/implementation-sequence.md)
+- [`../../domain/ui/roadmap.md`](../../domain/ui/roadmap.md)
+- [`../../design/active/editor-ui-workspace-tool-surface-architecture.md`](../../design/active/editor-ui-workspace-tool-surface-architecture.md)

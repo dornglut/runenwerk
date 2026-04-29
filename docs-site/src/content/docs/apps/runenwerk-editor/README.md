@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-04-29
 ---
 
 # Runenwerk Editor
@@ -23,3 +23,8 @@ last_reviewed: 2026-04-27
 ## Roadmap
 
 - [`roadmap.md`](./roadmap.md)
+
+## Related Domain Docs
+
+- [`../../domain/ui/README.md`](../../domain/ui/README.md)
+- [`../../domain/editor/README.md`](../../domain/editor/README.md)
