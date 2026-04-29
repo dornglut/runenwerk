@@ -159,6 +159,7 @@ transport, routing, reconnect, command bus, or event dispatch.
 
 - Networking architecture guide: [net-architecture.md](net-architecture.md)
 - Goals and pinned direction: [goals.md](goals.md)
+- Multiplayer design proposal: [multiplayer-design-proposal.md](multiplayer-design-proposal.md)
 
 ## ECS Runtime Audit Docs
 

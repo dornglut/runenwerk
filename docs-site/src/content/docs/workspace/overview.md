@@ -27,7 +27,9 @@ This page is a lightweight orientation map for the active Runenwerk repository.
 
 - Workspace agent rules: [`agents.md`](agents.md)
 - Workspace routines: [`routines/README.md`](routines/README.md)
+- Workspace roadmap index: [`roadmap-index.md`](roadmap-index.md)
 - Prompt templates: [`prompt-templates/README.md`](prompt-templates/README.md)
+- Documentation templates: [`templates/README.md`](templates/README.md)
 - Docs root index: [`../index.mdx`](../index.mdx)
 - Canonical architecture doctrine: [`../guidelines/runenwerk-architecture.md`](../guidelines/runenwerk-architecture.md)
 - Workspace architecture boundaries: [`../guidelines/architecture.md`](../guidelines/architecture.md)

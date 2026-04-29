@@ -332,7 +332,7 @@ Phase 1 is complete. The workspace identity hardening track is now the active fo
 ## Workspace identity hardening track (Steps 1-6)
 Status: Steps 1-6 completed; docking/tab behavior implementation is now the next phase target.
 
-- [Workspace Identity Contract and Migration Map](./workspace-identity-contract-and-migration-map.md)
+- [Workspace Identity Contract and Migration Map](../../../design/active/workspace-identity-contract-and-migration-map.md)
 
 Then continue with:
 

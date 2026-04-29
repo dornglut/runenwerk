@@ -1407,18 +1407,23 @@ Do not describe future plans as implemented facts.
 
 Do not silently rename files without updating links.
 
-## Initial Refactor Priorities
+## Current Refactor Priorities
 
-The current documentation refactor should proceed in this order:
+The first taxonomy cleanup has established:
 
-1. Finish `design/` lifecycle consistency.
-2. Rename design files to kebab-case.
-3. Add frontmatter to design documents.
-4. Add missing ADR lifecycle folders and `adr/README.md`.
-5. Split large app MVP documents by responsibility.
-6. Move completed benchmark and closeout evidence into `reports/`.
-7. Clean obvious stale or placeholder domain docs.
-8. Update root summaries only after canonical docs-site changes are stable.
+1. ADR lifecycle folders and `adr/README.md`.
+2. Top-level compatibility stubs for moved `multiplayer/` and `templates/` content.
+3. Architecture designs moved out of `guidelines/` into `design/active/`.
+4. Completed viewport phase evidence moved into `reports/closeouts/`.
+5. Workspace implementation sequencing moved into `workspace/roadmap-index.md`.
+
+Continue documentation cleanup in this order:
+
+1. Finish remaining `design/` lifecycle consistency.
+2. Split large app MVP documents by responsibility only if they still mix concerns.
+3. Move future completed benchmark and closeout evidence into `reports/`.
+4. Clean obvious stale or placeholder domain docs.
+5. Update root summaries only after canonical docs-site changes are stable.
 
 The goal is controlled convergence, not a disruptive reshuffle.
 

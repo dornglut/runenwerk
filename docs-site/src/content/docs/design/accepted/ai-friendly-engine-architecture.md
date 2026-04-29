@@ -888,7 +888,7 @@ Examples:
 
 ```text
 docs-site/src/content/docs/design/editor-surface-routing.md
-docs-site/src/content/docs/design/foundation-diagnostics.md
+docs-site/src/content/docs/design/accepted/foundation-diagnostics.md
 docs-site/src/content/docs/design/scene-identity.md
 docs-site/src/content/docs/design/asset-graph.md
 docs-site/src/content/docs/design/render-graph-ratification.md

@@ -39,10 +39,16 @@ Use `active/` for designs that are currently being discussed, implemented, or va
 
 A design belongs here when the direction is useful but not yet fully accepted or not yet checked against implementation.
 
+Index:
+
+- [`active/README.md`](active/README.md)
+
 Examples:
 
 ```text
 active/foundation-ratification.md
+active/editor-ui-workspace-tool-surface-architecture.md
+active/viewport-expression-upgrade-design.md
 ```
 
 ## `accepted/`
@@ -50,6 +56,10 @@ active/foundation-ratification.md
 Use `accepted/` for designs whose direction is approved.
 
 A design may be accepted before it is fully implemented.
+
+Index:
+
+- [`accepted/README.md`](accepted/README.md)
 
 Examples:
 
@@ -64,11 +74,19 @@ Use `deferred/` for designs that are valid but intentionally postponed.
 
 Deferred designs should explain why they are not being implemented now and what would reactivate them.
 
+Index:
+
+- [`deferred/README.md`](deferred/README.md)
+
 ## `superseded/`
 
 Use `superseded/` for designs that have been replaced.
 
 A superseded design must link to the replacement design, ADR, or guideline.
+
+Index:
+
+- [`superseded/README.md`](superseded/README.md)
 
 ## `implemented/`
 
@@ -76,17 +94,29 @@ Use `implemented/` for accepted designs that have been checked against actual co
 
 A design belongs here only when the implementation exists, tests pass, and any known divergence from the accepted design has been resolved or documented.
 
+Index:
+
+- [`implemented/README.md`](implemented/README.md)
+
 ## `rejected/`
 
 Use `rejected/` for designs that were explicitly considered and not chosen.
 
 Rejected designs should explain the rejected approach, why it was rejected, and what design, ADR, or guideline should be followed instead.
 
+Index:
+
+- [`rejected/README.md`](rejected/README.md)
+
 ## `archived/`
 
 Use `archived/` for historical or imported design material that is no longer authoritative and does not fit `rejected/` or `superseded/`.
 
 Archived designs must link to the replacement document or explain why no replacement exists.
+
+Index:
+
+- [`archived/README.md`](archived/README.md)
 
 ## `templates/`
 
