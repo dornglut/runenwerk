@@ -305,9 +305,31 @@ fn viewport_pointer_route(
     dispatch: &editor_shell::UiInputDispatchResult,
     position: UiPoint,
 ) -> Option<ViewportPointerRoute> {
-    let host_widget_id = dispatch.target?;
-    let structural_context = structural_context_for_widget(shell_state, host_widget_id)?;
-    let binding = tool_surface_bindings.resolve_structural_context(structural_context)?;
+    if let Some(host_widget_id) = dispatch.target
+        && let Some(structural_context) = structural_context_for_widget(shell_state, host_widget_id)
+        && let Some(binding) = tool_surface_bindings.resolve_structural_context(structural_context)
+        && binding.bounds.contains(position)
+    {
+        return Some(ViewportPointerRoute {
+            viewport_id: binding.viewport_id,
+            host_widget_id,
+            structural_context,
+            local_position: UiPoint::new(
+                position.x - binding.bounds.x,
+                position.y - binding.bounds.y,
+            ),
+        });
+    }
+
+    let binding = fallback_viewport_binding(shell_state, tool_surface_bindings, position)?;
+    let host_widget_id = binding.host_widget_id;
+    let structural_context = structural_context_for_widget(shell_state, host_widget_id).unwrap_or(
+        editor_shell::StructuralWidgetRoutingContext {
+            panel_instance_id: binding.panel_instance_id,
+            active_tool_surface: Some(binding.tool_surface_id),
+            tab_stack_id: binding.tab_stack_id,
+        },
+    );
     Some(ViewportPointerRoute {
         viewport_id: binding.viewport_id,
         host_widget_id,
@@ -329,6 +351,38 @@ fn viewport_capture_active(
                 .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
         })
         .is_some()
+}
+
+fn fallback_viewport_binding(
+    shell_state: &RunenwerkEditorShellState,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    if let Some(binding) = resolve_binding_for_widget(
+        shell_state,
+        tool_surface_bindings,
+        editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+    ) {
+        return Some(binding);
+    }
+
+    tool_surface_bindings
+        .bindings()
+        .filter(|binding| binding.bounds.contains(cursor))
+        .min_by(|left, right| {
+            let left_area = left.bounds.width * left.bounds.height;
+            let right_area = right.bounds.width * right.bounds.height;
+            left_area.total_cmp(&right_area)
+        })
+}
+
+fn resolve_binding_for_widget(
+    shell_state: &RunenwerkEditorShellState,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    widget_id: editor_shell::WidgetId,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    structural_context_for_widget(shell_state, widget_id)
+        .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
 }
 
 fn structural_context_for_widget(
@@ -417,5 +471,78 @@ fn picking_target_label(target: EditorPickingTarget) -> String {
             component_type,
         } => format!("component:{entity}:{component_type}"),
         EditorPickingTarget::GizmoAxis(axis) => format!("gizmo:{}", editor_axis_label(axis)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::editor_app::RunenwerkEditorApp;
+    use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
+    use editor_viewport::ViewportId;
+    use ui_input::InputResponse;
+    use ui_theme::ThemeTokens;
+
+    fn seeded_shell_state_with_projection() -> RunenwerkEditorShellState {
+        let app = RunenwerkEditorApp::new();
+        let mut shell_state = RunenwerkEditorShellState::new();
+        let view_model = crate::shell::build_editor_shell_view_model(&app);
+        let build = editor_shell::build_editor_shell(
+            &view_model,
+            &ThemeTokens::default(),
+            shell_state.workspace_state(),
+        );
+        shell_state.set_last_projection_artifacts(build.projection_artifacts);
+        shell_state
+    }
+
+    fn seeded_bindings(
+        shell_state: &RunenwerkEditorShellState,
+        viewport_id: ViewportId,
+        bounds: UiRect,
+    ) -> ToolSurfaceRuntimeBindingRegistryResource {
+        let structural_context = shell_state
+            .last_projection_artifacts()
+            .and_then(|artifacts| {
+                artifacts
+                    .widget_structural_context_by_id
+                    .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+                    .copied()
+            })
+            .expect("viewport embed structural context should exist");
+        let mut layout_map = ViewportLayoutMapResource::default();
+        layout_map.upsert_entry(ViewportLayoutEntry {
+            viewport_id,
+            host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+            structural_context,
+            bounds,
+        });
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.rebuild_from_layout_map(&layout_map);
+        bindings
+    }
+
+    #[test]
+    fn viewport_pointer_route_uses_canonical_fallback_when_dispatch_target_is_missing() {
+        let shell_state = seeded_shell_state_with_projection();
+        let viewport_bounds = UiRect::new(100.0, 80.0, 900.0, 560.0);
+        let bindings = seeded_bindings(&shell_state, ViewportId(5), viewport_bounds);
+        let dispatch = editor_shell::UiInputDispatchResult {
+            target: None,
+            response: InputResponse::ignored(),
+        };
+
+        let route = viewport_pointer_route(
+            &shell_state,
+            &bindings,
+            &dispatch,
+            UiPoint::new(220.0, 300.0),
+        )
+        .expect("fallback routing should resolve viewport route");
+
+        assert_eq!(route.viewport_id, ViewportId(5));
+        assert_eq!(route.host_widget_id, editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID);
+        assert!((route.local_position.x - 120.0).abs() <= 0.001);
+        assert!((route.local_position.y - 220.0).abs() <= 0.001);
     }
 }

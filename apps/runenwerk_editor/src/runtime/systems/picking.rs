@@ -40,7 +40,7 @@ pub fn produce_editor_picking_system(
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
 ) {
     let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
-    let routed_viewport = routed_viewport_bounds(&host, &tool_surface_bindings);
+    let routed_viewport = routed_viewport_bounds(&host, &tool_surface_bindings, cursor);
     if let Some((viewport_id, viewport_bounds)) = routed_viewport {
         let previous_hit = viewport_picking_results
             .result_for(viewport_id)
@@ -117,13 +117,9 @@ fn choose_primary_hit(
     grid_hit: Option<EditorPickingHit>,
 ) -> EditorPickingHit {
     match (entity_hit, grid_hit) {
-        (Some(entity), Some(grid)) => {
-            if entity.distance <= grid.distance {
-                entity
-            } else {
-                grid
-            }
-        }
+        // Selection UX priority: when an entity is under the cursor, prefer entity hits over
+        // grid fallback hits to avoid near-surface misses around floor intersections.
+        (Some(entity), Some(_grid)) => entity,
         (Some(entity), None) => entity,
         (None, Some(grid)) => grid,
         (None, None) => EditorPickingHit::none(),
@@ -286,8 +282,8 @@ fn project_world_to_screen(
 }
 
 fn viewport_ray(cursor: UiPoint, viewport_bounds: UiRect) -> Option<PickingRay> {
-    let width = viewport_bounds.width.max(1.0);
-    let height = viewport_bounds.height.max(1.0);
+    let width = viewport_bounds.width;
+    let height = viewport_bounds.height;
     if width <= f32::EPSILON || height <= f32::EPSILON {
         return None;
     }
@@ -384,21 +380,48 @@ fn hit_changed(previous: EditorPickingHit, next: EditorPickingHit) -> bool {
 fn routed_viewport_bounds(
     host: &EditorHostResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
 ) -> Option<(editor_viewport::ViewportId, UiRect)> {
+    if let Some(binding) = resolve_binding_for_widget(
+        &host.shell_state,
+        tool_surface_bindings,
+        editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+    ) {
+        return Some((binding.viewport_id, binding.bounds));
+    }
+
     let runtime_state = host.shell_state.runtime().state();
-    let binding = runtime_state
-        .captured_widget
-        .and_then(|widget| {
-            structural_context_for_widget(&host.shell_state, widget)
-                .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
-        })
-        .or_else(|| {
-            runtime_state.hovered_widget.and_then(|widget| {
-                structural_context_for_widget(&host.shell_state, widget)
-                    .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
-            })
+    if let Some(binding) = runtime_state.captured_widget.and_then(|widget| {
+        resolve_binding_for_widget(&host.shell_state, tool_surface_bindings, widget)
+    }) {
+        return Some((binding.viewport_id, binding.bounds));
+    }
+
+    if let Some(binding) = runtime_state.hovered_widget.and_then(|widget| {
+        resolve_binding_for_widget(&host.shell_state, tool_surface_bindings, widget)
+    }) {
+        return Some((binding.viewport_id, binding.bounds));
+    }
+
+    // Fallback for transient hover/capture dropouts: route by current cursor containment.
+    let cursor_binding = tool_surface_bindings
+        .bindings()
+        .filter(|binding| binding.bounds.contains(cursor))
+        .min_by(|left, right| {
+            let left_area = left.bounds.width * left.bounds.height;
+            let right_area = right.bounds.width * right.bounds.height;
+            left_area.total_cmp(&right_area)
         })?;
-    Some((binding.viewport_id, binding.bounds))
+    Some((cursor_binding.viewport_id, cursor_binding.bounds))
+}
+
+fn resolve_binding_for_widget(
+    shell_state: &crate::shell::RunenwerkEditorShellState,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    widget_id: editor_shell::WidgetId,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    structural_context_for_widget(shell_state, widget_id)
+        .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
 }
 
 fn structural_context_for_widget(
@@ -416,12 +439,55 @@ mod tests {
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
     use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
+    use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
+    use editor_viewport::ViewportId;
+    use ui_theme::ThemeTokens;
 
     fn seeded_runtime() -> RunenwerkEditorRuntime {
         let mut app = RunenwerkEditorApp::new();
         register_mvp_component_types(app.runtime_mut());
         bootstrap_mvp_scene_if_empty(app.runtime_mut()).expect("mvp bootstrap should succeed");
         app.runtime
+    }
+
+    fn seeded_host_with_projection() -> EditorHostResource {
+        let mut host = EditorHostResource::default();
+        let view_model = crate::shell::build_editor_shell_view_model(&host.app);
+        let build = editor_shell::build_editor_shell(
+            &view_model,
+            &ThemeTokens::default(),
+            host.shell_state.workspace_state(),
+        );
+        host.shell_state
+            .set_last_projection_artifacts(build.projection_artifacts);
+        host
+    }
+
+    fn bind_viewport_surface(
+        host: &EditorHostResource,
+        viewport_id: ViewportId,
+        bounds: UiRect,
+    ) -> ToolSurfaceRuntimeBindingRegistryResource {
+        let structural_context = host
+            .shell_state
+            .last_projection_artifacts()
+            .and_then(|artifacts| {
+                artifacts
+                    .widget_structural_context_by_id
+                    .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+                    .copied()
+            })
+            .expect("viewport embed structural context should exist");
+        let mut layout_map = ViewportLayoutMapResource::default();
+        layout_map.upsert_entry(ViewportLayoutEntry {
+            viewport_id,
+            host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+            structural_context,
+            bounds,
+        });
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.rebuild_from_layout_map(&layout_map);
+        bindings
     }
 
     #[test]
@@ -507,5 +573,40 @@ mod tests {
 
         assert_eq!(hit.target, EditorPickingTarget::None);
         assert!(hit.distance.is_infinite());
+    }
+
+    #[test]
+    fn routed_viewport_prefers_canonical_viewport_embed_binding() {
+        let mut host = seeded_host_with_projection();
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget = None;
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(12.0, 24.0));
+
+        assert_eq!(routed, Some((ViewportId(7), expected_bounds)));
+    }
+
+    #[test]
+    fn routed_viewport_falls_back_to_cursor_containment_when_projection_is_missing() {
+        let host = EditorHostResource::default();
+        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+        bindings.upsert_binding(crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
+            tool_surface_id: editor_shell::ToolSurfaceInstanceId::new(33),
+            panel_instance_id: editor_shell::PanelInstanceId::new(11),
+            tab_stack_id: editor_shell::TabStackId::new(22),
+            viewport_id: ViewportId(9),
+            host_widget_id: editor_shell::WidgetId(77),
+            bounds: UiRect::new(100.0, 200.0, 300.0, 250.0),
+            generation: 1,
+        });
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(250.0, 320.0));
+
+        assert_eq!(
+            routed,
+            Some((ViewportId(9), UiRect::new(100.0, 200.0, 300.0, 250.0))),
+        );
     }
 }
