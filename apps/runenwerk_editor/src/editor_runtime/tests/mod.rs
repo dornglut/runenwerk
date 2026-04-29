@@ -1,6 +1,7 @@
 pub mod shared;
 
 mod architecture_guards;
+mod entity_table;
 mod inspector;
 mod outliner;
 mod scene_editing;

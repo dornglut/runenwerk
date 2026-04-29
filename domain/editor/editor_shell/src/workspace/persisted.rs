@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub const PERSISTED_WORKSPACE_STATE_VERSION_V1: u32 = 1;
+pub const PERSISTED_WORKSPACE_STATE_VERSION_V2: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PersistedWorkspaceStateV1 {
@@ -23,6 +24,17 @@ pub struct PersistedWorkspaceStateV1 {
     pub tab_stacks: Vec<PersistedTabStackStateV1>,
     pub panels: Vec<PersistedPanelInstanceStateV1>,
     pub tool_surfaces: Vec<PersistedToolSurfaceStateV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PersistedWorkspaceStateV2 {
+    pub version: u32,
+    pub workspace_id: u64,
+    pub root_host_id: u64,
+    pub hosts: Vec<PersistedPanelHostNodeV1>,
+    pub tab_stacks: Vec<PersistedTabStackStateV1>,
+    pub panels: Vec<PersistedPanelInstanceStateV2>,
+    pub tool_surfaces: Vec<PersistedToolSurfaceStateV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -89,6 +101,24 @@ pub enum PersistedPanelKindV1 {
     Placeholder,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum PersistedPanelKindV2 {
+    Outliner,
+    EntityTable,
+    Viewport,
+    Inspector,
+    Console,
+    Placeholder,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersistedPanelInstanceStateV2 {
+    pub id: u64,
+    pub panel_kind: PersistedPanelKindV2,
+    pub active_tool_surface: Option<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersistedToolSurfaceStateV1 {
     pub id: u64,
@@ -106,6 +136,24 @@ pub enum PersistedToolSurfaceKindV1 {
     Placeholder,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum PersistedToolSurfaceKindV2 {
+    Outliner,
+    EntityTable,
+    Viewport,
+    Inspector,
+    Console,
+    Placeholder,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersistedToolSurfaceStateV2 {
+    pub id: u64,
+    pub tool_surface_kind: PersistedToolSurfaceKindV2,
+    pub mount: PersistedToolSurfaceMountV1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PersistedToolSurfaceMountV1 {
@@ -114,6 +162,49 @@ pub enum PersistedToolSurfaceMountV1 {
 }
 
 impl WorkspaceState {
+    pub fn to_persisted_v2(&self) -> PersistedWorkspaceStateV2 {
+        PersistedWorkspaceStateV2 {
+            version: PERSISTED_WORKSPACE_STATE_VERSION_V2,
+            workspace_id: self.workspace_id.raw(),
+            root_host_id: self.root_host_id.raw(),
+            hosts: self
+                .hosts_by_id
+                .values()
+                .map(|host| PersistedPanelHostNodeV1 {
+                    id: host.id.raw(),
+                    kind: persisted_host_kind(host.kind),
+                })
+                .collect(),
+            tab_stacks: self
+                .tab_stacks_by_id
+                .values()
+                .map(|stack| PersistedTabStackStateV1 {
+                    id: stack.id.raw(),
+                    ordered_panels: stack.ordered_panels.iter().map(|id| id.raw()).collect(),
+                    active_panel: stack.active_panel.map(|id| id.raw()),
+                })
+                .collect(),
+            panels: self
+                .panels_by_id
+                .values()
+                .map(|panel| PersistedPanelInstanceStateV2 {
+                    id: panel.id.raw(),
+                    panel_kind: persisted_panel_kind_v2(panel.panel_kind),
+                    active_tool_surface: panel.active_tool_surface.map(|id| id.raw()),
+                })
+                .collect(),
+            tool_surfaces: self
+                .tool_surfaces_by_id
+                .values()
+                .map(|surface| PersistedToolSurfaceStateV2 {
+                    id: surface.id.raw(),
+                    tool_surface_kind: persisted_tool_surface_kind_v2(surface.tool_surface_kind),
+                    mount: persisted_mount(surface.mount),
+                })
+                .collect(),
+        }
+    }
+
     pub fn to_persisted_v1(&self) -> PersistedWorkspaceStateV1 {
         PersistedWorkspaceStateV1 {
             version: PERSISTED_WORKSPACE_STATE_VERSION_V1,
@@ -211,6 +302,77 @@ impl WorkspaceState {
                 ToolSurfaceState {
                     id: surface_id,
                     tool_surface_kind: workspace_tool_surface_kind(surface.tool_surface_kind),
+                    mount: workspace_mount(surface.mount),
+                },
+            );
+        }
+
+        let state = WorkspaceState {
+            workspace_id: WorkspaceId::new(persisted.workspace_id),
+            root_host_id: PanelHostId::new(persisted.root_host_id),
+            hosts_by_id,
+            tab_stacks_by_id,
+            panels_by_id,
+            tool_surfaces_by_id,
+        };
+        state.validate_integrity()?;
+        Ok(state)
+    }
+
+    pub fn from_persisted_v2(
+        persisted: PersistedWorkspaceStateV2,
+    ) -> Result<Self, WorkspaceStateError> {
+        if persisted.version != PERSISTED_WORKSPACE_STATE_VERSION_V2 {
+            return Err(WorkspaceStateError::PersistedVersionUnsupported(
+                persisted.version,
+            ));
+        }
+
+        let mut hosts_by_id = BTreeMap::new();
+        for host in persisted.hosts {
+            let host_id = PanelHostId::new(host.id);
+            let kind = workspace_host_kind(host.kind);
+            hosts_by_id.insert(host_id, PanelHostNode { id: host_id, kind });
+        }
+
+        let mut tab_stacks_by_id = BTreeMap::new();
+        for stack in persisted.tab_stacks {
+            let stack_id = TabStackId::new(stack.id);
+            tab_stacks_by_id.insert(
+                stack_id,
+                TabStackState {
+                    id: stack_id,
+                    ordered_panels: stack
+                        .ordered_panels
+                        .into_iter()
+                        .map(PanelInstanceId::new)
+                        .collect(),
+                    active_panel: stack.active_panel.map(PanelInstanceId::new),
+                },
+            );
+        }
+
+        let mut panels_by_id = BTreeMap::new();
+        for panel in persisted.panels {
+            let panel_id = PanelInstanceId::new(panel.id);
+            panels_by_id.insert(
+                panel_id,
+                PanelInstanceState {
+                    id: panel_id,
+                    panel_kind: workspace_panel_kind_v2(panel.panel_kind),
+                    active_tool_surface: panel.active_tool_surface.map(ToolSurfaceInstanceId::new),
+                },
+            );
+        }
+
+        let mut tool_surfaces_by_id = BTreeMap::new();
+        for surface in persisted.tool_surfaces {
+            let surface_id = ToolSurfaceInstanceId::new(surface.id);
+            tool_surfaces_by_id.insert(
+                surface_id,
+                ToolSurfaceState {
+                    id: surface_id,
+                    tool_surface_kind: workspace_tool_surface_kind_v2(surface.tool_surface_kind),
                     mount: workspace_mount(surface.mount),
                 },
             );
@@ -328,10 +490,22 @@ impl TryFrom<String> for PersistedWorkspaceSplitAxisV1 {
 fn persisted_panel_kind(kind: PanelKind) -> PersistedPanelKindV1 {
     match kind {
         PanelKind::Outliner => PersistedPanelKindV1::Outliner,
+        PanelKind::EntityTable => PersistedPanelKindV1::Placeholder,
         PanelKind::Viewport => PersistedPanelKindV1::Viewport,
         PanelKind::Inspector => PersistedPanelKindV1::Inspector,
         PanelKind::Console => PersistedPanelKindV1::Console,
         PanelKind::Placeholder => PersistedPanelKindV1::Placeholder,
+    }
+}
+
+fn persisted_panel_kind_v2(kind: PanelKind) -> PersistedPanelKindV2 {
+    match kind {
+        PanelKind::Outliner => PersistedPanelKindV2::Outliner,
+        PanelKind::EntityTable => PersistedPanelKindV2::EntityTable,
+        PanelKind::Viewport => PersistedPanelKindV2::Viewport,
+        PanelKind::Inspector => PersistedPanelKindV2::Inspector,
+        PanelKind::Console => PersistedPanelKindV2::Console,
+        PanelKind::Placeholder => PersistedPanelKindV2::Placeholder,
     }
 }
 
@@ -342,6 +516,17 @@ fn workspace_panel_kind(kind: PersistedPanelKindV1) -> PanelKind {
         PersistedPanelKindV1::Inspector => PanelKind::Inspector,
         PersistedPanelKindV1::Console => PanelKind::Console,
         PersistedPanelKindV1::Placeholder => PanelKind::Placeholder,
+    }
+}
+
+fn workspace_panel_kind_v2(kind: PersistedPanelKindV2) -> PanelKind {
+    match kind {
+        PersistedPanelKindV2::Outliner => PanelKind::Outliner,
+        PersistedPanelKindV2::EntityTable => PanelKind::EntityTable,
+        PersistedPanelKindV2::Viewport => PanelKind::Viewport,
+        PersistedPanelKindV2::Inspector => PanelKind::Inspector,
+        PersistedPanelKindV2::Console => PanelKind::Console,
+        PersistedPanelKindV2::Placeholder => PanelKind::Placeholder,
     }
 }
 
@@ -372,13 +557,54 @@ impl TryFrom<String> for PersistedPanelKindV1 {
     }
 }
 
+impl From<PersistedPanelKindV2> for String {
+    fn from(value: PersistedPanelKindV2) -> Self {
+        match value {
+            PersistedPanelKindV2::Outliner => "outliner".to_string(),
+            PersistedPanelKindV2::EntityTable => "entity_table".to_string(),
+            PersistedPanelKindV2::Viewport => "viewport".to_string(),
+            PersistedPanelKindV2::Inspector => "inspector".to_string(),
+            PersistedPanelKindV2::Console => "console".to_string(),
+            PersistedPanelKindV2::Placeholder => "placeholder".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedPanelKindV2 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "outliner" => Ok(Self::Outliner),
+            "entity_table" => Ok(Self::EntityTable),
+            "viewport" => Ok(Self::Viewport),
+            "inspector" => Ok(Self::Inspector),
+            "console" => Ok(Self::Console),
+            "placeholder" => Ok(Self::Placeholder),
+            other => Err(format!("unsupported panel kind: {other}")),
+        }
+    }
+}
+
 fn persisted_tool_surface_kind(kind: ToolSurfaceKind) -> PersistedToolSurfaceKindV1 {
     match kind {
         ToolSurfaceKind::Outliner => PersistedToolSurfaceKindV1::Outliner,
+        ToolSurfaceKind::EntityTable => PersistedToolSurfaceKindV1::Placeholder,
         ToolSurfaceKind::Viewport => PersistedToolSurfaceKindV1::Viewport,
         ToolSurfaceKind::Inspector => PersistedToolSurfaceKindV1::Inspector,
         ToolSurfaceKind::Console => PersistedToolSurfaceKindV1::Console,
         ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV1::Placeholder,
+    }
+}
+
+fn persisted_tool_surface_kind_v2(kind: ToolSurfaceKind) -> PersistedToolSurfaceKindV2 {
+    match kind {
+        ToolSurfaceKind::Outliner => PersistedToolSurfaceKindV2::Outliner,
+        ToolSurfaceKind::EntityTable => PersistedToolSurfaceKindV2::EntityTable,
+        ToolSurfaceKind::Viewport => PersistedToolSurfaceKindV2::Viewport,
+        ToolSurfaceKind::Inspector => PersistedToolSurfaceKindV2::Inspector,
+        ToolSurfaceKind::Console => PersistedToolSurfaceKindV2::Console,
+        ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV2::Placeholder,
     }
 }
 
@@ -389,6 +615,17 @@ fn workspace_tool_surface_kind(kind: PersistedToolSurfaceKindV1) -> ToolSurfaceK
         PersistedToolSurfaceKindV1::Inspector => ToolSurfaceKind::Inspector,
         PersistedToolSurfaceKindV1::Console => ToolSurfaceKind::Console,
         PersistedToolSurfaceKindV1::Placeholder => ToolSurfaceKind::Placeholder,
+    }
+}
+
+fn workspace_tool_surface_kind_v2(kind: PersistedToolSurfaceKindV2) -> ToolSurfaceKind {
+    match kind {
+        PersistedToolSurfaceKindV2::Outliner => ToolSurfaceKind::Outliner,
+        PersistedToolSurfaceKindV2::EntityTable => ToolSurfaceKind::EntityTable,
+        PersistedToolSurfaceKindV2::Viewport => ToolSurfaceKind::Viewport,
+        PersistedToolSurfaceKindV2::Inspector => ToolSurfaceKind::Inspector,
+        PersistedToolSurfaceKindV2::Console => ToolSurfaceKind::Console,
+        PersistedToolSurfaceKindV2::Placeholder => ToolSurfaceKind::Placeholder,
     }
 }
 
@@ -410,6 +647,35 @@ impl TryFrom<String> for PersistedToolSurfaceKindV1 {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
             "outliner" => Ok(Self::Outliner),
+            "viewport" => Ok(Self::Viewport),
+            "inspector" => Ok(Self::Inspector),
+            "console" => Ok(Self::Console),
+            "placeholder" => Ok(Self::Placeholder),
+            other => Err(format!("unsupported tool-surface kind: {other}")),
+        }
+    }
+}
+
+impl From<PersistedToolSurfaceKindV2> for String {
+    fn from(value: PersistedToolSurfaceKindV2) -> Self {
+        match value {
+            PersistedToolSurfaceKindV2::Outliner => "outliner".to_string(),
+            PersistedToolSurfaceKindV2::EntityTable => "entity_table".to_string(),
+            PersistedToolSurfaceKindV2::Viewport => "viewport".to_string(),
+            PersistedToolSurfaceKindV2::Inspector => "inspector".to_string(),
+            PersistedToolSurfaceKindV2::Console => "console".to_string(),
+            PersistedToolSurfaceKindV2::Placeholder => "placeholder".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedToolSurfaceKindV2 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "outliner" => Ok(Self::Outliner),
+            "entity_table" => Ok(Self::EntityTable),
             "viewport" => Ok(Self::Viewport),
             "inspector" => Ok(Self::Inspector),
             "console" => Ok(Self::Console),
@@ -460,18 +726,18 @@ mod tests {
     #[test]
     fn persisted_roundtrip_preserves_structural_identity() {
         let workspace = bootstrap_workspace();
-        let persisted = workspace.to_persisted_v1();
+        let persisted = workspace.to_persisted_v2();
         let restored =
-            WorkspaceState::from_persisted_v1(persisted).expect("roundtrip should decode");
+            WorkspaceState::from_persisted_v2(persisted).expect("roundtrip should decode");
         assert_eq!(workspace, restored);
     }
 
     #[test]
     fn persisted_decode_rejects_invalid_references() {
         let workspace = bootstrap_workspace();
-        let mut persisted = workspace.to_persisted_v1();
+        let mut persisted = workspace.to_persisted_v2();
         persisted.panels.clear();
-        let error = WorkspaceState::from_persisted_v1(persisted)
+        let error = WorkspaceState::from_persisted_v2(persisted)
             .expect_err("invalid references must fail decode");
         assert!(matches!(error, WorkspaceStateError::MissingPanel(_)));
     }
@@ -479,9 +745,9 @@ mod tests {
     #[test]
     fn persisted_decode_rejects_unsupported_version() {
         let workspace = bootstrap_workspace();
-        let mut persisted = workspace.to_persisted_v1();
+        let mut persisted = workspace.to_persisted_v2();
         persisted.version = 99;
-        let error = WorkspaceState::from_persisted_v1(persisted)
+        let error = WorkspaceState::from_persisted_v2(persisted)
             .expect_err("unsupported versions must fail");
         assert!(matches!(
             error,
@@ -490,7 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn persisted_roundtrip_handles_detached_tool_surface_state() {
+    fn persisted_v2_roundtrip_handles_detached_tool_surface_state() {
         let workspace = bootstrap_workspace();
         let viewport_panel = workspace
             .panels_by_id
@@ -506,9 +772,19 @@ mod tests {
         )
         .expect("detaching should produce valid state");
 
-        let persisted = detached.to_persisted_v1();
+        let persisted = detached.to_persisted_v2();
         let restored =
-            WorkspaceState::from_persisted_v1(persisted).expect("detached state should decode");
+            WorkspaceState::from_persisted_v2(persisted).expect("detached state should decode");
         assert_eq!(detached, restored);
+    }
+
+    #[test]
+    fn persisted_v1_decode_remains_supported_for_legacy_layouts() {
+        let workspace = bootstrap_workspace();
+        let persisted = workspace.to_persisted_v1();
+        let restored = WorkspaceState::from_persisted_v1(persisted)
+            .expect("legacy v1 layout should still decode");
+
+        assert!(restored.validate_integrity().is_ok());
     }
 }

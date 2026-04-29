@@ -1,14 +1,16 @@
 use super::state::RunenwerkEditorApp;
 use crate::editor_features::ToolAction;
+use crate::editor_features::entity_table::dispatch_entity_table_command;
 use crate::editor_features::inspector::dispatch_inspector_command;
 use crate::editor_features::outliner::dispatch_outliner_command;
 use crate::editor_features::tools::{dispatch_tool_action, dispatch_tool_actions};
 use crate::editor_features::viewport::{ViewportInteractionCommand, ViewportInteractionController};
 use crate::editor_panels::{
-    InspectorPanelCommand, InspectorPanelCommandResult, InspectorPanelPresenter,
-    InspectorPanelViewModel, OutlinerPanelCommand, OutlinerPanelCommandResult,
-    OutlinerPanelPresenter, OutlinerPanelState, ViewportPanelCommand, ViewportPanelPresenter,
-    ViewportPanelState, ViewportToolState,
+    EntityTablePanelCommand, EntityTablePanelCommandResult, EntityTablePanelPresenter,
+    EntityTablePanelState, InspectorPanelCommand, InspectorPanelCommandResult,
+    InspectorPanelPresenter, InspectorPanelViewModel, OutlinerPanelCommand,
+    OutlinerPanelCommandResult, OutlinerPanelPresenter, OutlinerPanelState, ViewportPanelCommand,
+    ViewportPanelPresenter, ViewportPanelState, ViewportToolState,
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -29,6 +31,10 @@ impl RunenwerkEditorApp {
         OutlinerPanelPresenter::build_state(&self.runtime)
     }
 
+    pub fn entity_table_state(&self) -> EntityTablePanelState {
+        EntityTablePanelPresenter::build_state(&self.runtime, &self.entity_table_ui_state)
+    }
+
     pub fn inspector_view_model(&self) -> InspectorPanelViewModel {
         InspectorPanelPresenter::build_view_model(&self.runtime, &self.inspector_ui_state)
     }
@@ -38,6 +44,13 @@ impl RunenwerkEditorApp {
         command: OutlinerPanelCommand,
     ) -> Result<OutlinerPanelCommandResult, EditorMutationError> {
         dispatch_outliner_command(self, command)
+    }
+
+    pub fn dispatch_entity_table_command(
+        &mut self,
+        command: EntityTablePanelCommand,
+    ) -> Result<EntityTablePanelCommandResult, EditorMutationError> {
+        dispatch_entity_table_command(self, command)
     }
 
     pub fn dispatch_inspector_command(

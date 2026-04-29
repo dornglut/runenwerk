@@ -85,6 +85,7 @@ pub struct PanelHostNode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelKind {
     Outliner,
+    EntityTable,
     Viewport,
     Inspector,
     Console,
@@ -94,6 +95,7 @@ pub enum PanelKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolSurfaceKind {
     Outliner,
+    EntityTable,
     Viewport,
     Inspector,
     Console,
@@ -297,11 +299,13 @@ impl WorkspaceState {
         let console_tab_stack = allocator.allocate_tab_stack_id();
 
         let outliner_panel = allocator.allocate_panel_instance_id();
+        let entity_table_panel = allocator.allocate_panel_instance_id();
         let viewport_panel = allocator.allocate_panel_instance_id();
         let inspector_panel = allocator.allocate_panel_instance_id();
         let console_panel = allocator.allocate_panel_instance_id();
 
         let outliner_surface = allocator.allocate_tool_surface_instance_id();
+        let entity_table_surface = allocator.allocate_tool_surface_instance_id();
         let viewport_surface = allocator.allocate_tool_surface_instance_id();
         let inspector_surface = allocator.allocate_tool_surface_instance_id();
         let console_surface = allocator.allocate_tool_surface_instance_id();
@@ -385,7 +389,7 @@ impl WorkspaceState {
             outliner_tab_stack,
             TabStackState {
                 id: outliner_tab_stack,
-                ordered_panels: vec![outliner_panel],
+                ordered_panels: vec![outliner_panel, entity_table_panel],
                 active_panel: Some(outliner_panel),
             },
         );
@@ -424,6 +428,14 @@ impl WorkspaceState {
             },
         );
         panels_by_id.insert(
+            entity_table_panel,
+            PanelInstanceState {
+                id: entity_table_panel,
+                panel_kind: PanelKind::EntityTable,
+                active_tool_surface: Some(entity_table_surface),
+            },
+        );
+        panels_by_id.insert(
             viewport_panel,
             PanelInstanceState {
                 id: viewport_panel,
@@ -456,6 +468,16 @@ impl WorkspaceState {
                 tool_surface_kind: ToolSurfaceKind::Outliner,
                 mount: ToolSurfaceMount::Mounted {
                     panel_id: outliner_panel,
+                },
+            },
+        );
+        tool_surfaces_by_id.insert(
+            entity_table_surface,
+            ToolSurfaceState {
+                id: entity_table_surface,
+                tool_surface_kind: ToolSurfaceKind::EntityTable,
+                mount: ToolSurfaceMount::Mounted {
+                    panel_id: entity_table_panel,
                 },
             },
         );

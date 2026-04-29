@@ -18,7 +18,9 @@ use ui_surface::{
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
-use crate::editor_panels::{InspectorPanelCommand, InspectorPanelViewModel, OutlinerPanelCommand};
+use crate::editor_panels::{
+    EntityTablePanelCommand, InspectorPanelCommand, InspectorPanelViewModel, OutlinerPanelCommand,
+};
 use crate::editor_runtime::{
     bootstrap_mvp_scene_if_empty, is_local_transform_component, register_mvp_component_types,
 };
@@ -153,6 +155,119 @@ pub fn dispatch_shell_command(
                 destination,
             )
             .map_err(|_| EditorMutationError::runtime_rejected("workspace tab drop failed"))?;
+        }
+        ShellCommand::SelectEntityTableEntity {
+            entity,
+            target,
+            projection_epoch: _,
+        } => {
+            let Some(surface_contract) = resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::EntityTable,
+            ) else {
+                app.append_console_line(
+                    "[entity_table] selection ignored (missing structural tool-surface target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            if surface_contract.tool_surface_kind != ToolSurfaceKind::EntityTable {
+                app.append_console_line(format!(
+                    "[entity_table] selection ignored (surface-kind mismatch): expected=entity_table actual={}",
+                    tool_surface_kind_label(surface_contract.tool_surface_kind),
+                ));
+                return Ok(());
+            }
+            for required_capability in [SurfaceCapability::Observe, SurfaceCapability::Interact] {
+                if !surface_contract.capabilities.allows(required_capability) {
+                    app.append_console_line(format!(
+                        "[entity_table] selection ignored (missing capability): entity={} capability={}",
+                        entity.0,
+                        surface_capability_label(required_capability),
+                    ));
+                    return Ok(());
+                }
+            }
+
+            let table_state = app.entity_table_state();
+            let presentation_model = build_entity_table_surface_presentation_model(&table_state);
+            if !presentation_model.is_primary_selectable(entity.0) {
+                app.append_console_line(format!(
+                    "[entity_table] selection ignored (unavailable): entity={}",
+                    entity.0,
+                ));
+                return Ok(());
+            }
+
+            let _session_scope = SessionScopeHandle::new(
+                surface_contract.surface_instance_id,
+                target.panel_instance_id.raw(),
+                surface_contract.retention_class,
+            );
+            let intent =
+                SurfaceIntent::select_entity(surface_contract.surface_instance_id, entity.0);
+            let mut ratification_adapter =
+                EntityTableSelectionRatificationAdapter::new(app, surface_contract.capabilities);
+            match ratify_surface_intent(&mut ratification_adapter, intent) {
+                Ok(RatificationOutcome::Applied) | Ok(RatificationOutcome::Ignored) => {}
+                Err(RatificationDispatchError::MissingCapability(capability)) => {
+                    app.append_console_line(format!(
+                        "[entity_table] selection ignored (missing capability): entity={} capability={}",
+                        entity.0,
+                        surface_capability_label(capability),
+                    ));
+                }
+                Err(RatificationDispatchError::Adapter(error)) => return Err(error),
+            }
+        }
+        ShellCommand::AppendEntityTableSearchText {
+            text,
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::EntityTable,
+            )
+            .is_some()
+            {
+                app.dispatch_entity_table_command(EntityTablePanelCommand::AppendSearchText {
+                    text,
+                })?;
+            }
+        }
+        ShellCommand::BackspaceEntityTableSearch {
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::EntityTable,
+            )
+            .is_some()
+            {
+                app.dispatch_entity_table_command(EntityTablePanelCommand::BackspaceSearchQuery)?;
+            }
+        }
+        ShellCommand::ToggleEntityTableSort {
+            sort_key,
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::EntityTable,
+            )
+            .is_some()
+            {
+                app.dispatch_entity_table_command(EntityTablePanelCommand::ToggleSort {
+                    sort_key,
+                })?;
+            }
         }
         ShellCommand::SelectOutlinerEntity {
             entity,
@@ -506,6 +621,87 @@ pub fn dispatch_shell_command(
                 Err(RatificationDispatchError::Adapter(error)) => return Err(error),
             }
         }
+        ShellCommand::FocusInspectorField {
+            index,
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Inspector,
+            )
+            .is_some()
+            {
+                focus_inspector_field(app, index)?;
+                if let Some(state) = shell_state.as_deref_mut() {
+                    state
+                        .runtime_mut()
+                        .set_focused_widget(Some(editor_shell::inspector_field_widget_id(index)));
+                }
+            }
+        }
+        ShellCommand::AppendInspectorFieldText {
+            index,
+            text,
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Inspector,
+            )
+            .is_some()
+            {
+                append_inspector_field_text(app, index, &text)?;
+            }
+        }
+        ShellCommand::BackspaceInspectorFieldText {
+            index,
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Inspector,
+            )
+            .is_some()
+            {
+                backspace_inspector_field_text(app, index)?;
+            }
+        }
+        ShellCommand::CommitInspectorFieldText {
+            index,
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Inspector,
+            )
+            .is_some()
+            {
+                commit_inspector_field_text(app, index)?;
+            }
+        }
+        ShellCommand::CancelInspectorFieldText {
+            index: _,
+            target,
+            projection_epoch: _,
+        } => {
+            if resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Inspector,
+            )
+            .is_some()
+            {
+                app.dispatch_inspector_command(InspectorPanelCommand::CancelDraftComponentField)?;
+            }
+        }
         ShellCommand::NoOp => {}
     }
 
@@ -569,6 +765,22 @@ fn build_outliner_surface_presentation_model(
     SurfacePresentationModel::from_observation_frame(
         &adapter,
         outliner_state.rows.iter().map(|row| row.entity.0),
+    )
+}
+
+fn build_entity_table_surface_presentation_model(
+    table_state: &crate::editor_panels::EntityTablePanelState,
+) -> SurfacePresentationModel<u64> {
+    let adapter = OutlinerObservationFrameAdapter {
+        selected_entity_id: table_state
+            .rows
+            .iter()
+            .find(|row| row.is_selected)
+            .map(|row| row.entity.0),
+    };
+    SurfacePresentationModel::from_observation_frame(
+        &adapter,
+        table_state.rows.iter().map(|row| row.entity.0),
     )
 }
 
@@ -653,6 +865,7 @@ fn resolve_surface_command_contract(
 fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
     match kind {
         ToolSurfaceKind::Outliner => "outliner",
+        ToolSurfaceKind::EntityTable => "entity_table",
         ToolSurfaceKind::Viewport => "viewport",
         ToolSurfaceKind::Inspector => "inspector",
         ToolSurfaceKind::Console => "console",
@@ -697,6 +910,37 @@ struct OutlinerEntitySelectionRatificationAdapter<'a> {
 impl<'a> OutlinerEntitySelectionRatificationAdapter<'a> {
     fn new(app: &'a mut RunenwerkEditorApp, capabilities: SurfaceCapabilitySet) -> Self {
         Self { app, capabilities }
+    }
+}
+
+struct EntityTableSelectionRatificationAdapter<'a> {
+    app: &'a mut RunenwerkEditorApp,
+    capabilities: SurfaceCapabilitySet,
+}
+
+impl<'a> EntityTableSelectionRatificationAdapter<'a> {
+    fn new(app: &'a mut RunenwerkEditorApp, capabilities: SurfaceCapabilitySet) -> Self {
+        Self { app, capabilities }
+    }
+}
+
+impl RatificationAdapter for EntityTableSelectionRatificationAdapter<'_> {
+    type Error = EditorMutationError;
+
+    fn has_capability(&self, capability: SurfaceCapability) -> bool {
+        self.capabilities.allows(capability)
+    }
+
+    fn ratify_intent(&mut self, intent: SurfaceIntent) -> Result<RatificationOutcome, Self::Error> {
+        let entity_id = match intent.kind {
+            SurfaceIntentKind::SelectEntity { entity_id } => entity_id,
+            _ => return Ok(RatificationOutcome::Ignored),
+        };
+        self.app
+            .dispatch_entity_table_command(EntityTablePanelCommand::SelectEntity {
+                entity: editor_core::EntityId(entity_id),
+            })?;
+        Ok(RatificationOutcome::Applied)
     }
 }
 
@@ -787,10 +1031,19 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
         ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
+        ShellCommand::SelectEntityTableEntity { .. } => "SelectEntityTableEntity",
+        ShellCommand::AppendEntityTableSearchText { .. } => "AppendEntityTableSearchText",
+        ShellCommand::BackspaceEntityTableSearch { .. } => "BackspaceEntityTableSearch",
+        ShellCommand::ToggleEntityTableSort { .. } => "ToggleEntityTableSort",
         ShellCommand::SelectOutlinerEntity { .. } => "SelectOutlinerEntity",
         ShellCommand::SelectViewportProduct { .. } => "SelectViewportProduct",
         ShellCommand::ToggleViewportDetails => "ToggleViewportDetails",
         ShellCommand::ActivateInspectorField { .. } => "ActivateInspectorField",
+        ShellCommand::FocusInspectorField { .. } => "FocusInspectorField",
+        ShellCommand::AppendInspectorFieldText { .. } => "AppendInspectorFieldText",
+        ShellCommand::BackspaceInspectorFieldText { .. } => "BackspaceInspectorFieldText",
+        ShellCommand::CommitInspectorFieldText { .. } => "CommitInspectorFieldText",
+        ShellCommand::CancelInspectorFieldText { .. } => "CancelInspectorFieldText",
         ShellCommand::NoOp => "NoOp",
     }
 }
@@ -864,6 +1117,194 @@ fn activate_inspector_field(
         | InspectorPanelViewModel::Error { .. } => Err(EditorMutationError::inspector_rejected(
             "shell inspector field activation requires entity/component target",
         )),
+    }
+}
+
+fn focus_inspector_field(
+    app: &mut RunenwerkEditorApp,
+    index: usize,
+) -> Result<(), EditorMutationError> {
+    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let text = inspector_current_draft_text(&field, true);
+    apply_inspector_draft_text(app, entity, component_type, &field, text)
+}
+
+fn append_inspector_field_text(
+    app: &mut RunenwerkEditorApp,
+    index: usize,
+    text: &str,
+) -> Result<(), EditorMutationError> {
+    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let mut next_text = inspector_current_draft_text(&field, false);
+    next_text.push_str(text);
+    apply_inspector_draft_text(app, entity, component_type, &field, next_text)
+}
+
+fn backspace_inspector_field_text(
+    app: &mut RunenwerkEditorApp,
+    index: usize,
+) -> Result<(), EditorMutationError> {
+    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let mut next_text = inspector_current_draft_text(&field, true);
+    let _ = next_text.pop();
+    apply_inspector_draft_text(app, entity, component_type, &field, next_text)
+}
+
+fn commit_inspector_field_text(
+    app: &mut RunenwerkEditorApp,
+    index: usize,
+) -> Result<(), EditorMutationError> {
+    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let text = inspector_current_draft_text(&field, true);
+    let value = parse_inspector_field_text(&field, &text).ok_or(
+        EditorMutationError::inspector_rejected("inspector field text is invalid for target type"),
+    )?;
+    app.dispatch_inspector_command(InspectorPanelCommand::EditComponentField {
+        entity,
+        component_type,
+        path: field.path.clone(),
+        value,
+    })?;
+    Ok(())
+}
+
+fn inspector_component_field_at_index(
+    app: &mut RunenwerkEditorApp,
+    index: usize,
+) -> Result<
+    (
+        editor_core::EntityId,
+        editor_core::ComponentTypeId,
+        crate::editor_panels::InspectorWidgetField,
+    ),
+    EditorMutationError,
+> {
+    let inspector_view = app.inspector_view_model();
+    match inspector_view {
+        InspectorPanelViewModel::Component {
+            entity,
+            component_type,
+            widget_fields,
+            ..
+        } => {
+            let field = widget_fields
+                .get(index)
+                .ok_or(EditorMutationError::inspector_rejected(
+                    "inspector field index out of range",
+                ))?
+                .clone();
+            Ok((entity, component_type, field))
+        }
+        _ => Err(EditorMutationError::inspector_rejected(
+            "inspector text editing requires component target",
+        )),
+    }
+}
+
+fn inspector_current_draft_text(
+    field: &crate::editor_panels::InspectorWidgetField,
+    include_base_value: bool,
+) -> String {
+    if let Some(text) = &field.draft_text {
+        return text.clone();
+    }
+    if include_base_value {
+        return inspector_value_text(&field.value);
+    }
+    String::new()
+}
+
+fn apply_inspector_draft_text(
+    app: &mut RunenwerkEditorApp,
+    entity: editor_core::EntityId,
+    component_type: editor_core::ComponentTypeId,
+    field: &crate::editor_panels::InspectorWidgetField,
+    text: String,
+) -> Result<(), EditorMutationError> {
+    let parsed_value = parse_inspector_field_text(field, &text);
+    let initial_value = parsed_value
+        .clone()
+        .or_else(|| editable_value_from_field(field))
+        .ok_or(EditorMutationError::inspector_rejected(
+            "inspector field is not editable",
+        ))?;
+
+    app.dispatch_inspector_command(InspectorPanelCommand::BeginEditComponentField {
+        entity,
+        component_type,
+        path: field.path.clone(),
+        value: initial_value,
+        text: text.clone(),
+    })?;
+
+    app.dispatch_inspector_command(InspectorPanelCommand::UpdateDraftComponentFieldText { text })?;
+    if let Some(value) = parsed_value {
+        app.dispatch_inspector_command(InspectorPanelCommand::UpdateDraftComponentField { value })?;
+    }
+    Ok(())
+}
+
+fn parse_inspector_field_text(
+    field: &crate::editor_panels::InspectorWidgetField,
+    text: &str,
+) -> Option<InspectorEditValue> {
+    match &field.value {
+        InspectorValue::Bool(_) => {
+            let normalized = text.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "true" | "1" => Some(InspectorEditValue::Bool(true)),
+                "false" | "0" => Some(InspectorEditValue::Bool(false)),
+                _ => None,
+            }
+        }
+        InspectorValue::Integer(_) => text
+            .trim()
+            .parse::<i64>()
+            .ok()
+            .map(InspectorEditValue::Integer),
+        InspectorValue::Float(_) => text
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite())
+            .map(InspectorEditValue::Float),
+        InspectorValue::Text(_) => Some(InspectorEditValue::Text(text.to_string())),
+        InspectorValue::ReadOnlyText(_)
+        | InspectorValue::Enum { .. }
+        | InspectorValue::Group
+        | InspectorValue::Unsupported { .. } => None,
+    }
+}
+
+fn editable_value_from_field(
+    field: &crate::editor_panels::InspectorWidgetField,
+) -> Option<InspectorEditValue> {
+    if let Some(value) = &field.draft_value {
+        return Some(value.clone());
+    }
+
+    match &field.value {
+        InspectorValue::Bool(value) => Some(InspectorEditValue::Bool(*value)),
+        InspectorValue::Integer(value) => Some(InspectorEditValue::Integer(*value)),
+        InspectorValue::Float(value) => Some(InspectorEditValue::Float(*value)),
+        InspectorValue::Text(value) => Some(InspectorEditValue::Text(value.clone())),
+        InspectorValue::ReadOnlyText(_)
+        | InspectorValue::Enum { .. }
+        | InspectorValue::Group
+        | InspectorValue::Unsupported { .. } => None,
+    }
+}
+
+fn inspector_value_text(value: &InspectorValue) -> String {
+    match value {
+        InspectorValue::Bool(value) => value.to_string(),
+        InspectorValue::Integer(value) => value.to_string(),
+        InspectorValue::Float(value) => value.to_string(),
+        InspectorValue::Text(value) => value.clone(),
+        InspectorValue::ReadOnlyText(value) => value.clone(),
+        InspectorValue::Enum { current, .. } => current.clone(),
+        InspectorValue::Group => "group".to_string(),
+        InspectorValue::Unsupported { type_name } => format!("unsupported<{type_name}>"),
     }
 }
 

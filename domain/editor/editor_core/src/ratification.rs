@@ -50,6 +50,7 @@ pub enum ChangeOrigin {
     Shortcut,
     InspectorPanel,
     OutlinerPanel,
+    EntityTablePanel,
     ToolInteraction,
     ViewportInteraction,
     Runtime,

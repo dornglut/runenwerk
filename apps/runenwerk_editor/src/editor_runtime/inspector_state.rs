@@ -9,6 +9,7 @@ pub struct InspectorFieldDraft {
     pub component_type: ComponentTypeId,
     pub path: InspectorPath,
     pub value: InspectorEditValue,
+    pub text: String,
 }
 
 impl InspectorFieldDraft {
@@ -17,12 +18,14 @@ impl InspectorFieldDraft {
         component_type: ComponentTypeId,
         path: InspectorPath,
         value: InspectorEditValue,
+        text: impl Into<String>,
     ) -> Self {
         Self {
             entity,
             component_type,
             path,
             value,
+            text: text.into(),
         }
     }
 }
@@ -53,6 +56,7 @@ impl EditorInspectorUiState {
         component_type: ComponentTypeId,
         path: InspectorPath,
         value: InspectorEditValue,
+        text: impl Into<String>,
     ) {
         self.focused_field = Some(path.clone());
         self.active_draft = Some(InspectorFieldDraft::new(
@@ -60,6 +64,7 @@ impl EditorInspectorUiState {
             component_type,
             path,
             value,
+            text,
         ));
     }
 
@@ -75,6 +80,21 @@ impl EditorInspectorUiState {
             ))?;
 
         draft.value = value;
+        Ok(())
+    }
+
+    pub fn update_field_draft_text(
+        &mut self,
+        text: impl Into<String>,
+    ) -> Result<(), EditorMutationError> {
+        let draft = self
+            .active_draft
+            .as_mut()
+            .ok_or(EditorMutationError::inspector_rejected(
+                "no active inspector field draft",
+            ))?;
+
+        draft.text = text.into();
         Ok(())
     }
 

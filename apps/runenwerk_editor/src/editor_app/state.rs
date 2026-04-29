@@ -1,4 +1,5 @@
 use crate::editor_features::viewport::interaction::ViewportInteractionState;
+use crate::editor_panels::EntityTablePanelUiState;
 use crate::editor_runtime::inspector_state::EditorInspectorUiState;
 use crate::editor_runtime::runtime::RunenwerkEditorRuntime;
 use crate::editor_runtime::tool_state::EditorToolRuntimeState;
@@ -6,6 +7,7 @@ use crate::editor_runtime::tool_state::EditorToolRuntimeState;
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
     pub(crate) inspector_ui_state: EditorInspectorUiState,
+    pub(crate) entity_table_ui_state: EntityTablePanelUiState,
     pub(crate) tool_runtime_state: EditorToolRuntimeState,
     pub(crate) viewport_interaction_state: ViewportInteractionState,
     pub(crate) console_lines: Vec<String>,
@@ -26,6 +28,7 @@ impl RunenwerkEditorApp {
         Self {
             runtime: RunenwerkEditorRuntime::new(),
             inspector_ui_state: EditorInspectorUiState::new(),
+            entity_table_ui_state: EntityTablePanelUiState::new(),
             tool_runtime_state: EditorToolRuntimeState::new(),
             viewport_interaction_state: ViewportInteractionState::new(),
             console_lines: Vec::new(),
@@ -47,6 +50,7 @@ impl RunenwerkEditorApp {
     pub fn reset_transient_editor_ui_state(&mut self) {
         self.inspector_ui_state.clear_draft();
         self.inspector_ui_state.clear_focus();
+        self.entity_table_ui_state = EntityTablePanelUiState::new();
         self.tool_runtime_state = EditorToolRuntimeState::new();
         self.viewport_interaction_state.clear();
         self.viewport_details_visible = false;
@@ -58,6 +62,14 @@ impl RunenwerkEditorApp {
 
     pub fn inspector_ui_state_mut(&mut self) -> &mut EditorInspectorUiState {
         &mut self.inspector_ui_state
+    }
+
+    pub fn entity_table_ui_state(&self) -> &EntityTablePanelUiState {
+        &self.entity_table_ui_state
+    }
+
+    pub fn entity_table_ui_state_mut(&mut self) -> &mut EntityTablePanelUiState {
+        &mut self.entity_table_ui_state
     }
 
     pub fn tool_runtime_state(&self) -> &EditorToolRuntimeState {

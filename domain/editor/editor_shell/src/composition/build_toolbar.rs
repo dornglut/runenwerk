@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_shell/src/composition/build_toolbar.rs
 //! Purpose: Compose toolbar widgets from toolbar view model.
 
-use crate::{UiNode, button, hscroll, hstack, panel};
+use crate::{UiNode, button_selected, hscroll, hstack, panel};
 use ui_text::FontId;
 use ui_theme::{ThemeTokens, UiColor};
 
@@ -30,11 +30,12 @@ pub fn build_toolbar(view_model: &ToolbarViewModel, theme: &ThemeTokens) -> UiNo
             _ => continue,
         };
 
-        let mut node = button(
+        let mut node = button_selected(
             widget_id,
             button_vm.label.clone(),
             text_style.clone(),
             theme.clone(),
+            button_vm.is_active,
         );
         if let UiNodeKind::Button(button_node) = &mut node.kind {
             button_node.enabled = button_vm.enabled;

@@ -75,12 +75,21 @@ pub fn dispatch_inspector_command(
             component_type,
             path,
             value,
+            text,
         } => {
-            app.inspector_ui_state_mut()
-                .begin_field_edit(entity, component_type, path, value);
+            app.inspector_ui_state_mut().begin_field_edit(
+                entity,
+                component_type,
+                path,
+                value,
+                text,
+            );
         }
         InspectorPanelCommand::UpdateDraftComponentField { value } => {
             app.inspector_ui_state_mut().update_field_draft(value)?;
+        }
+        InspectorPanelCommand::UpdateDraftComponentFieldText { text } => {
+            app.inspector_ui_state_mut().update_field_draft_text(text)?;
         }
         InspectorPanelCommand::CommitDraftComponentField => {
             let draft = app.inspector_ui_state_mut().take_active_draft().ok_or(

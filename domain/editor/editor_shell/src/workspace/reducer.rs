@@ -53,6 +53,10 @@ pub enum WorkspaceMutation {
         floating_host_id: PanelHostId,
         bounds: FloatingHostBounds,
     },
+    SetSplitHostFraction {
+        split_host_id: PanelHostId,
+        fraction: f32,
+    },
 }
 
 pub fn reduce_workspace(
@@ -249,7 +253,31 @@ fn apply_mutation(
         } => {
             set_floating_host_bounds(state, floating_host_id, bounds)?;
         }
+        WorkspaceMutation::SetSplitHostFraction {
+            split_host_id,
+            fraction,
+        } => {
+            set_split_host_fraction(state, split_host_id, fraction)?;
+        }
     }
+    Ok(())
+}
+
+fn set_split_host_fraction(
+    state: &mut WorkspaceState,
+    split_host_id: PanelHostId,
+    fraction: f32,
+) -> Result<(), WorkspaceStateError> {
+    let host = state
+        .hosts_by_id
+        .get_mut(&split_host_id)
+        .ok_or(WorkspaceStateError::MissingHost(split_host_id))?;
+    let PanelHostKind::SplitHost(split) = &mut host.kind else {
+        return Err(WorkspaceStateError::ProjectionShapeMismatch(
+            "requested split fraction update on non-split host",
+        ));
+    };
+    split.fraction = fraction;
     Ok(())
 }
 

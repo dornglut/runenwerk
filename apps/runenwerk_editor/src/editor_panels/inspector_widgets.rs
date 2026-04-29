@@ -18,6 +18,7 @@ pub struct InspectorWidgetField {
     pub kind: InspectorWidgetKind,
     pub value: InspectorValue,
     pub draft_value: Option<InspectorEditValue>,
+    pub draft_text: Option<String>,
     pub is_focused: bool,
 }
 
@@ -30,6 +31,9 @@ impl InspectorWidgetField {
         let draft_value = active_draft
             .filter(|draft| draft.path == field.path)
             .map(|draft| draft.value.clone());
+        let draft_text = active_draft
+            .filter(|draft| draft.path == field.path)
+            .map(|draft| draft.text.clone());
 
         let is_focused = focused_field
             .map(|path| *path == field.path)
@@ -41,6 +45,7 @@ impl InspectorWidgetField {
             kind: widget_kind_from_value(&field.value),
             value: field.value,
             draft_value,
+            draft_text,
             is_focused,
         }
     }

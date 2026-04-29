@@ -2,6 +2,7 @@
 //! Purpose: Domain-owned editor shell view models.
 
 pub mod console;
+pub mod entity_table;
 pub mod inspector;
 pub mod outliner;
 pub mod shell;
@@ -9,6 +10,7 @@ pub mod toolbar;
 pub mod viewport;
 
 pub use console::*;
+pub use entity_table::*;
 pub use inspector::*;
 pub use outliner::*;
 pub use shell::*;

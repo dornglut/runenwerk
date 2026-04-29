@@ -4,7 +4,7 @@
 use editor_core::EntityId;
 use editor_viewport::{ExpressionProductId, ViewportId};
 
-use crate::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId};
+use crate::{EntityTableSortKey, PanelInstanceId, TabStackId, ToolSurfaceInstanceId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StructuralCommandTarget {
@@ -42,6 +42,25 @@ pub enum ShellCommand {
         destination: TabDropDestination,
         projection_epoch: u64,
     },
+    SelectEntityTableEntity {
+        entity: EntityId,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    AppendEntityTableSearchText {
+        text: String,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    BackspaceEntityTableSearch {
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    ToggleEntityTableSort {
+        sort_key: EntityTableSortKey,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
     SelectOutlinerEntity {
         entity: EntityId,
         target: StructuralCommandTarget,
@@ -55,6 +74,32 @@ pub enum ShellCommand {
     },
     ToggleViewportDetails,
     ActivateInspectorField {
+        index: usize,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    FocusInspectorField {
+        index: usize,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    AppendInspectorFieldText {
+        index: usize,
+        text: String,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    BackspaceInspectorFieldText {
+        index: usize,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    CommitInspectorFieldText {
+        index: usize,
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    CancelInspectorFieldText {
         index: usize,
         target: StructuralCommandTarget,
         projection_epoch: u64,
@@ -74,10 +119,37 @@ impl ShellCommand {
             | Self::CommitTabDrop {
                 projection_epoch, ..
             }
+            | Self::SelectEntityTableEntity {
+                projection_epoch, ..
+            }
+            | Self::AppendEntityTableSearchText {
+                projection_epoch, ..
+            }
+            | Self::BackspaceEntityTableSearch {
+                projection_epoch, ..
+            }
+            | Self::ToggleEntityTableSort {
+                projection_epoch, ..
+            }
             | Self::SelectViewportProduct {
                 projection_epoch, ..
             }
             | Self::ActivateInspectorField {
+                projection_epoch, ..
+            }
+            | Self::FocusInspectorField {
+                projection_epoch, ..
+            }
+            | Self::AppendInspectorFieldText {
+                projection_epoch, ..
+            }
+            | Self::BackspaceInspectorFieldText {
+                projection_epoch, ..
+            }
+            | Self::CommitInspectorFieldText {
+                projection_epoch, ..
+            }
+            | Self::CancelInspectorFieldText {
                 projection_epoch, ..
             } => Some(*projection_epoch),
             _ => None,

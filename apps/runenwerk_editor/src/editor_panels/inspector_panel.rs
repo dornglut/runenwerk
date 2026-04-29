@@ -99,9 +99,13 @@ pub enum InspectorPanelCommand {
         component_type: ComponentTypeId,
         path: InspectorPath,
         value: InspectorEditValue,
+        text: String,
     },
     UpdateDraftComponentField {
         value: InspectorEditValue,
+    },
+    UpdateDraftComponentFieldText {
+        text: String,
     },
     CommitDraftComponentField,
     CancelDraftComponentField,

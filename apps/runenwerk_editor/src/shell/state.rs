@@ -1,8 +1,9 @@
 use editor_shell::{
-    ActiveTabDragVisualState, DockingInteractionVisualState, DockingPreviewDropTarget, PanelHostId,
-    PanelInstanceId, ShellProjectionArtifacts, TabStackId, UiRuntime, UiTree, WorkspaceId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState, WorkspaceStateError,
-    reduce_workspace,
+    ActiveTabDragVisualState, BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
+    DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
+    PanelHostId, PanelInstanceId, ShellProjectionArtifacts, TabStackId, UiRuntime, UiTree,
+    WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
+    WorkspaceStateError, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -17,6 +18,18 @@ struct TabDragSession {
     active: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceSplitKind {
+    BodyConsole,
+    LeftRight,
+    CenterRight,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SplitResizeSession {
+    split_kind: WorkspaceSplitKind,
+}
+
 #[derive(Debug)]
 pub struct RunenwerkEditorShellState {
     runtime: UiRuntime,
@@ -27,6 +40,7 @@ pub struct RunenwerkEditorShellState {
     identity_allocator: WorkspaceIdentityAllocator,
     workspace_state: WorkspaceState,
     tab_drag_session: Option<TabDragSession>,
+    split_resize_session: Option<SplitResizeSession>,
     docking_visual_state: DockingInteractionVisualState,
 }
 
@@ -46,6 +60,7 @@ impl Default for RunenwerkEditorShellState {
             identity_allocator,
             workspace_state,
             tab_drag_session: None,
+            split_resize_session: None,
             docking_visual_state: DockingInteractionVisualState::default(),
         }
     }
@@ -110,6 +125,7 @@ impl RunenwerkEditorShellState {
         self.identity_allocator =
             WorkspaceIdentityAllocator::from_seed(workspace_state.next_identity_seed());
         self.workspace_state = workspace_state;
+        self.clear_split_resize();
         self.clear_cached_projection();
     }
 
@@ -253,11 +269,70 @@ impl RunenwerkEditorShellState {
         self.docking_visual_state.active_tab_drag = None;
     }
 
+    pub fn begin_split_resize(&mut self, split_kind: WorkspaceSplitKind) {
+        self.split_resize_session = Some(SplitResizeSession { split_kind });
+        self.docking_visual_state.active_split_border_widget =
+            Some(split_kind_widget_id(split_kind));
+    }
+
+    pub fn active_split_resize_kind(&self) -> Option<WorkspaceSplitKind> {
+        self.split_resize_session.map(|session| session.split_kind)
+    }
+
+    pub fn clear_split_resize(&mut self) {
+        self.split_resize_session = None;
+        self.docking_visual_state.active_split_border_widget = None;
+    }
+
+    pub fn set_workspace_split_fraction(
+        &mut self,
+        split_kind: WorkspaceSplitKind,
+        fraction: f32,
+    ) -> Result<(), WorkspaceStateError> {
+        let Some(split_host_id) = self.resolve_split_host_id(split_kind) else {
+            return Err(WorkspaceStateError::ProjectionShapeMismatch(
+                "split host path unavailable in workspace graph",
+            ));
+        };
+        self.apply_workspace_mutation(WorkspaceMutation::SetSplitHostFraction {
+            split_host_id,
+            fraction,
+        })
+    }
+
     pub fn clear_cached_projection(&mut self) {
         self.projection_epoch = self.projection_epoch.saturating_add(1);
         self.last_tree = None;
         self.last_bounds = None;
         self.last_projection_artifacts = None;
         self.clear_tab_drag();
+    }
+
+    fn resolve_split_host_id(&self, split_kind: WorkspaceSplitKind) -> Option<PanelHostId> {
+        let root_host_id = self.workspace_state.root_host_id();
+        let root = self.workspace_state.host(root_host_id)?;
+        let editor_shell::PanelHostKind::SplitHost(root_split) = root.kind else {
+            return None;
+        };
+        match split_kind {
+            WorkspaceSplitKind::BodyConsole => Some(root_host_id),
+            WorkspaceSplitKind::LeftRight => Some(root_split.first_child),
+            WorkspaceSplitKind::CenterRight => {
+                let left_right = self.workspace_state.host(root_split.first_child)?;
+                let editor_shell::PanelHostKind::SplitHost(left_right_split) = left_right.kind
+                else {
+                    return None;
+                };
+                Some(left_right_split.second_child)
+            }
+        }
+    }
+}
+
+fn split_kind_widget_id(kind: WorkspaceSplitKind) -> WidgetId {
+    match kind {
+        WorkspaceSplitKind::BodyConsole => BODY_CONSOLE_SPLIT_WIDGET_ID,
+        WorkspaceSplitKind::LeftRight => LEFT_RIGHT_SPLIT_WIDGET_ID,
+        WorkspaceSplitKind::CenterRight => CENTER_RIGHT_SPLIT_WIDGET_ID,
     }
 }

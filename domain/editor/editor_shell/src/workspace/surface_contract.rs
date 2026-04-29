@@ -13,8 +13,9 @@ pub const VIEWPORT_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitio
 pub const INSPECTOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(3);
 pub const CONSOLE_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(4);
 pub const PLACEHOLDER_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(5);
+pub const ENTITY_TABLE_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(6);
 
-pub fn editor_surface_definitions() -> [SurfaceDefinition; 5] {
+pub fn editor_surface_definitions() -> [SurfaceDefinition; 6] {
     [
         SurfaceDefinition::new(
             OUTLINER_SURFACE_DEFINITION_ID,
@@ -41,12 +42,18 @@ pub fn editor_surface_definitions() -> [SurfaceDefinition; 5] {
             "editor.tool_surface.placeholder",
             "Placeholder",
         ),
+        SurfaceDefinition::new(
+            ENTITY_TABLE_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.entity_table",
+            "Entity Table",
+        ),
     ]
 }
 
 pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId {
     match kind {
         ToolSurfaceKind::Outliner => OUTLINER_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::EntityTable => ENTITY_TABLE_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Viewport => VIEWPORT_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Inspector => INSPECTOR_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Console => CONSOLE_SURFACE_DEFINITION_ID,
@@ -57,6 +64,7 @@ pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId 
 pub fn tool_surface_capability_set(kind: ToolSurfaceKind) -> SurfaceCapabilitySet {
     match kind {
         ToolSurfaceKind::Outliner => SurfaceCapabilitySet::new(true, true, true, false),
+        ToolSurfaceKind::EntityTable => SurfaceCapabilitySet::new(true, true, true, false),
         ToolSurfaceKind::Viewport => SurfaceCapabilitySet::new(true, true, true, false),
         ToolSurfaceKind::Inspector => SurfaceCapabilitySet::new(true, true, true, false),
         ToolSurfaceKind::Console => SurfaceCapabilitySet::new(true, true, false, false),
@@ -67,6 +75,7 @@ pub fn tool_surface_capability_set(kind: ToolSurfaceKind) -> SurfaceCapabilitySe
 pub fn tool_surface_session_retention_class(kind: ToolSurfaceKind) -> SessionRetentionClass {
     match kind {
         ToolSurfaceKind::Outliner => SessionRetentionClass::Restorable,
+        ToolSurfaceKind::EntityTable => SessionRetentionClass::Restorable,
         ToolSurfaceKind::Viewport => SessionRetentionClass::Restorable,
         ToolSurfaceKind::Inspector => SessionRetentionClass::Persistent,
         ToolSurfaceKind::Console => SessionRetentionClass::Ephemeral,
@@ -121,7 +130,7 @@ mod tests {
         let mounted = mounted_surface_instances(&workspace).collect::<Vec<_>>();
 
         assert_eq!(workspace_id, WorkspaceId::new(1));
-        assert_eq!(mounted.len(), 4);
+        assert_eq!(mounted.len(), 5);
         assert!(
             mounted
                 .iter()
@@ -132,6 +141,7 @@ mod tests {
     #[test]
     fn tool_surface_capabilities_are_explicit_per_surface_kind() {
         let outliner_caps = tool_surface_capability_set(ToolSurfaceKind::Outliner);
+        let entity_table_caps = tool_surface_capability_set(ToolSurfaceKind::EntityTable);
         let console_caps = tool_surface_capability_set(ToolSurfaceKind::Console);
         let placeholder_caps = tool_surface_capability_set(ToolSurfaceKind::Placeholder);
 
@@ -139,6 +149,11 @@ mod tests {
         assert!(outliner_caps.allows(ui_surface::SurfaceCapability::Interact));
         assert!(outliner_caps.allows(ui_surface::SurfaceCapability::RequestMutation));
         assert!(!outliner_caps.allows(ui_surface::SurfaceCapability::Ratify));
+
+        assert!(entity_table_caps.allows(ui_surface::SurfaceCapability::Observe));
+        assert!(entity_table_caps.allows(ui_surface::SurfaceCapability::Interact));
+        assert!(entity_table_caps.allows(ui_surface::SurfaceCapability::RequestMutation));
+        assert!(!entity_table_caps.allows(ui_surface::SurfaceCapability::Ratify));
 
         assert!(console_caps.allows(ui_surface::SurfaceCapability::Observe));
         assert!(console_caps.allows(ui_surface::SurfaceCapability::Interact));
@@ -159,6 +174,10 @@ mod tests {
         );
         assert_eq!(
             tool_surface_session_retention_class(ToolSurfaceKind::Viewport),
+            SessionRetentionClass::Restorable,
+        );
+        assert_eq!(
+            tool_surface_session_retention_class(ToolSurfaceKind::EntityTable),
             SessionRetentionClass::Restorable,
         );
         assert_eq!(

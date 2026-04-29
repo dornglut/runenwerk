@@ -4,8 +4,11 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
-    CONSOLE_SCROLL_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, INSPECTOR_BODY_WIDGET_ID,
+    CONSOLE_BODY_WIDGET_ID, CONSOLE_HSCROLL_WIDGET_ID, CONSOLE_LIST_WIDGET_ID,
+    CONSOLE_PANEL_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ENTITY_TABLE_BODY_WIDGET_ID,
+    ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID, ENTITY_TABLE_LIST_WIDGET_ID,
+    ENTITY_TABLE_PANEL_WIDGET_ID, ENTITY_TABLE_SCROLL_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID,
+    ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, INSPECTOR_BODY_WIDGET_ID,
     INSPECTOR_LIST_WIDGET_ID, INSPECTOR_PANEL_WIDGET_ID, INSPECTOR_SCROLL_WIDGET_ID,
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
     OUTLINER_SCROLL_WIDGET_ID, PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId,
@@ -264,6 +267,15 @@ fn panel_widget_ids(panel_kind: PanelKind) -> &'static [WidgetId] {
             OUTLINER_LIST_WIDGET_ID,
             OUTLINER_SCROLL_WIDGET_ID,
         ],
+        PanelKind::EntityTable => &[
+            ENTITY_TABLE_PANEL_WIDGET_ID,
+            ENTITY_TABLE_BODY_WIDGET_ID,
+            ENTITY_TABLE_SEARCH_WIDGET_ID,
+            ENTITY_TABLE_LIST_WIDGET_ID,
+            ENTITY_TABLE_SCROLL_WIDGET_ID,
+            ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID,
+            ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID,
+        ],
         PanelKind::Viewport => &[
             VIEWPORT_PANEL_WIDGET_ID,
             VIEWPORT_BODY_WIDGET_ID,
@@ -282,6 +294,7 @@ fn panel_widget_ids(panel_kind: PanelKind) -> &'static [WidgetId] {
             CONSOLE_BODY_WIDGET_ID,
             CONSOLE_LIST_WIDGET_ID,
             CONSOLE_SCROLL_WIDGET_ID,
+            CONSOLE_HSCROLL_WIDGET_ID,
         ],
         PanelKind::Placeholder => &[],
     }
@@ -396,7 +409,7 @@ mod tests {
         assert!(projection.body_console_fraction > 0.0);
         assert!(projection.left_right_fraction > 0.0);
         assert!(projection.center_right_fraction > 0.0);
-        assert_eq!(projection.outliner.tabs.len(), 1);
+        assert_eq!(projection.outliner.tabs.len(), 2);
         assert_eq!(projection.viewport.tabs.len(), 1);
         assert_eq!(projection.inspector.tabs.len(), 1);
         assert_eq!(projection.console.tabs.len(), 1);
@@ -428,8 +441,8 @@ mod tests {
 
         assert_eq!(
             artifact.tab_button_route_by_widget_id.len(),
-            4,
-            "default layout should expose one tab button route per stack"
+            5,
+            "default layout should expose one tab button route per default panel"
         );
     }
 
@@ -476,7 +489,7 @@ mod tests {
         .expect("cross-stack move should produce a valid workspace");
 
         let projection = project_fixed_layout(&moved).expect("projection should succeed");
-        assert_eq!(projection.outliner.tabs.len(), 0);
+        assert_eq!(projection.outliner.tabs.len(), 1);
         assert_eq!(projection.viewport.tabs.len(), 2);
     }
 

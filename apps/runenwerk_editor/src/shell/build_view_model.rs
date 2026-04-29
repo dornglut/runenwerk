@@ -3,9 +3,10 @@ use editor_viewport::ArtifactObservationFrame;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::shell::{
-    build_console_view_model, build_inspector_observation_frame, build_inspector_view_model,
-    build_outliner_observation_frame, build_outliner_view_model, build_toolbar_observation_frame,
-    build_toolbar_view_model, build_viewport_observation_frame, build_viewport_view_model,
+    build_console_view_model, build_entity_table_view_model, build_inspector_observation_frame,
+    build_inspector_view_model, build_outliner_observation_frame, build_outliner_view_model,
+    build_toolbar_observation_frame, build_toolbar_view_model, build_viewport_observation_frame,
+    build_viewport_view_model,
 };
 
 pub fn build_editor_shell_view_model(app: &RunenwerkEditorApp) -> EditorShellViewModel {
@@ -19,6 +20,7 @@ pub fn build_editor_shell_view_model_with_viewport_products(
     let scene_version = app.runtime().current_scene_reality_version();
     let session = app.runtime().session_reality();
     let outliner_state = app.outliner_state();
+    let entity_table_state = app.entity_table_state();
     let inspector_view_model = app.inspector_view_model();
     let viewport_tool_state = app.viewport_tool_state();
     let history = session.history();
@@ -43,6 +45,7 @@ pub fn build_editor_shell_view_model_with_viewport_products(
     EditorShellViewModel {
         toolbar: build_toolbar_view_model(&toolbar_frame),
         outliner: build_outliner_view_model(&outliner_frame),
+        entity_table: build_entity_table_view_model(&entity_table_state),
         viewport: build_viewport_view_model(&viewport_frame),
         inspector: build_inspector_view_model(&inspector_frame),
         console: build_console_view_model(app.console_lines()),

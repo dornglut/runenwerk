@@ -4,8 +4,10 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InspectorFieldViewModel {
     pub label: String,
+    pub path_key: Option<String>,
     pub value_summary: String,
     pub is_focused: bool,
+    pub editable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -284,6 +284,7 @@ fn inspector_panel_begin_update_cancel_draft_updates_view_model_state() {
             component_type: position_type,
             path: InspectorPath::root().child_field("speed"),
             value: InspectorEditValue::Float(0.0),
+            text: "0".to_string(),
         })
         .expect("begin edit should succeed");
 
@@ -382,6 +383,7 @@ fn inspector_panel_commit_draft_writes_value_and_clears_draft() {
         component_type: position_type,
         path: InspectorPath::root().child_field("speed"),
         value: InspectorEditValue::Float(0.0),
+        text: "0".to_string(),
     })
     .expect("begin edit should succeed");
 

@@ -21,12 +21,25 @@ pub const LEFT_RIGHT_SPLIT_WIDGET_ID: WidgetId = WidgetId(21);
 pub const CENTER_RIGHT_SPLIT_WIDGET_ID: WidgetId = WidgetId(22);
 pub const BODY_CONSOLE_SPLIT_WIDGET_ID: WidgetId = WidgetId(23);
 pub const BODY_FLOATING_SPLIT_WIDGET_ID: WidgetId = WidgetId(24);
+pub const LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID: WidgetId = WidgetId(25);
+pub const CENTER_RIGHT_SPLIT_HANDLE_WIDGET_ID: WidgetId = WidgetId(26);
+pub const BODY_CONSOLE_SPLIT_HANDLE_WIDGET_ID: WidgetId = WidgetId(27);
 
 pub const OUTLINER_PANEL_WIDGET_ID: WidgetId = WidgetId(30);
 pub const OUTLINER_TITLE_WIDGET_ID: WidgetId = WidgetId(31);
 pub const OUTLINER_LIST_WIDGET_ID: WidgetId = WidgetId(32);
 pub const OUTLINER_BODY_WIDGET_ID: WidgetId = WidgetId(33);
 pub const OUTLINER_SCROLL_WIDGET_ID: WidgetId = WidgetId(34);
+
+pub const ENTITY_TABLE_PANEL_WIDGET_ID: WidgetId = WidgetId(35);
+pub const ENTITY_TABLE_TITLE_WIDGET_ID: WidgetId = WidgetId(36);
+pub const ENTITY_TABLE_SEARCH_WIDGET_ID: WidgetId = WidgetId(37);
+pub const ENTITY_TABLE_HEADER_ROW_WIDGET_ID: WidgetId = WidgetId(38);
+pub const ENTITY_TABLE_LIST_WIDGET_ID: WidgetId = WidgetId(39);
+pub const ENTITY_TABLE_SCROLL_WIDGET_ID: WidgetId = WidgetId(65);
+pub const ENTITY_TABLE_BODY_WIDGET_ID: WidgetId = WidgetId(66);
+pub const ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID: WidgetId = WidgetId(67);
+pub const ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID: WidgetId = WidgetId(68);
 
 pub const VIEWPORT_PANEL_WIDGET_ID: WidgetId = WidgetId(40);
 pub const VIEWPORT_TITLE_WIDGET_ID: WidgetId = WidgetId(41);
@@ -53,11 +66,15 @@ pub const CONSOLE_TITLE_WIDGET_ID: WidgetId = WidgetId(61);
 pub const CONSOLE_LIST_WIDGET_ID: WidgetId = WidgetId(62);
 pub const CONSOLE_BODY_WIDGET_ID: WidgetId = WidgetId(63);
 pub const CONSOLE_SCROLL_WIDGET_ID: WidgetId = WidgetId(64);
+pub const CONSOLE_HSCROLL_WIDGET_ID: WidgetId = WidgetId(69);
 pub const CONSOLE_LINE_WIDGET_ID_BASE: u64 = 20_000;
 
 pub const OUTLINER_ROW_WIDGET_ID_BASE: u64 = 1_000;
 pub const INSPECTOR_FIELD_WIDGET_ID_BASE: u64 = 10_000;
+pub const INSPECTOR_FIELD_FOCUS_WIDGET_ID_BASE: u64 = 15_000;
 pub const VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE: u64 = 30_000;
+pub const ENTITY_TABLE_ROW_WIDGET_ID_BASE: u64 = 40_000;
+pub const ENTITY_TABLE_SORT_BUTTON_WIDGET_ID_BASE: u64 = 41_000;
 pub const TAB_STRIP_WIDGET_ID_BASE: u64 = 1_000_000;
 pub const TAB_STACK_CONTAINER_WIDGET_ID_BASE: u64 = 1_050_000;
 pub const TAB_STRIP_SCROLL_WIDGET_ID_BASE: u64 = 1_100_000;
@@ -78,12 +95,24 @@ pub fn inspector_field_widget_id(index: usize) -> WidgetId {
     WidgetId(INSPECTOR_FIELD_WIDGET_ID_BASE + index as u64)
 }
 
+pub fn inspector_field_focus_widget_id(index: usize) -> WidgetId {
+    WidgetId(INSPECTOR_FIELD_FOCUS_WIDGET_ID_BASE + index as u64)
+}
+
 pub fn console_line_widget_id(index: usize) -> WidgetId {
     WidgetId(CONSOLE_LINE_WIDGET_ID_BASE + index as u64)
 }
 
 pub fn viewport_product_button_widget_id(index: usize) -> WidgetId {
     WidgetId(VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn entity_table_row_widget_id(index: usize) -> WidgetId {
+    WidgetId(ENTITY_TABLE_ROW_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn entity_table_sort_button_widget_id(index: usize) -> WidgetId {
+    WidgetId(ENTITY_TABLE_SORT_BUTTON_WIDGET_ID_BASE + index as u64)
 }
 
 pub fn tab_strip_widget_id(tab_stack_id: TabStackId) -> WidgetId {

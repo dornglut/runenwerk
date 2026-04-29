@@ -2,13 +2,15 @@
 //! Purpose: Aggregate shell view model.
 
 use crate::{
-    ConsoleViewModel, InspectorViewModel, OutlinerViewModel, ToolbarViewModel, ViewportViewModel,
+    ConsoleViewModel, EntityTableViewModel, InspectorViewModel, OutlinerViewModel,
+    ToolbarViewModel, ViewportViewModel,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EditorShellViewModel {
     pub toolbar: ToolbarViewModel,
     pub outliner: OutlinerViewModel,
+    pub entity_table: EntityTableViewModel,
     pub viewport: ViewportViewModel,
     pub inspector: InspectorViewModel,
     pub console: ConsoleViewModel,

@@ -1,10 +1,14 @@
 use editor_shell::{
-    CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockingPreviewDropTarget, EditorShellViewModel,
-    ShellCommand, ShellUiExpressionFrame, TabDropDestination, UiInputOutcome, UiTree,
-    build_editor_shell_with_docking_visual_state, map_interactions_to_shell_commands,
+    BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
+    ComputedLayoutMap, DockingPreviewDropTarget, EditorShellViewModel, LEFT_RIGHT_SPLIT_WIDGET_ID,
+    ShellCommand, ShellUiExpressionFrame, TabDropDestination, UiInputOutcome, UiInteractionResults,
+    UiTree, build_editor_shell_with_docking_visual_state, map_interactions_to_shell_commands,
 };
 use editor_viewport::ArtifactObservationFrame;
-use ui_input::{PointerEventKind, UiInputEvent};
+use ui_input::{
+    EventPropagation, FocusChange, InputResponse, PointerCapture, PointerEvent, PointerEventKind,
+    UiInputEvent,
+};
 use ui_math::UiRect;
 use ui_render_data::UiFrame;
 use ui_text::FontAtlasSource;
@@ -16,11 +20,14 @@ use crate::runtime::viewport::{
     ViewportPresentationStateResource,
 };
 use crate::shell::{
-    RunenwerkEditorShellState, build_editor_shell_view_model_with_viewport_products,
-    dispatch_shell_command,
+    RunenwerkEditorShellState, WorkspaceSplitKind,
+    build_editor_shell_view_model_with_viewport_products, dispatch_shell_command,
 };
 
 const CONSOLE_FOLLOW_BOTTOM_EPSILON: f32 = 1.0;
+const SPLIT_HIT_SLOP_PX: f32 = 8.0;
+const SPLIT_MIN_FRACTION: f32 = 0.08;
+const SPLIT_MAX_FRACTION: f32 = 0.92;
 
 pub struct RunenwerkEditorShellController;
 
@@ -193,6 +200,13 @@ impl RunenwerkEditorShellController {
             .max_scroll_offset_for_layout(&tree, &layouts, CONSOLE_SCROLL_WIDGET_ID)
             .unwrap_or(0.0);
         let pre_at_bottom = is_at_bottom(pre_offset, pre_max);
+
+        if let Some(outcome) =
+            Self::handle_split_resize_event(shell_state, event, &layouts, &projection_artifacts)
+        {
+            return Ok(outcome);
+        }
+
         let outcome = shell_state
             .runtime_mut()
             .dispatch_input(&tree, &layouts, event);
@@ -371,6 +385,182 @@ impl RunenwerkEditorShellController {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SplitResizeTarget {
+    BodyConsole,
+    LeftRight,
+    CenterRight,
+}
+
+impl SplitResizeTarget {
+    fn widget_id(self) -> editor_shell::WidgetId {
+        match self {
+            Self::BodyConsole => BODY_CONSOLE_SPLIT_WIDGET_ID,
+            Self::LeftRight => LEFT_RIGHT_SPLIT_WIDGET_ID,
+            Self::CenterRight => CENTER_RIGHT_SPLIT_WIDGET_ID,
+        }
+    }
+
+    fn axis(self) -> ui_math::Axis {
+        match self {
+            Self::BodyConsole => ui_math::Axis::Vertical,
+            Self::LeftRight | Self::CenterRight => ui_math::Axis::Horizontal,
+        }
+    }
+
+    fn projection_fraction(self, projection: &editor_shell::FixedLayoutProjection) -> f32 {
+        match self {
+            Self::BodyConsole => projection.body_console_fraction,
+            Self::LeftRight => projection.left_right_fraction,
+            Self::CenterRight => projection.center_right_fraction,
+        }
+    }
+
+    fn workspace_kind(self) -> WorkspaceSplitKind {
+        match self {
+            Self::BodyConsole => WorkspaceSplitKind::BodyConsole,
+            Self::LeftRight => WorkspaceSplitKind::LeftRight,
+            Self::CenterRight => WorkspaceSplitKind::CenterRight,
+        }
+    }
+
+    fn from_workspace_kind(value: WorkspaceSplitKind) -> Self {
+        match value {
+            WorkspaceSplitKind::BodyConsole => Self::BodyConsole,
+            WorkspaceSplitKind::LeftRight => Self::LeftRight,
+            WorkspaceSplitKind::CenterRight => Self::CenterRight,
+        }
+    }
+}
+
+impl RunenwerkEditorShellController {
+    fn handle_split_resize_event(
+        shell_state: &mut RunenwerkEditorShellState,
+        event: &UiInputEvent,
+        layouts: &ComputedLayoutMap,
+        projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    ) -> Option<UiInputOutcome> {
+        let UiInputEvent::Pointer(pointer) = event else {
+            return None;
+        };
+
+        if let Some(active_kind) = shell_state.active_split_resize_kind() {
+            let target = SplitResizeTarget::from_workspace_kind(active_kind);
+            match pointer.kind {
+                PointerEventKind::Move | PointerEventKind::Enter => {
+                    let split_layout = layouts.get(&target.widget_id())?;
+                    let next_fraction =
+                        split_fraction_from_pointer(target, split_layout.bounds, pointer)
+                            .clamp(SPLIT_MIN_FRACTION, SPLIT_MAX_FRACTION);
+                    let current_fraction =
+                        target.projection_fraction(&projection_artifacts.workspace.fixed_layout);
+                    let changed = (next_fraction - current_fraction).abs() > 0.001;
+                    if changed {
+                        let _ = shell_state
+                            .set_workspace_split_fraction(target.workspace_kind(), next_fraction);
+                    }
+                    return Some(consumed_pointer_outcome(Some(target.widget_id()), changed));
+                }
+                PointerEventKind::Up => {
+                    shell_state.clear_split_resize();
+                    return Some(consumed_pointer_outcome(Some(target.widget_id()), false));
+                }
+                PointerEventKind::Down | PointerEventKind::Leave | PointerEventKind::Scroll => {
+                    return Some(consumed_pointer_outcome(Some(target.widget_id()), false));
+                }
+            }
+        }
+
+        if !matches!(pointer.kind, PointerEventKind::Down)
+            || pointer.button != Some(ui_input::PointerButton::Primary)
+        {
+            return None;
+        }
+
+        let candidate =
+            resolve_split_resize_target(pointer.position, layouts, projection_artifacts)?;
+        shell_state.begin_split_resize(candidate.workspace_kind());
+        Some(consumed_pointer_outcome(Some(candidate.widget_id()), false))
+    }
+}
+
+fn resolve_split_resize_target(
+    cursor: ui_math::UiPoint,
+    layouts: &ComputedLayoutMap,
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+) -> Option<SplitResizeTarget> {
+    [
+        SplitResizeTarget::BodyConsole,
+        SplitResizeTarget::LeftRight,
+        SplitResizeTarget::CenterRight,
+    ]
+    .into_iter()
+    .filter_map(|target| {
+        let layout = layouts.get(&target.widget_id())?;
+        let bounds = layout.bounds;
+        if !bounds.contains(cursor) {
+            return None;
+        }
+        let boundary = split_boundary_position(
+            target,
+            bounds,
+            target.projection_fraction(&projection_artifacts.workspace.fixed_layout),
+        );
+        let distance = match target.axis() {
+            ui_math::Axis::Horizontal => (cursor.x - boundary).abs(),
+            ui_math::Axis::Vertical => (cursor.y - boundary).abs(),
+        };
+        (distance <= SPLIT_HIT_SLOP_PX).then_some((distance, target))
+    })
+    .min_by(|(left, _), (right, _)| left.total_cmp(right))
+    .map(|(_, target)| target)
+}
+
+fn split_boundary_position(
+    target: SplitResizeTarget,
+    bounds: ui_math::UiRect,
+    fraction: f32,
+) -> f32 {
+    match target.axis() {
+        ui_math::Axis::Horizontal => bounds.x + bounds.width * fraction,
+        ui_math::Axis::Vertical => bounds.y + bounds.height * fraction,
+    }
+}
+
+fn split_fraction_from_pointer(
+    target: SplitResizeTarget,
+    bounds: ui_math::UiRect,
+    pointer: &PointerEvent,
+) -> f32 {
+    match target.axis() {
+        ui_math::Axis::Horizontal => (pointer.position.x - bounds.x) / bounds.width.max(1.0),
+        ui_math::Axis::Vertical => (pointer.position.y - bounds.y) / bounds.height.max(1.0),
+    }
+}
+
+fn consumed_pointer_outcome(
+    target: Option<editor_shell::WidgetId>,
+    changed_layout: bool,
+) -> UiInputOutcome {
+    UiInputOutcome {
+        dispatch: editor_shell::UiInputDispatchResult {
+            target,
+            response: InputResponse {
+                propagation: EventPropagation::Stop,
+                capture: PointerCapture::None,
+                focus_change: FocusChange::None,
+                repaint: changed_layout,
+                relayout: changed_layout,
+            },
+        },
+        interactions: UiInteractionResults::new(),
+        invalidation: editor_shell::UiInvalidation {
+            repaint: changed_layout,
+            relayout: changed_layout,
+        },
     }
 }
 

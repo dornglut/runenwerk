@@ -1,7 +1,9 @@
 //! File: domain/editor/editor_shell/src/composition/build_outliner_panel.rs
 //! Purpose: Compose outliner panel widgets.
 
-use crate::{UiNode, UiNodeKind, button, label, panel, vscroll, vstack, vstack_with_policies};
+use crate::{
+    UiNode, UiNodeKind, button_selected, label, panel, vscroll, vstack, vstack_with_policies,
+};
 use ui_layout::SizePolicy;
 use ui_math::{UiInsets, UiSize};
 use ui_text::{FontId, TextOverflow};
@@ -34,12 +36,12 @@ pub fn build_outliner_panel(
         .enumerate()
         .map(|(index, row)| {
             let indent = "  ".repeat(row.depth);
-            let prefix = if row.is_selected { "• " } else { "" };
-            compact_outliner_row(button(
+            compact_outliner_row(button_selected(
                 outliner_row_widget_id(index),
-                format!("{indent}{prefix}{}", row.display_name),
+                format!("{indent}{}", row.display_name),
                 row_style.clone(),
                 theme.clone(),
+                row.is_selected,
             ))
         })
         .collect::<Vec<_>>();
@@ -60,7 +62,7 @@ pub fn build_outliner_panel(
     panel_theme.background_panel = UiColor::new(
         (theme.background_panel.r + 0.01).clamp(0.0, 1.0),
         (theme.background_panel.g + 0.01).clamp(0.0, 1.0),
-        (theme.background_panel.b + 0.04).clamp(0.0, 1.0),
+        (theme.background_panel.b + 0.01).clamp(0.0, 1.0),
         0.94,
     );
     panel(OUTLINER_PANEL_WIDGET_ID, panel_theme, vec![body])

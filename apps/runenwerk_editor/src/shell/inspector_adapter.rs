@@ -38,22 +38,26 @@ pub fn build_inspector_observation_frame(
                     .iter()
                     .map(|component| InspectorObservedField {
                         label: component.display_name.clone(),
+                        path_key: None,
                         value_summary: if component.is_selected {
                             "selected".to_string()
                         } else {
                             "attached".to_string()
                         },
                         is_focused: false,
+                        editable: false,
                     })
                     .chain(available_component_types.iter().map(|component| {
                         InspectorObservedField {
                             label: format!("+ {}", component.display_name),
+                            path_key: None,
                             value_summary: if component.already_attached {
                                 "already attached".to_string()
                             } else {
                                 "available".to_string()
                             },
                             is_focused: false,
+                            editable: false,
                         }
                     }))
                     .collect(),
@@ -130,24 +134,27 @@ pub fn build_inspector_view_model(frame: &InspectorObservationFrame) -> Inspecto
             .iter()
             .map(|field| InspectorFieldViewModel {
                 label: field.label.clone(),
+                path_key: field.path_key.clone(),
                 value_summary: field.value_summary.clone(),
                 is_focused: field.is_focused,
+                editable: field.editable,
             })
             .collect(),
     }
 }
 
 fn build_inspector_observed_field(field: &InspectorWidgetField) -> InspectorObservedField {
-    let draft_prefix = field
-        .draft_value
-        .as_ref()
-        .map(|draft| format!("draft={draft:?} | "))
-        .unwrap_or_default();
+    let value_text = field
+        .draft_text
+        .clone()
+        .unwrap_or_else(|| inspector_value_summary(&field.value));
 
     InspectorObservedField {
         label: field.display_name.clone(),
-        value_summary: format!("{draft_prefix}{}", inspector_value_summary(&field.value)),
+        path_key: Some(field.path.stable_key()),
+        value_summary: value_text,
         is_focused: field.is_focused,
+        editable: true,
     }
 }
 
