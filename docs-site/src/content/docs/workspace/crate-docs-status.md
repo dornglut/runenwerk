@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-04-30
 ---
 
 # Crate Documentation Status
@@ -23,12 +23,12 @@ Status labels:
 
 | Crate | Path | Status | Primary docs |
 | --- | --- | --- | --- |
-| `id` | `foundation/id` | current | `foundation/id/README.md` |
+| `id` | `foundation/id` | current | [`../foundation/id/README.md`](../foundation/id/README.md) |
 | `id_macros` | `foundation/id_macros` | missing | none |
-| `diagnostics` | `foundation/diagnostics` | thin | `foundation/diagnostics/foundation_diagnostics_implementation_roadmap.md` |
-| `ratification` | `foundation/ratification` | thin | [`../design/active/foundation-ratification.md`](../design/active/foundation-ratification.md) |
-| `schema` | `foundation/schema` | thin | [`../design/active/foundation-schema.md`](../design/active/foundation-schema.md) |
-| `commands` | `foundation/commands` | thin | [`../design/active/foundation-commands.md`](../design/active/foundation-commands.md) |
+| `diagnostics` | `foundation/diagnostics` | thin | [`../foundation/diagnostics/implementation-roadmap.md`](../foundation/diagnostics/implementation-roadmap.md) |
+| `ratification` | `foundation/ratification` | thin | [`../design/active/foundation-ratification-design.md`](../design/active/foundation-ratification-design.md) |
+| `schema` | `foundation/schema` | thin | [`../design/active/foundation-schema-design.md`](../design/active/foundation-schema-design.md) |
+| `commands` | `foundation/commands` | thin | [`../design/active/foundation-commands-design.md`](../design/active/foundation-commands-design.md) |
 
 ## Domain
 

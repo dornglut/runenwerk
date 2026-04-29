@@ -1324,7 +1324,7 @@ Status: complete.
 Create and review:
 
 ```text
-docs-site/src/content/docs/design/active/foundation-commands.md
+docs-site/src/content/docs/design/active/foundation-commands-design.md
 ```
 
 No code.
@@ -1555,7 +1555,7 @@ python3 tools/docs/validate_docs.py
 
 ## Final recommendation
 
-Keep `docs-site/src/content/docs/design/active/foundation-commands.md` as the active phase roadmap for `foundation/commands`.
+Keep `docs-site/src/content/docs/design/active/foundation-commands-design.md` as the active phase roadmap for `foundation/commands`.
 
 Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 are complete.
 

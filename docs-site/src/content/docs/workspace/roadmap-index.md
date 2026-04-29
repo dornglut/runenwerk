@@ -16,6 +16,10 @@ Provide one workspace-level index of active roadmap/design tracks without duplic
 
 This page is an index, not the source of truth for domain-specific execution steps.
 
+Operational execution checklist:
+
+- [workspace/repo-execution-priority-checklist.md](./repo-execution-priority-checklist.md)
+
 ## Source-of-Truth Tracks
 
 - UI substrate and surface execution roadmap:

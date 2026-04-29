@@ -9,7 +9,7 @@ last_reviewed: 2026-04-29
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
   - ./workspace-identity-contract-and-migration-map.md
-  - ./game-runtime-editor-ecs-design-rhai.md
+  - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related:
   - ../../apps/runenwerk-editor/current-architecture.md
   - ../../apps/runenwerk-editor/roadmap.md
@@ -195,6 +195,8 @@ into explicit provider implementations.
 - Panels: script editor, API browser, command/event refs, diagnostics, console.
 - Modes: edit, run test, reload, trace.
 
+Scripting remains language-neutral at the contract level; Rhai is the first concrete adapter candidate.
+
 `Debug` (runtime inspection)
 
 - Documents: optional runtime query tabs; primarily live runtime views.
@@ -206,6 +208,9 @@ into explicit provider implementations.
 - Documents: workspace/menu/theme/shortcut definitions.
 - Panels: workspace outliner, dock preview, panel registry, command palette, menu editor, shortcut editor, theme editor, inspector.
 - Modes: layout-edit, command-bind, style-edit, preview.
+
+This remains a later-phase track and aligns with authored editor-definition groundwork in
+`docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` (Phase E).
 
 ## Persistence and Ownership Rules
 
@@ -258,6 +263,11 @@ Future plugin capability:
 - register additional `ToolSurfaceKind`-equivalent definitions;
 - attach provider implementations for supported document kinds;
 - add workspace profile contributions (new tab + default layout template).
+
+Constrained in-game editors should reuse these shared primitives but remain permissioned:
+
+- surface interactions must stay capability-gated;
+- all mutations must flow through explicit command + ratification boundaries.
 
 This remains app-layer/plugin-layer composition, not domain invariant ownership.
 

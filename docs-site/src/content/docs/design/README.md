@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-26
+last_reviewed: 2026-04-29
 ---
 
 # Design Documents
@@ -46,9 +46,9 @@ Index:
 Examples:
 
 ```text
-active/foundation-ratification.md
+active/foundation-ratification-design.md
 active/editor-ui-workspace-tool-surface-architecture.md
-active/viewport-expression-upgrade-design.md
+active/workspace-viewport-expression-upgrade-design.md
 ```
 
 ## `accepted/`
@@ -64,8 +64,8 @@ Index:
 Examples:
 
 ```text
-accepted/foundation-diagnostics.md
-accepted/ai-friendly-engine-architecture.md
+accepted/foundation-diagnostics-design.md
+accepted/workspace-ai-friendly-engine-architecture.md
 ```
 
 ## `deferred/`
@@ -214,9 +214,39 @@ Use kebab-case filenames.
 Preferred:
 
 ```text
-foundation-diagnostics.md
-foundation-ratification.md
+foundation-diagnostics-design.md
+foundation-ratification-design.md
 crate-design-template.md
+```
+
+Use domain-first prefixes so design indexes can be grouped predictably.
+
+Recommended prefixes:
+
+```text
+foundation-
+editor-
+ui-
+engine-
+net-
+apps-
+workspace-
+runenwerk-
+domain-<subdomain>-
+```
+
+When a design spans multiple areas, prefer `workspace-` or `runenwerk-` instead of an ambiguous single-domain prefix.
+
+Use an intent suffix that matches the document's role.
+
+Recommended suffixes:
+
+```text
+-design.md
+-architecture.md
+-migration-map.md
+-evaluation.md
+-preserved-target-draft.md
 ```
 
 Avoid:
@@ -226,6 +256,8 @@ foundation_diagnostics.md
 FoundationDiagnostics.md
 design.md
 notes.md
+editor.md
+ui.md
 ```
 
 ## Negative Doctrine

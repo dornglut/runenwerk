@@ -7,7 +7,7 @@ layer: engine-runtime
 canonical: false
 last_reviewed: 2026-04-29
 related_designs:
-  - ../active/game-runtime-editor-ecs-design-rhai.md
+  - ../active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 ---
 
 # Game Runtime, Editor, ECS, Scripting, and Hot Reload Preserved Target Draft

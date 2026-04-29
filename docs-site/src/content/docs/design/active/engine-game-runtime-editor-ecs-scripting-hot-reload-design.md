@@ -8,8 +8,8 @@ canonical: true
 last_reviewed: 2026-04-29
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./runenwerk-field-world-and-simulation-platform-design.md
-  - ../deferred/game-runtime-editor-ecs-design-rhai-preserved-target-draft.md
+  - ./workspace-field-world-and-simulation-platform-design.md
+  - ../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
 ---
@@ -47,7 +47,8 @@ This document is architecture-focused. It does **not** commit a final implementa
 | ECS state ownership | Live runtime world + reflected component registration are active. | Keep ECS as live state only; expand contract catalog without ownership leakage. | `domain/ecs`, `apps/runenwerk_editor` |
 | Plugin/type registration | Concrete registration points exist in runtime/editor app code. | Stronger registry-driven discoverability across more gameplay domains. | `engine`, `apps/runenwerk_editor` |
 | Hot reload model | Data-driven scene/template reload paths exist; structural code changes still restart-oriented. | Explicit refresh/restart boundaries with clearer UX and diagnostics. | `engine`, `apps/runenwerk_editor` |
-| Gameplay scripting boundary | No script runtime crate is implemented in workspace yet. | Language-neutral script contract boundary + adapter implementation later. | future domain/runtime/adapter crates |
+| Gameplay scripting boundary | No script runtime crate is implemented in workspace yet. | Language-neutral script contract boundary + adapter implementation later; Rhai is the first concrete adapter candidate. | future domain/runtime/adapter crates |
+| Runtime UI attachment binding | Overlay UI is currently scene-template driven (`overlay_ui` + `ui_template`), not entity-attachment driven. | World-space/screen-projected UI attachment binding is deferred post-MVP and should be added only through explicit authored binding contracts and runtime formation seams. | `engine` scene runtime + future domain/runtime contracts |
 | Gameplay content breadth | Current editor MVP is 3D graybox scene authoring focused. | Post-MVP expansion for richer authored domains when contracts exist. | `apps/runenwerk_editor`, future domain crates |
 | Architectural reality model | Doctrine exists in guideline docs and editor runtime reality views. | Deeper consistency across authored/normalized/formed/instantiated/simulated pipelines. | guidelines + editor/runtime domains |
 
@@ -58,11 +59,13 @@ This document is architecture-focused. It does **not** commit a final implementa
 - Runtime may mutate entity/component instances, but mutation authority must remain explicit and domain-owned.
 - Editor composition must stay capability-driven; the editor should not invent runtime semantics absent engine/domain contracts.
 - Any future scripting integration must preserve Rust/domain ownership of correctness and invariants.
+- Scripting boundaries remain language-neutral even when Rhai is used as the first adapter; adapter-specific types must not leak into domain/runtime contracts.
+- World-space/screen-projected UI attachment flows are post-MVP and should not be treated as implied by current scene-overlay UI template support.
 
 ## Deferred Detailed Draft
 
 The prior long-form target draft has been moved (verbatim) to keep this active document concise and implementation-grounded:
 
-- [`../deferred/game-runtime-editor-ecs-design-rhai-preserved-target-draft.md`](../deferred/game-runtime-editor-ecs-design-rhai-preserved-target-draft.md)
+- [`../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md`](../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md)
 
 Use this active doc for current boundaries and gap analysis; use the deferred preserved draft for deeper aspirational details.

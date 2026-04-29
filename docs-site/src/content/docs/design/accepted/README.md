@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-04-29
 ---
 
 # Accepted Designs
@@ -16,5 +16,10 @@ Move a design to `implemented/` only after code has been checked against it and 
 
 ## Current Designs
 
-- [AI-Friendly Engine Architecture](ai-friendly-engine-architecture.md)
-- [Foundation Diagnostics Design](foundation-diagnostics.md)
+### Foundation
+
+- [Foundation Diagnostics Design](foundation-diagnostics-design.md)
+
+### Workspace / Cross-Domain
+
+- [AI-Friendly Engine Architecture](workspace-ai-friendly-engine-architecture.md)

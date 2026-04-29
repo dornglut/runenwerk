@@ -23,6 +23,7 @@ last_reviewed: 2026-04-29
 ## Roadmap
 
 - [`roadmap.md`](./roadmap.md)
+- [`execution-priority-checklist.md`](./execution-priority-checklist.md)
 
 ## Related Domain Docs
 

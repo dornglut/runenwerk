@@ -10,6 +10,7 @@ related:
   - ./mvp/first-3d-editor-mvp.md
   - ./mvp/acceptance-criteria.md
   - ./mvp/implementation-sequence.md
+  - ./execution-priority-checklist.md
   - ../../domain/ui/roadmap.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
 ---
@@ -47,5 +48,6 @@ The first milestone remains a 3D SDF scene authoring MVP with readable text, fix
 - [`mvp/first-3d-editor-mvp.md`](./mvp/first-3d-editor-mvp.md)
 - [`mvp/acceptance-criteria.md`](./mvp/acceptance-criteria.md)
 - [`mvp/implementation-sequence.md`](./mvp/implementation-sequence.md)
+- [`execution-priority-checklist.md`](./execution-priority-checklist.md)
 - [`../../domain/ui/roadmap.md`](../../domain/ui/roadmap.md)
 - [`../../design/active/editor-ui-workspace-tool-surface-architecture.md`](../../design/active/editor-ui-workspace-tool-surface-architecture.md)

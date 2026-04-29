@@ -9,6 +9,7 @@ last_reviewed: 2026-04-27
 related:
   - ./first-3d-editor-mvp.md
   - ./acceptance-criteria.md
+  - ../execution-priority-checklist.md
 ---
 
 # First 3D Editor MVP Implementation Sequence
@@ -41,4 +42,5 @@ Do not expand into post-MVP editor features until the core loop is usable end-to
 
 - [`first-3d-editor-mvp.md`](./first-3d-editor-mvp.md)
 - [`acceptance-criteria.md`](./acceptance-criteria.md)
+- [`../execution-priority-checklist.md`](../execution-priority-checklist.md)
 - [`../roadmap.md`](../roadmap.md)

@@ -9,6 +9,7 @@ last_reviewed: 2026-04-27
 related:
   - ./acceptance-criteria.md
   - ./implementation-sequence.md
+  - ../execution-priority-checklist.md
   - ../roadmap.md
 ---
 

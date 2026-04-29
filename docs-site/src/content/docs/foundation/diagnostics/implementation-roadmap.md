@@ -1,3 +1,16 @@
+---
+title: Diagnostics Implementation Roadmap
+description: Phased implementation roadmap for the foundation diagnostics crate.
+status: active
+owner: foundation
+layer: foundation
+canonical: true
+last_reviewed: 2026-04-30
+related:
+  - ./README.md
+  - ../../design/accepted/foundation-diagnostics-design.md
+---
+
 # `foundation/diagnostics` Implementation Roadmap
 
 ## Purpose
@@ -111,7 +124,7 @@ Commit the design document before writing implementation code.
 ### Files
 
 ```text
-docs/design/foundation_diagnostics.md
+docs-site/src/content/docs/design/accepted/foundation-diagnostics-design.md
 ```
 
 ### Required Content
@@ -1104,7 +1117,7 @@ CRATES.md
 DOMAIN_MAP.md
 AI_GUIDE.md
 TESTING.md
-docs/design/foundation_diagnostics.md
+docs-site/src/content/docs/design/accepted/foundation-diagnostics-design.md
 ```
 
 Optional future doc:
@@ -1230,7 +1243,7 @@ PR 1 — Design + Crate Skeleton
 Contents:
 
 ```text
-docs/design/foundation_diagnostics.md
+docs-site/src/content/docs/design/accepted/foundation-diagnostics-design.md
 foundation/diagnostics/Cargo.toml
 foundation/diagnostics/src/lib.rs
 root Cargo.toml workspace member update

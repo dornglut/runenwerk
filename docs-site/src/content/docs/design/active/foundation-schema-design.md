@@ -1304,7 +1304,7 @@ Review this document against:
 ARCHITECTURE.md
 DEPENDENCY_RULES.md
 AI_GUIDE.md
-foundation-vocabulary-crates.md
+foundation-vocabulary-crates-design.md
 foundation-ratification-phase5-evaluation.md
 current editor_inspector code
 current editor_scene command code
@@ -1575,7 +1575,7 @@ Deferred questions:
 
 ## Final recommendation
 
-Keep `docs-site/src/content/docs/design/active/foundation-schema.md` as the active phase roadmap for `foundation/schema`.
+Keep `docs-site/src/content/docs/design/active/foundation-schema-design.md` as the active phase roadmap for `foundation/schema`.
 
 Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 are complete.
 

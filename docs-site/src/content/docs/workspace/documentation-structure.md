@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-26
+last_reviewed: 2026-04-30
 related_adrs:
   - ../adr/accepted/0001-use-domain-owned-commands.md
   - ../adr/accepted/0002-keep-ai-out-of-foundation.md
@@ -117,6 +117,7 @@ content/docs/
 ├── index.mdx
 ├── workspace/
 ├── guidelines/
+├── foundation/
 ├── adr/
 ├── design/
 ├── domain/
@@ -213,6 +214,24 @@ design/
 A design document is not an ADR, not a roadmap, and not a report.
 
 Design documents explain architecture. Roadmaps explain implementation sequence. Reports record evidence. ADRs record decisions.
+
+### `foundation/`
+
+Use `foundation/` for cross-domain primitive crate docs.
+
+Examples:
+
+```text
+foundation/id/
+foundation/diagnostics/
+```
+
+Foundation docs should describe:
+
+- purpose and ownership boundaries;
+- public API usage for cross-domain primitives;
+- invariants and non-scope;
+- implementation roadmap notes when relevant.
 
 ### `domain/`
 
@@ -981,8 +1000,8 @@ Use kebab-case filenames for docs-site files.
 Preferred:
 
 ```text
-foundation-diagnostics.md
-foundation-ratification.md
+foundation-diagnostics-design.md
+foundation-ratification-design.md
 crate-design-template.md
 documentation-structure.md
 root-docs-map.md

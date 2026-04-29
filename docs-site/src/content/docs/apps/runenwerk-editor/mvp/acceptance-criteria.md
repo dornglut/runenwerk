@@ -9,6 +9,7 @@ last_reviewed: 2026-04-27
 related:
   - ./first-3d-editor-mvp.md
   - ./implementation-sequence.md
+  - ../execution-priority-checklist.md
 ---
 
 # First 3D Editor MVP Acceptance Criteria
@@ -57,4 +58,5 @@ The MVP does not need to prove:
 
 - [`first-3d-editor-mvp.md`](./first-3d-editor-mvp.md)
 - [`implementation-sequence.md`](./implementation-sequence.md)
+- [`../execution-priority-checklist.md`](../execution-priority-checklist.md)
 - [`../roadmap.md`](../roadmap.md)

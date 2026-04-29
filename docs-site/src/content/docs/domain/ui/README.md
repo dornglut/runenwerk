@@ -21,7 +21,7 @@ last_reviewed: 2026-04-29
 
 - [Editor UI Workspace Tool Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
 - [Workspace Identity Contract and Migration Map](../../design/active/workspace-identity-contract-and-migration-map.md)
-- [Viewport Expression Upgrade Design](../../design/active/viewport-expression-upgrade-design.md)
+- [Viewport Expression Upgrade Design](../../design/active/workspace-viewport-expression-upgrade-design.md)
 
 ## Scope Boundary
 

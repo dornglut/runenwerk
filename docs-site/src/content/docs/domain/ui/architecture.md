@@ -163,6 +163,6 @@ The migration direction should remain dependency-aware and incremental:
 - [Runenwerk Architecture Doctrine](../../guidelines/runenwerk-architecture.md)
 - [Module Structure Guidelines](../../guidelines/module-structure-guidelines.md)
 - [Editor / UI / Workspace / Tool-Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
-- [Viewport Expression Upgrade Design](../../design/active/viewport-expression-upgrade-design.md)
+- [Viewport Expression Upgrade Design](../../design/active/workspace-viewport-expression-upgrade-design.md)
 - [Workspace Identity Contract and Migration Map](../../design/active/workspace-identity-contract-and-migration-map.md)
 - [UI Substrate Roadmap](./roadmap.md)
