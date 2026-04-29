@@ -74,6 +74,6 @@ Core shell command flows now use surface contracts end-to-end:
 - Module structure guidelines:
   - [Module Structure Guidelines](../../docs-site/src/content/docs/guidelines/module-structure-guidelines.md)
 - Editor/UI/workspace/tool-surface architecture:
-  - [Editor / UI / Workspace / Tool-Surface Architecture](../../docs-site/src/content/docs/guidelines/editor-ui-workspace-tool-surface-architecture.md)
+  - [Editor / UI / Workspace / Tool-Surface Architecture](../../docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md)
 - Workspace identity contract:
-  - [Workspace Identity Contract and Migration Map](../../docs-site/src/content/docs/guidelines/workspace-identity-contract-and-migration-map.md)
+  - [Workspace Identity Contract and Migration Map](../../docs-site/src/content/docs/design/active/workspace-identity-contract-and-migration-map.md)

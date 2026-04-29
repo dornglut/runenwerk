@@ -3,4 +3,4 @@
 
 pub mod build_ui_frame;
 
-pub use build_ui_frame::build_ui_frame;
+pub use build_ui_frame::{InteractionVisualState, build_ui_frame};

@@ -4,6 +4,7 @@
 use crate::WidgetId;
 use std::collections::BTreeMap;
 use ui_input::FocusTargetId;
+use ui_math::UiPoint;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct UiRuntimeState {
@@ -12,6 +13,8 @@ pub struct UiRuntimeState {
     pub captured_widget: Option<WidgetId>,
     pub focused_target: Option<FocusTargetId>,
     pub scroll_offsets: BTreeMap<WidgetId, f32>,
+    pub middle_pan_anchor: Option<WidgetId>,
+    pub middle_pan_last_position: Option<UiPoint>,
 }
 
 impl UiRuntimeState {
@@ -19,6 +22,8 @@ impl UiRuntimeState {
         self.hovered_widget = None;
         self.pressed_widget = None;
         self.captured_widget = None;
+        self.middle_pan_anchor = None;
+        self.middle_pan_last_position = None;
     }
 
     pub fn scroll_offset(&self, widget_id: WidgetId) -> f32 {

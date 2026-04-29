@@ -2,10 +2,10 @@
 //! Purpose: Retained UI node and node-kind contracts.
 
 use ui_layout::{LayoutConstraints, SizePolicy};
-use ui_math::{Axis, UiInsets, UiSize};
-use ui_render_data::ViewportSurfaceEmbedSlotId;
+use ui_math::{Axis, UiInsets, UiRect, UiSize};
+use ui_render_data::{UiDrawKey, UiPaint, ViewportSurfaceEmbedSlotId};
 use ui_text::TextStyle;
-use ui_theme::ThemeTokens;
+use ui_theme::{ThemeTokens, UiColor};
 
 use crate::WidgetId;
 
@@ -43,6 +43,12 @@ pub enum UiNodeKind {
     Toggle(ToggleNode),
     NumericInput(NumericInputNode),
     Tabs(TabsNode),
+    Select(SelectNode),
+    Table(TableNode),
+    Tree(TreeNode),
+    Spacer(SpacerNode),
+    Divider(DividerNode),
+    Image(ImageNode),
     ViewportSurfaceEmbed(ViewportSurfaceEmbedNode),
     Scroll(ScrollNode),
     Stack(StackNode),
@@ -93,6 +99,9 @@ pub struct ButtonNode {
     pub min_size: UiSize,
     pub theme: ThemeTokens,
     pub enabled: bool,
+    pub selected: bool,
+    pub selected_fill: Option<UiColor>,
+    pub selected_border: Option<UiColor>,
 }
 
 impl ButtonNode {
@@ -114,6 +123,9 @@ impl ButtonNode {
             ),
             theme,
             enabled: true,
+            selected: false,
+            selected_fill: None,
+            selected_border: None,
         }
     }
 }
@@ -127,6 +139,7 @@ pub struct TextInputNode {
     pub min_size: UiSize,
     pub theme: ThemeTokens,
     pub editable: bool,
+    pub fill_width: bool,
 }
 
 impl TextInputNode {
@@ -154,6 +167,7 @@ impl TextInputNode {
             ),
             theme,
             editable: true,
+            fill_width: false,
         }
     }
 }
@@ -294,6 +308,243 @@ impl TabsNode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct SelectNode {
+    pub options: Vec<String>,
+    pub selected_index: Option<usize>,
+    pub placeholder: String,
+    pub text_style: TextStyle,
+    pub padding: UiInsets,
+    pub min_size: UiSize,
+    pub theme: ThemeTokens,
+    pub enabled: bool,
+}
+
+impl SelectNode {
+    pub fn new(
+        options: impl IntoIterator<Item = impl Into<String>>,
+        selected_index: Option<usize>,
+        placeholder: impl Into<String>,
+        text_style: TextStyle,
+        theme: ThemeTokens,
+    ) -> Self {
+        let options = options.into_iter().map(Into::into).collect::<Vec<_>>();
+        let selected_index = selected_index.filter(|index| *index < options.len());
+        let line_height = text_style.line_height_or_default(text_style.font_size * 1.2);
+        let padding = UiInsets::new(
+            theme.spacing.sm,
+            theme.spacing.xs,
+            theme.spacing.sm,
+            theme.spacing.xs,
+        );
+        let width_estimate = options
+            .iter()
+            .map(|option| option.chars().count() as f32 * text_style.font_size * 0.6)
+            .fold(0.0, f32::max)
+            + padding.horizontal()
+            + line_height;
+        Self {
+            options,
+            selected_index,
+            placeholder: placeholder.into(),
+            text_style,
+            padding,
+            min_size: UiSize::new(width_estimate.max(96.0), line_height + padding.vertical()),
+            theme,
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableColumn {
+    pub label: String,
+    pub min_width: f32,
+}
+
+impl TableColumn {
+    pub fn new(label: impl Into<String>, min_width: f32) -> Self {
+        Self {
+            label: label.into(),
+            min_width: min_width.max(24.0),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableRow {
+    pub cells: Vec<String>,
+    pub selected: bool,
+    pub enabled: bool,
+}
+
+impl TableRow {
+    pub fn new(cells: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            cells: cells.into_iter().map(Into::into).collect(),
+            selected: false,
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableNode {
+    pub columns: Vec<TableColumn>,
+    pub rows: Vec<TableRow>,
+    pub text_style: TextStyle,
+    pub header_text_style: TextStyle,
+    pub row_height: f32,
+    pub min_size: UiSize,
+    pub theme: ThemeTokens,
+}
+
+impl TableNode {
+    pub fn new(
+        columns: impl IntoIterator<Item = TableColumn>,
+        rows: impl IntoIterator<Item = TableRow>,
+        text_style: TextStyle,
+        header_text_style: TextStyle,
+        theme: ThemeTokens,
+    ) -> Self {
+        let columns = columns.into_iter().collect::<Vec<_>>();
+        let rows = rows.into_iter().collect::<Vec<_>>();
+        let line_height = text_style.line_height_or_default(text_style.font_size * 1.2);
+        let row_height = (line_height + theme.spacing.xs * 2.0).max(18.0);
+        let width = columns
+            .iter()
+            .map(|column| column.min_width)
+            .sum::<f32>()
+            .max(96.0);
+        let height = row_height * (rows.len() as f32 + 1.0);
+        Self {
+            columns,
+            rows,
+            text_style,
+            header_text_style,
+            row_height,
+            min_size: UiSize::new(width, height),
+            theme,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TreeRow {
+    pub label: String,
+    pub depth: usize,
+    pub expanded: bool,
+    pub selected: bool,
+    pub has_children: bool,
+    pub enabled: bool,
+}
+
+impl TreeRow {
+    pub fn new(label: impl Into<String>, depth: usize, has_children: bool) -> Self {
+        Self {
+            label: label.into(),
+            depth,
+            expanded: true,
+            selected: false,
+            has_children,
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TreeNode {
+    pub rows: Vec<TreeRow>,
+    pub text_style: TextStyle,
+    pub row_height: f32,
+    pub indent_width: f32,
+    pub min_size: UiSize,
+    pub theme: ThemeTokens,
+}
+
+impl TreeNode {
+    pub fn new(
+        rows: impl IntoIterator<Item = TreeRow>,
+        text_style: TextStyle,
+        theme: ThemeTokens,
+    ) -> Self {
+        let rows = rows.into_iter().collect::<Vec<_>>();
+        let line_height = text_style.line_height_or_default(text_style.font_size * 1.2);
+        let row_height = (line_height + theme.spacing.xs * 1.5).max(18.0);
+        let indent_width = theme.spacing.lg.max(16.0);
+        let width = rows
+            .iter()
+            .map(|row| {
+                row.depth as f32 * indent_width
+                    + row.label.chars().count() as f32 * text_style.font_size * 0.6
+                    + theme.spacing.xl
+            })
+            .fold(96.0, f32::max);
+        Self {
+            rows,
+            text_style,
+            row_height,
+            indent_width,
+            min_size: UiSize::new(width, row_height),
+            theme,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpacerNode {
+    pub min_size: UiSize,
+}
+
+impl SpacerNode {
+    pub const fn new(min_size: UiSize) -> Self {
+        Self { min_size }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DividerNode {
+    pub axis: Axis,
+    pub thickness: f32,
+    pub length_policy: SizePolicy,
+    pub color: UiColor,
+}
+
+impl DividerNode {
+    pub fn new(axis: Axis, thickness: f32, length_policy: SizePolicy, color: UiColor) -> Self {
+        Self {
+            axis,
+            thickness: thickness.max(0.0),
+            length_policy,
+            color,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageNode {
+    pub draw_key: UiDrawKey,
+    pub uv_rect: UiRect,
+    pub tint: UiPaint,
+    pub min_size: UiSize,
+}
+
+impl ImageNode {
+    pub const fn new(
+        draw_key: UiDrawKey,
+        uv_rect: UiRect,
+        tint: UiPaint,
+        min_size: UiSize,
+    ) -> Self {
+        Self {
+            draw_key,
+            uv_rect,
+            tint,
+            min_size,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ViewportSurfaceEmbedNode {
     pub viewport_id: u64,
     pub slot: ViewportSurfaceEmbedSlotId,
@@ -315,7 +566,15 @@ pub struct ScrollNode {
     pub axis: Axis,
     pub bar_thickness: f32,
     pub min_thumb_main_size: f32,
+    pub input_policy: ScrollInputPolicy,
     pub theme: ThemeTokens,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollInputPolicy {
+    WheelOnly,
+    MiddleDragOnly,
+    WheelAndMiddleDrag,
 }
 
 impl ScrollNode {
@@ -328,6 +587,7 @@ impl ScrollNode {
             axis: Axis::Vertical,
             bar_thickness: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
             min_thumb_main_size: (theme.spacing.lg + theme.spacing.xs).max(18.0),
+            input_policy: ScrollInputPolicy::WheelOnly,
             theme,
         }
     }
@@ -337,6 +597,7 @@ impl ScrollNode {
             axis: Axis::Horizontal,
             bar_thickness: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
             min_thumb_main_size: (theme.spacing.lg + theme.spacing.xs).max(18.0),
+            input_policy: ScrollInputPolicy::MiddleDragOnly,
             theme,
         }
     }

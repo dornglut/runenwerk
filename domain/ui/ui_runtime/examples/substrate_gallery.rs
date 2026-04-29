@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use ui_math::UiRect;
 use ui_render_data::{UiPrimitive, ViewportSurfaceEmbedSlotId};
 use ui_runtime::{
-    ButtonNode, PanelNode, ScrollNode, StackNode, TextInputNode, UiNode, UiNodeKind,
-    UiRuntimeState, UiTree, WidgetId, build_ui_frame, compute_tree_layout,
+    ButtonNode, InteractionVisualState, PanelNode, ScrollNode, StackNode, TextInputNode, UiNode,
+    UiNodeKind, UiRuntimeState, UiTree, WidgetId, build_ui_frame, compute_tree_layout,
 };
 use ui_text::{FontAtlasSource, FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas};
 use ui_theme::ThemeTokens;
@@ -145,7 +145,13 @@ fn main() {
     for (name, tree) in scenarios {
         let bounds = UiRect::new(0.0, 0.0, 360.0, 220.0);
         let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
-        let frame = build_ui_frame(&tree, &layouts, bounds.size(), &atlas);
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState::default(),
+            &atlas,
+        );
         let viewport_slots = viewport_embed_slot_ids(&frame);
         println!(
             "scenario={name} surfaces={} primitives={} viewport_embed_slots={:?}",

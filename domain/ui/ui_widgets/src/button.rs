@@ -11,8 +11,17 @@ pub fn button(
     text_style: TextStyle,
     theme: ThemeTokens,
 ) -> UiNode {
-    UiNode::new(
-        id,
-        UiNodeKind::Button(ButtonNode::new(label, text_style, theme)),
-    )
+    button_selected(id, label, text_style, theme, false)
+}
+
+pub fn button_selected(
+    id: WidgetId,
+    label: impl Into<String>,
+    text_style: TextStyle,
+    theme: ThemeTokens,
+    selected: bool,
+) -> UiNode {
+    let mut node = ButtonNode::new(label, text_style, theme);
+    node.selected = selected;
+    UiNode::new(id, UiNodeKind::Button(node))
 }

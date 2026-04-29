@@ -3,32 +3,72 @@
 
 use ui_math::UiPoint;
 
-use crate::{ComputedLayoutMap, UiTree, WidgetId};
+use crate::{ComputedLayout, ComputedLayoutMap, UiNode, UiNodeKind, UiTree, WidgetId};
 
 pub fn hit_test_widget(
     tree: &UiTree,
     layouts: &ComputedLayoutMap,
     point: UiPoint,
 ) -> Option<WidgetId> {
-    hit_test_node(&tree.root, layouts, point)
+    hit_test_node(&tree.root, layouts, point, None)
 }
 
 fn hit_test_node(
-    node: &crate::UiNode,
+    node: &UiNode,
     layouts: &ComputedLayoutMap,
     point: UiPoint,
+    inherited_clip: Option<ui_math::UiRect>,
 ) -> Option<WidgetId> {
     let layout = layouts.get(&node.id)?;
+    let clip = combine_clip(inherited_clip, clip_rect_for_node(node, layout))?;
 
     if !layout.bounds.contains(point) {
         return None;
     }
+    if let Some(clip_rect) = clip
+        && !clip_rect.contains(point)
+    {
+        return None;
+    }
 
     for child in node.children.iter().rev() {
-        if let Some(hit) = hit_test_node(child, layouts, point) {
+        if let Some(hit) = hit_test_node(child, layouts, point, clip) {
             return Some(hit);
         }
     }
 
     Some(node.id)
+}
+
+fn clip_rect_for_node(node: &UiNode, layout: &ComputedLayout) -> Option<ui_math::UiRect> {
+    match &node.kind {
+        UiNodeKind::Panel(_)
+        | UiNodeKind::Scroll(_)
+        | UiNodeKind::Button(_)
+        | UiNodeKind::TextInput(_)
+        | UiNodeKind::NumericInput(_)
+        | UiNodeKind::Tabs(_)
+        | UiNodeKind::Select(_) => Some(layout.content_bounds),
+        UiNodeKind::Table(_) | UiNodeKind::Tree(_) => Some(layout.bounds),
+        UiNodeKind::Label(_)
+        | UiNodeKind::Toggle(_)
+        | UiNodeKind::Spacer(_)
+        | UiNodeKind::Divider(_)
+        | UiNodeKind::Image(_)
+        | UiNodeKind::ViewportSurfaceEmbed(_)
+        | UiNodeKind::Stack(_)
+        | UiNodeKind::Split(_) => None,
+    }
+}
+
+fn combine_clip(
+    inherited: Option<ui_math::UiRect>,
+    local: Option<ui_math::UiRect>,
+) -> Option<Option<ui_math::UiRect>> {
+    match (inherited, local) {
+        (Some(a), Some(b)) => a.intersect(b).map(Some),
+        (Some(a), None) => Some(Some(a)),
+        (None, Some(b)) => Some(Some(b)),
+        (None, None) => Some(None),
+    }
 }

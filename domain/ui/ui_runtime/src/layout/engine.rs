@@ -8,9 +8,10 @@ use ui_layout::{
 use ui_math::{Axis, UiRect, UiSize};
 
 use crate::{
-    ButtonNode, ComputedLayout, ComputedLayoutMap, LabelNode, NumericInputNode, PanelNode,
-    ScrollNode, SplitNode, StackNode, TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind,
-    UiRuntimeState, UiTree, ViewportSurfaceEmbedNode,
+    ButtonNode, ComputedLayout, ComputedLayoutMap, DividerNode, ImageNode, LabelNode,
+    NumericInputNode, PanelNode, ScrollNode, SelectNode, SpacerNode, SplitNode, StackNode,
+    TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode, UiNode, UiNodeKind, UiRuntimeState,
+    UiTree, ViewportSurfaceEmbedNode,
 };
 
 pub fn compute_tree_layout(
@@ -37,6 +38,12 @@ fn layout_node(
         UiNodeKind::Toggle(toggle) => layout_toggle(node, toggle, bounds, out),
         UiNodeKind::NumericInput(numeric) => layout_numeric_input(node, numeric, bounds, out),
         UiNodeKind::Tabs(tabs) => layout_tabs(node, tabs, bounds, out),
+        UiNodeKind::Select(select) => layout_select(node, select, bounds, out),
+        UiNodeKind::Table(table) => layout_table(node, table, bounds, out),
+        UiNodeKind::Tree(tree) => layout_tree(node, tree, bounds, out),
+        UiNodeKind::Spacer(spacer) => layout_spacer(node, spacer, bounds, out),
+        UiNodeKind::Divider(divider) => layout_divider(node, divider, bounds, out),
+        UiNodeKind::Image(image) => layout_image(node, image, bounds, out),
         UiNodeKind::ViewportSurfaceEmbed(embed) => {
             layout_viewport_surface_embed(node, embed, bounds, out)
         }
@@ -180,10 +187,15 @@ fn layout_text_input(
         (text_width + text_input.padding.horizontal()).max(text_input.min_size.width),
         (line_height + text_input.padding.vertical()).max(text_input.min_size.height),
     );
+    let layout_width = if text_input.fill_width {
+        bounds.width.max(0.0)
+    } else {
+        measured_size.width.min(bounds.width.max(0.0))
+    };
     let layout_bounds = UiRect::new(
         bounds.x,
         bounds.y,
-        measured_size.width.min(bounds.width.max(0.0)),
+        layout_width,
         measured_size.height.min(bounds.height.max(0.0)),
     );
     let content_bounds = layout_bounds.inset(text_input.padding);
@@ -303,6 +315,127 @@ fn layout_viewport_surface_embed(
     measured_size
 }
 
+fn layout_select(
+    node: &UiNode,
+    select: &SelectNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let line_height = select
+        .text_style
+        .line_height_or_default(select.text_style.font_size * 1.2);
+    let display_text = select
+        .selected_index
+        .and_then(|index| select.options.get(index))
+        .unwrap_or(&select.placeholder);
+    let text_width =
+        (display_text.chars().count() as f32 * select.text_style.font_size * 0.6).max(0.0);
+    let measured_size = UiSize::new(
+        (text_width + select.padding.horizontal() + line_height).max(select.min_size.width),
+        (line_height + select.padding.vertical()).max(select.min_size.height),
+    );
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width.min(bounds.width.max(0.0)),
+        measured_size.height.min(bounds.height.max(0.0)),
+    );
+    let content_bounds = layout_bounds.inset(select.padding);
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, content_bounds, measured_size),
+    );
+    measured_size
+}
+
+fn layout_table(
+    node: &UiNode,
+    table: &TableNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = table_size(table);
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width.min(bounds.width.max(0.0)),
+        measured_size.height.min(bounds.height.max(0.0)),
+    );
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, layout_bounds, measured_size),
+    );
+    measured_size
+}
+
+fn layout_tree(
+    node: &UiNode,
+    tree: &TreeNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = tree_size(tree);
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width.min(bounds.width.max(0.0)),
+        measured_size.height.min(bounds.height.max(0.0)),
+    );
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, layout_bounds, measured_size),
+    );
+    measured_size
+}
+
+fn layout_spacer(
+    node: &UiNode,
+    spacer: &SpacerNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = UiSize::new(
+        bounds.width.max(spacer.min_size.width),
+        bounds.height.max(spacer.min_size.height),
+    );
+    out.insert(node.id, ComputedLayout::new(bounds, bounds, measured_size));
+    measured_size
+}
+
+fn layout_divider(
+    node: &UiNode,
+    divider: &DividerNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = divider_size_for_bounds(divider, bounds);
+    let layout_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        measured_size.width,
+        measured_size.height,
+    );
+    out.insert(
+        node.id,
+        ComputedLayout::new(layout_bounds, layout_bounds, measured_size),
+    );
+    measured_size
+}
+
+fn layout_image(
+    node: &UiNode,
+    image: &ImageNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = UiSize::new(
+        bounds.width.max(image.min_size.width),
+        bounds.height.max(image.min_size.height),
+    );
+    out.insert(node.id, ComputedLayout::new(bounds, bounds, measured_size));
+    measured_size
+}
+
 fn layout_scroll(
     node: &UiNode,
     scroll: &ScrollNode,
@@ -310,29 +443,52 @@ fn layout_scroll(
     state: &UiRuntimeState,
     out: &mut ComputedLayoutMap,
 ) -> UiSize {
-    let content_bounds = match scroll.axis {
-        Axis::Vertical => {
-            let scrollbar_width = scroll.bar_thickness.min(bounds.width.max(0.0));
-            UiRect::new(
-                bounds.x,
-                bounds.y,
-                (bounds.width - scrollbar_width).max(0.0),
-                bounds.height.max(0.0),
-            )
+    let base_content_bounds = UiRect::new(
+        bounds.x,
+        bounds.y,
+        bounds.width.max(0.0),
+        bounds.height.max(0.0),
+    );
+    let measured_content = node
+        .children
+        .first()
+        .map(measure_node)
+        .unwrap_or(UiSize::ZERO);
+    let has_overflow = match scroll.axis {
+        Axis::Vertical => measured_content.height > base_content_bounds.height + f32::EPSILON,
+        Axis::Horizontal => measured_content.width > base_content_bounds.width + f32::EPSILON,
+    };
+
+    let content_bounds = if has_overflow {
+        match scroll.axis {
+            Axis::Vertical => {
+                // Keep at least a sliver of content viewport in tight sizes so clipping remains
+                // active and content cannot visually escape the scroll container.
+                let max_gutter = (bounds.width - 1.0).max(0.0);
+                let scrollbar_width = scroll.bar_thickness.min(max_gutter);
+                UiRect::new(
+                    bounds.x,
+                    bounds.y,
+                    (bounds.width - scrollbar_width).max(0.0),
+                    bounds.height.max(0.0),
+                )
+            }
+            Axis::Horizontal => {
+                let max_gutter = (bounds.height - 1.0).max(0.0);
+                let scrollbar_height = scroll.bar_thickness.min(max_gutter);
+                UiRect::new(
+                    bounds.x,
+                    bounds.y,
+                    bounds.width.max(0.0),
+                    (bounds.height - scrollbar_height).max(0.0),
+                )
+            }
         }
-        Axis::Horizontal => {
-            let scrollbar_height = scroll.bar_thickness.min(bounds.height.max(0.0));
-            UiRect::new(
-                bounds.x,
-                bounds.y,
-                bounds.width.max(0.0),
-                (bounds.height - scrollbar_height).max(0.0),
-            )
-        }
+    } else {
+        base_content_bounds
     };
 
     if let Some(child) = node.children.first() {
-        let measured_content = measure_node(child);
         match scroll.axis {
             Axis::Vertical => {
                 let content_height = measured_content.height.max(content_bounds.height);
@@ -361,7 +517,12 @@ fn layout_scroll(
         }
     }
 
-    let measured_size = bounds.size();
+    // Preserve the child's unconstrained content extent in measured_size so ancestor
+    // scroll containers can still detect overflow through nested scroll nodes.
+    let measured_size = UiSize::new(
+        measured_content.width.max(content_bounds.width),
+        measured_content.height.max(content_bounds.height),
+    );
     out.insert(
         node.id,
         ComputedLayout::new(bounds, content_bounds, measured_size),
@@ -441,6 +602,20 @@ fn layout_split(
             layout_node(left, left_bounds, state, out);
             layout_node(right, right_bounds, state, out);
         }
+        [left, right, handle] => {
+            let (left_bounds, right_bounds) = layout.arrange(bounds);
+            layout_node(left, left_bounds, state, out);
+            layout_node(right, right_bounds, state, out);
+            let handle_size = measure_node(handle);
+            let handle_bounds = arrange_split_handle_bounds(
+                split.axis,
+                bounds,
+                left_bounds,
+                right_bounds,
+                handle_size,
+            );
+            layout_node(handle, handle_bounds, state, out);
+        }
         [only] => {
             layout_node(only, bounds, state, out);
         }
@@ -450,6 +625,43 @@ fn layout_split(
     out.insert(node.id, ComputedLayout::new(bounds, bounds, measured_size));
 
     measured_size
+}
+
+fn arrange_split_handle_bounds(
+    axis: Axis,
+    split_bounds: UiRect,
+    first_bounds: UiRect,
+    second_bounds: UiRect,
+    handle_size: UiSize,
+) -> UiRect {
+    let handle_width = handle_size.width.min(split_bounds.width.max(0.0));
+    let handle_height = handle_size.height.min(split_bounds.height.max(0.0));
+    match axis {
+        Axis::Horizontal => {
+            let boundary = (first_bounds.x + first_bounds.width + second_bounds.x) * 0.5;
+            let x = (boundary - handle_width * 0.5).clamp(
+                split_bounds.x,
+                split_bounds.x + (split_bounds.width - handle_width).max(0.0),
+            );
+            let y = (split_bounds.y + (split_bounds.height - handle_height) * 0.5).clamp(
+                split_bounds.y,
+                split_bounds.y + (split_bounds.height - handle_height).max(0.0),
+            );
+            UiRect::new(x, y, handle_width, handle_height)
+        }
+        Axis::Vertical => {
+            let boundary = (first_bounds.y + first_bounds.height + second_bounds.y) * 0.5;
+            let x = (split_bounds.x + (split_bounds.width - handle_width) * 0.5).clamp(
+                split_bounds.x,
+                split_bounds.x + (split_bounds.width - handle_width).max(0.0),
+            );
+            let y = (boundary - handle_height * 0.5).clamp(
+                split_bounds.y,
+                split_bounds.y + (split_bounds.height - handle_height).max(0.0),
+            );
+            UiRect::new(x, y, handle_width, handle_height)
+        }
+    }
 }
 
 fn measure_node(node: &UiNode) -> UiSize {
@@ -552,6 +764,26 @@ fn measure_node(node: &UiNode) -> UiSize {
                 (line_height + tabs.padding.vertical()).max(tabs.min_size.height),
             )
         }
+        UiNodeKind::Select(select) => {
+            let line_height = select
+                .text_style
+                .line_height_or_default(select.text_style.font_size * 1.2);
+            let display_text = select
+                .selected_index
+                .and_then(|index| select.options.get(index))
+                .unwrap_or(&select.placeholder);
+            let text_width =
+                (display_text.chars().count() as f32 * select.text_style.font_size * 0.6).max(0.0);
+            UiSize::new(
+                (text_width + select.padding.horizontal() + line_height).max(select.min_size.width),
+                (line_height + select.padding.vertical()).max(select.min_size.height),
+            )
+        }
+        UiNodeKind::Table(table) => table_size(table),
+        UiNodeKind::Tree(tree) => tree_size(tree),
+        UiNodeKind::Spacer(spacer) => spacer.min_size,
+        UiNodeKind::Divider(divider) => divider_intrinsic_size(divider),
+        UiNodeKind::Image(image) => image.min_size,
         UiNodeKind::ViewportSurfaceEmbed(embed) => embed.min_size,
         UiNodeKind::Scroll(scroll) => {
             let child = node
@@ -560,8 +792,8 @@ fn measure_node(node: &UiNode) -> UiSize {
                 .map(measure_node)
                 .unwrap_or(UiSize::ZERO);
             match scroll.axis {
-                Axis::Vertical => UiSize::new(child.width + scroll.bar_thickness, child.height),
-                Axis::Horizontal => UiSize::new(child.width, child.height + scroll.bar_thickness),
+                Axis::Vertical => UiSize::new(child.width, child.height),
+                Axis::Horizontal => UiSize::new(child.width, child.height),
             }
         }
         UiNodeKind::Stack(stack) => {
@@ -601,6 +833,51 @@ fn measure_node(node: &UiNode) -> UiSize {
     }
 }
 
+fn table_size(table: &TableNode) -> UiSize {
+    let width = table
+        .columns
+        .iter()
+        .map(|column| column.min_width)
+        .sum::<f32>()
+        .max(table.min_size.width);
+    let height = (table.rows.len() as f32 + 1.0) * table.row_height;
+    UiSize::new(width, height.max(table.min_size.height))
+}
+
+fn tree_size(tree: &TreeNode) -> UiSize {
+    let height = tree.rows.len().max(1) as f32 * tree.row_height;
+    UiSize::new(tree.min_size.width, height.max(tree.min_size.height))
+}
+
+fn divider_size_for_bounds(divider: &DividerNode, bounds: UiRect) -> UiSize {
+    let length = match divider.length_policy {
+        SizePolicy::Auto | SizePolicy::Flex(_) => match divider.axis {
+            Axis::Horizontal => bounds.width.max(0.0),
+            Axis::Vertical => bounds.height.max(0.0),
+        },
+        SizePolicy::Fixed(value) => value.max(0.0),
+    };
+    let thickness = divider.thickness.max(0.0);
+
+    match divider.axis {
+        Axis::Horizontal => UiSize::new(length, thickness),
+        Axis::Vertical => UiSize::new(thickness, length),
+    }
+}
+
+fn divider_intrinsic_size(divider: &DividerNode) -> UiSize {
+    let length = match divider.length_policy {
+        SizePolicy::Fixed(value) => value.max(0.0),
+        SizePolicy::Auto | SizePolicy::Flex(_) => 0.0,
+    };
+    let thickness = divider.thickness.max(0.0);
+
+    match divider.axis {
+        Axis::Horizontal => UiSize::new(length, thickness),
+        Axis::Vertical => UiSize::new(thickness, length),
+    }
+}
+
 fn measure_split(node: &UiNode, split: &SplitNode) -> UiSize {
     match node.children.as_slice() {
         [left, right] => {
@@ -617,7 +894,182 @@ fn measure_split(node: &UiNode, split: &SplitNode) -> UiSize {
                 ),
             }
         }
+        [left, right, _] => {
+            let left_size = measure_node(left);
+            let right_size = measure_node(right);
+            match split.axis {
+                Axis::Horizontal => UiSize::new(
+                    left_size.width + split.gap.max(0.0) + right_size.width,
+                    left_size.height.max(right_size.height),
+                ),
+                Axis::Vertical => UiSize::new(
+                    left_size.width.max(right_size.width),
+                    left_size.height + split.gap.max(0.0) + right_size.height,
+                ),
+            }
+        }
         [only] => measure_node(only),
         _ => UiSize::ZERO,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{UiNode, UiNodeKind, WidgetId};
+    use ui_render_data::{UiDrawKey, UiPaint};
+    use ui_theme::UiColor;
+
+    #[test]
+    fn spacer_layout_preserves_min_size_and_stack_position() {
+        let spacer_id = WidgetId(2);
+        let button_id = WidgetId(3);
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Stack(StackNode::vertical(4.0)),
+            vec![
+                UiNode::new(
+                    spacer_id,
+                    UiNodeKind::Spacer(SpacerNode::new(UiSize::new(20.0, 12.0))),
+                ),
+                UiNode::new(
+                    button_id,
+                    UiNodeKind::Button(ButtonNode::new(
+                        "Apply",
+                        ui_text::TextStyle::default(),
+                        ui_theme::ThemeTokens::default(),
+                    )),
+                ),
+            ],
+        ));
+
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 160.0, 80.0),
+            &UiRuntimeState::default(),
+        );
+
+        let spacer = layouts.get(&spacer_id).expect("spacer layout should exist");
+        let button = layouts.get(&button_id).expect("button layout should exist");
+
+        assert_eq!(spacer.measured_size, UiSize::new(160.0, 12.0));
+        assert_eq!(spacer.bounds.height, 12.0);
+        assert!((button.bounds.y - 16.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn divider_layout_respects_axis_thickness_and_fixed_length() {
+        let horizontal_id = WidgetId(10);
+        let vertical_id = WidgetId(11);
+        let color = UiColor::new(0.2, 0.3, 0.4, 1.0);
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Stack(StackNode::vertical(2.0)),
+            vec![
+                UiNode::new(
+                    horizontal_id,
+                    UiNodeKind::Divider(DividerNode::new(
+                        Axis::Horizontal,
+                        2.0,
+                        SizePolicy::Fixed(32.0),
+                        color,
+                    )),
+                ),
+                UiNode::new(
+                    vertical_id,
+                    UiNodeKind::Divider(DividerNode::new(
+                        Axis::Vertical,
+                        3.0,
+                        SizePolicy::Fixed(24.0),
+                        color,
+                    )),
+                ),
+            ],
+        ));
+
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 120.0, 80.0),
+            &UiRuntimeState::default(),
+        );
+
+        let horizontal = layouts
+            .get(&horizontal_id)
+            .expect("horizontal divider layout should exist");
+        let vertical = layouts
+            .get(&vertical_id)
+            .expect("vertical divider layout should exist");
+
+        assert_eq!(horizontal.measured_size, UiSize::new(32.0, 2.0));
+        assert_eq!(horizontal.bounds.height, 2.0);
+        assert_eq!(vertical.measured_size, UiSize::new(3.0, 24.0));
+        assert_eq!(vertical.bounds.width, 3.0);
+    }
+
+    #[test]
+    fn image_layout_preserves_min_size() {
+        let image_id = WidgetId(5);
+        let tree = UiTree::new(UiNode::new(
+            image_id,
+            UiNodeKind::Image(ImageNode::new(
+                UiDrawKey::new(7, Some(8)),
+                UiRect::new(0.0, 0.0, 1.0, 1.0),
+                UiPaint::WHITE,
+                UiSize::new(48.0, 32.0),
+            )),
+        ));
+
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(4.0, 6.0, 24.0, 16.0),
+            &UiRuntimeState::default(),
+        );
+
+        let image = layouts.get(&image_id).expect("image layout should exist");
+        assert_eq!(image.bounds, UiRect::new(4.0, 6.0, 24.0, 16.0));
+        assert_eq!(image.measured_size, UiSize::new(48.0, 32.0));
+    }
+
+    #[test]
+    fn scroll_layout_preserves_nonzero_content_viewport_in_tight_bounds() {
+        let scroll_id = WidgetId(21);
+        let tree = UiTree::new(UiNode::with_children(
+            scroll_id,
+            UiNodeKind::Scroll(ScrollNode::vertical(ui_theme::ThemeTokens::default())),
+            vec![UiNode::with_children(
+                WidgetId(22),
+                UiNodeKind::Stack(StackNode::vertical(2.0)),
+                vec![
+                    UiNode::new(
+                        WidgetId(23),
+                        UiNodeKind::Button(ButtonNode::new(
+                            "one",
+                            ui_text::TextStyle::default(),
+                            ui_theme::ThemeTokens::default(),
+                        )),
+                    ),
+                    UiNode::new(
+                        WidgetId(24),
+                        UiNodeKind::Button(ButtonNode::new(
+                            "two",
+                            ui_text::TextStyle::default(),
+                            ui_theme::ThemeTokens::default(),
+                        )),
+                    ),
+                ],
+            )],
+        ));
+
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 80.0, 6.0),
+            &UiRuntimeState::default(),
+        );
+        let scroll = layouts.get(&scroll_id).expect("scroll layout should exist");
+
+        assert!(
+            scroll.content_bounds.height > 0.0,
+            "tight overflow layouts should keep a non-zero content viewport for clipping",
+        );
     }
 }

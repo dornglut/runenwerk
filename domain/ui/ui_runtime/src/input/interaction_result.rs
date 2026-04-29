@@ -36,6 +36,23 @@ pub enum UiInteraction {
         target: WidgetId,
         index: usize,
     },
+    SelectChanged {
+        target: WidgetId,
+        index: usize,
+    },
+    TableRowSelected {
+        target: WidgetId,
+        row_index: usize,
+    },
+    TreeRowSelected {
+        target: WidgetId,
+        row_index: usize,
+    },
+    TreeRowToggled {
+        target: WidgetId,
+        row_index: usize,
+        expanded: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

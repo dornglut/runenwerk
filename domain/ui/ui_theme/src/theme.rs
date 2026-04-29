@@ -123,12 +123,12 @@ impl ThemeTokens {
 impl Default for ThemeTokens {
     fn default() -> Self {
         Self {
-            background: UiColor::new(0.08, 0.09, 0.11, 1.0),
-            background_panel: UiColor::new(0.12, 0.13, 0.16, 1.0),
-            foreground: UiColor::new(0.92, 0.93, 0.95, 1.0),
-            foreground_muted: UiColor::new(0.70, 0.73, 0.78, 1.0),
-            accent: UiColor::new(0.38, 0.58, 0.95, 1.0),
-            border: UiColor::new(0.24, 0.26, 0.32, 1.0),
+            background: UiColor::new(0.045, 0.023, 0.026, 1.0),
+            background_panel: UiColor::new(0.088, 0.036, 0.042, 1.0),
+            foreground: UiColor::new(0.955, 0.936, 0.940, 1.0),
+            foreground_muted: UiColor::new(0.845, 0.785, 0.800, 1.0),
+            accent: UiColor::new(0.860, 0.178, 0.248, 1.0),
+            border: UiColor::new(0.392, 0.142, 0.176, 1.0),
             border_width: 1.0,
             spacing: SpacingScale {
                 xs: 4.0,

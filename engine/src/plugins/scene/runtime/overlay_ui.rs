@@ -13,8 +13,8 @@ use crate::plugins::time::domain::Time;
 use crate::plugins::{InputState, SceneManager};
 use ui_math::{UiInsets, UiRect, UiSize};
 use ui_runtime::{
-    ComputedLayout, ComputedLayoutMap, LabelNode, PanelNode, UiNode, UiNodeKind, UiTree, WidgetId,
-    build_ui_frame,
+    ComputedLayout, ComputedLayoutMap, InteractionVisualState, LabelNode, PanelNode, UiNode,
+    UiNodeKind, UiTree, WidgetId, build_ui_frame,
 };
 use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextWrap};
 use ui_theme::{ThemeTokens, UiColor};
@@ -413,6 +413,7 @@ fn build_overlay_frame_via_substrate(
         &UiTree::new(root),
         &layouts,
         surface_size,
+        InteractionVisualState::default(),
         overlay_font_atlas(),
     )
 }

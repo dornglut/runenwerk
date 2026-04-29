@@ -2,17 +2,19 @@
 //! Purpose: Pointer input dispatch for ui_runtime.
 
 use ui_input::{
-    EventPropagation, FocusChange, FocusTargetId, InputResponse, PointerCapture, PointerEvent,
-    PointerEventKind,
+    EventPropagation, FocusChange, FocusTargetId, InputResponse, PointerButton, PointerCapture,
+    PointerEvent, PointerEventKind,
 };
 
 use crate::{
-    ComputedLayoutMap, UiInputDispatchResult, UiInputOutcome, UiInteraction, UiInteractionResults,
-    UiInvalidation, UiNodeKind, UiRuntimeState, UiTree, WidgetId, hit_test_widget,
+    ComputedLayoutMap, ScrollInputPolicy, UiInputDispatchResult, UiInputOutcome, UiInteraction,
+    UiInteractionResults, UiInvalidation, UiNodeKind, UiRuntimeState, UiTree, WidgetId,
+    hit_test_widget,
 };
 
 const SCROLL_DELTA_CLAMP: f32 = 8.0;
 const SCROLL_STEP_PX: f32 = 28.0;
+const PAN_SCROLL_SPEED: f32 = 1.5;
 
 pub fn dispatch_pointer_event(
     tree: &UiTree,
@@ -27,7 +29,36 @@ pub fn dispatch_pointer_event(
 
     match event.kind {
         PointerEventKind::Move | PointerEventKind::Enter => {
+            if state.middle_pan_anchor.is_some() {
+                let previous_hovered = state.hovered_widget;
+                let raw_hover_target = hit_test_widget(tree, layouts, event.position);
+                let hover_target =
+                    raw_hover_target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
+                state.hovered_widget = hover_target;
+
+                let mut interactions = UiInteractionResults::new();
+                push_hover_change_if_needed(&mut interactions, previous_hovered, hover_target);
+
+                let delta = middle_pan_delta(state, event.position, event.delta);
+                state.middle_pan_last_position = Some(event.position);
+                let owners = scroll_owners_for_pan(tree, raw_hover_target, state.middle_pan_anchor);
+                let changed = apply_middle_pan_delta(tree, layouts, state, &owners, delta);
+
+                return outcome(
+                    state.middle_pan_anchor.or(hover_target),
+                    InputResponse {
+                        propagation: EventPropagation::Stop,
+                        capture: PointerCapture::None,
+                        focus_change: FocusChange::None,
+                        repaint: changed,
+                        relayout: false,
+                    },
+                    interactions,
+                );
+            }
+
             let previous_hovered = state.hovered_widget;
+            let target = target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
             state.hovered_widget = target;
 
             let mut interactions = UiInteractionResults::new();
@@ -45,12 +76,49 @@ pub fn dispatch_pointer_event(
             outcome(None, InputResponse::ignored(), interactions)
         }
         PointerEventKind::Down => {
+            if event.button == Some(PointerButton::Middle) {
+                let previous_hovered = state.hovered_widget;
+                let raw_target = hit_test_widget(tree, layouts, event.position);
+                let hover_target =
+                    raw_target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
+                state.hovered_widget = hover_target;
+                state.middle_pan_anchor = raw_target;
+                state.middle_pan_last_position = Some(event.position);
+                state.captured_widget = raw_target;
+
+                let mut interactions = UiInteractionResults::new();
+                push_hover_change_if_needed(&mut interactions, previous_hovered, hover_target);
+
+                return outcome(
+                    raw_target,
+                    InputResponse {
+                        propagation: if raw_target.is_some() {
+                            EventPropagation::Stop
+                        } else {
+                            EventPropagation::Continue
+                        },
+                        capture: if raw_target.is_some() {
+                            PointerCapture::CaptureSelf
+                        } else {
+                            PointerCapture::None
+                        },
+                        focus_change: FocusChange::None,
+                        repaint: false,
+                        relayout: false,
+                    },
+                    interactions,
+                );
+            }
+
             let previous_hovered = state.hovered_widget;
             let previous_pressed = state.pressed_widget;
+            let target = target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
 
             state.hovered_widget = target;
             state.pressed_widget = target;
             state.captured_widget = target;
+            state.middle_pan_anchor = None;
+            state.middle_pan_last_position = None;
 
             let focus_change = match target {
                 Some(WidgetId(id)) => FocusChange::Set(FocusTargetId(id)),
@@ -87,14 +155,43 @@ pub fn dispatch_pointer_event(
             )
         }
         PointerEventKind::Up => {
+            if event.button == Some(PointerButton::Middle) && state.middle_pan_anchor.is_some() {
+                let previous_hovered = state.hovered_widget;
+                let release_target = hit_test_widget(tree, layouts, event.position)
+                    .filter(|widget_id| is_pointer_responsive(tree, *widget_id));
+                state.hovered_widget = release_target;
+                state.middle_pan_anchor = None;
+                state.middle_pan_last_position = None;
+                state.captured_widget = None;
+
+                let mut interactions = UiInteractionResults::new();
+                push_hover_change_if_needed(&mut interactions, previous_hovered, release_target);
+
+                return outcome(
+                    release_target,
+                    InputResponse {
+                        propagation: EventPropagation::Stop,
+                        capture: PointerCapture::Release,
+                        focus_change: FocusChange::None,
+                        repaint: false,
+                        relayout: false,
+                    },
+                    interactions,
+                );
+            }
+
             let previous_hovered = state.hovered_widget;
             let previous_pressed = state.pressed_widget;
             let pressed_target = state.pressed_widget;
-            let release_target = hit_test_widget(tree, layouts, event.position);
+            let target = target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
+            let release_target = hit_test_widget(tree, layouts, event.position)
+                .filter(|widget_id| is_pointer_responsive(tree, *widget_id));
 
             state.hovered_widget = release_target;
             state.pressed_widget = None;
             state.captured_widget = None;
+            state.middle_pan_anchor = None;
+            state.middle_pan_last_position = None;
 
             let mut interactions = UiInteractionResults::new();
             push_hover_change_if_needed(&mut interactions, previous_hovered, release_target);
@@ -134,13 +231,14 @@ pub fn dispatch_pointer_event(
         }
         PointerEventKind::Scroll => {
             let previous_hovered = state.hovered_widget;
-            let hover_target = hit_test_widget(tree, layouts, event.position);
+            let raw_hover_target = hit_test_widget(tree, layouts, event.position);
+            let hover_target =
+                raw_hover_target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
             state.hovered_widget = hover_target;
 
             let mut interactions = UiInteractionResults::new();
             push_hover_change_if_needed(&mut interactions, previous_hovered, hover_target);
 
-            let scroll_owner = hover_target.and_then(|widget| find_scroll_owner(tree, widget));
             if let Some(target_widget) = hover_target
                 && let Some(next_value) = stepped_numeric_value(tree, target_widget, event.delta.y)
             {
@@ -161,20 +259,14 @@ pub fn dispatch_pointer_event(
                 );
             }
 
-            let Some(scroll_owner) = scroll_owner else {
+            let owners = raw_hover_target
+                .map(|widget| find_scroll_owner_chain(tree, widget))
+                .unwrap_or_default();
+            let Some((scroll_owner, changed)) =
+                apply_scroll_wheel_delta(tree, layouts, state, &owners, event)
+            else {
                 return outcome(target, InputResponse::ignored(), interactions);
             };
-            let Some(raw_delta) = scroll_primary_delta(tree, scroll_owner, event) else {
-                return outcome(target, InputResponse::ignored(), interactions);
-            };
-
-            let max_offset = scroll_max_offset(tree, layouts, scroll_owner).unwrap_or(0.0);
-            let current_offset = state.scroll_offset(scroll_owner).clamp(0.0, max_offset);
-            let next_offset = (current_offset - scroll_pixels(raw_delta)).clamp(0.0, max_offset);
-            let changed = (next_offset - current_offset).abs() > f32::EPSILON;
-            if changed {
-                state.set_scroll_offset(scroll_owner, next_offset);
-            }
 
             outcome(
                 Some(scroll_owner),
@@ -207,8 +299,10 @@ fn activation_for_release(
     let node = find_node(tree, widget_id)?;
 
     match &node.kind {
-        UiNodeKind::Button(_) => Some(UiInteraction::Activated(widget_id)),
-        UiNodeKind::Toggle(toggle) => Some(UiInteraction::Toggled {
+        UiNodeKind::Button(button) => button
+            .enabled
+            .then_some(UiInteraction::Activated(widget_id)),
+        UiNodeKind::Toggle(toggle) => toggle.enabled.then_some(UiInteraction::Toggled {
             target: widget_id,
             checked: !toggle.checked,
         }),
@@ -226,10 +320,57 @@ fn activation_for_release(
                 index,
             })
         }
+        UiNodeKind::Select(select) => {
+            if !select.enabled || select.options.is_empty() {
+                return None;
+            }
+            let next_index = select
+                .selected_index
+                .map(|index| (index + 1) % select.options.len())
+                .unwrap_or(0);
+            Some(UiInteraction::SelectChanged {
+                target: widget_id,
+                index: next_index,
+            })
+        }
+        UiNodeKind::Table(table) => {
+            let layout = layouts.get(&widget_id)?;
+            let row_index = table_row_index_at(table, layout.content_bounds, release_position)?;
+            table.rows.get(row_index).and_then(|row| {
+                row.enabled.then_some(UiInteraction::TableRowSelected {
+                    target: widget_id,
+                    row_index,
+                })
+            })
+        }
+        UiNodeKind::Tree(tree) => {
+            let layout = layouts.get(&widget_id)?;
+            let row_index = tree_row_index_at(tree, layout.content_bounds, release_position)?;
+            let row = tree.rows.get(row_index)?;
+            if !row.enabled {
+                return None;
+            }
+            let relative_x = release_position.x - layout.content_bounds.x;
+            let toggle_end = row.depth as f32 * tree.indent_width + tree.indent_width;
+            if row.has_children && relative_x <= toggle_end {
+                return Some(UiInteraction::TreeRowToggled {
+                    target: widget_id,
+                    row_index,
+                    expanded: !row.expanded,
+                });
+            }
+            Some(UiInteraction::TreeRowSelected {
+                target: widget_id,
+                row_index,
+            })
+        }
         UiNodeKind::Panel(_)
         | UiNodeKind::Label(_)
         | UiNodeKind::TextInput(_)
         | UiNodeKind::NumericInput(_)
+        | UiNodeKind::Spacer(_)
+        | UiNodeKind::Divider(_)
+        | UiNodeKind::Image(_)
         | UiNodeKind::ViewportSurfaceEmbed(_)
         | UiNodeKind::Scroll(_)
         | UiNodeKind::Stack(_)
@@ -241,31 +382,98 @@ fn find_node(tree: &UiTree, widget_id: WidgetId) -> Option<&crate::UiNode> {
     tree.walk().find(|node| node.id == widget_id)
 }
 
-fn find_scroll_owner(tree: &UiTree, target: WidgetId) -> Option<WidgetId> {
-    find_scroll_owner_inner(&tree.root, target, None)
+fn is_pointer_responsive(tree: &UiTree, widget_id: WidgetId) -> bool {
+    let Some(node) = find_node(tree, widget_id) else {
+        return false;
+    };
+
+    match &node.kind {
+        UiNodeKind::Button(button) => button.enabled,
+        UiNodeKind::TextInput(text_input) => text_input.editable,
+        UiNodeKind::Toggle(toggle) => toggle.enabled,
+        UiNodeKind::NumericInput(numeric) => numeric.enabled,
+        UiNodeKind::Select(select) => select.enabled,
+        UiNodeKind::Table(table) => table.rows.iter().any(|row| row.enabled),
+        UiNodeKind::Tree(tree) => tree.rows.iter().any(|row| row.enabled),
+        UiNodeKind::Tabs(_) | UiNodeKind::ViewportSurfaceEmbed(_) | UiNodeKind::Scroll(_) => true,
+        UiNodeKind::Panel(_)
+        | UiNodeKind::Label(_)
+        | UiNodeKind::Spacer(_)
+        | UiNodeKind::Divider(_)
+        | UiNodeKind::Image(_)
+        | UiNodeKind::Stack(_)
+        | UiNodeKind::Split(_) => false,
+    }
 }
 
-fn find_scroll_owner_inner(
+fn table_row_index_at(
+    table: &crate::TableNode,
+    content_bounds: ui_math::UiRect,
+    position: ui_math::UiPoint,
+) -> Option<usize> {
+    if position.y < content_bounds.y + table.row_height {
+        return None;
+    }
+    let relative_y = position.y - content_bounds.y - table.row_height;
+    let row_index = (relative_y / table.row_height).floor() as usize;
+    (row_index < table.rows.len()).then_some(row_index)
+}
+
+fn tree_row_index_at(
+    tree: &crate::TreeNode,
+    content_bounds: ui_math::UiRect,
+    position: ui_math::UiPoint,
+) -> Option<usize> {
+    let relative_y = position.y - content_bounds.y;
+    if relative_y < 0.0 {
+        return None;
+    }
+    let row_index = (relative_y / tree.row_height).floor() as usize;
+    (row_index < tree.rows.len()).then_some(row_index)
+}
+
+fn find_scroll_owner_chain(tree: &UiTree, target: WidgetId) -> Vec<WidgetId> {
+    let mut chain_from_root = Vec::new();
+    let mut out = Vec::new();
+    let _ = find_scroll_owner_chain_inner(&tree.root, target, &mut chain_from_root, &mut out);
+    out
+}
+
+fn find_scroll_owner_chain_inner(
     node: &crate::UiNode,
     target: WidgetId,
-    current_scroll: Option<WidgetId>,
-) -> Option<WidgetId> {
-    let current_scroll = match node.kind {
-        UiNodeKind::Scroll(_) => Some(node.id),
-        _ => current_scroll,
+    chain_from_root: &mut Vec<WidgetId>,
+    out: &mut Vec<WidgetId>,
+) -> bool {
+    let pushed = if matches!(node.kind, UiNodeKind::Scroll(_)) {
+        chain_from_root.push(node.id);
+        true
+    } else {
+        false
     };
 
     if node.id == target {
-        return current_scroll;
+        out.extend(chain_from_root.iter().rev().copied());
+        if pushed {
+            chain_from_root.pop();
+        }
+        return true;
     }
 
     for child in &node.children {
-        if let Some(found) = find_scroll_owner_inner(child, target, current_scroll) {
-            return Some(found);
+        if find_scroll_owner_chain_inner(child, target, chain_from_root, out) {
+            if pushed {
+                chain_from_root.pop();
+            }
+            return true;
         }
     }
 
-    None
+    if pushed {
+        chain_from_root.pop();
+    }
+
+    false
 }
 
 fn scroll_max_offset(
@@ -283,12 +491,12 @@ fn scroll_max_offset(
     match scroll.axis {
         ui_math::Axis::Vertical => {
             let viewport_height = scroll_layout.content_bounds.height.max(0.0);
-            let content_height = child_layout.measured_size.height.max(viewport_height);
+            let content_height = child_layout.bounds.height.max(viewport_height);
             Some((content_height - viewport_height).max(0.0))
         }
         ui_math::Axis::Horizontal => {
             let viewport_width = scroll_layout.content_bounds.width.max(0.0);
-            let content_width = child_layout.measured_size.width.max(viewport_width);
+            let content_width = child_layout.bounds.width.max(viewport_width);
             Some((content_width - viewport_width).max(0.0))
         }
     }
@@ -324,6 +532,148 @@ fn scroll_primary_delta(
             }
         }
     }
+}
+
+fn apply_scroll_wheel_delta(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    state: &mut UiRuntimeState,
+    owners: &[WidgetId],
+    event: &PointerEvent,
+) -> Option<(WidgetId, bool)> {
+    for &owner in owners {
+        let Some(raw_delta) = scroll_primary_delta(tree, owner, event) else {
+            continue;
+        };
+        let Some(node) = find_node(tree, owner) else {
+            continue;
+        };
+        let UiNodeKind::Scroll(scroll) = &node.kind else {
+            continue;
+        };
+        if !matches!(
+            scroll.input_policy,
+            ScrollInputPolicy::WheelOnly | ScrollInputPolicy::WheelAndMiddleDrag
+        ) {
+            continue;
+        }
+        let max_offset = scroll_max_offset(tree, layouts, owner).unwrap_or(0.0);
+        if max_offset <= f32::EPSILON {
+            continue;
+        }
+        let current_offset = state.scroll_offset(owner).clamp(0.0, max_offset);
+        let next_offset = (current_offset - scroll_pixels(raw_delta)).clamp(0.0, max_offset);
+        let changed = (next_offset - current_offset).abs() > f32::EPSILON;
+        if !changed {
+            continue;
+        }
+        state.set_scroll_offset(owner, next_offset);
+        return Some((owner, true));
+    }
+
+    None
+}
+
+fn scroll_owners_for_pan(
+    tree: &UiTree,
+    raw_hover_target: Option<WidgetId>,
+    pan_anchor: Option<WidgetId>,
+) -> Vec<WidgetId> {
+    // Keep middle-drag scrolling sticky to the anchor where drag started so
+    // panning remains continuous even when pointer crosses other UI regions.
+    if let Some(anchor) = pan_anchor {
+        let owners = find_scroll_owner_chain(tree, anchor);
+        if !owners.is_empty() {
+            return owners;
+        }
+    }
+    raw_hover_target
+        .map(|target| find_scroll_owner_chain(tree, target))
+        .unwrap_or_default()
+}
+
+fn middle_pan_delta(
+    state: &UiRuntimeState,
+    position: ui_math::UiPoint,
+    event_delta: ui_math::UiVector,
+) -> ui_math::UiVector {
+    if event_delta.x.abs() > f32::EPSILON || event_delta.y.abs() > f32::EPSILON {
+        event_delta
+    } else if let Some(last) = state.middle_pan_last_position {
+        position - last
+    } else {
+        ui_math::UiVector::ZERO
+    }
+}
+
+fn apply_middle_pan_delta(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    state: &mut UiRuntimeState,
+    owners: &[WidgetId],
+    delta: ui_math::UiVector,
+) -> bool {
+    let mut changed = false;
+    if delta.x.abs() > f32::EPSILON {
+        changed |= apply_scroll_delta_for_axis(
+            tree,
+            layouts,
+            state,
+            owners,
+            ui_math::Axis::Horizontal,
+            delta.x * PAN_SCROLL_SPEED,
+        );
+    }
+    if delta.y.abs() > f32::EPSILON {
+        changed |= apply_scroll_delta_for_axis(
+            tree,
+            layouts,
+            state,
+            owners,
+            ui_math::Axis::Vertical,
+            delta.y * PAN_SCROLL_SPEED,
+        );
+    }
+    changed
+}
+
+fn apply_scroll_delta_for_axis(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    state: &mut UiRuntimeState,
+    owners: &[WidgetId],
+    axis: ui_math::Axis,
+    raw_delta: f32,
+) -> bool {
+    for &owner in owners {
+        let Some(node) = find_node(tree, owner) else {
+            continue;
+        };
+        let UiNodeKind::Scroll(scroll) = &node.kind else {
+            continue;
+        };
+        if scroll.axis != axis {
+            continue;
+        }
+        if !matches!(
+            scroll.input_policy,
+            ScrollInputPolicy::MiddleDragOnly | ScrollInputPolicy::WheelAndMiddleDrag
+        ) {
+            continue;
+        }
+        let max_offset = scroll_max_offset(tree, layouts, owner).unwrap_or(0.0);
+        if max_offset <= f32::EPSILON {
+            continue;
+        }
+        let current_offset = state.scroll_offset(owner).clamp(0.0, max_offset);
+        let next_offset = (current_offset - raw_delta).clamp(0.0, max_offset);
+        if (next_offset - current_offset).abs() <= f32::EPSILON {
+            continue;
+        }
+        state.set_scroll_offset(owner, next_offset);
+        return true;
+    }
+    false
 }
 
 fn stepped_numeric_value(tree: &UiTree, widget_id: WidgetId, delta_y: f32) -> Option<f64> {
