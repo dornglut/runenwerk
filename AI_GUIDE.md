@@ -37,6 +37,7 @@ Domain validation rules          -> owning domain ratifier
 Command vocabulary               -> foundation/commands
 Concrete command enums           -> owning domain
 Schema vocabulary                -> foundation/schema or owning domain
+Graph substrate                    -> domain/graph
 Concrete schemas                 -> owning domain
 Editor workspace concepts        -> domain/editor/editor_shell
 UI surface mounting concepts     -> domain/ui/ui_surface

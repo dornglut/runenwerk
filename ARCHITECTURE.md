@@ -36,6 +36,7 @@ Current foundation crates:
 - `foundation/diagnostics`: structured diagnostic reporting vocabulary.
 - `foundation/ratification`: shared ratification report vocabulary.
 - `foundation/schema`: portable schema identity, version, path, value, shape, field, constraint, metadata, descriptor, and optional diagnostics-bridge vocabulary.
+- `foundation/commands`: portable command contract identity, schema reference, descriptor, proposal, metadata, hint, issue, and optional diagnostics-bridge vocabulary.
 
 Foundation must not own LLM clients, prompt logic, app policy, editor policy, runtime orchestration, or backend integrations.
 

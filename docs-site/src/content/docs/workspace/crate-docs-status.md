@@ -44,6 +44,7 @@ Status labels:
 | `world_ops` | `domain/world_ops` | thin | [`../domain/world-ops/README.md`](../domain/world-ops/README.md) |
 | `world_sdf` | `domain/world_sdf` | thin | [`../domain/world-sdf/README.md`](../domain/world-sdf/README.md) |
 | `scheduler` | `domain/scheduler` | thin | [`../domain/scheduler/README.md`](../domain/scheduler/README.md) |
+| `graph` | `domain/graph` | current | [`../domain/graph/README.md`](../domain/graph/README.md) |
 | `scene` | `domain/scene` | thin | [`../domain/scene/README.md`](../domain/scene/README.md) |
 | `domain/ui/*` | `domain/ui` | current | [`../domain/ui/architecture.md`](../domain/ui/architecture.md) |
 | `domain/editor/*` | `domain/editor` | thin | [`../domain/editor/README.md`](../domain/editor/README.md) |

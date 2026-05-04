@@ -31,6 +31,7 @@ Schedule planning/execution         -> domain/scheduler
 Scene transform contracts           -> domain/scene
 Geometry primitives/queries         -> domain/geometry
 SDF fields/queries                  -> domain/sdf
+Graph substrate                     -> domain/graph
 Spatial coordinates/indexing        -> domain/spatial, domain/spatial_index
 Chunk streaming policy              -> domain/chunking
 Chunk/world op logs and deltas       -> domain/world_ops
