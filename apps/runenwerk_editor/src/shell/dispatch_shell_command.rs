@@ -25,9 +25,10 @@ use crate::editor_runtime::{
     bootstrap_mvp_scene_if_empty, is_local_transform_component, register_mvp_component_types,
 };
 use crate::persistence::{
+    default_workspace_layout_path_for_profile, legacy_workspace_layout_path_for_scene,
     load_scene_file_into_runtime_classified, read_retained_change_log, read_workspace_layout,
-    retained_change_log_path_for_scene, workspace_layout_path_for_scene, write_retained_change_log,
-    write_scene_file, write_workspace_layout,
+    retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
+    write_workspace_layout,
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -1426,9 +1427,15 @@ fn save_scene_to_default_path(
     write_scene_file(&path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save editor scene"))?;
     let retained_path = retained_change_log_path_for_scene(&path);
-    let workspace_layout_path = workspace_layout_path_for_scene(&path);
+    let workspace_layout_path =
+        default_workspace_layout_path_for_profile(shell_state.active_workspace_profile_id());
     let entry_count = write_retained_change_log(&retained_path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save retained change log"))?;
+    if let Some(parent) = workspace_layout_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| {
+            EditorMutationError::runtime_rejected("failed to create workspace layout folder")
+        })?;
+    }
     write_workspace_layout(&workspace_layout_path, shell_state.workspace_state())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
     app.runtime_mut()
@@ -1485,7 +1492,9 @@ fn load_scene_from_default_path(
         }
     };
     let retained_path = retained_change_log_path_for_scene(&path);
-    let workspace_layout_path = workspace_layout_path_for_scene(&path);
+    let workspace_layout_path =
+        default_workspace_layout_path_for_profile(shell_state.active_workspace_profile_id());
+    let legacy_workspace_layout_path = legacy_workspace_layout_path_for_scene(&path);
     let retained = if retained_path.exists() {
         Some(read_retained_change_log(&retained_path).map_err(|_| {
             EditorMutationError::runtime_rejected("failed to load retained change log")
@@ -1519,19 +1528,27 @@ fn load_scene_from_default_path(
             retained_path.display()
         ));
     }
-    if workspace_layout_path.exists() {
-        match read_workspace_layout(&workspace_layout_path) {
+    let layout_path_to_load = if workspace_layout_path.exists() {
+        Some(workspace_layout_path.clone())
+    } else if legacy_workspace_layout_path.exists() {
+        Some(legacy_workspace_layout_path.clone())
+    } else {
+        None
+    };
+
+    if let Some(layout_path_to_load) = layout_path_to_load {
+        match read_workspace_layout(&layout_path_to_load) {
             Ok(workspace_state) => {
                 shell_state.replace_workspace_state(workspace_state);
                 app.append_console_line(format!(
                     "[io] loaded workspace layout {}",
-                    workspace_layout_path.display()
+                    layout_path_to_load.display()
                 ));
             }
             Err(error) => {
                 app.append_console_line(format!(
                     "[io] workspace layout load failed, keeping current layout: {} ({error})",
-                    workspace_layout_path.display()
+                    layout_path_to_load.display()
                 ));
             }
         }

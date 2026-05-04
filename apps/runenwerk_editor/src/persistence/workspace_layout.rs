@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use editor_shell::{
     PERSISTED_WORKSPACE_STATE_VERSION_V1, PERSISTED_WORKSPACE_STATE_VERSION_V2,
-    PersistedWorkspaceStateV1, PersistedWorkspaceStateV2, WorkspaceState,
+    PersistedWorkspaceStateV1, PersistedWorkspaceStateV2, WorkspaceProfileId, WorkspaceState,
 };
 
 #[derive(Debug, Deserialize)]
@@ -14,7 +14,21 @@ struct PersistedWorkspaceVersionProbe {
     version: u32,
 }
 
-pub fn workspace_layout_path_for_scene(scene_path: &Path) -> PathBuf {
+const DEFAULT_WORKSPACE_LAYOUT_DIR: &str = "editor-scenes/workspaces";
+
+pub fn default_workspace_layout_dir() -> PathBuf {
+    PathBuf::from(DEFAULT_WORKSPACE_LAYOUT_DIR)
+}
+
+pub fn workspace_layout_path_for_profile(root: &Path, profile_id: WorkspaceProfileId) -> PathBuf {
+    root.join(format!("profile-{}.workspace.ron", profile_id.raw()))
+}
+
+pub fn default_workspace_layout_path_for_profile(profile_id: WorkspaceProfileId) -> PathBuf {
+    workspace_layout_path_for_profile(&default_workspace_layout_dir(), profile_id)
+}
+
+pub fn legacy_workspace_layout_path_for_scene(scene_path: &Path) -> PathBuf {
     let file_name = scene_path
         .file_name()
         .and_then(|name| name.to_str())
@@ -57,7 +71,7 @@ pub fn read_workspace_layout(path: &Path) -> Result<WorkspaceState> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_shell::WorkspaceIdentityAllocator;
+    use editor_shell::{LAYOUT_WORKSPACE_PROFILE_ID, WorkspaceIdentityAllocator};
 
     fn temp_workspace_layout_path() -> PathBuf {
         let mut path = std::env::temp_dir();
@@ -81,5 +95,26 @@ mod tests {
         let loaded = read_workspace_layout(&path).expect("workspace layout should decode");
         assert_eq!(workspace, loaded);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn profile_layout_path_is_not_derived_from_scene_path() {
+        let path = default_workspace_layout_path_for_profile(LAYOUT_WORKSPACE_PROFILE_ID);
+
+        assert_eq!(
+            path,
+            PathBuf::from("editor-scenes/workspaces/profile-1.workspace.ron")
+        );
+    }
+
+    #[test]
+    fn legacy_scene_layout_path_remains_available_for_load_migration() {
+        let path =
+            legacy_workspace_layout_path_for_scene(Path::new("editor-scenes/default.scene.ron"));
+
+        assert_eq!(
+            path,
+            PathBuf::from("editor-scenes/default.scene.ron.workspace.ron")
+        );
     }
 }

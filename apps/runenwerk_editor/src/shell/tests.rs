@@ -805,6 +805,29 @@ fn shell_identity_is_stable_across_rebuilds() {
 }
 
 #[test]
+fn shell_state_tracks_active_workspace_profile_separately_from_workspace_graph() {
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let workspace_before = shell_state.workspace_state().clone();
+
+    assert_eq!(
+        shell_state.active_workspace_profile_id(),
+        editor_shell::LAYOUT_WORKSPACE_PROFILE_ID,
+    );
+
+    shell_state.set_active_workspace_profile_id(editor_shell::WorkspaceProfileId::new(99));
+
+    assert_eq!(
+        shell_state.active_workspace_profile_id(),
+        editor_shell::WorkspaceProfileId::new(99),
+    );
+    assert_eq!(
+        *shell_state.workspace_state(),
+        workspace_before,
+        "changing active profile identity should not mutate the workspace graph",
+    );
+}
+
+#[test]
 fn clear_cached_projection_keeps_shell_identity_unchanged() {
     let mut shell_state = RunenwerkEditorShellState::new();
     let workspace_before = shell_state.workspace_id();

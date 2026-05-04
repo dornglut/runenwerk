@@ -2,8 +2,8 @@ use editor_shell::{
     ActiveTabDragVisualState, BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
     DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
     PanelHostId, PanelInstanceId, ShellProjectionArtifacts, TabStackId, UiRuntime, UiTree,
-    WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
-    WorkspaceStateError, reduce_workspace,
+    WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
+    WorkspaceState, WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -38,6 +38,7 @@ pub struct RunenwerkEditorShellState {
     last_projection_artifacts: Option<ShellProjectionArtifacts>,
     projection_epoch: u64,
     identity_allocator: WorkspaceIdentityAllocator,
+    active_workspace_profile_id: WorkspaceProfileId,
     workspace_state: WorkspaceState,
     tab_drag_session: Option<TabDragSession>,
     split_resize_session: Option<SplitResizeSession>,
@@ -48,8 +49,12 @@ impl Default for RunenwerkEditorShellState {
     fn default() -> Self {
         let mut identity_allocator = WorkspaceIdentityAllocator::new();
         let workspace_id = identity_allocator.allocate_workspace_id();
-        let workspace_state =
-            WorkspaceState::bootstrap_current_layout(workspace_id, &mut identity_allocator);
+        let profile_registry = default_workspace_profile_registry();
+        let active_workspace_profile_id = profile_registry.default_profile_id();
+        let workspace_state = profile_registry
+            .default_profile()
+            .expect("default workspace profile should exist")
+            .build_default_workspace_state(workspace_id, &mut identity_allocator);
         debug_assert!(workspace_state.validate_integrity().is_ok());
         Self {
             runtime: UiRuntime::new(),
@@ -58,6 +63,7 @@ impl Default for RunenwerkEditorShellState {
             last_projection_artifacts: None,
             projection_epoch: 0,
             identity_allocator,
+            active_workspace_profile_id,
             workspace_state,
             tab_drag_session: None,
             split_resize_session: None,
@@ -115,6 +121,18 @@ impl RunenwerkEditorShellState {
 
     pub fn workspace_id(&self) -> WorkspaceId {
         self.workspace_state.workspace_id()
+    }
+
+    pub fn active_workspace_profile_id(&self) -> WorkspaceProfileId {
+        self.active_workspace_profile_id
+    }
+
+    pub fn set_active_workspace_profile_id(&mut self, profile_id: WorkspaceProfileId) {
+        if self.active_workspace_profile_id == profile_id {
+            return;
+        }
+        self.active_workspace_profile_id = profile_id;
+        self.clear_cached_projection();
     }
 
     pub fn workspace_state(&self) -> &WorkspaceState {

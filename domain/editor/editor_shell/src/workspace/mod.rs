@@ -3,6 +3,7 @@
 
 pub mod identity;
 pub mod persisted;
+pub mod profile;
 pub mod projection;
 pub mod projection_ratification;
 pub mod reducer;
@@ -12,6 +13,7 @@ pub mod viewport_embed_slot;
 
 pub use identity::*;
 pub use persisted::*;
+pub use profile::*;
 pub use projection::*;
 pub use projection_ratification::*;
 pub use reducer::*;

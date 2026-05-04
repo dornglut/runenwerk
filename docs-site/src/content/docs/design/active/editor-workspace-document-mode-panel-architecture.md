@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-04-29
+last_reviewed: 2026-05-04
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
   - ./workspace-identity-contract-and-migration-map.md
@@ -57,10 +57,12 @@ This design builds on contracts already implemented:
   `apps/runenwerk_editor/src/shell/state.rs`,
   `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`
 
-Current gap to close:
+Current state and remaining gaps:
 
-- Workspace persistence is currently scene-path-coupled via
-  `apps/runenwerk_editor/src/persistence/workspace_layout.rs::workspace_layout_path_for_scene`.
+- Workspace profile contracts are now implemented in
+  `domain/editor/editor_shell/src/workspace/profile.rs`.
+- Workspace layout persistence is now profile-addressed via
+  `apps/runenwerk_editor/src/persistence/workspace_layout.rs::default_workspace_layout_path_for_profile`.
 - `EditorMode` is global and coarse (`Edit`, `Play`, `Simulate`) in
   `domain/editor/editor_core/src/session.rs`.
 - Panel semantics are mostly hardcoded to fixed kinds in
@@ -96,6 +98,33 @@ Panel meaning comes from provider + active document context.
 
 Providers bind document/runtime context into panel observation frames and command handling.
 This keeps shell composition generic and keeps domain semantics out of layout code.
+
+### 6) Blender-style editor type switching maps to tool-surface selection
+
+Blender's editor type selector changes which editor is hosted in an area. In Runenwerk, that concept maps to selecting or swapping the hosted tool surface for a panel/tab host.
+
+Use this mapping:
+
+```text
+Blender area                  -> Runenwerk panel host / tab stack / panel instance
+Blender editor type selector  -> ToolSurfaceKind / SurfaceDefinitionId selection
+Blender editor instance       -> ToolSurfaceInstanceId mounted into PanelInstanceId
+```
+
+This is not a document-kind switch and not a mode switch.
+
+- `DocumentKind` identifies the authored or inspected target, such as scene, UI, graph, script, runtime-debug, or editor-design.
+- mode identifies interaction behavior within the active workspace/document context.
+- `ToolSurfaceKind` identifies the hosted surface type, such as outliner, viewport, inspector, console, entity table, graph editor, or timeline.
+
+Near-term implementation should model an editor-type menu as a workspace command that changes a panel instance's active or mounted tool surface while preserving structural identity rules in:
+
+- `domain/editor/editor_shell/src/workspace/state.rs::ToolSurfaceKind`
+- `domain/editor/editor_shell/src/workspace/state.rs::ToolSurfaceState`
+- `domain/editor/editor_shell/src/workspace/surface_contract.rs::editor_surface_definitions`
+- `domain/editor/editor_shell/src/workspace/reducer.rs`
+
+The provider registry then decides what the selected surface observes and which commands it can emit for the active `(workspace_profile, document_kind)` context.
 
 ## Architecture Contract
 
@@ -216,13 +245,14 @@ This remains a later-phase track and aligns with authored editor-definition grou
 
 ### Rule 1: Workspace presets are not scene-coupled
 
-Current scene-coupled path helper:
+Legacy scene-coupled path helper retained for load fallback:
 
-- `apps/runenwerk_editor/src/persistence/workspace_layout.rs::workspace_layout_path_for_scene`
+- `apps/runenwerk_editor/src/persistence/workspace_layout.rs::legacy_workspace_layout_path_for_scene`
 
 Target:
 
-- workspace profile/preset persistence owned by editor domain persistence contracts;
+- workspace profile/preset identity owned by editor shell domain contracts;
+- workspace layout files addressed by explicit workspace profile identity;
 - per-document layout overrides optional and explicit;
 - session-only transient layout state remains app-local.
 
@@ -275,20 +305,24 @@ This remains app-layer/plugin-layer composition, not domain invariant ownership.
 
 ### Phase A - Introduce workspace profile abstraction without breaking current MVP
 
+Status: complete for baseline scope.
+
 - `domain/editor/editor_shell/src/workspace/mod.rs`
   - add `profile` module export.
-- `domain/editor/editor_shell/src/workspace/profile.rs` (new)
+- `domain/editor/editor_shell/src/workspace/profile.rs`
   - define workspace profile model and default profile registry.
 - `apps/runenwerk_editor/src/shell/state.rs::RunenwerkEditorShellState`
   - track active workspace profile id separately from `WorkspaceState`.
 
 ### Phase B - Decouple layout persistence from scene path
 
+Status: complete for baseline scope.
+
 - `apps/runenwerk_editor/src/persistence/workspace_layout.rs`
-  - replace `workspace_layout_path_for_scene` coupling with explicit workspace-profile layout persistence APIs.
+  - replace scene-path-derived save/load coupling with explicit workspace-profile layout persistence APIs.
 - `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs::save_scene_to_default_path`
   and `load_scene_from_default_path`
-  - stop treating layout persistence as a side effect of scene path.
+  - save and load layout through active workspace profile identity, with legacy scene-derived layout path used only as a read fallback.
 
 ### Phase C - Formalize document tabs and active document switching
 

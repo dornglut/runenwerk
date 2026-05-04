@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-29
+last_reviewed: 2026-05-04
 ---
 
 # Deferred Designs
@@ -17,6 +17,10 @@ Use this folder for designs that remain valid but are intentionally postponed.
 ### Editor App
 
 - [Apps Editor Power Editor Design](apps-editor-power-editor-design.md)
+
+### UI Domain
+
+- [UI Model Multiple Execution Strategies Design](ui-model-multiple-execution-strategies-design.md)
 
 ### Gameplay Domain
 
