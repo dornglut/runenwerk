@@ -1,9 +1,10 @@
 use editor_shell::{
     ActiveTabDragVisualState, BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
     DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
-    PanelHostId, PanelInstanceId, ShellProjectionArtifacts, TabStackId, UiRuntime, UiTree,
-    WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
-    WorkspaceState, WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
+    PanelHostId, PanelInstanceId, ShellProjectionArtifacts, TabStackId, ToolSurfaceInstanceId,
+    ToolSurfaceKind, UiRuntime, UiTree, WidgetId, WorkspaceId, WorkspaceIdentityAllocator,
+    WorkspaceMutation, WorkspaceProfileId, WorkspaceState, WorkspaceStateError,
+    default_workspace_profile_registry, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -155,6 +156,10 @@ impl RunenwerkEditorShellState {
         self.identity_allocator.allocate_tab_stack_id()
     }
 
+    pub fn allocate_tool_surface_instance_id(&mut self) -> ToolSurfaceInstanceId {
+        self.identity_allocator.allocate_tool_surface_instance_id()
+    }
+
     pub fn identity_allocator(&self) -> &WorkspaceIdentityAllocator {
         &self.identity_allocator
     }
@@ -177,6 +182,20 @@ impl RunenwerkEditorShellState {
         self.workspace_state = reduce_workspace(&self.workspace_state, op)?;
         self.clear_cached_projection();
         Ok(())
+    }
+
+    pub fn switch_panel_tool_surface_kind(
+        &mut self,
+        panel_instance_id: PanelInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
+    ) -> Result<ToolSurfaceInstanceId, WorkspaceStateError> {
+        let tool_surface_id = self.allocate_tool_surface_instance_id();
+        self.apply_workspace_mutation(WorkspaceMutation::ReplacePanelToolSurfaceKind {
+            panel_id: panel_instance_id,
+            tool_surface_id,
+            tool_surface_kind,
+        })?;
+        Ok(tool_surface_id)
     }
 
     pub fn docking_visual_state(&self) -> DockingInteractionVisualState {

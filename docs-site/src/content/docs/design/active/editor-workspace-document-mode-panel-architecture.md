@@ -19,7 +19,8 @@ related:
 # Runenwerk Editor Workspace-Document-Mode-Panel Architecture
 
 ## Status
-Draft for implementation.
+Active implementation. The accepted architecture is a per-surface-instance
+provider seam.
 
 ## Purpose
 
@@ -65,11 +66,15 @@ Current state and remaining gaps:
   `apps/runenwerk_editor/src/persistence/workspace_layout.rs::default_workspace_layout_path_for_profile`.
 - `EditorMode` is global and coarse (`Edit`, `Play`, `Simulate`) in
   `domain/editor/editor_core/src/session.rs`.
-- Panel semantics are mostly hardcoded to fixed kinds in
-  `domain/editor/editor_shell/src/workspace/state.rs` and
-  `domain/editor/editor_shell/src/composition/build_editor_shell.rs`.
-- Context-sensitive panel providers are implicit adapter functions in
-  `apps/runenwerk_editor/src/shell/*_adapter.rs`, not a formal provider registry contract.
+- Per-surface provider DTOs are implemented in
+  `domain/editor/editor_shell/src/surface_provider.rs`.
+- Concrete app providers and deterministic registry composition are implemented
+  in `apps/runenwerk_editor/src/shell/providers/`.
+- Surface-session state is keyed by `ToolSurfaceInstanceId` in
+  `apps/runenwerk_editor/src/shell/surface_session.rs`.
+- The production shell controller path resolves provider artifacts through
+  `EditorShellFrameModel`; fixed aggregate shell view models are not part of
+  the active architecture.
 
 ## Core Doctrine
 
@@ -96,8 +101,16 @@ Panel meaning comes from provider + active document context.
 
 ### 5) Provider is the semantic adapter
 
-Providers bind document/runtime context into panel observation frames and command handling.
-This keeps shell composition generic and keeps domain semantics out of layout code.
+Providers bind document/runtime context into surface observation, presentation,
+provider-local routes, and provider-local command proposal mapping.
+This keeps shell composition generic and keeps concrete scene/runtime semantics
+out of layout code.
+
+Provider outputs are keyed by `ToolSurfaceInstanceId`; `PanelInstanceId` is the
+host identity only. `EditorShellFrameModel.surfaces` is a resolved-surface
+lookup and never becomes the layout authority. Workspace graph, split hierarchy,
+tab order, active panel, and active mounted surface remain derived from
+`WorkspaceState`.
 
 ### 6) Blender-style editor type switching maps to tool-surface selection
 
@@ -335,14 +348,18 @@ Status: complete for baseline scope.
 
 ### Phase D - Replace adapter-only panel wiring with provider registry
 
-- `apps/runenwerk_editor/src/shell/build_view_model.rs`
-  - resolve panel view models via provider registry keyed by `(workspace, document_kind, panel_kind)`.
-- `apps/runenwerk_editor/src/shell/outliner_adapter.rs`
-  - migrate into outliner provider implementation.
-- `apps/runenwerk_editor/src/shell/inspector_adapter.rs`
-  - migrate into inspector provider implementation.
-- `apps/runenwerk_editor/src/shell/viewport_adapter.rs`
-  - migrate into viewport provider implementation.
+Status: active implementation for final-product provider seam.
+
+- `domain/editor/editor_shell/src/surface_provider.rs`
+  - owns app-neutral provider request/result, frame, route, diagnostic, and typed command proposal DTOs.
+- `apps/runenwerk_editor/src/shell/providers/`
+  - owns concrete scene outliner, entity table, viewport, inspector, console providers and deterministic registry composition.
+- `apps/runenwerk_editor/src/shell/controller.rs`
+  - builds `EditorShellFrameModel` and shell tree from provider artifacts.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs`
+  - renders active mounted `ToolSurfaceInstanceId` artifacts rather than treating `PanelKind` as final body selection.
+- Legacy `apps/runenwerk_editor/src/shell/*_adapter.rs`
+  - retained only as reusable presenter/observation helpers during migration.
 
 ### Phase E - Expand mode system from global enum to scoped mode sets
 

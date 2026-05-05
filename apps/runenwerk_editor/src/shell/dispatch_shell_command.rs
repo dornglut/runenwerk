@@ -17,12 +17,17 @@ use ui_surface::{
 };
 
 use crate::editor_app::RunenwerkEditorApp;
-use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
+use crate::editor_features::{
+    execute_intent_with_history_from_origin, redo_last_scene_change, undo_last_scene_change,
+};
 use crate::editor_panels::{
-    EntityTablePanelCommand, InspectorPanelCommand, InspectorPanelViewModel, OutlinerPanelCommand,
+    EntityTablePanelPresenter, InspectorPanelPresenter, InspectorPanelViewModel,
+    OutlinerPanelCommand,
 };
 use crate::editor_runtime::{
-    bootstrap_mvp_scene_if_empty, is_local_transform_component, register_mvp_component_types,
+    EditorInspectorUiState, bootstrap_mvp_scene_if_empty, is_local_transform_component,
+    register_mvp_component_types, select_single_component_with_origin,
+    select_single_entity_with_origin,
 };
 use crate::persistence::{
     default_workspace_layout_path_for_profile, legacy_workspace_layout_path_for_scene,
@@ -136,6 +141,7 @@ pub fn dispatch_shell_command(
                     active_panel: Some(panel_instance_id),
                 })
                 .map_err(|_| EditorMutationError::runtime_rejected("workspace mutation failed"))?;
+            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
         }
         ShellCommand::CommitTabDrop {
             panel_instance_id,
@@ -156,6 +162,23 @@ pub fn dispatch_shell_command(
                 destination,
             )
             .map_err(|_| EditorMutationError::runtime_rejected("workspace tab drop failed"))?;
+            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+        }
+        ShellCommand::SwitchPanelToolSurfaceKind {
+            panel_instance_id,
+            tool_surface_kind,
+            projection_epoch: _,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for surface switch command",
+                    ))?;
+            shell_state
+                .switch_panel_tool_surface_kind(panel_instance_id, tool_surface_kind)
+                .map_err(|_| EditorMutationError::runtime_rejected("surface switch failed"))?;
+            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
         }
         ShellCommand::SelectEntityTableEntity {
             entity,
@@ -191,7 +214,18 @@ pub fn dispatch_shell_command(
                 }
             }
 
-            let table_state = app.entity_table_state();
+            let Some(surface_id) = target.active_tool_surface else {
+                app.append_console_line(
+                    "[entity_table] selection ignored (missing tool-surface session target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            let session = app.surface_sessions().session_or_default(surface_id);
+            let table_state = EntityTablePanelPresenter::build_state(
+                app.runtime(),
+                &session.entity_table_ui_state,
+            );
             let presentation_model = build_entity_table_surface_presentation_model(&table_state);
             if !presentation_model.is_primary_selectable(entity.0) {
                 app.append_console_line(format!(
@@ -234,9 +268,17 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                app.dispatch_entity_table_command(EntityTablePanelCommand::AppendSearchText {
-                    text,
-                })?;
+                let Some(surface_id) = target.active_tool_surface else {
+                    app.append_console_line(
+                        "[entity_table] search ignored (missing tool-surface session target)"
+                            .to_string(),
+                    );
+                    return Ok(());
+                };
+                app.surface_sessions_mut()
+                    .session_mut(surface_id)
+                    .entity_table_ui_state
+                    .append_search_text(&text);
             }
         }
         ShellCommand::BackspaceEntityTableSearch {
@@ -250,7 +292,17 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                app.dispatch_entity_table_command(EntityTablePanelCommand::BackspaceSearchQuery)?;
+                let Some(surface_id) = target.active_tool_surface else {
+                    app.append_console_line(
+                        "[entity_table] search backspace ignored (missing tool-surface session target)"
+                            .to_string(),
+                    );
+                    return Ok(());
+                };
+                app.surface_sessions_mut()
+                    .session_mut(surface_id)
+                    .entity_table_ui_state
+                    .backspace_search_query();
             }
         }
         ShellCommand::ToggleEntityTableSort {
@@ -265,9 +317,17 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                app.dispatch_entity_table_command(EntityTablePanelCommand::ToggleSort {
-                    sort_key,
-                })?;
+                let Some(surface_id) = target.active_tool_surface else {
+                    app.append_console_line(
+                        "[entity_table] sort ignored (missing tool-surface session target)"
+                            .to_string(),
+                    );
+                    return Ok(());
+                };
+                app.surface_sessions_mut()
+                    .session_mut(surface_id)
+                    .entity_table_ui_state
+                    .toggle_sort(sort_key);
             }
         }
         ShellCommand::SelectOutlinerEntity {
@@ -518,8 +578,37 @@ pub fn dispatch_shell_command(
                 );
             }
         },
-        ShellCommand::ToggleViewportDetails => {
-            app.toggle_viewport_details_visible();
+        ShellCommand::ToggleViewportDetails {
+            target,
+            projection_epoch: _,
+        } => {
+            let Some(surface_contract) = resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Viewport,
+            ) else {
+                app.append_console_line(
+                    "[viewport] details toggle ignored (missing structural tool-surface target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            if surface_contract.tool_surface_kind != ToolSurfaceKind::Viewport {
+                app.append_console_line(format!(
+                    "[viewport] details toggle ignored (surface-kind mismatch): expected=viewport actual={}",
+                    tool_surface_kind_label(surface_contract.tool_surface_kind),
+                ));
+                return Ok(());
+            }
+            let Some(surface_id) = target.active_tool_surface else {
+                app.append_console_line(
+                    "[viewport] details toggle ignored (missing tool-surface session target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            let session = app.surface_sessions_mut().session_mut(surface_id);
+            session.viewport_details_visible = !session.viewport_details_visible;
         }
         ShellCommand::ActivateInspectorField {
             index,
@@ -555,7 +644,18 @@ pub fn dispatch_shell_command(
                 }
             }
 
-            let inspector_view = app.inspector_view_model();
+            let Some(tool_surface_id) = target.active_tool_surface else {
+                app.append_console_line(
+                    "[inspector] field activation ignored (missing tool-surface session target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            let mut session = app.surface_sessions().session_or_default(tool_surface_id);
+            let inspector_view = InspectorPanelPresenter::build_view_model(
+                app.runtime(),
+                &session.inspector_ui_state,
+            );
             let presentation_model =
                 build_inspector_surface_presentation_model(app.runtime(), &inspector_view);
             if app.debug_logs_enabled() {
@@ -595,6 +695,7 @@ pub fn dispatch_shell_command(
             }
             let mut ratification_adapter = InspectorFieldActivationRatificationAdapter::new(
                 app,
+                &mut session.inspector_ui_state,
                 surface_contract.capabilities,
             );
             match ratify_surface_intent(&mut ratification_adapter, intent) {
@@ -621,6 +722,7 @@ pub fn dispatch_shell_command(
                 }
                 Err(RatificationDispatchError::Adapter(error)) => return Err(error),
             }
+            *app.surface_sessions_mut().session_mut(tool_surface_id) = session;
         }
         ShellCommand::FocusInspectorField {
             index,
@@ -634,7 +736,9 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                focus_inspector_field(app, index)?;
+                mutate_inspector_surface_session(app, target, |app, state| {
+                    focus_inspector_field(app, state, index)
+                })?;
                 if let Some(state) = shell_state.as_deref_mut() {
                     state
                         .runtime_mut()
@@ -655,7 +759,9 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                append_inspector_field_text(app, index, &text)?;
+                mutate_inspector_surface_session(app, target, |app, state| {
+                    append_inspector_field_text(app, state, index, &text)
+                })?;
             }
         }
         ShellCommand::BackspaceInspectorFieldText {
@@ -670,7 +776,9 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                backspace_inspector_field_text(app, index)?;
+                mutate_inspector_surface_session(app, target, |app, state| {
+                    backspace_inspector_field_text(app, state, index)
+                })?;
             }
         }
         ShellCommand::CommitInspectorFieldText {
@@ -685,7 +793,9 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                commit_inspector_field_text(app, index)?;
+                mutate_inspector_surface_session(app, target, |app, state| {
+                    commit_inspector_field_text(app, state, index)
+                })?;
             }
         }
         ShellCommand::CancelInspectorFieldText {
@@ -700,8 +810,16 @@ pub fn dispatch_shell_command(
             )
             .is_some()
             {
-                app.dispatch_inspector_command(InspectorPanelCommand::CancelDraftComponentField)?;
+                mutate_inspector_surface_session(app, target, |_app, state| {
+                    state.cancel_field_draft();
+                    Ok(())
+                })?;
             }
+        }
+        ShellCommand::DispatchSurfaceLocalAction { .. } => {
+            return Err(EditorMutationError::session_rejected(
+                "surface-local command must be resolved through provider registry before dispatch",
+            ));
         }
         ShellCommand::NoOp => {}
     }
@@ -937,10 +1055,11 @@ impl RatificationAdapter for EntityTableSelectionRatificationAdapter<'_> {
             SurfaceIntentKind::SelectEntity { entity_id } => entity_id,
             _ => return Ok(RatificationOutcome::Ignored),
         };
-        self.app
-            .dispatch_entity_table_command(EntityTablePanelCommand::SelectEntity {
-                entity: editor_core::EntityId(entity_id),
-            })?;
+        select_single_entity_with_origin(
+            self.app.runtime_mut(),
+            editor_core::EntityId(entity_id),
+            editor_core::ChangeOrigin::EntityTablePanel,
+        )?;
         Ok(RatificationOutcome::Applied)
     }
 }
@@ -967,12 +1086,21 @@ impl RatificationAdapter for OutlinerEntitySelectionRatificationAdapter<'_> {
 
 struct InspectorFieldActivationRatificationAdapter<'a> {
     app: &'a mut RunenwerkEditorApp,
+    inspector_state: &'a mut EditorInspectorUiState,
     capabilities: SurfaceCapabilitySet,
 }
 
 impl<'a> InspectorFieldActivationRatificationAdapter<'a> {
-    fn new(app: &'a mut RunenwerkEditorApp, capabilities: SurfaceCapabilitySet) -> Self {
-        Self { app, capabilities }
+    fn new(
+        app: &'a mut RunenwerkEditorApp,
+        inspector_state: &'a mut EditorInspectorUiState,
+        capabilities: SurfaceCapabilitySet,
+    ) -> Self {
+        Self {
+            app,
+            inspector_state,
+            capabilities,
+        }
     }
 }
 
@@ -991,7 +1119,7 @@ impl RatificationAdapter for InspectorFieldActivationRatificationAdapter<'_> {
         let index = usize::try_from(field_index).map_err(|_| {
             EditorMutationError::inspector_rejected("inspector field index overflow")
         })?;
-        activate_inspector_field(self.app, index)?;
+        activate_inspector_field(self.app, self.inspector_state, index)?;
         Ok(RatificationOutcome::Applied)
     }
 }
@@ -1032,28 +1160,31 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
         ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
+        ShellCommand::SwitchPanelToolSurfaceKind { .. } => "SwitchPanelToolSurfaceKind",
         ShellCommand::SelectEntityTableEntity { .. } => "SelectEntityTableEntity",
         ShellCommand::AppendEntityTableSearchText { .. } => "AppendEntityTableSearchText",
         ShellCommand::BackspaceEntityTableSearch { .. } => "BackspaceEntityTableSearch",
         ShellCommand::ToggleEntityTableSort { .. } => "ToggleEntityTableSort",
         ShellCommand::SelectOutlinerEntity { .. } => "SelectOutlinerEntity",
         ShellCommand::SelectViewportProduct { .. } => "SelectViewportProduct",
-        ShellCommand::ToggleViewportDetails => "ToggleViewportDetails",
+        ShellCommand::ToggleViewportDetails { .. } => "ToggleViewportDetails",
         ShellCommand::ActivateInspectorField { .. } => "ActivateInspectorField",
         ShellCommand::FocusInspectorField { .. } => "FocusInspectorField",
         ShellCommand::AppendInspectorFieldText { .. } => "AppendInspectorFieldText",
         ShellCommand::BackspaceInspectorFieldText { .. } => "BackspaceInspectorFieldText",
         ShellCommand::CommitInspectorFieldText { .. } => "CommitInspectorFieldText",
         ShellCommand::CancelInspectorFieldText { .. } => "CancelInspectorFieldText",
+        ShellCommand::DispatchSurfaceLocalAction { .. } => "DispatchSurfaceLocalAction",
         ShellCommand::NoOp => "NoOp",
     }
 }
 
 fn activate_inspector_field(
     app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
     index: usize,
 ) -> Result<(), EditorMutationError> {
-    let inspector_view = app.inspector_view_model();
+    let inspector_view = InspectorPanelPresenter::build_view_model(app.runtime(), inspector_state);
 
     match inspector_view {
         InspectorPanelViewModel::Entity {
@@ -1063,10 +1194,14 @@ fn activate_inspector_field(
             ..
         } => {
             if let Some(component) = components.get(index) {
-                app.dispatch_inspector_command(InspectorPanelCommand::SelectComponent {
-                    entity: component.entity,
-                    component_type: component.component_type,
-                })?;
+                select_single_component_with_origin(
+                    app.runtime_mut(),
+                    component.entity,
+                    component.component_type,
+                    editor_core::ChangeOrigin::InspectorPanel,
+                )?;
+                inspector_state.clear_draft();
+                inspector_state.clear_focus();
                 return Ok(());
             }
 
@@ -1081,10 +1216,18 @@ fn activate_inspector_field(
                 return Ok(());
             }
 
-            app.dispatch_inspector_command(InspectorPanelCommand::AddComponentToEntity {
-                entity,
-                component_type: candidate.component_type,
-            })?;
+            execute_intent_with_history_from_origin(
+                app.runtime_mut(),
+                "Add Component",
+                editor_scene::SceneCommandIntent::AddComponent {
+                    entity,
+                    component_type: candidate.component_type,
+                },
+                editor_core::ChangeOrigin::InspectorPanel,
+            )
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
+            inspector_state.clear_draft();
+            inspector_state.clear_focus();
             Ok(())
         }
         InspectorPanelViewModel::Component {
@@ -1103,12 +1246,14 @@ fn activate_inspector_field(
                 EditorMutationError::inspector_rejected("inspector field is not editable"),
             )?;
 
-            app.dispatch_inspector_command(InspectorPanelCommand::EditComponentField {
+            commit_inspector_component_field_edit(
+                app,
+                inspector_state,
                 entity,
                 component_type,
-                path: field.path.clone(),
-                value: next_value,
-            })?;
+                field.path.clone(),
+                next_value,
+            )?;
 
             Ok(())
         }
@@ -1121,56 +1266,85 @@ fn activate_inspector_field(
     }
 }
 
+fn mutate_inspector_surface_session(
+    app: &mut RunenwerkEditorApp,
+    target: StructuralCommandTarget,
+    mutate: impl FnOnce(
+        &mut RunenwerkEditorApp,
+        &mut EditorInspectorUiState,
+    ) -> Result<(), EditorMutationError>,
+) -> Result<(), EditorMutationError> {
+    let Some(surface_id) = target.active_tool_surface else {
+        return Err(EditorMutationError::inspector_rejected(
+            "inspector command requires surface instance target",
+        ));
+    };
+    let mut session = app.surface_sessions().session_or_default(surface_id);
+    let result = mutate(app, &mut session.inspector_ui_state);
+    *app.surface_sessions_mut().session_mut(surface_id) = session;
+    result
+}
+
 fn focus_inspector_field(
     app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
     index: usize,
 ) -> Result<(), EditorMutationError> {
-    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let (entity, component_type, field) =
+        inspector_component_field_at_index(app, inspector_state, index)?;
     let text = inspector_current_draft_text(&field, true);
-    apply_inspector_draft_text(app, entity, component_type, &field, text)
+    apply_inspector_draft_text(inspector_state, entity, component_type, &field, text)
 }
 
 fn append_inspector_field_text(
     app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
     index: usize,
     text: &str,
 ) -> Result<(), EditorMutationError> {
-    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let (entity, component_type, field) =
+        inspector_component_field_at_index(app, inspector_state, index)?;
     let mut next_text = inspector_current_draft_text(&field, false);
     next_text.push_str(text);
-    apply_inspector_draft_text(app, entity, component_type, &field, next_text)
+    apply_inspector_draft_text(inspector_state, entity, component_type, &field, next_text)
 }
 
 fn backspace_inspector_field_text(
     app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
     index: usize,
 ) -> Result<(), EditorMutationError> {
-    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let (entity, component_type, field) =
+        inspector_component_field_at_index(app, inspector_state, index)?;
     let mut next_text = inspector_current_draft_text(&field, true);
     let _ = next_text.pop();
-    apply_inspector_draft_text(app, entity, component_type, &field, next_text)
+    apply_inspector_draft_text(inspector_state, entity, component_type, &field, next_text)
 }
 
 fn commit_inspector_field_text(
     app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
     index: usize,
 ) -> Result<(), EditorMutationError> {
-    let (entity, component_type, field) = inspector_component_field_at_index(app, index)?;
+    let (entity, component_type, field) =
+        inspector_component_field_at_index(app, inspector_state, index)?;
     let text = inspector_current_draft_text(&field, true);
     let value = parse_inspector_field_text(&field, &text).ok_or(
         EditorMutationError::inspector_rejected("inspector field text is invalid for target type"),
     )?;
-    app.dispatch_inspector_command(InspectorPanelCommand::EditComponentField {
+    commit_inspector_component_field_edit(
+        app,
+        inspector_state,
         entity,
         component_type,
-        path: field.path.clone(),
+        field.path,
         value,
-    })?;
-    Ok(())
+    )
 }
 
 fn inspector_component_field_at_index(
     app: &mut RunenwerkEditorApp,
+    inspector_state: &EditorInspectorUiState,
     index: usize,
 ) -> Result<
     (
@@ -1180,7 +1354,7 @@ fn inspector_component_field_at_index(
     ),
     EditorMutationError,
 > {
-    let inspector_view = app.inspector_view_model();
+    let inspector_view = InspectorPanelPresenter::build_view_model(app.runtime(), inspector_state);
     match inspector_view {
         InspectorPanelViewModel::Component {
             entity,
@@ -1216,7 +1390,7 @@ fn inspector_current_draft_text(
 }
 
 fn apply_inspector_draft_text(
-    app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
     entity: editor_core::EntityId,
     component_type: editor_core::ComponentTypeId,
     field: &crate::editor_panels::InspectorWidgetField,
@@ -1230,18 +1404,42 @@ fn apply_inspector_draft_text(
             "inspector field is not editable",
         ))?;
 
-    app.dispatch_inspector_command(InspectorPanelCommand::BeginEditComponentField {
+    inspector_state.begin_field_edit(
         entity,
         component_type,
-        path: field.path.clone(),
-        value: initial_value,
-        text: text.clone(),
-    })?;
-
-    app.dispatch_inspector_command(InspectorPanelCommand::UpdateDraftComponentFieldText { text })?;
+        field.path.clone(),
+        initial_value,
+        text.clone(),
+    );
+    inspector_state.update_field_draft_text(text)?;
     if let Some(value) = parsed_value {
-        app.dispatch_inspector_command(InspectorPanelCommand::UpdateDraftComponentField { value })?;
+        inspector_state.update_field_draft(value)?;
     }
+    Ok(())
+}
+
+fn commit_inspector_component_field_edit(
+    app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
+    entity: editor_core::EntityId,
+    component_type: editor_core::ComponentTypeId,
+    path: editor_inspector::InspectorPath,
+    value: InspectorEditValue,
+) -> Result<(), EditorMutationError> {
+    execute_intent_with_history_from_origin(
+        app.runtime_mut(),
+        "Edit Component Field",
+        editor_scene::SceneCommandIntent::EditComponentField {
+            entity,
+            component_type,
+            path,
+            value,
+        },
+        editor_core::ChangeOrigin::InspectorPanel,
+    )
+    .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
+    inspector_state.clear_draft();
+    inspector_state.clear_focus();
     Ok(())
 }
 
@@ -1540,6 +1738,7 @@ fn load_scene_from_default_path(
         match read_workspace_layout(&layout_path_to_load) {
             Ok(workspace_state) => {
                 shell_state.replace_workspace_state(workspace_state);
+                app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
                 app.append_console_line(format!(
                     "[io] loaded workspace layout {}",
                     layout_path_to_load.display()

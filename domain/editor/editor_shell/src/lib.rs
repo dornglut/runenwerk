@@ -7,6 +7,7 @@ pub mod expression;
 pub mod ids;
 pub mod observation;
 pub mod runtime;
+pub mod surface_provider;
 pub mod view_models;
 pub mod workspace;
 
@@ -19,6 +20,7 @@ pub use expression::*;
 pub use ids::*;
 pub use observation::*;
 pub use runtime::*;
+pub use surface_provider::*;
 pub use view_models::*;
 pub use workspace::{
     CONSOLE_SURFACE_DEFINITION_ID, ENTITY_TABLE_SURFACE_DEFINITION_ID, FixedLayoutProjection,
@@ -41,5 +43,6 @@ pub use workspace::{
     WorkspaceState, WorkspaceStateError, default_workspace_profile_registry,
     editor_surface_definitions, mounted_surface_instance, mounted_surface_instances,
     project_fixed_layout, project_workspace_for_shell, reduce_workspace,
-    tool_surface_capability_set, tool_surface_session_retention_class, viewport_embed_slot_for,
+    tool_surface_capability_set, tool_surface_definition_id, tool_surface_session_retention_class,
+    viewport_embed_slot_for,
 };

@@ -21,6 +21,15 @@ pub struct InteractionVisualState {
     pub focused_widget: Option<WidgetId>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ScrollbarGeometry {
+    pub scroll_widget_id: WidgetId,
+    pub axis: ui_math::Axis,
+    pub track_rect: UiRect,
+    pub thumb_rect: UiRect,
+    pub max_offset: f32,
+}
+
 pub fn build_ui_frame(
     tree: &UiTree,
     layouts: &ComputedLayoutMap,
@@ -322,7 +331,7 @@ fn emit_scroll_begin(
 fn emit_scrollbar(
     tree: &UiTree,
     node: &UiNode,
-    scroll: &ScrollNode,
+    _scroll: &ScrollNode,
     layouts: &ComputedLayoutMap,
     bounds: UiRect,
     content_bounds: UiRect,
@@ -330,17 +339,70 @@ fn emit_scrollbar(
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let Some(child) = node.children.first() else {
+    let Some(geometry) = scrollbar_geometry(tree, node.id, layouts, bounds, content_bounds) else {
         return;
     };
-    let Some(child_layout) = layouts.get(&child.id) else {
+    let radius = match geometry.axis {
+        ui_math::Axis::Vertical => {
+            if let UiNodeKind::Scroll(scroll) = &node.kind {
+                scroll.theme.radius.sm.min(geometry.track_rect.width * 0.5)
+            } else {
+                0.0
+            }
+        }
+        ui_math::Axis::Horizontal => {
+            if let UiNodeKind::Scroll(scroll) = &node.kind {
+                scroll.theme.radius.sm.min(geometry.track_rect.height * 0.5)
+            } else {
+                0.0
+            }
+        }
+    };
+    let UiNodeKind::Scroll(scroll) = &node.kind else {
         return;
     };
-    let (track_rect, thumb_rect, radius) = match scroll.axis {
+
+    let mut track_color = scroll.theme.border;
+    track_color.a = (track_color.a * 0.35).clamp(0.0, 1.0);
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        geometry.track_rect,
+        radius,
+        paint_from_color(track_color),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    let mut thumb_color = scroll.theme.accent;
+    thumb_color.a = (thumb_color.a * 0.80).clamp(0.0, 1.0);
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        geometry.thumb_rect,
+        radius,
+        paint_from_color(thumb_color),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+}
+
+pub(crate) fn scrollbar_geometry(
+    tree: &UiTree,
+    scroll_widget_id: WidgetId,
+    layouts: &ComputedLayoutMap,
+    bounds: UiRect,
+    content_bounds: UiRect,
+) -> Option<ScrollbarGeometry> {
+    let node = tree.walk().find(|node| node.id == scroll_widget_id)?;
+    let UiNodeKind::Scroll(scroll) = &node.kind else {
+        return None;
+    };
+    let child = node.children.first()?;
+    let child_layout = layouts.get(&child.id)?;
+    match scroll.axis {
         ui_math::Axis::Vertical => {
             let track_width = (bounds.width - content_bounds.width).max(0.0);
             if track_width <= f32::EPSILON || content_bounds.height <= f32::EPSILON {
-                return;
+                return None;
             }
             let track_x = if let Some(parent) = find_parent_node(tree, node.id) {
                 if let UiNodeKind::Scroll(parent_scroll) = &parent.kind {
@@ -370,7 +432,7 @@ fn emit_scrollbar(
             let content_extent = child_layout.bounds.height.max(viewport_extent);
             let max_offset = (content_extent - viewport_extent).max(0.0);
             if max_offset <= f32::EPSILON {
-                return;
+                return None;
             }
             let scroll_offset = (content_bounds.y - child_layout.bounds.y).clamp(0.0, max_offset);
             let min_thumb = scroll.min_thumb_main_size.min(track_rect.height).max(0.0);
@@ -378,14 +440,18 @@ fn emit_scrollbar(
             let thumb_extent = natural.clamp(min_thumb, track_rect.height);
             let thumb_range = (track_rect.height - thumb_extent).max(0.0);
             let thumb_y = track_rect.y + thumb_range * (scroll_offset / max_offset);
-            let thumb_rect = UiRect::new(track_rect.x, thumb_y, track_rect.width, thumb_extent);
-            let radius = scroll.theme.radius.sm.min(track_rect.width * 0.5);
-            (track_rect, thumb_rect, radius)
+            Some(ScrollbarGeometry {
+                scroll_widget_id,
+                axis: scroll.axis,
+                track_rect,
+                thumb_rect: UiRect::new(track_rect.x, thumb_y, track_rect.width, thumb_extent),
+                max_offset,
+            })
         }
         ui_math::Axis::Horizontal => {
             let track_height = (bounds.height - content_bounds.height).max(0.0);
             if track_height <= f32::EPSILON || content_bounds.width <= f32::EPSILON {
-                return;
+                return None;
             }
             let track_rect = UiRect::new(
                 content_bounds.x,
@@ -397,7 +463,7 @@ fn emit_scrollbar(
             let content_extent = child_layout.bounds.width.max(viewport_extent);
             let max_offset = (content_extent - viewport_extent).max(0.0);
             if max_offset <= f32::EPSILON {
-                return;
+                return None;
             }
             let scroll_offset = (content_bounds.x - child_layout.bounds.x).clamp(0.0, max_offset);
             let min_thumb = scroll.min_thumb_main_size.min(track_rect.width).max(0.0);
@@ -405,33 +471,15 @@ fn emit_scrollbar(
             let thumb_extent = natural.clamp(min_thumb, track_rect.width);
             let thumb_range = (track_rect.width - thumb_extent).max(0.0);
             let thumb_x = track_rect.x + thumb_range * (scroll_offset / max_offset);
-            let thumb_rect = UiRect::new(thumb_x, track_rect.y, thumb_extent, track_rect.height);
-            let radius = scroll.theme.radius.sm.min(track_rect.height * 0.5);
-            (track_rect, thumb_rect, radius)
+            Some(ScrollbarGeometry {
+                scroll_widget_id,
+                axis: scroll.axis,
+                track_rect,
+                thumb_rect: UiRect::new(thumb_x, track_rect.y, thumb_extent, track_rect.height),
+                max_offset,
+            })
         }
-    };
-
-    let mut track_color = scroll.theme.border;
-    track_color.a = (track_color.a * 0.35).clamp(0.0, 1.0);
-    layer.push(UiPrimitive::Rect(RectPrimitive::new(
-        track_rect,
-        radius,
-        paint_from_color(track_color),
-        default_draw_key(),
-        sort_key(depth, *primitive_order),
-    )));
-    *primitive_order += 1;
-
-    let mut thumb_color = scroll.theme.accent;
-    thumb_color.a = (thumb_color.a * 0.80).clamp(0.0, 1.0);
-    layer.push(UiPrimitive::Rect(RectPrimitive::new(
-        thumb_rect,
-        radius,
-        paint_from_color(thumb_color),
-        default_draw_key(),
-        sort_key(depth, *primitive_order),
-    )));
-    *primitive_order += 1;
+    }
 }
 
 fn find_parent_node(tree: &UiTree, target: WidgetId) -> Option<&UiNode> {

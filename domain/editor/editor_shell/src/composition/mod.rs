@@ -12,8 +12,8 @@ pub mod build_viewport_panel;
 pub use build_console_panel::build_console_panel;
 pub use build_editor_shell::{
     ActiveTabDragVisualState, DockingInteractionVisualState, DockingPreviewDropTarget,
-    EditorShellBuildResult, RoutedShellAction, ShellProjectionArtifacts, build_editor_shell,
-    build_editor_shell_with_docking_visual_state,
+    EditorShellBuildResult, RoutedShellAction, ShellProjectionArtifacts, build_editor_shell_frame,
+    build_editor_shell_frame_with_docking_visual_state,
 };
 pub use build_entity_table_panel::build_entity_table_panel;
 pub use build_inspector_panel::build_inspector_panel;

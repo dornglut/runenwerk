@@ -3,8 +3,8 @@
 
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
-    PanelInstanceId, TabStackId, TabStackState, ToolSurfaceInstanceId, ToolSurfaceMount,
-    WorkspaceState, WorkspaceStateError,
+    PanelInstanceId, TabStackId, TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind,
+    ToolSurfaceMount, ToolSurfaceState, WorkspaceState, WorkspaceStateError,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +28,11 @@ pub enum WorkspaceMutation {
     SetToolSurfaceMount {
         tool_surface_id: ToolSurfaceInstanceId,
         mount: ToolSurfaceMount,
+    },
+    ReplacePanelToolSurfaceKind {
+        panel_id: PanelInstanceId,
+        tool_surface_id: ToolSurfaceInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
     },
     ReorderPanelInTabStack {
         tab_stack_id: TabStackId,
@@ -206,6 +211,43 @@ fn apply_mutation(
                 .get_mut(&tool_surface_id)
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?
                 .mount = mount;
+        }
+        WorkspaceMutation::ReplacePanelToolSurfaceKind {
+            panel_id,
+            tool_surface_id,
+            tool_surface_kind,
+        } => {
+            let panel = state
+                .panels_by_id
+                .get(&panel_id)
+                .copied()
+                .ok_or(WorkspaceStateError::MissingPanel(panel_id))?;
+
+            if state.tool_surfaces_by_id.contains_key(&tool_surface_id) {
+                return Err(WorkspaceStateError::DuplicateToolSurfaceId(tool_surface_id));
+            }
+
+            if let Some(existing_surface_id) = panel.active_tool_surface {
+                let existing = state
+                    .tool_surfaces_by_id
+                    .get_mut(&existing_surface_id)
+                    .ok_or(WorkspaceStateError::MissingToolSurface(existing_surface_id))?;
+                existing.mount = ToolSurfaceMount::Unmounted;
+            }
+
+            state.tool_surfaces_by_id.insert(
+                tool_surface_id,
+                ToolSurfaceState {
+                    id: tool_surface_id,
+                    tool_surface_kind,
+                    mount: ToolSurfaceMount::Mounted { panel_id },
+                },
+            );
+            state
+                .panels_by_id
+                .get_mut(&panel_id)
+                .ok_or(WorkspaceStateError::MissingPanel(panel_id))?
+                .active_tool_surface = Some(tool_surface_id);
         }
         WorkspaceMutation::ReorderPanelInTabStack {
             tab_stack_id,

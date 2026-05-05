@@ -1,16 +1,11 @@
 use super::state::RunenwerkEditorApp;
 use crate::editor_features::ToolAction;
-use crate::editor_features::entity_table::dispatch_entity_table_command;
-use crate::editor_features::inspector::dispatch_inspector_command;
 use crate::editor_features::outliner::dispatch_outliner_command;
 use crate::editor_features::tools::{dispatch_tool_action, dispatch_tool_actions};
 use crate::editor_features::viewport::{ViewportInteractionCommand, ViewportInteractionController};
 use crate::editor_panels::{
-    EntityTablePanelCommand, EntityTablePanelCommandResult, EntityTablePanelPresenter,
-    EntityTablePanelState, InspectorPanelCommand, InspectorPanelCommandResult,
-    InspectorPanelPresenter, InspectorPanelViewModel, OutlinerPanelCommand,
-    OutlinerPanelCommandResult, OutlinerPanelPresenter, OutlinerPanelState, ViewportPanelCommand,
-    ViewportPanelPresenter, ViewportPanelState, ViewportToolState,
+    OutlinerPanelCommand, OutlinerPanelCommandResult, OutlinerPanelPresenter, OutlinerPanelState,
+    ViewportPanelCommand, ViewportPanelPresenter, ViewportPanelState, ViewportToolState,
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -18,7 +13,7 @@ use crate::runtime::viewport::{
 };
 use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState};
 use editor_core::EditorMutationError;
-use editor_shell::UiInputOutcome;
+use editor_shell::{ToolSurfaceInstanceId, UiInputOutcome};
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::UiInputEvent;
 use ui_math::UiRect;
@@ -31,33 +26,11 @@ impl RunenwerkEditorApp {
         OutlinerPanelPresenter::build_state(&self.runtime)
     }
 
-    pub fn entity_table_state(&self) -> EntityTablePanelState {
-        EntityTablePanelPresenter::build_state(&self.runtime, &self.entity_table_ui_state)
-    }
-
-    pub fn inspector_view_model(&self) -> InspectorPanelViewModel {
-        InspectorPanelPresenter::build_view_model(&self.runtime, &self.inspector_ui_state)
-    }
-
     pub fn dispatch_outliner_command(
         &mut self,
         command: OutlinerPanelCommand,
     ) -> Result<OutlinerPanelCommandResult, EditorMutationError> {
         dispatch_outliner_command(self, command)
-    }
-
-    pub fn dispatch_entity_table_command(
-        &mut self,
-        command: EntityTablePanelCommand,
-    ) -> Result<EntityTablePanelCommandResult, EditorMutationError> {
-        dispatch_entity_table_command(self, command)
-    }
-
-    pub fn dispatch_inspector_command(
-        &mut self,
-        command: InspectorPanelCommand,
-    ) -> Result<InspectorPanelCommandResult, EditorMutationError> {
-        dispatch_inspector_command(self, command)
     }
 
     pub fn viewport_state(&self) -> ViewportPanelState {
@@ -93,13 +66,17 @@ impl RunenwerkEditorApp {
         ViewportToolState::from_runtime(&self.tool_runtime_state)
     }
 
-    pub fn dispatch_viewport_interaction_command(
+    pub fn dispatch_viewport_interaction_for_surface(
         &mut self,
+        tool_surface_instance_id: ToolSurfaceInstanceId,
         command: ViewportInteractionCommand,
     ) -> Result<(), EditorMutationError> {
-        let mut state = core::mem::take(&mut self.viewport_interaction_state);
+        let mut state = self
+            .surface_sessions_mut()
+            .take_viewport_interaction_state(tool_surface_instance_id);
         let result = ViewportInteractionController::dispatch(self, &mut state, command);
-        self.viewport_interaction_state = state;
+        self.surface_sessions_mut()
+            .replace_viewport_interaction_state(tool_surface_instance_id, state);
         result
     }
 
@@ -118,10 +95,6 @@ impl RunenwerkEditorApp {
         S: editor_core::SharedChangePropagationSink,
     {
         self.runtime.propagate_shared_changes(sink)
-    }
-
-    pub fn cancel_viewport_interaction(&mut self) -> Result<(), EditorMutationError> {
-        self.dispatch_viewport_interaction_command(ViewportInteractionCommand::CancelInteraction)
     }
 
     pub fn build_shell_frame(
@@ -157,6 +130,26 @@ impl RunenwerkEditorApp {
             theme,
             atlas_source,
             viewport_products,
+        )
+    }
+
+    pub fn build_shell_expression_frame_with_surface_resources(
+        &self,
+        shell_state: &mut RunenwerkEditorShellState,
+        bounds: UiRect,
+        theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    ) -> editor_shell::ShellUiExpressionFrame {
+        RunenwerkEditorShellController::build_expression_frame_with_surface_resources(
+            self,
+            shell_state,
+            bounds,
+            theme,
+            atlas_source,
+            viewport_observations,
+            tool_surface_bindings,
         )
     }
 

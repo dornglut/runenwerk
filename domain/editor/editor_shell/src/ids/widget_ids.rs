@@ -53,6 +53,9 @@ pub const VIEWPORT_CANVAS_LABEL_WIDGET_ID: WidgetId = WidgetId(48);
 pub const VIEWPORT_SURFACE_EMBED_WIDGET_ID: WidgetId = WidgetId(49);
 pub const VIEWPORT_PRODUCTS_TITLE_WIDGET_ID: WidgetId = WidgetId(70);
 pub const VIEWPORT_PRODUCTS_LIST_WIDGET_ID: WidgetId = WidgetId(71);
+pub const VIEWPORT_DETAILS_TOGGLE_WIDGET_ID: WidgetId = WidgetId(72);
+pub const VIEWPORT_DETAILS_PANEL_WIDGET_ID: WidgetId = WidgetId(73);
+pub const VIEWPORT_DETAILS_LABEL_WIDGET_ID: WidgetId = WidgetId(74);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);

@@ -148,6 +148,7 @@ pub enum WorkspaceStateError {
     MissingToolSurface(ToolSurfaceInstanceId),
     DuplicateHostId(PanelHostId),
     DuplicateTabStackId(TabStackId),
+    DuplicateToolSurfaceId(ToolSurfaceInstanceId),
     DuplicatePanelInTabStacks(PanelInstanceId),
     DuplicateTabStackHost(TabStackId),
     PanelNotInTabStack {
@@ -203,6 +204,9 @@ impl std::fmt::Display for WorkspaceStateError {
             Self::DuplicateHostId(host_id) => write!(f, "duplicate host id: {host_id:?}"),
             Self::DuplicateTabStackId(tab_stack_id) => {
                 write!(f, "duplicate tab stack id: {tab_stack_id:?}")
+            }
+            Self::DuplicateToolSurfaceId(tool_surface_id) => {
+                write!(f, "duplicate tool surface id: {tool_surface_id:?}")
             }
             Self::DuplicatePanelInTabStacks(panel_id) => {
                 write!(f, "panel appears in multiple tab stacks: {panel_id:?}")

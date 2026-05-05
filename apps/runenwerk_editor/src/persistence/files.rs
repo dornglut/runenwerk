@@ -149,6 +149,55 @@ mod tests {
     }
 
     #[test]
+    fn load_scene_file_after_scene_reset_keeps_active_scene_document() {
+        let path = temp_scene_path("active_scene_document");
+        let source = r#"
+(
+    version: 2,
+    entities: [
+        (
+            id: 1,
+            display_name: "Entity",
+            parent: None,
+            transform: (
+                translation: (0.0, 0.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+            primitive: (
+                kind: Box,
+                box_half_extents: (0.5, 0.5, 0.5),
+                sphere_radius: 0.5,
+                capsule_radius: 0.25,
+                capsule_half_height: 0.75,
+            ),
+        ),
+    ],
+)
+"#;
+        std::fs::write(&path, source).expect("test scene file should be writable");
+
+        let mut runtime = RunenwerkEditorRuntime::new();
+        runtime.prepare_for_scene_load();
+        register_mvp_component_types(&mut runtime);
+
+        load_scene_file_into_runtime(&path, &mut runtime).expect("scene load should succeed");
+        let active_document = runtime
+            .session()
+            .active_document()
+            .expect("scene reset/load should leave an active document");
+        assert_eq!(
+            runtime
+                .session()
+                .document(active_document)
+                .map(|value| &value.kind),
+            Some(&editor_core::DocumentKind::Scene),
+        );
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn load_scene_file_into_runtime_rejects_invalid_normalized_structure() {
         let path = temp_scene_path("reject_duplicate");
         let source = r#"

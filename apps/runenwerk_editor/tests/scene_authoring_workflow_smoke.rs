@@ -9,7 +9,7 @@ use runenwerk_editor::editor_features::viewport::ViewportInteractionCommand;
 use runenwerk_editor::editor_features::{
     execute_intent_with_history, redo_last_scene_change, undo_last_scene_change,
 };
-use runenwerk_editor::editor_panels::{InspectorPanelCommand, OutlinerPanelCommand};
+use runenwerk_editor::editor_panels::OutlinerPanelCommand;
 
 #[derive(Debug, Clone, Default, ecs::Reflect)]
 struct Vec2 {
@@ -69,30 +69,37 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
     })
     .expect("outliner selection should succeed");
 
-    app.dispatch_inspector_command(InspectorPanelCommand::SelectComponent {
-        entity: EntityId(1),
-        component_type: position_type,
-    })
-    .expect("inspector component selection should succeed");
-
-    app.dispatch_inspector_command(InspectorPanelCommand::EditComponentField {
-        entity: EntityId(1),
-        component_type: position_type,
-        path: InspectorPath::root().child_field("speed"),
-        value: InspectorEditValue::Float(9.5),
-    })
+    execute_intent_with_history(
+        app.runtime_mut(),
+        "Edit Position Speed",
+        SceneCommandIntent::EditComponentField {
+            entity: EntityId(1),
+            component_type: position_type,
+            path: InspectorPath::root().child_field("speed"),
+            value: InspectorEditValue::Float(9.5),
+        },
+    )
     .expect("inspector edit should succeed");
 
-    app.dispatch_viewport_interaction_command(ViewportInteractionCommand::PointerDown {
-        hit: ViewportHitResult::gizmo_axis("X", 0.0),
-    })
+    let workspace = default_workspace_state();
+    let viewport_surface = default_surface_by_kind(&workspace, editor_shell::PanelKind::Viewport);
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerDown {
+            hit: ViewportHitResult::gizmo_axis("X", 0.0),
+        },
+    )
     .expect("viewport gizmo down should succeed");
-    app.dispatch_viewport_interaction_command(ViewportInteractionCommand::PointerDragAxis {
-        amount: 6.0,
-    })
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerDragAxis { amount: 6.0 },
+    )
     .expect("viewport drag should succeed");
-    app.dispatch_viewport_interaction_command(ViewportInteractionCommand::PointerUp)
-        .expect("viewport up should succeed");
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerUp,
+    )
+    .expect("viewport up should succeed");
 
     let ecs_entity = app
         .runtime()
@@ -149,4 +156,21 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         .get::<Position>(ecs_entity)
         .expect("position should exist");
     assert_eq!(position.speed, 9.5);
+}
+
+fn default_workspace_state() -> editor_shell::WorkspaceState {
+    let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
+    let workspace_id = allocator.allocate_workspace_id();
+    editor_shell::WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator)
+}
+
+fn default_surface_by_kind(
+    workspace_state: &editor_shell::WorkspaceState,
+    panel_kind: editor_shell::PanelKind,
+) -> editor_shell::ToolSurfaceInstanceId {
+    workspace_state
+        .panels()
+        .find(|panel| panel.panel_kind == panel_kind)
+        .and_then(|panel| panel.active_tool_surface)
+        .expect("default workspace should mount requested surface")
 }

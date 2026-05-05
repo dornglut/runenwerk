@@ -10,6 +10,8 @@ use crate::{
     ComputedLayoutMap, ScrollInputPolicy, UiInputDispatchResult, UiInputOutcome, UiInteraction,
     UiInteractionResults, UiInvalidation, UiNodeKind, UiRuntimeState, UiTree, WidgetId,
     hit_test_widget,
+    output::build_ui_frame::{ScrollbarGeometry, scrollbar_geometry},
+    state::ScrollbarThumbDragState,
 };
 
 const SCROLL_DELTA_CLAMP: f32 = 8.0;
@@ -29,6 +31,22 @@ pub fn dispatch_pointer_event(
 
     match event.kind {
         PointerEventKind::Move | PointerEventKind::Enter => {
+            if let Some(drag) = state.scrollbar_thumb_drag {
+                let changed =
+                    apply_scrollbar_thumb_drag(tree, layouts, state, drag, event.position);
+                return outcome(
+                    Some(drag.scroll_widget),
+                    InputResponse {
+                        propagation: EventPropagation::Stop,
+                        capture: PointerCapture::CaptureSelf,
+                        focus_change: FocusChange::None,
+                        repaint: changed,
+                        relayout: false,
+                    },
+                    UiInteractionResults::new(),
+                );
+            }
+
             if state.middle_pan_anchor.is_some() {
                 let previous_hovered = state.hovered_widget;
                 let raw_hover_target = hit_test_widget(tree, layouts, event.position);
@@ -67,6 +85,20 @@ pub fn dispatch_pointer_event(
             outcome(target, InputResponse::ignored(), interactions)
         }
         PointerEventKind::Leave => {
+            if let Some(drag) = state.scrollbar_thumb_drag {
+                return outcome(
+                    Some(drag.scroll_widget),
+                    InputResponse {
+                        propagation: EventPropagation::Stop,
+                        capture: PointerCapture::CaptureSelf,
+                        focus_change: FocusChange::None,
+                        repaint: false,
+                        relayout: false,
+                    },
+                    UiInteractionResults::new(),
+                );
+            }
+
             let previous_hovered = state.hovered_widget;
             state.hovered_widget = None;
 
@@ -76,6 +108,46 @@ pub fn dispatch_pointer_event(
             outcome(None, InputResponse::ignored(), interactions)
         }
         PointerEventKind::Down => {
+            if event.button == Some(PointerButton::Primary)
+                && let Some(geometry) =
+                    scrollbar_thumb_geometry_at_position(tree, layouts, event.position)
+            {
+                let previous_hovered = state.hovered_widget;
+                let previous_pressed = state.pressed_widget;
+                let target = Some(geometry.scroll_widget_id);
+                let pointer_grab_offset = axis_position(geometry.axis, event.position)
+                    - axis_rect_start(geometry.axis, geometry.thumb_rect);
+                state.hovered_widget = target;
+                state.pressed_widget = target;
+                state.captured_widget = target;
+                state.middle_pan_anchor = None;
+                state.middle_pan_last_position = None;
+                state.scrollbar_thumb_drag = Some(ScrollbarThumbDragState {
+                    scroll_widget: geometry.scroll_widget_id,
+                    axis: geometry.axis,
+                    pointer_grab_offset,
+                });
+                let focus_change = FocusChange::Set(FocusTargetId(geometry.scroll_widget_id.0));
+                state.focused_target = Some(FocusTargetId(geometry.scroll_widget_id.0));
+
+                let mut interactions = UiInteractionResults::new();
+                push_hover_change_if_needed(&mut interactions, previous_hovered, target);
+                push_pressed_change_if_needed(&mut interactions, previous_pressed, target);
+                push_focus_change_if_needed(&mut interactions, focus_change);
+
+                return outcome(
+                    target,
+                    InputResponse {
+                        propagation: EventPropagation::Stop,
+                        capture: PointerCapture::CaptureSelf,
+                        focus_change,
+                        repaint: true,
+                        relayout: false,
+                    },
+                    interactions,
+                );
+            }
+
             if event.button == Some(PointerButton::Middle) {
                 let previous_hovered = state.hovered_widget;
                 let raw_target = hit_test_widget(tree, layouts, event.position);
@@ -119,6 +191,7 @@ pub fn dispatch_pointer_event(
             state.captured_widget = target;
             state.middle_pan_anchor = None;
             state.middle_pan_last_position = None;
+            state.scrollbar_thumb_drag = None;
 
             let focus_change = match target {
                 Some(WidgetId(id)) => FocusChange::Set(FocusTargetId(id)),
@@ -155,6 +228,32 @@ pub fn dispatch_pointer_event(
             )
         }
         PointerEventKind::Up => {
+            if let Some(drag) = state.scrollbar_thumb_drag.take() {
+                let previous_pressed = state.pressed_widget;
+                let release_target = hit_test_widget(tree, layouts, event.position)
+                    .filter(|widget_id| is_pointer_responsive(tree, *widget_id));
+                state.hovered_widget = release_target;
+                state.pressed_widget = None;
+                state.captured_widget = None;
+                state.middle_pan_anchor = None;
+                state.middle_pan_last_position = None;
+
+                let mut interactions = UiInteractionResults::new();
+                push_pressed_change_if_needed(&mut interactions, previous_pressed, None);
+
+                return outcome(
+                    Some(drag.scroll_widget),
+                    InputResponse {
+                        propagation: EventPropagation::Stop,
+                        capture: PointerCapture::Release,
+                        focus_change: FocusChange::None,
+                        repaint: true,
+                        relayout: false,
+                    },
+                    interactions,
+                );
+            }
+
             if event.button == Some(PointerButton::Middle) && state.middle_pan_anchor.is_some() {
                 let previous_hovered = state.hovered_widget;
                 let release_target = hit_test_widget(tree, layouts, event.position)
@@ -192,6 +291,7 @@ pub fn dispatch_pointer_event(
             state.captured_widget = None;
             state.middle_pan_anchor = None;
             state.middle_pan_last_position = None;
+            state.scrollbar_thumb_drag = None;
 
             let mut interactions = UiInteractionResults::new();
             push_hover_change_if_needed(&mut interactions, previous_hovered, release_target);
@@ -280,6 +380,95 @@ pub fn dispatch_pointer_event(
                 interactions,
             )
         }
+    }
+}
+
+fn scrollbar_thumb_geometry_at_position(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    position: ui_math::UiPoint,
+) -> Option<ScrollbarGeometry> {
+    let mut hit = None;
+    for node in tree.walk() {
+        let Some(layout) = layouts.get(&node.id) else {
+            continue;
+        };
+        if let Some(geometry) =
+            scrollbar_geometry(tree, node.id, layouts, layout.bounds, layout.content_bounds)
+            && geometry.thumb_rect.contains(position)
+        {
+            hit = Some(geometry);
+        }
+    }
+    hit
+}
+
+fn apply_scrollbar_thumb_drag(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    state: &mut UiRuntimeState,
+    drag: ScrollbarThumbDragState,
+    position: ui_math::UiPoint,
+) -> bool {
+    let Some(layout) = layouts.get(&drag.scroll_widget) else {
+        state.scrollbar_thumb_drag = None;
+        state.captured_widget = None;
+        state.pressed_widget = None;
+        return false;
+    };
+    let Some(geometry) = scrollbar_geometry(
+        tree,
+        drag.scroll_widget,
+        layouts,
+        layout.bounds,
+        layout.content_bounds,
+    ) else {
+        state.scrollbar_thumb_drag = None;
+        state.captured_widget = None;
+        state.pressed_widget = None;
+        return false;
+    };
+    let thumb_extent = axis_rect_extent(geometry.axis, geometry.thumb_rect);
+    let track_extent = axis_rect_extent(geometry.axis, geometry.track_rect);
+    let thumb_range = (track_extent - thumb_extent).max(0.0);
+    if thumb_range <= f32::EPSILON || geometry.max_offset <= f32::EPSILON {
+        return false;
+    }
+
+    let pointer_main = axis_position(geometry.axis, position);
+    let track_start = axis_rect_start(geometry.axis, geometry.track_rect);
+    let thumb_start =
+        (pointer_main - track_start - drag.pointer_grab_offset).clamp(0.0, thumb_range);
+    let next_offset =
+        ((thumb_start / thumb_range) * geometry.max_offset).clamp(0.0, geometry.max_offset);
+    let current_offset = state
+        .scroll_offset(drag.scroll_widget)
+        .clamp(0.0, geometry.max_offset);
+    if (next_offset - current_offset).abs() <= f32::EPSILON {
+        return false;
+    }
+    state.set_scroll_offset(drag.scroll_widget, next_offset);
+    true
+}
+
+fn axis_position(axis: ui_math::Axis, position: ui_math::UiPoint) -> f32 {
+    match axis {
+        ui_math::Axis::Horizontal => position.x,
+        ui_math::Axis::Vertical => position.y,
+    }
+}
+
+fn axis_rect_start(axis: ui_math::Axis, rect: ui_math::UiRect) -> f32 {
+    match axis {
+        ui_math::Axis::Horizontal => rect.x,
+        ui_math::Axis::Vertical => rect.y,
+    }
+}
+
+fn axis_rect_extent(axis: ui_math::Axis, rect: ui_math::UiRect) -> f32 {
+    match axis {
+        ui_math::Axis::Horizontal => rect.width,
+        ui_math::Axis::Vertical => rect.height,
     }
 }
 

@@ -4,7 +4,6 @@ use scene::Vec3Value;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::ToolAction;
-use crate::editor_panels::InspectorPanelViewModel;
 use crate::editor_runtime::execute_scene_intent;
 
 use super::shared::Position;
@@ -29,13 +28,10 @@ fn tool_action_select_single_entity_updates_selection_and_inspector() {
     .expect("tool select should succeed");
 
     assert_eq!(app.outliner_state().selected_entity, Some(EntityId(1)));
-    assert!(matches!(
-        app.inspector_view_model(),
-        InspectorPanelViewModel::Entity {
-            entity: EntityId(1),
-            ..
-        }
-    ));
+    assert_eq!(
+        app.runtime().primary_inspect_target(),
+        Some(editor_inspector::InspectTarget::Entity(EntityId(1)))
+    );
 }
 
 #[test]
@@ -61,7 +57,7 @@ fn tool_action_clear_selection_clears_shared_selection() {
         .expect("tool clear should succeed");
 
     assert_eq!(app.outliner_state().selected_entity, None);
-    assert_eq!(app.inspector_view_model(), InspectorPanelViewModel::Empty);
+    assert_eq!(app.runtime().primary_inspect_target(), None);
 }
 
 #[test]

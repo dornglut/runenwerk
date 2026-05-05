@@ -23,6 +23,7 @@ use crate::shell::dispatch_shell_command;
 
 #[derive(Debug, Clone, Copy)]
 struct ViewportPointerRoute {
+    tool_surface_id: editor_shell::ToolSurfaceInstanceId,
     viewport_id: ViewportId,
     host_widget_id: editor_shell::WidgetId,
     structural_context: editor_shell::StructuralWidgetRoutingContext,
@@ -154,13 +155,18 @@ pub fn dispatch_editor_input_system(
     }
 
     if input.left_mouse_down()
-        && host.app.viewport_interaction_state().drag_in_progress()
+        && let Some(tool_surface_id) = host.app.surface_sessions().active_viewport_drag_surface()
         && position != previous
-        && viewport_capture_active(&host.shell_state, &tool_surface_bindings)
+        && viewport_capture_active_for_surface(
+            &host.shell_state,
+            &tool_surface_bindings,
+            tool_surface_id,
+        )
     {
         let amount = position.x - previous.x;
         if amount != 0.0
-            && let Err(error) = host.app.dispatch_viewport_interaction_command(
+            && let Err(error) = host.app.dispatch_viewport_interaction_for_surface(
+                tool_surface_id,
                 ViewportInteractionCommand::PointerDragAxis { amount },
             )
         {
@@ -183,7 +189,8 @@ pub fn dispatch_editor_input_system(
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
         );
-        let routed_release = outcome
+        let captured_surface = host.app.surface_sessions().active_viewport_drag_surface();
+        let routed_release_surface = outcome
             .as_ref()
             .and_then(|value| {
                 viewport_pointer_route(
@@ -193,13 +200,20 @@ pub fn dispatch_editor_input_system(
                     position,
                 )
             })
-            .is_some();
+            .map(|route| route.tool_surface_id);
 
-        if host.app.viewport_interaction_state().drag_in_progress()
-            && routed_release
-            && let Err(error) = host
-                .app
-                .dispatch_viewport_interaction_command(ViewportInteractionCommand::PointerUp)
+        if let Some(tool_surface_id) = captured_surface
+            && routed_release_surface
+                .map(|release_surface| release_surface == tool_surface_id)
+                .unwrap_or_else(|| {
+                    tool_surface_bindings
+                        .binding_for_tool_surface(tool_surface_id)
+                        .is_some()
+                })
+            && let Err(error) = host.app.dispatch_viewport_interaction_for_surface(
+                tool_surface_id,
+                ViewportInteractionCommand::PointerUp,
+            )
         {
             eprintln!("viewport pointer-up failed: {error}");
         }
@@ -437,6 +451,7 @@ fn viewport_pointer_route(
         && binding.bounds.contains(position)
     {
         return Some(ViewportPointerRoute {
+            tool_surface_id: binding.tool_surface_id,
             viewport_id: binding.viewport_id,
             host_widget_id,
             structural_context,
@@ -457,6 +472,7 @@ fn viewport_pointer_route(
         },
     );
     Some(ViewportPointerRoute {
+        tool_surface_id: binding.tool_surface_id,
         viewport_id: binding.viewport_id,
         host_widget_id,
         structural_context,
@@ -464,9 +480,10 @@ fn viewport_pointer_route(
     })
 }
 
-fn viewport_capture_active(
+fn viewport_capture_active_for_surface(
     shell_state: &RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    tool_surface_id: editor_shell::ToolSurfaceInstanceId,
 ) -> bool {
     shell_state
         .runtime()
@@ -476,7 +493,12 @@ fn viewport_capture_active(
             structural_context_for_widget(shell_state, widget_id)
                 .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
         })
-        .is_some()
+        .map(|binding| binding.tool_surface_id == tool_surface_id)
+        .unwrap_or_else(|| {
+            tool_surface_bindings
+                .binding_for_tool_surface(tool_surface_id)
+                .is_some()
+        })
 }
 
 fn fallback_viewport_binding(
@@ -546,8 +568,9 @@ fn dispatch_viewport_pointer_down(
 
     if host.app.debug_logs_enabled() {
         host.app.append_console_line(format!(
-            "[input] viewport pointer-down viewport={} widget={} panel={} tab_stack={} tool_surface={:?} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3} expr_frame={} sel_before={:?}",
+            "[input] viewport pointer-down viewport={} tool_surface={} widget={} panel={} tab_stack={} structural_tool_surface={:?} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3} expr_frame={} sel_before={:?}",
             route.viewport_id.0,
+            route.tool_surface_id.raw(),
             route.host_widget_id.0,
             route.structural_context.panel_instance_id.raw(),
             route.structural_context.tab_stack_id.raw(),
@@ -565,9 +588,10 @@ fn dispatch_viewport_pointer_down(
         ));
     }
 
-    let result = host
-        .app
-        .dispatch_viewport_interaction_command(ViewportInteractionCommand::PointerDown { hit });
+    let result = host.app.dispatch_viewport_interaction_for_surface(
+        route.tool_surface_id,
+        ViewportInteractionCommand::PointerDown { hit },
+    );
     if let Err(error) = result {
         eprintln!("viewport pointer-down failed: {error}");
         return;
@@ -607,20 +631,23 @@ mod tests {
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
     use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
+    use crate::shell::RunenwerkEditorShellController;
     use editor_viewport::ViewportId;
+    use engine::plugins::render::UiFontAtlasResource;
     use ui_input::InputResponse;
     use ui_theme::ThemeTokens;
 
     fn seeded_shell_state_with_projection() -> RunenwerkEditorShellState {
         let app = RunenwerkEditorApp::new();
         let mut shell_state = RunenwerkEditorShellState::new();
-        let view_model = crate::shell::build_editor_shell_view_model(&app);
-        let build = editor_shell::build_editor_shell(
-            &view_model,
+        let atlas = UiFontAtlasResource::default();
+        let _ = RunenwerkEditorShellController::build_frame(
+            &app,
+            &mut shell_state,
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
             &ThemeTokens::default(),
-            shell_state.workspace_state(),
+            &atlas,
         );
-        shell_state.set_last_projection_artifacts(build.projection_artifacts);
         shell_state
     }
 
@@ -673,6 +700,10 @@ mod tests {
             route.host_widget_id,
             editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID
         );
+        assert_eq!(
+            Some(route.tool_surface_id),
+            route.structural_context.active_tool_surface
+        );
         assert!((route.local_position.x - 120.0).abs() <= 0.001);
         assert!((route.local_position.y - 220.0).abs() <= 0.001);
     }
@@ -694,5 +725,41 @@ mod tests {
             route.is_none(),
             "outside viewport clicks must not route to viewport fallback",
         );
+    }
+
+    #[test]
+    fn viewport_capture_validation_is_tool_surface_scoped() {
+        let mut shell_state = seeded_shell_state_with_projection();
+        let viewport_bounds = UiRect::new(100.0, 80.0, 900.0, 560.0);
+        let bindings = seeded_bindings(&shell_state, ViewportId(5), viewport_bounds);
+        let route = viewport_pointer_route(
+            &shell_state,
+            &bindings,
+            &editor_shell::UiInputDispatchResult {
+                target: None,
+                response: InputResponse::ignored(),
+            },
+            UiPoint::new(220.0, 300.0),
+        )
+        .expect("viewport route should resolve");
+
+        assert!(viewport_capture_active_for_surface(
+            &shell_state,
+            &bindings,
+            route.tool_surface_id
+        ));
+        assert!(!viewport_capture_active_for_surface(
+            &shell_state,
+            &bindings,
+            editor_shell::ToolSurfaceInstanceId::new(999)
+        ));
+
+        shell_state.runtime_mut().state_mut().captured_widget =
+            Some(editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID);
+        assert!(viewport_capture_active_for_surface(
+            &shell_state,
+            &bindings,
+            route.tool_surface_id
+        ));
     }
 }

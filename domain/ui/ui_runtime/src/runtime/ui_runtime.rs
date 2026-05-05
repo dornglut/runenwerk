@@ -314,6 +314,7 @@ fn outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::output::build_ui_frame::scrollbar_geometry;
     use crate::{
         ButtonNode, ImageNode, NumericInputNode, PanelNode, ScrollNode, SpacerNode, StackNode,
         TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind,
@@ -368,6 +369,86 @@ mod tests {
         UiPoint::new(
             bounds.x + bounds.width * 0.5,
             bounds.y + bounds.height * 0.5,
+        )
+    }
+
+    fn vertical_overflow_scroll_tree(scroll_id: WidgetId, child_id: WidgetId) -> UiTree {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let rows = (0..24)
+            .map(|index| {
+                UiNode::new(
+                    WidgetId(10_000 + index),
+                    UiNodeKind::Button(ButtonNode::new(
+                        format!("Row {index}"),
+                        text_style.clone(),
+                        theme.clone(),
+                    )),
+                )
+            })
+            .collect::<Vec<_>>();
+        UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                scroll_id,
+                UiNodeKind::Scroll(ScrollNode::vertical(theme.clone())),
+                vec![UiNode::with_children(
+                    child_id,
+                    UiNodeKind::Stack(StackNode::vertical(2.0)),
+                    rows,
+                )],
+            )],
+        ))
+    }
+
+    fn horizontal_overflow_scroll_tree(scroll_id: WidgetId, child_id: WidgetId) -> UiTree {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let columns = (0..16)
+            .map(|index| {
+                UiNode::new(
+                    WidgetId(11_000 + index),
+                    UiNodeKind::Button(ButtonNode::new(
+                        format!("Button {index}"),
+                        text_style.clone(),
+                        theme.clone(),
+                    )),
+                )
+            })
+            .collect::<Vec<_>>();
+        UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                scroll_id,
+                UiNodeKind::Scroll(ScrollNode::horizontal(theme.clone())),
+                vec![UiNode::with_children(
+                    child_id,
+                    UiNodeKind::Stack(StackNode::horizontal(4.0)),
+                    columns,
+                )],
+            )],
+        ))
+    }
+
+    fn scrollbar_thumb_center(
+        tree: &UiTree,
+        layouts: &ComputedLayoutMap,
+        scroll_id: WidgetId,
+    ) -> UiPoint {
+        let layout = layouts.get(&scroll_id).expect("scroll layout should exist");
+        let geometry = scrollbar_geometry(
+            tree,
+            scroll_id,
+            layouts,
+            layout.bounds,
+            layout.content_bounds,
+        )
+        .expect("scrollbar geometry should exist");
+        UiPoint::new(
+            geometry.thumb_rect.x + geometry.thumb_rect.width * 0.5,
+            geometry.thumb_rect.y + geometry.thumb_rect.height * 0.5,
         )
     }
 
@@ -1018,6 +1099,222 @@ mod tests {
         assert!(
             runtime.state().scroll_offset(scroll_id) <= 0.001,
             "horizontal scroll should ignore wheel input by default",
+        );
+    }
+
+    #[test]
+    fn vertical_scrollbar_thumb_drag_updates_scroll_offset() {
+        let scroll_id = WidgetId(301);
+        let tree = vertical_overflow_scroll_tree(scroll_id, WidgetId(302));
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let start = scrollbar_thumb_center(&tree, &layouts, scroll_id);
+        let end = UiPoint::new(start.x, start.y + 36.0);
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: end,
+                delta: end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+
+        assert!(
+            runtime.state().scroll_offset(scroll_id) > 0.0,
+            "vertical thumb drag should advance scroll offset",
+        );
+    }
+
+    #[test]
+    fn horizontal_scrollbar_thumb_drag_updates_scroll_offset() {
+        let scroll_id = WidgetId(311);
+        let tree = horizontal_overflow_scroll_tree(scroll_id, WidgetId(312));
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 96.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let start = scrollbar_thumb_center(&tree, &layouts, scroll_id);
+        let end = UiPoint::new(start.x + 42.0, start.y);
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: end,
+                delta: end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+
+        assert!(
+            runtime.state().scroll_offset(scroll_id) > 0.0,
+            "horizontal thumb drag should advance scroll offset",
+        );
+    }
+
+    #[test]
+    fn scrollbar_thumb_drag_clamps_to_max_offset() {
+        let scroll_id = WidgetId(321);
+        let tree = vertical_overflow_scroll_tree(scroll_id, WidgetId(322));
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let start = scrollbar_thumb_center(&tree, &layouts, scroll_id);
+        let end = UiPoint::new(start.x, start.y + 10_000.0);
+        let max_offset = runtime
+            .max_scroll_offset_for_layout(&tree, &layouts, scroll_id)
+            .expect("max scroll should be computed");
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: end,
+                delta: end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+
+        assert!(
+            (runtime.state().scroll_offset(scroll_id) - max_offset).abs() <= 0.001,
+            "thumb drag should clamp to max scroll offset",
+        );
+    }
+
+    #[test]
+    fn scrollbar_thumb_drag_releases_capture_on_pointer_up() {
+        let scroll_id = WidgetId(331);
+        let tree = vertical_overflow_scroll_tree(scroll_id, WidgetId(332));
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let start = scrollbar_thumb_center(&tree, &layouts, scroll_id);
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        assert!(runtime.state().scrollbar_thumb_drag.is_some());
+
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Up,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+
+        assert!(runtime.state().scrollbar_thumb_drag.is_none());
+        assert_eq!(runtime.state().captured_widget, None);
+        assert_eq!(runtime.state().pressed_widget, None);
+    }
+
+    #[test]
+    fn scrollbar_track_without_overflow_does_not_capture() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let scroll_id = WidgetId(341);
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                scroll_id,
+                UiNodeKind::Scroll(ScrollNode::vertical(theme.clone())),
+                vec![UiNode::new(
+                    WidgetId(342),
+                    UiNodeKind::Button(ButtonNode::new("One", text_style, theme)),
+                )],
+            )],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let scroll_bounds = layouts.get(&scroll_id).expect("scroll layout").bounds;
+        let point = UiPoint::new(
+            scroll_bounds.x + scroll_bounds.width - 2.0,
+            scroll_bounds.y + 8.0,
+        );
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: point,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+
+        assert!(
+            runtime.state().scrollbar_thumb_drag.is_none(),
+            "non-overflowing scroll should not start a scrollbar-thumb capture",
         );
     }
 

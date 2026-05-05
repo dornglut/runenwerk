@@ -4,7 +4,14 @@
 use crate::WidgetId;
 use std::collections::BTreeMap;
 use ui_input::FocusTargetId;
-use ui_math::UiPoint;
+use ui_math::{Axis, UiPoint};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScrollbarThumbDragState {
+    pub scroll_widget: WidgetId,
+    pub axis: Axis,
+    pub pointer_grab_offset: f32,
+}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct UiRuntimeState {
@@ -15,6 +22,7 @@ pub struct UiRuntimeState {
     pub scroll_offsets: BTreeMap<WidgetId, f32>,
     pub middle_pan_anchor: Option<WidgetId>,
     pub middle_pan_last_position: Option<UiPoint>,
+    pub scrollbar_thumb_drag: Option<ScrollbarThumbDragState>,
 }
 
 impl UiRuntimeState {
@@ -24,6 +32,7 @@ impl UiRuntimeState {
         self.captured_widget = None;
         self.middle_pan_anchor = None;
         self.middle_pan_last_position = None;
+        self.scrollbar_thumb_drag = None;
     }
 
     pub fn scroll_offset(&self, widget_id: WidgetId) -> f32 {

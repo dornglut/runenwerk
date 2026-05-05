@@ -1,20 +1,19 @@
-use crate::editor_features::viewport::interaction::ViewportInteractionState;
-use crate::editor_panels::EntityTablePanelUiState;
-use crate::editor_runtime::inspector_state::EditorInspectorUiState;
 use crate::editor_runtime::runtime::RunenwerkEditorRuntime;
 use crate::editor_runtime::tool_state::EditorToolRuntimeState;
+use std::sync::Arc;
+
+use editor_shell::WorkspaceState;
+
+use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
-    pub(crate) inspector_ui_state: EditorInspectorUiState,
-    pub(crate) entity_table_ui_state: EntityTablePanelUiState,
     pub(crate) tool_runtime_state: EditorToolRuntimeState,
-    pub(crate) viewport_interaction_state: ViewportInteractionState,
     pub(crate) console_lines: Vec<String>,
     pub(crate) console_max_lines: usize,
-    pub(crate) console_follow_enabled: bool,
     pub(crate) debug_logs_enabled: bool,
-    pub(crate) viewport_details_visible: bool,
+    pub(crate) surface_sessions: SurfaceSessionStore,
+    pub(crate) surface_provider_registry: Arc<EditorSurfaceProviderRegistry>,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -27,15 +26,21 @@ impl RunenwerkEditorApp {
     pub fn new() -> Self {
         Self {
             runtime: RunenwerkEditorRuntime::new(),
-            inspector_ui_state: EditorInspectorUiState::new(),
-            entity_table_ui_state: EntityTablePanelUiState::new(),
             tool_runtime_state: EditorToolRuntimeState::new(),
-            viewport_interaction_state: ViewportInteractionState::new(),
             console_lines: Vec::new(),
             console_max_lines: 256,
-            console_follow_enabled: true,
             debug_logs_enabled: true,
-            viewport_details_visible: false,
+            surface_sessions: SurfaceSessionStore::default(),
+            surface_provider_registry: Arc::new(EditorSurfaceProviderRegistry::runenwerk_default()),
+        }
+    }
+
+    pub fn with_surface_provider_registry(
+        surface_provider_registry: EditorSurfaceProviderRegistry,
+    ) -> Self {
+        Self {
+            surface_provider_registry: Arc::new(surface_provider_registry),
+            ..Self::new()
         }
     }
 
@@ -48,28 +53,8 @@ impl RunenwerkEditorApp {
     }
 
     pub fn reset_transient_editor_ui_state(&mut self) {
-        self.inspector_ui_state.clear_draft();
-        self.inspector_ui_state.clear_focus();
-        self.entity_table_ui_state = EntityTablePanelUiState::new();
         self.tool_runtime_state = EditorToolRuntimeState::new();
-        self.viewport_interaction_state.clear();
-        self.viewport_details_visible = false;
-    }
-
-    pub fn inspector_ui_state(&self) -> &EditorInspectorUiState {
-        &self.inspector_ui_state
-    }
-
-    pub fn inspector_ui_state_mut(&mut self) -> &mut EditorInspectorUiState {
-        &mut self.inspector_ui_state
-    }
-
-    pub fn entity_table_ui_state(&self) -> &EntityTablePanelUiState {
-        &self.entity_table_ui_state
-    }
-
-    pub fn entity_table_ui_state_mut(&mut self) -> &mut EntityTablePanelUiState {
-        &mut self.entity_table_ui_state
+        self.surface_sessions.clear_transient();
     }
 
     pub fn tool_runtime_state(&self) -> &EditorToolRuntimeState {
@@ -78,14 +63,6 @@ impl RunenwerkEditorApp {
 
     pub fn tool_runtime_state_mut(&mut self) -> &mut EditorToolRuntimeState {
         &mut self.tool_runtime_state
-    }
-
-    pub fn viewport_interaction_state(&self) -> &ViewportInteractionState {
-        &self.viewport_interaction_state
-    }
-
-    pub fn viewport_interaction_state_mut(&mut self) -> &mut ViewportInteractionState {
-        &mut self.viewport_interaction_state
     }
 
     pub fn console_lines(&self) -> &[String] {
@@ -100,14 +77,6 @@ impl RunenwerkEditorApp {
         }
     }
 
-    pub fn console_follow_enabled(&self) -> bool {
-        self.console_follow_enabled
-    }
-
-    pub fn set_console_follow_enabled(&mut self, enabled: bool) {
-        self.console_follow_enabled = enabled;
-    }
-
     pub fn debug_logs_enabled(&self) -> bool {
         self.debug_logs_enabled
     }
@@ -120,15 +89,23 @@ impl RunenwerkEditorApp {
         self.debug_logs_enabled = !self.debug_logs_enabled;
     }
 
-    pub fn viewport_details_visible(&self) -> bool {
-        self.viewport_details_visible
+    pub fn surface_sessions(&self) -> &SurfaceSessionStore {
+        &self.surface_sessions
     }
 
-    pub fn set_viewport_details_visible(&mut self, visible: bool) {
-        self.viewport_details_visible = visible;
+    pub fn surface_sessions_mut(&mut self) -> &mut SurfaceSessionStore {
+        &mut self.surface_sessions
     }
 
-    pub fn toggle_viewport_details_visible(&mut self) {
-        self.viewport_details_visible = !self.viewport_details_visible;
+    pub fn prune_surface_sessions_for_workspace(&mut self, workspace: &WorkspaceState) {
+        self.surface_sessions.prune_for_workspace(workspace);
+    }
+
+    pub fn surface_provider_registry(&self) -> &EditorSurfaceProviderRegistry {
+        &self.surface_provider_registry
+    }
+
+    pub fn surface_provider_registry_handle(&self) -> Arc<EditorSurfaceProviderRegistry> {
+        Arc::clone(&self.surface_provider_registry)
     }
 }

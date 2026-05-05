@@ -23,12 +23,14 @@ use crate::runtime::resources::{
     scaled_shell_theme,
 };
 use crate::runtime::viewport::{
-    MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRegistryResource,
-    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
-    ViewportPickingResultsResource, ViewportPresentationStateResource,
-    ViewportProductRegistryResource, ViewportSurfaceSetResource, build_surface_binding_registry,
-    initial_presentation_state, initial_product_descriptors, resolve_structural_viewport_products,
+    MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRecord,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportLayoutEntry, ViewportLayoutMapResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceSetResource,
+    build_surface_binding_registry, initial_presentation_state, initial_product_descriptors,
+    resolve_structural_viewport_products,
 };
+use crate::shell::RunenwerkEditorShellState;
 
 const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
 const DEBUG_HARDCODED_UI_FRAME_ENV: &str = "RUNENWERK_EDITOR_DEBUG_UI_FRAME";
@@ -63,6 +65,14 @@ pub fn submit_editor_frame_system(
         &tool_surface_bindings,
     );
     let active_viewport_id = viewport_products.map(|value| value.viewport_id);
+    if let Some(viewport_id) = active_viewport_id {
+        seed_viewport_binding_for_active_workspace(
+            shell_state,
+            &mut tool_surface_bindings,
+            viewport_id,
+            bounds,
+        );
+    }
     let (expression_source_version, frame) = if debug_hardcoded_ui_frame_enabled() {
         let expression = editor_shell::ShellUiExpressionFrame::new(
             app.runtime().current_scene_reality_version(),
@@ -73,12 +83,13 @@ pub fn submit_editor_frame_system(
             expression.into_ui_frame(),
         )
     } else {
-        let expression = app.build_shell_expression_frame(
+        let expression = app.build_shell_expression_frame_with_surface_resources(
             shell_state,
             bounds,
             &shell_theme,
             &*atlas,
-            viewport_products,
+            Some(&viewport_observations),
+            Some(&tool_surface_bindings),
         );
         (
             expression.metadata.source_version,
@@ -212,6 +223,50 @@ pub fn submit_editor_frame_system(
             .with_order(UiFrameSubmissionOrder::new(10, 0))
             .with_frame(frame),
     );
+}
+
+fn seed_viewport_binding_for_active_workspace(
+    shell_state: &RunenwerkEditorShellState,
+    tool_surface_bindings: &mut ToolSurfaceRuntimeBindingRegistryResource,
+    viewport_id: editor_viewport::ViewportId,
+    bounds: ui_math::UiRect,
+) {
+    let Some((panel, surface, tab_stack)) = shell_state
+        .workspace_state()
+        .panels()
+        .filter_map(|panel| {
+            let surface_id = panel.active_tool_surface?;
+            let surface = shell_state.workspace_state().tool_surface(surface_id)?;
+            if surface.tool_surface_kind != editor_shell::ToolSurfaceKind::Viewport {
+                return None;
+            }
+            let tab_stack = shell_state
+                .workspace_state()
+                .tab_stacks()
+                .find(|stack| stack.ordered_panels.contains(&panel.id))?;
+            Some((panel, surface, tab_stack))
+        })
+        .next()
+    else {
+        return;
+    };
+
+    if tool_surface_bindings
+        .binding_for_tool_surface(surface.id)
+        .is_some()
+    {
+        return;
+    }
+
+    tool_surface_bindings.upsert_binding(ToolSurfaceRuntimeBindingRecord {
+        tool_surface_id: surface.id,
+        panel_instance_id: panel.id,
+        tab_stack_id: tab_stack.id,
+        viewport_id,
+        host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        bounds,
+        generation: tool_surface_bindings.generation().saturating_add(1),
+    });
 }
 
 pub fn sync_viewport_presentation_products_system(

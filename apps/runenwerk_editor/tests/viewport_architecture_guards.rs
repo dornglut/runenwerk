@@ -316,6 +316,169 @@ fn shell_frame_uses_viewport_embed_primitive_instead_of_raw_image_path() {
 }
 
 #[test]
+fn final_shell_frame_body_path_does_not_fan_out_by_panel_kind() {
+    let shell_builder =
+        include_str!("../../../domain/editor/editor_shell/src/composition/build_editor_shell.rs");
+    let body_start = shell_builder
+        .find("fn build_tab_stack_host_from_frame")
+        .expect("final frame tab-stack host function should exist");
+    let body_end = shell_builder[body_start..]
+        .find("fn build_tab_strip")
+        .map(|offset| body_start + offset)
+        .expect("next function after final frame tab-stack host should exist");
+    let final_body_path = &shell_builder[body_start..body_end];
+
+    assert!(
+        final_body_path.contains("frame_model.surface(surface_id)"),
+        "final shell body path must resolve panel content through mounted ToolSurfaceInstanceId",
+    );
+    assert!(
+        !final_body_path.contains("panel.panel_kind"),
+        "final shell body path must not switch on legacy PanelKind",
+    );
+    for concrete_builder in [
+        "build_outliner_panel(",
+        "build_entity_table_panel(",
+        "build_viewport_panel(",
+        "build_inspector_panel(",
+        "build_console_panel(",
+    ] {
+        assert!(
+            !final_body_path.contains(concrete_builder),
+            "final shell body path must not directly fan out to {concrete_builder}",
+        );
+    }
+}
+
+#[test]
+fn production_shell_paths_use_app_owned_registry_and_surface_sessions() {
+    let controller = include_str!("../src/shell/controller.rs");
+    let dispatcher = include_str!("../src/shell/dispatch_shell_command.rs");
+    let app_state = include_str!("../src/editor_app/state.rs");
+    let shell_mod = include_str!("../src/shell/mod.rs");
+    let providers = include_str!("../src/shell/providers/mod.rs");
+
+    assert!(
+        !controller.contains("EditorSurfaceProviderRegistry::runenwerk_default()"),
+        "production controller paths must use the app/plugin-host-owned provider registry",
+    );
+    for forbidden in [
+        concat!("EditorShell", "ViewModel"),
+        concat!("build_editor_shell", "_view_model"),
+        concat!("rebuild", "_view_model"),
+    ] {
+        assert!(
+            !controller.contains(forbidden)
+                && !dispatcher.contains(forbidden)
+                && !shell_mod.contains(forbidden),
+            "production shell modules must not expose or call old aggregate API {forbidden}",
+        );
+    }
+    for forbidden in [
+        "inspector_ui_state:",
+        "entity_table_ui_state:",
+        "viewport_interaction_state:",
+        "console_follow_enabled:",
+        "viewport_details_visible:",
+        "fn inspector_ui_state",
+        "fn entity_table_ui_state",
+        "fn viewport_interaction_state",
+        "fn set_console_follow_enabled",
+        "fn set_viewport_details_visible",
+        "fn toggle_viewport_details_visible",
+    ] {
+        assert!(
+            !app_state.contains(forbidden),
+            "RunenwerkEditorApp must not expose app-global provider-local state through {forbidden}",
+        );
+    }
+    assert!(
+        !providers.contains(concat!("SurfaceCommandProposal::", "ShellCommand"))
+            && !providers.contains(concat!("SurfaceCommandProposal::", "shell")),
+        "providers must return typed SurfaceCommandProposal variants, not boxed shell commands",
+    );
+    for forbidden in [
+        "inspector_ui_state_mut",
+        "entity_table_ui_state_mut",
+        "viewport_interaction_state_mut",
+        "set_console_follow_enabled",
+        "set_viewport_details_visible",
+        "toggle_viewport_details_visible",
+    ] {
+        assert!(
+            !controller.contains(forbidden) && !dispatcher.contains(forbidden),
+            "final shell controller/dispatcher paths must not mutate app-global provider-local state through {forbidden}",
+        );
+    }
+}
+
+#[test]
+fn production_input_bridge_routes_viewport_interaction_by_tool_surface_session() {
+    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+
+    for forbidden in [
+        "viewport_interaction_state()",
+        "viewport_interaction_state_mut()",
+        concat!("dispatch_viewport_interaction", "_command("),
+    ] {
+        assert!(
+            !input_bridge.contains(forbidden),
+            "production input bridge must not use app-global viewport interaction state through {forbidden}",
+        );
+    }
+    assert!(
+        input_bridge.contains("tool_surface_id"),
+        "viewport input route must carry ToolSurfaceInstanceId",
+    );
+    assert!(
+        input_bridge.contains("dispatch_viewport_interaction_for_surface"),
+        "viewport input must dispatch interaction commands to a targeted surface session",
+    );
+    assert!(
+        input_bridge.contains("active_viewport_drag_surface"),
+        "viewport drag continuation must resolve captured surface session state",
+    );
+}
+
+#[test]
+fn viewport_details_dispatch_has_no_first_active_viewport_fallback() {
+    let dispatcher = include_str!("../src/shell/dispatch_shell_command.rs");
+    let providers = include_str!("../src/shell/providers/mod.rs");
+    let shell_command =
+        include_str!("../../../domain/editor/editor_shell/src/commands/shell_command.rs");
+
+    assert!(
+        !dispatcher.contains("active_surface_by_kind"),
+        "viewport details dispatch must not pick the first active viewport surface",
+    );
+    assert!(
+        !dispatcher.contains("ToolSurfaceKind::Viewport)\n            .map"),
+        "viewport details dispatch must not map from viewport kind to an arbitrary active surface",
+    );
+    assert!(
+        shell_command.contains("ToggleViewportDetails {\n        target: StructuralCommandTarget"),
+        "viewport details command must carry structural ToolSurfaceInstanceId context",
+    );
+    assert!(
+        dispatcher.contains("target.active_tool_surface"),
+        "viewport details mutation must use the routed ToolSurfaceInstanceId",
+    );
+    assert!(
+        dispatcher.contains("session.viewport_details_visible = !session.viewport_details_visible"),
+        "viewport details mutation must update the routed surface session",
+    );
+    assert!(
+        providers.contains("SurfaceLocalAction::ToggleViewportDetails"),
+        "viewport provider must emit a provider-local details-toggle action",
+    );
+    assert!(
+        providers.contains("VIEWPORT_DETAILS_TOGGLE_WIDGET_ID")
+            && !providers.contains("VIEWPORT_PANEL_WIDGET_ID,\n            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportDetails)"),
+        "viewport details route must be attached to the dedicated details-toggle widget id",
+    );
+}
+
+#[test]
 fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identity() {
     let tool_surface_id = ToolSurfaceInstanceId::new(91);
     let panel_instance_id = PanelInstanceId::new(41);

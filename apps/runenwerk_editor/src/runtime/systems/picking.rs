@@ -442,7 +442,9 @@ mod tests {
     use crate::editor_app::RunenwerkEditorApp;
     use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
     use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
+    use crate::shell::RunenwerkEditorShellController;
     use editor_viewport::ViewportId;
+    use engine::plugins::render::UiFontAtlasResource;
     use ui_theme::ThemeTokens;
 
     fn seeded_runtime() -> RunenwerkEditorRuntime {
@@ -454,14 +456,14 @@ mod tests {
 
     fn seeded_host_with_projection() -> EditorHostResource {
         let mut host = EditorHostResource::default();
-        let view_model = crate::shell::build_editor_shell_view_model(&host.app);
-        let build = editor_shell::build_editor_shell(
-            &view_model,
+        let atlas = UiFontAtlasResource::default();
+        let _ = RunenwerkEditorShellController::build_frame(
+            &host.app,
+            &mut host.shell_state,
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
             &ThemeTokens::default(),
-            host.shell_state.workspace_state(),
+            &atlas,
         );
-        host.shell_state
-            .set_last_projection_artifacts(build.projection_artifacts);
         host
     }
 

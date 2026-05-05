@@ -3,7 +3,7 @@ use editor_inspector::InspectTarget;
 use editor_scene::SceneCommandIntent;
 
 use crate::editor_app::RunenwerkEditorApp;
-use crate::editor_panels::{InspectorPanelViewModel, OutlinerPanelCommand, OutlinerPanelPresenter};
+use crate::editor_panels::{OutlinerPanelCommand, OutlinerPanelPresenter};
 use crate::editor_runtime::{
     RunenwerkEditorRuntime, execute_scene_intent, outliner_tree_from_hierarchy_snapshot,
 };
@@ -79,7 +79,7 @@ fn outliner_panel_builds_rows_and_selected_entity() {
 }
 
 #[test]
-fn outliner_panel_select_command_updates_inspector_view_model() {
+fn outliner_panel_select_command_updates_inspect_target() {
     let mut app = RunenwerkEditorApp::new();
 
     execute_scene_intent(
@@ -99,13 +99,6 @@ fn outliner_panel_select_command_updates_inspector_view_model() {
         .expect("select command should succeed");
 
     assert_eq!(result.state.selected_entity, Some(EntityId(1)));
-    assert!(matches!(
-        app.inspector_view_model(),
-        InspectorPanelViewModel::Entity {
-            entity: EntityId(1),
-            ..
-        }
-    ));
     assert_eq!(
         app.runtime().primary_inspect_target(),
         Some(InspectTarget::Entity(EntityId(1)))

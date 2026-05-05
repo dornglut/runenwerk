@@ -1,8 +1,9 @@
 use editor_shell::{
     BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
-    ComputedLayoutMap, DockingPreviewDropTarget, EditorShellViewModel, LEFT_RIGHT_SPLIT_WIDGET_ID,
-    ShellCommand, ShellUiExpressionFrame, TabDropDestination, UiInputOutcome, UiInteractionResults,
-    UiTree, build_editor_shell_with_docking_visual_state, map_interactions_to_shell_commands,
+    ComputedLayoutMap, DockingPreviewDropTarget, EditorDomainMutation, EditorShellFrameModel,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal,
+    SurfaceSessionMutation, TabDropDestination, UiInputOutcome, UiInteractionResults, UiTree,
+    build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
 };
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::{
@@ -20,8 +21,9 @@ use crate::runtime::viewport::{
     ViewportPresentationStateResource,
 };
 use crate::shell::{
-    RunenwerkEditorShellState, WorkspaceSplitKind,
-    build_editor_shell_view_model_with_viewport_products, dispatch_shell_command,
+    EditorSurfaceProviderRegistry, RunenwerkEditorShellState, SurfaceProviderDispatchContext,
+    WorkspaceSplitKind, active_document_context, build_editor_shell_frame_model,
+    dispatch_shell_command, mounted_surface_requests,
 };
 
 const CONSOLE_FOLLOW_BOTTOM_EPSILON: f32 = 1.0;
@@ -32,17 +34,6 @@ const SPLIT_MAX_FRACTION: f32 = 0.92;
 pub struct RunenwerkEditorShellController;
 
 impl RunenwerkEditorShellController {
-    pub fn rebuild_view_model(app: &RunenwerkEditorApp) -> EditorShellViewModel {
-        Self::rebuild_view_model_with_viewport_products(app, None)
-    }
-
-    pub fn rebuild_view_model_with_viewport_products(
-        app: &RunenwerkEditorApp,
-        viewport_products: Option<&ArtifactObservationFrame>,
-    ) -> EditorShellViewModel {
-        build_editor_shell_view_model_with_viewport_products(app, viewport_products)
-    }
-
     pub fn rebuild_tree(
         app: &RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
@@ -55,12 +46,19 @@ impl RunenwerkEditorShellController {
         app: &RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
         theme: &ThemeTokens,
-        viewport_products: Option<&ArtifactObservationFrame>,
+        _viewport_products: Option<&ArtifactObservationFrame>,
     ) -> UiTree {
-        let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
+        let frame_model = Self::rebuild_frame_model_with_provider_context(
+            app,
+            shell_state,
+            theme,
+            app.surface_provider_registry(),
+            None,
+            None,
+        );
         let docking_visual_state = shell_state.docking_visual_state();
-        let build_result = build_editor_shell_with_docking_visual_state(
-            &view_model,
+        let build_result = build_editor_shell_frame_with_docking_visual_state(
+            &frame_model,
             theme,
             shell_state.workspace_state(),
             Some(&docking_visual_state),
@@ -127,8 +125,48 @@ impl RunenwerkEditorShellController {
     ) -> ShellUiExpressionFrame {
         let tree =
             Self::rebuild_tree_with_viewport_products(app, shell_state, theme, viewport_products);
+        Self::finish_expression_frame(app, shell_state, bounds, atlas_source, tree)
+    }
+
+    pub fn build_expression_frame_with_surface_resources(
+        app: &RunenwerkEditorApp,
+        shell_state: &mut RunenwerkEditorShellState,
+        bounds: UiRect,
+        theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    ) -> ShellUiExpressionFrame {
+        let frame_model = Self::rebuild_frame_model_with_provider_context(
+            app,
+            shell_state,
+            theme,
+            app.surface_provider_registry(),
+            viewport_observations,
+            tool_surface_bindings,
+        );
+        let docking_visual_state = shell_state.docking_visual_state();
+        let build_result = build_editor_shell_frame_with_docking_visual_state(
+            &frame_model,
+            theme,
+            shell_state.workspace_state(),
+            Some(&docking_visual_state),
+        );
+        let tree = build_result.tree;
+        shell_state.cache_projection_artifacts(build_result.projection_artifacts);
+        shell_state.set_last_tree(tree.clone());
+        Self::finish_expression_frame(app, shell_state, bounds, atlas_source, tree)
+    }
+
+    fn finish_expression_frame(
+        app: &RunenwerkEditorApp,
+        shell_state: &mut RunenwerkEditorShellState,
+        bounds: UiRect,
+        atlas_source: &dyn FontAtlasSource,
+        tree: UiTree,
+    ) -> ShellUiExpressionFrame {
         shell_state.set_last_bounds(bounds);
-        if app.console_follow_enabled()
+        if console_follow_enabled_for_active_surface(app, shell_state)
             && let Some(max_offset) =
                 shell_state
                     .runtime()
@@ -143,6 +181,25 @@ impl RunenwerkEditorShellController {
             .build_frame(&tree, bounds, atlas_source);
 
         ShellUiExpressionFrame::new(app.runtime().current_scene_reality_version(), frame)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn rebuild_frame_model_with_provider_context(
+        app: &RunenwerkEditorApp,
+        shell_state: &RunenwerkEditorShellState,
+        theme: &ThemeTokens,
+        registry: &EditorSurfaceProviderRegistry,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    ) -> EditorShellFrameModel {
+        build_editor_shell_frame_model(
+            app,
+            shell_state,
+            registry,
+            theme,
+            viewport_observations,
+            tool_surface_bindings,
+        )
     }
 
     pub fn dispatch_input(
@@ -172,15 +229,23 @@ impl RunenwerkEditorShellController {
         bounds: UiRect,
         theme: &ThemeTokens,
         event: &UiInputEvent,
-        viewport_products: Option<&ArtifactObservationFrame>,
+        _viewport_products: Option<&ArtifactObservationFrame>,
         viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
-        let view_model = Self::rebuild_view_model_with_viewport_products(app, viewport_products);
+        let registry = app.surface_provider_registry_handle();
+        let frame_model = Self::rebuild_frame_model_with_provider_context(
+            app,
+            shell_state,
+            theme,
+            registry.as_ref(),
+            viewport_observations,
+            tool_surface_bindings,
+        );
         let docking_visual_state = shell_state.docking_visual_state();
-        let build_result = build_editor_shell_with_docking_visual_state(
-            &view_model,
+        let build_result = build_editor_shell_frame_with_docking_visual_state(
+            &frame_model,
             theme,
             shell_state.workspace_state(),
             Some(&docking_visual_state),
@@ -221,10 +286,16 @@ impl RunenwerkEditorShellController {
                 .max_scroll_offset_for_layout(&tree, &post_layouts, CONSOLE_SCROLL_WIDGET_ID)
                 .unwrap_or(0.0);
             let post_at_bottom = is_at_bottom(post_offset, post_max);
-            if post_at_bottom {
-                app.set_console_follow_enabled(true);
-            } else if pre_at_bottom {
-                app.set_console_follow_enabled(false);
+            if let Some(surface_id) = active_console_surface(shell_state) {
+                if post_at_bottom {
+                    app.surface_sessions_mut()
+                        .session_mut(surface_id)
+                        .console_follow_enabled = true;
+                } else if pre_at_bottom {
+                    app.surface_sessions_mut()
+                        .session_mut(surface_id)
+                        .console_follow_enabled = false;
+                }
             }
         }
 
@@ -248,6 +319,7 @@ impl RunenwerkEditorShellController {
             app,
             shell_state,
             commands,
+            registry.as_ref(),
             viewport_presentations,
             viewport_observations,
             tool_surface_bindings,
@@ -357,10 +429,11 @@ impl RunenwerkEditorShellController {
         (commands, suppress_tab_activation)
     }
 
-    fn dispatch_commands(
+    pub(crate) fn dispatch_commands(
         app: &mut RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
         commands: Vec<ShellCommand>,
+        registry: &EditorSurfaceProviderRegistry,
         mut viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
@@ -372,6 +445,54 @@ impl RunenwerkEditorShellController {
                 continue;
             }
             let current_epoch = shell_state.current_projection_epoch();
+
+            if let ShellCommand::DispatchSurfaceLocalAction {
+                provider_id,
+                tool_surface_instance_id,
+                target,
+                action,
+                projection_epoch,
+            } = command
+            {
+                if !shell_state.is_projection_epoch_current(projection_epoch)
+                    || target.active_tool_surface != Some(tool_surface_instance_id)
+                {
+                    continue;
+                }
+                let document_context = active_document_context(app);
+                let Some(request) = mounted_surface_requests(shell_state, document_context)
+                    .into_iter()
+                    .find(|request| {
+                        request.tool_surface_instance_id == tool_surface_instance_id
+                            && request.panel_instance_id == target.panel_instance_id
+                            && request.tab_stack_id == target.tab_stack_id
+                    })
+                else {
+                    continue;
+                };
+                let dispatch_context = SurfaceProviderDispatchContext {
+                    app,
+                    shell_state,
+                    projection_epoch: current_epoch,
+                };
+                if let Some(command) = shell_command_from_surface_proposal(registry.map_action(
+                    &dispatch_context,
+                    &request,
+                    provider_id,
+                    action,
+                )?) {
+                    dispatch_shell_command(
+                        app,
+                        Some(shell_state),
+                        command,
+                        viewport_presentations.as_deref_mut(),
+                        viewport_observations,
+                        tool_surface_bindings,
+                        Some(current_epoch),
+                    )?;
+                }
+                continue;
+            }
 
             dispatch_shell_command(
                 app,
@@ -385,6 +506,110 @@ impl RunenwerkEditorShellController {
         }
 
         Ok(())
+    }
+}
+
+fn shell_command_from_surface_proposal(proposal: SurfaceCommandProposal) -> Option<ShellCommand> {
+    match proposal {
+        SurfaceCommandProposal::SurfaceSession(proposal) => match proposal.mutation {
+            SurfaceSessionMutation::AppendEntityTableSearchText { text } => {
+                Some(ShellCommand::AppendEntityTableSearchText {
+                    text,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::BackspaceEntityTableSearch => {
+                Some(ShellCommand::BackspaceEntityTableSearch {
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::ToggleEntityTableSort { sort_key } => {
+                Some(ShellCommand::ToggleEntityTableSort {
+                    sort_key,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::ToggleViewportDetails => {
+                Some(ShellCommand::ToggleViewportDetails {
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::ActivateInspectorField { index } => {
+                Some(ShellCommand::ActivateInspectorField {
+                    index,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::FocusInspectorField { index } => {
+                Some(ShellCommand::FocusInspectorField {
+                    index,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::AppendInspectorFieldText { index, text } => {
+                Some(ShellCommand::AppendInspectorFieldText {
+                    index,
+                    text,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::BackspaceInspectorFieldText { index } => {
+                Some(ShellCommand::BackspaceInspectorFieldText {
+                    index,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::CommitInspectorFieldText { index } => {
+                Some(ShellCommand::CommitInspectorFieldText {
+                    index,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::CancelInspectorFieldText { index } => {
+                Some(ShellCommand::CancelInspectorFieldText {
+                    index,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            SurfaceSessionMutation::ConsoleSetFollow { .. } => None,
+        },
+        SurfaceCommandProposal::EditorDomain(proposal) => match proposal.mutation {
+            EditorDomainMutation::SelectOutlinerEntity { entity } => {
+                Some(ShellCommand::SelectOutlinerEntity {
+                    entity,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            EditorDomainMutation::SelectEntityTableRow { entities } => {
+                let entity = entities.first().copied()?;
+                Some(ShellCommand::SelectEntityTableEntity {
+                    entity,
+                    target: proposal.target,
+                    projection_epoch: proposal.projection_epoch,
+                })
+            }
+            EditorDomainMutation::SelectViewportProduct {
+                viewport_id,
+                product_id,
+            } => Some(ShellCommand::SelectViewportProduct {
+                viewport_id,
+                product_id,
+                target: proposal.target,
+                projection_epoch: proposal.projection_epoch,
+            }),
+        },
+        SurfaceCommandProposal::NoOp => None,
     }
 }
 
@@ -569,6 +794,34 @@ fn is_console_scroll_event(event: &UiInputEvent, outcome: &UiInputOutcome) -> bo
         event,
         UiInputEvent::Pointer(pointer) if pointer.kind == PointerEventKind::Scroll
     ) && outcome.dispatch.target == Some(CONSOLE_SCROLL_WIDGET_ID)
+}
+
+fn console_follow_enabled_for_active_surface(
+    app: &RunenwerkEditorApp,
+    shell_state: &RunenwerkEditorShellState,
+) -> bool {
+    active_console_surface(shell_state)
+        .map(|surface_id| {
+            app.surface_sessions()
+                .session_or_default(surface_id)
+                .console_follow_enabled
+        })
+        .unwrap_or(true)
+}
+
+fn active_console_surface(
+    shell_state: &RunenwerkEditorShellState,
+) -> Option<editor_shell::ToolSurfaceInstanceId> {
+    shell_state
+        .workspace_state()
+        .panels()
+        .filter_map(|panel| {
+            let surface_id = panel.active_tool_surface?;
+            let surface = shell_state.workspace_state().tool_surface(surface_id)?;
+            (surface.tool_surface_kind == editor_shell::ToolSurfaceKind::Console)
+                .then_some(surface_id)
+        })
+        .next()
 }
 
 fn resolve_tab_drop_preview_target(

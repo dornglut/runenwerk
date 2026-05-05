@@ -4,7 +4,10 @@
 use editor_core::EntityId;
 use editor_viewport::{ExpressionProductId, ViewportId};
 
-use crate::{EntityTableSortKey, PanelInstanceId, TabStackId, ToolSurfaceInstanceId};
+use crate::{
+    EntityTableSortKey, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
+};
+use crate::{SurfaceLocalAction, SurfaceProviderId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StructuralCommandTarget {
@@ -42,6 +45,11 @@ pub enum ShellCommand {
         destination: TabDropDestination,
         projection_epoch: u64,
     },
+    SwitchPanelToolSurfaceKind {
+        panel_instance_id: PanelInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
+        projection_epoch: u64,
+    },
     SelectEntityTableEntity {
         entity: EntityId,
         target: StructuralCommandTarget,
@@ -72,7 +80,10 @@ pub enum ShellCommand {
         target: StructuralCommandTarget,
         projection_epoch: u64,
     },
-    ToggleViewportDetails,
+    ToggleViewportDetails {
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
     ActivateInspectorField {
         index: usize,
         target: StructuralCommandTarget,
@@ -104,6 +115,13 @@ pub enum ShellCommand {
         target: StructuralCommandTarget,
         projection_epoch: u64,
     },
+    DispatchSurfaceLocalAction {
+        provider_id: SurfaceProviderId,
+        tool_surface_instance_id: ToolSurfaceInstanceId,
+        target: StructuralCommandTarget,
+        action: SurfaceLocalAction,
+        projection_epoch: u64,
+    },
     NoOp,
 }
 
@@ -119,6 +137,9 @@ impl ShellCommand {
             | Self::CommitTabDrop {
                 projection_epoch, ..
             }
+            | Self::SwitchPanelToolSurfaceKind {
+                projection_epoch, ..
+            }
             | Self::SelectEntityTableEntity {
                 projection_epoch, ..
             }
@@ -132,6 +153,9 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::SelectViewportProduct {
+                projection_epoch, ..
+            }
+            | Self::ToggleViewportDetails {
                 projection_epoch, ..
             }
             | Self::ActivateInspectorField {
@@ -150,6 +174,9 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::CancelInspectorFieldText {
+                projection_epoch, ..
+            }
+            | Self::DispatchSurfaceLocalAction {
                 projection_epoch, ..
             } => Some(*projection_epoch),
             _ => None,

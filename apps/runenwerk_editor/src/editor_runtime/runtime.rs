@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use editor_core::{ComponentTypeId, EditorMutationError, EditorSession, EntityId, ResourceTypeId};
+use editor_core::{
+    ComponentTypeId, DocumentDescriptor, DocumentId, DocumentKind, EditorMutationError,
+    EditorSession, EntityId, ResourceTypeId,
+};
 use editor_inspector::{InspectTarget, InspectorEditError, InspectorEditValue, InspectorPath};
 use editor_scene::{SceneComponentDescriptor, SceneRuntime};
 
@@ -60,8 +63,10 @@ impl Default for RunenwerkEditorRuntime {
 
 impl RunenwerkEditorRuntime {
     pub fn new() -> Self {
+        let mut session = EditorSession::new();
+        ensure_default_scene_document(&mut session);
         Self {
-            session: EditorSession::new(),
+            session,
             scene_realities: SceneRealityStore::new(),
             retention_store: SceneRetentionStore::new(),
             ratified_changes: RatifiedChangeLog::new(),
@@ -85,6 +90,10 @@ impl RunenwerkEditorRuntime {
 
     pub fn session(&self) -> &EditorSession {
         &self.session
+    }
+
+    pub fn session_mut(&mut self) -> &mut EditorSession {
+        &mut self.session
     }
 
     pub fn session_reality(&self) -> SessionReality<'_> {
@@ -435,6 +444,7 @@ impl RunenwerkEditorRuntime {
     pub(crate) fn prepare_for_scene_load(&mut self) {
         self.clear_scene_entities_only();
         self.session = EditorSession::new();
+        ensure_default_scene_document(&mut self.session);
         self.retention_store = SceneRetentionStore::new();
         self.ratified_changes = RatifiedChangeLog::new();
         self.session_changes = editor_core::SessionChangeLog::new();
@@ -824,6 +834,17 @@ impl RunenwerkEditorRuntime {
 
         component_types
     }
+}
+
+fn ensure_default_scene_document(session: &mut EditorSession) -> DocumentId {
+    let scene_document_id = DocumentId(1);
+    session.upsert_document(DocumentDescriptor::new(
+        scene_document_id,
+        DocumentKind::Scene,
+        "Scene",
+    ));
+    session.set_active_document(Some(scene_document_id));
+    scene_document_id
 }
 
 fn map_session_change_to_share(

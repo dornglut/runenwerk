@@ -3,4 +3,4 @@
 
 pub mod runtime_state;
 
-pub use runtime_state::UiRuntimeState;
+pub use runtime_state::{ScrollbarThumbDragState, UiRuntimeState};

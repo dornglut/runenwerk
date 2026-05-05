@@ -3,8 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use editor_core::EntityId;
-use editor_viewport::{ExpressionProductId, ViewportId};
 use ui_layout::SizePolicy;
 use ui_math::Axis;
 use ui_text::FontId;
@@ -16,6 +14,7 @@ use crate::{
 };
 use ui_math::UiSize;
 
+use crate::EditorShellFrameModel;
 use crate::workspace::{
     ProjectedTabStackSlot, StructuralWidgetRoutingContext, WorkspaceProjectionArtifact,
     project_workspace_for_shell,
@@ -23,15 +22,12 @@ use crate::workspace::{
 use crate::{
     BODY_CONSOLE_SPLIT_HANDLE_WIDGET_ID, BODY_CONSOLE_SPLIT_WIDGET_ID,
     BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_HANDLE_WIDGET_ID,
-    CENTER_RIGHT_SPLIT_WIDGET_ID, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID,
-    ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellViewModel, EntityTableSortKey,
-    FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, FixedLayoutProjection,
-    INSPECTOR_PANEL_WIDGET_ID, LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID, LEFT_RIGHT_SPLIT_WIDGET_ID,
-    OUTLINER_PANEL_WIDGET_ID, PanelInstanceId, PanelKind, ROOT_WIDGET_ID, TabStackId,
-    VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceState, build_console_panel,
-    build_entity_table_panel, build_inspector_panel, build_outliner_panel, build_toolbar,
-    build_viewport_panel, entity_table_sort_button_widget_id, outliner_row_widget_id,
-    tab_stack_container_widget_id, tab_strip_scroll_widget_id, viewport_product_button_widget_id,
+    CENTER_RIGHT_SPLIT_WIDGET_ID, FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID,
+    FixedLayoutProjection, INSPECTOR_PANEL_WIDGET_ID, LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID, PanelInstanceId, PanelKind,
+    ROOT_WIDGET_ID, SurfaceLocalAction, SurfaceProviderId, TabStackId, ToolSurfaceInstanceId,
+    VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceState, build_toolbar,
+    tab_stack_container_widget_id, tab_strip_scroll_widget_id,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,40 +51,10 @@ pub enum RoutedShellAction {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
     },
-    SelectEntityTableRow {
-        entities: Vec<EntityId>,
-        context: StructuralWidgetRoutingContext,
-    },
-    AppendEntityTableSearchText {
-        context: StructuralWidgetRoutingContext,
-    },
-    BackspaceEntityTableSearch {
-        context: StructuralWidgetRoutingContext,
-    },
-    ToggleEntityTableSort {
-        sort_key: EntityTableSortKey,
-        context: StructuralWidgetRoutingContext,
-    },
-    SelectOutlinerEntity {
-        entity: EntityId,
-        context: StructuralWidgetRoutingContext,
-    },
-    SelectViewportProduct {
-        viewport_id: ViewportId,
-        product_id: ExpressionProductId,
-        enabled: bool,
-        context: StructuralWidgetRoutingContext,
-    },
-    ActivateInspectorField {
-        index: usize,
-        context: StructuralWidgetRoutingContext,
-    },
-    FocusInspectorField {
-        index: usize,
-        context: StructuralWidgetRoutingContext,
-    },
-    EditInspectorFieldText {
-        index: usize,
+    DispatchSurfaceLocalAction {
+        provider_id: SurfaceProviderId,
+        tool_surface_instance_id: ToolSurfaceInstanceId,
+        action: SurfaceLocalAction,
         context: StructuralWidgetRoutingContext,
     },
 }
@@ -129,16 +95,16 @@ pub struct EditorShellBuildResult {
     pub projection_artifacts: ShellProjectionArtifacts,
 }
 
-pub fn build_editor_shell(
-    view_model: &EditorShellViewModel,
+pub fn build_editor_shell_frame(
+    frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     workspace_state: &WorkspaceState,
 ) -> EditorShellBuildResult {
-    build_editor_shell_with_docking_visual_state(view_model, theme, workspace_state, None)
+    build_editor_shell_frame_with_docking_visual_state(frame_model, theme, workspace_state, None)
 }
 
-pub fn build_editor_shell_with_docking_visual_state(
-    view_model: &EditorShellViewModel,
+pub fn build_editor_shell_frame_with_docking_visual_state(
+    frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     workspace_state: &WorkspaceState,
     docking_visual_state: Option<&DockingInteractionVisualState>,
@@ -147,7 +113,7 @@ pub fn build_editor_shell_with_docking_visual_state(
         .expect("workspace state is invalid for fixed editor-shell projection");
     let projection = workspace_projection.fixed_layout.clone();
     let (widget_actions_by_id, widget_structural_context_by_id) =
-        build_widget_routes(view_model, &workspace_projection);
+        build_frame_widget_routes(frame_model, &workspace_projection);
     let projection_artifacts = ShellProjectionArtifacts {
         projection_epoch: 0,
         widget_actions_by_id,
@@ -155,31 +121,31 @@ pub fn build_editor_shell_with_docking_visual_state(
         workspace: workspace_projection,
     };
 
-    let toolbar = build_toolbar(&view_model.toolbar, theme);
-    let outliner = build_tab_stack_host(
+    let toolbar = build_toolbar(&frame_model.toolbar, theme);
+    let outliner = build_tab_stack_host_from_frame(
         &projection.outliner,
-        view_model,
+        frame_model,
         theme,
         docking_visual_state,
         OUTLINER_PANEL_WIDGET_ID,
     );
-    let viewport = build_tab_stack_host(
+    let viewport = build_tab_stack_host_from_frame(
         &projection.viewport,
-        view_model,
+        frame_model,
         theme,
         docking_visual_state,
         VIEWPORT_PANEL_WIDGET_ID,
     );
-    let inspector = build_tab_stack_host(
+    let inspector = build_tab_stack_host_from_frame(
         &projection.inspector,
-        view_model,
+        frame_model,
         theme,
         docking_visual_state,
         INSPECTOR_PANEL_WIDGET_ID,
     );
-    let console = build_tab_stack_host(
+    let console = build_tab_stack_host_from_frame(
         &projection.console,
-        view_model,
+        frame_model,
         theme,
         docking_visual_state,
         crate::CONSOLE_PANEL_WIDGET_ID,
@@ -241,7 +207,12 @@ pub fn build_editor_shell_with_docking_visual_state(
             theme.spacing.sm,
             vec![
                 body_with_console,
-                build_floating_column(&projection, view_model, theme, docking_visual_state),
+                build_floating_column_from_frame(
+                    &projection,
+                    frame_model,
+                    theme,
+                    docking_visual_state,
+                ),
             ],
         )
     };
@@ -276,50 +247,21 @@ pub fn build_editor_shell_with_docking_visual_state(
     }
 }
 
-fn build_tab_stack_host(
+fn build_tab_stack_host_from_frame(
     tab_stack: &ProjectedTabStackSlot,
-    view_model: &EditorShellViewModel,
+    frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     docking_visual_state: Option<&DockingInteractionVisualState>,
     empty_widget_id: WidgetId,
 ) -> UiNode {
-    let tab_strip = build_tab_strip(tab_stack, theme, docking_visual_state);
+    let tab_strip = build_tab_strip_from_frame(tab_stack, frame_model, theme, docking_visual_state);
     let panel_content = tab_stack
         .active_panel
-        .map(|panel| match panel.panel_kind {
-            PanelKind::Outliner => build_outliner_panel(
-                &view_model.outliner,
-                theme,
-                panel.panel_instance_id,
-                panel.active_tool_surface,
-            ),
-            PanelKind::EntityTable => build_entity_table_panel(
-                &view_model.entity_table,
-                theme,
-                panel.panel_instance_id,
-                panel.active_tool_surface,
-            ),
-            PanelKind::Viewport => build_viewport_panel(
-                &view_model.viewport,
-                theme,
-                panel.panel_instance_id,
-                panel.active_tool_surface,
-            ),
-            PanelKind::Inspector => build_inspector_panel(
-                &view_model.inspector,
-                theme,
-                panel.panel_instance_id,
-                panel.active_tool_surface,
-            ),
-            PanelKind::Console => build_console_panel(
-                &view_model.console,
-                theme,
-                panel.panel_instance_id,
-                panel.active_tool_surface,
-            ),
-            PanelKind::Placeholder => {
-                build_empty_stack_placeholder(empty_widget_id, "Placeholder", theme)
-            }
+        .and_then(|panel| {
+            panel
+                .active_tool_surface
+                .and_then(|surface_id| frame_model.surface(surface_id))
+                .map(|surface| surface.artifact.root.clone())
         })
         .unwrap_or_else(|| {
             build_empty_stack_placeholder(empty_widget_id, "Drop a tab here", theme)
@@ -332,8 +274,9 @@ fn build_tab_stack_host(
     )
 }
 
-fn build_tab_strip(
+fn build_tab_strip_from_frame(
     tab_stack: &ProjectedTabStackSlot,
+    frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> UiNode {
@@ -378,10 +321,13 @@ fn build_tab_strip(
             } else {
                 ""
             };
-            let title = format!(
-                "{dragging_marker}{}",
-                panel_kind_label(tab.panel.panel_kind)
-            );
+            let surface_title = tab
+                .panel
+                .active_tool_surface
+                .and_then(|surface_id| frame_model.surface(surface_id))
+                .map(|surface| surface.title.as_str())
+                .unwrap_or_else(|| panel_kind_label(tab.panel.panel_kind));
+            let title = format!("{dragging_marker}{surface_title}");
             let is_active = active_panel_id == Some(tab.panel.panel_instance_id);
             children.push(button_selected(
                 tab.widget_id,
@@ -426,9 +372,9 @@ fn build_drop_slot_button(widget_id: WidgetId, highlighted: bool, theme: &ThemeT
     node
 }
 
-fn build_floating_column(
+fn build_floating_column_from_frame(
     projection: &FixedLayoutProjection,
-    view_model: &EditorShellViewModel,
+    frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> UiNode {
@@ -456,9 +402,9 @@ fn build_floating_column(
     }
 
     for floating in &projection.floating_hosts {
-        let stack_panel = build_tab_stack_host(
+        let stack_panel = build_tab_stack_host_from_frame(
             &floating.tab_stack,
-            view_model,
+            frame_model,
             theme,
             docking_visual_state,
             floating.host_widget_id,
@@ -600,8 +546,8 @@ fn build_empty_stack_placeholder(id: WidgetId, label_text: &str, theme: &ThemeTo
     )
 }
 
-fn build_widget_routes(
-    view_model: &EditorShellViewModel,
+fn build_frame_widget_routes(
+    frame_model: &EditorShellFrameModel,
     workspace_projection: &WorkspaceProjectionArtifact,
 ) -> (
     BTreeMap<WidgetId, RoutedShellAction>,
@@ -610,7 +556,7 @@ fn build_widget_routes(
     let mut actions = BTreeMap::new();
     let mut structural_contexts = workspace_projection.widget_context_by_id.clone();
 
-    for button in &view_model.toolbar.buttons {
+    for button in &frame_model.toolbar.buttons {
         let route = match button.stable_name {
             "select" => Some((
                 crate::TOOLBAR_SELECT_BUTTON_WIDGET_ID,
@@ -666,110 +612,42 @@ fn build_widget_routes(
         );
     }
 
-    if let Some(context) = workspace_projection
-        .widget_context_by_id
-        .get(&OUTLINER_PANEL_WIDGET_ID)
-        .copied()
-    {
-        for (index, row) in view_model.outliner.rows.iter().enumerate() {
-            let widget_id = outliner_row_widget_id(index);
+    for surface in frame_model.surfaces.values() {
+        let context = StructuralWidgetRoutingContext {
+            panel_instance_id: surface.panel_instance_id,
+            active_tool_surface: Some(surface.surface_instance_id),
+            tab_stack_id: surface.tab_stack_id,
+        };
+        register_surface_node_contexts(&mut structural_contexts, &surface.artifact.root, context);
+        let Some(provider_id) = surface.provider_id else {
+            continue;
+        };
+        for (widget_id, route) in surface.routes.iter() {
             actions.insert(
-                widget_id,
-                RoutedShellAction::SelectOutlinerEntity {
-                    entity: row.entity,
+                *widget_id,
+                RoutedShellAction::DispatchSurfaceLocalAction {
+                    provider_id,
+                    tool_surface_instance_id: surface.surface_instance_id,
+                    action: route.action.clone(),
                     context,
                 },
             );
-            structural_contexts.insert(widget_id, context);
-        }
-    }
-
-    if let Some(context) = workspace_projection
-        .widget_context_by_id
-        .get(&ENTITY_TABLE_PANEL_WIDGET_ID)
-        .copied()
-    {
-        actions.insert(
-            ENTITY_TABLE_LIST_WIDGET_ID,
-            RoutedShellAction::SelectEntityTableRow {
-                entities: view_model
-                    .entity_table
-                    .rows
-                    .iter()
-                    .map(|row| row.entity)
-                    .collect(),
-                context,
-            },
-        );
-        actions.insert(
-            ENTITY_TABLE_SEARCH_WIDGET_ID,
-            RoutedShellAction::AppendEntityTableSearchText { context },
-        );
-        for (index, sort_key) in [
-            EntityTableSortKey::EntityId,
-            EntityTableSortKey::DisplayName,
-            EntityTableSortKey::Parent,
-            EntityTableSortKey::ComponentCount,
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let widget_id = entity_table_sort_button_widget_id(index);
-            actions.insert(
-                widget_id,
-                RoutedShellAction::ToggleEntityTableSort { sort_key, context },
-            );
-            structural_contexts.insert(widget_id, context);
-        }
-        structural_contexts.insert(ENTITY_TABLE_LIST_WIDGET_ID, context);
-        structural_contexts.insert(ENTITY_TABLE_SEARCH_WIDGET_ID, context);
-    }
-
-    if let Some(context) = workspace_projection
-        .widget_context_by_id
-        .get(&INSPECTOR_PANEL_WIDGET_ID)
-        .copied()
-    {
-        for (index, field) in view_model.inspector.fields.iter().enumerate() {
-            let widget_id = crate::inspector_field_widget_id(index);
-            let action = if field.editable {
-                RoutedShellAction::EditInspectorFieldText { index, context }
-            } else {
-                RoutedShellAction::ActivateInspectorField { index, context }
-            };
-            actions.insert(widget_id, action);
-            if field.editable {
-                actions.insert(
-                    crate::inspector_field_focus_widget_id(index),
-                    RoutedShellAction::FocusInspectorField { index, context },
-                );
-                structural_contexts.insert(crate::inspector_field_focus_widget_id(index), context);
-            }
-            structural_contexts.insert(widget_id, context);
-        }
-    }
-
-    if let Some(context) = workspace_projection
-        .widget_context_by_id
-        .get(&VIEWPORT_PANEL_WIDGET_ID)
-        .copied()
-    {
-        for (index, choice) in view_model.viewport.product_choices.iter().enumerate() {
-            let widget_id = viewport_product_button_widget_id(index);
-            actions.insert(
-                widget_id,
-                RoutedShellAction::SelectViewportProduct {
-                    viewport_id: choice.viewport_id,
-                    product_id: choice.product_id,
-                    enabled: choice.enabled,
-                    context,
-                },
-            );
-            structural_contexts.insert(widget_id, context);
+            structural_contexts.insert(*widget_id, context);
         }
     }
 
     (actions, structural_contexts)
+}
+
+fn register_surface_node_contexts(
+    contexts: &mut BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
+    node: &UiNode,
+    context: StructuralWidgetRoutingContext,
+) {
+    contexts.insert(node.id, context);
+    for child in &node.children {
+        register_surface_node_contexts(contexts, child, context);
+    }
 }
 
 fn root_background_opaque_enabled() -> bool {
