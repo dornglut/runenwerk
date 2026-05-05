@@ -129,7 +129,7 @@ mod tests {
 
         let mounted = mounted_surface_instances(&workspace).collect::<Vec<_>>();
 
-        assert_eq!(workspace_id, WorkspaceId::new(1));
+        assert_eq!(workspace_id, WorkspaceId::try_from_raw(1).unwrap());
         assert_eq!(mounted.len(), 5);
         assert!(
             mounted

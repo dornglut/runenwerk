@@ -284,8 +284,10 @@ mod tests {
 
     fn projected_workspace() -> WorkspaceProjectionArtifact {
         let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace =
-            WorkspaceState::bootstrap_current_layout(WorkspaceId::new(1), &mut allocator);
+        let workspace = WorkspaceState::bootstrap_current_layout(
+            WorkspaceId::try_from_raw(1).unwrap(),
+            &mut allocator,
+        );
 
         project_workspace_for_shell(&workspace).expect("workspace projection should succeed")
     }
@@ -371,7 +373,7 @@ mod tests {
         artifact.widget_context_by_id.insert(
             widget_id,
             StructuralWidgetRoutingContext {
-                panel_instance_id: PanelInstanceId::new(999),
+                panel_instance_id: PanelInstanceId::try_from_raw(999).unwrap(),
                 active_tool_surface: None,
                 tab_stack_id: artifact.fixed_layout.viewport.tab_stack_id,
             },

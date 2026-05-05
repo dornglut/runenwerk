@@ -7,6 +7,7 @@ layer: foundation
 canonical: true
 last_reviewed: 2026-04-30
 related:
+  - ./current-state.md
   - ./implementation-roadmap.md
   - ../../design/accepted/foundation-diagnostics-design.md
 ---
@@ -15,5 +16,6 @@ related:
 
 ## Current Docs
 
+- [`current-state.md`](./current-state.md)
 - [`implementation-roadmap.md`](./implementation-roadmap.md)
 - [`../../design/accepted/foundation-diagnostics-design.md`](../../design/accepted/foundation-diagnostics-design.md)

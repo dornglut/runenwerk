@@ -417,7 +417,11 @@ mod tests {
             },
         );
         let action = renderer
-            .resolve_feature_pass_action(UI_RENDER_FEATURE_ID, RenderPassId::new(1), &packet)
+            .resolve_feature_pass_action(
+                UI_RENDER_FEATURE_ID,
+                RenderPassId::try_from_raw(1).unwrap(),
+                &packet,
+            )
             .expect("skip policy should not error");
         assert_eq!(action, FeaturePassAction::Skip);
     }
@@ -434,7 +438,11 @@ mod tests {
         );
         assert!(
             renderer
-                .resolve_feature_pass_action(UI_RENDER_FEATURE_ID, RenderPassId::new(1), &packet)
+                .resolve_feature_pass_action(
+                    UI_RENDER_FEATURE_ID,
+                    RenderPassId::try_from_raw(1).unwrap(),
+                    &packet
+                )
                 .is_err(),
             "missing + fail-frame should produce an execution error"
         );
@@ -454,7 +462,7 @@ mod tests {
         let action = renderer
             .resolve_feature_pass_action(
                 WORLD_DRAW_RENDER_FEATURE_ID,
-                RenderPassId::new(2),
+                RenderPassId::try_from_raw(2).unwrap(),
                 &packet,
             )
             .expect("skip policy should not error");
@@ -506,7 +514,7 @@ mod tests {
         let mut explicit = BTreeSet::new();
         explicit.insert("main".to_string());
         let pass = CompiledPassExecutionPlan::Present(CompiledPresentExecutionPlan {
-            pass_id: RenderPassId::new(1),
+            pass_id: RenderPassId::try_from_raw(1).unwrap(),
             order_index: 0,
             feature_id: None,
             view_mask: CompiledViewMask::Explicit(explicit),

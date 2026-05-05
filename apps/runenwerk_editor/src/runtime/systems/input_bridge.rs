@@ -759,7 +759,7 @@ mod tests {
         assert!(!viewport_capture_active_for_surface(
             &shell_state,
             &bindings,
-            editor_shell::ToolSurfaceInstanceId::new(999)
+            editor_shell::ToolSurfaceInstanceId::try_from_raw(999).unwrap()
         ));
 
         shell_state.runtime_mut().state_mut().captured_widget =

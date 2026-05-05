@@ -307,9 +307,10 @@ mod tests {
             viewport_id,
             host_widget_id: WidgetId(widget_id),
             structural_context: StructuralWidgetRoutingContext {
-                panel_instance_id: PanelInstanceId::new(panel),
-                active_tool_surface: surface.map(ToolSurfaceInstanceId::new),
-                tab_stack_id: TabStackId::new(stack),
+                panel_instance_id: PanelInstanceId::try_from_raw(panel).unwrap(),
+                active_tool_surface: surface
+                    .map(|id| ToolSurfaceInstanceId::try_from_raw(id).unwrap()),
+                tab_stack_id: TabStackId::try_from_raw(stack).unwrap(),
             },
             bounds: UiRect::new(10.0, 20.0, 300.0, 200.0),
         }
@@ -324,11 +325,14 @@ mod tests {
         registry.rebuild_from_layout_map(&layout);
 
         let binding = registry
-            .binding_for_tool_surface(ToolSurfaceInstanceId::new(31))
+            .binding_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(31).unwrap())
             .expect("tool surface binding should exist");
         assert_eq!(binding.viewport_id, ViewportId(1));
-        assert_eq!(binding.panel_instance_id, PanelInstanceId::new(11));
-        assert_eq!(binding.tab_stack_id, TabStackId::new(21));
+        assert_eq!(
+            binding.panel_instance_id,
+            PanelInstanceId::try_from_raw(11).unwrap()
+        );
+        assert_eq!(binding.tab_stack_id, TabStackId::try_from_raw(21).unwrap());
     }
 
     #[test]
@@ -343,7 +347,7 @@ mod tests {
         registry.rebuild_from_layout_map(&layout);
 
         let rebind = registry
-            .latest_rebind_for_tool_surface(ToolSurfaceInstanceId::new(31))
+            .latest_rebind_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(31).unwrap())
             .expect("rebind should be tracked");
         assert_eq!(rebind.from_viewport_id, ViewportId(1));
         assert_eq!(rebind.to_viewport_id, ViewportId(2));
@@ -353,9 +357,9 @@ mod tests {
     fn resolve_command_target_fails_when_runtime_binding_missing() {
         let registry = ToolSurfaceRuntimeBindingRegistryResource::default();
         let target = StructuralCommandTarget {
-            panel_instance_id: PanelInstanceId::new(11),
-            active_tool_surface: Some(ToolSurfaceInstanceId::new(31)),
-            tab_stack_id: TabStackId::new(21),
+            panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
+            active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(31).unwrap()),
+            tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
         };
 
         let error = registry
@@ -365,7 +369,7 @@ mod tests {
             error,
             ToolSurfaceRuntimeBindingResolveError::MissingRuntimeBinding {
                 tool_surface_id, ..
-            } if tool_surface_id == ToolSurfaceInstanceId::new(31)
+            } if tool_surface_id == ToolSurfaceInstanceId::try_from_raw(31).unwrap()
         ));
     }
 
@@ -373,18 +377,18 @@ mod tests {
     fn resolve_command_target_fails_when_requested_viewport_is_stale() {
         let mut registry = ToolSurfaceRuntimeBindingRegistryResource::default();
         registry.upsert_binding(ToolSurfaceRuntimeBindingRecord {
-            tool_surface_id: ToolSurfaceInstanceId::new(31),
-            panel_instance_id: PanelInstanceId::new(11),
-            tab_stack_id: TabStackId::new(21),
+            tool_surface_id: ToolSurfaceInstanceId::try_from_raw(31).unwrap(),
+            panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
             viewport_id: ViewportId(2),
             host_widget_id: WidgetId(42),
             bounds: UiRect::new(0.0, 0.0, 100.0, 50.0),
             generation: 1,
         });
         let target = StructuralCommandTarget {
-            panel_instance_id: PanelInstanceId::new(11),
-            active_tool_surface: Some(ToolSurfaceInstanceId::new(31)),
-            tab_stack_id: TabStackId::new(21),
+            panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
+            active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(31).unwrap()),
+            tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
         };
 
         let error = registry
@@ -404,18 +408,18 @@ mod tests {
     fn resolve_command_target_fails_when_structural_identity_mismatch() {
         let mut registry = ToolSurfaceRuntimeBindingRegistryResource::default();
         registry.upsert_binding(ToolSurfaceRuntimeBindingRecord {
-            tool_surface_id: ToolSurfaceInstanceId::new(31),
-            panel_instance_id: PanelInstanceId::new(22),
-            tab_stack_id: TabStackId::new(44),
+            tool_surface_id: ToolSurfaceInstanceId::try_from_raw(31).unwrap(),
+            panel_instance_id: PanelInstanceId::try_from_raw(22).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(44).unwrap(),
             viewport_id: ViewportId(2),
             host_widget_id: WidgetId(42),
             bounds: UiRect::new(0.0, 0.0, 100.0, 50.0),
             generation: 1,
         });
         let target = StructuralCommandTarget {
-            panel_instance_id: PanelInstanceId::new(11),
-            active_tool_surface: Some(ToolSurfaceInstanceId::new(31)),
-            tab_stack_id: TabStackId::new(21),
+            panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
+            active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(31).unwrap()),
+            tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
         };
 
         let error = registry
@@ -429,10 +433,10 @@ mod tests {
                 bound_panel_instance_id,
                 bound_tab_stack_id,
                 ..
-            } if expected_panel_instance_id == PanelInstanceId::new(11)
-                && expected_tab_stack_id == TabStackId::new(21)
-                && bound_panel_instance_id == PanelInstanceId::new(22)
-                && bound_tab_stack_id == TabStackId::new(44)
+            } if expected_panel_instance_id == PanelInstanceId::try_from_raw(11).unwrap()
+                && expected_tab_stack_id == TabStackId::try_from_raw(21).unwrap()
+                && bound_panel_instance_id == PanelInstanceId::try_from_raw(22).unwrap()
+                && bound_tab_stack_id == TabStackId::try_from_raw(44).unwrap()
         ));
     }
 
@@ -460,13 +464,13 @@ mod tests {
         registry.rebuild_from_layout_map(&layout);
 
         let binding = registry
-            .binding_for_tool_surface(ToolSurfaceInstanceId::new(31))
+            .binding_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(31).unwrap())
             .expect("binding should exist");
         assert_eq!(binding.viewport_id, ViewportId(1));
         assert_eq!(binding.host_widget_id, WidgetId(202));
         assert!(
             registry
-                .latest_rebind_for_tool_surface(ToolSurfaceInstanceId::new(31))
+                .latest_rebind_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(31).unwrap())
                 .is_none(),
             "changing widget host without viewport remap must not produce runtime rebind",
         );

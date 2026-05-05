@@ -25,7 +25,14 @@ use runenwerk_editor::runtime::viewport::{
 };
 use ui_render_data::UiPrimitive;
 
-const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
+const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1001);
+
+const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
+    match UiFrameProducerId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("ui frame producer id constants must be non-zero"),
+    }
+}
 
 #[test]
 fn viewport_presentation_state_is_product_addressed() {
@@ -506,9 +513,9 @@ fn viewport_details_dispatch_has_no_first_active_viewport_fallback() {
 
 #[test]
 fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identity() {
-    let tool_surface_id = ToolSurfaceInstanceId::new(91);
-    let panel_instance_id = PanelInstanceId::new(41);
-    let tab_stack_id = TabStackId::new(51);
+    let tool_surface_id = ToolSurfaceInstanceId::try_from_raw(91).unwrap();
+    let panel_instance_id = PanelInstanceId::try_from_raw(41).unwrap();
+    let tab_stack_id = TabStackId::try_from_raw(51).unwrap();
     let mut layout = ViewportLayoutMapResource::default();
     layout.upsert_entry(ViewportLayoutEntry {
         viewport_id: ViewportId(1),
@@ -556,9 +563,9 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
 fn runtime_binding_resolution_rejects_structural_mismatch_even_when_viewport_matches() {
     let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
     bindings.upsert_binding(ToolSurfaceRuntimeBindingRecord {
-        tool_surface_id: ToolSurfaceInstanceId::new(7),
-        panel_instance_id: PanelInstanceId::new(11),
-        tab_stack_id: TabStackId::new(21),
+        tool_surface_id: ToolSurfaceInstanceId::try_from_raw(7).unwrap(),
+        panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
+        tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
         viewport_id: ViewportId(1),
         host_widget_id: WidgetId(301),
         bounds: ui_math::UiRect::new(0.0, 0.0, 320.0, 200.0),
@@ -568,9 +575,9 @@ fn runtime_binding_resolution_rejects_structural_mismatch_even_when_viewport_mat
     let error = bindings
         .resolve_command_target(
             StructuralCommandTarget {
-                panel_instance_id: PanelInstanceId::new(99),
-                active_tool_surface: Some(ToolSurfaceInstanceId::new(7)),
-                tab_stack_id: TabStackId::new(199),
+                panel_instance_id: PanelInstanceId::try_from_raw(99).unwrap(),
+                active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(7).unwrap()),
+                tab_stack_id: TabStackId::try_from_raw(199).unwrap(),
             },
             ViewportId(1),
         )

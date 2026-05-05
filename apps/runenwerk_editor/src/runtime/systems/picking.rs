@@ -577,9 +577,9 @@ mod tests {
         let host = EditorHostResource::default();
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
         bindings.upsert_binding(crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord {
-            tool_surface_id: editor_shell::ToolSurfaceInstanceId::new(33),
-            panel_instance_id: editor_shell::PanelInstanceId::new(11),
-            tab_stack_id: editor_shell::TabStackId::new(22),
+            tool_surface_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(33).unwrap(),
+            panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(11).unwrap(),
+            tab_stack_id: editor_shell::TabStackId::try_from_raw(22).unwrap(),
             viewport_id: ViewportId(9),
             host_widget_id: editor_shell::WidgetId(77),
             bounds: UiRect::new(100.0, 200.0, 300.0, 250.0),

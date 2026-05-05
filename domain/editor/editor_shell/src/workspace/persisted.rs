@@ -161,6 +161,13 @@ pub enum PersistedToolSurfaceMountV1 {
     Mounted { panel_id: u64 },
 }
 
+macro_rules! persisted_id {
+    ($ty:ty, $raw:expr, $message:literal) => {
+        <$ty>::try_from_raw($raw)
+            .map_err(|_| WorkspaceStateError::PersistedSchemaViolation($message))
+    };
+}
+
 impl WorkspaceState {
     pub fn to_persisted_v2(&self) -> PersistedWorkspaceStateV2 {
         PersistedWorkspaceStateV2 {
@@ -259,57 +266,105 @@ impl WorkspaceState {
 
         let mut hosts_by_id = BTreeMap::new();
         for host in persisted.hosts {
-            let host_id = PanelHostId::new(host.id);
-            let kind = workspace_host_kind(host.kind);
+            let host_id =
+                persisted_id!(PanelHostId, host.id, "persisted host id must be non-zero")?;
+            let kind = workspace_host_kind(host.kind)?;
             hosts_by_id.insert(host_id, PanelHostNode { id: host_id, kind });
         }
 
         let mut tab_stacks_by_id = BTreeMap::new();
         for stack in persisted.tab_stacks {
-            let stack_id = TabStackId::new(stack.id);
+            let stack_id = persisted_id!(
+                TabStackId,
+                stack.id,
+                "persisted tab-stack id must be non-zero"
+            )?;
+            let ordered_panels = stack
+                .ordered_panels
+                .into_iter()
+                .map(|panel_id| {
+                    persisted_id!(
+                        PanelInstanceId,
+                        panel_id,
+                        "persisted ordered panel id must be non-zero"
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let active_panel = stack
+                .active_panel
+                .map(|panel_id| {
+                    persisted_id!(
+                        PanelInstanceId,
+                        panel_id,
+                        "persisted active panel id must be non-zero"
+                    )
+                })
+                .transpose()?;
             tab_stacks_by_id.insert(
                 stack_id,
                 TabStackState {
                     id: stack_id,
-                    ordered_panels: stack
-                        .ordered_panels
-                        .into_iter()
-                        .map(PanelInstanceId::new)
-                        .collect(),
-                    active_panel: stack.active_panel.map(PanelInstanceId::new),
+                    ordered_panels,
+                    active_panel,
                 },
             );
         }
 
         let mut panels_by_id = BTreeMap::new();
         for panel in persisted.panels {
-            let panel_id = PanelInstanceId::new(panel.id);
+            let panel_id = persisted_id!(
+                PanelInstanceId,
+                panel.id,
+                "persisted panel id must be non-zero"
+            )?;
+            let active_tool_surface = panel
+                .active_tool_surface
+                .map(|surface_id| {
+                    persisted_id!(
+                        ToolSurfaceInstanceId,
+                        surface_id,
+                        "persisted active tool-surface id must be non-zero"
+                    )
+                })
+                .transpose()?;
             panels_by_id.insert(
                 panel_id,
                 PanelInstanceState {
                     id: panel_id,
                     panel_kind: workspace_panel_kind(panel.panel_kind),
-                    active_tool_surface: panel.active_tool_surface.map(ToolSurfaceInstanceId::new),
+                    active_tool_surface,
                 },
             );
         }
 
         let mut tool_surfaces_by_id = BTreeMap::new();
         for surface in persisted.tool_surfaces {
-            let surface_id = ToolSurfaceInstanceId::new(surface.id);
+            let surface_id = persisted_id!(
+                ToolSurfaceInstanceId,
+                surface.id,
+                "persisted tool-surface id must be non-zero"
+            )?;
             tool_surfaces_by_id.insert(
                 surface_id,
                 ToolSurfaceState {
                     id: surface_id,
                     tool_surface_kind: workspace_tool_surface_kind(surface.tool_surface_kind),
-                    mount: workspace_mount(surface.mount),
+                    mount: workspace_mount(surface.mount)?,
                 },
             );
         }
 
         let state = WorkspaceState {
-            workspace_id: WorkspaceId::new(persisted.workspace_id),
-            root_host_id: PanelHostId::new(persisted.root_host_id),
+            workspace_id: persisted_id!(
+                WorkspaceId,
+                persisted.workspace_id,
+                "persisted workspace id must be non-zero"
+            )?,
+            root_host_id: persisted_id!(
+                PanelHostId,
+                persisted.root_host_id,
+                "persisted root host id must be non-zero"
+            )?,
             hosts_by_id,
             tab_stacks_by_id,
             panels_by_id,
@@ -330,57 +385,105 @@ impl WorkspaceState {
 
         let mut hosts_by_id = BTreeMap::new();
         for host in persisted.hosts {
-            let host_id = PanelHostId::new(host.id);
-            let kind = workspace_host_kind(host.kind);
+            let host_id =
+                persisted_id!(PanelHostId, host.id, "persisted host id must be non-zero")?;
+            let kind = workspace_host_kind(host.kind)?;
             hosts_by_id.insert(host_id, PanelHostNode { id: host_id, kind });
         }
 
         let mut tab_stacks_by_id = BTreeMap::new();
         for stack in persisted.tab_stacks {
-            let stack_id = TabStackId::new(stack.id);
+            let stack_id = persisted_id!(
+                TabStackId,
+                stack.id,
+                "persisted tab-stack id must be non-zero"
+            )?;
+            let ordered_panels = stack
+                .ordered_panels
+                .into_iter()
+                .map(|panel_id| {
+                    persisted_id!(
+                        PanelInstanceId,
+                        panel_id,
+                        "persisted ordered panel id must be non-zero"
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let active_panel = stack
+                .active_panel
+                .map(|panel_id| {
+                    persisted_id!(
+                        PanelInstanceId,
+                        panel_id,
+                        "persisted active panel id must be non-zero"
+                    )
+                })
+                .transpose()?;
             tab_stacks_by_id.insert(
                 stack_id,
                 TabStackState {
                     id: stack_id,
-                    ordered_panels: stack
-                        .ordered_panels
-                        .into_iter()
-                        .map(PanelInstanceId::new)
-                        .collect(),
-                    active_panel: stack.active_panel.map(PanelInstanceId::new),
+                    ordered_panels,
+                    active_panel,
                 },
             );
         }
 
         let mut panels_by_id = BTreeMap::new();
         for panel in persisted.panels {
-            let panel_id = PanelInstanceId::new(panel.id);
+            let panel_id = persisted_id!(
+                PanelInstanceId,
+                panel.id,
+                "persisted panel id must be non-zero"
+            )?;
+            let active_tool_surface = panel
+                .active_tool_surface
+                .map(|surface_id| {
+                    persisted_id!(
+                        ToolSurfaceInstanceId,
+                        surface_id,
+                        "persisted active tool-surface id must be non-zero"
+                    )
+                })
+                .transpose()?;
             panels_by_id.insert(
                 panel_id,
                 PanelInstanceState {
                     id: panel_id,
                     panel_kind: workspace_panel_kind_v2(panel.panel_kind),
-                    active_tool_surface: panel.active_tool_surface.map(ToolSurfaceInstanceId::new),
+                    active_tool_surface,
                 },
             );
         }
 
         let mut tool_surfaces_by_id = BTreeMap::new();
         for surface in persisted.tool_surfaces {
-            let surface_id = ToolSurfaceInstanceId::new(surface.id);
+            let surface_id = persisted_id!(
+                ToolSurfaceInstanceId,
+                surface.id,
+                "persisted tool-surface id must be non-zero"
+            )?;
             tool_surfaces_by_id.insert(
                 surface_id,
                 ToolSurfaceState {
                     id: surface_id,
                     tool_surface_kind: workspace_tool_surface_kind_v2(surface.tool_surface_kind),
-                    mount: workspace_mount(surface.mount),
+                    mount: workspace_mount(surface.mount)?,
                 },
             );
         }
 
         let state = WorkspaceState {
-            workspace_id: WorkspaceId::new(persisted.workspace_id),
-            root_host_id: PanelHostId::new(persisted.root_host_id),
+            workspace_id: persisted_id!(
+                WorkspaceId,
+                persisted.workspace_id,
+                "persisted workspace id must be non-zero"
+            )?,
+            root_host_id: persisted_id!(
+                PanelHostId,
+                persisted.root_host_id,
+                "persisted root host id must be non-zero"
+            )?,
             hosts_by_id,
             tab_stacks_by_id,
             panels_by_id,
@@ -411,31 +514,55 @@ fn persisted_host_kind(kind: PanelHostKind) -> PersistedPanelHostKindV1 {
     }
 }
 
-fn workspace_host_kind(kind: PersistedPanelHostKindV1) -> PanelHostKind {
+fn workspace_host_kind(
+    kind: PersistedPanelHostKindV1,
+) -> Result<PanelHostKind, WorkspaceStateError> {
     match kind {
         PersistedPanelHostKindV1::SplitHost {
             axis,
             fraction,
             first_child,
             second_child,
-        } => PanelHostKind::SplitHost(SplitHostState {
+        } => Ok(PanelHostKind::SplitHost(SplitHostState {
             axis: workspace_axis(axis),
             fraction,
-            first_child: PanelHostId::new(first_child),
-            second_child: PanelHostId::new(second_child),
-        }),
+            first_child: persisted_id!(
+                PanelHostId,
+                first_child,
+                "persisted split first-child host id must be non-zero"
+            )?,
+            second_child: persisted_id!(
+                PanelHostId,
+                second_child,
+                "persisted split second-child host id must be non-zero"
+            )?,
+        })),
         PersistedPanelHostKindV1::TabStackHost { tab_stack_id } => {
-            PanelHostKind::TabStackHost(TabStackHostState {
-                tab_stack_id: TabStackId::new(tab_stack_id),
-            })
+            Ok(PanelHostKind::TabStackHost(TabStackHostState {
+                tab_stack_id: persisted_id!(
+                    TabStackId,
+                    tab_stack_id,
+                    "persisted tab-stack host id must be non-zero"
+                )?,
+            }))
         }
         PersistedPanelHostKindV1::FloatingHostPlaceholder {
             tab_stack_id,
             bounds,
-        } => PanelHostKind::FloatingHostPlaceholder(FloatingHostPlaceholderState {
-            tab_stack_id: tab_stack_id.map(TabStackId::new),
-            bounds: workspace_floating_bounds(bounds),
-        }),
+        } => Ok(PanelHostKind::FloatingHostPlaceholder(
+            FloatingHostPlaceholderState {
+                tab_stack_id: tab_stack_id
+                    .map(|id| {
+                        persisted_id!(
+                            TabStackId,
+                            id,
+                            "persisted floating tab-stack id must be non-zero"
+                        )
+                    })
+                    .transpose()?,
+                bounds: workspace_floating_bounds(bounds),
+            },
+        )),
     }
 }
 
@@ -694,12 +821,18 @@ fn persisted_mount(mount: ToolSurfaceMount) -> PersistedToolSurfaceMountV1 {
     }
 }
 
-fn workspace_mount(mount: PersistedToolSurfaceMountV1) -> ToolSurfaceMount {
+fn workspace_mount(
+    mount: PersistedToolSurfaceMountV1,
+) -> Result<ToolSurfaceMount, WorkspaceStateError> {
     match mount {
-        PersistedToolSurfaceMountV1::Unmounted => ToolSurfaceMount::Unmounted,
-        PersistedToolSurfaceMountV1::Mounted { panel_id } => ToolSurfaceMount::Mounted {
-            panel_id: PanelInstanceId::new(panel_id),
-        },
+        PersistedToolSurfaceMountV1::Unmounted => Ok(ToolSurfaceMount::Unmounted),
+        PersistedToolSurfaceMountV1::Mounted { panel_id } => Ok(ToolSurfaceMount::Mounted {
+            panel_id: persisted_id!(
+                PanelInstanceId,
+                panel_id,
+                "persisted mounted panel id must be non-zero"
+            )?,
+        }),
     }
 }
 
@@ -752,6 +885,19 @@ mod tests {
         assert!(matches!(
             error,
             WorkspaceStateError::PersistedVersionUnsupported(99)
+        ));
+    }
+
+    #[test]
+    fn persisted_decode_rejects_zero_raw_ids() {
+        let workspace = bootstrap_workspace();
+        let mut persisted = workspace.to_persisted_v2();
+        persisted.workspace_id = 0;
+        let error = WorkspaceState::from_persisted_v2(persisted)
+            .expect_err("zero persisted ids must fail decode");
+        assert!(matches!(
+            error,
+            WorkspaceStateError::PersistedSchemaViolation(_)
         ));
     }
 

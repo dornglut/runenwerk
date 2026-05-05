@@ -1493,8 +1493,10 @@ dependencies = [
 name = "id_macros"
 version = "0.1.0"
 dependencies = [
+ "id",
  "proc-macro2",
  "quote",
+ "static_assertions",
  "syn",
 ]
 

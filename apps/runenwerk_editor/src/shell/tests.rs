@@ -169,9 +169,11 @@ fn dispatch_shell_command_selects_outliner_entity() {
         ShellCommand::SelectOutlinerEntity {
             entity: EntityId(1),
             target: StructuralCommandTarget {
-                panel_instance_id: editor_shell::PanelInstanceId::new(1),
-                active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::new(1)),
-                tab_stack_id: editor_shell::TabStackId::new(1),
+                panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+                active_tool_surface: Some(
+                    editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
+                ),
+                tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
             },
             projection_epoch: 0,
         },
@@ -385,7 +387,7 @@ fn provider_id_mismatch_on_local_action_is_rejected_without_mutation() {
     else {
         panic!("expected one provider-local action");
     };
-    *provider_id = SurfaceProviderId::new(999);
+    *provider_id = SurfaceProviderId::try_from_raw(999).unwrap();
 
     let registry = EditorSurfaceProviderRegistry::runenwerk_default();
     let result = RunenwerkEditorShellController::dispatch_commands(
@@ -410,12 +412,12 @@ fn dispatch_shell_command_selects_viewport_product_when_available() {
     let viewport_id = ViewportId(1);
     let product_id = ExpressionProductId(2);
     let target = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(1),
-        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::new(1)),
-        tab_stack_id: editor_shell::TabStackId::new(1),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
     };
     let tool_surface_bindings = test_tool_surface_binding_registry(
-        editor_shell::ToolSurfaceInstanceId::new(1),
+        editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
         target.panel_instance_id,
         target.tab_stack_id,
         viewport_id,
@@ -464,12 +466,12 @@ fn dispatch_shell_command_updates_only_target_viewport_product_selection() {
     let product_scene = ExpressionProductId(1);
     let product_picking = ExpressionProductId(2);
     let target = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(1),
-        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::new(1)),
-        tab_stack_id: editor_shell::TabStackId::new(1),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
     };
     let tool_surface_bindings = test_tool_surface_binding_registry(
-        editor_shell::ToolSurfaceInstanceId::new(1),
+        editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
         target.panel_instance_id,
         target.tab_stack_id,
         viewport_b,
@@ -544,9 +546,11 @@ fn dispatch_shell_command_viewport_product_fails_closed_without_runtime_binding(
             viewport_id,
             product_id,
             target: StructuralCommandTarget {
-                panel_instance_id: editor_shell::PanelInstanceId::new(1),
-                active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::new(1)),
-                tab_stack_id: editor_shell::TabStackId::new(1),
+                panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+                active_tool_surface: Some(
+                    editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
+                ),
+                tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
             },
             projection_epoch: 0,
         },
@@ -572,12 +576,12 @@ fn dispatch_shell_command_viewport_product_rejects_stale_binding_viewport_mismat
     let rebound_viewport = ViewportId(2);
     let product_id = ExpressionProductId(2);
     let target = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(1),
-        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::new(1)),
-        tab_stack_id: editor_shell::TabStackId::new(1),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
     };
     let tool_surface_bindings = test_tool_surface_binding_registry(
-        editor_shell::ToolSurfaceInstanceId::new(1),
+        editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
         target.panel_instance_id,
         target.tab_stack_id,
         rebound_viewport,
@@ -637,9 +641,9 @@ fn dispatch_shell_command_viewport_product_requires_structural_tool_surface_targ
     viewport_observations.upsert_frame(frame);
 
     let tool_surface_bindings = test_tool_surface_binding_registry(
-        editor_shell::ToolSurfaceInstanceId::new(1),
-        editor_shell::PanelInstanceId::new(1),
-        editor_shell::TabStackId::new(1),
+        editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
+        editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+        editor_shell::TabStackId::try_from_raw(1).unwrap(),
         viewport_id,
     );
 
@@ -650,9 +654,9 @@ fn dispatch_shell_command_viewport_product_requires_structural_tool_surface_targ
             viewport_id,
             product_id,
             target: StructuralCommandTarget {
-                panel_instance_id: editor_shell::PanelInstanceId::new(1),
+                panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
                 active_tool_surface: None,
-                tab_stack_id: editor_shell::TabStackId::new(1),
+                tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
             },
             projection_epoch: 0,
         },
@@ -684,14 +688,14 @@ fn dispatch_shell_command_viewport_product_rejects_structural_binding_mismatch()
     viewport_observations.upsert_frame(frame);
 
     let target = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(7),
-        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::new(1)),
-        tab_stack_id: editor_shell::TabStackId::new(8),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(7).unwrap(),
+        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(8).unwrap(),
     };
     let tool_surface_bindings = test_tool_surface_binding_registry(
-        editor_shell::ToolSurfaceInstanceId::new(1),
-        editor_shell::PanelInstanceId::new(99),
-        editor_shell::TabStackId::new(100),
+        editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
+        editor_shell::PanelInstanceId::try_from_raw(99).unwrap(),
+        editor_shell::TabStackId::try_from_raw(100).unwrap(),
         viewport_id,
     );
 
@@ -951,7 +955,7 @@ fn provider_id_mismatch_on_viewport_details_toggle_is_rejected_without_mutation(
     else {
         panic!("expected one provider-local action");
     };
-    *provider_id = SurfaceProviderId::new(999);
+    *provider_id = SurfaceProviderId::try_from_raw(999).unwrap();
 
     let registry = app.surface_provider_registry_handle();
     let result = RunenwerkEditorShellController::dispatch_commands(
@@ -976,12 +980,12 @@ fn provider_id_mismatch_on_viewport_details_toggle_is_rejected_without_mutation(
 #[test]
 fn two_viewport_surfaces_keep_independent_details_state() {
     let mut app = RunenwerkEditorApp::new();
-    let surface_a = editor_shell::ToolSurfaceInstanceId::new(101);
-    let surface_b = editor_shell::ToolSurfaceInstanceId::new(102);
+    let surface_a = editor_shell::ToolSurfaceInstanceId::try_from_raw(101).unwrap();
+    let surface_b = editor_shell::ToolSurfaceInstanceId::try_from_raw(102).unwrap();
     let target_a = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(201),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(201).unwrap(),
         active_tool_surface: Some(surface_a),
-        tab_stack_id: editor_shell::TabStackId::new(301),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(301).unwrap(),
     };
 
     dispatch_shell_command(
@@ -1015,17 +1019,17 @@ fn two_viewport_surfaces_keep_independent_details_state() {
 #[test]
 fn two_entity_table_surfaces_keep_independent_search_and_sort_state() {
     let mut app = RunenwerkEditorApp::new();
-    let surface_a = editor_shell::ToolSurfaceInstanceId::new(111);
-    let surface_b = editor_shell::ToolSurfaceInstanceId::new(112);
+    let surface_a = editor_shell::ToolSurfaceInstanceId::try_from_raw(111).unwrap();
+    let surface_b = editor_shell::ToolSurfaceInstanceId::try_from_raw(112).unwrap();
     let target_a = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(211),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(211).unwrap(),
         active_tool_surface: Some(surface_a),
-        tab_stack_id: editor_shell::TabStackId::new(311),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(311).unwrap(),
     };
     let target_b = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(212),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(212).unwrap(),
         active_tool_surface: Some(surface_b),
-        tab_stack_id: editor_shell::TabStackId::new(312),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(312).unwrap(),
     };
 
     dispatch_shell_command(
@@ -1074,17 +1078,17 @@ fn two_entity_table_surfaces_keep_independent_search_and_sort_state() {
 #[test]
 fn two_inspector_surfaces_keep_independent_draft_state() {
     let mut app = RunenwerkEditorApp::new();
-    let surface_a = editor_shell::ToolSurfaceInstanceId::new(121);
-    let surface_b = editor_shell::ToolSurfaceInstanceId::new(122);
+    let surface_a = editor_shell::ToolSurfaceInstanceId::try_from_raw(121).unwrap();
+    let surface_b = editor_shell::ToolSurfaceInstanceId::try_from_raw(122).unwrap();
     let target_a = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(221),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(221).unwrap(),
         active_tool_surface: Some(surface_a),
-        tab_stack_id: editor_shell::TabStackId::new(321),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(321).unwrap(),
     };
     let _target_b = StructuralCommandTarget {
-        panel_instance_id: editor_shell::PanelInstanceId::new(222),
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(222).unwrap(),
         active_tool_surface: Some(surface_b),
-        tab_stack_id: editor_shell::TabStackId::new(322),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(322).unwrap(),
     };
     app.surface_sessions_mut()
         .session_mut(surface_a)
@@ -1143,8 +1147,8 @@ fn two_inspector_surfaces_keep_independent_draft_state() {
 #[test]
 fn two_viewport_surfaces_keep_independent_interaction_state() {
     let mut app = RunenwerkEditorApp::new();
-    let surface_a = editor_shell::ToolSurfaceInstanceId::new(131);
-    let surface_b = editor_shell::ToolSurfaceInstanceId::new(132);
+    let surface_a = editor_shell::ToolSurfaceInstanceId::try_from_raw(131).unwrap();
+    let surface_b = editor_shell::ToolSurfaceInstanceId::try_from_raw(132).unwrap();
     let entity = app.runtime_mut().spawn_world_entity(TestMarker);
     app.runtime_mut()
         .register_entity(EntityId(1), entity, "Alpha", None);
@@ -1182,8 +1186,8 @@ fn two_viewport_surfaces_keep_independent_interaction_state() {
 #[test]
 fn two_console_surfaces_keep_independent_follow_state() {
     let mut app = RunenwerkEditorApp::new();
-    let surface_a = editor_shell::ToolSurfaceInstanceId::new(141);
-    let surface_b = editor_shell::ToolSurfaceInstanceId::new(142);
+    let surface_a = editor_shell::ToolSurfaceInstanceId::try_from_raw(141).unwrap();
+    let surface_b = editor_shell::ToolSurfaceInstanceId::try_from_raw(142).unwrap();
 
     app.surface_sessions_mut()
         .session_mut(surface_a)
@@ -1427,11 +1431,13 @@ fn shell_state_tracks_active_workspace_profile_separately_from_workspace_graph()
         editor_shell::LAYOUT_WORKSPACE_PROFILE_ID,
     );
 
-    shell_state.set_active_workspace_profile_id(editor_shell::WorkspaceProfileId::new(99));
+    shell_state.set_active_workspace_profile_id(
+        editor_shell::WorkspaceProfileId::try_from_raw(99).unwrap(),
+    );
 
     assert_eq!(
         shell_state.active_workspace_profile_id(),
-        editor_shell::WorkspaceProfileId::new(99),
+        editor_shell::WorkspaceProfileId::try_from_raw(99).unwrap(),
     );
     assert_eq!(
         *shell_state.workspace_state(),

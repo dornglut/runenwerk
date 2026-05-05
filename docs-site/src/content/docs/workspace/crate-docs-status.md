@@ -24,11 +24,11 @@ Status labels:
 | Crate | Path | Status | Primary docs |
 | --- | --- | --- | --- |
 | `id` | `foundation/id` | current | [`../foundation/id/README.md`](../foundation/id/README.md) |
-| `id_macros` | `foundation/id_macros` | missing | none |
-| `diagnostics` | `foundation/diagnostics` | thin | [`../foundation/diagnostics/implementation-roadmap.md`](../foundation/diagnostics/implementation-roadmap.md) |
-| `ratification` | `foundation/ratification` | thin | [`../design/active/foundation-ratification-design.md`](../design/active/foundation-ratification-design.md) |
-| `schema` | `foundation/schema` | thin | [`../design/active/foundation-schema-design.md`](../design/active/foundation-schema-design.md) |
-| `commands` | `foundation/commands` | thin | [`../design/active/foundation-commands-design.md`](../design/active/foundation-commands-design.md) |
+| `id_macros` | `foundation/id_macros` | current | [`../foundation/id-macros/README.md`](../foundation/id-macros/README.md) |
+| `diagnostics` | `foundation/diagnostics` | current | [`../foundation/diagnostics/current-state.md`](../foundation/diagnostics/current-state.md) |
+| `ratification` | `foundation/ratification` | current | [`../foundation/ratification/README.md`](../foundation/ratification/README.md) |
+| `schema` | `foundation/schema` | current | [`../foundation/schema/README.md`](../foundation/schema/README.md) |
+| `commands` | `foundation/commands` | current | [`../foundation/commands/README.md`](../foundation/commands/README.md) |
 
 ## Domain
 

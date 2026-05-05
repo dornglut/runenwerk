@@ -42,7 +42,7 @@ AI/editor/tools use the same contracts as everyone else
 
 ## Critical premise check: should this crate exist now?
 
-Yes, design is justified now. Implementation should still wait until this design is accepted.
+Yes, design is justified now and the initial vocabulary implementation is complete.
 
 The crate is justified because `foundation/schema` Phase 1 through Phase 4 are complete. Schema now provides stable vocabulary for ids, versions, paths, values, descriptors, metadata, diagnostics projection, one inspector interop consumer, and one domain-owned descriptor publication. That makes command descriptors practical without inventing shape/value vocabulary inside command APIs.
 

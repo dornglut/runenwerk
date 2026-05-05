@@ -156,7 +156,7 @@ mod tests {
         let hidden = build_viewport_panel(
             &ViewportViewModel::default(),
             &theme,
-            PanelInstanceId::new(1),
+            PanelInstanceId::try_from_raw(1).unwrap(),
             None,
         );
         let hidden_button = find_node(&hidden, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID)
@@ -170,7 +170,12 @@ mod tests {
             details_visible: true,
             ..Default::default()
         };
-        let visible = build_viewport_panel(&visible_model, &theme, PanelInstanceId::new(1), None);
+        let visible = build_viewport_panel(
+            &visible_model,
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
         let visible_button = find_node(&visible, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID)
             .expect("details button should exist");
         assert!(matches!(
@@ -185,7 +190,7 @@ mod tests {
         let hidden = build_viewport_panel(
             &ViewportViewModel::default(),
             &theme,
-            PanelInstanceId::new(1),
+            PanelInstanceId::try_from_raw(1).unwrap(),
             None,
         );
         assert!(find_node(&hidden, VIEWPORT_DETAILS_PANEL_WIDGET_ID).is_none());
@@ -198,7 +203,12 @@ mod tests {
             preview_active: true,
             ..Default::default()
         };
-        let visible = build_viewport_panel(&visible_model, &theme, PanelInstanceId::new(1), None);
+        let visible = build_viewport_panel(
+            &visible_model,
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
         assert!(find_node(&visible, VIEWPORT_DETAILS_PANEL_WIDGET_ID).is_some());
         let details_label = find_node(&visible, VIEWPORT_DETAILS_LABEL_WIDGET_ID)
             .expect("details label should exist");

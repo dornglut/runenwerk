@@ -9,7 +9,7 @@ struct ResourceTestParams {
 
 #[test]
 fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
-    let id = RenderResourceId::new(42);
+    let id = RenderResourceId::try_from_raw(42).unwrap();
     let descriptor = RenderResourceDescriptor::uniform_buffer::<ResourceTestParams>(id);
 
     match descriptor {
@@ -31,22 +31,22 @@ fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
 
 #[test]
 fn typed_ids_roundtrip_and_sort_by_raw_value() {
-    let pass = RenderPassId::new(7);
+    let pass = RenderPassId::try_from_raw(7).unwrap();
     let raw: u64 = pass.into();
     assert_eq!(raw, 7);
 
-    let a = RenderResourceId::new(1);
-    let b = RenderResourceId::new(2);
+    let a = RenderResourceId::try_from_raw(1).unwrap();
+    let b = RenderResourceId::try_from_raw(2).unwrap();
     assert!(a < b);
     assert_eq!(a.to_string(), "1");
 }
 
 #[test]
 fn duplicate_resource_detection_finds_collisions() {
-    let duplicate = RenderResourceId::new(9);
+    let duplicate = RenderResourceId::try_from_raw(9).unwrap();
     let descriptors = vec![
         RenderResourceDescriptor::sampled_texture(duplicate),
-        RenderResourceDescriptor::color_target(RenderResourceId::new(10)),
+        RenderResourceDescriptor::color_target(RenderResourceId::try_from_raw(10).unwrap()),
         RenderResourceDescriptor::imported_texture(duplicate),
     ];
 

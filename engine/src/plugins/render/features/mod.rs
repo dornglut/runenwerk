@@ -22,16 +22,23 @@ pub const DEFORMATION_RENDER_FEATURE_LABEL: &str = "deformation";
 pub const WIND_FIELDS_RENDER_FEATURE_LABEL: &str = "wind.fields";
 pub const EDITOR_PICKING_RENDER_FEATURE_LABEL: &str = "editor.picking";
 
-pub const SCENE_ROUTE_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(1);
-pub const EDITOR_PICKING_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(2);
-pub const UI_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(3);
-pub const WORLD_DRAW_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(4);
-pub const CAVE_INTERIOR_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(5);
-pub const PROCEDURAL_WORLD_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(6);
-pub const DETAIL_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(7);
-pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(8);
-pub const DEFORMATION_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(9);
-pub const WIND_FIELDS_RENDER_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(10);
+pub const SCENE_ROUTE_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(1);
+pub const EDITOR_PICKING_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(2);
+pub const UI_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(3);
+pub const WORLD_DRAW_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(4);
+pub const CAVE_INTERIOR_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(5);
+pub const PROCEDURAL_WORLD_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(6);
+pub const DETAIL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(7);
+pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(8);
+pub const DEFORMATION_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(9);
+pub const WIND_FIELDS_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(10);
+
+const fn render_feature_id(raw: u64) -> RenderFeatureId {
+    match RenderFeatureId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("render feature id constants must be non-zero"),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FeatureContributionStatus {
@@ -516,8 +523,8 @@ mod tests {
 
     #[test]
     fn cycle_is_reported_as_issue() {
-        const A_ID: RenderFeatureId = RenderFeatureId::new(1001);
-        const B_ID: RenderFeatureId = RenderFeatureId::new(1002);
+        const A_ID: RenderFeatureId = render_feature_id(1001);
+        const B_ID: RenderFeatureId = render_feature_id(1002);
 
         let mut registry = RenderFeatureRegistryResource {
             descriptors: BTreeMap::new(),

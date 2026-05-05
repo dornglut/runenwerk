@@ -4,8 +4,15 @@ use crate::plugins::scene::ui::UiRenderShaderConfig;
 use crate::runtime::WorldMut;
 use crate::state::UiOverlayState;
 
-const SCENE_OVERLAY_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1);
-const DEBUG_METRICS_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(2);
+const SCENE_OVERLAY_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1);
+const DEBUG_METRICS_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(2);
+
+const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
+    match UiFrameProducerId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("ui frame producer id constants must be non-zero"),
+    }
+}
 
 pub(crate) fn collect_runtime_ui_frame_submissions_system(mut world: WorldMut) {
     let Some(mut submissions) = world.remove_resource::<UiFrameSubmissionRegistryResource>() else {

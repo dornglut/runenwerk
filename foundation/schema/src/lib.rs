@@ -67,8 +67,9 @@ mod tests {
 
     use crate::{
         SchemaCompatibility, SchemaConstraint, SchemaDescriptor, SchemaField, SchemaId,
-        SchemaMetadata, SchemaMetadataEntry, SchemaMetadataValue, SchemaPath, SchemaPathSegment,
-        SchemaShape, SchemaValue, SchemaValueMapEntry, SchemaValueObjectField, SchemaVersion,
+        SchemaIssue, SchemaIssueCode, SchemaIssueSubject, SchemaMetadata, SchemaMetadataEntry,
+        SchemaMetadataValue, SchemaPath, SchemaPathSegment, SchemaShape, SchemaValue,
+        SchemaValueMapEntry, SchemaValueObjectField, SchemaVersion,
     };
 
     fn string_shape() -> SchemaShape {
@@ -236,9 +237,24 @@ mod tests {
             SchemaVersion::new(1).unwrap(),
             SchemaShape::object(Vec::new()).unwrap(),
         )
-        .with_compatibility(SchemaCompatibility::Compatible);
+        .with_compatibility(SchemaCompatibility::Compatible)
+        .with_issue(SchemaIssue::new(
+            SchemaIssueCode::InvalidMetadata,
+            SchemaIssueSubject::Metadata,
+            "metadata warning",
+            1,
+        ))
+        .with_issue(SchemaIssue::new(
+            SchemaIssueCode::InvalidDescriptor,
+            SchemaIssueSubject::Descriptor,
+            "descriptor error",
+            9,
+        ));
 
-        assert!(descriptor.highest_issue().is_none());
+        let highest = descriptor.highest_issue().expect("highest issue");
+        assert_eq!(highest.code(), SchemaIssueCode::InvalidDescriptor);
+        assert_eq!(highest.subject(), &SchemaIssueSubject::Descriptor);
+        assert_eq!(highest.severity_rank(), 9);
     }
 
     #[test]

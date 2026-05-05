@@ -13,4 +13,8 @@ last_reviewed: 2026-04-30
 ## Crate Docs
 
 - [`id/README.md`](./id/README.md)
+- [`id-macros/README.md`](./id-macros/README.md)
 - [`diagnostics/README.md`](./diagnostics/README.md)
+- [`ratification/README.md`](./ratification/README.md)
+- [`schema/README.md`](./schema/README.md)
+- [`commands/README.md`](./commands/README.md)

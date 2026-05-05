@@ -32,11 +32,18 @@ use crate::shell::toolbar_adapter::{build_toolbar_observation_frame, build_toolb
 use crate::shell::viewport_adapter::{build_viewport_observation_frame, build_viewport_view_model};
 use crate::shell::{RunenwerkEditorShellState, SurfaceSessionState};
 
-const SCENE_OUTLINER_PROVIDER_ID: SurfaceProviderId = SurfaceProviderId::new(1);
-const SCENE_ENTITY_TABLE_PROVIDER_ID: SurfaceProviderId = SurfaceProviderId::new(2);
-const SCENE_VIEWPORT_PROVIDER_ID: SurfaceProviderId = SurfaceProviderId::new(3);
-const SCENE_INSPECTOR_PROVIDER_ID: SurfaceProviderId = SurfaceProviderId::new(4);
-const CONSOLE_PROVIDER_ID: SurfaceProviderId = SurfaceProviderId::new(5);
+const SCENE_OUTLINER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(1);
+const SCENE_ENTITY_TABLE_PROVIDER_ID: SurfaceProviderId = surface_provider_id(2);
+const SCENE_VIEWPORT_PROVIDER_ID: SurfaceProviderId = surface_provider_id(3);
+const SCENE_INSPECTOR_PROVIDER_ID: SurfaceProviderId = surface_provider_id(4);
+const CONSOLE_PROVIDER_ID: SurfaceProviderId = surface_provider_id(5);
+
+const fn surface_provider_id(raw: u64) -> SurfaceProviderId {
+    match SurfaceProviderId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("surface provider id constants must be non-zero"),
+    }
+}
 
 pub struct SurfaceProviderBuildContext<'a> {
     pub app: &'a RunenwerkEditorApp,
@@ -929,7 +936,7 @@ mod tests {
     fn dummy(id: u64, priority: u16, supports: bool) -> Box<dyn EditorSurfaceProvider> {
         Box::new(DummyProvider {
             descriptor: SurfaceProviderDescriptor::new(
-                SurfaceProviderId::new(id),
+                SurfaceProviderId::try_from_raw(id).unwrap(),
                 format!("provider-{id}"),
                 SurfaceProviderPriority(priority),
             ),
@@ -941,7 +948,7 @@ mod tests {
     fn failing(id: u64) -> Box<dyn EditorSurfaceProvider> {
         Box::new(DummyProvider {
             descriptor: SurfaceProviderDescriptor::new(
-                SurfaceProviderId::new(id),
+                SurfaceProviderId::try_from_raw(id).unwrap(),
                 "failing",
                 SurfaceProviderPriority::DEFAULT,
             ),
@@ -957,9 +964,9 @@ mod tests {
                 document_id: editor_core::DocumentId(1),
                 document_kind: DocumentKind::Scene,
             },
-            panel_instance_id: PanelInstanceId::new(3),
-            tab_stack_id: TabStackId::new(3),
-            tool_surface_instance_id: ToolSurfaceInstanceId::new(3),
+            panel_instance_id: PanelInstanceId::try_from_raw(3).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(3).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(3).unwrap(),
             tool_surface_kind: ToolSurfaceKind::Viewport,
             surface_definition_id: VIEWPORT_SURFACE_DEFINITION_ID,
         }
@@ -1002,7 +1009,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            SurfaceProviderRegistryError::DuplicateProviderId(id) if id == SurfaceProviderId::new(1)
+            SurfaceProviderRegistryError::DuplicateProviderId(id) if id == SurfaceProviderId::try_from_raw(1).unwrap()
         ));
     }
 
@@ -1040,7 +1047,10 @@ mod tests {
             &Default::default(),
         );
 
-        assert_eq!(frame.provider_id, Some(SurfaceProviderId::new(2)));
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(2).unwrap())
+        );
         assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
     }
 

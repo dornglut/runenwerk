@@ -490,7 +490,7 @@ mod tests {
     use crate::plugins::render::{RenderPassKind, RenderPassNode};
 
     fn resource(id: u64) -> RenderResourceId {
-        RenderResourceId::new(id)
+        RenderResourceId::try_from_raw(id).unwrap()
     }
 
     fn storage_read_write_pass() -> (RenderPassNode, ResourceGraph, RenderResourceId) {
@@ -499,8 +499,11 @@ mod tests {
         resources.add_resource(RenderResourceDescriptor::imported_external_buffer(
             storage_id,
         ));
-        let mut pass =
-            RenderPassNode::new(RenderPassId::new(1), "test.pass", RenderPassKind::Compute);
+        let mut pass = RenderPassNode::new(
+            RenderPassId::try_from_raw(1).unwrap(),
+            "test.pass",
+            RenderPassKind::Compute,
+        );
         pass.reads.push(storage_id);
         pass.writes.push(storage_id);
         (pass, resources, storage_id)
@@ -556,8 +559,11 @@ mod tests {
             write_only,
         ));
 
-        let mut pass =
-            RenderPassNode::new(RenderPassId::new(11), "test.order", RenderPassKind::Compute);
+        let mut pass = RenderPassNode::new(
+            RenderPassId::try_from_raw(11).unwrap(),
+            "test.order",
+            RenderPassKind::Compute,
+        );
         pass.reads.extend([read_only, shared]);
         pass.writes.extend([shared, write_only]);
 
@@ -604,8 +610,11 @@ mod tests {
         resources.add_resource(RenderResourceDescriptor::imported_external_buffer(second));
         resources.add_resource(RenderResourceDescriptor::imported_external_buffer(third));
 
-        let mut pass =
-            RenderPassNode::new(RenderPassId::new(12), "test.usage", RenderPassKind::Compute);
+        let mut pass = RenderPassNode::new(
+            RenderPassId::try_from_raw(12).unwrap(),
+            "test.usage",
+            RenderPassKind::Compute,
+        );
         pass.reads.extend([first, second, first]);
         pass.writes.extend([second, third, second]);
 

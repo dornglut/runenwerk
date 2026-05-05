@@ -426,7 +426,14 @@ mod tests {
     };
     use crate::plugins::render::*;
 
-    const CUSTOM_FEATURE_ID: RenderFeatureId = RenderFeatureId::new(999);
+    const CUSTOM_FEATURE_ID: RenderFeatureId = render_feature_id(999);
+
+    const fn render_feature_id(raw: u64) -> RenderFeatureId {
+        match RenderFeatureId::try_from_raw(raw) {
+            Ok(id) => id,
+            Err(_) => panic!("render feature id constants must be non-zero"),
+        }
+    }
 
     fn test_world() -> ecs::World {
         let mut world = ecs::World::default();

@@ -161,17 +161,17 @@ mod tests {
         let mut registry = UiFrameSubmissionRegistryResource::default();
 
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::new(1))
+            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(1).unwrap())
                 .with_order(UiFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::new(1))
+            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(1).unwrap())
                 .with_order(UiFrameSubmissionOrder::new(20, 0)),
         );
 
         assert_eq!(registry.submission_count(), 1);
         let submission = registry
-            .get(&UiFrameProducerId::new(1))
+            .get(&UiFrameProducerId::try_from_raw(1).unwrap())
             .expect("producer submission should exist");
         assert_eq!(submission.order.layer, 20);
     }
@@ -181,17 +181,17 @@ mod tests {
         let mut registry = UiFrameSubmissionRegistryResource::default();
 
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::new(2))
+            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(2).unwrap())
                 .with_route(UiFrameRoute::Screen)
                 .with_order(UiFrameSubmissionOrder::new(100, 5)),
         );
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::new(1))
+            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(1).unwrap())
                 .with_route(UiFrameRoute::Screen)
                 .with_order(UiFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::new(3))
+            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(3).unwrap())
                 .with_route(UiFrameRoute::ViewportOverlay)
                 .with_order(UiFrameSubmissionOrder::new(0, 0)),
         );
@@ -205,9 +205,9 @@ mod tests {
         assert_eq!(
             ordered,
             vec![
-                UiFrameProducerId::new(1),
-                UiFrameProducerId::new(2),
-                UiFrameProducerId::new(3),
+                UiFrameProducerId::try_from_raw(1).unwrap(),
+                UiFrameProducerId::try_from_raw(2).unwrap(),
+                UiFrameProducerId::try_from_raw(3).unwrap(),
             ]
         );
     }

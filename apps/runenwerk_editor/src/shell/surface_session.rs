@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn prune_for_workspace_removes_unmounted_surface_sessions() {
         let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::new(1);
+        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
         let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
         let surface_id = workspace
             .tool_surfaces()
@@ -164,7 +164,7 @@ mod tests {
     fn clear_transient_removes_all_surface_sessions() {
         let mut store = SurfaceSessionStore::default();
         store
-            .session_mut(ToolSurfaceInstanceId::new(7))
+            .session_mut(ToolSurfaceInstanceId::try_from_raw(7).unwrap())
             .entity_table_ui_state
             .append_search_text("abc");
 
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn prune_for_workspace_retains_mounted_console_session() {
         let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::new(1);
+        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
         let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
         let surface_id = workspace
             .tool_surfaces()

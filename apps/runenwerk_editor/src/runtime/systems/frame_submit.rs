@@ -32,11 +32,18 @@ use crate::runtime::viewport::{
 };
 use crate::shell::RunenwerkEditorShellState;
 
-const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
+const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1001);
 const DEBUG_HARDCODED_UI_FRAME_ENV: &str = "RUNENWERK_EDITOR_DEBUG_UI_FRAME";
 const VIEWPORT_DEBUG_STAGE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_DEBUG_STAGE";
 const VIEWPORT_ROOT_OPAQUE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_ROOT_OPAQUE";
 const VIEWPORT_BRANCH_TRACE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_BRANCH_TRACE";
+
+const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
+    match UiFrameProducerId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("ui frame producer id constants must be non-zero"),
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn submit_editor_frame_system(

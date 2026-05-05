@@ -36,7 +36,8 @@ pub struct RenderFlow {
 impl RenderFlow {
     pub fn new(label: impl Into<String>) -> Self {
         let label = label.into();
-        let flow_id = RenderFlowId::new(NEXT_FLOW_ID.fetch_add(1, Ordering::Relaxed));
+        let flow_id = RenderFlowId::try_from_raw(NEXT_FLOW_ID.fetch_add(1, Ordering::Relaxed))
+            .expect("render flow id sequence starts at one");
 
         Self {
             graph: RenderFlowGraph::new(flow_id, label),

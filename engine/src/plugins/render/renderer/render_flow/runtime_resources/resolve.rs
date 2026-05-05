@@ -16,7 +16,7 @@ impl FlowRuntimeResources {
         value
             .parse::<u64>()
             .ok()
-            .map(RenderResourceId::new)
+            .and_then(|raw| RenderResourceId::try_from_raw(raw).ok())
             .map(RuntimeResourceKey::FlowOwned)
     }
 

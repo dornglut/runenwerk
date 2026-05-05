@@ -1,3 +1,9 @@
+//! Attribute macro support for typed ID wrappers.
+//!
+//! `#[id]` expands a unit struct into a transparent wrapper around
+//! [`id::TypedId`]. The generated wrapper remains foundation vocabulary only:
+//! it does not create registries, storage, ECS bindings, or runtime policy.
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Attribute, ItemStruct, parse_macro_input};
@@ -56,8 +62,11 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
         }
 
         impl #ident {
-            pub const fn new(raw: u64) -> Self {
-                Self(::id::TypedId::new(raw))
+            pub const fn try_from_raw(raw: u64) -> Result<Self, ::id::InvalidRawId> {
+                match ::id::TypedId::try_from_raw(raw) {
+                    Ok(value) => Ok(Self(value)),
+                    Err(error) => Err(error),
+                }
             }
 
             pub const fn raw(self) -> u64 {
@@ -77,9 +86,11 @@ fn expand_id(item: ItemStruct) -> proc_macro2::TokenStream {
             }
         }
 
-        impl From<u64> for #ident {
-            fn from(value: u64) -> Self {
-                Self::new(value)
+        impl TryFrom<::core::primitive::u64> for #ident {
+            type Error = ::id::InvalidRawId;
+
+            fn try_from(value: ::core::primitive::u64) -> Result<Self, Self::Error> {
+                Self::try_from_raw(value)
             }
         }
 

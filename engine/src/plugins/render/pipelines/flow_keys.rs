@@ -83,8 +83,8 @@ mod tests {
 
     fn sample_key() -> FlowPassPipelineKey {
         FlowPassPipelineKey {
-            flow_id: RenderFlowId::new(1),
-            pass_id: RenderPassId::new(1),
+            flow_id: RenderFlowId::try_from_raw(1).unwrap(),
+            pass_id: RenderPassId::try_from_raw(1).unwrap(),
             pass_kind: FlowPassKind::Fullscreen,
             feature_id: None,
             shader_identity: "shader".to_string(),

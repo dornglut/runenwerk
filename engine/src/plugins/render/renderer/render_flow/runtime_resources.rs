@@ -130,12 +130,13 @@ mod tests {
     #[test]
     fn kind_of_resolves_label_alias_to_runtime_id() {
         let mut resources = FlowRuntimeResources::default();
-        resources
-            .kinds
-            .insert(RenderResourceId::new(42), RuntimeResourceKind::TextureLike);
+        resources.kinds.insert(
+            RenderResourceId::try_from_raw(42).unwrap(),
+            RuntimeResourceKind::TextureLike,
+        );
         resources.resource_ids_by_label.insert(
             "editor.viewport.v1.scene_color".to_string(),
-            RenderResourceId::new(42),
+            RenderResourceId::try_from_raw(42).unwrap(),
         );
 
         assert_eq!(
@@ -148,12 +149,12 @@ mod tests {
     fn capture_texture_class_resolves_label_alias_to_descriptor() {
         let mut resources = FlowRuntimeResources::default();
         resources.descriptors.insert(
-            RenderResourceId::new(7),
-            RenderResourceDescriptor::color_target(RenderResourceId::new(7)),
+            RenderResourceId::try_from_raw(7).unwrap(),
+            RenderResourceDescriptor::color_target(RenderResourceId::try_from_raw(7).unwrap()),
         );
         resources.resource_ids_by_label.insert(
             "editor.viewport.v1.overlay".to_string(),
-            RenderResourceId::new(7),
+            RenderResourceId::try_from_raw(7).unwrap(),
         );
 
         assert_eq!(

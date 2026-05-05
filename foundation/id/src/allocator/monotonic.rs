@@ -1,7 +1,7 @@
 use core::fmt;
 use core::marker::PhantomData;
 
-use crate::TypedId;
+use crate::{AllocationError, TypedId};
 
 /// Monotonic allocator for tag-typed IDs.
 ///
@@ -12,11 +12,42 @@ pub struct MonotonicIdAllocator<Tag> {
 }
 
 impl<Tag> MonotonicIdAllocator<Tag> {
+    /// Creates an allocator whose next issued raw ID is `start_at`.
+    ///
+    /// Use this for reviewed, trusted start values. Raw, imported, persisted,
+    /// or otherwise untrusted seeds should use [`Self::try_new`] so invalid
+    /// zero starts are surfaced as typed errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `start_at` is `0`. `TypedId` raw values are non-zero, so a
+    /// monotonic allocator cannot issue zero as its first ID.
     pub const fn new(start_at: u64) -> Self {
+        assert!(
+            start_at != 0,
+            "MonotonicIdAllocator start value must be non-zero"
+        );
+
         Self {
             next: start_at,
             _marker: PhantomData,
         }
+    }
+
+    /// Creates an allocator from a raw start value.
+    ///
+    /// This is the correct constructor for raw, imported, persisted, or
+    /// otherwise untrusted seeds. It rejects `0` because `TypedId` raw values
+    /// are non-zero.
+    pub const fn try_new(start_at: u64) -> Result<Self, AllocationError> {
+        if start_at == 0 {
+            return Err(AllocationError::InvalidStart { start_at });
+        }
+
+        Ok(Self {
+            next: start_at,
+            _marker: PhantomData,
+        })
     }
 
     pub const fn next_raw(&self) -> u64 {
@@ -83,6 +114,20 @@ mod tests {
     fn default_starts_at_one() {
         let allocator = MonotonicIdAllocator::<ResourceTag>::default();
         assert_eq!(allocator.next_raw(), 1);
+    }
+
+    #[test]
+    fn try_new_rejects_zero_start() {
+        assert_eq!(
+            MonotonicIdAllocator::<ResourceTag>::try_new(0),
+            Err(AllocationError::InvalidStart { start_at: 0 })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "MonotonicIdAllocator start value must be non-zero")]
+    fn new_panics_for_zero_start() {
+        let _ = MonotonicIdAllocator::<ResourceTag>::new(0);
     }
 
     #[test]

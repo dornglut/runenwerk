@@ -69,7 +69,7 @@ fn provider_route_activation_maps_to_surface_local_dispatch_command() {
             target,
             action: SurfaceLocalAction::SelectOutlinerEntity { entity },
             projection_epoch,
-        }] if *provider_id == SurfaceProviderId::new(77)
+        }] if *provider_id == SurfaceProviderId::try_from_raw(77).unwrap()
             && *tool_surface_instance_id == surface_id
             && target.panel_instance_id == panel_id
             && target.active_tool_surface == Some(surface_id)
@@ -97,9 +97,9 @@ fn provider_route_rejects_mismatched_structural_context() {
         .insert(
             WidgetId(50_001),
             crate::StructuralWidgetRoutingContext {
-                panel_instance_id: PanelInstanceId::new(999),
+                panel_instance_id: PanelInstanceId::try_from_raw(999).unwrap(),
                 active_tool_surface: None,
-                tab_stack_id: crate::TabStackId::new(999),
+                tab_stack_id: crate::TabStackId::try_from_raw(999).unwrap(),
             },
         );
 
@@ -227,7 +227,7 @@ fn surface_frame(
         tab_stack_id,
         surface_kind: surface.tool_surface_kind,
         surface_definition_id: tool_surface_definition_id(surface.tool_surface_kind),
-        provider_id: Some(SurfaceProviderId::new(77)),
+        provider_id: Some(SurfaceProviderId::try_from_raw(77).unwrap()),
         title: format!("{:?}", surface.tool_surface_kind),
         artifact: SurfacePresentationArtifact::provider(label(
             root_widget_id,

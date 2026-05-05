@@ -14,8 +14,15 @@ const SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
 const OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.overlay";
 const VIEWPORT_BOUNDS_EPSILON: f32 = 0.75;
-const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1001);
-const SCENE_OVERLAY_UI_PRODUCER_ID: UiFrameProducerId = UiFrameProducerId::new(1);
+const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1001);
+const SCENE_OVERLAY_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1);
+
+const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
+    match UiFrameProducerId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("ui frame producer id constants must be non-zero"),
+    }
+}
 
 #[test]
 fn startup_render_smoke_publishes_editor_shell_submission() {

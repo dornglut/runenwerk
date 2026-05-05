@@ -179,6 +179,14 @@ mod tests {
             .with_reversibility_hint(CommandReversibilityHint::DependsOnParameters);
 
         assert_eq!(descriptor.effect_hint(), CommandEffectHint::DomainMutation);
+        assert_eq!(
+            descriptor.reversibility_hint(),
+            CommandReversibilityHint::DependsOnParameters
+        );
+        assert_eq!(
+            descriptor.target_hint(),
+            Some(&CommandTargetHint::EntityLike)
+        );
     }
 
     #[test]

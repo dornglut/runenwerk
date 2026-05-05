@@ -9,7 +9,14 @@ use crate::{ToolSurfaceKind, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceS
 #[id]
 pub struct WorkspaceProfileId;
 
-pub const LAYOUT_WORKSPACE_PROFILE_ID: WorkspaceProfileId = WorkspaceProfileId::new(1);
+pub const LAYOUT_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(1);
+
+const fn workspace_profile_id(raw: u64) -> WorkspaceProfileId {
+    match WorkspaceProfileId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("workspace profile id constants must be non-zero"),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceLayoutTemplate {

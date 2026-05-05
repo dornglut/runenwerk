@@ -1,4 +1,3 @@
-use engine::plugins::render::RenderResourceDescriptor;
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
     RenderCapturePointIdentity, RenderDebugTimingsState, RenderPassProvenanceRecord,
@@ -6,6 +5,7 @@ use engine::plugins::render::inspect::{
     summarize_pass_timings,
 };
 use engine::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
+use engine::plugins::render::{RenderResourceDescriptor, RenderResourceId};
 use wgpu::TextureFormat;
 
 #[derive(Debug, Clone, Copy, engine::plugins::render::GpuStorage)]
@@ -69,7 +69,9 @@ fn debug_timing_state_extracts_compute_dispatch_samples() {
 
 #[test]
 fn resource_kind_label_matches_descriptor_kind() {
-    let descriptor = RenderResourceDescriptor::storage_buffer::<InspectStorage>(1u64);
+    let descriptor = RenderResourceDescriptor::storage_buffer::<InspectStorage>(
+        RenderResourceId::try_from_raw(1).unwrap(),
+    );
     assert_eq!(resource_kind_name(&descriptor), "storage_buffer");
 }
 
