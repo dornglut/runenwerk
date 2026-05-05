@@ -5,16 +5,24 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # ECS Runtime Gap Summary (Capability Model Cross-Check)
 
 This document maps the requested capability model to the current repository state.
 
-Audit date: 2026-04-09.
+Audit date: 2026-05-05.
 
 Terminology alignment update: 2026-04-09 (`Queue*` -> `WorkQueue*` and legacy tick-buffer names -> `TickBuffer*` in ECS runtime code).
+
+Networking design package update: 2026-05-05. Long-term
+networking architecture now lives in:
+
+- [Authoritative replication protocol](../design/active/net-authoritative-replication-protocol.md)
+- [Prediction and reconciliation boundary](../design/active/net-prediction-reconciliation-boundary.md)
+- [ECS/net replication boundary](../design/active/ecs-net-replication-boundary.md)
+- [Implementation roadmap](multiplayer-replication-implementation-roadmap.md)
 
 Status labels:
 
@@ -117,7 +125,7 @@ Status labels:
 - `Implemented` registration-based component replication registry.
 - `Implemented` opt-in replicated component contract.
 - `Partial` optional entity-level replication metadata (`NetEntity` marker + id map, not richer metadata registry).
-- `Missing` optional resource-level replication metadata.
+- `Implemented` resource-level replication descriptors.
 - `Partial` generic runtime metadata retrieval (component-descriptor lookup exists; no broader ECS metadata query model).
 
 ## 7) Ownership and routing
@@ -246,6 +254,8 @@ The highest-impact remaining gap is no longer naming convergence; that work is c
 Current primary gap focus:
 
 1. `WorkQueue*` extensibility (priority, aging, custom policies) is still intentionally minimal,
-2. richer consumer-lag/inspection diagnostics remain partial in several runtime layers.
+2. richer consumer-lag/inspection diagnostics remain partial in several runtime layers,
+3. common-case multiplayer replication still needs a driver-light ECS extraction/apply path,
+4. ACK, baseline, and reconnect hardening now belongs to the net replication roadmap, not ECS core.
 
 The current substrate now has world-owned messaging primitives with aligned naming (`Broadcast*`, `WorkQueue*`, `TickBuffer*`) and runtime-owned frame/tick finalization.

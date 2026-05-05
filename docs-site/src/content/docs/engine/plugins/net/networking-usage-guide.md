@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # Networking Usage Guide
@@ -45,6 +45,10 @@ pub struct PlayerState {
 }
 ```
 
+Current status: declarations generate replication metadata. They do not
+yet generate the complete snapshot extraction, delta generation, or ECS
+apply path.
+
 ## 3) Implement a Driver
 
 Implement:
@@ -55,6 +59,10 @@ Implement:
 
 `InputDriver::receive_remote_input` receives `ConnectionId`, so
 authoritative gameplay can map input to sender identity.
+
+This is currently required for real gameplay integration. The long-term
+design keeps driver traits as an escape hatch while adding a lower
+boilerplate declarative path later.
 
 ## 4) Install a Single Net Plugin
 
@@ -82,3 +90,8 @@ Server replication is computed per connection, not globally:
 - independent ack/baseline cursors per `ConnectionId`
 - targeted snapshot/delta delivery
 - delta fallback to full resync only for the affected connection
+
+Related designs:
+
+- [../../../design/active/net-plugin-runtime-bridge.md](../../../design/active/net-plugin-runtime-bridge.md)
+- [../../../design/active/net-declarative-replication-authoring.md](../../../design/active/net-declarative-replication-authoring.md)

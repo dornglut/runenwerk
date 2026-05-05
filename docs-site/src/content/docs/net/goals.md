@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # net Goals
@@ -67,6 +67,14 @@ In particular:
 - Interest management controls what each client receives.
 - Client-side prediction and reconciliation are first-class paths.
 - Correction/smoothing policies are gameplay-owned (in the owning domain/app module), not transport-owned.
+
+Current design details are split into:
+
+- [../design/active/net-authoritative-replication-protocol.md](../design/active/net-authoritative-replication-protocol.md)
+- [../design/active/net-prediction-reconciliation-boundary.md](../design/active/net-prediction-reconciliation-boundary.md)
+- [../design/active/ecs-net-replication-boundary.md](../design/active/ecs-net-replication-boundary.md)
+- [../design/active/net-interest-streaming-design.md](../design/active/net-interest-streaming-design.md)
+- [../design/active/net-transport-lanes-delivery.md](../design/active/net-transport-lanes-delivery.md)
 
 ## Session and Transport Goals
 
@@ -150,3 +158,5 @@ The intended steady-state ownership is:
   - defines what multiplayer means for a specific game
 
 This is the model new work in the networking domain should reinforce.
+
+Implementation order is tracked separately in [multiplayer-replication-implementation-roadmap.md](multiplayer-replication-implementation-roadmap.md).

@@ -5,19 +5,21 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # ECS Runtime Prioritized Roadmap (Post-Runtime Rewrite)
 
 This roadmap is implementation-ordered and intentionally biased toward remaining runtime convergence work.
 
-Audit date: 2026-04-09.
+Audit date: 2026-05-05.
 
 ## Recommendation Summary
 
 This document is now partly historical.
 The major messaging redesign has already landed in core ECS runtime (`Broadcast*`, `WorkQueue*`, `TickBuffer*`) with runtime-owned frame/tick finalization hooks.
+The canonical multiplayer replication implementation sequence now lives
+in [multiplayer-replication-implementation-roadmap.md](multiplayer-replication-implementation-roadmap.md).
 
 Reason:
 
@@ -25,6 +27,11 @@ Reason:
 - some roadmap path references below still use pre-merge module paths and should be read as historical context.
 
 Use this roadmap primarily to track remaining convergence work, not as a statement that the old event substrate is still current.
+Use the active design package for networking architecture:
+
+- [ECS/net replication boundary](../design/active/ecs-net-replication-boundary.md)
+- [Plugin runtime bridge](../design/active/net-plugin-runtime-bridge.md)
+- [Diagnostics and inspection](../design/active/net-diagnostics-inspection.md)
 
 ## Priority 1: Foundation
 
@@ -48,11 +55,11 @@ Primary ownership locations:
 
 Checklist:
 
-- [ ] define separate storage/config types for broadcast streams and queues in ECS world APIs.
-- [ ] preserve unread cursor behavior for broadcast streams with runtime-owned cursor state.
-- [ ] add bounded queue primitive with explicit overflow and backpressure reporting.
+- [x] define separate storage/config types for broadcast streams and queues in ECS world APIs.
+- [x] preserve unread cursor behavior for broadcast streams with runtime-owned cursor state.
+- [x] add bounded queue primitive with explicit overflow and backpressure reporting.
 - [x] add deterministic tick-scoped tick-buffer buffering contract.
-- [ ] keep direct world/admin APIs for inspection, clear, and deterministic test control.
+- [x] keep direct world/admin APIs for inspection, clear, and deterministic test control.
 
 ### F2. Make lifecycle/finalization runtime-owned
 
@@ -109,9 +116,9 @@ Primary ownership locations:
 
 Checklist:
 
-- [ ] model broadcast read/write and work-queue destructive drain as explicit access domains.
-- [ ] preserve parallelism where safe while preventing drain/read races.
-- [ ] expose conflicts in plan introspection for tooling.
+- [x] model broadcast read/write and work-queue destructive drain as explicit access domains.
+- [x] preserve parallelism where safe while preventing drain/read races.
+- [x] expose conflicts in plan introspection for tooling.
 
 ## Priority 2: Multiplayer-Enabling
 
@@ -125,8 +132,8 @@ Primary ownership locations:
 Checklist:
 
 - [x] register multiple tick-buffer types.
-- [ ] deterministic per-tick ordering and sequence metadata.
-- [ ] optional dedup hooks.
+- [x] deterministic per-tick ordering and sequence metadata.
+- [x] optional dedup hooks.
 - [x] per-buffer diagnostics (buffer size, dropped, rejected, pending, sequence).
 
 ### M2. Generic ownership/routing contract
@@ -138,10 +145,10 @@ Primary ownership locations:
 
 Checklist:
 
-- [ ] generic owner model for entities/resources (including no-owner/server-owned).
-- [ ] input routing helpers from connection/controller to owned targets.
-- [ ] support spectator/controller roles without entity assumptions.
-- [ ] ownership transfer support hooks.
+- [x] generic owner model for entities/resources (including no-owner/server-owned).
+- [x] input routing helpers from connection/controller to owned targets.
+- [x] support spectator/controller roles without entity assumptions.
+- [x] ownership transfer support hooks.
 
 ### M3. Replication metadata registry expansion
 
@@ -165,10 +172,10 @@ Primary ownership locations:
 
 Checklist:
 
-- [ ] batched structural delta extraction API (spawn/despawn/upsert/remove style output).
-- [ ] component-type filtering in extraction API.
-- [ ] ownership/interest filtering hooks for replication and streaming.
-- [ ] frame-relative and tick-relative extraction windows.
+- [x] batched structural delta extraction API (spawn/despawn/upsert/remove style output).
+- [x] component-type filtering in extraction API.
+- [x] ownership/interest filtering hooks for replication and streaming.
+- [x] frame-relative and tick-relative extraction windows.
 
 ### M5. Diagnostics baseline for desync triage
 

@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # engine_net
@@ -55,6 +55,29 @@ fn receive_remote_input(
     input: Vec<Self::Input>,
 ) -> Result<(), Self::Error>;
 ```
+
+## Implemented vs Partial
+
+Implemented substrate:
+
+- protocol envelopes, snapshots, deltas, ACKs, cursors, and input frames;
+- profile, interest, authority, prediction, and lane vocabulary;
+- snapshot timeline helpers and runtime client/server contract helpers;
+- low-level driver traits for custom replication.
+
+Partial contracts:
+
+- declarative metadata does not yet replace driver implementations for
+  normal gameplay;
+- lower-level server runtime ACK validation still needs sent-cursor
+  hardening;
+- component/resource extraction and apply remain integration work.
+
+Design details:
+
+- [../../design/active/net-authoritative-replication-protocol.md](../../design/active/net-authoritative-replication-protocol.md)
+- [../../design/active/ecs-net-replication-boundary.md](../../design/active/ecs-net-replication-boundary.md)
+- [../../design/active/net-declarative-replication-authoring.md](../../design/active/net-declarative-replication-authoring.md)
 
 ## Ownership
 

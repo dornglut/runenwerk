@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # net
@@ -159,7 +159,26 @@ transport, routing, reconnect, command bus, or event dispatch.
 
 - Networking architecture guide: [net-architecture.md](net-architecture.md)
 - Goals and pinned direction: [goals.md](goals.md)
+- Implementation roadmap: [multiplayer-replication-implementation-roadmap.md](multiplayer-replication-implementation-roadmap.md)
+
+## Canonical Design Package
+
+Use these active design documents for long-term networking architecture:
+
+- Authoritative replication protocol: [../design/active/net-authoritative-replication-protocol.md](../design/active/net-authoritative-replication-protocol.md)
+- Prediction and reconciliation boundary: [../design/active/net-prediction-reconciliation-boundary.md](../design/active/net-prediction-reconciliation-boundary.md)
+- Engine net plugin runtime bridge: [../design/active/net-plugin-runtime-bridge.md](../design/active/net-plugin-runtime-bridge.md)
+- ECS/net replication boundary: [../design/active/ecs-net-replication-boundary.md](../design/active/ecs-net-replication-boundary.md)
+- Interest and streaming: [../design/active/net-interest-streaming-design.md](../design/active/net-interest-streaming-design.md)
+- Reconnect and history recovery: [../design/active/net-reconnect-history-recovery.md](../design/active/net-reconnect-history-recovery.md)
+- Declarative replication authoring: [../design/active/net-declarative-replication-authoring.md](../design/active/net-declarative-replication-authoring.md)
+- Transport lanes and delivery: [../design/active/net-transport-lanes-delivery.md](../design/active/net-transport-lanes-delivery.md)
+- Diagnostics and inspection: [../design/active/net-diagnostics-inspection.md](../design/active/net-diagnostics-inspection.md)
+
+Historical context only:
+
 - Multiplayer design proposal: [multiplayer-design-proposal.md](multiplayer-design-proposal.md)
+- Replication model: [replication-model.md](replication-model.md)
 
 ## ECS Runtime Audit Docs
 

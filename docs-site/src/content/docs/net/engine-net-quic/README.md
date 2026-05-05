@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # engine_net_quic
@@ -58,3 +58,11 @@ It implements client/server endpoint bootstrap, handshake framing, live datagram
 - Consumes `engine_net` protocol/session contracts
 - Emits/consumes `SessionRuntimeEvent` and `SessionRuntimeCommand`
 - Remains gameplay-agnostic; it does not own replication semantics
+
+Transport lane design:
+
+- [../../design/active/net-transport-lanes-delivery.md](../../design/active/net-transport-lanes-delivery.md)
+
+Reconnect design:
+
+- [../../design/active/net-reconnect-history-recovery.md](../../design/active/net-reconnect-history-recovery.md)

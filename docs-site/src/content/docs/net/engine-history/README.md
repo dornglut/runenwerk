@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # engine_history
@@ -51,3 +51,14 @@ last_reviewed: 2026-04-27
 - future rollback-oriented flows
 
 It depends on `engine_sim` for shared simulation identity/hash vocabulary (`SimulationTick`, `SimulationHash`, `SimulationSessionId`, `SimulationSeed`).
+
+Current status:
+
+- implemented as a replay/history substrate;
+- not yet the default reconnect recovery path;
+- generic ECS checkpoint hooks and selective component/resource history
+  remain future work.
+
+Recovery design:
+
+- [../../design/active/net-reconnect-history-recovery.md](../../design/active/net-reconnect-history-recovery.md)

@@ -5,13 +5,14 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # Runenwerk Networking Architecture
 
-This document describes the **runtime architecture of the Runenwerk
-multiplayer stack**.
+This document is the high-level orientation page for the Runenwerk
+multiplayer stack. It summarizes the current architecture and links to
+the canonical design package for long-term contracts.
 
 It explains how networking flows through the following domains:
 
@@ -23,6 +24,20 @@ It explains how networking flows through the following domains:
 The goal is to maintain a **clean separation between simulation,
 replication, and transport** while supporting a **server-authoritative
 ECS architecture**.
+
+For implementation order, use [multiplayer-replication-implementation-roadmap.md](multiplayer-replication-implementation-roadmap.md).
+
+For design detail, use:
+
+- [../design/active/net-authoritative-replication-protocol.md](../design/active/net-authoritative-replication-protocol.md)
+- [../design/active/net-prediction-reconciliation-boundary.md](../design/active/net-prediction-reconciliation-boundary.md)
+- [../design/active/net-plugin-runtime-bridge.md](../design/active/net-plugin-runtime-bridge.md)
+- [../design/active/ecs-net-replication-boundary.md](../design/active/ecs-net-replication-boundary.md)
+- [../design/active/net-interest-streaming-design.md](../design/active/net-interest-streaming-design.md)
+- [../design/active/net-reconnect-history-recovery.md](../design/active/net-reconnect-history-recovery.md)
+- [../design/active/net-declarative-replication-authoring.md](../design/active/net-declarative-replication-authoring.md)
+- [../design/active/net-transport-lanes-delivery.md](../design/active/net-transport-lanes-delivery.md)
+- [../design/active/net-diagnostics-inspection.md](../design/active/net-diagnostics-inspection.md)
 
 ------------------------------------------------------------------------
 
@@ -100,6 +115,29 @@ Responsibilities:
 -   interest management
 -   replication profiles
 -   runtime replication pipeline
+
+Current runtime contracts include:
+
+-   `AuthoritativeServerRuntime` for validated input ingestion,
+    per-connection snapshot baseline selection, full/delta snapshot
+    construction, monotonic acknowledgement handling, full-resync
+    fallback, interest-filtered payload views, lane trace emission, and
+    aggregate replication stats.
+-   `ClientReplicationRuntime` for authoritative full/delta receive,
+    tick and cursor progression checks, strict delta base validation
+    against the current client cursor, full-resync requests after failed
+    deltas, stale/duplicate snapshot rejection, local `NetEntityId`
+    mapping, and operation-plan output for the owning ECS apply layer.
+-   `SnapshotTimeline` for authoritative cursor allocation, retained
+    full baselines, delta construction, pruning, and merge logic.
+
+Current partial contracts:
+
+-   declarative metadata does not yet generate complete snapshot/delta/apply code;
+-   normal gameplay still commonly implements driver traits;
+-   interest policies are predicates, not a built-in spatial/team data source;
+-   reconnect uses full resync first; history-backed recovery remains future work;
+-   diagnostics are aggregate-heavy and need richer per-connection inspection.
 
 Key modules:
 
@@ -239,6 +277,11 @@ Key modules:
     engine_net/replication
     engine_net/runtime/server.rs
 
+The current server runtime is transport-agnostic. It chooses full versus
+delta snapshots from per-connection acknowledgement state and records a
+full-resync request when a baseline is missing or pruned. It does not
+make transport lanes responsible for replication policy.
+
 ------------------------------------------------------------------------
 
 # Snapshot System
@@ -248,20 +291,34 @@ Replication uses **snapshot-based synchronization**.
 Snapshots contain:
 
     spawn messages
-    component patches
+    component upserts/removals
     despawn messages
 
 Snapshot types:
 
-    FullSnapshot
+    Snapshot
     DeltaSnapshot
-    ComponentPatch
+    SnapshotPayload
 
 Snapshots are versioned using:
 
-    SnapshotTick
+    SimulationTick
+    SnapshotCursor
 
 Clients maintain baselines to apply deltas.
+
+Current invariants:
+
+- snapshot cursors must advance monotonically;
+- duplicate cursors and stale ticks are rejected;
+- delta `base` must equal the client's current cursor;
+- missing, mismatched, or malformed deltas request a full resync;
+- despawns remove stored component state and suppress late upserts for
+  the same `NetEntityId`.
+
+`engine_net` returns operation plans for spawn, despawn, upsert, and
+remove actions. The owning gameplay/app integration applies those plans
+to ECS state through public ECS/runtime contracts.
 
 ------------------------------------------------------------------------
 
@@ -286,6 +343,10 @@ Example:
     interest = Spatial
 
 Interest filtering occurs **before snapshot generation**.
+
+The net crate owns policy vocabulary and predicate evaluation. It does
+not own gameplay team membership, spatial partitioning, or distance data;
+those inputs are supplied by the owning domain/app layer.
 
 ------------------------------------------------------------------------
 
@@ -339,6 +400,10 @@ Typical flow:
 
 Prediction is enabled via replication profiles.
 
+Current prediction support is a reusable reconciliation contract, not a
+gameplay smoothing implementation. Game/app code owns smoothing,
+rollback, and replay policy around authoritative snapshot application.
+
 ------------------------------------------------------------------------
 
 # Network Identity
@@ -354,6 +419,9 @@ This identifier:
 -   maps to ECS entities locally
 
 ECS entity IDs are never sent over the network.
+
+`NetEntityMap` is the current runtime helper for local ECS/network ID
+mapping and emits assignment/removal events for diagnostics.
 
 ------------------------------------------------------------------------
 
@@ -444,14 +512,17 @@ struct PlayerState;
 struct PlayerInput;
 ```
 
-The engine provides:
+Current substrate provides:
 
 -   replication registration
--   snapshot encoding
--   delta replication
+-   snapshot and delta protocol contracts
 -   transport routing
--   prediction
--   reconciliation
+-   prediction/reconciliation hooks
+
+Current limitation: these are net-core contracts and helpers. End-to-end
+game integration still needs app/domain systems that extract gameplay
+payloads and apply operation plans to ECS state without making clients
+authoritative over replicated server state.
 
 ------------------------------------------------------------------------
 

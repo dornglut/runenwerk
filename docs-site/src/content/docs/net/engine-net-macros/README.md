@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-05
 ---
 
 # engine_net_macros
@@ -13,6 +13,10 @@ last_reviewed: 2026-04-28
 `engine_net_macros` provides attribute macros for declarative network replication metadata.
 
 The crate is a proc-macro crate. It generates implementations against `engine_net::replication` contracts, but it does not own the replication runtime itself.
+
+Current scope note: these macros generate metadata implementations. They
+do not generate snapshot encoding, delta generation, ECS extraction, ECS
+apply logic, or transport sends.
 
 ## Macros
 
@@ -72,7 +76,7 @@ pub struct Player;
     authority = Server,
     direction = ServerToClient,
     reliability = Reliable,
-    prediction = None,
+    prediction = Disabled,
     priority = High,
     frequency_hz = 30,
     profile = ReliableState,
@@ -97,6 +101,10 @@ Out of scope:
 - replication scheduling;
 - snapshot delta generation;
 - game-specific networking policy.
+
+Declarative authoring design:
+
+- [../../design/active/net-declarative-replication-authoring.md](../../design/active/net-declarative-replication-authoring.md)
 
 ## Validation
 
