@@ -25,6 +25,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - [Documentation Refactor](./docs-refactor.md)
 - [Implementation Batch](./implementation-batch.md)
 - [Phase Completion Drift Check](./phase-completion-drift-check.md)
+- [Roadmap Milestone Kickoff](./roadmap-milestone-kickoff.md)
 
 ## Rules
 

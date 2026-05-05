@@ -5,9 +5,10 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-04
+last_reviewed: 2026-05-05
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
+  - ./editor-self-authoring-and-final-ui-design.md
   - ./workspace-identity-contract-and-migration-map.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related:
@@ -194,22 +195,22 @@ Preserve panel identity and hosting in:
 - `domain/editor/editor_shell/src/workspace/state.rs`
 - `domain/editor/editor_shell/src/workspace/projection.rs`
 
-Formalize providers in app/editor integration:
+Implemented providers in app/editor integration:
 
-- `apps/runenwerk_editor/src/shell/` (new provider modules)
-- `apps/runenwerk_editor/src/shell/build_view_model.rs`
+- `apps/runenwerk_editor/src/shell/providers/mod.rs`
+- `apps/runenwerk_editor/src/shell/controller.rs`
+- `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`
 
 Provider responsibilities:
 
-- declare supported document kinds and workspace scopes;
-- build observation frames/view models for panel type;
-- map panel-local interactions into shell/domain commands.
+- declare supported document context and mounted surface kind;
+- lower observation into a `SurfacePresentationArtifact`;
+- emit provider-local routes keyed by mounted `ToolSurfaceInstanceId`;
+- map routed local actions into typed `SurfaceCommandProposal` values.
 
-This turns existing adapters like
-`apps/runenwerk_editor/src/shell/outliner_adapter.rs`
-and
-`apps/runenwerk_editor/src/shell/inspector_adapter.rs`
-into explicit provider implementations.
+The previous aggregate shell builder and shell adapter modules are gone. The
+app shell uses provider-owned lowering and the retained UI tree/render-data path
+as the only implemented UI execution strategy.
 
 ## Default Workspace Set (Target)
 
@@ -247,12 +248,21 @@ Scripting remains language-neutral at the contract level; Rhai is the first conc
 
 `Editor Design` (self-authoring)
 
-- Documents: workspace/menu/theme/shortcut definitions.
-- Panels: workspace outliner, dock preview, panel registry, command palette, menu editor, shortcut editor, theme editor, inspector.
-- Modes: layout-edit, command-bind, style-edit, preview.
+- Documents: workspace layout, UI layout, menu, theme, shortcut, command binding, panel registry, and tool-surface definition documents.
+- Panels: workspace outliner, UI hierarchy, dock preview, panel registry, tool-surface registry, command palette, menu editor, shortcut editor, theme editor, validation/diagnostics, and inspector.
+- Modes: layout-edit, ui-layout-edit, command-bind, create/manage, style-edit, validation, preview.
 
 This remains a later-phase track and aligns with authored editor-definition groundwork in
-`docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` (Phase E).
+`docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` (Phase E) and the concrete self-authoring/final UI target in `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
+
+The dedicated self-authoring design now exists and covers:
+
+- authored document schemas for workspace/UI/editor definitions;
+- create, duplicate, delete, rename, import/export, and migration flows;
+- layout editing UX for dock hosts, tab stacks, panels, tool surfaces, and UI trees;
+- validation/formation from authored definitions into active workspace/editor instances;
+- persistence, versioning, history, undo/redo, and sharing boundaries;
+- command/ratification and capability rules for self-authoring mutations.
 
 ## Persistence and Ownership Rules
 
@@ -346,9 +356,9 @@ Status: complete for baseline scope.
 - `apps/runenwerk_editor/src/editor_runtime/document/` (module family)
   - split scene-specific runtime document state from generic document-tab management.
 
-### Phase D - Replace adapter-only panel wiring with provider registry
+### Phase D - Finalize provider-owned shell wiring
 
-Status: active implementation for final-product provider seam.
+Status: implemented for the current editor shell.
 
 - `domain/editor/editor_shell/src/surface_provider.rs`
   - owns app-neutral provider request/result, frame, route, diagnostic, and typed command proposal DTOs.
@@ -358,8 +368,7 @@ Status: active implementation for final-product provider seam.
   - builds `EditorShellFrameModel` and shell tree from provider artifacts.
 - `domain/editor/editor_shell/src/composition/build_editor_shell.rs`
   - renders active mounted `ToolSurfaceInstanceId` artifacts rather than treating `PanelKind` as final body selection.
-- Legacy `apps/runenwerk_editor/src/shell/*_adapter.rs`
-  - retained only as reusable presenter/observation helpers during migration.
+- Provider-local session state lives only in `apps/runenwerk_editor/src/shell/surface_session.rs`, keyed by `ToolSurfaceInstanceId`.
 
 ### Phase E - Expand mode system from global enum to scoped mode sets
 

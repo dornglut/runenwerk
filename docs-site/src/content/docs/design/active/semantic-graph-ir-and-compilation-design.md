@@ -10,6 +10,7 @@ related_docs:
   - ../../guidelines/runenwerk-architecture.md
   - ../../domain/scheduler/README.md
 related_designs:
+  - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
   - ./workspace-field-world-and-simulation-platform-design.md
   - ./workspace-viewport-expression-upgrade-design.md
@@ -470,9 +471,10 @@ Before accepting this design:
 6. Add focused ratification and lowering tests.
 7. Update crate/domain docs and `CRATES.md` only when a new crate is actually added.
 
-## Open Questions
+## Remaining Questions
 
-- Which concrete semantic graph domain should be implemented first?
+- Gameplay graph specialization is defined in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
+- Which non-gameplay semantic graph domain should be implemented first after material/procedural and gameplay contracts are sequenced?
 - Should source maps use only domain-local ids, or also integrate with future retained expression graph lineage?
 - Which formed product family should be the first target: ECS/scheduler, material/render expression, or field/world products?
 - When should semantic graph descriptors become discoverable through `foundation/commands` and `foundation/schema`?

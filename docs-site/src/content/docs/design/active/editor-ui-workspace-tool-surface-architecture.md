@@ -5,7 +5,10 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
+related:
+  - ./editor-self-authoring-and-final-ui-design.md
+  - ./editor-workspace-document-mode-panel-architecture.md
 ---
 
 # Editor / UI / Workspace / Tool-Surface Architecture
@@ -450,8 +453,8 @@ The framework should use a **retained tree UI + tool-surface/canvas hybrid**.
 #### Immediate-mode as the primary core model
 Rejected because it is weak for complex editor interactions, persistent focus/capture, advanced tool surfaces, and long-lived workspace state.
 
-#### ECS-driven UI as the primary architecture
-Rejected because it is not a good primary semantic model for editor/workspace/tool behavior, even if ECS can still be used in runtime domains.
+#### Runtime-world UI ownership as the primary architecture
+Rejected because the editor shell must keep explicit authored/runtime separation, command-owned mutation, and retained UI frame/render-data lowering as the implemented execution path.
 
 #### CSS-like implicit cascade as the primary styling model
 Rejected because Runenwerk should prefer explicit, typed, auditable contracts over highly implicit styling behavior.
@@ -796,6 +799,8 @@ Even while the host editor is code-defined, the architecture should prepare expl
 ## Stage 3 — Authored editor-definition architecture
 Later, these definitions become authored content that can be created/edited inside Runenwerk.
 
+The concrete self-authoring and final editor UI target is defined in `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
+
 ### Principle
 Do not build Stage 3 now. But do not block it with Stage 1 decisions.
 
@@ -1025,4 +1030,3 @@ Architect now for later:
 Do not skip the host architecture.
 Do not let the shell become the whole platform.
 Do not delay the reusable framework waiting for a future meta-editor.
-

@@ -22,10 +22,14 @@ last_reviewed: 2026-04-29
 
 ## Roadmap
 
-- [`roadmap.md`](./roadmap.md)
+- [`roadmap.md`](./roadmap.md) - final end-to-end SDF-first editor/UI implementation roadmap.
 - [`execution-priority-checklist.md`](./execution-priority-checklist.md)
 
 ## Related Domain Docs
 
 - [`../../domain/ui/README.md`](../../domain/ui/README.md)
 - [`../../domain/editor/README.md`](../../domain/editor/README.md)
+- [`../../domain/sdf/README.md`](../../domain/sdf/README.md)
+- [`../../domain/world-sdf/README.md`](../../domain/world-sdf/README.md)
+- [`../../design/active/editor-asset-pipeline-and-content-workflow-design.md`](../../design/active/editor-asset-pipeline-and-content-workflow-design.md)
+- [`../../design/active/editor-procedural-content-and-simulation-workflow-plan.md`](../../design/active/editor-procedural-content-and-simulation-workflow-plan.md)

@@ -1,129 +1,520 @@
 ---
-title: Runenwerk Editor Roadmap
-description: Post-MVP expansion roadmap for the Runenwerk editor application.
+title: Runenwerk Editor Final Implementation Roadmap
+description: Repo-truth implementation roadmap from current editor MVP state to feature-complete UI, editor, asset pipeline, runtime preview, and self-authoring workflows.
 status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-04
+last_reviewed: 2026-05-05
+related_designs:
+  - ../../design/active/workspace-field-world-and-simulation-platform-design.md
+  - ../../design/active/editor-workspace-document-mode-panel-architecture.md
+  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/active/editor-self-authoring-and-final-ui-design.md
+  - ../../design/active/editor-asset-pipeline-and-content-workflow-design.md
+  - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
+  - ../../design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
+  - ../../design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+related_roadmaps:
+  - ../../domain/ui/roadmap.md
+  - ../../engine/plugins/render/docs/roadmap.md
+related_reports:
+  - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
 related:
+  - ./execution-priority-checklist.md
+  - ./current-architecture.md
   - ./mvp/first-3d-editor-mvp.md
   - ./mvp/acceptance-criteria.md
   - ./mvp/implementation-sequence.md
-  - ./execution-priority-checklist.md
-  - ../../domain/ui/roadmap.md
-  - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
-  - ../../design/active/editor-workspace-document-mode-panel-architecture.md
+  - ../../domain/sdf/README.md
+  - ../../domain/world-sdf/README.md
+  - ../../domain/world-ops/README.md
+  - ../../domain/spatial/README.md
+  - ../../domain/chunking/README.md
 ---
 
-# Runenwerk Editor Roadmap
+# Runenwerk Editor Final Implementation Roadmap
 
-## Purpose
+## Goal
 
-This document tracks editor expansion after the first 3D scene authoring MVP is stable.
+Make the Runenwerk editor feature-complete end to end:
 
-This page tracks app-level feature scope. UI substrate/surface architecture sequencing is owned by domain and design roadmap documents.
+- project creation and project loading;
+- document tabs for scenes, prefabs, SDF and field-world documents, UI, graphs, scripts, materials, textures, particles, physics, animation, procedural generation, gameplay graphs, gameplay rules/triggers/abilities/quests, imports, runtime/debug documents, and editor definitions;
+- task workspaces with scoped modes and mode-aware tools;
+- reusable dock/tab/area UI with editor type switching and new-tab creation;
+- complete SDF-first 3D scene authoring with transform tools, common entity actions, SDF primitive and brush workflows, inspector/component editing, undo/redo, persistence, validation, and viewport feedback;
+- an SDF/field-world-first asset pipeline that imports, validates, forms field products, caches, previews, hot-reloads, and publishes authored content;
+- authoring workspaces for UI, graphs/materials/textures, SDF modeling, procedural generation, gameplay graph ATR IR, particles, physics, animation, scripting, debugging, and editor design;
+- play/simulate/runtime preview with explicit data hot reload and code rebuild boundaries;
+- final self-authoring workflows for workspace layouts, UI layouts, menus, shortcuts, themes, command bindings, and tool-surface definitions.
 
-## Post-MVP Expansion
+This is not a deferral list. Every phase below is required for feature completion. Later phases are ordered after their prerequisites, not optional.
 
-Likely post-MVP areas:
+## Repo Truth Audit
 
-- rotate and scale gizmos;
-- more component and shape editing;
-- better viewport overlays;
-- docking and layout persistence;
-- create, delete, and duplicate flows;
-- UI authoring mode;
-- 2D mode if needed;
-- asset workflows;
-- deeper inspector and component authoring.
+Current implemented baseline:
 
-## Current Post-MVP Status
+- Editor MVP acceptance is closed in `docs-site/src/content/docs/apps/runenwerk-editor/execution-priority-checklist.md`.
+- Workspace profile identity exists in `domain/editor/editor_shell/src/workspace/profile.rs::WorkspaceProfile`.
+- Profile-addressed workspace layout persistence exists in `apps/runenwerk_editor/src/persistence/workspace_layout.rs::default_workspace_layout_path_for_profile`.
+- Structural workspace identities exist in `domain/editor/editor_shell/src/workspace/state.rs::WorkspaceState`.
+- Tab reorder, tab rehome, floating host placeholders, and split resizing exist in `domain/editor/editor_shell/src/workspace/reducer.rs::WorkspaceMutation`.
+- Provider DTOs exist in `domain/editor/editor_shell/src/surface_provider.rs`.
+- Concrete app providers exist in `apps/runenwerk_editor/src/shell/providers/mod.rs::EditorSurfaceProviderRegistry`.
+- Retained UI substrate and widgets exist in `domain/ui/*`, including select, tree, table, tabs, toggle, numeric input, text input, scroll, split, and viewport embed.
+- Scene file migration, normalization, and formation exist in `domain/editor/editor_persistence/src/scene_migration.rs`, `domain/editor/editor_persistence/src/scene_normalization.rs`, and `domain/editor/editor_persistence/src/scene_formation.rs`.
+- SDF primitives, composition, transforms, sampling, gradients/normals, and queries exist in `domain/sdf/src/field.rs::SdfField3`, `domain/sdf/src/primitives/`, `domain/sdf/src/ops/`, and `domain/sdf/src/queries/`.
+- World edit operation logs, dirty-region tracking, build queues, and invalidation contracts exist in `domain/world_ops/src/operation_log.rs`, `domain/world_ops/src/dirty.rs`, `domain/world_ops/src/build_queue.rs`, and `domain/world_ops/src/region_invalidation.rs`.
+- World-scale SDF chunk/page payload records and collision query contracts exist in `domain/world_sdf/src/storage.rs::SdfChunkStore` and `domain/world_sdf/src/collision.rs::CollisionQueryService`.
+- Spatial coordinates, chunk coordinates, clipmap windows, and chunk residency planning exist in `domain/spatial/src/` and `domain/chunking/src/`.
+- Scene manifests are discovered from loose RON files by `engine/src/plugins/scene/manifest/catalog.rs::load_scene_manifest_descriptors`.
+- Render import contracts in `engine/src/plugins/render/resource/import.rs` describe render resources only; they are not a general asset pipeline.
+- Render prepared-frame material plumbing exists in `engine/src/plugins/render/frame/contributions.rs::PreparedMaterialFeatureContribution`, and the material feature slot exists as `engine/src/plugins/render/features/mod.rs::MATERIAL_RENDER_FEATURE_ID`.
+- Shader reload helpers exist in `engine/src/plugins/render/shader/hot_reload.rs::poll_shader_hot_reload` and `engine/src/plugins/shared/reload.rs`.
+- `assets/editor/config.ron` contains a Blender path, and `assets/models/*.blend` plus `assets/models/*.glb` exist, but those files are foreign-source/reference content today. They are not the canonical world representation and no importer/catalog/cache pipeline currently owns them.
 
-Completed baseline infrastructure:
+Current blocking gaps:
 
-- workspace profile abstraction is implemented in `domain/editor/editor_shell/src/workspace/profile.rs`;
-- `RunenwerkEditorShellState` tracks active workspace profile identity separately from `WorkspaceState`;
-- workspace layout persistence is profile-addressed through `apps/runenwerk_editor/src/persistence/workspace_layout.rs::default_workspace_layout_path_for_profile`;
-- scene-derived workspace layout paths are retained only as a legacy load fallback.
+- `domain/editor/editor_core/src/document.rs::DocumentKind` is too coarse for final document workflows.
+- `domain/editor/editor_core/src/session.rs::EditorSession` stores documents, but it does not own ordered document tabs, active-tab commands, compatibility validation, or non-scene document state.
+- `apps/runenwerk_editor/src/editor_runtime/document/mod.rs::SceneDocumentState` is scene-specific and is not a generic document runtime.
+- `domain/editor/editor_core/src/session.rs::EditorMode` is a global enum instead of scoped workspace/document mode contracts.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame` renders tab buttons and drop slots, but not editor type selectors, plus/new-tab controls, area menus, close controls, or document tabs.
+- `domain/editor/editor_shell/src/commands/map_interactions.rs::map_interactions_to_shell_commands` intentionally ignores `SelectChanged`, `TabSelected`, `TreeRowSelected`, `TreeRowToggled`, `Toggled`, and `NumericStepped` for shell-level workflows.
+- `apps/runenwerk_editor/src/editor_runtime/commands/ratification.rs::ratify_scene_change`, `apps/runenwerk_editor/src/editor_runtime/commands/scene_commands.rs::execute_scene_command_and_push_history_with_origin`, and `apps/runenwerk_editor/src/editor_runtime/commands/transactions.rs::execute_scene_transaction_and_push_history_with_origin_and_causality` still own domain-like operation orchestration in the app crate.
+- Rotate, scale, duplicate, broader create/delete flows, SDF primitive creation, brush/layer workflows, and richer inspector/component authoring are incomplete.
+- There is no asset catalog, asset id model, dependency graph, import plan, artifact cache, asset browser, import diagnostics surface, project-wide asset hot reload workflow, field-product formation pipeline, SDF/world asset taxonomy, or `world_sdf` artifact/cache bridge.
+- There is no `domain/material_graph`, `domain/texture`, `domain/procgen`, `domain/particles`, `domain/physics`, or `domain/animation`.
+- There are no editor providers for material graph editing, procedural texturing, Texture3D/volume inspection, procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview.
+- There is no `domain/gameplay_graph`, Action/Trigger/Rule IR, gameplay graph compiler, gameplay graph to ECS query/event/schedule lowering, or gameplay graph editor/debug provider.
+
+## Implementation Readiness
+
+- M1 through M3 are implementation-ready against current editor, shell, UI, scene, SDF, and persistence docs.
+- M4 and M5 are implementation-ready once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
+- M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
+- M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
+- M8 is implementation-ready for the retained UI path. Compiled-reactive or ECS-driven UI execution remains blocked unless it receives an active design or accepted ADR before M2 starts.
+- M9 is release-readiness verification, not a feature construction phase.
+
+## Milestones
+
+### M0 - Governance And Evidence Baseline
+
+Exit criteria:
+
+- This roadmap is canonical for app-level sequencing.
+- Asset pipeline architecture is captured in `docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md`.
+- Procedural authoring, material/texturing, particles, physics, animation, and simulation workflows are captured in `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`.
+- Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
+- The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/active/workspace-field-world-and-simulation-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
+- UI execution strategy is closed for M1 through M7: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution may only enter this roadmap after a concrete active design or accepted ADR is created before M2 starts.
+- Existing MVP, UI, editor, render, and runtime design docs link to this roadmap without restating stale phase order.
+- `python3 tools/docs/validate_docs.py` passes.
+
+### M1 - Editor Structural Core Closed
+
+Purpose: close the structural seams that every later feature depends on.
+
+Implementation targets:
+
+- `domain/editor/editor_core/src/document.rs::DocumentKind`
+  - replace the coarse `Asset`, `Resource`, `Tool`, and catch-all usage with explicit document kinds for scene, prefab, SDF graph, SDF brush/layer, field-world definition, field product preview, material graph, material, procedural texture, Texture3D/volume texture, procedural generation graph, gameplay graph, gameplay rule/trigger, ability, quest, particle graph, particle emitter, physics scene/config, animation clip, animation graph, timeline, UI layout, graph, script, foreign mesh/reference import, asset catalog, runtime debug, workspace definition, theme, shortcut, menu, command binding, panel registry, and tool-surface definition.
+- `domain/editor/editor_core/src/session.rs::EditorSession`
+  - add ordered document-tab state, active document switching commands, close/dirty/save state transitions, and compatibility validation hooks.
+- `apps/runenwerk_editor/src/editor_runtime/document/mod.rs`
+  - split scene runtime document state from generic document-tab runtime state.
+- `domain/editor/editor_shell/src/surface_provider.rs`
+  - close the provider DTO contract for workspace profile, document kind, surface definition, capabilities, and provider-local route results.
+- `apps/runenwerk_editor/src/shell/providers/`
+  - split the current monolithic provider module into subdomain modules with `mod.rs` boundaries: `outliner`, `entity_table`, `viewport`, `inspector`, `console`, and provider registry composition.
+- `domain/editor/editor_core/src/ratification.rs`
+  - add a domain-owned scene-change ratification parameter object for operation orchestration.
+- `domain/editor/editor_scene/src/operations/execute_scene_command.rs`
+  - move single-command scene operation orchestration behind narrow domain-owned context traits.
+- `domain/editor/editor_scene/src/operations/execute_scene_transaction.rs`
+  - move transaction orchestration behind the same context family.
+- `apps/runenwerk_editor/src/editor_runtime/runtime.rs::RunenwerkEditorRuntime`
+  - implement those context traits without moving app IO, renderer, or engine integration into domain crates.
+- `domain/editor/editor_core/src/session.rs::EditorMode`
+  - replace the global enum with mode ids, mode descriptors, and workspace/document compatibility rules.
+
+Validation:
+
+- `cargo test -p runenwerk_editor -p editor_core -p editor_scene -p editor_shell`
+- `cargo test -p runenwerk_editor --test scene_authoring_workflow_smoke`
+- `cargo test -p runenwerk_editor --test viewport_architecture_guards`
+
+### M2 - Final Shell, Docking, Tabs, And Area UI
+
+Purpose: productize the editor shell as a real work surface, not a fixed MVP panel layout.
+
+Implementation targets:
+
+- `domain/editor/editor_shell/src/workspace/reducer.rs::WorkspaceMutation`
+  - add workspace mutations for new panel tab allocation, close tab, close other tabs, split area horizontally, split area vertically, duplicate area, close area, reset area, lock area type, and saved layout preset application.
+- `domain/editor/editor_shell/src/workspace/state.rs::WorkspaceState`
+  - preserve `PanelInstanceId` and `ToolSurfaceInstanceId` identity through every new structural mutation.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame`
+  - render editor type selector, area tabs, plus/new-tab button, split/menu/close controls, and consistent area chrome.
+- `domain/editor/editor_shell/src/commands/shell_command.rs::ShellCommand`
+  - add commands for new panel tab creation, area close, tab close, area split, area menu actions, and document-tab actions.
+- `domain/editor/editor_shell/src/commands/map_interactions.rs::map_interactions_to_shell_commands`
+  - map `UiInteraction::SelectChanged` to `SwitchPanelToolSurfaceKind`, map tab controls to tab commands, map tree/table/toggle/numeric interactions for shell-owned controls, and keep provider-local actions routed through provider proposals.
+- `apps/runenwerk_editor/src/shell/state.rs::RunenwerkEditorShellState`
+  - allocate new panel and tool-surface identities through `WorkspaceIdentityAllocator` and prune surface sessions only after structural state is ratified.
+- `domain/editor/editor_shell/src/workspace/persisted.rs`
+  - persist the full saved workspace layout, including tab stacks, active panels, floating hosts, split fractions, area type locks, and durable layout identity.
+
+Validation:
+
+- `cargo test -p editor_shell`
+- `cargo test -p ui_runtime -p ui_widgets`
+- `cargo test -p runenwerk_editor -p editor_shell -p ui_runtime`
+
+### M3 - Scene Authoring Feature Complete
+
+Purpose: finish the core 3D editor before expanding into every other workspace.
+
+Implementation targets:
+
+- `domain/editor/editor_scene/src/scene_command.rs::SceneCommandIntent`
+  - add duplicate entity/subtree, create SDF primitive, create child, batch delete, set transform, reset transform, and add/remove common component actions.
+- `apps/runenwerk_editor/src/editor_features/scene_commands.rs`
+  - expose create, delete, duplicate, rename, reparent, add component, remove component, and common SDF primitive actions as shell/provider commands.
+- `apps/runenwerk_editor/src/editor_features/viewport/tools.rs`
+  - add rotate and scale tool definitions alongside select and translate.
+- `apps/runenwerk_editor/src/editor_features/viewport/interaction.rs`
+  - implement rotate and scale gizmo interaction, snap support, cancellation, preview, and commit behavior through scene transactions.
+- `apps/runenwerk_editor/src/editor_runtime/transform_preview.rs`
+  - generalize preview state for translate, rotate, and scale without making preview state authoritative.
+- `domain/editor/editor_inspector/src/model/`, `domain/editor/editor_inspector/src/editing.rs`, and `apps/runenwerk_editor/src/editor_panels/inspector_panel.rs`
+  - make common reflected fields editable through reusable controls and typed inspector edit values.
+- `domain/editor/editor_scene/src/sdf_authoring/`
+  - add scene-authoring contracts for SDF primitives, boolean composition intent, brush/layer metadata, and SDF preview diagnostics without making scene graph ownership replace `domain/sdf` or `domain/world_sdf`.
+- `apps/runenwerk_editor/src/editor_features/viewport/sdf_tools.rs`
+  - expose SDF brush, add/subtract, smooth/blend, and surface-pick interactions as editor tools routed through scene/world commands.
+- `domain/editor/editor_shell/src/composition/build_outliner_panel.rs`
+  - replace ad hoc row buttons with the retained tree control where hierarchy semantics require expand/collapse and selection.
+- `apps/runenwerk_editor/src/persistence/files.rs`
+  - keep scene save/load going through migration, normalization, formation, apply, and retained change log persistence.
+
+Validation:
+
+- `cargo test -p runenwerk_editor --test scene_authoring_workflow_smoke`
+- `cargo test -p runenwerk_editor -p editor_inspector -p editor_scene`
+- GPU smoke manually when visual acceptance matters:
+  `RUNENWERK_ENABLE_GPU_SMOKE=1 RUNENWERK_ENABLE_MACOS_MAIN_THREAD_GPU_SMOKE=1 cargo test -p runenwerk_editor --test viewport_gpu_truth_smoke -- --ignored`
+
+### M4 - SDF/Field Asset Pipeline Foundation
+
+Purpose: make project content explicit and field-world-first instead of loose files discovered by unrelated runtime systems.
+
+Implementation targets:
+
+- `domain/asset/src/lib.rs`
+  - add a new engine-agnostic asset domain crate.
+- `domain/asset/src/id.rs`
+  - define typed ids for assets, sources, imported artifacts, import jobs, and asset revisions.
+- `domain/asset/src/kind.rs`
+  - define asset kinds for scene, prefab, SDF graph, SDF brush/layer, field-world definition, world edit log, field material channels, formed field product, `world_sdf` chunk/page artifact, clipmap/brickmap product, material graph, material, procedural material, procedural texture, Texture2D, Texture3D/volume texture, gameplay graph, gameplay rule/trigger, gameplay ability, gameplay quest, gameplay ATR IR product, gameplay ECS lowering product, particle graph, particle emitter, physics config, animation clip, animation graph, procgen graph, UI layout, graph, script, shader, theme, menu, shortcut, workspace definition, editor definition, and foreign mesh/reference source. Mesh/glTF kinds are interop/reference kinds, not the primary world substrate.
+- `domain/asset/src/source.rs`
+  - model source files, source hashes, source provenance, external source roots, authored SDF/field documents, and foreign source roots.
+- `domain/asset/src/artifact.rs`
+  - model imported artifacts, formed field product references, `world_sdf` payload references, gameplay ATR IR products, gameplay ECS query/event/schedule lowering products, source maps, cache keys, generated files, runtime package refs, and artifact validity.
+- `domain/asset/src/dependency_graph.rs`
+  - model dependencies and reverse dependencies for import invalidation and hot reload.
+- `domain/asset/src/import_settings.rs`
+  - model import settings for SDF graph/source formation, field-world layers, `world_sdf` brick/page/chunk product formation, material channel policy, procedural material/texturing, PBR parameter validation, triplanar mapping, Texture2D, Texture3D/volume texture products, gameplay graph compiler profile, ATR IR validation, ECS query/event/schedule lowering, SDF physics relation readiness, authority/network policy, particles, physics configs, animation clips/graphs, procgen graphs, shaders, UI definitions, scripts, authored RON documents, and Blender/glTF as foreign-source compatibility.
+- `domain/asset/src/import_plan.rs`
+  - build deterministic import plans without executing external tools.
+- `domain/asset/src/diagnostics.rs`
+  - define stable asset pipeline diagnostic codes.
+- `domain/asset/src/ratification.rs`
+  - ratify imported, migrated, generated, and externally supplied asset candidates.
+- `domain/world_sdf/src/product.rs`
+  - define engine-agnostic descriptors for formed SDF chunk/page/brick products, product scope, scale band, source lineage, freshness, consumer class, and retention/rebuild policy.
+- `domain/world_sdf/src/ratification.rs`
+  - ratify formed `world_sdf` payload candidates before they become catalog-visible artifacts.
+- `domain/world_ops/src/build_graph.rs` and `domain/world_ops/src/build_queue.rs`
+  - connect asset/source changes to field-product invalidation and interactive/background rebuild plans without owning artifact IO.
+- `domain/editor/editor_persistence/src/project_file.rs`
+  - add `ProjectFileV2` with asset catalog roots, startup document, source roots, field-product cache root, workspace profile defaults, and migration from `ProjectFileV1`.
+- `apps/runenwerk_editor/src/persistence/files.rs::read_project_file`
+  - load and migrate project files through the asset catalog instead of scene-only entries.
+- `DOMAIN_MAP.md` and `CRATES.md`
+  - add the new asset domain ownership when the crate lands.
+
+Validation:
+
+- `cargo test -p asset`
+- `cargo test -p editor_persistence`
+- asset kind and import-settings tests cover gameplay graph, gameplay rule/trigger, ability, quest, ATR IR product, and ECS lowering product entries;
+- `cargo metadata --no-deps` after adding the workspace member.
+
+### M5 - Asset Import, Field Product Formation, Preview, And Hot Reload Execution
+
+Purpose: connect the asset domain to real editor and runtime workflows.
+
+Implementation targets:
+
+- `apps/runenwerk_editor/src/asset_pipeline/import_jobs.rs::run_import_job`
+  - execute domain import plans with app-owned IO and external process policy.
+- `apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs::run_field_product_job`
+  - execute field-product formation plans for SDF graphs, field-world layers, material channels, and `world_sdf` chunk/page/brick artifacts through app/engine-owned runtime policy.
+- `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`
+  - maintain the open project's asset catalog, import job queue, field-product build queue, diagnostics, dirty asset set, dirty field-product set, and preview state.
+- `domain/world_ops/src/dirty.rs`, `domain/world_ops/src/region_invalidation.rs`, and `domain/world_ops/src/build_queue.rs`
+  - drive explicit invalidation and rebuild scheduling for affected regions, scale bands, and consumer products.
+- `domain/world_sdf/src/storage.rs::SdfChunkStore`
+  - receive ratified chunk/page/brick payload artifacts through runtime/app integration; do not let the editor write private storage internals directly.
+- `tools/assets/blender_export.py::main`
+  - support foreign-source/reference import by exporting configured `.blend` sources to deterministic `.glb` artifacts using `assets/editor/config.ron` as host configuration, or emit a missing-tool diagnostic that preserves the prior valid artifact. This is not the canonical field-world pipeline.
+- `apps/runenwerk_editor/src/shell/providers/asset_browser.rs::AssetBrowserProvider`
+  - add an asset browser surface backed by the asset catalog.
+- `apps/runenwerk_editor/src/shell/providers/import_inspector.rs::ImportInspectorProvider`
+  - expose import settings, import diagnostics, source/artifact paths, dependencies, and reimport controls.
+- `apps/runenwerk_editor/src/shell/providers/field_product_viewer.rs::FieldProductViewerProvider`
+  - preview SDF fields, material channels, chunk/page/brick payloads, clipmap/brickmap products, provenance, freshness, and invalidation diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/sdf_brush_browser.rs::SdfBrushBrowserProvider`
+  - browse and preview SDF brushes/layers as field-world authoring assets.
+- `apps/runenwerk_editor/src/shell/providers/texture_viewer.rs::TextureViewerProvider`
+  - inspect Texture2D, Texture3D/volume slices, channels, mips, color space, compression, and generated texture provenance.
+- `engine/src/plugins/scene/manifest/catalog.rs::load_scene_manifest_descriptors`
+  - migrate from loose scene manifest scanning to an asset-catalog-backed scene/template query, with the current loose RON path retained only as an explicit compatibility adapter during migration.
+- `engine/src/plugins/render/resource/import.rs`
+  - keep render resource imports as renderer-facing contracts and map asset artifact ids to render resource ids at engine integration edges.
+- `engine/src/plugins/render/shader/hot_reload.rs::poll_shader_hot_reload`
+  - integrate shader asset revisions and diagnostics with the asset reload stream.
+- `engine/src/plugins/shared/reload.rs`
+  - reuse reload status payloads for asset, field product, `world_sdf` payload, shader, scene, prefab, UI, graph, and script hot reload status.
+
+Validation:
+
+- import or author one SDF/field source and form a ratified field product artifact;
+- update an SDF/field source and prove region/product invalidation flows through `world_ops` into rebuild scheduling;
+- load or preview a formed `world_sdf` chunk/page/brick payload without treating mesh/glTF as the source of world truth;
+- import one `.blend` source into a `.glb` foreign-reference artifact from `assets/models/`, or prove the missing-tool diagnostic path preserves the prior valid artifact;
+- load a scene through the project asset catalog;
+- reimport a changed source and show diagnostics in the editor;
+- prove failed imports leave prior valid artifacts intact;
+- `cargo test -p runenwerk_editor -p engine -p asset`.
+
+### M6 - Procedural Authoring Workspaces Beyond Scene Editing
+
+Purpose: make the editor a multi-document procedural authoring environment.
+
+Detailed feature slices, milestone gates, and remaining decisions for material graphs, procedural texturing, Texture3D, procgen, particles, physics, animation, and world processes are owned by `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`. Gameplay graph ATR IR and ECS lowering are owned by `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
+
+M6 closes by sub-milestone, not as one broad bucket. Each sub-milestone must satisfy its owning design's first-slice exit criteria, source lineage requirements, diagnostics, failed-product preservation, and provider boundary tests before it can be marked complete.
+
+Sub-milestones:
+
+- M6.0 Shared workspace substrate: workspace profiles, scoped mode compatibility, graph canvas hosting, diagnostics, provider routing, runtime debug surfaces, and document tab coverage.
+- M6.1 Material and texture first slice: `domain/material_graph`, `domain/texture`, PBR parameters, procedural nodes, triplanar mapping, Texture2D, Texture3D, material previews, and formed material products.
+- M6.2 Procgen first slice: deterministic generator documents, seed/scope contracts, bounded preview, world-operation lowering, bake/rollback, and changed-region diagnostics.
+- M6.3 Gameplay graph first slice: prerequisite gameplay event/action/state/quest contracts, Action/Trigger/Rule IR, compiler passes, ECS query/event/schedule lowering, SDF physics `HIT` relation readiness, authority diagnostics, and source maps.
+- M6.4 Particles first slice: deterministic emitter documents, SDF/field spawn and collision coupling, preview products, count/bounds diagnostics, and backend-neutral formed products.
+- M6.5 SDF physics first slice: collision product descriptors, rigid/kinematic/character body contracts, physics material links, field-query readiness, and debug surfaces.
+- M6.6 Animation first slice: clips, curves, timeline, state/blend graphs, procedural motion hooks, source maps, and preview diagnostics.
+- M6.7 World-process first slice: bounded material-transport previews, timescale/solver-budget contracts, bake/commit to governed `world_ops`, rollback, and product freshness diagnostics.
+
+Implementation targets:
+
+- `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry`
+  - add `Field World`, `SDF Modeling`, `Materials`, `Textures`, `Procedural Generation`, `Gameplay`, `Particles`, `Physics`, `Animation`, `Layout`, `UI`, `Graphs`, `Scripting`, `Simulation`, `Debug`, and `Editor Design` workspace profiles.
+- `domain/editor/editor_core/src/session.rs`
+  - validate mode activation against `(workspace_profile, document_kind)`.
+- future `domain/material_graph/src/lib.rs`
+  - own material graph semantics, PBR parameter contracts, procedural texturing nodes, triplanar mapping semantics, ratification, lowering, and formed material products.
+- future `domain/texture/src/lib.rs`
+  - own Texture2D, Texture3D/volume texture descriptors, color space, sampler, compression, generated texture cache metadata, and texture diagnostics.
+- future `domain/procgen/src/lib.rs`
+  - own procedural generation documents, seed contracts, generator graphs, and lowering to bounded world operation windows.
+- future `domain/gameplay/events/src/lib.rs`
+  - own gameplay event ids, payload schemas, channel descriptors, authority class, and source-map subjects used by gameplay graph lowering.
+- future `domain/gameplay/actions/src/lib.rs`
+  - own action request, action plan, action result, and effect vocabulary before gameplay graph transforms can request actions.
+- future `domain/gameplay/state/src/lib.rs`
+  - own state machine, state membership, transition, and condition contracts before gameplay graph state transforms lower to runtime products.
+- future `domain/gameplay/quests/src/lib.rs`
+  - own quest, objective, progress, and completion contracts before gameplay graph quest transforms lower to runtime products.
+- future `domain/gameplay_graph/src/lib.rs`
+  - own gameplay graph semantics, Action/Trigger/Rule IR, compiler passes, SDF physics relation binding, and formed ECS query/event/schedule/runtime products while depending on narrower gameplay event/action/state/quest contracts for their semantics.
+- future `domain/particles/src/lib.rs`
+  - own emitter definitions, particle graph semantics, SDF/field coupling contracts, and formed particle products.
+- future `domain/physics/src/lib.rs`
+  - own body, collider, constraint, trigger, physics material, collision product, and readiness contracts.
+- future `domain/animation/src/lib.rs`
+  - own clips, curves, state machines, blend trees, procedural motion, root motion, animation events, and binding diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/ui_hierarchy.rs::UiHierarchyProvider`
+  - show and edit UI document hierarchy.
+- `apps/runenwerk_editor/src/shell/providers/ui_canvas.rs::UiCanvasProvider`
+  - preview retained UI layout documents through the existing UI substrate.
+- `apps/runenwerk_editor/src/shell/providers/graph_canvas.rs::GraphCanvasProvider`
+  - host graph documents using `domain/graph`.
+- `apps/runenwerk_editor/src/shell/providers/field_layer_stack.rs::FieldLayerStackProvider`
+  - show and edit authored field-world layers, SDF operation ordering, and material channel bindings through commands.
+- `apps/runenwerk_editor/src/shell/providers/sdf_graph_canvas.rs::SdfGraphCanvasProvider`
+  - host SDF graph documents while using `domain/sdf` for field semantics and `domain/graph` only for graph substrate behavior.
+- `apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs::MaterialGraphCanvasProvider`
+  - edit material graphs without making graph canvas state material truth.
+- `apps/runenwerk_editor/src/shell/providers/material_inspector.rs::MaterialInspectorProvider`
+  - edit PBR parameters, procedural node settings, SDF/field inputs, and material channel bindings.
+- `apps/runenwerk_editor/src/shell/providers/material_preview.rs::MaterialPreviewProvider`
+  - preview material products on SDF primitives, field products, and reference meshes.
+- `apps/runenwerk_editor/src/shell/providers/procgen_graph_canvas.rs::ProcgenGraphCanvasProvider`
+  - edit procedural generation graphs that lower to deterministic world operation windows.
+- `apps/runenwerk_editor/src/shell/providers/procgen_preview.rs::ProcgenPreviewProvider`
+  - preview, bake, and rollback bounded generated worlds.
+- `apps/runenwerk_editor/src/shell/providers/gameplay_graph_canvas.rs::GameplayGraphCanvasProvider`
+  - edit constrained gameplay graphs without making graph canvas state runtime authority.
+- `apps/runenwerk_editor/src/shell/providers/gameplay_compiler_diagnostics.rs::GameplayCompilerDiagnosticsProvider`
+  - inspect ATR IR, ECS query/event/schedule lowering, SDF physics relation readiness, source maps, and authority diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/particle_graph_canvas.rs::ParticleGraphCanvasProvider`
+  - edit emitters and particle graphs.
+- `apps/runenwerk_editor/src/shell/providers/particle_preview.rs::ParticlePreviewProvider`
+  - preview particles, field collision, counts, bounds, and simulation diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/physics_authoring.rs::PhysicsAuthoringProvider`
+  - edit bodies, colliders, materials, layers, masks, constraints, and triggers.
+- `apps/runenwerk_editor/src/shell/providers/physics_debug.rs::PhysicsDebugProvider`
+  - inspect contacts, sweeps, activation, constraints, and missing `world_sdf` readiness.
+- `apps/runenwerk_editor/src/shell/providers/timeline.rs::TimelineProvider`
+  - edit clips, events, and playback ranges.
+- `apps/runenwerk_editor/src/shell/providers/curve_editor.rs::CurveEditorProvider`
+  - edit typed animation/procedural curves.
+- `apps/runenwerk_editor/src/shell/providers/animation_graph_canvas.rs::AnimationGraphCanvasProvider`
+  - edit state machines, blend trees, and procedural motion graphs.
+- `apps/runenwerk_editor/src/shell/providers/simulation_preview.rs::SimulationPreviewProvider`
+  - preview and bake material transport, erosion, snow, water, sediment, and other world-process effects.
+- `apps/runenwerk_editor/src/shell/providers/script_editor.rs::ScriptEditorProvider`
+  - edit script assets while keeping scripting language-neutral at the domain boundary.
+- `apps/runenwerk_editor/src/shell/providers/diagnostics.rs::DiagnosticsProvider`
+  - show project, import, runtime, and validation diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/runtime_debug.rs::RuntimeDebugProvider`
+  - inspect ECS/runtime state without making authored documents ECS entities.
+
+Validation:
+
+- M6.0 through M6.7 each have explicit closeout notes or checklist entries before M6 is marked complete;
+- one document tab per implemented document kind opens, saves, closes, reopens, and reports dirty state correctly;
+- procedural graph lowering never depends on editor graph canvas state;
+- gameplay graph lowering never depends on editor graph canvas state and forms ECS query/event/schedule products with source maps;
+- generated products keep source lineage, seed, version, and diagnostics;
+- unsupported workspace/document/surface combinations fail closed with provider diagnostics;
+- no provider bypasses command or ratification boundaries.
+
+### M7 - Runtime Preview, Play/Simulate, Scripting, And Data Hot Reload
+
+Purpose: make authored content executable inside clear runtime boundaries.
+
+Implementation targets:
+
+- `apps/runenwerk_editor/src/editor_app/state.rs`
+  - separate edit, preview, simulate, and play session state.
+- `apps/runenwerk_editor/src/runtime/app.rs`
+  - compose runtime preview/play resources without making the generic engine editor-shaped.
+- `domain/editor/editor_core/src/session.rs`
+  - validate play/simulate mode transitions through scoped mode contracts.
+- future `domain/script_runtime/src/lib.rs`
+  - define language-neutral script asset/runtime command contracts.
+- future `adapters/script_rhai/src/lib.rs`
+  - implement the first Rhai adapter without leaking Rhai types into domain contracts.
+- future `engine/src/plugins/gameplay_graph/`
+  - instantiate formed gameplay graph products into ECS query descriptors, event subscriptions, fixed executor descriptors, schedule edges, runtime registries, source maps, and authority/network metadata without interpreting authored graph nodes.
+- future `domain/gameplay_graph/src/lowering/sdf_physics.rs`
+  - bind `RELATE HIT` and other SDF/field relations to `domain/world_sdf`, future `domain/physics`, or engine collision/query products through readiness diagnostics.
+- `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`
+  - route safe data hot reload into SDF graph, field-world, field product, `world_sdf` payload, material graph, generated texture, Texture3D, particle, physics config, animation, procgen, gameplay graph formed product, scene, prefab, UI, graph, material, shader, and script refresh workflows.
+- `docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`
+  - keep the data hot reload versus Rust rebuild/restart boundary aligned with implementation.
+
+Validation:
+
+- data/assets reload live where safe;
+- procedural material, texture, particle, physics, animation, and procgen products fail closed when hot reload cannot preserve runtime safety;
+- gameplay graph products fail closed when ECS query/event/schedule lowering, SDF physics readiness, source maps, or authority metadata cannot be preserved;
+- structural Rust changes require registry refresh and play-session restart;
+- play/simulate does not mutate authored documents without explicit commands;
+- runtime execution consumes formed gameplay graph products, not live authored graph traversal;
+- script actions request domain/runtime commands instead of directly mutating ECS internals.
+
+### M8 - Final UI Self-Authoring And Editor Design
+
+Purpose: let Runenwerk author its own editor/UI definitions after the host editor is complete enough to support it.
+
+Implementation targets:
+
+- future `domain/editor/editor_definition/src/lib.rs`
+  - own authored editor/workspace/UI/menu/theme/shortcut/command binding/panel registry/tool-surface definition schemas.
+- `domain/editor/editor_core/src/document.rs::DocumentKind`
+  - use the final definition document kinds from M1.
+- `domain/editor/editor_shell/src/workspace/state.rs`
+  - keep active workspace state session-owned and separate from authored workspace definitions.
+- `apps/runenwerk_editor/src/shell/providers/editor_design_outliner.rs::EditorDesignOutlinerProvider`
+  - show authored definition hierarchy.
+- `apps/runenwerk_editor/src/shell/providers/dock_layout_preview.rs::DockLayoutPreviewProvider`
+  - preview formed workspace definitions before applying them.
+- `apps/runenwerk_editor/src/shell/providers/theme_editor.rs::ThemeEditorProvider`
+  - edit and preview theme definitions.
+- `apps/runenwerk_editor/src/shell/providers/shortcut_editor.rs::ShortcutEditorProvider`
+  - edit shortcuts with conflict diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/menu_editor.rs::MenuEditorProvider`
+  - edit menu definitions and command bindings.
+- `docs-site/src/content/docs/design/deferred/ui-model-multiple-execution-strategies-design.md`
+  - keep the M0 UI execution-strategy decision visible during final self-authoring. M8 must not introduce compiled-reactive or ECS-driven UI execution for the first time; any promoted strategy must already have an active design and guard tests before M2 starts.
+
+Validation:
+
+- create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, and migrate definitions;
+- validation blocks malformed definitions from becoming active;
+- edits are undoable through ratified commands;
+- final self-authoring follows the UI execution strategy closed in M0; if a strategy was promoted before M2, M8 verifies its authored-definition and preview boundaries instead of deciding them for the first time;
+- active runtime/session-only ids are never persisted as authored ids.
+
+### M9 - Hardening, Release Readiness, And Full Gate
+
+Purpose: close the editor as a product-quality tool.
+
+Implementation targets:
+
+- `docs-site/src/content/docs/apps/runenwerk-editor/current-architecture.md`
+  - update current architecture after each closed milestone.
+- `docs-site/src/content/docs/workspace/roadmap-index.md`
+  - keep source-of-truth links current.
+- `docs-site/src/content/docs/workspace/repo-execution-priority-checklist.md`
+  - keep operational Now/Next status aligned.
+- `apps/runenwerk_editor/tests/`
+  - add smoke tests for project open/save, SDF/field asset import, field-product formation, procedural material/texturing, Texture3D/volume inspection, procgen preview/bake, gameplay graph ATR IR lowering to ECS query/event/schedule products, SDF physics `HIT` relation diagnostics, particles, physics authoring/debug, animation preview, world-process preview/bake, document tabs, docking, scene authoring, UI authoring, runtime preview, and self-authoring.
+- `domain/editor/editor_shell/src/tests.rs`
+  - keep projection golden tests authoritative for workspace structure and routing.
+- `domain/ui/ui_runtime/src/output/build_ui_frame.rs`
+  - keep UI frame snapshot expectations stable where render-data output is contractual.
+
+Full validation:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace`
+- `python3 tools/docs/validate_docs.py`
+- `./quiet_full_gate.sh` for milestone closeout and final release-readiness validation.
+
+## Completion Criteria
+
+The roadmap is complete when a user can:
+
+1. create or open a project;
+2. import source assets and see catalog diagnostics;
+3. create and edit SDF scenes, field-world layers, prefabs, UI layouts, graphs, scripts, materials, procedural textures, Texture3D assets, gameplay graphs, gameplay rules/triggers/abilities/quests, particles, physics configs, animation clips/graphs, procedural generators, menus, themes, shortcuts, and workspace/editor definitions;
+4. use document tabs, workspace switching, scoped modes, docking, editor type switching, area tabs, plus/new-tab controls, and saved layouts;
+5. author a 3D SDF scene with create/delete/duplicate, hierarchy operations, SDF primitive/brush actions, translate/rotate/scale, snapping, inspector/component editing, undo/redo, and persistence;
+6. preview imported assets, SDF fields, `world_sdf` chunk/page/brick products, procedural PBR materials, triplanar/Texture3D products, gameplay graph lowering products, ECS query/event/schedule source maps, particles, physics debug products, animation products, procedural generation outputs, and authored documents in appropriate tool surfaces;
+7. run play/simulate/preview with safe data hot reload and clear restart boundaries for structural Rust changes;
+8. validate, migrate, import, export, and publish authored definitions, including gameplay graph ATR IR products that lower into deterministic runtime products;
+9. recover from failed imports, invalid documents, bad definitions, and stale runtime previews without corrupting project state;
+10. pass the full repository validation gate.
 
 ## Rule
 
-Post-MVP expansion should not obscure the first MVP acceptance criteria.
-
-The first milestone remains a 3D SDF scene authoring MVP with readable text, fixed workspace layout, synced selection, transform editing, translate gizmo interaction, undo/redo, and near-immediate persistence.
-
-## App-Domain Migration Track
-
-This track folds the current app-thinning audit into the roadmap. It is not a new MVP feature. It is architecture cleanup required to keep `apps/runenwerk_editor` as a composition root instead of a second editor domain.
-
-### Goal
-
-Move scene mutation orchestration, ratification construction, retained transaction policy, and history semantics toward domain-owned operation contracts. Keep app code responsible for runtime integration, engine systems, IO, viewport resources, and host-specific adapters.
-
-### Current App-Owned Domain Behavior
-
-The current app still owns domain-like behavior in these exact locations:
-
-- `apps/runenwerk_editor/src/editor_runtime/commands/ratification.rs::ratify_scene_change`
-  - builds `RatifiedChange` metadata, affected domains/scopes, version progression, retention hints, reconciliation policy, and propagation structure.
-- `apps/runenwerk_editor/src/editor_runtime/commands/scene_commands.rs::execute_scene_command_and_push_history_with_origin`
-  - executes scene commands, pushes history, syncs selection, asserts projection parity, ratifies the change, and records retained transactions.
-- `apps/runenwerk_editor/src/editor_runtime/commands/transactions.rs::execute_scene_transaction_and_push_history_with_origin_and_causality`
-  - executes multi-command transactions, pushes one history entry, ratifies the transaction, and records retained transactions.
-- `apps/runenwerk_editor/src/editor_runtime/history/*`
-  - owns retained transaction replay/storage policy that should remain aligned with editor-domain retention semantics.
-- `apps/runenwerk_editor/src/editor_runtime/scene.rs`
-  - should be audited for domain operation ownership versus app runtime state ownership.
-- `apps/runenwerk_editor/src/editor_runtime/selection.rs`
-  - should be audited for selection mutation rules that belong in editor-domain contracts.
-- `apps/runenwerk_editor/src/editor_features/*`
-  - should become thin action/adaptor routing where behavior is already owned by domain/editor crates.
-- `apps/runenwerk_editor/src/editor_panels/*`
-  - should remain concrete app UI composition only; inspector/outliner semantics should flow through domain observation/provider contracts.
-
-### Target Domain Locations
-
-- `domain/editor/editor_core/src/ratification.rs`
-  - add domain-owned scene-change ratification construction or a focused submodule when the existing file grows.
-- `domain/editor/editor_scene/src/operations/execute_scene_command.rs`
-  - own scene command operation orchestration against a narrow domain-owned context trait.
-- `domain/editor/editor_scene/src/operations/execute_scene_transaction.rs`
-  - own multi-command scene transaction orchestration against the same narrow contract family.
-- `domain/editor/editor_scene/src/operations/mod.rs`
-  - expose legal scene operations without introducing a generic `services`, `handlers`, or `use_cases` layer.
-
-### Required Dependency Inversion
-
-Domain operations must not take `apps/runenwerk_editor::editor_runtime::RunenwerkEditorRuntime`.
-
-Instead, introduce narrow domain-owned context traits for the exact responsibilities needed by each operation, such as:
-
-- scene command execution context;
-- session/history access;
-- scene snapshot capture;
-- retained transaction recording;
-- reality version allocation;
-- selection repair after scene changes;
-- projection parity verification hook, if it remains part of the operation contract.
-
-`apps/runenwerk_editor/src/editor_runtime/runtime.rs::RunenwerkEditorRuntime` should implement those traits in the app crate.
-
-### Sequencing
-
-1. Extract ratification construction inputs into a domain-owned parameter object in `domain/editor/editor_core/src/ratification.rs`.
-2. Move single scene command orchestration to `domain/editor/editor_scene/src/operations/execute_scene_command.rs`.
-3. Move multi-command scene transaction orchestration to `domain/editor/editor_scene/src/operations/execute_scene_transaction.rs`.
-4. Keep app wrappers temporarily in `apps/runenwerk_editor/src/editor_runtime/commands/*` while call sites migrate.
-5. Remove app wrappers once shell, tool actions, inspector, outliner, and viewport flows call the domain operations through app-implemented context traits.
-6. Preserve current tests during migration, especially scene authoring smoke, retained transaction replay, inspector edit undo/redo, and architecture guard tests.
-
-## Related Documents
-
-- [`mvp/first-3d-editor-mvp.md`](./mvp/first-3d-editor-mvp.md)
-- [`mvp/acceptance-criteria.md`](./mvp/acceptance-criteria.md)
-- [`mvp/implementation-sequence.md`](./mvp/implementation-sequence.md)
-- [`execution-priority-checklist.md`](./execution-priority-checklist.md)
-- [`../../domain/ui/roadmap.md`](../../domain/ui/roadmap.md)
-- [`../../design/active/editor-ui-workspace-tool-surface-architecture.md`](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
-- [`../../design/active/editor-workspace-document-mode-panel-architecture.md`](../../design/active/editor-workspace-document-mode-panel-architecture.md)
+Do not add new editor/UI feature paths by bypassing these ownership seams. If a needed feature does not fit, update the owning design first, then update this roadmap, then implement through the appropriate domain, engine, app, or tool boundary.
