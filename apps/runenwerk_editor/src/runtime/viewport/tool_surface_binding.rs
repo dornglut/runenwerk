@@ -8,7 +8,7 @@ use editor_shell::{
     ToolSurfaceInstanceId, WidgetId,
 };
 use editor_viewport::ViewportId;
-use ui_math::UiRect;
+use ui_math::{UiPoint, UiRect};
 
 use crate::runtime::viewport::ViewportLayoutMapResource;
 
@@ -139,6 +139,31 @@ impl ToolSurfaceRuntimeBindingRegistryResource {
 
     pub fn bindings(&self) -> impl Iterator<Item = ToolSurfaceRuntimeBindingRecord> + '_ {
         self.bindings_by_tool_surface.values().copied()
+    }
+
+    pub fn binding_for_host_widget(
+        &self,
+        host_widget_id: WidgetId,
+    ) -> Option<ToolSurfaceRuntimeBindingRecord> {
+        self.bindings_by_tool_surface
+            .values()
+            .find(|binding| binding.host_widget_id == host_widget_id)
+            .copied()
+    }
+
+    pub fn binding_containing_cursor(
+        &self,
+        cursor: UiPoint,
+    ) -> Option<ToolSurfaceRuntimeBindingRecord> {
+        self.bindings_by_tool_surface
+            .values()
+            .filter(|binding| binding.bounds.contains(cursor))
+            .min_by(|left, right| {
+                let left_area = left.bounds.width * left.bounds.height;
+                let right_area = right.bounds.width * right.bounds.height;
+                left_area.total_cmp(&right_area)
+            })
+            .copied()
     }
 
     pub fn upsert_binding(&mut self, mut binding: ToolSurfaceRuntimeBindingRecord) {

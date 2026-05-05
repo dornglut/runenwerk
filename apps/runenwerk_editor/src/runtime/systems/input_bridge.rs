@@ -445,11 +445,14 @@ fn viewport_pointer_route(
     dispatch: &editor_shell::UiInputDispatchResult,
     position: UiPoint,
 ) -> Option<ViewportPointerRoute> {
-    if let Some(host_widget_id) = dispatch.target
-        && let Some(structural_context) = structural_context_for_widget(shell_state, host_widget_id)
-        && let Some(binding) = tool_surface_bindings.resolve_structural_context(structural_context)
-        && binding.bounds.contains(position)
-    {
+    if let Some(host_widget_id) = dispatch.target {
+        let binding =
+            viewport_scene_binding_for_widget(shell_state, tool_surface_bindings, host_widget_id)?;
+        if !binding.bounds.contains(position) {
+            return None;
+        }
+
+        let structural_context = structural_context_for_widget(shell_state, host_widget_id)?;
         return Some(ViewportPointerRoute {
             tool_surface_id: binding.tool_surface_id,
             viewport_id: binding.viewport_id,
@@ -462,7 +465,7 @@ fn viewport_pointer_route(
         });
     }
 
-    let binding = fallback_viewport_binding(shell_state, tool_surface_bindings, position)?;
+    let binding = fallback_viewport_binding(tool_surface_bindings, position)?;
     let host_widget_id = binding.host_widget_id;
     let structural_context = structural_context_for_widget(shell_state, host_widget_id).unwrap_or(
         editor_shell::StructuralWidgetRoutingContext {
@@ -485,54 +488,36 @@ fn viewport_capture_active_for_surface(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     tool_surface_id: editor_shell::ToolSurfaceInstanceId,
 ) -> bool {
-    shell_state
-        .runtime()
-        .state()
-        .captured_widget
-        .and_then(|widget_id| {
-            structural_context_for_widget(shell_state, widget_id)
-                .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
-        })
+    if let Some(captured_widget) = shell_state.runtime().state().captured_widget {
+        return viewport_scene_binding_for_widget(
+            shell_state,
+            tool_surface_bindings,
+            captured_widget,
+        )
         .map(|binding| binding.tool_surface_id == tool_surface_id)
-        .unwrap_or_else(|| {
-            tool_surface_bindings
-                .binding_for_tool_surface(tool_surface_id)
-                .is_some()
-        })
-}
-
-fn fallback_viewport_binding(
-    shell_state: &RunenwerkEditorShellState,
-    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-    cursor: UiPoint,
-) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    if let Some(binding) = resolve_binding_for_widget(
-        shell_state,
-        tool_surface_bindings,
-        editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-    )
-    .filter(|binding| binding.bounds.contains(cursor))
-    {
-        return Some(binding);
+        .unwrap_or(false);
     }
 
     tool_surface_bindings
-        .bindings()
-        .filter(|binding| binding.bounds.contains(cursor))
-        .min_by(|left, right| {
-            let left_area = left.bounds.width * left.bounds.height;
-            let right_area = right.bounds.width * right.bounds.height;
-            left_area.total_cmp(&right_area)
-        })
+        .binding_for_tool_surface(tool_surface_id)
+        .is_some()
 }
 
-fn resolve_binding_for_widget(
+fn fallback_viewport_binding(
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    cursor: UiPoint,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    tool_surface_bindings.binding_containing_cursor(cursor)
+}
+
+fn viewport_scene_binding_for_widget(
     shell_state: &RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     widget_id: editor_shell::WidgetId,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    structural_context_for_widget(shell_state, widget_id)
-        .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
+    let context = structural_context_for_widget(shell_state, widget_id)?;
+    let binding = tool_surface_bindings.resolve_structural_context(context)?;
+    (binding.host_widget_id == widget_id).then_some(binding)
 }
 
 fn structural_context_for_widget(
@@ -728,6 +713,29 @@ mod tests {
     }
 
     #[test]
+    fn viewport_pointer_route_rejects_viewport_chrome_dispatch_target() {
+        let shell_state = seeded_shell_state_with_projection();
+        let viewport_bounds = UiRect::new(100.0, 80.0, 900.0, 560.0);
+        let bindings = seeded_bindings(&shell_state, ViewportId(5), viewport_bounds);
+        let dispatch = editor_shell::UiInputDispatchResult {
+            target: Some(editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID),
+            response: InputResponse::handled(),
+        };
+
+        let route = viewport_pointer_route(
+            &shell_state,
+            &bindings,
+            &dispatch,
+            UiPoint::new(220.0, 300.0),
+        );
+
+        assert!(
+            route.is_none(),
+            "viewport chrome must not fall back into scene interaction routing",
+        );
+    }
+
+    #[test]
     fn viewport_capture_validation_is_tool_surface_scoped() {
         let mut shell_state = seeded_shell_state_with_projection();
         let viewport_bounds = UiRect::new(100.0, 80.0, 900.0, 560.0);
@@ -752,6 +760,14 @@ mod tests {
             &shell_state,
             &bindings,
             editor_shell::ToolSurfaceInstanceId::new(999)
+        ));
+
+        shell_state.runtime_mut().state_mut().captured_widget =
+            Some(editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        assert!(!viewport_capture_active_for_surface(
+            &shell_state,
+            &bindings,
+            route.tool_surface_id
         ));
 
         shell_state.runtime_mut().state_mut().captured_widget =

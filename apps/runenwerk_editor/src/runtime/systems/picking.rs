@@ -382,48 +382,28 @@ fn routed_viewport_bounds(
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     cursor: UiPoint,
 ) -> Option<(editor_viewport::ViewportId, UiRect)> {
-    if let Some(binding) = resolve_binding_for_widget(
-        &host.shell_state,
-        tool_surface_bindings,
-        editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-    )
-    .filter(|binding| binding.bounds.contains(cursor))
-    {
-        return Some((binding.viewport_id, binding.bounds));
-    }
-
     let runtime_state = host.shell_state.runtime().state();
-    if let Some(binding) = runtime_state.captured_widget.and_then(|widget| {
-        resolve_binding_for_widget(&host.shell_state, tool_surface_bindings, widget)
-    }) {
-        return Some((binding.viewport_id, binding.bounds));
+    if let Some(captured_widget) = runtime_state.captured_widget {
+        return viewport_scene_binding_for_widget(
+            &host.shell_state,
+            tool_surface_bindings,
+            captured_widget,
+        )
+        .map(|binding| (binding.viewport_id, binding.bounds));
     }
 
-    if let Some(binding) = runtime_state.hovered_widget.and_then(|widget| {
-        resolve_binding_for_widget(&host.shell_state, tool_surface_bindings, widget)
-    }) {
-        return Some((binding.viewport_id, binding.bounds));
-    }
-
-    // Fallback for transient hover/capture dropouts: route by current cursor containment.
-    let cursor_binding = tool_surface_bindings
-        .bindings()
-        .filter(|binding| binding.bounds.contains(cursor))
-        .min_by(|left, right| {
-            let left_area = left.bounds.width * left.bounds.height;
-            let right_area = right.bounds.width * right.bounds.height;
-            left_area.total_cmp(&right_area)
-        })?;
+    let cursor_binding = tool_surface_bindings.binding_containing_cursor(cursor)?;
     Some((cursor_binding.viewport_id, cursor_binding.bounds))
 }
 
-fn resolve_binding_for_widget(
+fn viewport_scene_binding_for_widget(
     shell_state: &crate::shell::RunenwerkEditorShellState,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     widget_id: editor_shell::WidgetId,
 ) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    structural_context_for_widget(shell_state, widget_id)
-        .and_then(|context| tool_surface_bindings.resolve_structural_context(context))
+    let context = structural_context_for_widget(shell_state, widget_id)?;
+    let binding = tool_surface_bindings.resolve_structural_context(context)?;
+    (binding.host_widget_id == widget_id).then_some(binding)
 }
 
 fn structural_context_for_widget(
@@ -625,5 +605,53 @@ mod tests {
         let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(8.0, 8.0));
 
         assert_eq!(routed, None);
+    }
+
+    #[test]
+    fn routed_viewport_ignores_hovered_viewport_chrome_widget() {
+        let mut host = seeded_host_with_projection();
+        host.shell_state.runtime_mut().state_mut().hovered_widget =
+            Some(editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        host.shell_state.runtime_mut().state_mut().captured_widget = None;
+        let expected_bounds = UiRect::new(90.0, 120.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(120.0, 60.0));
+
+        assert_eq!(
+            routed, None,
+            "viewport chrome hover must not resolve to scene picking"
+        );
+    }
+
+    #[test]
+    fn routed_viewport_ignores_captured_viewport_chrome_widget() {
+        let mut host = seeded_host_with_projection();
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget =
+            Some(editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(120.0, 240.0));
+
+        assert_eq!(
+            routed, None,
+            "non-scene pointer capture must not resolve to scene picking even inside embed bounds"
+        );
+    }
+
+    #[test]
+    fn routed_viewport_keeps_scene_capture_when_cursor_leaves_embed() {
+        let mut host = seeded_host_with_projection();
+        host.shell_state.runtime_mut().state_mut().hovered_widget = None;
+        host.shell_state.runtime_mut().state_mut().captured_widget =
+            Some(editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID);
+        let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
+        let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
+
+        let routed = routed_viewport_bounds(&host, &bindings, UiPoint::new(8.0, 8.0));
+
+        assert_eq!(routed, Some((ViewportId(7), expected_bounds)));
     }
 }

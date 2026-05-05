@@ -438,6 +438,32 @@ fn production_input_bridge_routes_viewport_interaction_by_tool_surface_session()
         input_bridge.contains("active_viewport_drag_surface"),
         "viewport drag continuation must resolve captured surface session state",
     );
+    assert!(
+        input_bridge.contains("viewport_scene_binding_for_widget"),
+        "viewport input must route through an explicit scene-region binding helper",
+    );
+    assert!(
+        !input_bridge.contains("resolve_structural_context(structural_context)\n        && binding.bounds.contains(position)"),
+        "viewport input must not treat arbitrary viewport-surface chrome as scene interaction",
+    );
+}
+
+#[test]
+fn production_picking_routes_only_through_viewport_scene_region() {
+    let picking = include_str!("../src/runtime/systems/picking.rs");
+
+    assert!(
+        picking.contains("viewport_scene_binding_for_widget"),
+        "picking must distinguish viewport scene region widgets from provider chrome",
+    );
+    assert!(
+        picking.contains("binding_containing_cursor(cursor)"),
+        "picking fallback must use explicit viewport scene-region bounds",
+    );
+    assert!(
+        !picking.contains("runtime_state.hovered_widget.and_then"),
+        "picking must not resolve arbitrary hovered viewport-surface widgets as scene input",
+    );
 }
 
 #[test]
