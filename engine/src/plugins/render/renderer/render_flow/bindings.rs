@@ -32,6 +32,7 @@ impl Renderer {
         allow_depth_sampling: bool,
         color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
+        vertex_layout_signature_hash: u64,
         primitive_topology_class: FlowPrimitiveTopologyClass,
         runtime_resources: &'a FlowRuntimeResources,
     ) -> Result<(
@@ -175,6 +176,7 @@ impl Renderer {
             feature_runtime_version: feature_runtime_version(packet, pass_feature_id),
             color_formats,
             depth_format,
+            vertex_layout_signature_hash,
             sample_count: 1,
             primitive_topology_class,
         };

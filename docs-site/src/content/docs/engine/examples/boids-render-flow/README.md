@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # Boids Render Flow Example
@@ -16,13 +16,16 @@ What it demonstrates:
 
 - ECS simulation state (`BoidsRenderState`) projected into flow uniforms.
 - ping-pong storage simulation (`boids.instances`) on a compute pass.
-- fullscreen compose pass that draws boids directly from storage.
+- graphics draw pass that draws boids directly from storage.
+- flow-owned color target, history copy, and explicit terminal present pass.
 - pure builtin compiled runtime path (no custom executor hooks).
 
 Flow chain:
 
 - `boids.simulate` (compute, `assets/shaders/boids_compute.wgsl`)
-- `boids.compose` (fullscreen, `assets/shaders/boids_compose.wgsl`)
+- `boids.draw` (graphics, `assets/shaders/boids_compose.wgsl`)
+- `boids.history` (copy, `boids.color` -> `boids.history`)
+- `boids.present` (present, `boids.color` -> surface)
 
 Run:
 

@@ -4,10 +4,12 @@ use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{
-    RenderPassId, RenderResourceDescriptor, RenderResourceId, RenderShaderReference,
+    RenderDrawDescriptor, RenderPassId, RenderResourceDescriptor, RenderResourceId,
+    RenderShaderReference, RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeSet;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, Default)]
 pub struct CompiledFlowExecutionPlan {
@@ -53,6 +55,7 @@ pub struct CompiledRasterExecutionPlan {
     pub targets: CompiledTargetPlan,
     pub draw_buffers: CompiledDrawBufferPlan,
     pub clear_color: Option<[f32; 4]>,
+    pub draw: Option<CompiledDrawPlan>,
 }
 
 #[derive(Debug, Clone)]
@@ -145,10 +148,33 @@ pub struct CompiledTargetPlan {
 
 #[derive(Debug, Clone, Default)]
 pub struct CompiledDrawBufferPlan {
-    pub vertex_buffers: Vec<CompiledResourceRef>,
+    pub vertex_buffers: Vec<CompiledVertexBufferBinding>,
     pub instance_buffers: Vec<CompiledResourceRef>,
+    pub instance_buffer_layouts: Vec<CompiledVertexBufferLayout>,
     pub index_buffers: Vec<CompiledResourceRef>,
     pub indirect_buffers: Vec<CompiledResourceRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompiledVertexBufferBinding {
+    pub resource: CompiledResourceRef,
+    pub layout: CompiledVertexBufferLayout,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CompiledVertexBufferLayout {
+    pub slot: u32,
+    pub array_stride: u64,
+    pub step_mode: RenderVertexStepMode,
+    pub attributes: Vec<RenderVertexAttribute>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CompiledDrawPlan {
+    pub vertex_count: u32,
+    pub instance_count: u32,
+    pub first_vertex: u32,
+    pub first_instance: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,6 +264,7 @@ fn compile_pass_execution(
                 targets: compile_target_plan(node, resources),
                 draw_buffers: CompiledDrawBufferPlan::default(),
                 clear_color: node.clear_color,
+                draw: None,
             })
         }
         RenderPassKind::Graphics => {
@@ -251,6 +278,7 @@ fn compile_pass_execution(
                 targets: compile_target_plan(node, resources),
                 draw_buffers: compile_draw_buffer_plan(node, resources),
                 clear_color: node.clear_color,
+                draw: node.draw.map(compile_draw_plan),
             })
         }
         RenderPassKind::Copy => CompiledPassExecutionPlan::Copy(CompiledCopyExecutionPlan {
@@ -437,12 +465,21 @@ fn compile_draw_buffer_plan(
         vertex_buffers: node
             .vertex_buffers
             .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
+            .zip(node.vertex_buffer_layouts.iter())
+            .map(|(resource, layout)| CompiledVertexBufferBinding {
+                resource: compile_resource_ref(resource, resources),
+                layout: compile_vertex_buffer_layout(layout),
+            })
             .collect(),
         instance_buffers: node
             .instance_buffers
             .iter()
             .map(|resource| compile_resource_ref(resource, resources))
+            .collect(),
+        instance_buffer_layouts: node
+            .instance_buffer_layouts
+            .iter()
+            .map(compile_vertex_buffer_layout)
             .collect(),
         index_buffers: node
             .index_buffers
@@ -454,6 +491,37 @@ fn compile_draw_buffer_plan(
             .iter()
             .map(|resource| compile_resource_ref(resource, resources))
             .collect(),
+    }
+}
+
+fn compile_vertex_buffer_layout(layout: &RenderVertexBufferLayout) -> CompiledVertexBufferLayout {
+    CompiledVertexBufferLayout {
+        slot: layout.slot,
+        array_stride: layout.array_stride,
+        step_mode: layout.step_mode,
+        attributes: layout.attributes.clone(),
+    }
+}
+
+fn compile_draw_plan(draw: RenderDrawDescriptor) -> CompiledDrawPlan {
+    CompiledDrawPlan {
+        vertex_count: draw.vertex_count,
+        instance_count: draw.instance_count,
+        first_vertex: draw.first_vertex,
+        first_instance: draw.first_instance,
+    }
+}
+
+impl CompiledDrawBufferPlan {
+    pub fn vertex_layout_signature_hash(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for binding in &self.vertex_buffers {
+            binding.layout.hash(&mut hasher);
+        }
+        for layout in &self.instance_buffer_layouts {
+            layout.hash(&mut hasher);
+        }
+        hasher.finish()
     }
 }
 

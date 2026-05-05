@@ -17,6 +17,7 @@ pub struct FlowPassPipelineKey {
     pub feature_runtime_version: u64,
     pub color_formats: Vec<TextureFormat>,
     pub depth_format: Option<TextureFormat>,
+    pub vertex_layout_signature_hash: u64,
     pub sample_count: u32,
     pub primitive_topology_class: FlowPrimitiveTopologyClass,
 }
@@ -24,7 +25,7 @@ pub struct FlowPassPipelineKey {
 impl FlowPassPipelineKey {
     pub fn stats_key(&self) -> String {
         format!(
-            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}",
+            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}",
             self.flow_id,
             self.pass_id,
             self.pass_kind,
@@ -33,7 +34,8 @@ impl FlowPassPipelineKey {
             self.bind_group_layout_signature_hash,
             self.material_specialization_fragment_hash,
             self.view_signature_hash,
-            self.feature_runtime_version
+            self.feature_runtime_version,
+            self.vertex_layout_signature_hash
         )
     }
 }
@@ -95,6 +97,7 @@ mod tests {
             feature_runtime_version: 5,
             color_formats: vec![TextureFormat::Rgba8Unorm],
             depth_format: None,
+            vertex_layout_signature_hash: 0,
             sample_count: 1,
             primitive_topology_class: FlowPrimitiveTopologyClass::TriangleList,
         }

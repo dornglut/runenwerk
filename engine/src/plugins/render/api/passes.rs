@@ -5,7 +5,8 @@ use crate::plugins::render::api::{
 };
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
-    GpuParams, RenderPassId, RenderPassKind, RenderPassNode, RenderResourceId, ShaderHandle,
+    GpuParams, RenderDrawDescriptor, RenderPassId, RenderPassKind, RenderPassNode,
+    RenderResourceId, RenderVertexBufferLayout, ShaderHandle,
 };
 
 #[derive(Debug)]
@@ -205,9 +206,273 @@ impl FullscreenPassBuilder {
         self
     }
 
+    /// Writes this pass into a raster color attachment.
+    ///
+    /// Validation accepts flow-owned color targets and the imported surface color.
     pub fn write_color_target(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
         push_unique_resource(&mut self.pass.writes, id);
+        self
+    }
+
+    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
+        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+        self
+    }
+
+    pub fn finish(self) -> RenderFlow {
+        self.flow.push_pass(self.pass)
+    }
+}
+
+#[derive(Debug)]
+pub struct GraphicsPassBuilder {
+    flow: RenderFlow,
+    pass: RenderPassNode,
+}
+
+impl GraphicsPassBuilder {
+    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
+        let pass = new_pass(&mut flow, label, RenderPassKind::Graphics);
+        Self { flow, pass }
+    }
+
+    pub fn shader(mut self, shader: ShaderHandle) -> Self {
+        self.pass.shader = Some(RenderShaderReference::RegistryHandle(shader));
+        self
+    }
+
+    pub fn shader_asset(mut self, path: impl Into<String>) -> Self {
+        self.pass.shader = Some(RenderShaderReference::AssetPath(path.into()));
+        self
+    }
+
+    pub fn for_feature(mut self, feature_id: RenderFeatureId) -> Self {
+        self.pass.feature_id = Some(feature_id);
+        self
+    }
+
+    pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
+    where
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
+    {
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
+        self
+    }
+
+    pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
+    where
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+    {
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
+        self
+    }
+
+    pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
+    where
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S) -> U + Send + Sync + 'static,
+    {
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
+        self
+    }
+
+    pub fn uniform_from_state_with_surface_to<S, U, F>(
+        mut self,
+        handle: UniformHandle<U>,
+        projection: F,
+    ) -> Self
+    where
+        S: ecs::Resource + Send + Sync + 'static,
+        U: GpuParams + Send + Sync + 'static,
+        F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
+    {
+        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
+        self
+    }
+
+    pub fn bind_storage<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
+        push_unique_resource(&mut self.pass.reads, *handle.id());
+        self
+    }
+
+    pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
+        let label = label.into();
+        let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
+        push_unique_resource(&mut self.pass.reads, a_id);
+        push_unique_resource(&mut self.pass.reads, b_id);
+        self
+    }
+
+    pub fn sample_texture(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.sampled_textures, id);
+        self
+    }
+
+    pub fn write_surface_color(mut self) -> Self {
+        let id = self.flow.ensure_surface_color_resource();
+        push_unique_resource(&mut self.pass.writes, id);
+        self
+    }
+
+    /// Writes this pass into a raster color attachment.
+    ///
+    /// Validation accepts flow-owned color targets and the imported surface color.
+    pub fn write_color_target(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        push_unique_resource(&mut self.pass.writes, id);
+        self
+    }
+
+    pub fn depth_target(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        self.pass.depth_target = Some(id);
+        self
+    }
+
+    pub fn vertex_buffer<T>(
+        mut self,
+        handle: StorageArrayHandle<T>,
+        layout: RenderVertexBufferLayout,
+    ) -> Self {
+        let id = *handle.id();
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.vertex_buffers, id);
+        self.pass.vertex_buffer_layouts.push(layout);
+        self
+    }
+
+    pub fn index_buffer<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
+        let id = *handle.id();
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.index_buffers, id);
+        self
+    }
+
+    pub fn instance_buffer<T>(
+        mut self,
+        handle: StorageArrayHandle<T>,
+        layout: RenderVertexBufferLayout,
+    ) -> Self {
+        let id = *handle.id();
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.instance_buffers, id);
+        self.pass.instance_buffer_layouts.push(layout);
+        self
+    }
+
+    pub fn indirect_buffer<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
+        let id = *handle.id();
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.indirect_buffers, id);
+        self
+    }
+
+    pub fn clear_color(mut self, color: [f32; 4]) -> Self {
+        self.pass.clear_color = Some(color);
+        self
+    }
+
+    pub fn draw(mut self, vertex_count: u32, instance_count: u32) -> Self {
+        self.pass.draw = Some(RenderDrawDescriptor::new(vertex_count, instance_count));
+        self
+    }
+
+    pub fn draw_with_offsets(
+        mut self,
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) -> Self {
+        self.pass.draw = Some(RenderDrawDescriptor::with_offsets(
+            vertex_count,
+            instance_count,
+            first_vertex,
+            first_instance,
+        ));
+        self
+    }
+
+    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
+        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+        self
+    }
+
+    pub fn finish(self) -> RenderFlow {
+        self.flow.push_pass(self.pass)
+    }
+}
+
+#[derive(Debug)]
+pub struct CopyPassBuilder {
+    flow: RenderFlow,
+    pass: RenderPassNode,
+}
+
+impl CopyPassBuilder {
+    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
+        let pass = new_pass(&mut flow, label, RenderPassKind::Copy);
+        Self { flow, pass }
+    }
+
+    pub fn source(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        self.pass.reads.clear();
+        self.pass.reads.push(id);
+        self
+    }
+
+    pub fn destination(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        self.pass.writes.clear();
+        self.pass.writes.push(id);
+        self
+    }
+
+    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
+        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+        self
+    }
+
+    pub fn finish(self) -> RenderFlow {
+        self.flow.push_pass(self.pass)
+    }
+}
+
+#[derive(Debug)]
+pub struct PresentPassBuilder {
+    flow: RenderFlow,
+    pass: RenderPassNode,
+}
+
+impl PresentPassBuilder {
+    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
+        flow.ensure_surface_color_resource();
+        let pass = new_pass(&mut flow, label, RenderPassKind::Present);
+        Self { flow, pass }
+    }
+
+    pub fn source(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        self.pass.reads.clear();
+        self.pass.reads.push(id);
+        self
+    }
+
+    pub fn surface_color(mut self) -> Self {
+        let id = self.flow.ensure_surface_color_resource();
+        self.pass.reads.clear();
+        self.pass.reads.push(id);
         self
     }
 

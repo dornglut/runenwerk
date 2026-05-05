@@ -4,7 +4,7 @@ use crate::plugins::render::graph::{
     RenderFlowGraph, RenderPassKind, RenderPassNode, validate_builtin_ui_pass_shape,
 };
 use crate::plugins::render::resource::{ImportedBufferSemantic, ImportedTextureSemantic};
-use crate::plugins::render::{RenderPassId, RenderResourceId};
+use crate::plugins::render::{RenderPassId, RenderResourceId, RenderVertexStepMode};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error;
 
@@ -98,6 +98,9 @@ pub enum RenderFlowValidationIssue {
     #[error("compute pass '{pass_label}' cannot declare clear_color")]
     ComputePassHasClearColor { pass_label: String },
 
+    #[error("compute pass '{pass_label}' cannot declare draw parameters")]
+    ComputePassHasDraw { pass_label: String },
+
     #[error("compute pass '{pass_label}' declares invalid dispatch_workgroups({x}, {y}, {z})")]
     InvalidComputeDispatch {
         pass_label: String,
@@ -118,11 +121,112 @@ pub enum RenderFlowValidationIssue {
     #[error("fullscreen pass '{pass_label}' cannot declare vertex/index/instance/indirect buffers")]
     FullscreenPassHasGraphicsBuffers { pass_label: String },
 
+    #[error("fullscreen pass '{pass_label}' cannot declare vertex buffer layouts")]
+    FullscreenPassHasVertexLayouts { pass_label: String },
+
+    #[error("fullscreen pass '{pass_label}' cannot declare draw parameters")]
+    FullscreenPassHasDraw { pass_label: String },
+
+    #[error(
+        "fullscreen pass '{pass_label}' must declare exactly one color output; found {write_count}"
+    )]
+    FullscreenPassInvalidColorOutputArity {
+        pass_label: String,
+        write_count: usize,
+    },
+
     #[error("graphics pass '{pass_label}' cannot declare workgroup_size")]
     GraphicsPassHasWorkgroupSize { pass_label: String },
 
     #[error("graphics pass '{pass_label}' cannot declare compute dispatch")]
     GraphicsPassHasComputeDispatch { pass_label: String },
+
+    #[error(
+        "graphics pass '{pass_label}' must declare exactly one color output; found {write_count}"
+    )]
+    GraphicsPassInvalidColorOutputArity {
+        pass_label: String,
+        write_count: usize,
+    },
+
+    #[error(
+        "{pass_kind} pass '{pass_label}' writes raster color output '{resource_id:?}' but kind '{resource_kind}' is not a runtime-supported color attachment"
+    )]
+    InvalidRasterColorOutputResource {
+        pass_kind: &'static str,
+        pass_label: String,
+        resource_id: RenderResourceId,
+        resource_kind: &'static str,
+    },
+
+    #[error("graphics pass '{pass_label}' must declare draw(...) or draw_with_offsets(...)")]
+    GraphicsPassMissingDraw { pass_label: String },
+
+    #[error(
+        "graphics pass '{pass_label}' declares invalid draw(vertex_count={vertex_count}, instance_count={instance_count})"
+    )]
+    GraphicsPassInvalidDraw {
+        pass_label: String,
+        vertex_count: u32,
+        instance_count: u32,
+    },
+
+    #[error(
+        "graphics pass '{pass_label}' declares {buffer_count} {role} buffers but {layout_count} layouts"
+    )]
+    GraphicsPassBufferLayoutCountMismatch {
+        pass_label: String,
+        role: &'static str,
+        buffer_count: usize,
+        layout_count: usize,
+    },
+
+    #[error(
+        "graphics pass '{pass_label}' declares {role} buffer layout slot {slot} with step mode '{step_mode}', expected '{expected}'"
+    )]
+    GraphicsPassBufferLayoutStepModeMismatch {
+        pass_label: String,
+        role: &'static str,
+        slot: u32,
+        step_mode: &'static str,
+        expected: &'static str,
+    },
+
+    #[error("graphics pass '{pass_label}' declares duplicate vertex buffer slot {slot}")]
+    GraphicsPassDuplicateVertexBufferSlot { pass_label: String, slot: u32 },
+
+    #[error(
+        "graphics pass '{pass_label}' declares vertex buffer slots that must be dense from 0; expected slot {expected}, found {found}"
+    )]
+    GraphicsPassNonDenseVertexBufferSlots {
+        pass_label: String,
+        expected: u32,
+        found: u32,
+    },
+
+    #[error("graphics pass '{pass_label}' declares vertex buffer slot {slot} with zero stride")]
+    GraphicsPassInvalidVertexStride { pass_label: String, slot: u32 },
+
+    #[error("graphics pass '{pass_label}' declares vertex buffer slot {slot} with no attributes")]
+    GraphicsPassMissingVertexAttributes { pass_label: String, slot: u32 },
+
+    #[error("graphics pass '{pass_label}' declares duplicate shader location {shader_location}")]
+    GraphicsPassDuplicateVertexShaderLocation {
+        pass_label: String,
+        shader_location: u32,
+    },
+
+    #[error(
+        "graphics pass '{pass_label}' declares vertex attribute at location {shader_location} beyond stride for slot {slot}: offset {offset} + size {size} > stride {stride}"
+    )]
+    GraphicsPassInvalidVertexAttributeRange {
+        pass_label: String,
+        slot: u32,
+        shader_location: u32,
+        offset: u64,
+        size: u64,
+        stride: u64,
+    },
 
     #[error(
         "copy pass '{pass_label}' must declare exactly one reads(...) and one writes(...) resource"
@@ -160,7 +264,7 @@ pub enum RenderFlowValidationIssue {
     },
 
     #[error(
-        "graphics pass '{pass_label}' uses depth_target '{resource_id:?}' but kind '{resource_kind}' is not depth/surface-depth import"
+        "graphics pass '{pass_label}' uses depth_target '{resource_id:?}' but kind '{resource_kind}' is not a flow-owned depth target"
     )]
     InvalidDepthTargetResource {
         pass_label: String,
@@ -457,6 +561,8 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 || !pass.index_buffers.is_empty()
                 || !pass.instance_buffers.is_empty()
                 || !pass.indirect_buffers.is_empty()
+                || !pass.vertex_buffer_layouts.is_empty()
+                || !pass.instance_buffer_layouts.is_empty()
             {
                 issues.push(RenderFlowValidationIssue::ComputePassHasGraphicsBuffers {
                     pass_label: pass.label.clone(),
@@ -464,6 +570,11 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
             }
             if pass.clear_color.is_some() {
                 issues.push(RenderFlowValidationIssue::ComputePassHasClearColor {
+                    pass_label: pass.label.clone(),
+                });
+            }
+            if pass.draw.is_some() {
+                issues.push(RenderFlowValidationIssue::ComputePassHasDraw {
                     pass_label: pass.label.clone(),
                 });
             }
@@ -508,6 +619,24 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                     },
                 );
             }
+            if !pass.vertex_buffer_layouts.is_empty() || !pass.instance_buffer_layouts.is_empty() {
+                issues.push(RenderFlowValidationIssue::FullscreenPassHasVertexLayouts {
+                    pass_label: pass.label.clone(),
+                });
+            }
+            if pass.draw.is_some() {
+                issues.push(RenderFlowValidationIssue::FullscreenPassHasDraw {
+                    pass_label: pass.label.clone(),
+                });
+            }
+            if pass.writes.len() != 1 {
+                issues.push(
+                    RenderFlowValidationIssue::FullscreenPassInvalidColorOutputArity {
+                        pass_label: pass.label.clone(),
+                        write_count: pass.writes.len(),
+                    },
+                );
+            }
         }
         RenderPassKind::BuiltinUiComposite => {
             validate_builtin_ui_pass_shape(pass, issues);
@@ -523,6 +652,28 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                     pass_label: pass.label.clone(),
                 });
             }
+            if pass.writes.len() != 1 {
+                issues.push(
+                    RenderFlowValidationIssue::GraphicsPassInvalidColorOutputArity {
+                        pass_label: pass.label.clone(),
+                        write_count: pass.writes.len(),
+                    },
+                );
+            }
+            match pass.draw {
+                Some(draw) if draw.vertex_count == 0 || draw.instance_count == 0 => {
+                    issues.push(RenderFlowValidationIssue::GraphicsPassInvalidDraw {
+                        pass_label: pass.label.clone(),
+                        vertex_count: draw.vertex_count,
+                        instance_count: draw.instance_count,
+                    });
+                }
+                Some(_) => {}
+                None => issues.push(RenderFlowValidationIssue::GraphicsPassMissingDraw {
+                    pass_label: pass.label.clone(),
+                }),
+            }
+            validate_graphics_vertex_layouts(pass, issues);
         }
         RenderPassKind::Copy => {
             if pass.reads.len() != 1 || pass.writes.len() != 1 {
@@ -535,12 +686,15 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 || pass.compute_dispatch.is_some()
                 || pass.clear_color.is_some()
                 || pass.depth_target.is_some()
+                || pass.draw.is_some()
                 || !pass.uniform_bindings.is_empty()
                 || !pass.sampled_textures.is_empty()
                 || !pass.write_textures.is_empty()
                 || !pass.vertex_buffers.is_empty()
+                || !pass.vertex_buffer_layouts.is_empty()
                 || !pass.index_buffers.is_empty()
                 || !pass.instance_buffers.is_empty()
+                || !pass.instance_buffer_layouts.is_empty()
                 || !pass.indirect_buffers.is_empty()
             {
                 issues.push(RenderFlowValidationIssue::CopyPassInvalidFields {
@@ -564,12 +718,15 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 || pass.compute_dispatch.is_some()
                 || pass.clear_color.is_some()
                 || pass.depth_target.is_some()
+                || pass.draw.is_some()
                 || !pass.uniform_bindings.is_empty()
                 || !pass.sampled_textures.is_empty()
                 || !pass.write_textures.is_empty()
                 || !pass.vertex_buffers.is_empty()
+                || !pass.vertex_buffer_layouts.is_empty()
                 || !pass.index_buffers.is_empty()
                 || !pass.instance_buffers.is_empty()
+                || !pass.instance_buffer_layouts.is_empty()
                 || !pass.indirect_buffers.is_empty()
             {
                 issues.push(RenderFlowValidationIssue::PresentPassInvalidFields {
@@ -623,6 +780,26 @@ fn validate_pass_resource_usage(
         }
     }
 
+    if matches!(
+        pass.kind,
+        RenderPassKind::Fullscreen | RenderPassKind::Graphics
+    ) && pass.writes.len() == 1
+    {
+        let output = pass.writes[0];
+        if let Some(resource) = resources_by_id.get(&output)
+            && !is_raster_color_output_resource(resource)
+        {
+            issues.push(
+                RenderFlowValidationIssue::InvalidRasterColorOutputResource {
+                    pass_kind: render_pass_kind_name(pass.kind),
+                    pass_label: pass.label.clone(),
+                    resource_id: output,
+                    resource_kind: resource_kind_name(resource),
+                },
+            );
+        }
+    }
+
     for id in &pass.vertex_buffers {
         validate_buffer_role_resource(pass, *id, "vertex_buffer", resources_by_id, issues);
     }
@@ -639,13 +816,7 @@ fn validate_pass_resource_usage(
     if let Some(depth_target) = &pass.depth_target
         && let Some(resource) = resources_by_id.get(depth_target)
     {
-        let depth_ok = match resource {
-            RenderResourceDescriptor::DepthTarget(_) => true,
-            RenderResourceDescriptor::ImportedTexture(value) => {
-                value.semantic == ImportedTextureSemantic::SurfaceDepth
-            }
-            _ => false,
-        };
+        let depth_ok = matches!(resource, RenderResourceDescriptor::DepthTarget(_));
         if !depth_ok {
             issues.push(RenderFlowValidationIssue::InvalidDepthTargetResource {
                 pass_label: pass.label.clone(),
@@ -726,6 +897,190 @@ fn validate_pass_resource_usage(
     }
 }
 
+fn validate_graphics_vertex_layouts(
+    pass: &RenderPassNode,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    validate_graphics_buffer_layout_counts(
+        pass,
+        "vertex",
+        pass.vertex_buffers.len(),
+        pass.vertex_buffer_layouts.len(),
+        issues,
+    );
+    validate_graphics_buffer_layout_counts(
+        pass,
+        "instance",
+        pass.instance_buffers.len(),
+        pass.instance_buffer_layouts.len(),
+        issues,
+    );
+
+    let mut slots = BTreeSet::<u32>::new();
+    let mut ordered_slots = Vec::<u32>::new();
+    let mut shader_locations = BTreeSet::<u32>::new();
+
+    for layout in &pass.vertex_buffer_layouts {
+        validate_graphics_layout_step_mode(
+            pass,
+            "vertex",
+            layout.slot,
+            layout.step_mode,
+            RenderVertexStepMode::Vertex,
+            issues,
+        );
+        validate_graphics_layout_shape(pass, layout, &mut shader_locations, issues);
+        if !slots.insert(layout.slot) {
+            issues.push(
+                RenderFlowValidationIssue::GraphicsPassDuplicateVertexBufferSlot {
+                    pass_label: pass.label.clone(),
+                    slot: layout.slot,
+                },
+            );
+        }
+        ordered_slots.push(layout.slot);
+    }
+
+    for layout in &pass.instance_buffer_layouts {
+        validate_graphics_layout_step_mode(
+            pass,
+            "instance",
+            layout.slot,
+            layout.step_mode,
+            RenderVertexStepMode::Instance,
+            issues,
+        );
+        validate_graphics_layout_shape(pass, layout, &mut shader_locations, issues);
+        if !slots.insert(layout.slot) {
+            issues.push(
+                RenderFlowValidationIssue::GraphicsPassDuplicateVertexBufferSlot {
+                    pass_label: pass.label.clone(),
+                    slot: layout.slot,
+                },
+            );
+        }
+        ordered_slots.push(layout.slot);
+    }
+
+    ordered_slots.sort_unstable();
+    for (expected, found) in ordered_slots.iter().copied().enumerate() {
+        if expected as u32 != found {
+            issues.push(
+                RenderFlowValidationIssue::GraphicsPassNonDenseVertexBufferSlots {
+                    pass_label: pass.label.clone(),
+                    expected: expected as u32,
+                    found,
+                },
+            );
+        }
+    }
+}
+
+fn validate_graphics_buffer_layout_counts(
+    pass: &RenderPassNode,
+    role: &'static str,
+    buffer_count: usize,
+    layout_count: usize,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    if buffer_count != layout_count {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassBufferLayoutCountMismatch {
+                pass_label: pass.label.clone(),
+                role,
+                buffer_count,
+                layout_count,
+            },
+        );
+    }
+}
+
+fn validate_graphics_layout_step_mode(
+    pass: &RenderPassNode,
+    role: &'static str,
+    slot: u32,
+    step_mode: RenderVertexStepMode,
+    expected: RenderVertexStepMode,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    if step_mode != expected {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassBufferLayoutStepModeMismatch {
+                pass_label: pass.label.clone(),
+                role,
+                slot,
+                step_mode: vertex_step_mode_name(step_mode),
+                expected: vertex_step_mode_name(expected),
+            },
+        );
+    }
+}
+
+fn validate_graphics_layout_shape(
+    pass: &RenderPassNode,
+    layout: &crate::plugins::render::RenderVertexBufferLayout,
+    shader_locations: &mut BTreeSet<u32>,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    if layout.array_stride == 0 {
+        issues.push(RenderFlowValidationIssue::GraphicsPassInvalidVertexStride {
+            pass_label: pass.label.clone(),
+            slot: layout.slot,
+        });
+    }
+
+    if layout.attributes.is_empty() {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassMissingVertexAttributes {
+                pass_label: pass.label.clone(),
+                slot: layout.slot,
+            },
+        );
+    }
+
+    for attribute in &layout.attributes {
+        if !shader_locations.insert(attribute.shader_location) {
+            issues.push(
+                RenderFlowValidationIssue::GraphicsPassDuplicateVertexShaderLocation {
+                    pass_label: pass.label.clone(),
+                    shader_location: attribute.shader_location,
+                },
+            );
+        }
+
+        let size = attribute.format.size_bytes();
+        if attribute.offset.saturating_add(size) > layout.array_stride {
+            issues.push(
+                RenderFlowValidationIssue::GraphicsPassInvalidVertexAttributeRange {
+                    pass_label: pass.label.clone(),
+                    slot: layout.slot,
+                    shader_location: attribute.shader_location,
+                    offset: attribute.offset,
+                    size,
+                    stride: layout.array_stride,
+                },
+            );
+        }
+    }
+}
+
+fn vertex_step_mode_name(value: RenderVertexStepMode) -> &'static str {
+    match value {
+        RenderVertexStepMode::Vertex => "vertex",
+        RenderVertexStepMode::Instance => "instance",
+    }
+}
+
+fn is_raster_color_output_resource(resource: &RenderResourceDescriptor) -> bool {
+    match resource {
+        RenderResourceDescriptor::ColorTarget(_) => true,
+        RenderResourceDescriptor::ImportedTexture(value) => {
+            value.semantic == ImportedTextureSemantic::SurfaceColor
+        }
+        _ => false,
+    }
+}
+
 fn validate_buffer_role_resource(
     pass: &RenderPassNode,
     resource_id: RenderResourceId,
@@ -786,6 +1141,17 @@ fn resource_kind_name(resource: &RenderResourceDescriptor) -> &'static str {
             ImportedBufferSemantic::HistoryBuffer => "imported_buffer(history_buffer)",
             ImportedBufferSemantic::External => "imported_buffer(external)",
         },
+    }
+}
+
+fn render_pass_kind_name(kind: RenderPassKind) -> &'static str {
+    match kind {
+        RenderPassKind::Compute => "compute",
+        RenderPassKind::Fullscreen => "fullscreen",
+        RenderPassKind::BuiltinUiComposite => "builtin_ui_composite",
+        RenderPassKind::Graphics => "graphics",
+        RenderPassKind::Copy => "copy",
+        RenderPassKind::Present => "present",
     }
 }
 

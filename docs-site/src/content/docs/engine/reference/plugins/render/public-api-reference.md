@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # Render Public API Reference
@@ -21,8 +21,17 @@ These are the APIs most users should start with.
 - pass builders:
   - `ComputePassBuilder`
   - `FullscreenPassBuilder`
+  - `GraphicsPassBuilder`
+  - `CopyPassBuilder`
+  - `PresentPassBuilder`
   - `BuiltinUiCompositePassBuilder`
-  - advanced pass-feature hook: `ComputePassBuilder::for_feature`, `FullscreenPassBuilder::for_feature`
+  - advanced pass-feature hook: `ComputePassBuilder::for_feature`, `FullscreenPassBuilder::for_feature`, `GraphicsPassBuilder::for_feature`
+- graphics authoring:
+  - `RenderVertexBufferLayout`
+  - `RenderVertexAttribute`
+  - `RenderVertexFormat`
+  - `RenderVertexStepMode`
+  - `RenderDrawDescriptor`
 - handles and IDs:
   - `PassHandle`
   - `RenderFlowId`
@@ -149,6 +158,9 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `CompiledStorageBinding`
   - `CompiledTargetPlan`
   - `CompiledDrawBufferPlan`
+  - `CompiledVertexBufferBinding`
+  - `CompiledVertexBufferLayout`
+  - `CompiledDrawPlan`
   - `CompiledResourceRef`
   - `CompiledBuiltinImport`
   - `CompiledStateRequirement`
@@ -179,9 +191,9 @@ Typed imported-resource contract:
 
 - Prefer typed imports:
   - `RenderResourceDescriptor::imported_surface_color`
-  - `RenderResourceDescriptor::imported_surface_depth`
   - `RenderResourceDescriptor::imported_history_texture`
   - `RenderResourceDescriptor::imported_history_buffer`
+- `RenderResourceDescriptor::imported_surface_depth` remains a typed declaration compatibility API, but it is not accepted as a runtime graphics depth attachment. Use flow-owned `RenderFlow::with_depth_target(...)` and `GraphicsPassBuilder::depth_target(...)` for executable graphics depth.
 - `imported_texture` / `imported_buffer` remain compatibility constructors and compile to `External` semantics.
 - Active runtime flow validation rejects `External` imports.
 

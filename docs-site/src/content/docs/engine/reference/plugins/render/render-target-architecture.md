@@ -52,12 +52,13 @@ Render stays:
 
 ## Typed Import Boundary
 
-Active runtime accepts typed import semantics only:
+Active runtime accepts typed import semantics for executable surface-color/UI/history paths:
 
 - surface color
-- surface depth
 - builtin UI frame contribution
 - history categories (typed texture/buffer)
+
+Surface-depth import remains typed declaration compatibility, but graphics depth attachments are currently runtime-backed through flow-owned depth targets.
 
 Generic external imports remain compatibility constructors and are rejected in active runtime validation.
 

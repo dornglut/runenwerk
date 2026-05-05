@@ -32,15 +32,25 @@ mod tests {
     #[allow(deprecated)]
     use super::*;
     #[allow(deprecated)]
-    use engine::plugins::render::{RenderFrameDataRegistry, RenderPassKind};
+    use engine::plugins::render::{RenderFrameDataRegistry, RenderPassId, RenderPassKind};
 
     fn pass_kind(flow: &RenderFlow, pass_id: &str) -> RenderPassKind {
         flow.graph()
             .passes
             .passes
             .iter()
-            .find(|pass| pass.id.as_str() == pass_id)
+            .find(|pass| pass.label == pass_id)
             .map(|pass| pass.kind)
+            .expect("requested pass should exist")
+    }
+
+    fn pass_id(flow: &RenderFlow, pass_label: &str) -> RenderPassId {
+        flow.graph()
+            .passes
+            .passes
+            .iter()
+            .find(|pass| pass.label == pass_label)
+            .map(|pass| pass.id)
             .expect("requested pass should exist")
     }
 
@@ -52,7 +62,7 @@ mod tests {
             .passes
             .passes
             .iter()
-            .map(|pass| pass.id.as_str().to_string())
+            .map(|pass| pass.label.clone())
             .collect::<Vec<_>>();
         assert_eq!(pass_ids, vec!["simulate", "compose", "ui"]);
 
@@ -72,7 +82,7 @@ mod tests {
             .project_uniforms(&frame_data, (1280, 720))
             .expect("uniform projection should succeed");
 
-        assert!(uniforms.pass("simulate").is_some());
-        assert!(uniforms.pass("compose").is_some());
+        assert!(uniforms.pass(pass_id(&flow, "simulate")).is_some());
+        assert!(uniforms.pass(pass_id(&flow, "compose")).is_some());
     }
 }

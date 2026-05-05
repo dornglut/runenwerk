@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # Render Plugin Architecture
@@ -22,8 +22,9 @@ last_reviewed: 2026-04-27
 ## Current Public Surface
 
 - `RenderFlow` v2 builder surface
-- pass builders: `compute_pass`, `fullscreen_pass`, `builtin_ui_composite_pass`
+- pass builders: `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`
 - typed handles: storage arrays, uniforms, ping-pong handles
+- flow-owned render targets: color targets, depth targets, history textures
 - GPU params derives: `GpuUniform`, `GpuStorage`, `GpuParams`, `ToGpuValue`
 - ECS-first state projection with `Resource`-bound state APIs
 
@@ -35,7 +36,8 @@ last_reviewed: 2026-04-27
 - Runtime compatibility helper: `RenderFrameDataRegistry` for projection helpers/tests only, not active submission.
 - Feature/domain payloads are carried as prepared contributions (`PreparedFrameContributions`) with explicit status/fallback policy.
 - Feature prepared payload handoff resources are explicit (`PreparedDrawFeatureResource`, `PreparedMaterialFeatureResource`, `PreparedDeformationFeatureResource`) and consumed only in `RenderPrepare`.
-- Active runtime validation only accepts typed import semantics (surface/UI/history categories); external imports are compatibility-only.
+- Active runtime validation accepts typed surface-color/UI/history semantics; external imports are compatibility-only.
+- Runtime-backed graphics depth uses flow-owned depth targets. Imported surface-depth declarations remain compatibility metadata until the renderer exposes a prepared surface-depth texture.
 - Active execute path is single-view only; multi-view packet execution is deferred and guarded by fail-fast runtime checks.
 
 ## Inspection Boundary

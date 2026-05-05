@@ -5,6 +5,8 @@ pub(crate) fn build_render_flow() -> RenderFlow {
     RenderFlow::new("boids_render_flow")
         .with_state::<BoidsRenderState>()
         .with_surface_color()
+        .with_color_target("boids.color")
+        .with_history_texture("boids.history")
         .double_buffer_storage_array::<BoidAgent>("boids.instances", DEFAULT_BOID_COUNT as u64)
         .compute_pass("boids.simulate")
         .shader_asset("assets/shaders/boids_compute.wgsl")
@@ -12,12 +14,22 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_ping_pong_storage("boids.instances")
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
-        .fullscreen_pass("boids.compose")
+        .graphics_pass("boids.draw")
         .shader_asset("assets/shaders/boids_compose.wgsl")
         .uniform_from_state_with_surface(BoidsRenderState::compose_params)
         .bind_ping_pong_storage("boids.instances")
-        .write_surface_color()
+        .write_color_target("boids.color")
+        .draw(3, 1)
         .depends_on("boids.simulate")
+        .finish()
+        .copy_pass("boids.history")
+        .source("boids.color")
+        .destination("boids.history")
+        .depends_on("boids.draw")
+        .finish()
+        .present_pass("boids.present")
+        .source("boids.color")
+        .depends_on("boids.history")
         .finish()
         .validate()
         .expect("boids_render_flow should validate")
@@ -60,11 +72,47 @@ mod tests {
             .iter()
             .map(|pass| pass.label.clone())
             .collect::<Vec<_>>();
-        assert_eq!(pass_ids, vec!["boids.simulate", "boids.compose"]);
-        assert_eq!(pass_kind(&flow, "boids.simulate"), RenderPassKind::Compute);
         assert_eq!(
-            pass_kind(&flow, "boids.compose"),
-            RenderPassKind::Fullscreen
+            pass_ids,
+            vec![
+                "boids.simulate",
+                "boids.draw",
+                "boids.history",
+                "boids.present"
+            ]
+        );
+        assert_eq!(pass_kind(&flow, "boids.simulate"), RenderPassKind::Compute);
+        assert_eq!(pass_kind(&flow, "boids.draw"), RenderPassKind::Graphics);
+        assert_eq!(pass_kind(&flow, "boids.history"), RenderPassKind::Copy);
+        assert_eq!(pass_kind(&flow, "boids.present"), RenderPassKind::Present);
+    }
+
+    #[test]
+    fn flow_orders_compute_graphics_history_copy_then_present() {
+        let flow = build_render_flow();
+        let order = flow
+            .pass_order()
+            .expect("boids_render_flow pass order should validate")
+            .into_iter()
+            .map(|id| {
+                flow.graph()
+                    .passes
+                    .passes
+                    .iter()
+                    .find(|pass| pass.id == id)
+                    .map(|pass| pass.label.clone())
+                    .expect("ordered pass should exist")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            order,
+            vec![
+                "boids.simulate",
+                "boids.draw",
+                "boids.history",
+                "boids.present"
+            ]
         );
     }
 
@@ -81,6 +129,6 @@ mod tests {
             .expect("uniform projection should succeed");
 
         assert!(uniforms.pass(pass_id(&flow, "boids.simulate")).is_some());
-        assert!(uniforms.pass(pass_id(&flow, "boids.compose")).is_some());
+        assert!(uniforms.pass(pass_id(&flow, "boids.draw")).is_some());
     }
 }

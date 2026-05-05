@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-05
 ---
 
 # Render Flow Usage Guide
@@ -15,9 +15,10 @@ last_reviewed: 2026-04-27
 1. Add `RenderPlugin`.
 2. Model frame-owned simulation/render values as ECS `Resource` types.
 3. Build a `RenderFlow` with ergonomic declarations:
-   - `with_state`, `with_surface_color`, `with_surface_depth` (optional), `with_builtin_ui`
+   - `with_state`, `with_surface_color`, `with_builtin_ui`
+   - `with_color_target`, `with_depth_target`, `with_history_texture`
    - `double_buffer_storage_array`
-   - pass builders (`compute_pass`, `fullscreen_pass`, `builtin_ui_composite_pass`)
+   - pass builders (`compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`)
 4. Validate (`.validate()?`) and register with `App::add_render_flow(...)`.
 
 ## Minimal Flow
@@ -36,12 +37,21 @@ let flow = RenderFlow::new("minimal.flow")
 ## State-Projected Simulation + Compose
 
 ```rust
-use engine::plugins::render::{GpuStorage, GpuUniform, RenderFlow};
+use engine::plugins::render::{
+    GpuStorage, GpuUniform, RenderFlow, RenderVertexBufferLayout, RenderVertexFormat,
+};
 use engine::prelude::Resource;
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
 struct Cell {
     alive: u32,
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct Instance {
+    position: [f32; 2],
+    radius: f32,
+    _pad: u32,
 }
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -75,21 +85,80 @@ impl State {
     }
 }
 
-let flow = RenderFlow::new("sim.flow")
+let (flow, instances) = RenderFlow::new("sim.flow")
     .with_state::<State>()
     .with_surface_color()
-    .with_builtin_ui()
+    .with_color_target("scene.color")
+    .with_history_texture("scene.history")
     .double_buffer_storage_array::<Cell>("cells", 1024)
+    .storage_array::<Instance>("instances", 128);
+
+let flow = flow
     .compute_pass("simulate")
     .uniform_from_state(State::compute_params)
     .bind_ping_pong_storage("cells")
     .dispatch_from_state(State::dispatch_workgroups)
     .finish()
-    .fullscreen_pass("compose")
+    .graphics_pass("draw")
     .uniform_from_state_with_surface(State::compose_params)
     .bind_ping_pong_storage("cells")
-    .write_surface_color()
+    .instance_buffer(
+        instances,
+        RenderVertexBufferLayout::instance(0, 16)
+            .attribute(0, 0, RenderVertexFormat::Float32x2)
+            .attribute(1, 8, RenderVertexFormat::Float32),
+    )
+    .write_color_target("scene.color")
+    .draw(3, 128)
     .depends_on("simulate")
+    .finish()
+    .copy_pass("history")
+    .source("scene.color")
+    .destination("scene.history")
+    .depends_on("draw")
+    .finish()
+    .present_pass("present")
+    .source("scene.color")
+    .depends_on("history")
+    .finish()
+    .validate()?;
+```
+
+## Fullscreen Compose + Present
+
+Fullscreen raymarching and postprocess flows should stay on `fullscreen_pass(...)` when they draw a screen triangle without mesh/instance buffers. Use a flow-owned color target when the frame should end with an explicit terminal present pass:
+
+```rust
+use engine::plugins::render::RenderFlow;
+
+let flow = RenderFlow::new("sdf.flow")
+    .with_surface_color()
+    .with_color_target("sdf.color")
+    .fullscreen_pass("sdf.compose")
+    .write_color_target("sdf.color")
+    .finish()
+    .present_pass("sdf.present")
+    .source("sdf.color")
+    .depends_on("sdf.compose")
+    .finish()
+    .validate()?;
+```
+
+Compatibility path:
+
+- A fullscreen or graphics pass may still write `surface.color` directly with `.write_surface_color()`.
+- Use `present_pass(...)` when the flow needs a first-class terminal pass for inspection, ordering, or copy/history work.
+
+## UI Composite After Direct Surface Writes
+
+`builtin_ui_composite_pass(...)` writes to the surface color import. It is appropriate after flows that render directly to `surface.color`:
+
+```rust
+let flow = RenderFlow::new("ui.flow")
+    .with_surface_color()
+    .with_builtin_ui()
+    .fullscreen_pass("compose")
+    .write_surface_color()
     .finish()
     .builtin_ui_composite_pass("ui")
     .depends_on("compose")
@@ -107,9 +176,17 @@ let flow = RenderFlow::new("sim.flow")
 
 Import-model contract:
 
-- Use typed imports from the public flow API (`with_surface_color`, `with_surface_depth`, `with_builtin_ui`).
+- Use typed imports from the public flow API (`with_surface_color`, `with_builtin_ui`) for active runtime flows.
+- Use flow-owned `with_depth_target(...)` plus `.depth_target(...)` for runtime-backed graphics depth attachments.
+- `with_surface_depth` / `RenderResourceDescriptor::imported_surface_depth` remain declaration compatibility for the typed import model, but imported surface depth is not accepted as a graphics depth target until the renderer exposes a prepared surface-depth texture.
 - Avoid generic `RenderResourceDescriptor::imported_texture(...)` / `imported_buffer(...)` for active runtime flows.
 - Active validation rejects external/generic import semantics in the runtime path.
+
+Graphics contract:
+
+- `graphics_pass(...)` must declare exactly one color output and explicit draw parameters with `.draw(...)` or `.draw_with_offsets(...)`.
+- Vertex and instance buffers are runtime-backed when authored with `RenderVertexBufferLayout::{vertex, instance}` attributes. Layout slots must be dense from `0`, shader locations must be unique, and every buffer must have a matching layout.
+- Graphics storage bindings are bind-group storage reads/writes. Raster color/depth writes must use `.write_color_target(...)` / `.depth_target(...)`; storage bindings are not color attachments.
 
 Runtime boundary note:
 
@@ -118,7 +195,7 @@ Runtime boundary note:
 
 Advanced feature-tagged pass note:
 
-- `compute_pass(...)` and `fullscreen_pass(...)` expose optional `.for_feature("feature.id")` tagging.
+- `compute_pass(...)`, `fullscreen_pass(...)`, and `graphics_pass(...)` expose optional `.for_feature("feature.id")` tagging.
 - Feature-tagged passes execute through the same compiled path but are gated by prepared feature status/fallback policy.
 - Only tag passes when the corresponding feature contribution is prepared for the frame; otherwise policy may skip those passes.
 

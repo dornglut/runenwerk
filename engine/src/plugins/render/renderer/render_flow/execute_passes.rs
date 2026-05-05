@@ -1,5 +1,7 @@
 use super::*;
 use crate::plugins::render::RenderPassId;
+use crate::plugins::render::graph::CompiledDrawBufferPlan;
+use crate::plugins::render::{RenderVertexFormat, RenderVertexStepMode};
 
 impl Renderer {
     #[allow(clippy::too_many_arguments)]
@@ -171,6 +173,7 @@ impl Renderer {
             true,
             Vec::new(),
             None,
+            0,
             FlowPrimitiveTopologyClass::None,
             runtime_resources,
         )?;
@@ -279,6 +282,7 @@ impl Renderer {
             true,
             vec![color_target.format],
             None,
+            0,
             FlowPrimitiveTopologyClass::TriangleList,
             runtime_resources,
         )?;
@@ -402,6 +406,7 @@ impl Renderer {
             "builtin:graphics",
         );
 
+        let vertex_layout_signature_hash = plan.draw_buffers.vertex_layout_signature_hash();
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
             device,
             frame_texture,
@@ -417,6 +422,7 @@ impl Renderer {
             true,
             vec![color_target.format],
             depth_target.as_ref().map(|value| value.format),
+            vertex_layout_signature_hash,
             FlowPrimitiveTopologyClass::TriangleList,
             runtime_resources,
         )?;
@@ -441,6 +447,10 @@ impl Renderer {
                 })
         });
 
+        let vertex_attribute_sets = build_vertex_attribute_sets(&plan.draw_buffers);
+        let vertex_buffer_layouts =
+            build_vertex_buffer_layouts(&plan.draw_buffers, &vertex_attribute_sets);
+
         let pipeline =
             self.flow_pipeline_cache
                 .get_or_create_render_pipeline(pipeline_key.clone(), || {
@@ -451,7 +461,7 @@ impl Renderer {
                             module: &shader_module,
                             entry_point: Some("vs_main"),
                             compilation_options: PipelineCompilationOptions::default(),
-                            buffers: &[],
+                            buffers: &vertex_buffer_layouts,
                         },
                         fragment: Some(FragmentState {
                             module: &shader_module,
@@ -519,16 +529,19 @@ impl Renderer {
             pass.set_bind_group(0, bind_group, &[]);
         }
 
-        let mut vertex_slot = 0u32;
-        for resource in &plan.draw_buffers.vertex_buffers {
-            let buffer = runtime_resources.resolve_storage_buffer_ref(plan.pass_id, resource)?;
-            pass.set_vertex_buffer(vertex_slot, buffer.buffer.slice(..));
-            vertex_slot = vertex_slot.saturating_add(1);
+        for binding in &plan.draw_buffers.vertex_buffers {
+            let buffer =
+                runtime_resources.resolve_storage_buffer_ref(plan.pass_id, &binding.resource)?;
+            pass.set_vertex_buffer(binding.layout.slot, buffer.buffer.slice(..));
         }
-        for resource in &plan.draw_buffers.instance_buffers {
+        for (resource, layout) in plan
+            .draw_buffers
+            .instance_buffers
+            .iter()
+            .zip(plan.draw_buffers.instance_buffer_layouts.iter())
+        {
             let buffer = runtime_resources.resolve_storage_buffer_ref(plan.pass_id, resource)?;
-            pass.set_vertex_buffer(vertex_slot, buffer.buffer.slice(..));
-            vertex_slot = vertex_slot.saturating_add(1);
+            pass.set_vertex_buffer(layout.slot, buffer.buffer.slice(..));
         }
 
         let index_buffer = match plan.draw_buffers.index_buffers.as_slice() {
@@ -556,11 +569,21 @@ impl Renderer {
             }
         };
 
+        let draw = plan.draw.ok_or_else(|| {
+            anyhow::anyhow!(
+                "graphics pass '{}' is missing draw parameters in execution plan",
+                plan.pass_id
+            )
+        })?;
+
+        let vertex_range = draw.first_vertex..draw.first_vertex + draw.vertex_count;
+        let instance_range = draw.first_instance..draw.first_instance + draw.instance_count;
+
         match (index_buffer.is_some(), indirect_buffer) {
             (true, Some(indirect)) => pass.draw_indexed_indirect(indirect.buffer, 0),
             (false, Some(indirect)) => pass.draw_indirect(indirect.buffer, 0),
-            (true, None) => pass.draw_indexed(0..3, 0, 0..1),
-            (false, None) => pass.draw(0..3, 0..1),
+            (true, None) => pass.draw_indexed(vertex_range, 0, instance_range),
+            (false, None) => pass.draw(vertex_range, instance_range),
         }
         Ok(EncodedPipelinePass {
             dispatch_workgroups: None,
@@ -790,5 +813,94 @@ impl Renderer {
             generation: None,
         };
         self.encode_texture_copy(encoder, pass.pass_id, source, destination)
+    }
+}
+
+fn build_vertex_attribute_sets(draw_buffers: &CompiledDrawBufferPlan) -> Vec<Vec<VertexAttribute>> {
+    draw_buffers
+        .vertex_buffers
+        .iter()
+        .map(|binding| {
+            binding
+                .layout
+                .attributes
+                .iter()
+                .map(|attribute| VertexAttribute {
+                    format: render_vertex_format_to_wgpu(attribute.format),
+                    offset: attribute.offset,
+                    shader_location: attribute.shader_location,
+                })
+                .collect::<Vec<_>>()
+        })
+        .chain(draw_buffers.instance_buffer_layouts.iter().map(|layout| {
+            layout
+                .attributes
+                .iter()
+                .map(|attribute| VertexAttribute {
+                    format: render_vertex_format_to_wgpu(attribute.format),
+                    offset: attribute.offset,
+                    shader_location: attribute.shader_location,
+                })
+                .collect::<Vec<_>>()
+        }))
+        .collect()
+}
+
+fn build_vertex_buffer_layouts<'a>(
+    draw_buffers: &'a CompiledDrawBufferPlan,
+    attribute_sets: &'a [Vec<VertexAttribute>],
+) -> Vec<VertexBufferLayout<'a>> {
+    let mut layouts = Vec::<(u32, VertexBufferLayout<'a>)>::new();
+    let mut attribute_index = 0usize;
+
+    for binding in &draw_buffers.vertex_buffers {
+        layouts.push((
+            binding.layout.slot,
+            VertexBufferLayout {
+                array_stride: binding.layout.array_stride,
+                step_mode: render_vertex_step_mode_to_wgpu(binding.layout.step_mode),
+                attributes: &attribute_sets[attribute_index],
+            },
+        ));
+        attribute_index = attribute_index.saturating_add(1);
+    }
+
+    for layout in &draw_buffers.instance_buffer_layouts {
+        layouts.push((
+            layout.slot,
+            VertexBufferLayout {
+                array_stride: layout.array_stride,
+                step_mode: render_vertex_step_mode_to_wgpu(layout.step_mode),
+                attributes: &attribute_sets[attribute_index],
+            },
+        ));
+        attribute_index = attribute_index.saturating_add(1);
+    }
+
+    layouts.sort_by_key(|(slot, _)| *slot);
+    layouts.into_iter().map(|(_, layout)| layout).collect()
+}
+
+fn render_vertex_step_mode_to_wgpu(value: RenderVertexStepMode) -> VertexStepMode {
+    match value {
+        RenderVertexStepMode::Vertex => VertexStepMode::Vertex,
+        RenderVertexStepMode::Instance => VertexStepMode::Instance,
+    }
+}
+
+fn render_vertex_format_to_wgpu(value: RenderVertexFormat) -> VertexFormat {
+    match value {
+        RenderVertexFormat::Float32 => VertexFormat::Float32,
+        RenderVertexFormat::Float32x2 => VertexFormat::Float32x2,
+        RenderVertexFormat::Float32x3 => VertexFormat::Float32x3,
+        RenderVertexFormat::Float32x4 => VertexFormat::Float32x4,
+        RenderVertexFormat::Uint32 => VertexFormat::Uint32,
+        RenderVertexFormat::Uint32x2 => VertexFormat::Uint32x2,
+        RenderVertexFormat::Uint32x3 => VertexFormat::Uint32x3,
+        RenderVertexFormat::Uint32x4 => VertexFormat::Uint32x4,
+        RenderVertexFormat::Sint32 => VertexFormat::Sint32,
+        RenderVertexFormat::Sint32x2 => VertexFormat::Sint32x2,
+        RenderVertexFormat::Sint32x3 => VertexFormat::Sint32x3,
+        RenderVertexFormat::Sint32x4 => VertexFormat::Sint32x4,
     }
 }
