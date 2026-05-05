@@ -1,5 +1,6 @@
 use ecs::{
-    BroadcastKey, TickBufferKey, TickBufferProvenance, TickBufferPushError, WorkQueueKey, World,
+    BroadcastKey, TickBufferConfig, TickBufferKey, TickBufferProvenance, TickBufferPushError,
+    WorkQueueKey, World,
 };
 
 #[test]
@@ -27,6 +28,115 @@ fn tick_buffer_sequence_is_global_and_monotonic_across_ticks() {
         .push_buffer_message_for_tick(6, TickBufferProvenance::UNSPECIFIED, 4_u32)
         .expect("sequence should continue after tick finalization");
     assert_eq!(fourth.sequence, 4);
+}
+
+#[test]
+fn finalized_tick_late_writes_are_rejected_and_do_not_survive_repeat_finalization() {
+    let mut world = World::new();
+
+    world
+        .push_buffer_message_for_tick(10, TickBufferProvenance::UNSPECIFIED, 1_u32)
+        .expect("initial input should enqueue");
+    world.finalize_tick_boundary(10);
+
+    let late = world.push_buffer_message_for_tick(10, TickBufferProvenance::UNSPECIFIED, 2_u32);
+    assert!(matches!(
+        late,
+        Err(TickBufferPushError::FinalizedTick {
+            tick: 10,
+            finalized_tick: 10,
+            ..
+        })
+    ));
+
+    world.finalize_tick_boundary(10);
+    assert!(world.buffer_messages_at_tick::<u32>(10).is_empty());
+
+    let stats = world
+        .buffer_stats::<u32>()
+        .expect("buffer stats should exist after rejected late write");
+    assert_eq!(stats.pushed, 1);
+    assert_eq!(stats.rejected, 1);
+    assert_eq!(stats.pending_messages, 0);
+}
+
+#[test]
+fn older_than_finalized_tick_is_rejected_and_future_tick_still_accepts_messages() {
+    let mut world = World::new();
+
+    world.finalize_tick_boundary(10);
+
+    let older = world.push_buffer_message_for_tick(9, TickBufferProvenance::UNSPECIFIED, 1_u32);
+    assert!(matches!(
+        older,
+        Err(TickBufferPushError::FinalizedTick {
+            tick: 9,
+            finalized_tick: 10,
+            ..
+        })
+    ));
+
+    let future = world
+        .push_buffer_message_for_tick(11, TickBufferProvenance::UNSPECIFIED, 2_u32)
+        .expect("future tick should stay open");
+    assert_eq!(future.tick, 11);
+    assert!(world.buffer_messages_at_tick::<u32>(9).is_empty());
+    assert_eq!(world.buffer_messages_at_tick::<u32>(11), &[2]);
+}
+
+#[test]
+fn tick_finalization_is_monotonic_and_gap_finalization_purges_all_closed_ticks() {
+    let mut world = World::new();
+
+    world
+        .push_buffer_message_for_tick(3, TickBufferProvenance::UNSPECIFIED, 3_u32)
+        .unwrap();
+    world
+        .push_buffer_message_for_tick(5, TickBufferProvenance::UNSPECIFIED, 5_u32)
+        .unwrap();
+    world
+        .push_buffer_message_for_tick(7, TickBufferProvenance::UNSPECIFIED, 7_u32)
+        .unwrap();
+
+    world.finalize_tick_boundary(5);
+    world.finalize_tick_boundary(5);
+    world.finalize_tick_boundary(4);
+
+    assert!(world.buffer_messages_at_tick::<u32>(3).is_empty());
+    assert!(world.buffer_messages_at_tick::<u32>(5).is_empty());
+    assert_eq!(world.buffer_messages_at_tick::<u32>(7), &[7]);
+    assert_eq!(world.current_buffer_tick(), 5);
+    assert_eq!(world.messaging_finalization_counters().tick_boundaries, 1);
+
+    world.finalize_tick_boundary(7);
+    assert!(world.buffer_messages_at_tick::<u32>(7).is_empty());
+    assert_eq!(world.messaging_finalization_counters().tick_boundaries, 2);
+}
+
+#[test]
+fn finalized_ticks_are_closed_even_when_retained_for_inspection() {
+    let mut world = World::new();
+    world.configure_tick_buffer::<u32>(TickBufferConfig {
+        capacity: None,
+        retain_finalized_ticks: true,
+    });
+
+    world
+        .push_buffer_message_for_tick(4, TickBufferProvenance::UNSPECIFIED, 4_u32)
+        .unwrap();
+    world.finalize_tick_boundary(4);
+    assert_eq!(world.buffer_messages_at_tick::<u32>(4), &[4]);
+
+    let late = world.push_buffer_message_for_tick(4, TickBufferProvenance::UNSPECIFIED, 40_u32);
+    assert!(matches!(
+        late,
+        Err(TickBufferPushError::FinalizedTick {
+            tick: 4,
+            finalized_tick: 4,
+            ..
+        })
+    ));
+    assert_eq!(world.buffer_messages_at_tick::<u32>(4), &[4]);
 }
 
 #[test]

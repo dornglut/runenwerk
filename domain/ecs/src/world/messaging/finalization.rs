@@ -40,7 +40,15 @@ impl World {
     }
 
     pub fn finalize_tick_boundary(&mut self, finalized_tick: u64) {
+        if self
+            .finalized_buffer_tick
+            .is_some_and(|last_finalized_tick| finalized_tick <= last_finalized_tick)
+        {
+            return;
+        }
+
         self.current_buffer_tick = finalized_tick;
+        self.finalized_buffer_tick = Some(finalized_tick);
 
         for stream in self.tick_buffers.values_mut() {
             if stream.config.retain_finalized_ticks {

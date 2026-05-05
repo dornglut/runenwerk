@@ -1,8 +1,9 @@
+use std::any::TypeId;
 use std::sync::{Arc, Mutex};
 
 use scheduler::{
-    AccessKey, ExecutionScheduler, Node, RegisteredSystem, ScheduleLabel, SchedulerBuilder,
-    SystemAccess,
+    AccessKey, ConflictKind, ExecutionScheduler, Node, RegisteredSystem, ScheduleLabel,
+    SchedulerBuilder, SystemAccess,
 };
 
 #[derive(Copy, Clone)]
@@ -22,6 +23,11 @@ impl ScheduleLabel for Update {
         "Update"
     }
 }
+
+struct A;
+struct B;
+struct C;
+struct D;
 
 fn push_node(log: Arc<Mutex<Vec<String>>>, name: &'static str) -> Node<()> {
     Node::new(name, move |_ctx: &mut ()| {
@@ -219,6 +225,160 @@ fn same_system_mixed_intents_on_queue_are_rejected() {
 
     let message = format!("{err:#}");
     assert!(message.contains("conflicting access"), "{message}");
+    assert!(
+        message.contains("read/drain conflict on work queue"),
+        "{message}"
+    );
+}
+
+#[test]
+fn multiple_resource_conflicts_are_reported_in_registration_order() {
+    let first = AccessKey::resource::<A>("same_name");
+    let second = AccessKey::resource::<B>("same_name");
+    let left = SystemAccess::new().with_write(first).with_write(second);
+    let right = SystemAccess::new().with_read(first).with_read(second);
+
+    for _ in 0..16 {
+        let conflicts = left.conflicts_with(&right);
+        assert_eq!(conflicts.len(), 2);
+        assert_eq!(conflicts[0].kind, ConflictKind::ReadWrite);
+        assert_eq!(conflicts[0].key.type_id(), Some(TypeId::of::<A>()));
+        assert_eq!(conflicts[1].kind, ConflictKind::ReadWrite);
+        assert_eq!(conflicts[1].key.type_id(), Some(TypeId::of::<B>()));
+    }
+}
+
+#[test]
+fn same_name_conflicts_do_not_collapse_or_swap() {
+    let first = AccessKey::broadcast_stream::<A>("same_stream");
+    let second = AccessKey::broadcast_stream::<B>("same_stream");
+    let left = SystemAccess::new().with_write(first).with_write(second);
+    let right = SystemAccess::new().with_write(first).with_write(second);
+
+    let conflicts = left.conflicts_with(&right);
+    assert_eq!(conflicts.len(), 2);
+    assert_eq!(conflicts[0].key.type_id(), Some(TypeId::of::<A>()));
+    assert_eq!(conflicts[1].key.type_id(), Some(TypeId::of::<B>()));
+    assert!(
+        conflicts
+            .iter()
+            .all(|conflict| conflict.diagnostic_message().contains("broadcast stream"))
+    );
+}
+
+#[test]
+fn work_queue_conflicts_sort_by_domain_mode_and_registration_order() {
+    let queue_a = AccessKey::work_queue::<A>("queue_a");
+    let queue_b = AccessKey::work_queue::<B>("queue_b");
+    let left = SystemAccess::new()
+        .with_read(queue_b)
+        .with_write(queue_a)
+        .with_drain(queue_b)
+        .with_drain(queue_a);
+    let right = SystemAccess::new()
+        .with_drain(queue_b)
+        .with_drain(queue_a)
+        .with_write(queue_b);
+
+    let conflicts = left.conflicts_with(&right);
+    let summary: Vec<_> = conflicts
+        .iter()
+        .map(|conflict| {
+            (
+                conflict.kind,
+                conflict.key.type_id(),
+                conflict.diagnostic_message(),
+            )
+        })
+        .collect();
+
+    assert_eq!(
+        summary,
+        vec![
+            (
+                ConflictKind::ReadWrite,
+                Some(TypeId::of::<B>()),
+                "read/write conflict on work queue 'queue_b'".to_string(),
+            ),
+            (
+                ConflictKind::ReadDrain,
+                Some(TypeId::of::<B>()),
+                "read/drain conflict on work queue 'queue_b'".to_string(),
+            ),
+            (
+                ConflictKind::WriteDrain,
+                Some(TypeId::of::<B>()),
+                "write/drain conflict on work queue 'queue_b'".to_string(),
+            ),
+            (
+                ConflictKind::WriteDrain,
+                Some(TypeId::of::<A>()),
+                "write/drain conflict on work queue 'queue_a'".to_string(),
+            ),
+            (
+                ConflictKind::DrainDrain,
+                Some(TypeId::of::<B>()),
+                "drain/drain conflict on work queue 'queue_b'".to_string(),
+            ),
+            (
+                ConflictKind::DrainDrain,
+                Some(TypeId::of::<A>()),
+                "drain/drain conflict on work queue 'queue_a'".to_string(),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn tick_buffer_and_broadcast_conflict_wording_and_order_are_stable() {
+    let broadcast = AccessKey::broadcast_stream::<C>("damage");
+    let tick_buffer = AccessKey::tick_buffer::<D>("input");
+    let left = SystemAccess::new()
+        .with_write(tick_buffer)
+        .with_write(broadcast);
+    let right = SystemAccess::new()
+        .with_drain(tick_buffer)
+        .with_read(broadcast);
+
+    let conflicts = left.conflicts_with(&right);
+    let messages: Vec<_> = conflicts
+        .iter()
+        .map(|conflict| conflict.diagnostic_message())
+        .collect();
+
+    assert_eq!(
+        messages,
+        vec![
+            "read/write conflict on broadcast stream 'damage'",
+            "write/drain conflict on tick buffer 'input'",
+        ]
+    );
+}
+
+#[test]
+fn validate_internal_reports_deterministic_conflict_when_multiple_exist() {
+    let resource = AccessKey::resource::<A>("resource");
+    let queue = AccessKey::work_queue::<B>("queue");
+    let tick_buffer = AccessKey::tick_buffer::<C>("input");
+    let access = SystemAccess::new()
+        .with_read(tick_buffer)
+        .with_read(resource)
+        .with_write(resource)
+        .with_drain(queue)
+        .with_write(queue)
+        .with_drain(tick_buffer);
+
+    for _ in 0..16 {
+        let conflict = access
+            .validate_internal()
+            .expect_err("multiple internal conflicts should be rejected");
+        assert_eq!(conflict.kind, ConflictKind::ReadWrite);
+        assert_eq!(conflict.key.type_id(), Some(TypeId::of::<A>()));
+        assert_eq!(
+            conflict.diagnostic_message(),
+            "read/write conflict on resource 'resource'"
+        );
+    }
 }
 
 #[test]

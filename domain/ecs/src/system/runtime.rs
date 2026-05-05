@@ -465,10 +465,9 @@ fn merge_access(system_name: &str, access_parts: &[SystemAccess]) -> Result<Syst
     }
     if let Err(conflict) = merged.validate_internal() {
         return Err(anyhow!(
-            "system '{}' has conflicting param access to '{}' ({:?})",
+            "system '{}' has conflicting param access: {}",
             system_name,
-            conflict.key.name(),
-            conflict.kind
+            conflict.diagnostic_message()
         ));
     }
     Ok(merged)

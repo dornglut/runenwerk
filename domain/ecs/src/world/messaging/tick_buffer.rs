@@ -74,6 +74,11 @@ pub enum TickBufferPushError {
     Deduplicated {
         buffer_type: &'static str,
     },
+    FinalizedTick {
+        buffer_type: &'static str,
+        tick: u64,
+        finalized_tick: u64,
+    },
 }
 
 type TickBufferDedupHook = Box<dyn Fn(&dyn Any, &dyn Any) -> bool + Send + Sync + 'static>;
@@ -273,6 +278,7 @@ impl World {
         message: T,
     ) -> Result<TickBufferMeta, TickBufferPushError> {
         let type_id = TypeId::of::<T>();
+        let finalized_buffer_tick = self.finalized_buffer_tick;
         if !self.tick_buffers.contains_key(&type_id) {
             let buffer_key = self.allocate_tick_buffer_key();
             self.tick_buffers
@@ -282,6 +288,17 @@ impl World {
             .tick_buffers
             .get_mut(&type_id)
             .expect("tick buffer should exist after ensure");
+
+        if let Some(finalized_tick) = finalized_buffer_tick
+            && tick <= finalized_tick
+        {
+            buffer.rejected = buffer.rejected.saturating_add(1);
+            return Err(TickBufferPushError::FinalizedTick {
+                buffer_type: buffer.buffer_type_name,
+                tick,
+                finalized_tick,
+            });
+        }
 
         if let Some(capacity) = buffer.config.capacity
             && buffer.pending_messages >= capacity

@@ -65,8 +65,22 @@ Primary ownership locations:
 Checklist:
 
 - [ ] ensure frame finalization always executes exactly once per frame from runtime lifecycle.
-- [ ] add explicit tick finalization boundary/hook for fixed-step phases.
+- [x] add explicit tick finalization boundary/hook for fixed-step phases.
 - [ ] remove dependence on manual `world.finalize_frame_boundary()` calls in gameplay/editor flows.
+
+Tick-buffer lifecycle contract:
+
+- `World::finalize_tick_boundary(N)` closes all ticks `<= N`.
+- For non-retained tick buffers, finalizing tick `N` purges all buffered messages for ticks
+  `<= N`; gap finalization is therefore explicit and closes the whole prefix, not only
+  the single named tick.
+- Repeating finalization for an already-finalized tick is idempotent and does not rewind
+  `current_buffer_tick` or increment tick-boundary counters again.
+- A push for `tick <= finalized_buffer_tick` is rejected with
+  `TickBufferPushError::FinalizedTick` and increments the buffer rejected counter; late
+  writes are not silently dropped and do not remain pending.
+- Retained tick buffers keep already-finalized messages for inspection, but finalized
+  ticks are still closed to new writes.
 
 ### F3. Strengthen stable identity surfaces for runtime introspection
 
@@ -77,9 +91,14 @@ Primary ownership locations:
 
 Checklist:
 
-- [ ] add stable system IDs separate from type-name strings.
-- [ ] expose stable param-slot IDs for diagnostic tooling and stream cursor tracking.
+- [x] add stable system IDs separate from type-name strings.
+- [x] expose stable param-slot IDs for diagnostic tooling and stream cursor tracking.
 - [ ] keep deterministic registration and plan reporting.
+
+Current scope note: system and param-slot IDs are first-class runtime diagnostics
+surfaces. Richer external identity for every scheduler access key remains constrained by
+TypeId-backed domains, so conflict ordering uses deterministic registration order rather
+than human-readable names as canonical identity.
 
 ### F4. Add first-class work-queue/stream conflict semantics to scheduler
 

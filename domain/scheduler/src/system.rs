@@ -150,8 +150,7 @@ impl<C> RegisteredSystem<C> {
 
 fn internal_access_error(system_name: &str, conflict: &AccessConflict) -> anyhow::Error {
     anyhow::anyhow!(
-        "system '{system_name}' has conflicting access to '{}' ({:?})",
-        conflict.key.name(),
-        conflict.kind
+        "system '{system_name}' has conflicting access: {}",
+        conflict.diagnostic_message()
     )
 }
