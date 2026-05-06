@@ -10,3 +10,4 @@ var/dev/server-cert.der
 playgrounds/godot-chunking-demo/.godot/editor/*
 editor-scenes/*.changes.ron
 editor-scenes/*.workspace.ron
+editor-scenes/workspaces/*.workspace.ron

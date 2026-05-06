@@ -74,16 +74,11 @@ Current implemented baseline:
 - Shader reload helpers exist in `engine/src/plugins/render/shader/hot_reload.rs::poll_shader_hot_reload` and `engine/src/plugins/shared/reload.rs`.
 - `assets/editor/config.ron` contains a Blender path, and `assets/models/*.blend` plus `assets/models/*.glb` exist, but those files are foreign-source/reference content today. They are not the canonical world representation and no importer/catalog/cache pipeline currently owns them.
 
-Current blocking gaps:
+Current post-M3 gaps:
 
-- `domain/editor/editor_core/src/document.rs::DocumentKind` is too coarse for final document workflows.
-- `domain/editor/editor_core/src/session.rs::EditorSession` stores documents, but it does not own ordered document tabs, active-tab commands, compatibility validation, or non-scene document state.
-- `apps/runenwerk_editor/src/editor_runtime/document/mod.rs::SceneDocumentState` is scene-specific and is not a generic document runtime.
-- `domain/editor/editor_core/src/session.rs::EditorMode` is a global enum instead of scoped workspace/document mode contracts.
-- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame` renders tab buttons and drop slots, but not editor type selectors, plus/new-tab controls, area menus, close controls, or document tabs.
-- `domain/editor/editor_shell/src/commands/map_interactions.rs::map_interactions_to_shell_commands` intentionally ignores `SelectChanged`, `TabSelected`, `TreeRowSelected`, `TreeRowToggled`, `Toggled`, and `NumericStepped` for shell-level workflows.
-- `apps/runenwerk_editor/src/editor_runtime/commands/ratification.rs::ratify_scene_change`, `apps/runenwerk_editor/src/editor_runtime/commands/scene_commands.rs::execute_scene_command_and_push_history_with_origin`, and `apps/runenwerk_editor/src/editor_runtime/commands/transactions.rs::execute_scene_transaction_and_push_history_with_origin_and_causality` still own domain-like operation orchestration in the app crate.
-- Rotate, scale, duplicate, broader create/delete flows, SDF primitive creation, brush/layer workflows, and richer inspector/component authoring are incomplete.
+- M1 structural seams are closed: `DocumentKind` has the explicit M1 taxonomy, `EditorSession` owns ordered document tabs, active switching, dirty/save/close transitions, document compatibility validation, and mode ids/descriptors/registry compatibility rules; app-local generic document-tab runtime state is split from scene-specific document state.
+- M2 shell seams are closed: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage.
+- M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
 - There is no asset catalog, asset id model, dependency graph, import plan, artifact cache, asset browser, import diagnostics surface, project-wide asset hot reload workflow, field-product formation pipeline, SDF/world asset taxonomy, or `world_sdf` artifact/cache bridge.
 - There is no `domain/material_graph`, `domain/texture`, `domain/procgen`, `domain/particles`, `domain/physics`, or `domain/animation`.
 - There are no editor providers for material graph editing, procedural texturing, Texture3D/volume inspection, procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview.
@@ -91,8 +86,8 @@ Current blocking gaps:
 
 ## Implementation Readiness
 
-- M1 through M3 are implementation-ready against current editor, shell, UI, scene, SDF, and persistence docs.
-- M4 and M5 are implementation-ready once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
+- M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
+- M4 and M5 are the next implementation-ready track once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
 - M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
 - M8 is implementation-ready for the retained UI path. Compiled-reactive or ECS-driven UI execution remains blocked unless it receives an active design or accepted ADR before M2 starts.
@@ -114,6 +109,8 @@ Exit criteria:
 - `python3 tools/docs/validate_docs.py` passes.
 
 ### M1 - Editor Structural Core Closed
+
+Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M4 asset pipeline foundation is the next milestone, while procedural domains, gameplay graph, and self-authoring remain deferred.
 
 Purpose: close the structural seams that every later feature depends on.
 
@@ -150,6 +147,8 @@ Validation:
 
 Purpose: productize the editor shell as a real work surface, not a fixed MVP panel layout.
 
+Status: complete as of 2026-05-05. The reducer, persistence, shell command, tab chrome, interaction mapping, app allocator/pruning seams, dynamic workspace graph projection/composition, and projected-host split resizing are implemented and covered by focused shell/app tests. The old fixed-layout projection remains only as a compatibility view for legacy default-layout guards.
+
 Implementation targets:
 
 - `domain/editor/editor_shell/src/workspace/reducer.rs::WorkspaceMutation`
@@ -176,6 +175,8 @@ Validation:
 ### M3 - Scene Authoring Feature Complete
 
 Purpose: finish the core 3D editor before expanding into every other workspace.
+
+Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M4 asset pipeline foundation is the next milestone.
 
 Implementation targets:
 

@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-04
+last_reviewed: 2026-05-06
 ---
 
 # Runenwerk Editor Current Architecture
@@ -70,6 +70,31 @@ Surface-local UI state is stored per `ToolSurfaceInstanceId` in
 diagnostics, runtime/session state, and toolbar state remain app/global; console
 view state, entity table filters, inspector draft/focus state, and viewport
 interaction/details state are surface-session concerns.
+
+## Shell Layout
+
+The app toolbar is produced by
+`apps/runenwerk_editor/src/shell/toolbar_adapter.rs::build_toolbar_observation_frame`
+and rendered by
+`domain/editor/editor_shell/src/composition/build_toolbar.rs::build_toolbar`.
+It exposes File, Edit, and Window menu controls, followed by Scene and Modelling
+workspace profile switches plus a disabled add-workspace placeholder. Menu
+items whose workflows are not implemented are emitted as disabled toolbar
+buttons so the retained UI renders them as unavailable instead of routing them
+to app behavior.
+
+Default workspace profiles are defined in
+`domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry`.
+The Scene and Modelling profiles are distinct workspace profiles; both currently
+use the same structural shell template while retaining separate profile identity
+and profile-addressed layout persistence.
+
+The default structural layout is defined in
+`domain/editor/editor_shell/src/workspace/state.rs::WorkspaceState::bootstrap_current_layout`.
+It places the viewport in the expanding left/middle area, the scene hierarchy
+above the inspector in the right sidebar, and the console/log surface in the
+bottom band. The compatibility projection for that structure is maintained in
+`domain/editor/editor_shell/src/workspace/projection.rs::project_fixed_layout`.
 
 ## Related Docs
 

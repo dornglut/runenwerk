@@ -109,9 +109,9 @@ Focus:
 
 ## Current Now Tasks
 
-- [ ] Finish docking/tab behavior on top of existing structural identity and binding contracts. Status: active/partially implemented; automated coverage exists for tab reorder, rehome, floating host creation, split resizing, and structural identity preservation.
-- [ ] Expose editor-area/type switching with a retained select/dropdown route. Status: active/open; `ui_widgets::select` and `UiInteraction::SelectChanged` exist, but editor shell mapping currently ignores select changes and no panel-level editor-type selector is rendered.
-- [ ] Add plus/new-tab affordance for tab stacks. Status: open; current workspace behavior can reorder/rehome/float existing tabs, but no shell control creates a new panel/tool-surface tab.
+- [x] Finish docking/tab behavior on top of existing structural identity and binding contracts. Status: implemented and test-covered; automated coverage exists for tab reorder, rehome, floating host creation, split resizing, area split/duplicate/reset/close, dynamic split-area composition, and structural identity preservation.
+- [x] Expose editor-area/type switching with a retained select/dropdown route. Status: implemented and test-covered; tab chrome renders an editor type selector and maps `SelectChanged` to `SwitchPanelToolSurfaceKind`.
+- [x] Add plus/new-tab affordance for tab stacks. Status: implemented and test-covered; tab chrome exposes a plus/new-tab control that allocates panel and tool-surface identities after structural ratification.
 - [ ] Expand non-viewport surface maturity (entity-table/query, richer inspector controls) using existing surface contracts. Status: active/partially implemented; entity-table, console, inspector, outliner, provider routing, and independent surface-session coverage exists, but richer common workflows remain open.
 - [ ] Broaden reusable control adoption in editor surfaces. Status: active/open; controls exist in `domain/ui/*`, but shell surfaces still contain panel-specific composition and some ad hoc row/button patterns where retained tree/table/numeric/toggle/select controls should become the default.
 - [ ] Prepare UI/editor self-authoring design before implementation. Status: target design exists in `design/active/editor-self-authoring-and-final-ui-design.md`; implementation remains boundary-gated until document/provider/mode/docking foundations are closed.
