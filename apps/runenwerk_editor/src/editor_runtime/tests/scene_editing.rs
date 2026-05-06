@@ -3,11 +3,16 @@ use editor_core::{
     TransactionId,
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
-use editor_scene::{SceneCommandIntent, SceneEditorCommand, scene_intent_to_command};
+use editor_scene::{
+    SceneCommandIntent, SceneEditorCommand, SdfBooleanIntent, SdfPrimitiveKind, SdfPrimitiveSpec,
+    scene_intent_to_command,
+};
 
 use crate::editor_runtime::{
-    RunenwerkEditorRuntime, execute_scene_command, execute_scene_intent,
-    ratify_scene_command_with_transaction_id, ratify_scene_redo, ratify_scene_undo,
+    EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, EditorPrimitive, EditorPrimitiveKind,
+    LOCAL_TRANSFORM_COMPONENT_TYPE_ID, RunenwerkEditorRuntime, execute_scene_command,
+    execute_scene_intent, ratify_scene_command_with_transaction_id, ratify_scene_redo,
+    ratify_scene_undo, register_mvp_component_types,
 };
 
 use super::shared::Position;
@@ -212,4 +217,74 @@ fn undo_redo_replays_stored_scene_transaction() {
             .semantic_operations,
         vec![SemanticOperation::SceneTransactionRedone]
     );
+}
+
+#[test]
+fn scene_m3_child_duplicate_batch_delete_and_sdf_primitive_commands() {
+    let mut runtime = RunenwerkEditorRuntime::new();
+    register_mvp_component_types(&mut runtime);
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(30),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Root".to_string(),
+        },
+    )
+    .expect("root create should succeed");
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(31),
+        SceneCommandIntent::CreateChildEntity {
+            parent: EntityId(1),
+            display_name: "Child".to_string(),
+        },
+    )
+    .expect("child create should succeed");
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(32),
+        SceneCommandIntent::CreateSdfPrimitive {
+            parent: Some(EntityId(2)),
+            display_name: "Sphere".to_string(),
+            primitive: SdfPrimitiveSpec::new(SdfPrimitiveKind::Sphere, SdfBooleanIntent::Add),
+        },
+    )
+    .expect("sdf primitive create should succeed");
+
+    let primitive_ecs = runtime
+        .ids()
+        .resolve_entity(EntityId(3))
+        .expect("primitive entity should be registered");
+    let primitive = runtime
+        .world()
+        .get::<EditorPrimitive>(primitive_ecs)
+        .expect("primitive component should exist");
+    assert_eq!(primitive.kind(), EditorPrimitiveKind::Sphere);
+    assert!(runtime.entity_has_component(EntityId(3), LOCAL_TRANSFORM_COMPONENT_TYPE_ID));
+    assert!(runtime.entity_has_component(EntityId(3), EDITOR_PRIMITIVE_COMPONENT_TYPE_ID));
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(33),
+        SceneCommandIntent::DuplicateEntitySubtree {
+            source: EntityId(2),
+            new_parent: Some(EntityId(1)),
+            name_suffix: " Copy".to_string(),
+        },
+    )
+    .expect("duplicate subtree should succeed");
+    assert_eq!(runtime.document().children_of(Some(EntityId(1))).len(), 2);
+
+    execute_scene_intent(
+        &mut runtime,
+        CommandId(34),
+        SceneCommandIntent::DeleteEntities {
+            entities: vec![EntityId(2)],
+        },
+    )
+    .expect("batch delete should delete child subtree");
+    assert!(!runtime.document().contains(EntityId(2)));
+    assert!(!runtime.document().contains(EntityId(3)));
 }

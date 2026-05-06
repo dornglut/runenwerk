@@ -1,6 +1,6 @@
 use editor_core::{
-    ChangeOrigin, CommandExecutor, CommandId, EditorMutationError, GoverningChangeError,
-    RatifiedChange, SemanticOperation,
+    ChangeOrigin, CommandId, EditorMutationError, GoverningChangeError, RatifiedChange,
+    SceneChangeRatificationParams, SemanticOperation,
 };
 use editor_scene::{SceneCommandIntent, SceneEditorCommand, scene_intent_to_command};
 
@@ -10,10 +10,7 @@ use crate::editor_runtime::{
     RetainedSceneTransaction, RunenwerkEditorRuntime, sync_selection_after_scene_change,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutedSceneCommand {
-    pub metadata: editor_core::CommandMetadata,
-}
+pub use editor_scene::ExecutedSceneCommand;
 
 pub(crate) fn execute_scene_intent(
     runtime: &mut RunenwerkEditorRuntime,
@@ -29,17 +26,12 @@ pub(crate) fn execute_scene_command(
     mut command: SceneEditorCommand,
 ) -> Result<Option<ExecutedSceneCommand>, EditorMutationError> {
     let executed = runtime
-        .with_scene_command_context(|ctx| CommandExecutor::execute_command(ctx, &mut command))?;
+        .with_scene_command_context(|ctx| editor_scene::execute_scene_command(ctx, &mut command))?;
 
     sync_selection_after_scene_change(runtime);
     assert_scene_projection_parity(runtime);
 
-    match executed {
-        Some(executed) => Ok(Some(ExecutedSceneCommand {
-            metadata: executed.metadata,
-        })),
-        None => Ok(None),
-    }
+    Ok(executed)
 }
 
 pub(crate) fn execute_scene_command_and_push_history_with_origin(
@@ -52,25 +44,12 @@ pub(crate) fn execute_scene_command_and_push_history_with_origin(
     let transaction_label = transaction_label.into();
     let before_snapshot = runtime.capture_scene_snapshot();
 
+    let transaction =
+        editor_core::TransactionMetadata::new(transaction_id, transaction_label.clone());
     let executed_command_metadata =
         runtime.with_scene_command_context(|ctx| -> Result<_, GoverningChangeError> {
-            let executed_command = CommandExecutor::execute_command(ctx, &mut command)
-                .map_err(|error| GoverningChangeError::mutation_rejected(error.message))?;
-
-            if let Some(executed_command) = &executed_command {
-                let entry = editor_core::HistoryEntry::new(
-                    editor_core::TransactionMetadata::new(
-                        transaction_id,
-                        transaction_label.clone(),
-                    ),
-                    vec![executed_command.metadata.clone()],
-                );
-
-                ctx.session_mut().history_mut().push_applied(entry);
-                Ok(Some(executed_command.metadata.clone()))
-            } else {
-                Ok(None)
-            }
+            editor_scene::execute_scene_command_and_push_history(ctx, &mut command, transaction)
+                .map(|executed| executed.map(|executed| executed.metadata))
         })?;
 
     sync_selection_after_scene_change(runtime);
@@ -82,11 +61,13 @@ pub(crate) fn execute_scene_command_and_push_history_with_origin(
 
     let ratified_change = ratify_scene_change(
         runtime,
-        editor_core::TransactionMetadata::new(transaction_id, transaction_label),
-        vec![command_metadata],
-        origin,
-        vec![SemanticOperation::SceneCommandApplied],
-        None,
+        SceneChangeRatificationParams::new(
+            editor_core::TransactionMetadata::new(transaction_id, transaction_label),
+            vec![command_metadata],
+            origin,
+            vec![SemanticOperation::SceneCommandApplied],
+            None,
+        ),
     );
     runtime.record_ratified_change(ratified_change.clone());
     let after_snapshot = runtime.capture_scene_snapshot();

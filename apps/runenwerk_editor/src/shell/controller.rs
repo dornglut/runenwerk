@@ -1,8 +1,8 @@
 use editor_shell::{
-    BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
-    ComputedLayoutMap, DockingPreviewDropTarget, EditorDomainMutation, EditorShellFrameModel,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal,
-    SurfaceSessionMutation, TabDropDestination, UiInputOutcome, UiInteractionResults, UiTree,
+    CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockingPreviewDropTarget, EditorDomainMutation,
+    EditorShellFrameModel, PanelHostId, ProjectedWorkspaceHostSlot, ShellCommand,
+    ShellUiExpressionFrame, SurfaceCommandProposal, SurfaceSessionMutation, TabDropDestination,
+    UiInputOutcome, UiInteractionResults, UiTree, WidgetId, WorkspaceSplitAxis,
     build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
 };
 use editor_viewport::ArtifactObservationFrame;
@@ -22,8 +22,8 @@ use crate::runtime::viewport::{
 };
 use crate::shell::{
     EditorSurfaceProviderRegistry, RunenwerkEditorShellState, SurfaceProviderDispatchContext,
-    WorkspaceSplitKind, active_document_context, build_editor_shell_frame_model,
-    dispatch_shell_command, mounted_surface_requests,
+    active_document_context, build_editor_shell_frame_model, dispatch_shell_command,
+    mounted_surface_requests,
 };
 
 const CONSOLE_FOLLOW_BOTTOM_EPSILON: f32 = 1.0;
@@ -306,6 +306,19 @@ impl RunenwerkEditorShellController {
             &layouts,
             &projection_artifacts,
         );
+        if !suppress_tab_activation
+            && let UiInputEvent::Pointer(pointer) = event
+            && pointer.kind == PointerEventKind::Up
+            && pointer.button == Some(ui_input::PointerButton::Primary)
+            && let Some(route) =
+                tab_button_route_at_pointer(&projection_artifacts, &layouts, pointer.position)
+        {
+            docking_commands.push(ShellCommand::SetTabStackActivePanel {
+                tab_stack_id: route.tab_stack_id,
+                panel_instance_id: route.panel_instance_id,
+                projection_epoch: projection_artifacts.projection_epoch,
+            });
+        }
 
         let mut commands =
             map_interactions_to_shell_commands(&outcome.interactions, &projection_artifacts);
@@ -345,15 +358,18 @@ impl RunenwerkEditorShellController {
         match pointer.kind {
             PointerEventKind::Down => {
                 let pressed = shell_state.runtime().state().pressed_widget;
-                let Some(pressed_widget) = pressed else {
-                    shell_state.clear_tab_drag();
-                    return (commands, suppress_tab_activation);
-                };
-                if let Some(route) = projection_artifacts
-                    .workspace
-                    .tab_button_route_by_widget_id
-                    .get(&pressed_widget)
-                {
+                let route =
+                    tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position)
+                        .or_else(|| {
+                            pressed.and_then(|pressed_widget| {
+                                projection_artifacts
+                                    .workspace
+                                    .tab_button_route_by_widget_id
+                                    .get(&pressed_widget)
+                                    .copied()
+                            })
+                        });
+                if let Some(route) = route {
                     shell_state.begin_tab_drag_candidate(
                         route.panel_instance_id,
                         route.tab_stack_id,
@@ -370,6 +386,7 @@ impl RunenwerkEditorShellController {
                     projection_artifacts.projection_epoch,
                 );
                 if became_active || shell_state.docking_visual_state().active_tab_drag.is_some() {
+                    suppress_tab_activation = true;
                     let preview_target = resolve_tab_drop_preview_target(
                         projection_artifacts,
                         tree,
@@ -387,6 +404,7 @@ impl RunenwerkEditorShellController {
                     .set_tab_drag_preview_target(None, projection_artifacts.projection_epoch);
             }
             PointerEventKind::Up => {
+                let click_candidate = shell_state.tab_drag_candidate();
                 let preview_target = resolve_tab_drop_preview_target(
                     projection_artifacts,
                     tree,
@@ -421,6 +439,15 @@ impl RunenwerkEditorShellController {
                             projection_epoch: drag_epoch,
                         });
                     }
+                } else if let Some((panel_instance_id, tab_stack_id, _drag_epoch, false)) =
+                    click_candidate
+                {
+                    commands.push(ShellCommand::SetTabStackActivePanel {
+                        tab_stack_id,
+                        panel_instance_id,
+                        projection_epoch: projection_artifacts.projection_epoch,
+                    });
+                    suppress_tab_activation = true;
                 }
             }
             PointerEventKind::Scroll => {}
@@ -471,16 +498,13 @@ impl RunenwerkEditorShellController {
                     continue;
                 };
                 let dispatch_context = SurfaceProviderDispatchContext {
-                    app,
-                    shell_state,
                     projection_epoch: current_epoch,
+                    _marker: std::marker::PhantomData,
                 };
-                if let Some(command) = shell_command_from_surface_proposal(registry.map_action(
-                    &dispatch_context,
-                    &request,
-                    provider_id,
-                    action,
-                )?) {
+                if let Some(proposal) =
+                    registry.map_action(&dispatch_context, &request, provider_id, action)?
+                    && let Some(command) = shell_command_from_surface_proposal(proposal)
+                {
                     dispatch_shell_command(
                         app,
                         Some(shell_state),
@@ -581,7 +605,6 @@ fn shell_command_from_surface_proposal(proposal: SurfaceCommandProposal) -> Opti
                     projection_epoch: proposal.projection_epoch,
                 })
             }
-            SurfaceSessionMutation::ConsoleSetFollow { .. } => None,
         },
         SurfaceCommandProposal::EditorDomain(proposal) => match proposal.mutation {
             EditorDomainMutation::SelectOutlinerEntity { entity } => {
@@ -609,56 +632,15 @@ fn shell_command_from_surface_proposal(proposal: SurfaceCommandProposal) -> Opti
                 projection_epoch: proposal.projection_epoch,
             }),
         },
-        SurfaceCommandProposal::NoOp => None,
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SplitResizeTarget {
-    BodyConsole,
-    LeftRight,
-    CenterRight,
-}
-
-impl SplitResizeTarget {
-    fn widget_id(self) -> editor_shell::WidgetId {
-        match self {
-            Self::BodyConsole => BODY_CONSOLE_SPLIT_WIDGET_ID,
-            Self::LeftRight => LEFT_RIGHT_SPLIT_WIDGET_ID,
-            Self::CenterRight => CENTER_RIGHT_SPLIT_WIDGET_ID,
-        }
-    }
-
-    fn axis(self) -> ui_math::Axis {
-        match self {
-            Self::BodyConsole => ui_math::Axis::Vertical,
-            Self::LeftRight | Self::CenterRight => ui_math::Axis::Horizontal,
-        }
-    }
-
-    fn projection_fraction(self, projection: &editor_shell::FixedLayoutProjection) -> f32 {
-        match self {
-            Self::BodyConsole => projection.body_console_fraction,
-            Self::LeftRight => projection.left_right_fraction,
-            Self::CenterRight => projection.center_right_fraction,
-        }
-    }
-
-    fn workspace_kind(self) -> WorkspaceSplitKind {
-        match self {
-            Self::BodyConsole => WorkspaceSplitKind::BodyConsole,
-            Self::LeftRight => WorkspaceSplitKind::LeftRight,
-            Self::CenterRight => WorkspaceSplitKind::CenterRight,
-        }
-    }
-
-    fn from_workspace_kind(value: WorkspaceSplitKind) -> Self {
-        match value {
-            WorkspaceSplitKind::BodyConsole => Self::BodyConsole,
-            WorkspaceSplitKind::LeftRight => Self::LeftRight,
-            WorkspaceSplitKind::CenterRight => Self::CenterRight,
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SplitResizeTarget {
+    split_host_id: PanelHostId,
+    widget_id: WidgetId,
+    axis: WorkspaceSplitAxis,
+    fraction: f32,
 }
 
 impl RunenwerkEditorShellController {
@@ -672,29 +654,35 @@ impl RunenwerkEditorShellController {
             return None;
         };
 
-        if let Some(active_kind) = shell_state.active_split_resize_kind() {
-            let target = SplitResizeTarget::from_workspace_kind(active_kind);
+        if let Some((split_host_id, split_widget_id, split_axis)) =
+            shell_state.active_split_resize_session()
+        {
             match pointer.kind {
                 PointerEventKind::Move | PointerEventKind::Enter => {
-                    let split_layout = layouts.get(&target.widget_id())?;
+                    let Some(active_target) =
+                        split_resize_target_by_host(projection_artifacts, split_host_id)
+                    else {
+                        shell_state.clear_split_resize();
+                        return Some(consumed_pointer_outcome(Some(split_widget_id), false));
+                    };
+                    let split_layout = layouts.get(&split_widget_id)?;
                     let next_fraction =
-                        split_fraction_from_pointer(target, split_layout.bounds, pointer)
+                        split_fraction_from_pointer(split_axis, split_layout.bounds, pointer)
                             .clamp(SPLIT_MIN_FRACTION, SPLIT_MAX_FRACTION);
-                    let current_fraction =
-                        target.projection_fraction(&projection_artifacts.workspace.fixed_layout);
+                    let current_fraction = active_target.fraction;
                     let changed = (next_fraction - current_fraction).abs() > 0.001;
                     if changed {
                         let _ = shell_state
-                            .set_workspace_split_fraction(target.workspace_kind(), next_fraction);
+                            .set_workspace_split_host_fraction(split_host_id, next_fraction);
                     }
-                    return Some(consumed_pointer_outcome(Some(target.widget_id()), changed));
+                    return Some(consumed_pointer_outcome(Some(split_widget_id), changed));
                 }
                 PointerEventKind::Up => {
                     shell_state.clear_split_resize();
-                    return Some(consumed_pointer_outcome(Some(target.widget_id()), false));
+                    return Some(consumed_pointer_outcome(Some(split_widget_id), false));
                 }
                 PointerEventKind::Down | PointerEventKind::Leave | PointerEventKind::Scroll => {
-                    return Some(consumed_pointer_outcome(Some(target.widget_id()), false));
+                    return Some(consumed_pointer_outcome(Some(split_widget_id), false));
                 }
             }
         }
@@ -705,10 +693,18 @@ impl RunenwerkEditorShellController {
             return None;
         }
 
+        if tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some() {
+            return None;
+        }
+
         let candidate =
             resolve_split_resize_target(pointer.position, layouts, projection_artifacts)?;
-        shell_state.begin_split_resize(candidate.workspace_kind());
-        Some(consumed_pointer_outcome(Some(candidate.widget_id()), false))
+        shell_state.begin_workspace_split_resize(
+            candidate.split_host_id,
+            candidate.widget_id,
+            candidate.axis,
+        );
+        Some(consumed_pointer_outcome(Some(candidate.widget_id), false))
     }
 }
 
@@ -717,52 +713,96 @@ fn resolve_split_resize_target(
     layouts: &ComputedLayoutMap,
     projection_artifacts: &editor_shell::ShellProjectionArtifacts,
 ) -> Option<SplitResizeTarget> {
-    [
-        SplitResizeTarget::BodyConsole,
-        SplitResizeTarget::LeftRight,
-        SplitResizeTarget::CenterRight,
-    ]
-    .into_iter()
-    .filter_map(|target| {
-        let layout = layouts.get(&target.widget_id())?;
-        let bounds = layout.bounds;
-        if !bounds.contains(cursor) {
-            return None;
-        }
-        let boundary = split_boundary_position(
-            target,
-            bounds,
-            target.projection_fraction(&projection_artifacts.workspace.fixed_layout),
-        );
-        let distance = match target.axis() {
-            ui_math::Axis::Horizontal => (cursor.x - boundary).abs(),
-            ui_math::Axis::Vertical => (cursor.y - boundary).abs(),
-        };
-        (distance <= SPLIT_HIT_SLOP_PX).then_some((distance, target))
-    })
-    .min_by(|(left, _), (right, _)| left.total_cmp(right))
-    .map(|(_, target)| target)
+    split_resize_targets(projection_artifacts)
+        .into_iter()
+        .filter_map(|target| {
+            let layout = layouts.get(&target.widget_id)?;
+            let bounds = layout.bounds;
+            if !bounds.contains(cursor) {
+                return None;
+            }
+            let boundary = split_boundary_position(target.axis, bounds, target.fraction);
+            let distance = match workspace_axis_to_ui_axis(target.axis) {
+                ui_math::Axis::Horizontal => (cursor.x - boundary).abs(),
+                ui_math::Axis::Vertical => (cursor.y - boundary).abs(),
+            };
+            (distance <= SPLIT_HIT_SLOP_PX).then_some((distance, target))
+        })
+        .min_by(|(left, _), (right, _)| left.total_cmp(right))
+        .map(|(_, target)| target)
 }
 
 fn split_boundary_position(
-    target: SplitResizeTarget,
+    axis: WorkspaceSplitAxis,
     bounds: ui_math::UiRect,
     fraction: f32,
 ) -> f32 {
-    match target.axis() {
+    match workspace_axis_to_ui_axis(axis) {
         ui_math::Axis::Horizontal => bounds.x + bounds.width * fraction,
         ui_math::Axis::Vertical => bounds.y + bounds.height * fraction,
     }
 }
 
 fn split_fraction_from_pointer(
-    target: SplitResizeTarget,
+    axis: WorkspaceSplitAxis,
     bounds: ui_math::UiRect,
     pointer: &PointerEvent,
 ) -> f32 {
-    match target.axis() {
+    match workspace_axis_to_ui_axis(axis) {
         ui_math::Axis::Horizontal => (pointer.position.x - bounds.x) / bounds.width.max(1.0),
         ui_math::Axis::Vertical => (pointer.position.y - bounds.y) / bounds.height.max(1.0),
+    }
+}
+
+fn split_resize_target_by_host(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    split_host_id: PanelHostId,
+) -> Option<SplitResizeTarget> {
+    split_resize_targets(projection_artifacts)
+        .into_iter()
+        .find(|target| target.split_host_id == split_host_id)
+}
+
+fn split_resize_targets(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+) -> Vec<SplitResizeTarget> {
+    let mut targets = Vec::new();
+    collect_split_resize_targets(&projection_artifacts.workspace.root_host, &mut targets);
+    targets
+}
+
+fn collect_split_resize_targets(
+    host: &ProjectedWorkspaceHostSlot,
+    targets: &mut Vec<SplitResizeTarget>,
+) {
+    match host {
+        ProjectedWorkspaceHostSlot::Split {
+            host_id,
+            widget_id,
+            axis,
+            fraction,
+            first_child,
+            second_child,
+            ..
+        } => {
+            targets.push(SplitResizeTarget {
+                split_host_id: *host_id,
+                widget_id: *widget_id,
+                axis: *axis,
+                fraction: *fraction,
+            });
+            collect_split_resize_targets(first_child, targets);
+            collect_split_resize_targets(second_child, targets);
+        }
+        ProjectedWorkspaceHostSlot::TabStack { .. }
+        | ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => {}
+    }
+}
+
+fn workspace_axis_to_ui_axis(axis: WorkspaceSplitAxis) -> ui_math::Axis {
+    match axis {
+        WorkspaceSplitAxis::Horizontal => ui_math::Axis::Horizontal,
+        WorkspaceSplitAxis::Vertical => ui_math::Axis::Vertical,
     }
 }
 
@@ -838,7 +878,96 @@ fn resolve_tab_drop_preview_target(
                 .get(&widget_id)
                 .copied()
         })
+        .or_else(|| tab_drop_route_at_pointer(projection_artifacts, layouts, pointer_position))
         .map(map_projected_tab_drop_target)
+}
+
+fn tab_drop_route_at_pointer(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Option<editor_shell::ProjectedTabDropRoute> {
+    let containing = projection_artifacts
+        .workspace
+        .tab_drop_route_by_widget_id
+        .iter()
+        .filter_map(|(widget_id, route)| {
+            let layout = layouts.get(widget_id)?;
+            layout.bounds.contains(pointer_position).then(|| {
+                let center_x = layout.bounds.x + layout.bounds.width * 0.5;
+                let center_y = layout.bounds.y + layout.bounds.height * 0.5;
+                let distance =
+                    (center_x - pointer_position.x).abs() + (center_y - pointer_position.y).abs();
+                (distance, *route)
+            })
+        })
+        .min_by(|left, right| left.0.total_cmp(&right.0))
+        .map(|(_, route)| route);
+    if containing.is_some() {
+        return containing;
+    }
+
+    projection_artifacts
+        .workspace
+        .tab_drop_route_by_widget_id
+        .iter()
+        .filter_map(|(widget_id, route)| {
+            let layout = layouts.get(widget_id)?;
+            let y_min = layout.bounds.y - 6.0;
+            let y_max = layout.bounds.y + layout.bounds.height + 6.0;
+            if pointer_position.y < y_min || pointer_position.y > y_max {
+                return None;
+            }
+            let center_x = layout.bounds.x + layout.bounds.width * 0.5;
+            let distance = (center_x - pointer_position.x).abs();
+            (distance <= 64.0).then_some((distance, *route))
+        })
+        .min_by(|left, right| left.0.total_cmp(&right.0))
+        .map(|(_, route)| route)
+}
+
+fn tab_button_route_at_pointer(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Option<editor_shell::ProjectedTabButtonRoute> {
+    let containing = projection_artifacts
+        .workspace
+        .tab_button_route_by_widget_id
+        .iter()
+        .filter_map(|(widget_id, route)| {
+            let layout = layouts.get(widget_id)?;
+            layout.bounds.contains(pointer_position).then(|| {
+                let center_x = layout.bounds.x + layout.bounds.width * 0.5;
+                let center_y = layout.bounds.y + layout.bounds.height * 0.5;
+                let distance =
+                    (center_x - pointer_position.x).abs() + (center_y - pointer_position.y).abs();
+                (distance, *route)
+            })
+        })
+        .min_by(|left, right| left.0.total_cmp(&right.0))
+        .map(|(_, route)| route);
+    if containing.is_some() {
+        return containing;
+    }
+
+    projection_artifacts
+        .workspace
+        .tab_button_route_by_widget_id
+        .iter()
+        .filter_map(|(widget_id, route)| {
+            let layout = layouts.get(widget_id)?;
+            let y_min = layout.bounds.y - 4.0;
+            let y_max = layout.bounds.y + layout.bounds.height + 4.0;
+            if pointer_position.y < y_min || pointer_position.y > y_max {
+                return None;
+            }
+            let center_x = layout.bounds.x + layout.bounds.width * 0.5;
+            let distance = (center_x - pointer_position.x).abs();
+            (distance <= 48.0).then_some((distance, *route))
+        })
+        .min_by(|left, right| left.0.total_cmp(&right.0))
+        .map(|(_, route)| route)
 }
 
 fn map_projected_tab_drop_target(

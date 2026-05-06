@@ -1,5 +1,9 @@
 use crate::editor_app::RunenwerkEditorApp;
-use crate::editor_features::scene_commands::execute_intent_with_history_from_origin;
+use crate::editor_features::scene_commands::{
+    create_child_with_history_from_origin, delete_entities_with_history_from_origin,
+    delete_entity_with_history_from_origin, duplicate_entity_subtree_with_history_from_origin,
+    rename_entity_with_history_from_origin, reparent_entity_with_history_from_origin,
+};
 use crate::editor_panels::{
     OutlinerPanelCommand, OutlinerPanelCommandResult, OutlinerPanelPresenter,
 };
@@ -14,17 +18,40 @@ pub fn dispatch_outliner_command(
         OutlinerPanelCommand::SelectEntity { entity } => {
             select_entity_from_outliner(app.runtime_mut(), entity)?;
         }
+        OutlinerPanelCommand::CreateChild {
+            parent,
+            display_name,
+        } => {
+            create_child_with_history_from_origin(
+                app.runtime_mut(),
+                parent,
+                display_name,
+                editor_core::ChangeOrigin::OutlinerPanel,
+            )
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
+        }
         OutlinerPanelCommand::RenameEntity {
             entity,
             new_display_name,
         } => {
-            execute_intent_with_history_from_origin(
+            rename_entity_with_history_from_origin(
                 app.runtime_mut(),
-                "Rename Entity",
-                editor_scene::SceneCommandIntent::RenameEntity {
-                    entity,
-                    new_display_name,
-                },
+                entity,
+                new_display_name,
+                editor_core::ChangeOrigin::OutlinerPanel,
+            )
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
+        }
+        OutlinerPanelCommand::DuplicateSubtree {
+            source,
+            new_parent,
+            name_suffix,
+        } => {
+            duplicate_entity_subtree_with_history_from_origin(
+                app.runtime_mut(),
+                source,
+                new_parent,
+                name_suffix,
                 editor_core::ChangeOrigin::OutlinerPanel,
             )
             .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
@@ -32,19 +59,26 @@ pub fn dispatch_outliner_command(
         OutlinerPanelCommand::ReparentEntity { entity, new_parent } => {
             app.runtime().validate_reparent(entity, new_parent)?;
 
-            execute_intent_with_history_from_origin(
+            reparent_entity_with_history_from_origin(
                 app.runtime_mut(),
-                "Reparent Entity",
-                editor_scene::SceneCommandIntent::ReparentEntity { entity, new_parent },
+                entity,
+                new_parent,
                 editor_core::ChangeOrigin::OutlinerPanel,
             )
             .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
         }
         OutlinerPanelCommand::DeleteEntity { entity } => {
-            execute_intent_with_history_from_origin(
+            delete_entity_with_history_from_origin(
                 app.runtime_mut(),
-                "Delete Entity",
-                editor_scene::SceneCommandIntent::DeleteEntity { entity },
+                entity,
+                editor_core::ChangeOrigin::OutlinerPanel,
+            )
+            .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;
+        }
+        OutlinerPanelCommand::DeleteEntities { entities } => {
+            delete_entities_with_history_from_origin(
+                app.runtime_mut(),
+                entities,
                 editor_core::ChangeOrigin::OutlinerPanel,
             )
             .map_err(|error| EditorMutationError::runtime_rejected(error.as_static_str()))?;

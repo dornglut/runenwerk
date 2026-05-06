@@ -97,3 +97,30 @@ pub struct RatifiedChange {
     pub migration_path: Option<MigrationPathId>,
     pub timestamp: SystemTime,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SceneChangeRatificationParams {
+    pub transaction: TransactionMetadata,
+    pub command_metadata: Vec<CommandMetadata>,
+    pub origin: ChangeOrigin,
+    pub semantic_operations: Vec<SemanticOperation>,
+    pub causality_id: Option<CausalityId>,
+}
+
+impl SceneChangeRatificationParams {
+    pub fn new(
+        transaction: TransactionMetadata,
+        command_metadata: Vec<CommandMetadata>,
+        origin: ChangeOrigin,
+        semantic_operations: Vec<SemanticOperation>,
+        causality_id: Option<CausalityId>,
+    ) -> Self {
+        Self {
+            transaction,
+            command_metadata,
+            origin,
+            semantic_operations,
+            causality_id,
+        }
+    }
+}

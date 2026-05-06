@@ -2,11 +2,13 @@ use editor_core::{ChangeOrigin, EntityId, SelectionTarget, SessionChangeKind, Wo
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_shell::{
     CONSOLE_SCROLL_WIDGET_ID, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID,
-    FLOATING_DROP_ZONE_WIDGET_ID, LEFT_RIGHT_SPLIT_WIDGET_ID, PanelKind, ShellCommand,
-    StructuralCommandTarget, SurfaceLocalAction, SurfaceProviderAvailability, SurfaceProviderId,
-    UiInteraction, UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-    VIEWPORT_PANEL_WIDGET_ID, WorkspaceMutation, map_interactions_to_shell_commands,
-    outliner_row_widget_id,
+    FLOATING_DROP_ZONE_WIDGET_ID, LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
+    PanelKind, SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget,
+    SurfaceLocalAction, SurfaceProviderAvailability, SurfaceProviderId, ToolSurfaceKind,
+    ToolbarCommandKind, ToolbarMenuKind, UiInteraction, UiInteractionResults,
+    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, WorkspaceMutation,
+    WorkspaceSplitAxis, map_interactions_to_shell_commands, outliner_row_widget_id,
+    workspace_split_host_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionProductId, ProducerHealth, ProductAvailabilityState,
@@ -80,6 +82,81 @@ fn dispatch_shell_command_updates_active_tool() {
     assert_eq!(
         app.runtime().session().active_tool(),
         Some(TRANSLATE_TOOL_ID)
+    );
+}
+
+#[test]
+fn dispatch_shell_command_handles_toolbar_menu_and_workspace_commands() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::ToggleToolbarMenu {
+            menu: ToolbarMenuKind::File,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("toolbar menu command should succeed");
+    assert_eq!(
+        shell_state.active_toolbar_menu(),
+        Some(ToolbarMenuKind::File)
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::RunToolbarCommand {
+            command: ToolbarCommandKind::NextWorkspace,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("next workspace command should succeed");
+    assert_eq!(
+        shell_state.active_workspace_profile_id(),
+        MODELLING_WORKSPACE_PROFILE_ID
+    );
+    assert_eq!(shell_state.active_toolbar_menu(), None);
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::RunToolbarCommand {
+            command: ToolbarCommandKind::PreviousWorkspace,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("previous workspace command should succeed");
+    assert_eq!(
+        shell_state.active_workspace_profile_id(),
+        SCENE_WORKSPACE_PROFILE_ID
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SwitchWorkspaceProfile {
+            profile_id: MODELLING_WORKSPACE_PROFILE_ID,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("explicit workspace switch command should succeed");
+    assert_eq!(
+        shell_state.active_workspace_profile_id(),
+        MODELLING_WORKSPACE_PROFILE_ID
     );
 }
 
@@ -884,6 +961,111 @@ fn editor_type_switch_replaces_mounted_surface_without_changing_panel_identity()
         app.surface_sessions().session(before_surface).is_none(),
         "switched-out surface session should be pruned"
     );
+}
+
+#[test]
+fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessions() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let (viewport_panel, _) =
+        panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::Viewport);
+    let before_surface = shell_state
+        .workspace_state()
+        .panel(viewport_panel)
+        .and_then(|panel| panel.active_tool_surface)
+        .expect("viewport panel should have active surface");
+    app.surface_sessions_mut()
+        .session_mut(before_surface)
+        .viewport_details_visible = true;
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SwitchPanelToolSurfaceKind {
+            panel_instance_id: viewport_panel,
+            tool_surface_kind: editor_shell::ToolSurfaceKind::Viewport,
+            projection_epoch: 1,
+        },
+        None,
+        None,
+        None,
+        Some(1),
+    )
+    .expect("same-kind editor type switch should dispatch through mounted surface seam");
+
+    let after_surface = shell_state
+        .workspace_state()
+        .panel(viewport_panel)
+        .and_then(|panel| panel.active_tool_surface)
+        .expect("switched panel should mount a replacement surface");
+    assert_ne!(before_surface, after_surface);
+    assert!(
+        app.surface_sessions().session(before_surface).is_none(),
+        "old surface-local state should be pruned after replacement"
+    );
+    assert_eq!(
+        app.surface_sessions()
+            .session(after_surface)
+            .map(|session| session.viewport_details_visible),
+        None,
+        "replacement surface should not inherit old viewport details state"
+    );
+
+    let frame_model = build_editor_shell_frame_model(
+        &app,
+        &shell_state,
+        app.surface_provider_registry(),
+        &ThemeTokens::default(),
+        None,
+        None,
+    );
+    let viewport_frame = frame_model
+        .surface(after_surface)
+        .expect("replacement viewport surface should resolve a provider frame");
+    assert_eq!(viewport_frame.panel_instance_id, viewport_panel);
+    assert_eq!(viewport_frame.title, "Viewport");
+    assert_eq!(
+        viewport_frame.availability,
+        SurfaceProviderAvailability::Available
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SwitchPanelToolSurfaceKind {
+            panel_instance_id: viewport_panel,
+            tool_surface_kind: editor_shell::ToolSurfaceKind::Placeholder,
+            projection_epoch: 2,
+        },
+        None,
+        None,
+        None,
+        Some(2),
+    )
+    .expect("unsupported editor type switch should still use mounted surface seam");
+
+    let unsupported_surface = shell_state
+        .workspace_state()
+        .panel(viewport_panel)
+        .and_then(|panel| panel.active_tool_surface)
+        .expect("placeholder switch should mount a surface");
+    let frame_model = build_editor_shell_frame_model(
+        &app,
+        &shell_state,
+        app.surface_provider_registry(),
+        &ThemeTokens::default(),
+        None,
+        None,
+    );
+    let unsupported_frame = frame_model
+        .surface(unsupported_surface)
+        .expect("unsupported mounted surface should still resolve a diagnostic frame");
+    assert_eq!(unsupported_frame.panel_instance_id, viewport_panel);
+    assert_eq!(
+        unsupported_frame.availability,
+        SurfaceProviderAvailability::Unsupported
+    );
+    assert!(unsupported_frame.routes.is_empty());
 }
 
 #[test]
@@ -2075,7 +2257,12 @@ fn dragging_left_right_split_border_updates_workspace_fraction() {
         .get(&LEFT_RIGHT_SPLIT_WIDGET_ID)
         .expect("left-right split layout should exist")
         .bounds;
-    let before = artifacts.workspace.fixed_layout.left_right_fraction;
+    let before = artifacts
+        .workspace
+        .fixed_layout
+        .as_ref()
+        .expect("fixed layout should project")
+        .left_right_fraction;
     let boundary_x = split_bounds.x + split_bounds.width * before;
     let pointer_down = UiPoint::new(boundary_x, split_bounds.y + split_bounds.height * 0.5);
     let pointer_move = UiPoint::new(pointer_down.x + 120.0, pointer_down.y);
@@ -2138,7 +2325,12 @@ fn dragging_left_right_split_border_applies_multiple_pointer_moves() {
         .get(&LEFT_RIGHT_SPLIT_WIDGET_ID)
         .expect("left-right split layout should exist")
         .bounds;
-    let before = artifacts.workspace.fixed_layout.left_right_fraction;
+    let before = artifacts
+        .workspace
+        .fixed_layout
+        .as_ref()
+        .expect("fixed layout should project")
+        .left_right_fraction;
     let boundary_x = split_bounds.x + split_bounds.width * before;
     let pointer_down = UiPoint::new(boundary_x, split_bounds.y + split_bounds.height * 0.5);
     let pointer_move_a = UiPoint::new(pointer_down.x + 60.0, pointer_down.y);
@@ -2190,6 +2382,94 @@ fn dragging_left_right_split_border_applies_multiple_pointer_moves() {
     assert!(
         (after_second_move - after_first_move).abs() > 0.01,
         "second move should continue adjusting split fraction in same drag session",
+    );
+}
+
+#[test]
+fn dragging_dynamic_split_border_updates_workspace_fraction() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+    let (_, viewport_stack_id) =
+        panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::Viewport);
+    let split_host_id = shell_state
+        .apply_workspace_mutation_with_allocations(|allocator| {
+            let split_host_id = allocator.allocate_panel_host_id();
+            let first_child_host_id = allocator.allocate_panel_host_id();
+            let second_child_host_id = allocator.allocate_panel_host_id();
+            let new_tab_stack_id = allocator.allocate_tab_stack_id();
+            let new_panel_id = allocator.allocate_panel_instance_id();
+            let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
+            (
+                WorkspaceMutation::SplitTabStackArea {
+                    tab_stack_id: viewport_stack_id,
+                    axis: WorkspaceSplitAxis::Horizontal,
+                    split_host_id,
+                    first_child_host_id,
+                    second_child_host_id,
+                    new_tab_stack_id,
+                    new_panel_id,
+                    new_panel_kind: PanelKind::Inspector,
+                    new_tool_surface_id,
+                    new_tool_surface_kind: ToolSurfaceKind::Inspector,
+                    fraction: 0.45,
+                },
+                split_host_id,
+            )
+        })
+        .expect("dynamic workspace split should be valid");
+
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let tree = shell_state
+        .last_tree()
+        .expect("shell tree should exist")
+        .clone();
+    let layouts = shell_state.runtime().compute_layout(&tree, bounds);
+    let split_widget_id = workspace_split_host_widget_id(split_host_id);
+    let split_bounds = layouts
+        .get(&split_widget_id)
+        .expect("dynamic split layout should exist")
+        .bounds;
+    let before = split_host_fraction(shell_state.workspace_state(), split_host_id);
+    let boundary_x = split_bounds.x + split_bounds.width * before;
+    let pointer_down = UiPoint::new(boundary_x, split_bounds.y + split_bounds.height * 0.5);
+    let pointer_move = UiPoint::new(pointer_down.x + 100.0, pointer_down.y);
+
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Down,
+        pointer_down,
+        Some(PointerButton::Primary),
+    );
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Move,
+        pointer_move,
+        None,
+    );
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Up,
+        pointer_move,
+        Some(PointerButton::Primary),
+    );
+
+    let after = split_host_fraction(shell_state.workspace_state(), split_host_id);
+    assert!(
+        (after - before).abs() > 0.02,
+        "dragging a dynamic split border should mutate that split host fraction",
     );
 }
 
@@ -2355,6 +2635,19 @@ fn left_right_split_fraction(workspace: &editor_shell::WorkspaceState) -> f32 {
         panic!("left-right host should be split host");
     };
     left_right_split.fraction
+}
+
+fn split_host_fraction(
+    workspace: &editor_shell::WorkspaceState,
+    split_host_id: editor_shell::PanelHostId,
+) -> f32 {
+    let host = workspace
+        .host(split_host_id)
+        .expect("split host should exist");
+    let editor_shell::PanelHostKind::SplitHost(split) = host.kind else {
+        panic!("host should be split host");
+    };
+    split.fraction
 }
 
 fn tab_widget_for_panel(

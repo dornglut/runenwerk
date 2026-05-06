@@ -2,9 +2,8 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::ToolAction;
 use crate::editor_features::scene_commands::execute_intent_with_history_from_origin;
 use crate::editor_runtime::{
-    TransformToolKind, clear_selection_with_origin,
-    commit_translation_preview_into_local_transform, select_single_component_with_origin,
-    select_single_entity_with_origin,
+    TransformToolKind, clear_selection_with_origin, commit_transform_preview_into_local_transform,
+    select_single_component_with_origin, select_single_entity_with_origin,
 };
 use editor_core::EditorMutationError;
 
@@ -57,18 +56,10 @@ pub fn dispatch_tool_action(
             app.tool_runtime_state_mut().set_hovered_entity(entity);
         }
         ToolAction::BeginPreview => {
-            let selection = app
-                .runtime()
-                .session()
-                .selection()
-                .primary()
-                .cloned()
-                .ok_or(EditorMutationError::session_rejected(
-                    "cannot begin preview without a primary selection",
-                ))?;
-
-            app.tool_runtime_state_mut()
-                .begin_preview(selection, TransformToolKind::Translate)?;
+            begin_preview(app, TransformToolKind::Translate)?;
+        }
+        ToolAction::BeginTransformPreview(tool) => {
+            begin_preview(app, tool)?;
         }
         ToolAction::UpdatePreview => {
             app.tool_runtime_state_mut().update_preview()?;
@@ -78,11 +69,7 @@ pub fn dispatch_tool_action(
                 EditorMutationError::session_rejected("no active preview session"),
             )?;
 
-            commit_translation_preview_into_local_transform(
-                app.runtime_mut(),
-                preview.entity,
-                preview.translation_delta,
-            )?;
+            commit_transform_preview_into_local_transform(app.runtime_mut(), &preview)?;
         }
         ToolAction::CancelPreview => {
             let _ = app.tool_runtime_state_mut().cancel_preview().ok_or(
@@ -91,6 +78,25 @@ pub fn dispatch_tool_action(
         }
     }
 
+    Ok(())
+}
+
+fn begin_preview(
+    app: &mut RunenwerkEditorApp,
+    tool: TransformToolKind,
+) -> Result<(), EditorMutationError> {
+    let selection = app
+        .runtime()
+        .session()
+        .selection()
+        .primary()
+        .cloned()
+        .ok_or(EditorMutationError::session_rejected(
+            "cannot begin preview without a primary selection",
+        ))?;
+
+    app.tool_runtime_state_mut()
+        .begin_preview(selection, tool)?;
     Ok(())
 }
 

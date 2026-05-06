@@ -14,6 +14,8 @@ pub struct TransformPreviewSession {
     pub tool: TransformToolKind,
     pub started_from_selection: SelectionTarget,
     pub translation_delta: Vec3Value,
+    pub rotation_delta_radians: Vec3Value,
+    pub scale_delta: Vec3Value,
 }
 
 impl TransformPreviewSession {
@@ -27,11 +29,23 @@ impl TransformPreviewSession {
             tool,
             started_from_selection,
             translation_delta: Vec3Value::zero(),
+            rotation_delta_radians: Vec3Value::zero(),
+            scale_delta: Vec3Value::zero(),
         }
     }
 
     pub fn with_translation_delta(mut self, delta: Vec3Value) -> Self {
         self.translation_delta = delta;
+        self
+    }
+
+    pub fn with_rotation_delta_radians(mut self, delta: Vec3Value) -> Self {
+        self.rotation_delta_radians = delta;
+        self
+    }
+
+    pub fn with_scale_delta(mut self, delta: Vec3Value) -> Self {
+        self.scale_delta = delta;
         self
     }
 }

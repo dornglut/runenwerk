@@ -272,7 +272,7 @@ pub struct InspectorEditableField {
 }
 
 fn collect_editable_fields(field: &InspectorField, out: &mut Vec<InspectorEditableField>) {
-    if field.children.is_empty() && is_supported_edit_value(&field.value) {
+    if field.children.is_empty() && !field.is_read_only && is_supported_edit_value(&field.value) {
         out.push(InspectorEditableField {
             display_name: field.display_name.clone(),
             path: field.path.clone(),

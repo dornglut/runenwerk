@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-04-29
+last_reviewed: 2026-05-06
 ---
 
 # Domain Layer Overview
@@ -40,6 +40,16 @@ Domain crates must not depend on:
 | Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
 | UI substrate | `domain/ui/*` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
 | Editor domains | `domain/editor/*` | [`editor/README.md`](./editor/README.md) |
+
+## Planned Domain Areas
+
+These areas are roadmap-level intent, not implemented workspace members.
+Do not add crate metadata for them until their implementation milestone lands.
+
+| Area | Planned crate | Primary docs | Notes |
+| --- | --- | --- | --- |
+| UI definition and formation | `domain/ui/ui_definition` | [`ui/roadmap.md`](./ui/roadmap.md), [`../design/active/ui-definition-formation-foundation-design.md`](../design/active/ui-definition-formation-foundation-design.md) | Planned M3.5 framework for authored UI templates, slots, repeaters, embeds, menus, availability, and retained UI formation. |
+| Editor definition and self-authoring | `domain/editor/editor_definition` | [`../design/active/ui-definition-formation-foundation-design.md`](../design/active/ui-definition-formation-foundation-design.md), [`../design/active/editor-self-authoring-and-final-ui-design.md`](../design/active/editor-self-authoring-and-final-ui-design.md), [`../apps/runenwerk-editor/roadmap.md`](../apps/runenwerk-editor/roadmap.md) | Planned M3.5 editor binding layer for toolbar, menus, workspace catalogs, shell chrome, and common provider surface templates; M3.6 extends it into visual UI/style/layout authoring. |
 
 ## What Belongs in Domain
 

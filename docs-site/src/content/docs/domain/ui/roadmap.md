@@ -5,9 +5,10 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-06
 related:
   - ./architecture.md
+  - ../../design/active/ui-definition-formation-foundation-design.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../design/active/editor-self-authoring-and-final-ui-design.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
@@ -33,6 +34,7 @@ Implemented and in use:
 - runtime viewport routing is structural-first with one explicit bootstrap-only single-viewport seam;
 - architecture guard tests enforce no `first_frame()` routing fallback and no `ViewportId(0)` synthesis;
 - viewport semantic slot taxonomy remains in `editor_viewport`, with opaque renderer-facing payload slots in `ui_render_data`.
+- no general UI definition/formation crate exists yet; top-level editor menus, workspace profile catalogs/default layouts, unavailable feature representation, and custom workspace catalog behavior remain code-defined in editor shell/app layers.
 
 Evidence in code:
 
@@ -107,20 +109,62 @@ Focus:
 - keep guard suites authoritative as behavior evolves;
 - keep architecture and roadmap pages synchronized with implemented seams.
 
+### Phase 7 - UI Definition Formation Framework
+
+Status: planned, not implemented.
+
+Owning design:
+
+- `docs-site/src/content/docs/design/active/ui-definition-formation-foundation-design.md`
+
+Decision:
+
+- keep the current retained UI tree plus tool-surface/canvas hybrid as the accepted execution path;
+- add a compiler-inspired definition/formation layer above the substrate instead of moving editor semantics into `domain/ui`;
+- treat authored and normalized UI definitions as execution-neutral source/IR;
+- keep compiled-reactive and ECS-driven UI execution deferred unless a future active design or accepted ADR promotes one. If promoted, they should become additional formation targets from the normalized model, not replacements for authored template identity.
+
+Owning planned crates:
+
+- `domain/ui/ui_definition`
+- `domain/editor/editor_definition`
+
+Scope:
+
+- authored UI templates, layout nodes, controls, menu/popover intent, theme references, route slots, value slots, collection slots, repeaters, template refs, embed slots, and availability references;
+- stable authored UI ids distinct from `WidgetId`, focus/capture ids, `PanelInstanceId`, and `ToolSurfaceInstanceId`;
+- validation, normalization, diagnostics, source/path maps, and a first retained-tree formation target;
+- generic availability descriptors so disabled/unavailable UI can render without routing fake commands;
+- editor-specific bindings for toolbar, menus, workspace catalogs, shell chrome, and common provider surface templates in `domain/editor/editor_definition`.
+
+Non-goals:
+
+- moving editor workspace profiles, panel/tab/tool-surface semantics, shell routing policy, provider execution, or app IO into `domain/ui/ui_definition`;
+- app provider registries, file IO, or runtime instantiation;
+- visual editor self-authoring implementation and user-authored document lifecycle inside M3.5; those move to the M3.6 UI self-authoring workspace after this framework is active;
+- baking retained `UiNodeKind`, runtime `WidgetId`, concrete shell commands, or ECS component/entity layout into authored UI templates;
+- ECS entities as authored UI/editor identities.
+
+Milestone placement:
+
+- the app roadmap inserts this as M3.5 before the promoted M3.6 UI self-authoring workspace and before M4 so new asset/procedural/editor-design workspace work does not add more hard-coded toolbar, menu, workspace, shell chrome, and provider surface structure.
+
 ## Current Now Tasks
 
-- [ ] Finish docking/tab behavior on top of existing structural identity and binding contracts. Status: active/partially implemented; automated coverage exists for tab reorder, rehome, floating host creation, split resizing, and structural identity preservation.
-- [ ] Expose editor-area/type switching with a retained select/dropdown route. Status: active/open; `ui_widgets::select` and `UiInteraction::SelectChanged` exist, but editor shell mapping currently ignores select changes and no panel-level editor-type selector is rendered.
-- [ ] Add plus/new-tab affordance for tab stacks. Status: open; current workspace behavior can reorder/rehome/float existing tabs, but no shell control creates a new panel/tool-surface tab.
+- [x] Finish docking/tab behavior on top of existing structural identity and binding contracts. Status: implemented and test-covered; automated coverage exists for tab reorder, rehome, floating host creation, split resizing, area split/duplicate/reset/close, dynamic split-area composition, and structural identity preservation.
+- [x] Expose editor-area/type switching with a retained select/dropdown route. Status: implemented and test-covered; tab chrome renders an editor type selector and maps `SelectChanged` to `SwitchPanelToolSurfaceKind`.
+- [x] Add plus/new-tab affordance for tab stacks. Status: implemented and test-covered; tab chrome exposes a plus/new-tab control that allocates panel and tool-surface identities after structural ratification.
 - [ ] Expand non-viewport surface maturity (entity-table/query, richer inspector controls) using existing surface contracts. Status: active/partially implemented; entity-table, console, inspector, outliner, provider routing, and independent surface-session coverage exists, but richer common workflows remain open.
 - [ ] Broaden reusable control adoption in editor surfaces. Status: active/open; controls exist in `domain/ui/*`, but shell surfaces still contain panel-specific composition and some ad hoc row/button patterns where retained tree/table/numeric/toggle/select controls should become the default.
-- [ ] Prepare UI/editor self-authoring design before implementation. Status: target design exists in `design/active/editor-self-authoring-and-final-ui-design.md`; implementation remains boundary-gated until document/provider/mode/docking foundations are closed.
 - [ ] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard coverage exists in `apps/runenwerk_editor/tests/viewport_architecture_guards.rs` and related shell/provider tests.
+- [ ] Add the planned UI definition formation framework before M3.6 and M4. Status: planned M3.5; docs now define the full framework, editor binding layer, and migration scope, but no crate or workspace metadata exists yet.
+- [ ] Implement the promoted UI self-authoring workspace before M4. Status: planned M3.6; the active self-authoring design is now Now-track and should provide visual UI/layout/style/binding authoring before later feature surfaces are built.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-05.
 
 ## Non-Goals for This Track
 
 - redesigning renderer architecture;
-- introducing full authored editor-definition workflows now;
+- introducing the visual editor or user-authored document lifecycle inside M3.5;
 - collapsing surface semantics into shell or runtime substrate layers;
 - moving privileged ratification ownership into generic UI substrate code.
+- using ECS entities, runtime widget ids, or shell session ids as durable authored UI/editor identity.

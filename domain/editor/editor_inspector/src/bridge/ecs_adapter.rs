@@ -204,7 +204,8 @@ fn build_leaf_field(
         }
     };
 
-    InspectorField::new(stable_name, display_name, path, inspector_value).read_only(true)
+    let is_read_only = matches!(inspector_value, InspectorValue::Unsupported { .. });
+    InspectorField::new(stable_name, display_name, path, inspector_value).read_only(is_read_only)
 }
 
 #[cfg(test)]

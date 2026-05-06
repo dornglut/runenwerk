@@ -5,9 +5,10 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-06
 related_designs:
   - ../../design/active/workspace-field-world-and-simulation-platform-design.md
+  - ../../design/active/ui-definition-formation-foundation-design.md
   - ../../design/active/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
   - ../../design/active/editor-self-authoring-and-final-ui-design.md
@@ -47,7 +48,7 @@ Make the Runenwerk editor feature-complete end to end:
 - an SDF/field-world-first asset pipeline that imports, validates, forms field products, caches, previews, hot-reloads, and publishes authored content;
 - authoring workspaces for UI, graphs/materials/textures, SDF modeling, procedural generation, gameplay graph ATR IR, particles, physics, animation, scripting, debugging, and editor design;
 - play/simulate/runtime preview with explicit data hot reload and code rebuild boundaries;
-- final self-authoring workflows for workspace layouts, UI layouts, menus, shortcuts, themes, command bindings, and tool-surface definitions.
+- current self-authoring workflows for workspace layouts, UI layouts, menus, shortcuts, themes, command bindings, and tool-surface definitions before later asset/procedural/gameplay editors are built on top of more hard-coded UI.
 
 This is not a deferral list. Every phase below is required for feature completion. Later phases are ordered after their prerequisites, not optional.
 
@@ -74,16 +75,12 @@ Current implemented baseline:
 - Shader reload helpers exist in `engine/src/plugins/render/shader/hot_reload.rs::poll_shader_hot_reload` and `engine/src/plugins/shared/reload.rs`.
 - `assets/editor/config.ron` contains a Blender path, and `assets/models/*.blend` plus `assets/models/*.glb` exist, but those files are foreign-source/reference content today. They are not the canonical world representation and no importer/catalog/cache pipeline currently owns them.
 
-Current blocking gaps:
+Current post-M3 gaps:
 
-- `domain/editor/editor_core/src/document.rs::DocumentKind` is too coarse for final document workflows.
-- `domain/editor/editor_core/src/session.rs::EditorSession` stores documents, but it does not own ordered document tabs, active-tab commands, compatibility validation, or non-scene document state.
-- `apps/runenwerk_editor/src/editor_runtime/document/mod.rs::SceneDocumentState` is scene-specific and is not a generic document runtime.
-- `domain/editor/editor_core/src/session.rs::EditorMode` is a global enum instead of scoped workspace/document mode contracts.
-- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame` renders tab buttons and drop slots, but not editor type selectors, plus/new-tab controls, area menus, close controls, or document tabs.
-- `domain/editor/editor_shell/src/commands/map_interactions.rs::map_interactions_to_shell_commands` intentionally ignores `SelectChanged`, `TabSelected`, `TreeRowSelected`, `TreeRowToggled`, `Toggled`, and `NumericStepped` for shell-level workflows.
-- `apps/runenwerk_editor/src/editor_runtime/commands/ratification.rs::ratify_scene_change`, `apps/runenwerk_editor/src/editor_runtime/commands/scene_commands.rs::execute_scene_command_and_push_history_with_origin`, and `apps/runenwerk_editor/src/editor_runtime/commands/transactions.rs::execute_scene_transaction_and_push_history_with_origin_and_causality` still own domain-like operation orchestration in the app crate.
-- Rotate, scale, duplicate, broader create/delete flows, SDF primitive creation, brush/layer workflows, and richer inspector/component authoring are incomplete.
+- M1 structural seams are closed: `DocumentKind` has the explicit M1 taxonomy, `EditorSession` owns ordered document tabs, active switching, dirty/save/close transitions, document compatibility validation, and mode ids/descriptors/registry compatibility rules; app-local generic document-tab runtime state is split from scene-specific document state.
+- M2 shell seams are closed: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage.
+- M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
+- There is no general UI definition/formation crate yet; toolbar/menu structure, workspace profile catalogs/default layouts, disabled or unavailable feature representation, and custom workspace catalogs remain code-defined in editor shell/app layers.
 - There is no asset catalog, asset id model, dependency graph, import plan, artifact cache, asset browser, import diagnostics surface, project-wide asset hot reload workflow, field-product formation pipeline, SDF/world asset taxonomy, or `world_sdf` artifact/cache bridge.
 - There is no `domain/material_graph`, `domain/texture`, `domain/procgen`, `domain/particles`, `domain/physics`, or `domain/animation`.
 - There are no editor providers for material graph editing, procedural texturing, Texture3D/volume inspection, procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview.
@@ -91,11 +88,13 @@ Current blocking gaps:
 
 ## Implementation Readiness
 
-- M1 through M3 are implementation-ready against current editor, shell, UI, scene, SDF, and persistence docs.
-- M4 and M5 are implementation-ready once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
+- M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
+- M3.5 is the next UI/editor infrastructure slice: add a full UI definition formation framework before M3.6 and M4 so new asset/procedural/editor-design surfaces do not add more hard-coded menu, toolbar, shell chrome, provider surface, workspace, and unavailable-feature structure.
+- M3.6 is the promoted self-authoring/UI workspace slice: build the UI workspace, visual definition authoring, style/theme editing, validation, preview, and apply/rollback flows now so later asset, procedural, gameplay, runtime, and overlay UI can be authored through the same system.
+- M4 and M5 are the next content-pipeline track after M3.5 and M3.6 once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
 - M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
-- M8 is implementation-ready for the retained UI path. Compiled-reactive or ECS-driven UI execution remains blocked unless it receives an active design or accepted ADR before M2 starts.
+- Later self-authoring packaging/extensibility is implementation-ready for the retained UI path only. Compiled-reactive or ECS-driven UI execution remains blocked; neither strategy was promoted before M2, and any future promotion requires a separate active design or accepted ADR plus a roadmap update.
 - M9 is release-readiness verification, not a feature construction phase.
 
 ## Milestones
@@ -109,11 +108,13 @@ Exit criteria:
 - Procedural authoring, material/texturing, particles, physics, animation, and simulation workflows are captured in `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`.
 - Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
 - The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/active/workspace-field-world-and-simulation-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
-- UI execution strategy is closed for M1 through M7: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution may only enter this roadmap after a concrete active design or accepted ADR is created before M2 starts.
+- UI execution strategy is closed for M1 through M7 and M3.5/M3.6: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution remains deferred and may not enter self-authoring as a first-time decision.
 - Existing MVP, UI, editor, render, and runtime design docs link to this roadmap without restating stale phase order.
 - `python3 tools/docs/validate_docs.py` passes.
 
 ### M1 - Editor Structural Core Closed
+
+Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M3.5 UI definition formation framework and M3.6 UI self-authoring workspace are the next infrastructure milestones before M4 asset pipeline foundation, while procedural domains and gameplay graph remain deferred.
 
 Purpose: close the structural seams that every later feature depends on.
 
@@ -150,6 +151,8 @@ Validation:
 
 Purpose: productize the editor shell as a real work surface, not a fixed MVP panel layout.
 
+Status: complete as of 2026-05-05. The reducer, persistence, shell command, tab chrome, interaction mapping, app allocator/pruning seams, dynamic workspace graph projection/composition, and projected-host split resizing are implemented and covered by focused shell/app tests. The old fixed-layout projection remains only as a compatibility view for legacy default-layout guards.
+
 Implementation targets:
 
 - `domain/editor/editor_shell/src/workspace/reducer.rs::WorkspaceMutation`
@@ -176,6 +179,8 @@ Validation:
 ### M3 - Scene Authoring Feature Complete
 
 Purpose: finish the core 3D editor before expanding into every other workspace.
+
+Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M3.5 UI definition formation framework is the next milestone; M3.6 UI self-authoring workspace follows it before M4 asset pipeline foundation.
 
 Implementation targets:
 
@@ -207,6 +212,125 @@ Validation:
 - GPU smoke manually when visual acceptance matters:
   `RUNENWERK_ENABLE_GPU_SMOKE=1 RUNENWERK_ENABLE_MACOS_MAIN_THREAD_GPU_SMOKE=1 cargo test -p runenwerk_editor --test viewport_gpu_truth_smoke -- --ignored`
 
+### M3.5 - UI Definition Formation Framework
+
+Purpose: introduce the first full UI definition framework before M3.6 and M4, including generic UI templates, RON-authored fixture loading, editor bindings, retained UI formation, and migration of stable editor chrome/common surface structure. M3.6 starts the visual editor and user-authored document lifecycle on top of this framework.
+
+Owning design:
+
+- `docs-site/src/content/docs/design/active/ui-definition-formation-foundation-design.md`
+
+Rationale:
+
+- M4 and later milestones will add many asset, workspace, menu, diagnostics, and preview surfaces; adding them through more shell/app hard-coding would multiply the current toolbar/layout friction.
+- The framework belongs above the retained UI substrate, not inside editor-specific shell code.
+- Authored UI definitions should be stable source/IR. Retained UI is the first formation target, not the permanent authored format.
+- M3.6 should edit and manage definitions immediately after this slice; it should not be the first milestone to define the underlying UI definition contracts.
+- The milestone should prove the model by migrating the toolbar, menus, workspace switcher, shell chrome, and common provider surface structure instead of leaving legacy builders as parallel sources of truth.
+
+Implementation targets:
+
+- future `domain/ui/ui_definition/src/lib.rs`
+  - add the planned engine-agnostic UI definition crate under the UI domain crate family.
+- future `domain/ui/ui_definition/src/identity.rs`
+  - define stable authored UI ids that are distinct from `WidgetId`, focus/capture ids, `PanelInstanceId`, `ToolSurfaceInstanceId`, and ECS entity ids.
+- future `domain/ui/ui_definition/src/template.rs`, `src/node.rs`, `src/slot.rs`, `src/menu.rs`, `src/embed.rs`, and `src/availability.rs`
+  - model authored UI templates, structural nodes, controls, menus, slots, repeaters, template refs, embed slots, and availability definitions without editor-specific command semantics, retained `UiNodeKind`, runtime `WidgetId`, ECS entity ids, or compiled update functions.
+- future `domain/ui/ui_definition/src/normalize.rs`
+  - canonicalize ordering, resolve generic references, and report duplicate ids or malformed structures.
+- future `domain/ui/ui_definition/src/validate.rs`
+  - validate ids, slot references, template refs, repeaters, embed slots, availability refs, and unsupported node combinations with structured diagnostics.
+- future `domain/ui/ui_definition/src/form.rs`
+  - form validated definitions into retained UI products consumed by `ui_tree`, `ui_widgets`, and `ui_runtime` as the first target; formation emits route slots, embed slots, authored paths, and availability/diagnostic state, not command execution.
+- future `domain/editor/editor_definition/src/lib.rs`
+  - add the planned editor-specific definition crate above `ui_definition` and below `editor_shell`.
+- future `domain/editor/editor_definition/src/toolbar.rs`, `src/menu.rs`, `src/workspace.rs`, `src/surface.rs`, `src/command.rs`, `src/availability.rs`, `src/binding.rs`, `src/validate.rs`, and `src/form_editor_ui.rs`
+  - define editor menu ids, workspace catalog entries, command route ids, availability descriptors, toolbar bindings, shell chrome bindings, and common provider surface template bindings without importing active shell runtime state or app IO.
+- future `assets/editor/ui/*.ron`
+  - add checked-in RON templates for toolbar, shell chrome, common provider surfaces, and editor bindings.
+- `domain/editor/editor_shell/src/composition/build_toolbar.rs::build_toolbar`
+  - migrate toolbar structure to formed definitions and remove `stable_name` string routing as the source of truth.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame`
+  - template-form stable tab-stack/area chrome while keeping workspace mutation and panel identity ownership in `editor_shell`.
+- `domain/editor/editor_shell/src/composition/build_inspector_panel.rs::build_inspector_panel`, `build_outliner_panel.rs::build_outliner_panel`, `build_entity_table_panel.rs::build_entity_table_panel`, `build_viewport_panel.rs::build_viewport_panel`, and `build_console_panel.rs::build_console_panel`
+  - migrate repeated list/tree/table/form/chrome structure to templates while providers continue supplying data, embed payloads, and route results.
+- `DOMAIN_MAP.md` and `docs-site/src/content/docs/domain/00-overview.md`
+  - keep the planned ownership marked as planned until the crates are actually added to workspace metadata.
+
+Non-goals:
+
+- no editor workspace/profile catalog implementation in `domain/ui/ui_definition`;
+- no app provider registry, file IO, or runtime instantiation;
+- no visual workspace layout designer, menu editor, theme editor, or shortcut editor inside M3.5; those are M3.6;
+- no compiled-reactive or ECS-driven UI execution path;
+- no retained-tree-specific authored source model that would force template rewrites for future accepted execution strategies;
+- no authored ids derived from runtime/session ids or ECS entities.
+
+Validation:
+
+- when code lands: `cargo test -p ui_definition -p editor_definition -p ui_tree -p ui_runtime -p ui_widgets -p editor_shell`;
+- after crate metadata changes: `cargo metadata --no-deps`;
+- for docs-only planning updates: `python3 tools/docs/validate_docs.py`.
+
+### M3.6 - UI Self-Authoring Workspace And Styling
+
+Purpose: move the former final self-authoring/UI design work into the Now track so Runenwerk can style, inspect, validate, preview, and author UI definitions before later asset, procedural, gameplay, runtime, overlay, and in-game UI surfaces are built.
+
+Owning design:
+
+- `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`
+
+Rationale:
+
+- Later editor features will need many custom surfaces. Building those first in Rust and only adding self-authoring at the end would recreate the hard-coded toolbar/surface problem at a larger scale.
+- The UI workspace should be the tool used to build later editor UI, debug overlays, and runtime/game UI templates, while behavior and command execution remain owned by their domains/app layers.
+- This milestone starts visual authoring, but it remains bounded to definition documents, retained preview/formation, explicit command routing, and ratified changes.
+
+Implementation targets:
+
+- `domain/editor/editor_core/src/document.rs::DocumentKind`
+  - activate the UI layout, workspace definition, theme, shortcut, menu, command binding, panel registry, tool-surface definition, and editor definition document kinds for the authoring workspace.
+- `domain/editor/editor_definition/src/lib.rs`
+  - extend the M3.5 editor binding layer into durable workspace profile, layout, menu, shortcut, command binding, panel registry, and tool-surface definition schemas.
+- future `domain/ui/ui_definition/src/migration.rs`
+  - add versioned authored UI definition migrations where needed for saved templates and style documents.
+- `domain/editor/editor_shell/src/workspace/state.rs`
+  - keep active workspace state session-owned and separate from authored workspace definitions while supporting preview/apply/rollback of formed workspace definitions.
+- `apps/runenwerk_editor/src/shell/providers/editor_design_outliner.rs::EditorDesignOutlinerProvider`
+  - show authored definition hierarchy, references, validation state, and dirty state.
+- `apps/runenwerk_editor/src/shell/providers/ui_hierarchy.rs::UiHierarchyProvider`
+  - show and edit the authored UI tree through ratified commands.
+- `apps/runenwerk_editor/src/shell/providers/ui_canvas.rs::UiCanvasProvider`
+  - preview formed UI definitions with selection handles, responsive preview sizes, and state fixtures.
+- `apps/runenwerk_editor/src/shell/providers/style_inspector.rs::StyleInspectorProvider`
+  - edit theme tokens, style references, layout constraints, spacing, typography, colors, and control state styling.
+- `apps/runenwerk_editor/src/shell/providers/bindings_panel.rs::BindingsPanelProvider`
+  - edit slot, action route, availability, collection, selection, and embed bindings without executing commands directly.
+- `apps/runenwerk_editor/src/shell/providers/dock_layout_preview.rs::DockLayoutPreviewProvider`
+  - preview formed workspace definitions before applying them.
+- `apps/runenwerk_editor/src/shell/providers/theme_editor.rs::ThemeEditorProvider`
+  - edit and preview theme definitions.
+- `apps/runenwerk_editor/src/shell/providers/shortcut_editor.rs::ShortcutEditorProvider`
+  - edit shortcuts with conflict diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/menu_editor.rs::MenuEditorProvider`
+  - edit menu definitions and command bindings.
+- `apps/runenwerk_editor/src/shell/providers/definition_validation.rs::DefinitionValidationProvider`
+  - show blocking errors, warnings, migrations, unresolved references, capability issues, command route issues, and source paths.
+- `apps/runenwerk_editor/src/shell/providers/command_diff.rs::CommandDiffProvider`
+  - show the exact ratified definition change before apply/activation.
+- `docs-site/src/content/docs/design/deferred/ui-model-multiple-execution-strategies-design.md`
+  - keep the M0 UI execution-strategy decision visible during self-authoring. M3.6 must not introduce compiled-reactive or ECS-driven UI execution for the first time; any future promotion requires a separate active design or accepted ADR, guard tests, and roadmap update.
+
+Validation:
+
+- create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, and migrate UI/editor definitions;
+- style/theme edits update retained preview without mutating active runtime state until ratified;
+- UI canvas and hierarchy edits are undoable through ratified commands;
+- validation blocks malformed definitions from becoming active;
+- editor, debug overlay, and runtime/game UI template categories can be authored as definitions even when later runtime bindings are not yet executable;
+- active runtime/session-only ids are never persisted as authored ids;
+- self-authoring follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time.
+
 ### M4 - SDF/Field Asset Pipeline Foundation
 
 Purpose: make project content explicit and field-world-first instead of loose files discovered by unrelated runtime systems.
@@ -218,7 +342,7 @@ Implementation targets:
 - `domain/asset/src/id.rs`
   - define typed ids for assets, sources, imported artifacts, import jobs, and asset revisions.
 - `domain/asset/src/kind.rs`
-  - define asset kinds for scene, prefab, SDF graph, SDF brush/layer, field-world definition, world edit log, field material channels, formed field product, `world_sdf` chunk/page artifact, clipmap/brickmap product, material graph, material, procedural material, procedural texture, Texture2D, Texture3D/volume texture, gameplay graph, gameplay rule/trigger, gameplay ability, gameplay quest, gameplay ATR IR product, gameplay ECS lowering product, particle graph, particle emitter, physics config, animation clip, animation graph, procgen graph, UI layout, graph, script, shader, theme, menu, shortcut, workspace definition, editor definition, and foreign mesh/reference source. Mesh/glTF kinds are interop/reference kinds, not the primary world substrate.
+  - define asset kinds for scene, prefab, SDF graph, SDF brush/layer, field-world definition, world edit log, field material channels, formed field product, `world_sdf` chunk/page artifact, clipmap/brickmap product, material graph, material, procedural material, procedural texture, Texture2D, Texture3D/volume texture, gameplay graph, gameplay rule/trigger, gameplay ability, gameplay quest, gameplay ATR IR product, gameplay ECS lowering product, particle graph, particle emitter, physics config, animation clip, animation graph, procgen graph, UI layout, UI definition, graph, script, shader, theme, menu, shortcut, workspace definition, editor definition, and foreign mesh/reference source. Mesh/glTF kinds are interop/reference kinds, not the primary world substrate.
 - `domain/asset/src/source.rs`
   - model source files, source hashes, source provenance, external source roots, authored SDF/field documents, and foreign source roots.
 - `domain/asset/src/artifact.rs`
@@ -440,38 +564,31 @@ Validation:
 - runtime execution consumes formed gameplay graph products, not live authored graph traversal;
 - script actions request domain/runtime commands instead of directly mutating ECS internals.
 
-### M8 - Final UI Self-Authoring And Editor Design
+### M8 - UI Authoring Packaging, Extensibility, And Externalization
 
-Purpose: let Runenwerk author its own editor/UI definitions after the host editor is complete enough to support it.
+Purpose: harden the M3.6 self-authoring system for specialized editor packaging, external definition exchange, and long-lived project migration after the main asset/procedural/runtime feature tracks exist.
 
 Implementation targets:
 
-- future `domain/editor/editor_definition/src/lib.rs`
-  - own authored editor/workspace/UI/menu/theme/shortcut/command binding/panel registry/tool-surface definition schemas.
-- `domain/editor/editor_core/src/document.rs::DocumentKind`
-  - use the final definition document kinds from M1.
-- `domain/editor/editor_shell/src/workspace/state.rs`
-  - keep active workspace state session-owned and separate from authored workspace definitions.
-- `apps/runenwerk_editor/src/shell/providers/editor_design_outliner.rs::EditorDesignOutlinerProvider`
-  - show authored definition hierarchy.
-- `apps/runenwerk_editor/src/shell/providers/dock_layout_preview.rs::DockLayoutPreviewProvider`
-  - preview formed workspace definitions before applying them.
-- `apps/runenwerk_editor/src/shell/providers/theme_editor.rs::ThemeEditorProvider`
-  - edit and preview theme definitions.
-- `apps/runenwerk_editor/src/shell/providers/shortcut_editor.rs::ShortcutEditorProvider`
-  - edit shortcuts with conflict diagnostics.
-- `apps/runenwerk_editor/src/shell/providers/menu_editor.rs::MenuEditorProvider`
-  - edit menu definitions and command bindings.
+- `domain/editor/editor_definition/src/package.rs`
+  - define exportable editor-definition package manifests, dependency references, compatibility ranges, and migration metadata.
+- `domain/ui/ui_definition/src/package.rs`
+  - define exportable UI-template/theme package manifests without app IO or runtime execution.
+- `apps/runenwerk_editor/src/persistence/editor_definition_package.rs`
+  - import/export packages through app-owned file IO and project policy.
+- `apps/runenwerk_editor/src/shell/providers/editor_package_publisher.rs::EditorPackagePublisherProvider`
+  - validate and publish specialized editor packages from authored definitions.
+- `apps/runenwerk_editor/src/shell/providers/definition_migration_report.rs::DefinitionMigrationReportProvider`
+  - show cross-project migration reports and unresolved compatibility issues.
 - `docs-site/src/content/docs/design/deferred/ui-model-multiple-execution-strategies-design.md`
-  - keep the M0 UI execution-strategy decision visible during final self-authoring. M8 must not introduce compiled-reactive or ECS-driven UI execution for the first time; any promoted strategy must already have an active design and guard tests before M2 starts.
+  - keep the M0 UI execution-strategy decision visible. M8 must not introduce compiled-reactive or ECS-driven UI execution for the first time; any future promotion requires a separate active design or accepted ADR, guard tests, and roadmap update.
 
 Validation:
 
-- create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, and migrate definitions;
-- validation blocks malformed definitions from becoming active;
-- edits are undoable through ratified commands;
-- final self-authoring follows the UI execution strategy closed in M0; if a strategy was promoted before M2, M8 verifies its authored-definition and preview boundaries instead of deciding them for the first time;
-- active runtime/session-only ids are never persisted as authored ids.
+- package import/export preserves authored ids, source maps, diagnostics, migrations, and compatibility metadata;
+- published specialized editor packages cannot activate invalid UI/editor definitions;
+- package publishing follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time;
+- active runtime/session-only ids are never exported as authored ids.
 
 ### M9 - Hardening, Release Readiness, And Full Gate
 

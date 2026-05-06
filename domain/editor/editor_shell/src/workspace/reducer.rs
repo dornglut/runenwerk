@@ -3,8 +3,9 @@
 
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
-    PanelInstanceId, TabStackId, TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind,
-    ToolSurfaceMount, ToolSurfaceState, WorkspaceState, WorkspaceStateError,
+    PanelInstanceId, PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId,
+    TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState,
+    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +18,56 @@ pub enum WorkspaceMutation {
     SetTabStackActivePanel {
         tab_stack_id: TabStackId,
         active_panel: Option<PanelInstanceId>,
+    },
+    AddPanelTab {
+        tab_stack_id: TabStackId,
+        panel_id: PanelInstanceId,
+        panel_kind: PanelKind,
+        tool_surface_id: ToolSurfaceInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
+        activate_panel: bool,
+    },
+    ClosePanelTab {
+        tab_stack_id: TabStackId,
+        panel_id: PanelInstanceId,
+    },
+    CloseOtherPanelTabs {
+        tab_stack_id: TabStackId,
+        keep_panel_id: PanelInstanceId,
+    },
+    SplitTabStackArea {
+        tab_stack_id: TabStackId,
+        axis: WorkspaceSplitAxis,
+        split_host_id: PanelHostId,
+        first_child_host_id: PanelHostId,
+        second_child_host_id: PanelHostId,
+        new_tab_stack_id: TabStackId,
+        new_panel_id: PanelInstanceId,
+        new_panel_kind: PanelKind,
+        new_tool_surface_id: ToolSurfaceInstanceId,
+        new_tool_surface_kind: ToolSurfaceKind,
+        fraction: f32,
+    },
+    DuplicateTabStackArea {
+        tab_stack_id: TabStackId,
+        new_panel_id: PanelInstanceId,
+        new_tool_surface_id: ToolSurfaceInstanceId,
+    },
+    CloseTabStackArea {
+        tab_stack_id: TabStackId,
+    },
+    ResetTabStackArea {
+        tab_stack_id: TabStackId,
+        panel_id: PanelInstanceId,
+        tool_surface_id: ToolSurfaceInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
+    },
+    LockTabStackAreaType {
+        tab_stack_id: TabStackId,
+        locked_tool_surface_kind: Option<ToolSurfaceKind>,
+    },
+    ApplySavedLayoutPreset {
+        workspace_state: Box<WorkspaceState>,
     },
     AttachToolSurfaceToPanel {
         panel_id: PanelInstanceId,
@@ -100,6 +151,90 @@ fn apply_mutation(
                 .get_mut(&tab_stack_id)
                 .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
             stack.active_panel = active_panel;
+        }
+        WorkspaceMutation::AddPanelTab {
+            tab_stack_id,
+            panel_id,
+            panel_kind,
+            tool_surface_id,
+            tool_surface_kind,
+            activate_panel,
+        } => add_panel_tab(
+            state,
+            tab_stack_id,
+            panel_id,
+            panel_kind,
+            tool_surface_id,
+            tool_surface_kind,
+            activate_panel,
+        )?,
+        WorkspaceMutation::ClosePanelTab {
+            tab_stack_id,
+            panel_id,
+        } => close_panel_tab(state, tab_stack_id, panel_id)?,
+        WorkspaceMutation::CloseOtherPanelTabs {
+            tab_stack_id,
+            keep_panel_id,
+        } => close_other_panel_tabs(state, tab_stack_id, keep_panel_id)?,
+        WorkspaceMutation::SplitTabStackArea {
+            tab_stack_id,
+            axis,
+            split_host_id,
+            first_child_host_id,
+            second_child_host_id,
+            new_tab_stack_id,
+            new_panel_id,
+            new_panel_kind,
+            new_tool_surface_id,
+            new_tool_surface_kind,
+            fraction,
+        } => split_tab_stack_area(
+            state,
+            tab_stack_id,
+            axis,
+            split_host_id,
+            first_child_host_id,
+            second_child_host_id,
+            new_tab_stack_id,
+            new_panel_id,
+            new_panel_kind,
+            new_tool_surface_id,
+            new_tool_surface_kind,
+            fraction,
+        )?,
+        WorkspaceMutation::DuplicateTabStackArea {
+            tab_stack_id,
+            new_panel_id,
+            new_tool_surface_id,
+        } => duplicate_tab_stack_area(state, tab_stack_id, new_panel_id, new_tool_surface_id)?,
+        WorkspaceMutation::CloseTabStackArea { tab_stack_id } => {
+            close_tab_stack_area(state, tab_stack_id)?
+        }
+        WorkspaceMutation::ResetTabStackArea {
+            tab_stack_id,
+            panel_id,
+            tool_surface_id,
+            tool_surface_kind,
+        } => reset_tab_stack_area(
+            state,
+            tab_stack_id,
+            panel_id,
+            tool_surface_id,
+            tool_surface_kind,
+        )?,
+        WorkspaceMutation::LockTabStackAreaType {
+            tab_stack_id,
+            locked_tool_surface_kind,
+        } => {
+            state
+                .tab_stacks_by_id
+                .get_mut(&tab_stack_id)
+                .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?
+                .locked_tool_surface_kind = locked_tool_surface_kind;
+        }
+        WorkspaceMutation::ApplySavedLayoutPreset { workspace_state } => {
+            workspace_state.validate_integrity()?;
+            *state = *workspace_state;
         }
         WorkspaceMutation::AttachToolSurfaceToPanel {
             panel_id,
@@ -217,6 +352,17 @@ fn apply_mutation(
             tool_surface_id,
             tool_surface_kind,
         } => {
+            if let Some(tab_stack_id) = tab_stack_id_for_panel(state, panel_id)
+                && let Some(locked_kind) = state
+                    .tab_stacks_by_id
+                    .get(&tab_stack_id)
+                    .and_then(|stack| stack.locked_tool_surface_kind)
+                && locked_kind != tool_surface_kind
+            {
+                return Err(WorkspaceStateError::ProjectionShapeMismatch(
+                    "surface switch violates locked area type",
+                ));
+            }
             let panel = state
                 .panels_by_id
                 .get(&panel_id)
@@ -321,6 +467,463 @@ fn set_split_host_fraction(
     };
     split.fraction = fraction;
     Ok(())
+}
+
+fn add_panel_tab(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+    panel_id: PanelInstanceId,
+    panel_kind: PanelKind,
+    tool_surface_id: ToolSurfaceInstanceId,
+    tool_surface_kind: ToolSurfaceKind,
+    activate_panel: bool,
+) -> Result<(), WorkspaceStateError> {
+    if state.panels_by_id.contains_key(&panel_id) {
+        return Err(WorkspaceStateError::DuplicatePanelId(panel_id));
+    }
+    if state.tool_surfaces_by_id.contains_key(&tool_surface_id) {
+        return Err(WorkspaceStateError::DuplicateToolSurfaceId(tool_surface_id));
+    }
+    let stack = state
+        .tab_stacks_by_id
+        .get_mut(&tab_stack_id)
+        .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
+    if let Some(locked_kind) = stack.locked_tool_surface_kind
+        && locked_kind != tool_surface_kind
+    {
+        return Err(WorkspaceStateError::ProjectionShapeMismatch(
+            "new tab violates locked area type",
+        ));
+    }
+
+    state.panels_by_id.insert(
+        panel_id,
+        PanelInstanceState {
+            id: panel_id,
+            panel_kind,
+            active_tool_surface: Some(tool_surface_id),
+        },
+    );
+    state.tool_surfaces_by_id.insert(
+        tool_surface_id,
+        ToolSurfaceState {
+            id: tool_surface_id,
+            tool_surface_kind,
+            mount: ToolSurfaceMount::Mounted { panel_id },
+        },
+    );
+    stack.ordered_panels.push(panel_id);
+    if activate_panel || stack.active_panel.is_none() {
+        stack.active_panel = Some(panel_id);
+    }
+    Ok(())
+}
+
+fn close_panel_tab(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+    panel_id: PanelInstanceId,
+) -> Result<(), WorkspaceStateError> {
+    let removed_index = {
+        let stack = state
+            .tab_stacks_by_id
+            .get_mut(&tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
+        let index = stack
+            .ordered_panels
+            .iter()
+            .position(|candidate| *candidate == panel_id)
+            .ok_or(WorkspaceStateError::PanelNotInTabStack {
+                tab_stack_id,
+                panel_id,
+            })?;
+        stack.ordered_panels.remove(index);
+        if stack.active_panel == Some(panel_id) {
+            stack.active_panel = stack
+                .ordered_panels
+                .get(index)
+                .or_else(|| {
+                    index
+                        .checked_sub(1)
+                        .and_then(|prev| stack.ordered_panels.get(prev))
+                })
+                .copied();
+        }
+        index
+    };
+    let _ = removed_index;
+    remove_panel_and_surface(state, panel_id)?;
+    cleanup_empty_floating_stack(state, tab_stack_id);
+    Ok(())
+}
+
+fn close_other_panel_tabs(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+    keep_panel_id: PanelInstanceId,
+) -> Result<(), WorkspaceStateError> {
+    let removed = {
+        let stack = state
+            .tab_stacks_by_id
+            .get_mut(&tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
+        if !stack.ordered_panels.contains(&keep_panel_id) {
+            return Err(WorkspaceStateError::PanelNotInTabStack {
+                tab_stack_id,
+                panel_id: keep_panel_id,
+            });
+        }
+        let removed = stack
+            .ordered_panels
+            .iter()
+            .copied()
+            .filter(|panel| *panel != keep_panel_id)
+            .collect::<Vec<_>>();
+        stack.ordered_panels = vec![keep_panel_id];
+        stack.active_panel = Some(keep_panel_id);
+        removed
+    };
+
+    for panel_id in removed {
+        remove_panel_and_surface(state, panel_id)?;
+    }
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "structural split mutation carries explicit ids"
+)]
+fn split_tab_stack_area(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+    axis: WorkspaceSplitAxis,
+    split_host_id: PanelHostId,
+    first_child_host_id: PanelHostId,
+    second_child_host_id: PanelHostId,
+    new_tab_stack_id: TabStackId,
+    new_panel_id: PanelInstanceId,
+    new_panel_kind: PanelKind,
+    new_tool_surface_id: ToolSurfaceInstanceId,
+    new_tool_surface_kind: ToolSurfaceKind,
+    fraction: f32,
+) -> Result<(), WorkspaceStateError> {
+    if !(fraction > 0.0 && fraction < 1.0 && fraction.is_finite()) {
+        return Err(WorkspaceStateError::InvalidSplitFraction {
+            host_id: split_host_id,
+            fraction,
+        });
+    }
+    if state.hosts_by_id.contains_key(&split_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(split_host_id));
+    }
+    if state.hosts_by_id.contains_key(&first_child_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(first_child_host_id));
+    }
+    if state.hosts_by_id.contains_key(&second_child_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(second_child_host_id));
+    }
+    if state.tab_stacks_by_id.contains_key(&new_tab_stack_id) {
+        return Err(WorkspaceStateError::DuplicateTabStackId(new_tab_stack_id));
+    }
+    if state.panels_by_id.contains_key(&new_panel_id) {
+        return Err(WorkspaceStateError::DuplicatePanelId(new_panel_id));
+    }
+    if state.tool_surfaces_by_id.contains_key(&new_tool_surface_id) {
+        return Err(WorkspaceStateError::DuplicateToolSurfaceId(
+            new_tool_surface_id,
+        ));
+    }
+
+    let host_id = tab_stack_host_id(state, tab_stack_id)?;
+    replace_host_reference(state, host_id, split_host_id)?;
+    state.hosts_by_id.remove(&host_id);
+    state.hosts_by_id.insert(
+        split_host_id,
+        PanelHostNode {
+            id: split_host_id,
+            kind: PanelHostKind::SplitHost(SplitHostState {
+                axis,
+                fraction,
+                first_child: first_child_host_id,
+                second_child: second_child_host_id,
+            }),
+        },
+    );
+    state.hosts_by_id.insert(
+        first_child_host_id,
+        PanelHostNode {
+            id: first_child_host_id,
+            kind: PanelHostKind::TabStackHost(TabStackHostState { tab_stack_id }),
+        },
+    );
+    state.hosts_by_id.insert(
+        second_child_host_id,
+        PanelHostNode {
+            id: second_child_host_id,
+            kind: PanelHostKind::TabStackHost(TabStackHostState {
+                tab_stack_id: new_tab_stack_id,
+            }),
+        },
+    );
+    state.tab_stacks_by_id.insert(
+        new_tab_stack_id,
+        TabStackState {
+            id: new_tab_stack_id,
+            ordered_panels: vec![new_panel_id],
+            active_panel: Some(new_panel_id),
+            locked_tool_surface_kind: None,
+        },
+    );
+    state.panels_by_id.insert(
+        new_panel_id,
+        PanelInstanceState {
+            id: new_panel_id,
+            panel_kind: new_panel_kind,
+            active_tool_surface: Some(new_tool_surface_id),
+        },
+    );
+    state.tool_surfaces_by_id.insert(
+        new_tool_surface_id,
+        ToolSurfaceState {
+            id: new_tool_surface_id,
+            tool_surface_kind: new_tool_surface_kind,
+            mount: ToolSurfaceMount::Mounted {
+                panel_id: new_panel_id,
+            },
+        },
+    );
+    Ok(())
+}
+
+fn duplicate_tab_stack_area(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+    new_panel_id: PanelInstanceId,
+    new_tool_surface_id: ToolSurfaceInstanceId,
+) -> Result<(), WorkspaceStateError> {
+    let source_panel = state
+        .tab_stacks_by_id
+        .get(&tab_stack_id)
+        .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?
+        .active_panel
+        .and_then(|panel_id| state.panels_by_id.get(&panel_id).copied())
+        .ok_or(WorkspaceStateError::ProjectionShapeMismatch(
+            "cannot duplicate an empty tab stack",
+        ))?;
+    let source_surface_kind = source_panel
+        .active_tool_surface
+        .and_then(|surface_id| state.tool_surfaces_by_id.get(&surface_id))
+        .map(|surface| surface.tool_surface_kind)
+        .unwrap_or(ToolSurfaceKind::Placeholder);
+    add_panel_tab(
+        state,
+        tab_stack_id,
+        new_panel_id,
+        source_panel.panel_kind,
+        new_tool_surface_id,
+        source_surface_kind,
+        true,
+    )
+}
+
+fn reset_tab_stack_area(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+    panel_id: PanelInstanceId,
+    tool_surface_id: ToolSurfaceInstanceId,
+    tool_surface_kind: ToolSurfaceKind,
+) -> Result<(), WorkspaceStateError> {
+    let existing_panels = state
+        .tab_stacks_by_id
+        .get(&tab_stack_id)
+        .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?
+        .ordered_panels
+        .clone();
+    {
+        let stack = state
+            .tab_stacks_by_id
+            .get_mut(&tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
+        stack.ordered_panels.clear();
+        stack.active_panel = None;
+    }
+    for existing in existing_panels {
+        remove_panel_and_surface(state, existing)?;
+    }
+    add_panel_tab(
+        state,
+        tab_stack_id,
+        panel_id,
+        panel_kind_for_tool_surface(tool_surface_kind),
+        tool_surface_id,
+        tool_surface_kind,
+        true,
+    )
+}
+
+fn close_tab_stack_area(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+) -> Result<(), WorkspaceStateError> {
+    let host_id = tab_stack_host_id(state, tab_stack_id)?;
+    let panels = state
+        .tab_stacks_by_id
+        .get(&tab_stack_id)
+        .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?
+        .ordered_panels
+        .clone();
+    for panel_id in panels {
+        remove_panel_and_surface(state, panel_id)?;
+    }
+    state.tab_stacks_by_id.remove(&tab_stack_id);
+
+    if let Some(floating_host_id) = floating_host_for_tab_stack(state, tab_stack_id) {
+        if let Some(host) = state.hosts_by_id.get_mut(&floating_host_id)
+            && let PanelHostKind::FloatingHostPlaceholder(placeholder) = &mut host.kind
+        {
+            placeholder.tab_stack_id = None;
+        }
+        state.hosts_by_id.remove(&host_id);
+        return Ok(());
+    }
+
+    if state.root_host_id == host_id {
+        state.hosts_by_id.insert(
+            host_id,
+            PanelHostNode {
+                id: host_id,
+                kind: PanelHostKind::TabStackHost(TabStackHostState { tab_stack_id }),
+            },
+        );
+        state.tab_stacks_by_id.insert(
+            tab_stack_id,
+            TabStackState {
+                id: tab_stack_id,
+                ordered_panels: Vec::new(),
+                active_panel: None,
+                locked_tool_surface_kind: None,
+            },
+        );
+        return Ok(());
+    }
+
+    let (parent_id, sibling_id) = split_parent_and_sibling_for_host(state, host_id).ok_or(
+        WorkspaceStateError::ProjectionShapeMismatch("area host is not inside a split"),
+    )?;
+    replace_host_reference(state, parent_id, sibling_id)?;
+    state.hosts_by_id.remove(&parent_id);
+    state.hosts_by_id.remove(&host_id);
+    Ok(())
+}
+
+fn remove_panel_and_surface(
+    state: &mut WorkspaceState,
+    panel_id: PanelInstanceId,
+) -> Result<(), WorkspaceStateError> {
+    let panel = state
+        .panels_by_id
+        .remove(&panel_id)
+        .ok_or(WorkspaceStateError::MissingPanel(panel_id))?;
+    if let Some(surface_id) = panel.active_tool_surface {
+        state.tool_surfaces_by_id.remove(&surface_id);
+    }
+    for surface in state.tool_surfaces_by_id.values_mut() {
+        if surface.mount == (ToolSurfaceMount::Mounted { panel_id }) {
+            surface.mount = ToolSurfaceMount::Unmounted;
+        }
+    }
+    Ok(())
+}
+
+fn tab_stack_host_id(
+    state: &WorkspaceState,
+    tab_stack_id: TabStackId,
+) -> Result<PanelHostId, WorkspaceStateError> {
+    state
+        .hosts_by_id
+        .values()
+        .find_map(|host| {
+            matches!(
+                host.kind,
+                PanelHostKind::TabStackHost(TabStackHostState { tab_stack_id: id }) if id == tab_stack_id
+            )
+            .then_some(host.id)
+        })
+        .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))
+}
+
+fn tab_stack_id_for_panel(state: &WorkspaceState, panel_id: PanelInstanceId) -> Option<TabStackId> {
+    state
+        .tab_stacks_by_id
+        .values()
+        .find_map(|stack| stack.ordered_panels.contains(&panel_id).then_some(stack.id))
+}
+
+fn floating_host_for_tab_stack(
+    state: &WorkspaceState,
+    tab_stack_id: TabStackId,
+) -> Option<PanelHostId> {
+    state.hosts_by_id.values().find_map(|host| {
+        if let PanelHostKind::FloatingHostPlaceholder(placeholder) = host.kind
+            && placeholder.tab_stack_id == Some(tab_stack_id)
+        {
+            return Some(host.id);
+        }
+        None
+    })
+}
+
+fn split_parent_and_sibling_for_host(
+    state: &WorkspaceState,
+    host_id: PanelHostId,
+) -> Option<(PanelHostId, PanelHostId)> {
+    state.hosts_by_id.values().find_map(|host| {
+        if let PanelHostKind::SplitHost(split) = host.kind {
+            if split.first_child == host_id {
+                return Some((host.id, split.second_child));
+            }
+            if split.second_child == host_id {
+                return Some((host.id, split.first_child));
+            }
+        }
+        None
+    })
+}
+
+fn replace_host_reference(
+    state: &mut WorkspaceState,
+    old_host_id: PanelHostId,
+    new_host_id: PanelHostId,
+) -> Result<(), WorkspaceStateError> {
+    if state.root_host_id == old_host_id {
+        state.root_host_id = new_host_id;
+        return Ok(());
+    }
+    for host in state.hosts_by_id.values_mut() {
+        if let PanelHostKind::SplitHost(split) = &mut host.kind {
+            if split.first_child == old_host_id {
+                split.first_child = new_host_id;
+                return Ok(());
+            }
+            if split.second_child == old_host_id {
+                split.second_child = new_host_id;
+                return Ok(());
+            }
+        }
+    }
+    Err(WorkspaceStateError::MissingHost(old_host_id))
+}
+
+fn panel_kind_for_tool_surface(kind: ToolSurfaceKind) -> PanelKind {
+    match kind {
+        ToolSurfaceKind::Outliner => PanelKind::Outliner,
+        ToolSurfaceKind::EntityTable => PanelKind::EntityTable,
+        ToolSurfaceKind::Viewport => PanelKind::Viewport,
+        ToolSurfaceKind::Inspector => PanelKind::Inspector,
+        ToolSurfaceKind::Console => PanelKind::Console,
+        ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
+    }
 }
 
 fn reorder_panel_in_stack(
@@ -454,6 +1057,7 @@ fn move_panel_to_new_floating_host(
             id: floating_tab_stack_id,
             ordered_panels: vec![panel_id],
             active_panel: Some(panel_id),
+            locked_tool_surface_kind: None,
         },
     );
     state.hosts_by_id.insert(
@@ -899,5 +1503,222 @@ mod tests {
                 .ordered_panels
                 .contains(&viewport_panel)
         );
+    }
+
+    #[test]
+    fn add_close_and_close_other_tabs_preserve_remaining_identity() {
+        let workspace = bootstrap_workspace();
+        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
+        let outliner_panel = panel_id_by_kind(&workspace, PanelKind::Outliner);
+        let outliner_surface = workspace
+            .panel(outliner_panel)
+            .expect("outliner panel should exist")
+            .active_tool_surface;
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let added = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::AddPanelTab {
+                tab_stack_id: outliner_stack,
+                panel_id,
+                panel_kind: PanelKind::Console,
+                tool_surface_id: surface_id,
+                tool_surface_kind: ToolSurfaceKind::Console,
+                activate_panel: true,
+            },
+        )
+        .expect("adding a panel tab should succeed");
+        assert_eq!(
+            added
+                .tab_stack(outliner_stack)
+                .expect("stack should exist")
+                .active_panel,
+            Some(panel_id)
+        );
+
+        let closed = reduce_workspace(
+            &added,
+            WorkspaceMutation::ClosePanelTab {
+                tab_stack_id: outliner_stack,
+                panel_id,
+            },
+        )
+        .expect("closing a panel tab should succeed");
+        assert_eq!(
+            closed
+                .panel(outliner_panel)
+                .expect("remaining panel should keep identity")
+                .active_tool_surface,
+            outliner_surface
+        );
+        assert!(closed.panel(panel_id).is_none());
+        assert!(closed.tool_surface(surface_id).is_none());
+
+        let second_panel = allocator.allocate_panel_instance_id();
+        let second_surface = allocator.allocate_tool_surface_instance_id();
+        let with_second = reduce_workspace(
+            &closed,
+            WorkspaceMutation::AddPanelTab {
+                tab_stack_id: outliner_stack,
+                panel_id: second_panel,
+                panel_kind: PanelKind::Inspector,
+                tool_surface_id: second_surface,
+                tool_surface_kind: ToolSurfaceKind::Inspector,
+                activate_panel: true,
+            },
+        )
+        .expect("second tab should add");
+        let only_outliner = reduce_workspace(
+            &with_second,
+            WorkspaceMutation::CloseOtherPanelTabs {
+                tab_stack_id: outliner_stack,
+                keep_panel_id: outliner_panel,
+            },
+        )
+        .expect("close other tabs should succeed");
+        assert_eq!(
+            only_outliner
+                .tab_stack(outliner_stack)
+                .expect("stack should exist")
+                .ordered_panels,
+            vec![outliner_panel]
+        );
+        assert!(only_outliner.panel(second_panel).is_none());
+        assert!(only_outliner.tool_surface(second_surface).is_none());
+    }
+
+    #[test]
+    fn split_duplicate_reset_and_close_area_keep_structural_graph_valid() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let split_host_id = allocator.allocate_panel_host_id();
+        let first_child_host_id = allocator.allocate_panel_host_id();
+        let second_child_host_id = allocator.allocate_panel_host_id();
+        let new_tab_stack_id = allocator.allocate_tab_stack_id();
+        let new_panel_id = allocator.allocate_panel_instance_id();
+        let new_surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let split = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::SplitTabStackArea {
+                tab_stack_id: viewport_stack,
+                axis: WorkspaceSplitAxis::Horizontal,
+                split_host_id,
+                first_child_host_id,
+                second_child_host_id,
+                new_tab_stack_id,
+                new_panel_id,
+                new_panel_kind: PanelKind::Inspector,
+                new_tool_surface_id: new_surface_id,
+                new_tool_surface_kind: ToolSurfaceKind::Inspector,
+                fraction: 0.5,
+            },
+        )
+        .expect("split should produce a valid graph");
+        assert!(split.host(split_host_id).is_some());
+        assert!(split.tab_stack(new_tab_stack_id).is_some());
+
+        let duplicate_panel = allocator.allocate_panel_instance_id();
+        let duplicate_surface = allocator.allocate_tool_surface_instance_id();
+        let duplicated = reduce_workspace(
+            &split,
+            WorkspaceMutation::DuplicateTabStackArea {
+                tab_stack_id: new_tab_stack_id,
+                new_panel_id: duplicate_panel,
+                new_tool_surface_id: duplicate_surface,
+            },
+        )
+        .expect("duplicate should add a tab in the same area");
+        assert!(
+            duplicated
+                .tab_stack(new_tab_stack_id)
+                .expect("stack should exist")
+                .ordered_panels
+                .contains(&duplicate_panel)
+        );
+
+        let reset_panel = allocator.allocate_panel_instance_id();
+        let reset_surface = allocator.allocate_tool_surface_instance_id();
+        let reset = reduce_workspace(
+            &duplicated,
+            WorkspaceMutation::ResetTabStackArea {
+                tab_stack_id: new_tab_stack_id,
+                panel_id: reset_panel,
+                tool_surface_id: reset_surface,
+                tool_surface_kind: ToolSurfaceKind::Console,
+            },
+        )
+        .expect("reset should replace area contents");
+        assert_eq!(
+            reset
+                .tab_stack(new_tab_stack_id)
+                .expect("stack should exist")
+                .ordered_panels,
+            vec![reset_panel]
+        );
+        assert!(reset.panel(new_panel_id).is_none());
+        assert!(reset.tool_surface(new_surface_id).is_none());
+
+        let closed = reduce_workspace(
+            &reset,
+            WorkspaceMutation::CloseTabStackArea {
+                tab_stack_id: new_tab_stack_id,
+            },
+        )
+        .expect("closing split child should collapse the split");
+        assert!(closed.tab_stack(new_tab_stack_id).is_none());
+        assert!(closed.host(split_host_id).is_none());
+        assert!(closed.panel(reset_panel).is_none());
+        assert!(closed.tool_surface(reset_surface).is_none());
+    }
+
+    #[test]
+    fn locked_area_type_rejects_incompatible_surface_switch_and_new_tab() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let viewport_panel = panel_id_by_kind(&workspace, PanelKind::Viewport);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let locked = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaType {
+                tab_stack_id: viewport_stack,
+                locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+            },
+        )
+        .expect("locking area type should succeed");
+
+        let switch_error = reduce_workspace(
+            &locked,
+            WorkspaceMutation::ReplacePanelToolSurfaceKind {
+                panel_id: viewport_panel,
+                tool_surface_id: allocator.allocate_tool_surface_instance_id(),
+                tool_surface_kind: ToolSurfaceKind::Inspector,
+            },
+        )
+        .expect_err("incompatible switch should fail");
+        assert!(matches!(
+            switch_error,
+            WorkspaceStateError::ProjectionShapeMismatch(_)
+        ));
+
+        let tab_error = reduce_workspace(
+            &locked,
+            WorkspaceMutation::AddPanelTab {
+                tab_stack_id: viewport_stack,
+                panel_id: allocator.allocate_panel_instance_id(),
+                panel_kind: PanelKind::Inspector,
+                tool_surface_id: allocator.allocate_tool_surface_instance_id(),
+                tool_surface_kind: ToolSurfaceKind::Inspector,
+                activate_panel: true,
+            },
+        )
+        .expect_err("incompatible new tab should fail");
+        assert!(matches!(
+            tab_error,
+            WorkspaceStateError::ProjectionShapeMismatch(_)
+        ));
     }
 }

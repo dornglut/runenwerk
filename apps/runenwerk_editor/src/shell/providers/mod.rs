@@ -1,35 +1,39 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use editor_core::{DocumentKind, EditorMutationError};
+use editor_core::{DocumentKind, EditorMutationError, EntityId, RealityVersion};
+use editor_inspector::InspectorValue;
 use editor_shell::{
     ConsoleViewModel, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID,
-    EditorDomainMutation, EditorShellFrameModel, EntityTableSortKey, ResolvedSurfaceFrame,
-    SurfaceCommandProposal, SurfaceDocumentContext, SurfaceLocalAction, SurfaceLocalRoute,
-    SurfacePresentationArtifact, SurfacePresentationArtifactKind, SurfaceProviderAvailability,
-    SurfaceProviderDescriptor, SurfaceProviderDiagnostic, SurfaceProviderId,
-    SurfaceProviderPriority, SurfaceProviderRequest, SurfaceRouteTable, SurfaceSessionMutation,
-    ToolSurfaceInstanceId, ToolSurfaceKind, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, build_console_panel,
-    build_entity_table_panel, build_inspector_panel, build_outliner_panel, build_viewport_panel,
-    editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
-    inspector_field_widget_id, outliner_row_widget_id, surface_session_proposal,
+    EditorDomainMutation, EditorShellFrameModel, EntityTableRowViewModel, EntityTableSortKey,
+    EntityTableViewModel, InspectorFieldViewModel, InspectorObservationFrame,
+    InspectorObservedField, InspectorObservedTarget, InspectorTargetViewModel, InspectorViewModel,
+    ObservationConsumerKind, ObservationFrameMetadata, ObservationSourceReality,
+    OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel, OutlinerViewModel,
+    ResolvedSurfaceFrame, SurfaceCommandProposal, SurfaceDocumentContext, SurfaceLocalAction,
+    SurfaceLocalRoute, SurfacePresentationArtifact, SurfacePresentationArtifactKind,
+    SurfaceProviderAvailability, SurfaceProviderDescriptor, SurfaceProviderDiagnostic,
+    SurfaceProviderId, SurfaceProviderPriority, SurfaceProviderRequest, SurfaceRouteTable,
+    SurfaceSessionMutation, ToolSurfaceInstanceId, ToolSurfaceKind,
+    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, ViewportObservationFrame, ViewportProductChoiceViewModel,
+    ViewportProductObservation, ViewportViewModel, build_console_panel, build_entity_table_panel,
+    build_inspector_panel, build_outliner_panel, build_viewport_panel, editor_domain_proposal,
+    entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
+    outliner_row_widget_id, surface_session_proposal, tool_surface_capability_set,
     tool_surface_definition_id, viewport_product_button_widget_id,
 };
+use editor_viewport::{ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState};
 use ui_text::FontId;
 use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
-use crate::editor_panels::{EntityTablePanelPresenter, InspectorPanelPresenter};
+use crate::editor_panels::{
+    EntityTablePanelPresenter, EntityTablePanelState, InspectorPanelPresenter,
+    InspectorPanelViewModel, InspectorWidgetField, OutlinerPanelState, ViewportToolState,
+};
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
 };
-use crate::shell::console_adapter::build_console_view_model;
-use crate::shell::entity_table_adapter::build_entity_table_view_model;
-use crate::shell::inspector_adapter::{
-    build_inspector_observation_frame, build_inspector_view_model,
-};
-use crate::shell::outliner_adapter::{build_outliner_observation_frame, build_outliner_view_model};
 use crate::shell::toolbar_adapter::{build_toolbar_observation_frame, build_toolbar_view_model};
-use crate::shell::viewport_adapter::{build_viewport_observation_frame, build_viewport_view_model};
 use crate::shell::{RunenwerkEditorShellState, SurfaceSessionState};
 
 const SCENE_OUTLINER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(1);
@@ -54,9 +58,8 @@ pub struct SurfaceProviderBuildContext<'a> {
 }
 
 pub struct SurfaceProviderDispatchContext<'a> {
-    pub app: &'a RunenwerkEditorApp,
-    pub shell_state: &'a RunenwerkEditorShellState,
     pub projection_epoch: u64,
+    pub _marker: std::marker::PhantomData<&'a ()>,
 }
 
 pub trait EditorSurfaceProvider: Send + Sync {
@@ -73,7 +76,7 @@ pub trait EditorSurfaceProvider: Send + Sync {
         context: &SurfaceProviderDispatchContext<'_>,
         request: &SurfaceProviderRequest,
         action: SurfaceLocalAction,
-    ) -> Result<SurfaceCommandProposal, SurfaceProviderDiagnostic>;
+    ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic>;
 }
 
 #[derive(Debug)]
@@ -122,7 +125,7 @@ impl EditorSurfaceProviderRegistry {
         request: &SurfaceProviderRequest,
         session: &SurfaceSessionState,
     ) -> ResolvedSurfaceFrame {
-        if !workspace_allows_document(context.shell_state, request) {
+        if !workspace_allows_document(request) {
             return unsupported_frame(
                 request,
                 "Unsupported Document",
@@ -187,7 +190,7 @@ impl EditorSurfaceProviderRegistry {
         request: &SurfaceProviderRequest,
         provider_id: SurfaceProviderId,
         action: SurfaceLocalAction,
-    ) -> Result<SurfaceCommandProposal, EditorMutationError> {
+    ) -> Result<Option<SurfaceCommandProposal>, EditorMutationError> {
         let provider = self
             .providers
             .iter()
@@ -222,6 +225,8 @@ pub fn build_editor_shell_frame_model(
         history.can_undo(),
         history.can_redo(),
         app.debug_logs_enabled(),
+        shell_state.active_toolbar_menu(),
+        shell_state.active_workspace_profile_id(),
         scene_version,
     );
 
@@ -268,6 +273,7 @@ pub fn mounted_surface_requests(
                 tool_surface_instance_id: surface.id,
                 tool_surface_kind: surface.tool_surface_kind,
                 surface_definition_id: tool_surface_definition_id(surface.tool_surface_kind),
+                capabilities: tool_surface_capability_set(surface.tool_surface_kind),
             })
         })
         .collect()
@@ -276,7 +282,7 @@ pub fn mounted_surface_requests(
 pub fn active_document_context(app: &RunenwerkEditorApp) -> SurfaceDocumentContext {
     let active_document = app.runtime().session().active_document();
     if let Some(document_id) = active_document {
-        if let Some(document) = app.runtime().session().document(document_id) {
+        if let Some(document) = app.runtime().session().active_document_descriptor() {
             return SurfaceDocumentContext::Resolved {
                 document_id,
                 document_kind: document.kind.clone(),
@@ -287,10 +293,325 @@ pub fn active_document_context(app: &RunenwerkEditorApp) -> SurfaceDocumentConte
     SurfaceDocumentContext::NoActiveDocument
 }
 
-fn workspace_allows_document(
-    shell_state: &RunenwerkEditorShellState,
-    request: &SurfaceProviderRequest,
-) -> bool {
+fn build_console_view_model(lines: &[String]) -> ConsoleViewModel {
+    ConsoleViewModel {
+        lines: lines.to_vec(),
+    }
+}
+
+fn build_outliner_observation_frame(
+    state: &OutlinerPanelState,
+    source_version: RealityVersion,
+) -> OutlinerObservationFrame {
+    OutlinerObservationFrame {
+        metadata: ObservationFrameMetadata::strict_current(
+            ObservationSourceReality::ObservedScene,
+            ObservationConsumerKind::Outliner,
+            source_version,
+        ),
+        rows: state
+            .rows
+            .iter()
+            .map(|row| OutlinerObservedRow {
+                entity: row.entity,
+                display_name: row.display_name.clone(),
+                depth: row.depth,
+                has_children: row.has_children,
+                is_selected: state.selected_entity == Some(row.entity),
+            })
+            .collect(),
+    }
+}
+
+fn build_outliner_view_model(frame: &OutlinerObservationFrame) -> OutlinerViewModel {
+    OutlinerViewModel {
+        rows: frame
+            .rows
+            .iter()
+            .map(|row| OutlinerRowViewModel {
+                entity: row.entity,
+                display_name: row.display_name.clone(),
+                depth: row.depth,
+                has_children: row.has_children,
+                is_selected: row.is_selected,
+            })
+            .collect(),
+    }
+}
+
+fn build_entity_table_view_model(state: &EntityTablePanelState) -> EntityTableViewModel {
+    EntityTableViewModel {
+        search_query: state.search_query.clone(),
+        sort_key: state.sort_key,
+        sort_ascending: state.sort_ascending,
+        rows: state
+            .rows
+            .iter()
+            .map(|row| EntityTableRowViewModel {
+                entity: row.entity,
+                entity_id_label: row.entity.0.to_string(),
+                display_name: row.display_name.clone(),
+                parent_label: row
+                    .parent
+                    .map(|parent| parent.0.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                component_count: row.component_count,
+                is_selected: row.is_selected,
+            })
+            .collect(),
+    }
+}
+
+fn build_viewport_observation_frame(
+    products: Option<&ArtifactObservationFrame>,
+    details_visible: bool,
+    selected_entity: Option<EntityId>,
+    drag_in_progress: bool,
+    tool_state: ViewportToolState,
+    source_version: RealityVersion,
+) -> ViewportObservationFrame {
+    let viewport_id = products.map(|value| value.viewport_id);
+    let selected_primary_product_id = products.and_then(|value| value.selected_primary_product_id);
+    let products = products
+        .map(|value| {
+            value
+                .available_products
+                .iter()
+                .map(|descriptor| {
+                    let availability = value
+                        .availability_by_product
+                        .get(&descriptor.id)
+                        .copied()
+                        .unwrap_or(ProductAvailabilityState::Unavailable);
+                    let producer_health = value
+                        .producer_health_by_product
+                        .get(&descriptor.id)
+                        .copied()
+                        .unwrap_or(ProducerHealth::Unavailable);
+                    ViewportProductObservation {
+                        viewport_id: value.viewport_id,
+                        product_id: descriptor.id,
+                        product_kind: descriptor.kind,
+                        label: format!("{:?}", descriptor.kind),
+                        freshness: descriptor.freshness,
+                        availability,
+                        producer_health,
+                        is_selected_primary: value.selected_primary_product_id
+                            == Some(descriptor.id),
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    ViewportObservationFrame {
+        metadata: ObservationFrameMetadata::strict_current(
+            ObservationSourceReality::ObservedScene,
+            ObservationConsumerKind::Viewport,
+            source_version,
+        ),
+        viewport_id,
+        selected_primary_product_id,
+        products,
+        details_visible,
+        selected_entity,
+        hovered_entity: tool_state.hovered_entity,
+        drag_in_progress,
+        preview_active: tool_state.active_preview.is_some(),
+    }
+}
+
+fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportViewModel {
+    ViewportViewModel {
+        viewport_id: frame.viewport_id,
+        selected_primary_product_id: frame.selected_primary_product_id,
+        product_choices: frame
+            .products
+            .iter()
+            .map(|product| ViewportProductChoiceViewModel {
+                viewport_id: product.viewport_id,
+                product_id: product.product_id,
+                label: format!(
+                    "{:?} [{:?}/{:?}]",
+                    product.product_kind, product.availability, product.producer_health
+                ),
+                selected: product.is_selected_primary,
+                enabled: product.availability == ProductAvailabilityState::Available,
+            })
+            .collect::<Vec<_>>(),
+        details_visible: frame.details_visible,
+        selected_entity: frame.selected_entity,
+        hovered_entity: frame.hovered_entity,
+        drag_in_progress: frame.drag_in_progress,
+        preview_active: frame.preview_active,
+    }
+}
+
+fn build_inspector_observation_frame(
+    view_model: &InspectorPanelViewModel,
+    source_version: RealityVersion,
+) -> InspectorObservationFrame {
+    let metadata = ObservationFrameMetadata::strict_current(
+        ObservationSourceReality::ObservedScene,
+        ObservationConsumerKind::Inspector,
+        source_version,
+    );
+
+    match view_model {
+        InspectorPanelViewModel::Empty => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Empty,
+            fields: Vec::new(),
+        },
+        InspectorPanelViewModel::Entity {
+            display_name,
+            components,
+            available_component_types,
+            ..
+        } => {
+            InspectorObservationFrame {
+                metadata,
+                target: InspectorObservedTarget::Entity {
+                    display_name: display_name.clone(),
+                },
+                fields: components
+                    .iter()
+                    .map(|component| InspectorObservedField {
+                        label: component.display_name.clone(),
+                        path_key: None,
+                        value_summary: if component.is_selected {
+                            "selected".to_string()
+                        } else {
+                            "attached".to_string()
+                        },
+                        is_focused: false,
+                        editable: false,
+                    })
+                    .chain(available_component_types.iter().map(|component| {
+                        InspectorObservedField {
+                            label: format!("+ {}", component.display_name),
+                            path_key: None,
+                            value_summary: if component.already_attached {
+                                "already attached".to_string()
+                            } else {
+                                "available".to_string()
+                            },
+                            is_focused: false,
+                            editable: false,
+                        }
+                    }))
+                    .collect(),
+            }
+        }
+        InspectorPanelViewModel::Component {
+            entity_display_name,
+            component_display_name,
+            widget_fields,
+            ..
+        } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Component {
+                entity_display_name: entity_display_name.clone(),
+                component_display_name: component_display_name.clone(),
+            },
+            fields: widget_fields
+                .iter()
+                .map(build_inspector_observed_field)
+                .collect(),
+        },
+        InspectorPanelViewModel::Resource { resource_type } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Resource {
+                display_name: format!("Resource {}", resource_type.0),
+            },
+            fields: Vec::new(),
+        },
+        InspectorPanelViewModel::Unsupported { target } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Unsupported {
+                label: target.clone(),
+            },
+            fields: Vec::new(),
+        },
+        InspectorPanelViewModel::Error { message } => InspectorObservationFrame {
+            metadata,
+            target: InspectorObservedTarget::Error {
+                message: message.clone(),
+            },
+            fields: Vec::new(),
+        },
+    }
+}
+
+fn build_inspector_view_model(frame: &InspectorObservationFrame) -> InspectorViewModel {
+    let target = match &frame.target {
+        InspectorObservedTarget::Empty => InspectorTargetViewModel::Empty,
+        InspectorObservedTarget::Entity { display_name } => InspectorTargetViewModel::Entity {
+            display_name: display_name.clone(),
+        },
+        InspectorObservedTarget::Component {
+            entity_display_name,
+            component_display_name,
+        } => InspectorTargetViewModel::Component {
+            entity_display_name: entity_display_name.clone(),
+            component_display_name: component_display_name.clone(),
+        },
+        InspectorObservedTarget::Resource { display_name } => InspectorTargetViewModel::Resource {
+            display_name: display_name.clone(),
+        },
+        InspectorObservedTarget::Unsupported { label } => InspectorTargetViewModel::Unsupported {
+            label: label.clone(),
+        },
+        InspectorObservedTarget::Error { message } => InspectorTargetViewModel::Error {
+            message: message.clone(),
+        },
+    };
+
+    InspectorViewModel {
+        target,
+        fields: frame
+            .fields
+            .iter()
+            .map(|field| InspectorFieldViewModel {
+                label: field.label.clone(),
+                path_key: field.path_key.clone(),
+                value_summary: field.value_summary.clone(),
+                is_focused: field.is_focused,
+                editable: field.editable,
+            })
+            .collect(),
+    }
+}
+
+fn build_inspector_observed_field(field: &InspectorWidgetField) -> InspectorObservedField {
+    let value_text = field
+        .draft_text
+        .clone()
+        .unwrap_or_else(|| inspector_value_summary(&field.value));
+
+    InspectorObservedField {
+        label: field.display_name.clone(),
+        path_key: Some(field.path.stable_key()),
+        value_summary: value_text,
+        is_focused: field.is_focused,
+        editable: true,
+    }
+}
+
+fn inspector_value_summary(value: &InspectorValue) -> String {
+    match value {
+        InspectorValue::Bool(v) => v.to_string(),
+        InspectorValue::Integer(v) => v.to_string(),
+        InspectorValue::Float(v) => v.to_string(),
+        InspectorValue::Text(v) => v.clone(),
+        InspectorValue::Enum { current, .. } => current.clone(),
+        InspectorValue::ReadOnlyText(v) => v.clone(),
+        InspectorValue::Group => "group".to_string(),
+        InspectorValue::Unsupported { type_name } => format!("unsupported<{type_name}>"),
+    }
+}
+
+fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
     let registry = editor_shell::default_workspace_profile_registry();
     if request.tool_surface_kind == ToolSurfaceKind::Console {
         return true;
@@ -299,7 +620,7 @@ fn workspace_allows_document(
         return false;
     };
     registry
-        .profile(shell_state.active_workspace_profile_id())
+        .profile(request.workspace_profile_id)
         .map(|profile| profile.document_kind_filters.contains(document_kind))
         .unwrap_or(false)
 }
@@ -402,480 +723,13 @@ fn remap_widget_id(
     surface_scoped_widget_id(surface_id, widget_id.0)
 }
 
-struct SceneOutlinerProvider;
-struct SceneEntityTableProvider;
-struct SceneViewportProvider;
-struct SceneInspectorProvider;
-struct ConsoleProvider;
+pub mod console;
+pub mod scene;
 
-impl EditorSurfaceProvider for SceneOutlinerProvider {
-    fn descriptor(&self) -> SurfaceProviderDescriptor {
-        SurfaceProviderDescriptor::new(
-            SCENE_OUTLINER_PROVIDER_ID,
-            "Scene Outliner",
-            SurfaceProviderPriority::DEFAULT,
-        )
-    }
-
-    fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        matches!(
-            request.document_context.resolved_document_kind(),
-            Some(DocumentKind::Scene)
-        ) && request.tool_surface_kind == ToolSurfaceKind::Outliner
-    }
-
-    fn build_frame(
-        &self,
-        context: &SurfaceProviderBuildContext<'_>,
-        request: &SurfaceProviderRequest,
-        _session: &SurfaceSessionState,
-    ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let state = context.app.outliner_state();
-        let frame = build_outliner_observation_frame(
-            &state,
-            context.app.runtime().current_scene_reality_version(),
-        );
-        let view_model = build_outliner_view_model(&frame);
-        let root = remap_surface_node_ids(
-            build_outliner_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
-        );
-        let mut routes = SurfaceRouteTable::empty();
-        for (index, row) in view_model.rows.iter().enumerate() {
-            routes.insert(
-                remap_widget_id(
-                    request.tool_surface_instance_id,
-                    outliner_row_widget_id(index),
-                ),
-                SurfaceLocalRoute::new(SurfaceLocalAction::SelectOutlinerEntity {
-                    entity: row.entity,
-                }),
-            );
-        }
-        Ok(ProviderSurfaceFrame {
-            title: "Outliner".to_string(),
-            artifact: SurfacePresentationArtifact::provider(root),
-            routes,
-        })
-    }
-
-    fn map_action(
-        &self,
-        context: &SurfaceProviderDispatchContext<'_>,
-        request: &SurfaceProviderRequest,
-        action: SurfaceLocalAction,
-    ) -> Result<SurfaceCommandProposal, SurfaceProviderDiagnostic> {
-        match action {
-            SurfaceLocalAction::SelectOutlinerEntity { entity } => Ok(editor_domain_proposal(
-                request,
-                context.projection_epoch,
-                EditorDomainMutation::SelectOutlinerEntity { entity },
-            )),
-            _ => Ok(SurfaceCommandProposal::NoOp),
-        }
-    }
-}
-
-impl EditorSurfaceProvider for SceneEntityTableProvider {
-    fn descriptor(&self) -> SurfaceProviderDescriptor {
-        SurfaceProviderDescriptor::new(
-            SCENE_ENTITY_TABLE_PROVIDER_ID,
-            "Scene Entity Table",
-            SurfaceProviderPriority::DEFAULT,
-        )
-    }
-
-    fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        matches!(
-            request.document_context.resolved_document_kind(),
-            Some(DocumentKind::Scene)
-        ) && request.tool_surface_kind == ToolSurfaceKind::EntityTable
-    }
-
-    fn build_frame(
-        &self,
-        context: &SurfaceProviderBuildContext<'_>,
-        request: &SurfaceProviderRequest,
-        session: &SurfaceSessionState,
-    ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let state = EntityTablePanelPresenter::build_state(
-            context.app.runtime(),
-            &session.entity_table_ui_state,
-        );
-        let view_model = build_entity_table_view_model(&state);
-        let root = remap_surface_node_ids(
-            build_entity_table_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
-        );
-        let mut routes = SurfaceRouteTable::empty();
-        routes.insert(
-            remap_widget_id(
-                request.tool_surface_instance_id,
-                ENTITY_TABLE_LIST_WIDGET_ID,
-            ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::SelectEntityTableRow {
-                entities: view_model.rows.iter().map(|row| row.entity).collect(),
-            }),
-        );
-        routes.insert(
-            remap_widget_id(
-                request.tool_surface_instance_id,
-                ENTITY_TABLE_SEARCH_WIDGET_ID,
-            ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::AppendEntityTableSearchText {
-                text: String::new(),
-            }),
-        );
-        for (index, sort_key) in [
-            EntityTableSortKey::EntityId,
-            EntityTableSortKey::DisplayName,
-            EntityTableSortKey::Parent,
-            EntityTableSortKey::ComponentCount,
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            routes.insert(
-                remap_widget_id(
-                    request.tool_surface_instance_id,
-                    entity_table_sort_button_widget_id(index),
-                ),
-                SurfaceLocalRoute::new(SurfaceLocalAction::ToggleEntityTableSort { sort_key }),
-            );
-        }
-        Ok(ProviderSurfaceFrame {
-            title: "Entities".to_string(),
-            artifact: SurfacePresentationArtifact::provider(root),
-            routes,
-        })
-    }
-
-    fn map_action(
-        &self,
-        context: &SurfaceProviderDispatchContext<'_>,
-        request: &SurfaceProviderRequest,
-        action: SurfaceLocalAction,
-    ) -> Result<SurfaceCommandProposal, SurfaceProviderDiagnostic> {
-        let projection_epoch = context.projection_epoch;
-        match action {
-            SurfaceLocalAction::SelectEntityTableEntity { entity } => Ok(editor_domain_proposal(
-                request,
-                projection_epoch,
-                EditorDomainMutation::SelectEntityTableRow {
-                    entities: vec![entity],
-                },
-            )),
-            SurfaceLocalAction::SelectEntityTableRow { entities } => Ok(editor_domain_proposal(
-                request,
-                projection_epoch,
-                EditorDomainMutation::SelectEntityTableRow { entities },
-            )),
-            SurfaceLocalAction::AppendEntityTableSearchText { text } => {
-                Ok(surface_session_proposal(
-                    request,
-                    projection_epoch,
-                    SurfaceSessionMutation::AppendEntityTableSearchText { text },
-                ))
-            }
-            SurfaceLocalAction::BackspaceEntityTableSearch => Ok(surface_session_proposal(
-                request,
-                projection_epoch,
-                SurfaceSessionMutation::BackspaceEntityTableSearch,
-            )),
-            SurfaceLocalAction::ToggleEntityTableSort { sort_key } => Ok(surface_session_proposal(
-                request,
-                projection_epoch,
-                SurfaceSessionMutation::ToggleEntityTableSort { sort_key },
-            )),
-            _ => Ok(SurfaceCommandProposal::NoOp),
-        }
-    }
-}
-
-impl EditorSurfaceProvider for SceneViewportProvider {
-    fn descriptor(&self) -> SurfaceProviderDescriptor {
-        SurfaceProviderDescriptor::new(
-            SCENE_VIEWPORT_PROVIDER_ID,
-            "Scene Viewport",
-            SurfaceProviderPriority::DEFAULT,
-        )
-    }
-
-    fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        matches!(
-            request.document_context.resolved_document_kind(),
-            Some(DocumentKind::Scene)
-        ) && request.tool_surface_kind == ToolSurfaceKind::Viewport
-    }
-
-    fn build_frame(
-        &self,
-        context: &SurfaceProviderBuildContext<'_>,
-        request: &SurfaceProviderRequest,
-        session: &SurfaceSessionState,
-    ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let products = context
-            .tool_surface_bindings
-            .and_then(|bindings| {
-                bindings.binding_for_tool_surface(request.tool_surface_instance_id)
-            })
-            .and_then(|binding| {
-                context
-                    .viewport_observations
-                    .and_then(|observations| observations.frame_for(binding.viewport_id))
-            });
-        let tool_state = context.app.viewport_tool_state();
-        let frame = build_viewport_observation_frame(
-            products,
-            session.viewport_details_visible,
-            context.app.runtime().selected_entity(),
-            session.viewport_interaction_state.drag_in_progress(),
-            tool_state,
-            context.app.runtime().current_scene_reality_version(),
-        );
-        let view_model = build_viewport_view_model(&frame);
-        let root = remap_surface_node_ids(
-            build_viewport_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
-        );
-        let mut routes = SurfaceRouteTable::empty();
-        routes.insert(
-            remap_widget_id(
-                request.tool_surface_instance_id,
-                VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-            ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportDetails),
-        );
-        for (index, choice) in view_model.product_choices.iter().enumerate() {
-            routes.insert(
-                remap_widget_id(
-                    request.tool_surface_instance_id,
-                    viewport_product_button_widget_id(index),
-                ),
-                SurfaceLocalRoute::new(SurfaceLocalAction::SelectViewportProduct {
-                    viewport_id: choice.viewport_id,
-                    product_id: choice.product_id,
-                    enabled: choice.enabled,
-                }),
-            );
-        }
-        Ok(ProviderSurfaceFrame {
-            title: "Viewport".to_string(),
-            artifact: SurfacePresentationArtifact::provider(root),
-            routes,
-        })
-    }
-
-    fn map_action(
-        &self,
-        context: &SurfaceProviderDispatchContext<'_>,
-        request: &SurfaceProviderRequest,
-        action: SurfaceLocalAction,
-    ) -> Result<SurfaceCommandProposal, SurfaceProviderDiagnostic> {
-        match action {
-            SurfaceLocalAction::SelectViewportProduct {
-                viewport_id,
-                product_id,
-                enabled,
-            } if enabled => Ok(editor_domain_proposal(
-                request,
-                context.projection_epoch,
-                EditorDomainMutation::SelectViewportProduct {
-                    viewport_id,
-                    product_id,
-                },
-            )),
-            SurfaceLocalAction::ToggleViewportDetails => Ok(surface_session_proposal(
-                request,
-                context.projection_epoch,
-                SurfaceSessionMutation::ToggleViewportDetails,
-            )),
-            _ => Ok(SurfaceCommandProposal::NoOp),
-        }
-    }
-}
-
-impl EditorSurfaceProvider for SceneInspectorProvider {
-    fn descriptor(&self) -> SurfaceProviderDescriptor {
-        SurfaceProviderDescriptor::new(
-            SCENE_INSPECTOR_PROVIDER_ID,
-            "Scene Inspector",
-            SurfaceProviderPriority::DEFAULT,
-        )
-    }
-
-    fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        matches!(
-            request.document_context.resolved_document_kind(),
-            Some(DocumentKind::Scene)
-        ) && request.tool_surface_kind == ToolSurfaceKind::Inspector
-    }
-
-    fn build_frame(
-        &self,
-        context: &SurfaceProviderBuildContext<'_>,
-        request: &SurfaceProviderRequest,
-        session: &SurfaceSessionState,
-    ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let panel_model = InspectorPanelPresenter::build_view_model(
-            context.app.runtime(),
-            &session.inspector_ui_state,
-        );
-        let frame = build_inspector_observation_frame(
-            &panel_model,
-            context.app.runtime().current_scene_reality_version(),
-        );
-        let view_model = build_inspector_view_model(&frame);
-        let root = remap_surface_node_ids(
-            build_inspector_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
-        );
-        let mut routes = SurfaceRouteTable::empty();
-        for (index, field) in view_model.fields.iter().enumerate() {
-            let action = if field.editable {
-                SurfaceLocalAction::EditInspectorFieldText {
-                    index,
-                    text: String::new(),
-                }
-            } else {
-                SurfaceLocalAction::ActivateInspectorField { index }
-            };
-            routes.insert(
-                remap_widget_id(
-                    request.tool_surface_instance_id,
-                    inspector_field_widget_id(index),
-                ),
-                SurfaceLocalRoute::new(action),
-            );
-            if field.editable {
-                routes.insert(
-                    remap_widget_id(
-                        request.tool_surface_instance_id,
-                        inspector_field_focus_widget_id(index),
-                    ),
-                    SurfaceLocalRoute::new(SurfaceLocalAction::FocusInspectorField { index }),
-                );
-            }
-        }
-        Ok(ProviderSurfaceFrame {
-            title: "Inspector".to_string(),
-            artifact: SurfacePresentationArtifact::provider(root),
-            routes,
-        })
-    }
-
-    fn map_action(
-        &self,
-        context: &SurfaceProviderDispatchContext<'_>,
-        request: &SurfaceProviderRequest,
-        action: SurfaceLocalAction,
-    ) -> Result<SurfaceCommandProposal, SurfaceProviderDiagnostic> {
-        let projection_epoch = context.projection_epoch;
-        match action {
-            SurfaceLocalAction::ActivateInspectorField { index } => Ok(surface_session_proposal(
-                request,
-                projection_epoch,
-                SurfaceSessionMutation::ActivateInspectorField { index },
-            )),
-            SurfaceLocalAction::FocusInspectorField { index } => Ok(surface_session_proposal(
-                request,
-                projection_epoch,
-                SurfaceSessionMutation::FocusInspectorField { index },
-            )),
-            SurfaceLocalAction::EditInspectorFieldText { index, text } => {
-                Ok(surface_session_proposal(
-                    request,
-                    projection_epoch,
-                    SurfaceSessionMutation::AppendInspectorFieldText { index, text },
-                ))
-            }
-            SurfaceLocalAction::BackspaceInspectorFieldText { index } => {
-                Ok(surface_session_proposal(
-                    request,
-                    projection_epoch,
-                    SurfaceSessionMutation::BackspaceInspectorFieldText { index },
-                ))
-            }
-            SurfaceLocalAction::CommitInspectorFieldText { index } => Ok(surface_session_proposal(
-                request,
-                projection_epoch,
-                SurfaceSessionMutation::CommitInspectorFieldText { index },
-            )),
-            SurfaceLocalAction::CancelInspectorFieldText { index } => Ok(surface_session_proposal(
-                request,
-                projection_epoch,
-                SurfaceSessionMutation::CancelInspectorFieldText { index },
-            )),
-            _ => Ok(SurfaceCommandProposal::NoOp),
-        }
-    }
-}
-
-impl EditorSurfaceProvider for ConsoleProvider {
-    fn descriptor(&self) -> SurfaceProviderDescriptor {
-        SurfaceProviderDescriptor::new(
-            CONSOLE_PROVIDER_ID,
-            "Console",
-            SurfaceProviderPriority::DEFAULT,
-        )
-    }
-
-    fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        request.tool_surface_kind == ToolSurfaceKind::Console
-    }
-
-    fn build_frame(
-        &self,
-        context: &SurfaceProviderBuildContext<'_>,
-        request: &SurfaceProviderRequest,
-        _session: &SurfaceSessionState,
-    ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let view_model: ConsoleViewModel = build_console_view_model(context.app.console_lines());
-        let root = remap_surface_node_ids(
-            build_console_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
-        );
-        Ok(ProviderSurfaceFrame {
-            title: "Console".to_string(),
-            artifact: SurfacePresentationArtifact::provider(root),
-            routes: SurfaceRouteTable::empty(),
-        })
-    }
-
-    fn map_action(
-        &self,
-        _context: &SurfaceProviderDispatchContext<'_>,
-        _request: &SurfaceProviderRequest,
-        _action: SurfaceLocalAction,
-    ) -> Result<SurfaceCommandProposal, SurfaceProviderDiagnostic> {
-        Ok(SurfaceCommandProposal::NoOp)
-    }
-}
+use console::ConsoleProvider;
+use scene::{
+    SceneEntityTableProvider, SceneInspectorProvider, SceneOutlinerProvider, SceneViewportProvider,
+};
 
 #[cfg(test)]
 mod tests {
@@ -928,8 +782,8 @@ mod tests {
             _context: &SurfaceProviderDispatchContext<'_>,
             _request: &SurfaceProviderRequest,
             _action: SurfaceLocalAction,
-        ) -> Result<SurfaceCommandProposal, SurfaceProviderDiagnostic> {
-            Ok(SurfaceCommandProposal::NoOp)
+        ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
+            Ok(None)
         }
     }
 
@@ -969,6 +823,7 @@ mod tests {
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(3).unwrap(),
             tool_surface_kind: ToolSurfaceKind::Viewport,
             surface_definition_id: VIEWPORT_SURFACE_DEFINITION_ID,
+            capabilities: tool_surface_capability_set(ToolSurfaceKind::Viewport),
         }
     }
 

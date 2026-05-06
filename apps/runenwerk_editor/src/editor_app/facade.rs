@@ -51,6 +51,21 @@ impl RunenwerkEditorApp {
         self.tool_runtime_state.update_translation_preview(delta)
     }
 
+    pub fn update_rotation_preview(
+        &mut self,
+        delta_radians: scene::Vec3Value,
+    ) -> Result<(), EditorMutationError> {
+        self.tool_runtime_state
+            .update_rotation_preview(delta_radians)
+    }
+
+    pub fn update_scale_preview(
+        &mut self,
+        delta: scene::Vec3Value,
+    ) -> Result<(), EditorMutationError> {
+        self.tool_runtime_state.update_scale_preview(delta)
+    }
+
     pub fn dispatch_tool_action(&mut self, action: ToolAction) -> Result<(), EditorMutationError> {
         dispatch_tool_action(self, action)
     }

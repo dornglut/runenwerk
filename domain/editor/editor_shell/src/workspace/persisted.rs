@@ -82,6 +82,8 @@ pub struct PersistedTabStackStateV1 {
     pub id: u64,
     pub ordered_panels: Vec<u64>,
     pub active_panel: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locked_tool_surface_kind: Option<PersistedToolSurfaceKindV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -189,6 +191,9 @@ impl WorkspaceState {
                     id: stack.id.raw(),
                     ordered_panels: stack.ordered_panels.iter().map(|id| id.raw()).collect(),
                     active_panel: stack.active_panel.map(|id| id.raw()),
+                    locked_tool_surface_kind: stack
+                        .locked_tool_surface_kind
+                        .map(persisted_tool_surface_kind_v2),
                 })
                 .collect(),
             panels: self
@@ -232,6 +237,7 @@ impl WorkspaceState {
                     id: stack.id.raw(),
                     ordered_panels: stack.ordered_panels.iter().map(|id| id.raw()).collect(),
                     active_panel: stack.active_panel.map(|id| id.raw()),
+                    locked_tool_surface_kind: None,
                 })
                 .collect(),
             panels: self
@@ -306,6 +312,9 @@ impl WorkspaceState {
                     id: stack_id,
                     ordered_panels,
                     active_panel,
+                    locked_tool_surface_kind: stack
+                        .locked_tool_surface_kind
+                        .map(workspace_tool_surface_kind_v2),
                 },
             );
         }
@@ -425,6 +434,9 @@ impl WorkspaceState {
                     id: stack_id,
                     ordered_panels,
                     active_panel,
+                    locked_tool_surface_kind: stack
+                        .locked_tool_surface_kind
+                        .map(workspace_tool_surface_kind_v2),
                 },
             );
         }
@@ -925,6 +937,43 @@ mod tests {
     }
 
     #[test]
+    fn persisted_v2_roundtrip_preserves_area_type_locks() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = workspace
+            .tab_stacks_by_id
+            .values()
+            .find(|stack| {
+                stack.ordered_panels.iter().any(|panel| {
+                    workspace.panel(*panel).map(|value| value.panel_kind)
+                        == Some(PanelKind::Viewport)
+                })
+            })
+            .expect("viewport stack should exist")
+            .id;
+        let locked = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaType {
+                tab_stack_id: viewport_stack,
+                locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+            },
+        )
+        .expect("locking should produce valid state");
+
+        let persisted = locked.to_persisted_v2();
+        assert_eq!(
+            persisted
+                .tab_stacks
+                .iter()
+                .find(|stack| stack.id == viewport_stack.raw())
+                .and_then(|stack| stack.locked_tool_surface_kind),
+            Some(PersistedToolSurfaceKindV2::Viewport)
+        );
+        let restored =
+            WorkspaceState::from_persisted_v2(persisted).expect("locked state should decode");
+        assert_eq!(locked, restored);
+    }
+
+    #[test]
     fn persisted_v1_decode_remains_supported_for_legacy_layouts() {
         let workspace = bootstrap_workspace();
         let persisted = workspace.to_persisted_v1();
@@ -932,5 +981,10 @@ mod tests {
             .expect("legacy v1 layout should still decode");
 
         assert!(restored.validate_integrity().is_ok());
+        assert!(
+            restored
+                .tab_stacks()
+                .all(|stack| stack.locked_tool_surface_kind.is_none())
+        );
     }
 }

@@ -1,7 +1,7 @@
 //! File: apps/runenwerk_editor/src/editor_runtime/realities/session.rs
 //! Purpose: Read-only session-reality boundary for editor interaction state.
 
-use editor_core::{EditorMode, EditorSession, HistoryStack, SelectionSet, ToolId};
+use editor_core::{EditorSession, HistoryStack, ModeId, SelectionSet, ToolId};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SessionReality<'a> {
@@ -17,7 +17,7 @@ impl<'a> SessionReality<'a> {
         self.session
     }
 
-    pub fn mode(&self) -> EditorMode {
+    pub fn mode(&self) -> ModeId {
         self.session.mode()
     }
 

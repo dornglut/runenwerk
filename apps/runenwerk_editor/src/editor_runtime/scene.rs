@@ -3,10 +3,16 @@ use editor_inspector::{
     InspectorEditError, InspectorEditValue, InspectorPath, InspectorPathSegment,
     set_component_field_value, set_resource_field_value,
 };
-use editor_scene::{SceneComponentSnapshot, SceneEntitySnapshot, SceneRuntime};
+use editor_scene::{
+    SceneComponentSnapshot, SceneEntitySnapshot, SceneRuntime, SceneTransform, SceneVec3,
+    SdfPrimitiveKind, SdfPrimitiveSpec,
+};
+use scene::{LocalTransform, QuatValue, Vec3Value};
 
 use crate::editor_runtime::{
-    EditorRuntimeIdRegistry, RunenwerkEditorInspectorBridge, SceneDocumentState,
+    EDITOR_PRIMITIVE_COMPONENT_TYPE_ID, EditorPrimitive, EditorPrimitiveKind,
+    EditorRuntimeIdRegistry, LOCAL_TRANSFORM_COMPONENT_TYPE_ID, RunenwerkEditorInspectorBridge,
+    SceneDocumentState,
 };
 
 struct EmptyEntityBundle;
@@ -119,6 +125,28 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         Ok(snapshot)
     }
 
+    fn children_of(&self, parent: Option<EntityId>) -> Vec<EntityId> {
+        self.document.children_of(parent)
+    }
+
+    fn duplicate_entity_subtree(
+        &mut self,
+        source: EntityId,
+        new_parent: Option<EntityId>,
+        name_suffix: &str,
+    ) -> Result<Vec<EntityId>, EditorMutationError> {
+        let mut created = Vec::new();
+        let source_snapshot =
+            self.document
+                .entity_snapshot(source)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "source entity is not registered",
+                ))?;
+        let root_parent = new_parent.or(source_snapshot.parent);
+        duplicate_entity_recursive(self, source, root_parent, name_suffix, &mut created)?;
+        Ok(created)
+    }
+
     fn reparent_entity(
         &mut self,
         entity: EntityId,
@@ -187,6 +215,49 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
             ecs_entity,
             snapshot.component_type,
         )
+    }
+
+    fn create_sdf_primitive(
+        &mut self,
+        parent: Option<EntityId>,
+        display_name: &str,
+        primitive: SdfPrimitiveSpec,
+    ) -> Result<EntityId, EditorMutationError> {
+        let entity = self.create_entity(parent, display_name)?;
+        self.add_component(entity, LOCAL_TRANSFORM_COMPONENT_TYPE_ID)?;
+        self.add_component(entity, EDITOR_PRIMITIVE_COMPONENT_TYPE_ID)?;
+        self.write_transform(entity, primitive.transform)?;
+        write_editor_primitive_kind(self, entity, primitive.kind)?;
+        Ok(entity)
+    }
+
+    fn read_transform(&self, entity: EntityId) -> Result<SceneTransform, EditorMutationError> {
+        let ecs_entity =
+            self.ids
+                .resolve_entity(entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
+        let transform = self.world.get::<LocalTransform>(ecs_entity).ok_or(
+            EditorMutationError::runtime_rejected("entity does not have LocalTransform"),
+        )?;
+        Ok(scene_transform_from_local(*transform))
+    }
+
+    fn write_transform(
+        &mut self,
+        entity: EntityId,
+        transform: SceneTransform,
+    ) -> Result<(), EditorMutationError> {
+        let ecs_entity =
+            self.ids
+                .resolve_entity(entity)
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor entity is not registered",
+                ))?;
+        self.world
+            .insert(ecs_entity, local_transform_from_scene(transform))
+            .map_err(|_| EditorMutationError::runtime_rejected("failed to write LocalTransform"))
     }
 
     fn read_component_field(
@@ -266,6 +337,135 @@ impl<'a> SceneRuntime for RunenwerkEditorSceneRuntime<'a> {
         self.document
             .rename_entity(entity, new_display_name.to_string())
     }
+}
+
+fn duplicate_entity_recursive(
+    runtime: &mut RunenwerkEditorSceneRuntime<'_>,
+    source: EntityId,
+    new_parent: Option<EntityId>,
+    name_suffix: &str,
+    created: &mut Vec<EntityId>,
+) -> Result<EntityId, EditorMutationError> {
+    let source_snapshot =
+        runtime
+            .document
+            .entity_snapshot(source)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "source entity is not registered",
+            ))?;
+    let duplicate_name = format!("{}{}", source_snapshot.display_name, name_suffix);
+    let duplicate = runtime.create_entity(new_parent, &duplicate_name)?;
+    copy_common_scene_components(runtime, source, duplicate)?;
+    created.push(duplicate);
+
+    for child in runtime.document.children_of(Some(source)) {
+        let _ = duplicate_entity_recursive(runtime, child, Some(duplicate), name_suffix, created)?;
+    }
+
+    Ok(duplicate)
+}
+
+fn copy_common_scene_components(
+    runtime: &mut RunenwerkEditorSceneRuntime<'_>,
+    source: EntityId,
+    target: EntityId,
+) -> Result<(), EditorMutationError> {
+    let source_ecs =
+        runtime
+            .ids
+            .resolve_entity(source)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "source entity is not registered",
+            ))?;
+    let target_ecs =
+        runtime
+            .ids
+            .resolve_entity(target)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "target entity is not registered",
+            ))?;
+
+    if let Some(transform) = runtime.world.get::<LocalTransform>(source_ecs).copied() {
+        runtime
+            .world
+            .insert(target_ecs, transform)
+            .map_err(|_| EditorMutationError::runtime_rejected("failed to copy LocalTransform"))?;
+    }
+
+    if let Some(primitive) = runtime.world.get::<EditorPrimitive>(source_ecs).copied() {
+        runtime
+            .world
+            .insert(target_ecs, primitive)
+            .map_err(|_| EditorMutationError::runtime_rejected("failed to copy EditorPrimitive"))?;
+    }
+
+    Ok(())
+}
+
+fn write_editor_primitive_kind(
+    runtime: &mut RunenwerkEditorSceneRuntime<'_>,
+    entity: EntityId,
+    kind: SdfPrimitiveKind,
+) -> Result<(), EditorMutationError> {
+    let ecs_entity =
+        runtime
+            .ids
+            .resolve_entity(entity)
+            .ok_or(EditorMutationError::runtime_rejected(
+                "editor entity is not registered",
+            ))?;
+    let mut primitive = runtime
+        .world
+        .get::<EditorPrimitive>(ecs_entity)
+        .copied()
+        .unwrap_or_default();
+    primitive.set_kind(editor_primitive_kind_from_sdf(kind));
+    runtime
+        .world
+        .insert(ecs_entity, primitive)
+        .map_err(|_| EditorMutationError::runtime_rejected("failed to write EditorPrimitive"))
+}
+
+fn editor_primitive_kind_from_sdf(kind: SdfPrimitiveKind) -> EditorPrimitiveKind {
+    match kind {
+        SdfPrimitiveKind::Box => EditorPrimitiveKind::Box,
+        SdfPrimitiveKind::Sphere => EditorPrimitiveKind::Sphere,
+        SdfPrimitiveKind::Capsule => EditorPrimitiveKind::Capsule,
+    }
+}
+
+fn scene_transform_from_local(transform: LocalTransform) -> SceneTransform {
+    SceneTransform::new(
+        SceneVec3::new(
+            transform.translation.x,
+            transform.translation.y,
+            transform.translation.z,
+        ),
+        editor_scene::SceneQuat::new(
+            transform.rotation.x,
+            transform.rotation.y,
+            transform.rotation.z,
+            transform.rotation.w,
+        ),
+        SceneVec3::new(transform.scale.x, transform.scale.y, transform.scale.z),
+    )
+}
+
+fn local_transform_from_scene(transform: SceneTransform) -> LocalTransform {
+    LocalTransform::new(
+        Vec3Value::new(
+            transform.translation.x,
+            transform.translation.y,
+            transform.translation.z,
+        ),
+        QuatValue::new(
+            transform.rotation.x,
+            transform.rotation.y,
+            transform.rotation.z,
+            transform.rotation.w,
+        ),
+        Vec3Value::new(transform.scale.x, transform.scale.y, transform.scale.z),
+    )
 }
 
 fn read_edit_value_at_path(

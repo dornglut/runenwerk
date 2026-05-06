@@ -6,10 +6,13 @@ use ui_theme::ThemeTokens;
 use crate::{
     EditorShellFrameModel, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, ShellCommand,
     SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
-    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, ToolbarButtonViewModel,
-    ToolbarViewModel, UiInteraction, UiInteractionResults, WidgetId, WorkspaceIdentityAllocator,
-    WorkspaceState, build_editor_shell_frame, label, map_interactions_to_shell_commands,
-    tool_surface_definition_id,
+    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, ToolSurfaceKind,
+    ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults, WidgetId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
+    build_editor_shell_frame, label, map_interactions_to_shell_commands, reduce_workspace,
+    tab_close_button_widget_id, tab_stack_kind_select_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tool_surface_definition_id, workspace_split_host_widget_id,
 };
 
 #[test]
@@ -38,6 +41,105 @@ fn toolbar_activation_maps_to_shell_command() {
     );
 
     assert_eq!(commands, vec![ShellCommand::ActivateTranslateTool]);
+}
+
+#[test]
+fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
+    let frame_model = EditorShellFrameModel::new(
+        ToolbarViewModel {
+            buttons: vec![
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_001),
+                    stable_name: "menu_file",
+                    label: "File".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_100),
+                    stable_name: "file_save",
+                    label: "Save".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_101),
+                    stable_name: "file_save_as",
+                    label: "Save As".to_string(),
+                    is_active: false,
+                    enabled: false,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(3_002),
+                    stable_name: "workspace_modelling",
+                    label: "Modelling".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+            ],
+        },
+        BTreeMap::new(),
+    );
+    let workspace = sample_workspace_state();
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![
+                UiInteraction::Activated(crate::TOOLBAR_FILE_MENU_WIDGET_ID),
+                UiInteraction::Activated(crate::toolbar_menu_item_widget_id(1)),
+                UiInteraction::Activated(crate::toolbar_menu_item_widget_id(2)),
+                UiInteraction::Activated(crate::TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID),
+            ],
+        },
+        &build.projection_artifacts,
+    );
+
+    assert_eq!(
+        commands,
+        vec![
+            ShellCommand::ToggleToolbarMenu {
+                menu: crate::ToolbarMenuKind::File,
+            },
+            ShellCommand::RunToolbarCommand {
+                command: crate::ToolbarCommandKind::SaveScene,
+            },
+            ShellCommand::NoOp,
+            ShellCommand::SwitchWorkspaceProfile {
+                profile_id: crate::MODELLING_WORKSPACE_PROFILE_ID,
+            },
+        ]
+    );
+}
+
+#[test]
+fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right() {
+    let workspace = sample_workspace_state();
+    let projection =
+        crate::project_fixed_layout(&workspace).expect("default layout should project");
+
+    assert_eq!(projection.left_right_fraction, 0.72);
+    assert_eq!(projection.center_right_fraction, 0.56);
+    assert_eq!(
+        projection
+            .viewport
+            .active_panel
+            .map(|panel| panel.panel_kind),
+        Some(PanelKind::Viewport)
+    );
+    assert_eq!(
+        projection
+            .outliner
+            .active_panel
+            .map(|panel| panel.panel_kind),
+        Some(PanelKind::Outliner)
+    );
+    assert_eq!(
+        projection
+            .inspector
+            .active_panel
+            .map(|panel| panel.panel_kind),
+        Some(PanelKind::Inspector)
+    );
 }
 
 #[test]
@@ -114,6 +216,63 @@ fn provider_route_rejects_mismatched_structural_context() {
 }
 
 #[test]
+fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let frame_model = frame_model_for_workspace(&workspace);
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let projection_epoch = build.projection_artifacts.projection_epoch;
+
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![
+                UiInteraction::SelectChanged {
+                    target: tab_stack_kind_select_widget_id(viewport_stack),
+                    index: 3,
+                },
+                UiInteraction::Activated(tab_stack_new_tab_button_widget_id(viewport_stack)),
+                UiInteraction::Activated(tab_stack_split_horizontal_button_widget_id(
+                    viewport_stack,
+                )),
+                UiInteraction::Activated(tab_close_button_widget_id(viewport_stack, 0)),
+            ],
+        },
+        &build.projection_artifacts,
+    );
+
+    assert!(matches!(
+        commands.as_slice(),
+        [
+            ShellCommand::SwitchPanelToolSurfaceKind {
+                panel_instance_id,
+                tool_surface_kind: ToolSurfaceKind::Inspector,
+                projection_epoch: select_epoch,
+            },
+            ShellCommand::CreatePanelTab {
+                tab_stack_id: create_stack,
+                ..
+            },
+            ShellCommand::SplitTabStackArea {
+                tab_stack_id: split_stack,
+                ..
+            },
+            ShellCommand::ClosePanelTab {
+                tab_stack_id: close_stack,
+                panel_instance_id: close_panel,
+                projection_epoch: close_epoch,
+            },
+        ] if *panel_instance_id == viewport_panel
+            && *select_epoch == projection_epoch
+            && *create_stack == viewport_stack
+            && *split_stack == viewport_stack
+            && *close_stack == viewport_stack
+            && *close_panel == viewport_panel
+            && *close_epoch == projection_epoch
+    ));
+}
+
+#[test]
 fn frame_model_surfaces_are_artifact_lookup_not_layout_authority() {
     let workspace = sample_workspace_state();
     let (_, outliner_surface) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
@@ -132,6 +291,63 @@ fn frame_model_surfaces_are_artifact_lookup_not_layout_authority() {
             .values()
             .any(|context| context.active_tool_surface == Some(outliner_surface)),
         "workspace projection still owns mounted surface layout even when the frame lookup lacks an artifact"
+    );
+}
+
+#[test]
+fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+    let split_host_id = allocator.allocate_panel_host_id();
+    let first_child_host_id = allocator.allocate_panel_host_id();
+    let second_child_host_id = allocator.allocate_panel_host_id();
+    let new_tab_stack_id = allocator.allocate_tab_stack_id();
+    let new_panel_id = allocator.allocate_panel_instance_id();
+    let new_surface_id = allocator.allocate_tool_surface_instance_id();
+
+    let split_workspace = reduce_workspace(
+        &workspace,
+        WorkspaceMutation::SplitTabStackArea {
+            tab_stack_id: viewport_stack,
+            axis: WorkspaceSplitAxis::Horizontal,
+            split_host_id,
+            first_child_host_id,
+            second_child_host_id,
+            new_tab_stack_id,
+            new_panel_id,
+            new_panel_kind: PanelKind::Inspector,
+            new_tool_surface_id: new_surface_id,
+            new_tool_surface_kind: ToolSurfaceKind::Inspector,
+            fraction: 0.5,
+        },
+    )
+    .expect("split area should produce a valid workspace graph");
+    let frame_model = frame_model_for_workspace(&split_workspace);
+
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &split_workspace);
+
+    assert!(
+        build.projection_artifacts.workspace.fixed_layout.is_none(),
+        "arbitrary split workspace should leave the legacy fixed projection path",
+    );
+    assert!(
+        build
+            .projection_artifacts
+            .workspace
+            .tab_button_route_by_widget_id
+            .values()
+            .any(|route| route.tab_stack_id == new_tab_stack_id
+                && route.panel_instance_id == new_panel_id),
+        "dynamic projection should route tabs in newly split areas",
+    );
+    assert!(
+        ui_tree_contains_widget(
+            &build.tree.root,
+            workspace_split_host_widget_id(split_host_id)
+        ),
+        "dynamic composition should render the newly inserted split host",
     );
 }
 
@@ -258,4 +474,20 @@ fn panel_and_surface_by_kind(
                 .map(|surface_id| (panel.id, surface_id))
         })
         .expect("expected mounted surface for panel kind")
+}
+
+fn tab_stack_by_panel(workspace: &WorkspaceState, panel_id: PanelInstanceId) -> crate::TabStackId {
+    workspace
+        .tab_stacks()
+        .find(|stack| stack.ordered_panels.contains(&panel_id))
+        .map(|stack| stack.id)
+        .expect("panel should belong to a tab stack")
+}
+
+fn ui_tree_contains_widget(node: &crate::UiNode, widget_id: WidgetId) -> bool {
+    node.id == widget_id
+        || node
+            .children
+            .iter()
+            .any(|child| ui_tree_contains_widget(child, widget_id))
 }

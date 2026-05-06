@@ -3,8 +3,9 @@ use editor_scene::SceneCommandIntent;
 use scene::{LocalTransform, QuatValue, Vec3Value};
 
 use crate::editor_app::RunenwerkEditorApp;
-use crate::editor_features::ToolAction;
-use crate::editor_runtime::{RunenwerkEditorRuntime, execute_scene_intent};
+use crate::editor_features::{ToolAction, ViewportToolCommand, ViewportToolController};
+use crate::editor_runtime::{RunenwerkEditorRuntime, TransformToolKind, execute_scene_intent};
+use crate::editor_tools_state::TranslateAxis;
 
 #[test]
 fn runtime_can_register_and_add_local_transform_component() {
@@ -163,4 +164,115 @@ fn cancel_preview_does_not_mutate_local_transform() {
         .expect("LocalTransform should exist");
 
     assert_eq!(transform.translation, Vec3Value::zero());
+}
+
+#[test]
+fn commit_preview_applies_rotation_delta_to_local_transform() {
+    let mut app = transform_app();
+
+    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
+        1,
+    ))))
+    .expect("select should succeed");
+    app.dispatch_tool_action(ToolAction::BeginTransformPreview(TransformToolKind::Rotate))
+        .expect("begin rotate preview should succeed");
+    app.update_rotation_preview(Vec3Value::new(0.0, std::f32::consts::FRAC_PI_2, 0.0))
+        .expect("rotation preview should update");
+    app.dispatch_tool_action(ToolAction::CommitPreview)
+        .expect("commit preview should succeed");
+
+    let transform = entity_transform(&app, EntityId(1));
+    let expected = glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+    assert!((transform.rotation.x - expected.x).abs() < 0.0001);
+    assert!((transform.rotation.y - expected.y).abs() < 0.0001);
+    assert!((transform.rotation.z - expected.z).abs() < 0.0001);
+    assert!((transform.rotation.w - expected.w).abs() < 0.0001);
+}
+
+#[test]
+fn commit_preview_applies_scale_delta_to_local_transform() {
+    let mut app = transform_app();
+
+    app.dispatch_tool_action(ToolAction::SelectSingle(SelectionTarget::Entity(EntityId(
+        1,
+    ))))
+    .expect("select should succeed");
+    app.dispatch_tool_action(ToolAction::BeginTransformPreview(TransformToolKind::Scale))
+        .expect("begin scale preview should succeed");
+    app.update_scale_preview(Vec3Value::new(0.5, -0.25, 2.0))
+        .expect("scale preview should update");
+    app.dispatch_tool_action(ToolAction::CommitPreview)
+        .expect("commit preview should succeed");
+
+    let transform = entity_transform(&app, EntityId(1));
+    assert_eq!(transform.scale, Vec3Value::new(1.5, 0.75, 3.0));
+}
+
+#[test]
+fn viewport_translate_axis_drag_applies_snap_settings() {
+    let mut app = transform_app();
+    app.tool_runtime_state_mut()
+        .set_snap_settings(editor_viewport::SnapSettings {
+            enabled: true,
+            translate_step: 0.5,
+            ..Default::default()
+        });
+
+    ViewportToolController::dispatch(
+        &mut app,
+        ViewportToolCommand::BeginTranslateAxisDrag {
+            entity: EntityId(1),
+            axis: TranslateAxis::X,
+        },
+    )
+    .expect("begin translate should succeed");
+    ViewportToolController::dispatch(
+        &mut app,
+        ViewportToolCommand::UpdateTranslateAxisDrag { amount: 0.74 },
+    )
+    .expect("update translate should succeed");
+    ViewportToolController::dispatch(&mut app, ViewportToolCommand::CommitTranslateDrag)
+        .expect("commit translate should succeed");
+
+    let transform = entity_transform(&app, EntityId(1));
+    assert_eq!(transform.translation, Vec3Value::new(0.5, 0.0, 0.0));
+}
+
+fn transform_app() -> RunenwerkEditorApp {
+    let mut app = RunenwerkEditorApp::new();
+    let transform_type = ComponentTypeId(500);
+
+    app.runtime_mut()
+        .register_component_type::<LocalTransform>(transform_type);
+    execute_scene_intent(
+        app.runtime_mut(),
+        CommandId(1),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Entity".to_string(),
+        },
+    )
+    .expect("create should succeed");
+    execute_scene_intent(
+        app.runtime_mut(),
+        CommandId(2),
+        SceneCommandIntent::AddComponent {
+            entity: EntityId(1),
+            component_type: transform_type,
+        },
+    )
+    .expect("add LocalTransform should succeed");
+    app
+}
+
+fn entity_transform(app: &RunenwerkEditorApp, entity: EntityId) -> LocalTransform {
+    let ecs_entity = app
+        .runtime()
+        .ids()
+        .resolve_entity(entity)
+        .expect("entity should exist");
+    *app.runtime()
+        .world()
+        .get::<LocalTransform>(ecs_entity)
+        .expect("LocalTransform should exist")
 }

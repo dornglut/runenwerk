@@ -28,9 +28,10 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 
 - [Editor Asset Pipeline and Content Workflow Design](editor-asset-pipeline-and-content-workflow-design.md)
 - [Editor Procedural Content and Simulation Workflow Plan](editor-procedural-content-and-simulation-workflow-plan.md)
-- [Editor Self-Authoring and Final UI Design](editor-self-authoring-and-final-ui-design.md)
+- [Editor Self-Authoring and UI Workspace Design](editor-self-authoring-and-final-ui-design.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
 - [Runenwerk Editor Workspace-Document-Mode-Panel Architecture](editor-workspace-document-mode-panel-architecture.md)
+- [UI Definition Formation Framework Design](ui-definition-formation-foundation-design.md)
 - [Workspace Identity Contract and Migration Map](workspace-identity-contract-and-migration-map.md)
 
 ### Engine Runtime

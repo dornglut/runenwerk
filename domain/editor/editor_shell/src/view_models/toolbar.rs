@@ -3,6 +3,33 @@
 
 use editor_core::ToolId;
 
+use crate::WorkspaceProfileId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarMenuKind {
+    File,
+    Edit,
+    Window,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarCommandKind {
+    SaveScene,
+    SaveSceneAs,
+    OpenScene,
+    OpenRecent,
+    Undo,
+    Redo,
+    EditPreferences,
+    NewWindow,
+    NextWorkspace,
+    PreviousWorkspace,
+    SaveWorkspace,
+    LoadWorkspaceProfile(WorkspaceProfileId),
+    LoadCustomWorkspace,
+    AddWorkspace,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolbarButtonViewModel {
     pub id: ToolId,

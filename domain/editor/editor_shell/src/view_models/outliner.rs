@@ -8,6 +8,7 @@ pub struct OutlinerRowViewModel {
     pub entity: EntityId,
     pub display_name: String,
     pub depth: usize,
+    pub has_children: bool,
     pub is_selected: bool,
 }
 

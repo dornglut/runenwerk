@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use editor_core::{DocumentId, DocumentKind, EntityId};
 use editor_viewport::{ExpressionProductId, ViewportId};
 use id_macros::id;
-use ui_surface::SurfaceDefinitionId;
+use ui_surface::{SurfaceCapability, SurfaceCapabilitySet, SurfaceDefinitionId};
 
 use crate::{
     EntityTableSortKey, PanelInstanceId, StructuralCommandTarget, TabStackId,
@@ -83,6 +83,13 @@ pub struct SurfaceProviderRequest {
     pub tool_surface_instance_id: ToolSurfaceInstanceId,
     pub tool_surface_kind: ToolSurfaceKind,
     pub surface_definition_id: SurfaceDefinitionId,
+    pub capabilities: SurfaceCapabilitySet,
+}
+
+impl SurfaceProviderRequest {
+    pub fn has_capability(&self, capability: SurfaceCapability) -> bool {
+        self.capabilities.allows(capability)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -187,9 +194,6 @@ pub enum SurfaceLocalAction {
     },
     CancelInspectorFieldText {
         index: usize,
-    },
-    ConsoleSetFollow {
-        enabled: bool,
     },
 }
 
@@ -296,7 +300,6 @@ impl EditorShellFrameModel {
 pub enum SurfaceCommandProposal {
     SurfaceSession(SurfaceSessionMutationProposal),
     EditorDomain(EditorDomainProposal),
-    NoOp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -318,7 +321,6 @@ pub enum SurfaceSessionMutation {
     BackspaceInspectorFieldText { index: usize },
     CommitInspectorFieldText { index: usize },
     CancelInspectorFieldText { index: usize },
-    ConsoleSetFollow { enabled: bool },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
