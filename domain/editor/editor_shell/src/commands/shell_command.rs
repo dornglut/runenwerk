@@ -1,11 +1,12 @@
 //! File: domain/editor/editor_shell/src/commands/shell_command.rs
 //! Purpose: Shell-level commands emitted from UI interactions.
 
-use editor_core::EntityId;
+use editor_core::{DocumentId, EntityId};
 use editor_viewport::{ExpressionProductId, ViewportId};
 
 use crate::{
     EntityTableSortKey, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
+    ToolbarCommandKind, ToolbarMenuKind, WorkspaceProfileId, WorkspaceSplitAxis,
 };
 use crate::{SurfaceLocalAction, SurfaceProviderId};
 
@@ -29,6 +30,17 @@ pub enum TabDropDestination {
 pub enum ShellCommand {
     ActivateSelectTool,
     ActivateTranslateTool,
+    ActivateRotateTool,
+    ActivateScaleTool,
+    ToggleToolbarMenu {
+        menu: ToolbarMenuKind,
+    },
+    RunToolbarCommand {
+        command: ToolbarCommandKind,
+    },
+    SwitchWorkspaceProfile {
+        profile_id: WorkspaceProfileId,
+    },
     Undo,
     Redo,
     SaveScene,
@@ -49,6 +61,54 @@ pub enum ShellCommand {
         panel_instance_id: PanelInstanceId,
         tool_surface_kind: ToolSurfaceKind,
         projection_epoch: u64,
+    },
+    CreatePanelTab {
+        tab_stack_id: TabStackId,
+        tool_surface_kind: ToolSurfaceKind,
+        projection_epoch: u64,
+    },
+    ClosePanelTab {
+        tab_stack_id: TabStackId,
+        panel_instance_id: PanelInstanceId,
+        projection_epoch: u64,
+    },
+    CloseOtherPanelTabs {
+        tab_stack_id: TabStackId,
+        keep_panel_instance_id: PanelInstanceId,
+        projection_epoch: u64,
+    },
+    SplitTabStackArea {
+        tab_stack_id: TabStackId,
+        axis: WorkspaceSplitAxis,
+        tool_surface_kind: ToolSurfaceKind,
+        projection_epoch: u64,
+    },
+    DuplicateTabStackArea {
+        tab_stack_id: TabStackId,
+        projection_epoch: u64,
+    },
+    CloseTabStackArea {
+        tab_stack_id: TabStackId,
+        projection_epoch: u64,
+    },
+    ResetTabStackArea {
+        tab_stack_id: TabStackId,
+        tool_surface_kind: ToolSurfaceKind,
+        projection_epoch: u64,
+    },
+    LockTabStackAreaType {
+        tab_stack_id: TabStackId,
+        locked_tool_surface_kind: Option<ToolSurfaceKind>,
+        projection_epoch: u64,
+    },
+    ActivateDocumentTab {
+        document_id: DocumentId,
+    },
+    CloseDocumentTab {
+        document_id: DocumentId,
+    },
+    SaveDocumentTab {
+        document_id: DocumentId,
     },
     SelectEntityTableEntity {
         entity: EntityId,
@@ -138,6 +198,30 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::SwitchPanelToolSurfaceKind {
+                projection_epoch, ..
+            }
+            | Self::CreatePanelTab {
+                projection_epoch, ..
+            }
+            | Self::ClosePanelTab {
+                projection_epoch, ..
+            }
+            | Self::CloseOtherPanelTabs {
+                projection_epoch, ..
+            }
+            | Self::SplitTabStackArea {
+                projection_epoch, ..
+            }
+            | Self::DuplicateTabStackArea {
+                projection_epoch, ..
+            }
+            | Self::CloseTabStackArea {
+                projection_epoch, ..
+            }
+            | Self::ResetTabStackArea {
+                projection_epoch, ..
+            }
+            | Self::LockTabStackAreaType {
                 projection_epoch, ..
             }
             | Self::SelectEntityTableEntity {

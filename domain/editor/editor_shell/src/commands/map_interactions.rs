@@ -18,7 +18,19 @@ pub fn map_interactions_to_shell_commands(
             UiInteraction::Activated(widget_id) => {
                 commands.push(command_for_activation(*widget_id, routing));
             }
+            UiInteraction::SelectChanged { target, index } => {
+                commands.push(command_for_select_change(*target, *index, routing));
+            }
+            UiInteraction::Toggled { target, checked } => {
+                commands.push(command_for_toggle(*target, *checked, routing));
+            }
+            UiInteraction::TabSelected { target, index } => {
+                commands.push(command_for_tab_selection(*target, *index, routing));
+            }
             UiInteraction::TableRowSelected { target, row_index } => {
+                commands.push(command_for_table_row(*target, *row_index, routing));
+            }
+            UiInteraction::TreeRowSelected { target, row_index } => {
                 commands.push(command_for_table_row(*target, *row_index, routing));
             }
             UiInteraction::TextInput { target, event } => {
@@ -106,11 +118,7 @@ pub fn map_interactions_to_shell_commands(
             UiInteraction::HoveredChanged { .. }
             | UiInteraction::PressedChanged { .. }
             | UiInteraction::FocusChanged(_)
-            | UiInteraction::Toggled { .. }
             | UiInteraction::NumericStepped { .. }
-            | UiInteraction::TabSelected { .. }
-            | UiInteraction::SelectChanged { .. }
-            | UiInteraction::TreeRowSelected { .. }
             | UiInteraction::TreeRowToggled { .. } => {}
         }
     }
@@ -133,6 +141,30 @@ fn command_for_activation(
     match action {
         RoutedShellAction::ActivateSelectTool => ShellCommand::ActivateSelectTool,
         RoutedShellAction::ActivateTranslateTool => ShellCommand::ActivateTranslateTool,
+        RoutedShellAction::ActivateRotateTool => ShellCommand::ActivateRotateTool,
+        RoutedShellAction::ActivateScaleTool => ShellCommand::ActivateScaleTool,
+        RoutedShellAction::ToggleToolbarMenu { menu } => {
+            ShellCommand::ToggleToolbarMenu { menu: *menu }
+        }
+        RoutedShellAction::RunToolbarCommand { command, enabled } => {
+            if *enabled {
+                ShellCommand::RunToolbarCommand { command: *command }
+            } else {
+                ShellCommand::NoOp
+            }
+        }
+        RoutedShellAction::SwitchWorkspaceProfile {
+            profile_id,
+            enabled,
+        } => {
+            if *enabled {
+                ShellCommand::SwitchWorkspaceProfile {
+                    profile_id: *profile_id,
+                }
+            } else {
+                ShellCommand::NoOp
+            }
+        }
         RoutedShellAction::Undo { enabled } => {
             if *enabled {
                 ShellCommand::Undo
@@ -170,6 +202,59 @@ fn command_for_activation(
             panel_instance_id: *panel_instance_id,
             projection_epoch: routing.projection_epoch,
         },
+        RoutedShellAction::CreatePanelTab {
+            tab_stack_id,
+            tool_surface_kind,
+        } => ShellCommand::CreatePanelTab {
+            tab_stack_id: *tab_stack_id,
+            tool_surface_kind: *tool_surface_kind,
+            projection_epoch: routing.projection_epoch,
+        },
+        RoutedShellAction::ClosePanelTab {
+            tab_stack_id,
+            panel_instance_id,
+        } => ShellCommand::ClosePanelTab {
+            tab_stack_id: *tab_stack_id,
+            panel_instance_id: *panel_instance_id,
+            projection_epoch: routing.projection_epoch,
+        },
+        RoutedShellAction::SplitTabStackArea {
+            tab_stack_id,
+            axis,
+            tool_surface_kind,
+        } => ShellCommand::SplitTabStackArea {
+            tab_stack_id: *tab_stack_id,
+            axis: *axis,
+            tool_surface_kind: *tool_surface_kind,
+            projection_epoch: routing.projection_epoch,
+        },
+        RoutedShellAction::DuplicateTabStackArea { tab_stack_id } => {
+            ShellCommand::DuplicateTabStackArea {
+                tab_stack_id: *tab_stack_id,
+                projection_epoch: routing.projection_epoch,
+            }
+        }
+        RoutedShellAction::CloseTabStackArea { tab_stack_id } => ShellCommand::CloseTabStackArea {
+            tab_stack_id: *tab_stack_id,
+            projection_epoch: routing.projection_epoch,
+        },
+        RoutedShellAction::ResetTabStackArea {
+            tab_stack_id,
+            tool_surface_kind,
+        } => ShellCommand::ResetTabStackArea {
+            tab_stack_id: *tab_stack_id,
+            tool_surface_kind: *tool_surface_kind,
+            projection_epoch: routing.projection_epoch,
+        },
+        RoutedShellAction::LockTabStackAreaType {
+            tab_stack_id,
+            locked_tool_surface_kind,
+        } => ShellCommand::LockTabStackAreaType {
+            tab_stack_id: *tab_stack_id,
+            locked_tool_surface_kind: *locked_tool_surface_kind,
+            projection_epoch: routing.projection_epoch,
+        },
+        RoutedShellAction::SwitchPanelToolSurfaceKind { .. } => ShellCommand::NoOp,
         RoutedShellAction::DispatchSurfaceLocalAction {
             provider_id,
             tool_surface_instance_id,
@@ -182,6 +267,74 @@ fn command_for_activation(
             action: action.clone(),
             projection_epoch: routing.projection_epoch,
         },
+    }
+}
+
+fn command_for_select_change(
+    widget_id: crate::WidgetId,
+    index: usize,
+    routing: &ShellProjectionArtifacts,
+) -> ShellCommand {
+    match routing.widget_actions_by_id.get(&widget_id) {
+        Some(RoutedShellAction::SwitchPanelToolSurfaceKind {
+            panel_instance_id: Some(panel_instance_id),
+            tool_surface_kinds,
+            ..
+        }) => {
+            let Some(tool_surface_kind) = tool_surface_kinds.get(index).copied() else {
+                return ShellCommand::NoOp;
+            };
+            ShellCommand::SwitchPanelToolSurfaceKind {
+                panel_instance_id: *panel_instance_id,
+                tool_surface_kind,
+                projection_epoch: routing.projection_epoch,
+            }
+        }
+        _ => ShellCommand::NoOp,
+    }
+}
+
+fn command_for_toggle(
+    widget_id: crate::WidgetId,
+    checked: bool,
+    routing: &ShellProjectionArtifacts,
+) -> ShellCommand {
+    match routing.widget_actions_by_id.get(&widget_id) {
+        Some(RoutedShellAction::LockTabStackAreaType {
+            tab_stack_id,
+            locked_tool_surface_kind,
+        }) => ShellCommand::LockTabStackAreaType {
+            tab_stack_id: *tab_stack_id,
+            locked_tool_surface_kind: checked.then_some(*locked_tool_surface_kind).flatten(),
+            projection_epoch: routing.projection_epoch,
+        },
+        _ => ShellCommand::NoOp,
+    }
+}
+
+fn command_for_tab_selection(
+    widget_id: crate::WidgetId,
+    index: usize,
+    routing: &ShellProjectionArtifacts,
+) -> ShellCommand {
+    let Some(RoutedShellAction::ActivateTab { tab_stack_id, .. }) =
+        routing.widget_actions_by_id.get(&widget_id)
+    else {
+        return ShellCommand::NoOp;
+    };
+    let Some(route) = routing
+        .workspace
+        .tab_button_route_by_widget_id
+        .values()
+        .filter(|route| route.tab_stack_id == *tab_stack_id)
+        .nth(index)
+    else {
+        return ShellCommand::NoOp;
+    };
+    ShellCommand::SetTabStackActivePanel {
+        tab_stack_id: route.tab_stack_id,
+        panel_instance_id: route.panel_instance_id,
+        projection_epoch: routing.projection_epoch,
     }
 }
 

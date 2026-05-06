@@ -113,6 +113,7 @@ pub struct TabStackState {
     pub id: TabStackId,
     pub ordered_panels: Vec<PanelInstanceId>,
     pub active_panel: Option<PanelInstanceId>,
+    pub locked_tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,6 +149,7 @@ pub enum WorkspaceStateError {
     MissingToolSurface(ToolSurfaceInstanceId),
     DuplicateHostId(PanelHostId),
     DuplicateTabStackId(TabStackId),
+    DuplicatePanelId(PanelInstanceId),
     DuplicateToolSurfaceId(ToolSurfaceInstanceId),
     DuplicatePanelInTabStacks(PanelInstanceId),
     DuplicateTabStackHost(TabStackId),
@@ -204,6 +206,9 @@ impl std::fmt::Display for WorkspaceStateError {
             Self::DuplicateHostId(host_id) => write!(f, "duplicate host id: {host_id:?}"),
             Self::DuplicateTabStackId(tab_stack_id) => {
                 write!(f, "duplicate tab stack id: {tab_stack_id:?}")
+            }
+            Self::DuplicatePanelId(panel_id) => {
+                write!(f, "duplicate panel id: {panel_id:?}")
             }
             Self::DuplicateToolSurfaceId(tool_surface_id) => {
                 write!(f, "duplicate tool surface id: {tool_surface_id:?}")
@@ -283,7 +288,7 @@ impl std::fmt::Display for WorkspaceStateError {
 impl std::error::Error for WorkspaceStateError {}
 
 impl WorkspaceState {
-    /// Transitional seed for the current fixed layout only.
+    /// Transitional seed for the current fixed scene-authoring layout only.
     /// This function is not the universal workspace-construction doctrine.
     pub fn bootstrap_current_layout(
         workspace_id: WorkspaceId,
@@ -333,8 +338,8 @@ impl WorkspaceState {
                 id: left_right_split_host,
                 kind: PanelHostKind::SplitHost(SplitHostState {
                     axis: WorkspaceSplitAxis::Horizontal,
-                    fraction: 0.22,
-                    first_child: outliner_tab_host,
+                    fraction: 0.72,
+                    first_child: viewport_tab_host,
                     second_child: center_right_split_host,
                 }),
             },
@@ -344,9 +349,9 @@ impl WorkspaceState {
             PanelHostNode {
                 id: center_right_split_host,
                 kind: PanelHostKind::SplitHost(SplitHostState {
-                    axis: WorkspaceSplitAxis::Horizontal,
-                    fraction: 0.70,
-                    first_child: viewport_tab_host,
+                    axis: WorkspaceSplitAxis::Vertical,
+                    fraction: 0.56,
+                    first_child: outliner_tab_host,
                     second_child: inspector_tab_host,
                 }),
             },
@@ -395,6 +400,7 @@ impl WorkspaceState {
                 id: outliner_tab_stack,
                 ordered_panels: vec![outliner_panel, entity_table_panel],
                 active_panel: Some(outliner_panel),
+                locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -403,6 +409,7 @@ impl WorkspaceState {
                 id: viewport_tab_stack,
                 ordered_panels: vec![viewport_panel],
                 active_panel: Some(viewport_panel),
+                locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -411,6 +418,7 @@ impl WorkspaceState {
                 id: inspector_tab_stack,
                 ordered_panels: vec![inspector_panel],
                 active_panel: Some(inspector_panel),
+                locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -419,6 +427,7 @@ impl WorkspaceState {
                 id: console_tab_stack,
                 ordered_panels: vec![console_panel],
                 active_panel: Some(console_panel),
+                locked_tool_surface_kind: None,
             },
         );
 
@@ -524,6 +533,13 @@ impl WorkspaceState {
             panels_by_id,
             tool_surfaces_by_id,
         }
+    }
+
+    pub fn bootstrap_modelling_layout(
+        workspace_id: WorkspaceId,
+        allocator: &mut WorkspaceIdentityAllocator,
+    ) -> Self {
+        Self::bootstrap_current_layout(workspace_id, allocator)
     }
 
     pub fn workspace_id(&self) -> WorkspaceId {

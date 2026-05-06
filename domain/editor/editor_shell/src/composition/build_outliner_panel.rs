@@ -1,18 +1,17 @@
 //! File: domain/editor/editor_shell/src/composition/build_outliner_panel.rs
 //! Purpose: Compose outliner panel widgets.
 
-use crate::{
-    UiNode, UiNodeKind, button_selected, label, panel, vscroll, vstack, vstack_with_policies,
-};
+use crate::{UiNode, label, panel, vscroll, vstack_with_policies};
 use ui_layout::SizePolicy;
-use ui_math::{UiInsets, UiSize};
 use ui_text::{FontId, TextOverflow};
 use ui_theme::{ThemeTokens, UiColor};
+use ui_tree::TreeRow;
+use ui_widgets::tree;
 
 use crate::{
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
     OUTLINER_SCROLL_WIDGET_ID, OUTLINER_TITLE_WIDGET_ID, OutlinerViewModel, PanelInstanceId,
-    ToolSurfaceInstanceId, outliner_row_widget_id,
+    ToolSurfaceInstanceId,
 };
 
 pub fn build_outliner_panel(
@@ -33,24 +32,15 @@ pub fn build_outliner_panel(
     let rows = view_model
         .rows
         .iter()
-        .enumerate()
-        .map(|(index, row)| {
-            let indent = "  ".repeat(row.depth);
-            compact_outliner_row(button_selected(
-                outliner_row_widget_id(index),
-                format!("{indent}{}", row.display_name),
-                row_style.clone(),
-                theme.clone(),
-                row.is_selected,
-            ))
+        .map(|row| {
+            let mut tree_row = TreeRow::new(row.display_name.clone(), row.depth, row.has_children);
+            tree_row.selected = row.is_selected;
+            tree_row.expanded = true;
+            tree_row
         })
         .collect::<Vec<_>>();
 
-    let list = vstack(
-        OUTLINER_LIST_WIDGET_ID,
-        (theme.spacing.xs * 0.60).max(1.5),
-        rows,
-    );
+    let list = tree(OUTLINER_LIST_WIDGET_ID, rows, row_style, theme.clone());
     let scroll = vscroll(OUTLINER_SCROLL_WIDGET_ID, theme.clone(), vec![list]);
     let body = vstack_with_policies(
         OUTLINER_BODY_WIDGET_ID,
@@ -66,17 +56,4 @@ pub fn build_outliner_panel(
         0.94,
     );
     panel(OUTLINER_PANEL_WIDGET_ID, panel_theme, vec![body])
-}
-
-fn compact_outliner_row(mut node: UiNode) -> UiNode {
-    if let UiNodeKind::Button(button) = &mut node.kind {
-        let vertical = (button.theme.spacing.xs * 0.45).max(1.0);
-        let horizontal = (button.theme.spacing.sm * 0.80).max(2.0);
-        button.padding = UiInsets::new(horizontal, vertical, horizontal, vertical);
-        let line_height = button
-            .text_style
-            .line_height_or_default(button.text_style.font_size * 1.2);
-        button.min_size = UiSize::new(0.0, (line_height + button.padding.vertical()).max(12.0));
-    }
-    node
 }

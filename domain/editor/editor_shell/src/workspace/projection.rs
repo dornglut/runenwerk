@@ -1,5 +1,5 @@
 //! File: domain/editor/editor_shell/src/workspace/projection.rs
-//! Purpose: Pure projection from canonical workspace graph into fixed shell composition slots.
+//! Purpose: Pure projection from canonical workspace graph into shell composition slots.
 
 use std::collections::BTreeMap;
 
@@ -12,11 +12,12 @@ use crate::{
     INSPECTOR_LIST_WIDGET_ID, INSPECTOR_PANEL_WIDGET_ID, INSPECTOR_SCROLL_WIDGET_ID,
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
     OUTLINER_SCROLL_WIDGET_ID, PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId,
-    PanelKind, TabStackHostState, TabStackId, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID,
-    VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    VIEWPORT_SURFACE_EMBED_WIDGET_ID, WidgetId, WorkspaceSplitAxis, WorkspaceState,
-    WorkspaceStateError, floating_host_widget_id, tab_button_widget_id, tab_drop_zone_widget_id,
-    tab_strip_widget_id,
+    PanelKind, TabStackHostState, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
+    VIEWPORT_BODY_WIDGET_ID, VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID,
+    VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
+    WorkspaceState, WorkspaceStateError, floating_host_widget_id, tab_button_widget_id,
+    tab_drop_zone_widget_id, tab_strip_widget_id, workspace_split_handle_widget_id,
+    workspace_split_host_widget_id,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +47,7 @@ pub struct ProjectedTabStackSlot {
     pub tabs: Vec<ProjectedTabButton>,
     pub drop_slots: Vec<ProjectedTabDropSlot>,
     pub active_panel: Option<ProjectedPanelSlot>,
+    pub locked_tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,6 +68,27 @@ pub struct FixedLayoutProjection {
     pub inspector: ProjectedTabStackSlot,
     pub console: ProjectedTabStackSlot,
     pub floating_hosts: Vec<ProjectedFloatingHostSlot>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProjectedWorkspaceHostSlot {
+    Split {
+        host_id: PanelHostId,
+        widget_id: WidgetId,
+        handle_widget_id: WidgetId,
+        axis: WorkspaceSplitAxis,
+        fraction: f32,
+        first_child: Box<ProjectedWorkspaceHostSlot>,
+        second_child: Box<ProjectedWorkspaceHostSlot>,
+    },
+    TabStack {
+        host_id: PanelHostId,
+        tab_stack: ProjectedTabStackSlot,
+    },
+    EmptyFloatingPlaceholder {
+        host_id: PanelHostId,
+        widget_id: WidgetId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -97,7 +120,9 @@ pub struct ProjectedTabDropRoute {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceProjectionArtifact {
-    pub fixed_layout: FixedLayoutProjection,
+    pub root_host: ProjectedWorkspaceHostSlot,
+    pub floating_hosts: Vec<ProjectedFloatingHostSlot>,
+    pub fixed_layout: Option<FixedLayoutProjection>,
     pub widget_context_by_id: BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
     pub tab_button_route_by_widget_id: BTreeMap<WidgetId, ProjectedTabButtonRoute>,
     pub tab_drop_route_by_widget_id: BTreeMap<WidgetId, ProjectedTabDropRoute>,
@@ -106,17 +131,15 @@ pub struct WorkspaceProjectionArtifact {
 pub fn project_workspace_for_shell(
     workspace_state: &WorkspaceState,
 ) -> Result<WorkspaceProjectionArtifact, WorkspaceStateError> {
-    let fixed_layout = project_fixed_layout(workspace_state)?;
+    workspace_state.validate_integrity()?;
+    let root_host = project_host_slot(workspace_state, workspace_state.root_host_id())?;
+    let floating_hosts = project_floating_hosts(workspace_state)?;
+    let fixed_layout = project_fixed_layout(workspace_state).ok();
     let mut widget_context_by_id = BTreeMap::new();
     let mut tab_button_route_by_widget_id = BTreeMap::new();
     let mut tab_drop_route_by_widget_id = BTreeMap::new();
 
-    for stack_slot in [
-        &fixed_layout.outliner,
-        &fixed_layout.viewport,
-        &fixed_layout.inspector,
-        &fixed_layout.console,
-    ] {
+    for stack_slot in projected_host_tab_stacks(&root_host) {
         register_tab_stack_routes(
             stack_slot,
             &mut tab_button_route_by_widget_id,
@@ -125,7 +148,7 @@ pub fn project_workspace_for_shell(
         register_active_panel_widget_contexts(&mut widget_context_by_id, stack_slot.active_panel);
     }
 
-    for floating in &fixed_layout.floating_hosts {
+    for floating in &floating_hosts {
         register_tab_stack_routes(
             &floating.tab_stack,
             &mut tab_button_route_by_widget_id,
@@ -145,11 +168,82 @@ pub fn project_workspace_for_shell(
     );
 
     Ok(WorkspaceProjectionArtifact {
+        root_host,
+        floating_hosts,
         fixed_layout,
         widget_context_by_id,
         tab_button_route_by_widget_id,
         tab_drop_route_by_widget_id,
     })
+}
+
+fn project_host_slot(
+    workspace_state: &WorkspaceState,
+    host_id: PanelHostId,
+) -> Result<ProjectedWorkspaceHostSlot, WorkspaceStateError> {
+    let host = workspace_state
+        .host(host_id)
+        .ok_or(WorkspaceStateError::MissingHost(host_id))?;
+    match host.kind {
+        PanelHostKind::SplitHost(split) => Ok(ProjectedWorkspaceHostSlot::Split {
+            host_id,
+            widget_id: workspace_split_host_widget_id(host_id),
+            handle_widget_id: workspace_split_handle_widget_id(host_id),
+            axis: split.axis,
+            fraction: split.fraction,
+            first_child: Box::new(project_host_slot(workspace_state, split.first_child)?),
+            second_child: Box::new(project_host_slot(workspace_state, split.second_child)?),
+        }),
+        PanelHostKind::TabStackHost(TabStackHostState { tab_stack_id }) => {
+            Ok(ProjectedWorkspaceHostSlot::TabStack {
+                host_id,
+                tab_stack: project_tab_stack_slot_by_id(workspace_state, tab_stack_id)?,
+            })
+        }
+        PanelHostKind::FloatingHostPlaceholder(_) => {
+            Ok(ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder {
+                host_id,
+                widget_id: floating_host_widget_id(host_id),
+            })
+        }
+    }
+}
+
+fn project_floating_hosts(
+    workspace_state: &WorkspaceState,
+) -> Result<Vec<ProjectedFloatingHostSlot>, WorkspaceStateError> {
+    let mut floating_hosts = Vec::new();
+    for host in workspace_state.hosts_by_id.values() {
+        let PanelHostKind::FloatingHostPlaceholder(placeholder) = host.kind else {
+            continue;
+        };
+        let Some(tab_stack_id) = placeholder.tab_stack_id else {
+            continue;
+        };
+        floating_hosts.push(ProjectedFloatingHostSlot {
+            host_id: host.id,
+            host_widget_id: floating_host_widget_id(host.id),
+            bounds: placeholder.bounds,
+            tab_stack: project_tab_stack_slot_by_id(workspace_state, tab_stack_id)?,
+        });
+    }
+    Ok(floating_hosts)
+}
+
+pub fn projected_host_tab_stacks(host: &ProjectedWorkspaceHostSlot) -> Vec<&ProjectedTabStackSlot> {
+    match host {
+        ProjectedWorkspaceHostSlot::Split {
+            first_child,
+            second_child,
+            ..
+        } => {
+            let mut stacks = projected_host_tab_stacks(first_child);
+            stacks.extend(projected_host_tab_stacks(second_child));
+            stacks
+        }
+        ProjectedWorkspaceHostSlot::TabStack { tab_stack, .. } => vec![tab_stack],
+        ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => Vec::new(),
+    }
 }
 
 pub fn project_fixed_layout(
@@ -169,19 +263,19 @@ pub fn project_fixed_layout(
         WorkspaceSplitAxis::Horizontal,
         "left-right host must be a horizontal split",
     )?;
-    let center_right = split_host_with_axis(
+    let right_sidebar = split_host_with_axis(
         workspace_state,
         left_right.second_child,
-        WorkspaceSplitAxis::Horizontal,
-        "center-right host must be a horizontal split",
+        WorkspaceSplitAxis::Vertical,
+        "right sidebar host must be a vertical split",
     )?;
 
-    let outliner =
-        projected_tab_stack_from_host(workspace_state, left_right.first_child, "outliner")?;
     let viewport =
-        projected_tab_stack_from_host(workspace_state, center_right.first_child, "viewport")?;
+        projected_tab_stack_from_host(workspace_state, left_right.first_child, "viewport")?;
+    let outliner =
+        projected_tab_stack_from_host(workspace_state, right_sidebar.first_child, "outliner")?;
     let inspector =
-        projected_tab_stack_from_host(workspace_state, center_right.second_child, "inspector")?;
+        projected_tab_stack_from_host(workspace_state, right_sidebar.second_child, "inspector")?;
     let console = projected_tab_stack_from_host(workspace_state, root.second_child, "console")?;
 
     let mut floating_hosts = Vec::new();
@@ -203,7 +297,7 @@ pub fn project_fixed_layout(
     Ok(FixedLayoutProjection {
         body_console_fraction: root.fraction,
         left_right_fraction: left_right.fraction,
-        center_right_fraction: center_right.fraction,
+        center_right_fraction: right_sidebar.fraction,
         outliner,
         viewport,
         inspector,
@@ -386,6 +480,7 @@ fn project_tab_stack_slot_by_id(
         tabs,
         drop_slots,
         active_panel,
+        locked_tool_surface_kind: stack.locked_tool_surface_kind,
     })
 }
 

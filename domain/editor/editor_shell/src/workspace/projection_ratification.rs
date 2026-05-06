@@ -9,7 +9,7 @@ use crate::{
     FLOATING_DROP_ZONE_WIDGET_ID, PanelInstanceId, ProjectedPanelSlot, ProjectedTabButtonRoute,
     ProjectedTabDropRoute, ProjectedTabDropTarget, ProjectedTabStackSlot,
     StructuralWidgetRoutingContext, TabStackId, ToolSurfaceInstanceId, WidgetId,
-    WorkspaceProjectionArtifact,
+    WorkspaceProjectionArtifact, projected_host_tab_stacks,
 };
 
 pub type EditorShellProjectionRatificationReport = RatificationReport<
@@ -83,14 +83,9 @@ pub fn ratify_workspace_projection_routes(
     let mut report = RatificationReport::accepted();
     let active_panels = active_panels_by_identity(artifact);
 
-    for stack in fixed_layout_stacks(artifact) {
+    for stack in all_projected_stacks(artifact) {
         ratify_stack_tab_routes(stack, artifact, &mut report);
         ratify_stack_drop_routes(stack, artifact, &mut report);
-    }
-
-    for floating in &artifact.fixed_layout.floating_hosts {
-        ratify_stack_tab_routes(&floating.tab_stack, artifact, &mut report);
-        ratify_stack_drop_routes(&floating.tab_stack, artifact, &mut report);
     }
 
     ratify_floating_drop_route(artifact, &mut report);
@@ -99,13 +94,10 @@ pub fn ratify_workspace_projection_routes(
     report
 }
 
-fn fixed_layout_stacks(artifact: &WorkspaceProjectionArtifact) -> [&ProjectedTabStackSlot; 4] {
-    [
-        &artifact.fixed_layout.outliner,
-        &artifact.fixed_layout.viewport,
-        &artifact.fixed_layout.inspector,
-        &artifact.fixed_layout.console,
-    ]
+fn all_projected_stacks(artifact: &WorkspaceProjectionArtifact) -> Vec<&ProjectedTabStackSlot> {
+    let mut stacks = projected_host_tab_stacks(&artifact.root_host);
+    stacks.extend(artifact.floating_hosts.iter().map(|host| &host.tab_stack));
+    stacks
 }
 
 fn active_panels_by_identity(
@@ -113,14 +105,8 @@ fn active_panels_by_identity(
 ) -> BTreeMap<(PanelInstanceId, TabStackId), Option<ToolSurfaceInstanceId>> {
     let mut active_panels = BTreeMap::new();
 
-    for stack in fixed_layout_stacks(artifact) {
+    for stack in all_projected_stacks(artifact) {
         if let Some(panel) = stack.active_panel {
-            active_panels.insert(active_panel_key(panel), panel.active_tool_surface);
-        }
-    }
-
-    for floating in &artifact.fixed_layout.floating_hosts {
-        if let Some(panel) = floating.tab_stack.active_panel {
             active_panels.insert(active_panel_key(panel), panel.active_tool_surface);
         }
     }
@@ -307,7 +293,11 @@ mod tests {
     #[test]
     fn projection_route_ratifier_rejects_missing_tab_button_route() {
         let mut artifact = projected_workspace();
-        let widget_id = artifact.fixed_layout.viewport.tabs[0].widget_id;
+        let fixed_layout = artifact
+            .fixed_layout
+            .as_ref()
+            .expect("fixed layout should project");
+        let widget_id = fixed_layout.viewport.tabs[0].widget_id;
         artifact.tab_button_route_by_widget_id.remove(&widget_id);
 
         let report =
@@ -328,14 +318,16 @@ mod tests {
     #[test]
     fn projection_route_ratifier_rejects_mismatched_tab_button_route() {
         let mut artifact = projected_workspace();
-        let widget_id = artifact.fixed_layout.viewport.tabs[0].widget_id;
+        let fixed_layout = artifact
+            .fixed_layout
+            .as_ref()
+            .expect("fixed layout should project");
+        let widget_id = fixed_layout.viewport.tabs[0].widget_id;
         artifact.tab_button_route_by_widget_id.insert(
             widget_id,
             ProjectedTabButtonRoute {
-                panel_instance_id: artifact.fixed_layout.viewport.tabs[0]
-                    .panel
-                    .panel_instance_id,
-                tab_stack_id: artifact.fixed_layout.outliner.tab_stack_id,
+                panel_instance_id: fixed_layout.viewport.tabs[0].panel.panel_instance_id,
+                tab_stack_id: fixed_layout.outliner.tab_stack_id,
             },
         );
 
@@ -369,13 +361,17 @@ mod tests {
     #[test]
     fn projection_route_ratifier_rejects_stale_widget_context() {
         let mut artifact = projected_workspace();
+        let fixed_layout = artifact
+            .fixed_layout
+            .as_ref()
+            .expect("fixed layout should project");
         let widget_id = WidgetId(999_999);
         artifact.widget_context_by_id.insert(
             widget_id,
             StructuralWidgetRoutingContext {
                 panel_instance_id: PanelInstanceId::try_from_raw(999).unwrap(),
                 active_tool_surface: None,
-                tab_stack_id: artifact.fixed_layout.viewport.tab_stack_id,
+                tab_stack_id: fixed_layout.viewport.tab_stack_id,
             },
         );
 

@@ -7,14 +7,26 @@ pub const ROOT_WIDGET_ID: WidgetId = WidgetId(1);
 
 pub const TOOLBAR_ROOT_WIDGET_ID: WidgetId = WidgetId(10);
 pub const TOOLBAR_ROW_WIDGET_ID: WidgetId = WidgetId(11);
-pub const TOOLBAR_SELECT_BUTTON_WIDGET_ID: WidgetId = WidgetId(12);
-pub const TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID: WidgetId = WidgetId(13);
-pub const TOOLBAR_UNDO_BUTTON_WIDGET_ID: WidgetId = WidgetId(14);
-pub const TOOLBAR_REDO_BUTTON_WIDGET_ID: WidgetId = WidgetId(15);
-pub const TOOLBAR_SAVE_BUTTON_WIDGET_ID: WidgetId = WidgetId(16);
-pub const TOOLBAR_LOAD_BUTTON_WIDGET_ID: WidgetId = WidgetId(17);
-pub const TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID: WidgetId = WidgetId(18);
-pub const TOOLBAR_SCROLL_WIDGET_ID: WidgetId = WidgetId(19);
+pub const TOOLBAR_FILE_MENU_WIDGET_ID: WidgetId = WidgetId(12);
+pub const TOOLBAR_EDIT_MENU_WIDGET_ID: WidgetId = WidgetId(13);
+pub const TOOLBAR_WINDOW_MENU_WIDGET_ID: WidgetId = WidgetId(14);
+pub const TOOLBAR_SEPARATOR_WIDGET_ID: WidgetId = WidgetId(15);
+pub const TOOLBAR_SCENE_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(16);
+pub const TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(17);
+pub const TOOLBAR_ADD_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(18);
+pub const TOOLBAR_MENU_ROW_WIDGET_ID: WidgetId = WidgetId(19);
+pub const TOOLBAR_SELECT_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_001);
+pub const TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_002);
+pub const TOOLBAR_ROTATE_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_003);
+pub const TOOLBAR_SCALE_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_004);
+pub const TOOLBAR_UNDO_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_005);
+pub const TOOLBAR_REDO_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_006);
+pub const TOOLBAR_SAVE_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_007);
+pub const TOOLBAR_LOAD_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_008);
+pub const TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID: WidgetId = WidgetId(28);
+pub const TOOLBAR_SCROLL_WIDGET_ID: WidgetId = WidgetId(29);
+pub const TOOLBAR_MENU_ITEM_WIDGET_ID_BASE: u64 = 90_000;
+pub const TOOLBAR_ROWS_WIDGET_ID: WidgetId = WidgetId(90_999);
 
 pub const BODY_ROOT_WIDGET_ID: WidgetId = WidgetId(20);
 pub const LEFT_RIGHT_SPLIT_WIDGET_ID: WidgetId = WidgetId(21);
@@ -83,7 +95,18 @@ pub const TAB_STACK_CONTAINER_WIDGET_ID_BASE: u64 = 1_050_000;
 pub const TAB_STRIP_SCROLL_WIDGET_ID_BASE: u64 = 1_100_000;
 pub const TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_200_000;
 pub const TAB_DROP_ZONE_WIDGET_ID_BASE: u64 = 1_400_000;
+pub const TAB_CLOSE_BUTTON_WIDGET_ID_BASE: u64 = 1_500_000;
 pub const FLOATING_HOST_WIDGET_ID_BASE: u64 = 1_600_000;
+pub const TAB_STACK_KIND_SELECT_WIDGET_ID_BASE: u64 = 1_900_000;
+pub const TAB_STACK_NEW_TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_950_000;
+pub const TAB_STACK_SPLIT_HORIZONTAL_BUTTON_WIDGET_ID_BASE: u64 = 2_000_000;
+pub const TAB_STACK_SPLIT_VERTICAL_BUTTON_WIDGET_ID_BASE: u64 = 2_050_000;
+pub const TAB_STACK_DUPLICATE_BUTTON_WIDGET_ID_BASE: u64 = 2_100_000;
+pub const TAB_STACK_CLOSE_AREA_BUTTON_WIDGET_ID_BASE: u64 = 2_150_000;
+pub const TAB_STACK_RESET_AREA_BUTTON_WIDGET_ID_BASE: u64 = 2_200_000;
+pub const TAB_STACK_LOCK_TYPE_TOGGLE_WIDGET_ID_BASE: u64 = 2_250_000;
+pub const WORKSPACE_SPLIT_HOST_WIDGET_ID_BASE: u64 = 2_300_000;
+pub const WORKSPACE_SPLIT_HANDLE_WIDGET_ID_BASE: u64 = 2_350_000;
 pub const FLOATING_COLUMN_WIDGET_ID: WidgetId = WidgetId(1_800_001);
 pub const FLOATING_DROP_ZONE_WIDGET_ID: WidgetId = WidgetId(1_800_002);
 
@@ -118,6 +141,10 @@ pub fn entity_table_sort_button_widget_id(index: usize) -> WidgetId {
     WidgetId(ENTITY_TABLE_SORT_BUTTON_WIDGET_ID_BASE + index as u64)
 }
 
+pub fn toolbar_menu_item_widget_id(index: usize) -> WidgetId {
+    WidgetId(TOOLBAR_MENU_ITEM_WIDGET_ID_BASE + index as u64)
+}
+
 pub fn tab_strip_widget_id(tab_stack_id: TabStackId) -> WidgetId {
     WidgetId(TAB_STRIP_WIDGET_ID_BASE + tab_stack_id.raw())
 }
@@ -136,6 +163,14 @@ pub fn tab_button_widget_id(tab_stack_id: TabStackId, tab_index: usize) -> Widge
     )
 }
 
+pub fn tab_close_button_widget_id(tab_stack_id: TabStackId, tab_index: usize) -> WidgetId {
+    WidgetId(
+        TAB_CLOSE_BUTTON_WIDGET_ID_BASE
+            + tab_stack_id.raw() * STACK_WIDGET_STRIDE
+            + tab_index as u64,
+    )
+}
+
 pub fn tab_drop_zone_widget_id(tab_stack_id: TabStackId, insert_index: usize) -> WidgetId {
     WidgetId(
         TAB_DROP_ZONE_WIDGET_ID_BASE
@@ -144,8 +179,58 @@ pub fn tab_drop_zone_widget_id(tab_stack_id: TabStackId, insert_index: usize) ->
     )
 }
 
+pub fn tab_stack_kind_select_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_KIND_SELECT_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_new_tab_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_NEW_TAB_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_split_horizontal_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_SPLIT_HORIZONTAL_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_split_vertical_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_SPLIT_VERTICAL_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_duplicate_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_DUPLICATE_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_close_area_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_CLOSE_AREA_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_reset_area_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_RESET_AREA_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_lock_type_toggle_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_LOCK_TYPE_TOGGLE_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
 pub fn floating_host_widget_id(host_id: PanelHostId) -> WidgetId {
     WidgetId(FLOATING_HOST_WIDGET_ID_BASE + host_id.raw() * HOST_WIDGET_STRIDE)
+}
+
+pub fn workspace_split_host_widget_id(host_id: PanelHostId) -> WidgetId {
+    match host_id.raw() {
+        1 => BODY_CONSOLE_SPLIT_WIDGET_ID,
+        2 => LEFT_RIGHT_SPLIT_WIDGET_ID,
+        3 => CENTER_RIGHT_SPLIT_WIDGET_ID,
+        _ => WidgetId(WORKSPACE_SPLIT_HOST_WIDGET_ID_BASE + host_id.raw() * HOST_WIDGET_STRIDE),
+    }
+}
+
+pub fn workspace_split_handle_widget_id(host_id: PanelHostId) -> WidgetId {
+    match host_id.raw() {
+        1 => BODY_CONSOLE_SPLIT_HANDLE_WIDGET_ID,
+        2 => LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID,
+        3 => CENTER_RIGHT_SPLIT_HANDLE_WIDGET_ID,
+        _ => WidgetId(WORKSPACE_SPLIT_HANDLE_WIDGET_ID_BASE + host_id.raw() * HOST_WIDGET_STRIDE),
+    }
 }
 
 pub fn outliner_row_index(widget_id: WidgetId) -> Option<usize> {
