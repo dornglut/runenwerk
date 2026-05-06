@@ -5,8 +5,9 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-06
 related:
+  - ./ui-definition-formation-foundation-design.md
   - ./editor-self-authoring-and-final-ui-design.md
   - ./editor-workspace-document-mode-panel-architecture.md
 ---
@@ -458,6 +459,52 @@ Rejected because the editor shell must keep explicit authored/runtime separation
 
 #### CSS-like implicit cascade as the primary styling model
 Rejected because Runenwerk should prefer explicit, typed, auditable contracts over highly implicit styling behavior.
+
+---
+
+## Long-Term UI Definition Direction
+
+### Decision
+
+Keep the retained tree UI plus tool-surface/canvas hybrid, and add a UI definition formation framework above `domain/ui` before starting visual editor self-authoring.
+
+The definition layer is source/IR, not retained UI in disguise. M3.5 forms into retained UI because that is the current accepted execution path. If a future active design or accepted ADR adds compiled-reactive or ECS-driven execution, those should be additional formation targets from the normalized definition model.
+
+The planned split is:
+
+- `domain/ui/*`: retained UI tree/runtime, layout, input, focus/capture, widgets, popovers, menus, theme tokens, and render-data contracts.
+- planned `domain/ui/ui_definition`: general authored UI templates, slots, repeaters, embeds, menus, availability, validation, normalization, execution-neutral source/IR, and formation into concrete UI products.
+- `domain/editor/editor_shell`: active editor workspace, panel/tab/tool-surface instance state, shell projection, and routing.
+- planned `domain/editor/editor_definition`: editor-specific toolbar, workspace catalogs, command route ids, availability descriptors, editor menus, shell chrome bindings, provider surface template bindings, and later authored layout definitions.
+- `apps/runenwerk_editor`: concrete provider registry, file IO, runtime integration, and preview/app instantiation.
+
+### Options Considered
+
+| Option | Fit | Decision |
+| --- | --- | --- |
+| Keep retained UI and add compiler-inspired definition/formation | Matches current implementation, Runenwerk's description-to-execution doctrine, explicit command boundaries, and future authored definitions. | Chosen. |
+| Full ECS-driven UI | May fit narrow world-bound labels or simulation-linked overlays later, but risks making ECS entity identity into authored UI/editor identity and conflicts with the accepted retained path. | Deferred; requires active design or ADR. |
+| Immediate-mode/debug-tool UI | Useful for throwaway diagnostics, but weak for durable focus/capture, menus, popovers, layout persistence, and self-authoring. | Not a primary architecture. |
+| Web/React-like declarative UI | Useful as inspiration for authored definitions, but the runtime model, cascade assumptions, and backend expectations do not match current domain boundaries. | Do not adopt wholesale. |
+| Hybrid general UI definition plus editor-specific definitions | Keeps substrate general while letting editor workspaces, commands, and tool-surface policy remain editor-owned. | Chosen refinement. |
+
+### Pain Point Mapping
+
+- toolbar/menu changes requiring shell routing edits: menu/action definitions should form generic UI menu products with explicit command route slots, while editor-specific command binding remains in editor definition/app layers;
+- hard-coded workspace profiles and default layouts: editor definitions should own workspace catalogs and default shell layout definitions, then form into `editor_shell` workspace products;
+- missing real dropdown/popover primitives: generic primitives belong in `domain/ui`; authored menu/popover definitions belong in the planned UI definition layer;
+- disabled/unavailable feature representation: formed products should carry availability/diagnostic state without routing fake or unavailable commands;
+- missing custom workspace catalog: editor definition should own the catalog, not the shell runtime enum alone;
+- self-authoring: M3.6 should edit the same definition families, not invent a second editor-only UI model.
+- future UI execution strategies: compiled-reactive or ECS-driven UI should consume the same normalized UI definitions through separate formation targets, rather than requiring authored template rewrites.
+
+### Boundary Rules
+
+- Do not turn `domain/ui` into an editor semantics crate.
+- Do not persist `WidgetId`, focus/capture ids, `PanelInstanceId`, `ToolSurfaceInstanceId`, or ECS entity ids as authored UI/editor ids.
+- Do not encode retained `UiNodeKind`, ECS components, or compiled update functions in authored UI source.
+- Preserve explicit command and ratification boundaries; formed UI may expose route slots, but execution remains with the owning editor/app/domain command path.
+- Do not start visual M3.6 self-authoring until the M3.5 definition framework owns menus, workspace catalogs, unavailable item representation, and template migration seams.
 
 ---
 

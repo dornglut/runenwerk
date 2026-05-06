@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-06
 related:
   - ./roadmap-index.md
   - ../apps/runenwerk-editor/execution-priority-checklist.md
@@ -51,6 +51,8 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 - [ ] Expand non-viewport surface maturity using existing surface contracts. Status: active/partially implemented; entity-table, console, inspector, outliner, and independent surface-session tests exist, but richer surface coverage remains open (source: `domain/ui/roadmap.md`).
 - [ ] Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard suites pass (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
 - [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: active; docs validation currently passes (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
+- [ ] Insert the M3.5 UI definition formation framework before M3.6 and M4. Status: planned; the owning roadmaps now place `domain/ui/ui_definition` and `domain/editor/editor_definition` before UI self-authoring and asset/procedural workspace expansion so menu, toolbar, shell chrome, provider surface, workspace, popover, theme, and unavailable-feature structure does not keep hard-coding into shell/app paths (source: `apps/runenwerk-editor/roadmap.md` and `domain/ui/roadmap.md`).
+- [ ] Implement the M3.6 UI self-authoring workspace and styling track before M4. Status: planned; the former final self-authoring work is now promoted before asset/procedural/gameplay expansion so later editor, debug overlay, runtime overlay, and game UI templates can be authored through the same definition system (source: `apps/runenwerk-editor/roadmap.md` and `design/active/editor-self-authoring-and-final-ui-design.md`).
 - [x] Add rotate and scale gizmos after translate workflow is stable. Status: implemented and test-covered for M3; translate, rotate, and scale tool activation, preview, snap-aware interaction, commit, undo/redo, and scene-authoring smoke coverage exist (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `apps/runenwerk-editor/roadmap.md`).
 - [x] Add create/delete/duplicate flows for common scene-authoring actions. Status: implemented and test-covered for M3; outliner/app scene commands cover create child, rename, reparent, duplicate subtree, delete single entity, batch delete, and SDF primitive creation through viewport SDF tool routing (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `apps/runenwerk-editor/roadmap.md`).
 - [x] Improve inspector/component authoring breadth for common 3D flows. Status: implemented and test-covered for M3; common reflected primitive fields are editable through typed inspector edit values, and component add/remove remains routed through scene command intents (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `apps/runenwerk-editor/roadmap.md`).
@@ -59,7 +61,7 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 - [ ] Keep scripting boundary language-neutral with Rhai as first adapter candidate when scripting implementation starts. Status: promoted to Now for editor/runtime tracking, but not implementation-started (source: `design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`).
 - [ ] Add world-space/screen-projected UI attachment binding through explicit authored binding contracts and runtime formation seams. Status: promoted to Now for tracking, but still boundary-gated by the owning design doc before implementation (source: `design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`).
 - [ ] Keep constrained in-game editors capability-gated with explicit command/ratification boundaries. Status: promoted to Now for tracking, but still boundary-gated by the owning design doc before implementation (source: `design/active/editor-workspace-document-mode-panel-architecture.md`).
-- [ ] Continue Editor Design/self-authoring track for UI/editor layout design, creation, and management. Status: promoted to Now for tracking and now designed at target level, but implementation remains gated behind document/provider/mode/docking closure (source: `design/active/editor-self-authoring-and-final-ui-design.md`, `design/active/editor-workspace-document-mode-panel-architecture.md`, and `reports/audits/editor-ui-priority-code-audit-2026-05-05.md`).
+- [ ] Continue Editor Design/self-authoring track for UI/editor layout design, creation, and management. Status: promoted to planned M3.6 after M3.5 and before M4 (source: `design/active/editor-self-authoring-and-final-ui-design.md`, `apps/runenwerk-editor/roadmap.md`, and `domain/ui/roadmap.md`).
 - [ ] Execute render immediate remaining phases: `R4` binding model expansion, `R6` boids feature proof, `R7` SDF renderer rebuild on new path (source: `engine/plugins/render/docs/roadmap.md`).
 - [ ] Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) in Priority 1 (source: `net/ecs-runtime-prioritized-roadmap.md`).
 - [ ] Keep architecture guards and docs synchronized while these tracks land (source: `workspace/roadmap-index.md`).

@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-06
 related:
   - ./mvp/implementation-sequence.md
   - ./mvp/acceptance-criteria.md
@@ -93,6 +93,8 @@ Representative evidence:
 - [ ] Expand non-viewport surface maturity using existing surface contracts. Status: Active/partially implemented; entity-table, console, inspector, outliner, provider routing, and independent surface-session coverage exist, but richer common workflows remain open.
 - [ ] Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: Active.
 - [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: Active.
+- [ ] Insert the M3.5 UI definition formation framework before M3.6 and M4. Status: Planned; this should add `domain/ui/ui_definition` plus `domain/editor/editor_definition`, cover templates/slots/repeaters/embeds/menus/availability, and migrate stable editor chrome/common surface structure without moving editor semantics into `domain/ui`.
+- [ ] Implement the M3.6 UI self-authoring workspace and styling track before M4. Status: Planned; this should add visual UI/layout/style/binding authoring, validation, retained previews, apply/rollback, and fixture-based editor/debug/runtime/game UI template previews before later feature work creates more hard-coded UI.
 - [x] Add rotate and scale gizmos after translate workflow is stable. Status: Implemented and automated verified; rotate/scale tool activation, preview, snap-aware interaction, commit, undo/redo, and scene-authoring smoke coverage exist.
 - [x] Add create/delete/duplicate flows for common scene-authoring actions. Status: Implemented and automated verified; outliner/app scene commands cover create child, rename, reparent, duplicate subtree, delete single entity, batch delete, and SDF primitive creation through viewport SDF tool routing.
 - [x] Improve inspector/component authoring breadth for common 3D flows. Status: Implemented for M3 and automated verified; common reflected primitive fields are editable through typed inspector edit values, and component add/remove remains routed through scene command intents.
@@ -101,4 +103,4 @@ Representative evidence:
 - [ ] Add language-neutral scripting boundary with Rhai as first adapter candidate. Status: Boundary-gated/open; no implementation started in the editor checklist.
 - [ ] Add world-space/screen-projected UI attachment binding only via explicit authored binding contracts and runtime formation seams. Status: Boundary-gated/open.
 - [ ] Add constrained in-game editors only through capability-gated surfaces and explicit command/ratification boundaries. Status: Boundary-gated/open.
-- [ ] Continue Editor Design/self-authoring track for UI/editor layout design, creation, and management. Status: Open/boundary-gated; target design now exists in `design/active/editor-self-authoring-and-final-ui-design.md`, but implementation remains gated behind document/provider/mode/docking closure.
+- [ ] Continue Editor Design/self-authoring track for UI/editor layout design, creation, and management. Status: Promoted to planned M3.6; implementation follows M3.5 and now precedes M4 asset/procedural expansion.

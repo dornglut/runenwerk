@@ -1,12 +1,13 @@
 ---
-title: Editor Self-Authoring and Final UI Design
-description: Target product and architecture design for Runenwerk editor/UI self-authoring, layout design, creation and management flows, and final editor UI.
+title: Editor Self-Authoring and UI Workspace Design
+description: Now-track product and architecture design for Runenwerk editor/UI self-authoring, UI workspace, layout design, styling, creation and management flows.
 status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-06
 related:
+  - ./ui-definition-formation-foundation-design.md
   - ./editor-ui-workspace-tool-surface-architecture.md
   - ./editor-workspace-document-mode-panel-architecture.md
   - ./workspace-identity-contract-and-migration-map.md
@@ -15,30 +16,29 @@ related:
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
 ---
 
-# Editor Self-Authoring and Final UI Design
+# Editor Self-Authoring and UI Workspace Design
 
 ## Status
 
 Active design.
 
-This document makes the self-authoring track implementation-design-level. It does not mean implementation should start before the current editor/UI structural priorities are closed.
+This document is now part of the immediate editor/UI roadmap. The implementation order is M3.5 UI definition formation framework first, then M3.6 UI self-authoring workspace before the asset/procedural/gameplay expansion milestones.
 
-The required order remains:
+The required order is:
 
-1. document tabs and active document switching;
-2. provider registry and app-domain operation migration closeout;
-3. scoped workspace/document modes;
-4. docking/tab product completion;
-5. reachable editor-area type switching and plus/new-tab affordances;
-6. self-authoring implementation.
+1. M1 through M3 editor structural, shell, docking/tab, document/mode, and scene-authoring foundations;
+2. M3.5 UI definition formation framework;
+3. M3.6 UI workspace and self-authoring implementation;
+4. M4+ asset, procedural, gameplay, runtime, overlay, and in-game UI work built on authored UI/style definitions instead of new hard-coded shell/app UI.
 
 ## Purpose
 
-Define the target user experience and architecture for Runenwerk to design and manage:
+Define the target user experience and architecture for Runenwerk to design, style, validate, preview, and manage:
 
 - editor workspace layouts;
 - dock hosts, tab stacks, panels, and tool surfaces;
 - UI layouts and UI documents;
+- runtime/game UI templates and overlay/debug UI templates as authored definitions;
 - menus, command bindings, shortcuts, and themes;
 - authored editor definitions that can later be packaged into specialized editors.
 
@@ -46,7 +46,8 @@ This is the design for the long-term goal:
 
 ```text
 Code defines the first editor.
-The editor can later define editors.
+The editor now starts defining editor UI.
+Later features consume authored UI instead of adding new hard-coded UI paths.
 ```
 
 ## Core Definitions
@@ -107,6 +108,20 @@ Examples:
 - panel registry definition;
 - tool-surface definition.
 
+### General UI Definition
+
+A general UI definition is editor-agnostic authored UI structure. It can describe UI nodes, layout, menu/popover structure, theme-token references, and generic action slots.
+
+It must not encode editor workspace profiles, panel/tab identity, `ToolSurfaceKind`, provider registry policy, or concrete editor command execution.
+
+It also must not encode retained runtime details such as `UiNodeKind`, `WidgetId`, focus/capture ids, ECS entity ids, or compiled update functions. Those belong to concrete formation targets. The M3.5 target is retained UI formation; future accepted compiled-reactive or ECS-driven strategies should add separate formation products from the same normalized source model.
+
+### Editor Definition
+
+An editor definition is editor-specific authored structure. It can describe workspace profiles, default layouts, editor menus, shortcuts, command bindings, panel registries, and tool-surface definitions.
+
+It may reference general UI definitions and formed UI products, but it owns editor semantics separately from `domain/ui`.
+
 ## Product Goals
 
 The final editor UI must let users:
@@ -118,6 +133,8 @@ The final editor UI must let users:
 - add a new area tab through a visible plus button;
 - design editor layouts visually;
 - design UI layouts visually;
+- design and preview editor, debug overlay, runtime overlay, and game UI templates as authored definitions;
+- style UI through theme tokens, state styles, typography, spacing, colors, and layout constraints;
 - create, duplicate, rename, delete, import, export, validate, and migrate authored definitions;
 - preview a definition before applying it;
 - apply valid definitions through ratified commands;
@@ -136,6 +153,8 @@ Do not start by building:
 - every future tool surface.
 
 The first version should prove authored editor/UI definition editing and activation inside the host editor.
+
+It may author runtime/game UI templates before the runtime binding path is complete. In that case preview uses explicit fixtures and diagnostics, and activation into the game runtime remains gated by the later owning runtime/game UI integration.
 
 ## Final Editor UI Design
 
@@ -584,7 +603,9 @@ Responsibilities:
 - prepare provider requests;
 - prepare command routes;
 - prepare theme tokens;
-- prepare UI tree templates.
+- prepare concrete UI products for the selected execution target.
+
+For M3.5, the selected target is a retained UI product consumed by `ui_tree`, `ui_widgets`, and `ui_runtime`. Future accepted compiled-reactive or ECS-driven strategies may add `CompiledUiProgram` or `EcsUiSpawnPlan`-style products without changing authored template identity.
 
 ### Instantiated
 
@@ -830,6 +851,17 @@ Session ids:
 
 ## Architecture Ownership
 
+### Planned `domain/ui/ui_definition`
+
+Owns general UI definition and formation contracts:
+
+- authored UI node/layout/menu/popover/theme-reference/action-slot definitions;
+- stable authored UI ids distinct from runtime widget, focus, capture, shell, and ECS ids;
+- validation, normalization, migration where needed, and formation into concrete UI products;
+- diagnostics for generic UI structure, references, availability, and unsupported formed products.
+
+It must not own editor workspaces, tool-surface semantics, provider registries, or command execution.
+
 ### `domain/editor/editor_core`
 
 Owns:
@@ -854,12 +886,16 @@ Owns:
 
 Owns:
 
-- authored definition schemas;
+- editor-specific authored definition schemas;
+- workspace profile catalogs and default layout definitions;
+- editor menu, shortcut, command binding, panel registry, and tool-surface definitions;
 - normalization;
 - formation;
 - migration;
 - validation;
 - self-authoring operation contracts.
+
+It may consume general UI definition contracts, but it must not move generic UI substrate behavior or runtime widget identity into editor-authored definitions.
 
 ### `domain/ui`
 
@@ -905,6 +941,14 @@ Add or preserve guards that prevent:
 
 ## Implementation Phases
 
+### Roadmap Placement
+
+This design is implemented as M3.6 in `docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md`.
+
+M3.6 is not a replacement for M3.5. It consumes the M3.5 definition framework and makes it usable through an editor workspace before M4 asset pipeline work begins.
+
+The later M8 roadmap slot is no longer the first self-authoring implementation. It is reserved for packaging, externalization, and long-lived migration hardening after the main editor feature tracks exist.
+
 ### Phase 0 - Design Closeout
 
 Outputs:
@@ -913,26 +957,40 @@ Outputs:
 - updated Now checklists;
 - explicit acceptance criteria.
 
-### Phase 1 - Definition Foundation
+### Phase 0.5 - UI Definition Formation Framework
 
 Implement:
 
-- authored definition ids;
-- minimal schemas for workspace layout and UI layout definitions;
+- planned `domain/ui/ui_definition` contracts for authored UI ids, nodes, layout, menu/popover structure, slots, repeaters, template refs, embeds, theme references, validation, normalization, and read-only formation into retained UI products as the first target;
+- planned `domain/editor/editor_definition` bindings for editor toolbar, menus, workspace catalogs, shell chrome, and common provider surface templates;
+- generic availability/diagnostic representation for disabled or unavailable UI without routing unavailable commands;
+- tests proving authored ids do not reuse runtime `WidgetId`, focus/capture ids, `PanelInstanceId`, `ToolSurfaceInstanceId`, or ECS entity ids.
+
+This is the M3.5 roadmap slice. It enables the M3.6 visual authoring workspace.
+
+### Phase 1 - M3.6 Authored Definition Lifecycle
+
+Implement:
+
+- editor definition document lifecycle;
+- UI definition document lifecycle;
+- durable schemas for workspace layout definitions, UI layouts, themes, menus, shortcuts, command bindings, and references to formed UI definitions;
 - normalization and validation reports;
 - read-only formation into current workspace contracts.
 
-### Phase 2 - Area Chrome Productization
+### Phase 2 - M3.6 UI Workspace Shell
 
 Implement:
 
+- UI workspace profile;
 - editor type selector dropdown;
 - plus/new-tab button;
 - new panel/tool-surface allocation command;
 - tab close/menu controls;
-- shell interaction mapping for select/dropdown changes.
+- shell interaction mapping for select/dropdown changes;
+- default UI workspace layout with UI hierarchy, UI canvas, style inspector, bindings/actions, validation, and command diff surfaces.
 
-### Phase 3 - Workspace Layout Designer
+### Phase 3 - M3.6 Workspace Layout Designer
 
 Implement:
 
@@ -943,7 +1001,7 @@ Implement:
 - layout validation;
 - apply preview.
 
-### Phase 4 - UI Layout Designer
+### Phase 4 - M3.6 UI Layout Designer
 
 Implement:
 
@@ -954,26 +1012,30 @@ Implement:
 - binding/action panel;
 - UI layout validation.
 
-### Phase 5 - Menus, Shortcuts, Themes
+### Phase 5 - M3.6 Styling, Menus, Shortcuts, And Themes
 
 Implement:
 
 - menu definition documents;
 - shortcut definition documents;
 - theme definition documents;
+- style inspector property editing;
+- theme token editing;
+- state style previews for normal, hover, active, disabled, selected, and focused control states;
 - conflict validation;
 - preview/apply flows.
 
-### Phase 6 - Formation, Migration, And Publishing
+### Phase 6 - M3.6 Formation, Migration, And Activation
 
 Implement:
 
 - versioned migrations;
-- apply/publish command;
+- preview fixtures for editor, debug overlay, runtime overlay, and game UI templates;
+- apply command;
 - rollback/revert;
-- import/export.
+- import/export for authored definition documents.
 
-### Phase 7 - Packaging Later
+### Phase 7 - M8 Packaging Later
 
 Later only:
 
@@ -983,25 +1045,21 @@ Later only:
 
 ## Acceptance Criteria
 
-The self-authoring system is ready for implementation only when:
+M3.6 may start after M3.5 closes with active `domain/ui/ui_definition` and `domain/editor/editor_definition` crates, checked-in RON fixtures, retained formation, diagnostics, and explicit route/embed products.
 
-- document tabs and active document switching are implemented;
-- provider routing is closed enough to support new document/workspace contexts;
-- scoped modes are available;
-- docking/tab controls are productized;
-- editor type switching is exposed in UI;
-- plus/new-tab creation is exposed in UI;
-- authored definition schemas are specified;
-- validation/formation is specified;
-- command/ratification boundaries are specified;
-- persistence/migration strategy is specified.
-
-The first implementation milestone is complete when:
+The promoted self-authoring milestone is complete when:
 
 - a user can create a workspace layout definition;
 - a user can add/split/move/close areas in the layout designer;
 - a user can add a tab and choose editor type;
+- a user can create and edit a UI definition document in the UI workspace;
+- a user can select UI nodes through the hierarchy and canvas;
+- a user can style selected UI nodes through theme tokens and state style controls;
+- a user can bind value, collection, route, availability, and embed slots through explicit binding panels;
+- editor, debug overlay, runtime overlay, and game UI template categories can be authored and previewed with fixture data;
 - validation catches malformed layouts;
-- a valid definition can be formed into an active workspace preview;
+- validation catches malformed UI templates, slot refs, route refs, theme refs, and unsupported embeds;
+- a valid definition can be formed into an active workspace/UI preview;
+- valid definitions can be applied or rolled back through ratified commands;
 - edits are undoable through ratified commands;
 - no active runtime/session-only ids are persisted as authored ids.

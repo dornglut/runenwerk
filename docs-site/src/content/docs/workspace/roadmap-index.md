@@ -32,7 +32,7 @@ Operational execution checklist:
   - [domain/ui/architecture.md](../domain/ui/architecture.md)
 - Editor/UI/workspace long-horizon architecture:
   - [design/active/editor-ui-workspace-tool-surface-architecture.md](../design/active/editor-ui-workspace-tool-surface-architecture.md)
-- Editor self-authoring and final UI design:
+- Editor self-authoring and UI workspace design:
   - [design/active/editor-self-authoring-and-final-ui-design.md](../design/active/editor-self-authoring-and-final-ui-design.md)
 - Editor asset pipeline and content workflow design:
   - [design/active/editor-asset-pipeline-and-content-workflow-design.md](../design/active/editor-asset-pipeline-and-content-workflow-design.md)
@@ -51,22 +51,18 @@ Operational execution checklist:
 - workspace structural identity and routing contracts are implemented and guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated in production editor flows;
 - editor MVP acceptance is complete and the active editor/UI work has moved to the repository Now list;
-- current active editor/UI work is primarily document tabs, provider migration and app-domain operation migration closeout, scoped modes, docking/tab behavior, broader non-viewport surface maturity, richer SDF scene-authoring actions, SDF/field-first asset pipeline and field-product foundation, procedural authoring domain sequencing, and continued guard/doc drift control.
+- current active editor/UI work is primarily the M3.5 UI definition formation framework, the promoted M3.6 UI self-authoring workspace/styling track, broader non-viewport surface maturity through templates, and continued guard/doc drift control before SDF/field asset and procedural workspace expansion.
 
 ## Recommended Near-Term Order
 
-1. Close editor document-tab and active-document switching gaps.
-2. Finish the provider-registry migration and editor app-domain operation migration.
-3. Replace the global editor mode enum with scoped workspace/document mode sets.
-4. Complete docking/tab behavior on existing structural identity contracts.
-5. Add reachable editor-area/type switching and plus/new-tab affordances.
-6. Expand non-viewport surface maturity through existing `ui_surface` contracts.
-7. Build the SDF/field-first asset pipeline and field-product foundation before broader content workspaces depend on loose files.
-8. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.
-9. Add gameplay graph ATR IR contracts after semantic graph and ECS/runtime boundaries are explicit, then lower first-slice gameplay rules into ECS query/event/schedule products.
-10. Keep self-authoring/final UI design aligned while implementation remains gated.
-11. Preserve and extend architecture guards while these features land.
-12. Keep domain and workspace docs synchronized with shipped behavior.
+1. Implement M3.5 UI definition formation framework.
+2. Implement M3.6 UI self-authoring workspace, styling, validation, preview, and apply/rollback.
+3. Use the M3.6 workspace to author later editor, debug overlay, runtime overlay, and game UI templates instead of adding new hard-coded shell/app UI.
+4. Build the SDF/field-first asset pipeline and field-product foundation after the UI authoring substrate is available.
+5. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.
+6. Add gameplay graph ATR IR contracts after semantic graph and ECS/runtime boundaries are explicit, then lower first-slice gameplay rules into ECS query/event/schedule products.
+7. Preserve and extend architecture guards while these features land.
+8. Keep domain and workspace docs synchronized with shipped behavior.
 
 ## Rule
 
