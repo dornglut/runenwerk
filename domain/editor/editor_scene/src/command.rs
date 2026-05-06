@@ -5,21 +5,27 @@ use editor_core::{Command, CommandId, CommandMetadata, CommandOutcome};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 
 use crate::{
-    AddComponentCommand, CreateEntityCommand, DeleteEntityCommand, EditComponentFieldCommand,
+    AddComponentCommand, CreateEntityCommand, CreateSdfPrimitiveCommand, DeleteEntitiesCommand,
+    DeleteEntityCommand, DuplicateEntitySubtreeCommand, EditComponentFieldCommand,
     EditResourceFieldCommand, RemoveComponentCommand, RenameEntityCommand, ReparentEntityCommand,
-    SceneCommandContext, SceneCommandIntent,
+    ResetTransformCommand, SceneCommandContext, SceneCommandIntent, SetTransformCommand,
 };
 
 #[derive(Debug, Clone, PartialEq)]
 enum SceneCommandKind {
     CreateEntity(CreateEntityCommand),
+    CreateSdfPrimitive(CreateSdfPrimitiveCommand),
     DeleteEntity(DeleteEntityCommand),
+    DeleteEntities(DeleteEntitiesCommand),
+    DuplicateEntitySubtree(DuplicateEntitySubtreeCommand),
     AddComponent(AddComponentCommand),
     RemoveComponent(RemoveComponentCommand),
     ReparentEntity(ReparentEntityCommand),
     EditComponentField(EditComponentFieldCommand),
     EditResourceField(EditResourceFieldCommand),
     RenameEntity(RenameEntityCommand),
+    SetTransform(SetTransformCommand),
+    ResetTransform(ResetTransformCommand),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,9 +47,36 @@ impl SceneEditorCommand {
                 parent,
                 display_name,
             } => SceneCommandKind::CreateEntity(CreateEntityCommand::new(parent, display_name)),
+            SceneCommandIntent::CreateChildEntity {
+                parent,
+                display_name,
+            } => {
+                SceneCommandKind::CreateEntity(CreateEntityCommand::new(Some(parent), display_name))
+            }
+            SceneCommandIntent::CreateSdfPrimitive {
+                parent,
+                display_name,
+                primitive,
+            } => SceneCommandKind::CreateSdfPrimitive(CreateSdfPrimitiveCommand::new(
+                parent,
+                display_name,
+                primitive,
+            )),
             SceneCommandIntent::DeleteEntity { entity } => {
                 SceneCommandKind::DeleteEntity(DeleteEntityCommand::new(entity))
             }
+            SceneCommandIntent::DeleteEntities { entities } => {
+                SceneCommandKind::DeleteEntities(DeleteEntitiesCommand::new(entities))
+            }
+            SceneCommandIntent::DuplicateEntitySubtree {
+                source,
+                new_parent,
+                name_suffix,
+            } => SceneCommandKind::DuplicateEntitySubtree(DuplicateEntitySubtreeCommand::new(
+                source,
+                new_parent,
+                name_suffix,
+            )),
             SceneCommandIntent::AddComponent {
                 entity,
                 component_type,
@@ -82,6 +115,12 @@ impl SceneEditorCommand {
                 entity,
                 new_display_name,
             } => SceneCommandKind::RenameEntity(RenameEntityCommand::new(entity, new_display_name)),
+            SceneCommandIntent::SetTransform { entity, transform } => {
+                SceneCommandKind::SetTransform(SetTransformCommand::new(entity, transform))
+            }
+            SceneCommandIntent::ResetTransform { entity } => {
+                SceneCommandKind::ResetTransform(ResetTransformCommand::new(entity))
+            }
         };
 
         Self { metadata, kind }
@@ -118,13 +157,18 @@ impl Command for SceneEditorCommand {
     fn apply<'a>(&mut self, ctx: &mut Self::Context<'a>) -> Result<CommandOutcome, Self::Error> {
         match &mut self.kind {
             SceneCommandKind::CreateEntity(command) => command.apply(ctx)?,
+            SceneCommandKind::CreateSdfPrimitive(command) => command.apply(ctx)?,
             SceneCommandKind::DeleteEntity(command) => command.apply(ctx)?,
+            SceneCommandKind::DeleteEntities(command) => command.apply(ctx)?,
+            SceneCommandKind::DuplicateEntitySubtree(command) => command.apply(ctx)?,
             SceneCommandKind::AddComponent(command) => command.apply(ctx)?,
             SceneCommandKind::RemoveComponent(command) => command.apply(ctx)?,
             SceneCommandKind::ReparentEntity(command) => command.apply(ctx)?,
             SceneCommandKind::EditComponentField(command) => command.apply(ctx)?,
             SceneCommandKind::EditResourceField(command) => command.apply(ctx)?,
             SceneCommandKind::RenameEntity(command) => command.apply(ctx)?,
+            SceneCommandKind::SetTransform(command) => command.apply(ctx)?,
+            SceneCommandKind::ResetTransform(command) => command.apply(ctx)?,
         }
 
         Ok(CommandOutcome::Applied)
@@ -133,13 +177,18 @@ impl Command for SceneEditorCommand {
     fn undo<'a>(&mut self, ctx: &mut Self::Context<'a>) -> Result<CommandOutcome, Self::Error> {
         match &mut self.kind {
             SceneCommandKind::CreateEntity(command) => command.undo(ctx)?,
+            SceneCommandKind::CreateSdfPrimitive(command) => command.undo(ctx)?,
             SceneCommandKind::DeleteEntity(command) => command.undo(ctx)?,
+            SceneCommandKind::DeleteEntities(command) => command.undo(ctx)?,
+            SceneCommandKind::DuplicateEntitySubtree(command) => command.undo(ctx)?,
             SceneCommandKind::AddComponent(command) => command.undo(ctx)?,
             SceneCommandKind::RemoveComponent(command) => command.undo(ctx)?,
             SceneCommandKind::ReparentEntity(command) => command.undo(ctx)?,
             SceneCommandKind::EditComponentField(command) => command.undo(ctx)?,
             SceneCommandKind::EditResourceField(command) => command.undo(ctx)?,
             SceneCommandKind::RenameEntity(command) => command.undo(ctx)?,
+            SceneCommandKind::SetTransform(command) => command.undo(ctx)?,
+            SceneCommandKind::ResetTransform(command) => command.undo(ctx)?,
         }
 
         Ok(CommandOutcome::Applied)

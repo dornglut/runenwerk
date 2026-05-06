@@ -8,13 +8,19 @@ use crate::{SceneCommandIntent, SceneEditorCommand};
 pub fn scene_intent_label(intent: &SceneCommandIntent) -> String {
     match intent {
         SceneCommandIntent::CreateEntity { .. } => "Create Entity".to_string(),
+        SceneCommandIntent::CreateChildEntity { .. } => "Create Child Entity".to_string(),
+        SceneCommandIntent::CreateSdfPrimitive { .. } => "Create SDF Primitive".to_string(),
         SceneCommandIntent::DeleteEntity { .. } => "Delete Entity".to_string(),
+        SceneCommandIntent::DeleteEntities { .. } => "Delete Entities".to_string(),
+        SceneCommandIntent::DuplicateEntitySubtree { .. } => "Duplicate Entity Subtree".to_string(),
         SceneCommandIntent::ReparentEntity { .. } => "Reparent Entity".to_string(),
         SceneCommandIntent::AddComponent { .. } => "Add Component".to_string(),
         SceneCommandIntent::RemoveComponent { .. } => "Remove Component".to_string(),
         SceneCommandIntent::EditComponentField { .. } => "Edit Component Field".to_string(),
         SceneCommandIntent::EditResourceField { .. } => "Edit Resource Field".to_string(),
         SceneCommandIntent::RenameEntity { .. } => "Rename Entity".to_string(),
+        SceneCommandIntent::SetTransform { .. } => "Set Transform".to_string(),
+        SceneCommandIntent::ResetTransform { .. } => "Reset Transform".to_string(),
     }
 }
 

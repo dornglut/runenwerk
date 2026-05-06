@@ -4,7 +4,7 @@
 use editor_core::{ComponentTypeId, EntityId, ResourceTypeId};
 use editor_inspector::{InspectorEditError, InspectorEditValue, InspectorPath};
 
-use crate::{SceneComponentSnapshot, SceneEntitySnapshot};
+use crate::{SceneComponentSnapshot, SceneEntitySnapshot, SceneTransform, SdfPrimitiveSpec};
 
 pub trait SceneRuntime {
     fn create_entity(
@@ -22,6 +22,21 @@ pub trait SceneRuntime {
         &mut self,
         entity: EntityId,
     ) -> Result<SceneEntitySnapshot, editor_core::EditorMutationError>;
+
+    fn children_of(&self, _parent: Option<EntityId>) -> Vec<EntityId> {
+        Vec::new()
+    }
+
+    fn duplicate_entity_subtree(
+        &mut self,
+        _source: EntityId,
+        _new_parent: Option<EntityId>,
+        _name_suffix: &str,
+    ) -> Result<Vec<EntityId>, editor_core::EditorMutationError> {
+        Err(editor_core::EditorMutationError::runtime_rejected(
+            "scene runtime does not support entity subtree duplication",
+        ))
+    }
 
     fn reparent_entity(
         &mut self,
@@ -45,6 +60,36 @@ pub trait SceneRuntime {
         &mut self,
         snapshot: SceneComponentSnapshot,
     ) -> Result<(), editor_core::EditorMutationError>;
+
+    fn create_sdf_primitive(
+        &mut self,
+        _parent: Option<EntityId>,
+        _display_name: &str,
+        _primitive: SdfPrimitiveSpec,
+    ) -> Result<EntityId, editor_core::EditorMutationError> {
+        Err(editor_core::EditorMutationError::runtime_rejected(
+            "scene runtime does not support SDF primitive creation",
+        ))
+    }
+
+    fn read_transform(
+        &self,
+        _entity: EntityId,
+    ) -> Result<SceneTransform, editor_core::EditorMutationError> {
+        Err(editor_core::EditorMutationError::runtime_rejected(
+            "scene runtime does not support transform reads",
+        ))
+    }
+
+    fn write_transform(
+        &mut self,
+        _entity: EntityId,
+        _transform: SceneTransform,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        Err(editor_core::EditorMutationError::runtime_rejected(
+            "scene runtime does not support transform writes",
+        ))
+    }
 
     fn read_component_field(
         &self,

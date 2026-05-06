@@ -4,14 +4,33 @@
 use editor_core::{ComponentTypeId, EntityId, ResourceTypeId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 
+use crate::{SceneTransform, SdfPrimitiveSpec};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SceneCommandIntent {
     CreateEntity {
         parent: Option<EntityId>,
         display_name: String,
     },
+    CreateChildEntity {
+        parent: EntityId,
+        display_name: String,
+    },
+    CreateSdfPrimitive {
+        parent: Option<EntityId>,
+        display_name: String,
+        primitive: SdfPrimitiveSpec,
+    },
     DeleteEntity {
         entity: EntityId,
+    },
+    DeleteEntities {
+        entities: Vec<EntityId>,
+    },
+    DuplicateEntitySubtree {
+        source: EntityId,
+        new_parent: Option<EntityId>,
+        name_suffix: String,
     },
     ReparentEntity {
         entity: EntityId,
@@ -39,5 +58,12 @@ pub enum SceneCommandIntent {
     RenameEntity {
         entity: EntityId,
         new_display_name: String,
+    },
+    SetTransform {
+        entity: EntityId,
+        transform: SceneTransform,
+    },
+    ResetTransform {
+        entity: EntityId,
     },
 }
