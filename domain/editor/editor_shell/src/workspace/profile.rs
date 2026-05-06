@@ -11,6 +11,7 @@ pub struct WorkspaceProfileId;
 
 pub const SCENE_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(1);
 pub const MODELLING_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(2);
+pub const EDITOR_DESIGN_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(3);
 pub const LAYOUT_WORKSPACE_PROFILE_ID: WorkspaceProfileId = SCENE_WORKSPACE_PROFILE_ID;
 
 const fn workspace_profile_id(raw: u64) -> WorkspaceProfileId {
@@ -24,6 +25,7 @@ const fn workspace_profile_id(raw: u64) -> WorkspaceProfileId {
 pub enum WorkspaceLayoutTemplate {
     Scene,
     Modelling,
+    EditorDesign,
     CurrentFixedEditor,
 }
 
@@ -38,6 +40,9 @@ impl WorkspaceLayoutTemplate {
                 WorkspaceState::bootstrap_current_layout(workspace_id, allocator)
             }
             Self::Modelling => WorkspaceState::bootstrap_modelling_layout(workspace_id, allocator),
+            Self::EditorDesign => {
+                WorkspaceState::bootstrap_editor_design_layout(workspace_id, allocator)
+            }
         }
     }
 }
@@ -144,6 +149,35 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                 vec![EDIT_MODE_ID],
                 vec![DocumentKind::Scene, DocumentKind::SdfBrushLayer],
             ),
+            WorkspaceProfile::new(
+                EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+                "Editor Design",
+                WorkspaceLayoutTemplate::EditorDesign,
+                vec![
+                    ToolSurfaceKind::EditorDesignOutliner,
+                    ToolSurfaceKind::UiHierarchy,
+                    ToolSurfaceKind::UiCanvas,
+                    ToolSurfaceKind::StyleInspector,
+                    ToolSurfaceKind::Bindings,
+                    ToolSurfaceKind::DockLayoutPreview,
+                    ToolSurfaceKind::ThemeEditor,
+                    ToolSurfaceKind::ShortcutEditor,
+                    ToolSurfaceKind::MenuEditor,
+                    ToolSurfaceKind::DefinitionValidation,
+                    ToolSurfaceKind::CommandDiff,
+                ],
+                vec![EDIT_MODE_ID],
+                vec![
+                    DocumentKind::UiLayout,
+                    DocumentKind::WorkspaceDefinition,
+                    DocumentKind::Theme,
+                    DocumentKind::Shortcut,
+                    DocumentKind::Menu,
+                    DocumentKind::CommandBinding,
+                    DocumentKind::PanelRegistry,
+                    DocumentKind::ToolSurfaceDefinition,
+                ],
+            ),
         ],
     )
 }
@@ -184,5 +218,35 @@ mod tests {
         assert_eq!(workspace.workspace_id(), workspace_id);
         assert!(workspace.validate_integrity().is_ok());
         assert_eq!(profile.id, SCENE_WORKSPACE_PROFILE_ID);
+    }
+
+    #[test]
+    fn editor_design_profile_exposes_self_authoring_surfaces() {
+        let registry = default_workspace_profile_registry();
+        let profile = registry
+            .profile(EDITOR_DESIGN_WORKSPACE_PROFILE_ID)
+            .expect("editor design profile should exist");
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+
+        assert_eq!(profile.label, "Editor Design");
+        assert!(
+            profile
+                .default_tool_surfaces
+                .contains(&ToolSurfaceKind::UiCanvas)
+        );
+        assert!(
+            profile
+                .document_kind_filters
+                .contains(&DocumentKind::UiLayout)
+        );
+        assert!(workspace.validate_integrity().is_ok());
+        assert!(
+            workspace
+                .tool_surfaces()
+                .any(|surface| surface.tool_surface_kind == ToolSurfaceKind::DefinitionValidation)
+        );
     }
 }

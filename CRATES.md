@@ -49,7 +49,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ui_runtime` | `domain/ui/ui_runtime` | domain | Retained UI runtime orchestration, input dispatch, layout, frame output, and runtime state. | evolving |
 | `ui_widgets` | `domain/ui/ui_widgets` | domain | Widget constructors over `ui_tree` contracts. | evolving |
 | `editor_core` | `domain/editor/editor_core` | domain | Editor command, capability, transaction, ratification, migration, selection, session, sharing, and workflow contracts. | evolving |
-| `editor_definition` | `domain/editor/editor_definition` | domain | Editor-specific UI definition bindings for toolbar, menus, workspace catalogs, shell chrome, routes, availability, and surface templates. | evolving |
+| `editor_definition` | `domain/editor/editor_definition` | domain | Editor-owned definition documents, lifecycle validation, workspace/profile/layout, menu, shortcut, theme, command binding, panel registry, tool-surface, toolbar, shell chrome, route, availability, and surface template schemas. | evolving |
 | `editor_inspector` | `domain/editor/editor_inspector` | domain | Inspector model, editing, target, resolution, bridge, schema interop, session, and validation contracts. | evolving |
 | `editor_scene` | `domain/editor/editor_scene` | domain | Editor scene model, commands, command descriptors, proposal adapter, command bridge, and scene command contracts. | evolving |
 | `editor_viewport` | `domain/editor/editor_viewport` | domain | Editor viewport camera, expression, hit, overlay, snap, and viewport contracts. | evolving |

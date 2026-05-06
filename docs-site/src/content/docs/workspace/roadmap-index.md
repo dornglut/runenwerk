@@ -51,18 +51,17 @@ Operational execution checklist:
 - workspace structural identity and routing contracts are implemented and guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated in production editor flows;
 - editor MVP acceptance is complete and the active editor/UI work has moved to the repository Now list;
-- current active editor/UI work is primarily the promoted M3.6 UI self-authoring workspace/styling track after the validated M3.5 UI definition formation closeout candidate, broader non-viewport surface maturity through templates, and continued guard/doc drift control before SDF/field asset and procedural workspace expansion.
+- current active editor/UI work has completed M3.6 self-authoring: durable schemas, Editor Design workspace/profile, provider surfaces, fixture document loading, validation, retained previews, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and apply/rollback exist before SDF/field asset and procedural workspace expansion.
 
 ## Recommended Near-Term Order
 
-1. Implement M3.6 UI self-authoring workspace, styling, validation, preview, and apply/rollback.
+1. Build the SDF/field-first asset pipeline and field-product foundation now that the UI authoring substrate is available.
 2. Continue richer provider surface template migrations only when retained behavior parity and provider-boundary preservation are explicit.
 3. Use the M3.6 workspace to author later editor, debug overlay, runtime overlay, and game UI templates instead of adding new hard-coded shell/app UI.
-4. Build the SDF/field-first asset pipeline and field-product foundation after the UI authoring substrate is available.
-5. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.
-6. Add gameplay graph ATR IR contracts after semantic graph and ECS/runtime boundaries are explicit, then lower first-slice gameplay rules into ECS query/event/schedule products.
-7. Preserve and extend architecture guards while these features land.
-8. Keep domain and workspace docs synchronized with shipped behavior.
+4. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.
+5. Add gameplay graph ATR IR contracts after semantic graph and ECS/runtime boundaries are explicit, then lower first-slice gameplay rules into ECS query/event/schedule products.
+6. Preserve and extend architecture guards while these features land.
+7. Keep domain and workspace docs synchronized with shipped behavior.
 
 ## Rule
 

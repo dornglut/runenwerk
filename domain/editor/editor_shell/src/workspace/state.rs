@@ -89,6 +89,17 @@ pub enum PanelKind {
     Viewport,
     Inspector,
     Console,
+    EditorDesignOutliner,
+    UiHierarchy,
+    UiCanvas,
+    StyleInspector,
+    Bindings,
+    DockLayoutPreview,
+    ThemeEditor,
+    ShortcutEditor,
+    MenuEditor,
+    DefinitionValidation,
+    CommandDiff,
     Placeholder,
 }
 
@@ -99,6 +110,17 @@ pub enum ToolSurfaceKind {
     Viewport,
     Inspector,
     Console,
+    EditorDesignOutliner,
+    UiHierarchy,
+    UiCanvas,
+    StyleInspector,
+    Bindings,
+    DockLayoutPreview,
+    ThemeEditor,
+    ShortcutEditor,
+    MenuEditor,
+    DefinitionValidation,
+    CommandDiff,
     Placeholder,
 }
 
@@ -540,6 +562,233 @@ impl WorkspaceState {
         allocator: &mut WorkspaceIdentityAllocator,
     ) -> Self {
         Self::bootstrap_current_layout(workspace_id, allocator)
+    }
+
+    pub fn bootstrap_editor_design_layout(
+        workspace_id: WorkspaceId,
+        allocator: &mut WorkspaceIdentityAllocator,
+    ) -> Self {
+        let body_validation_split_host = allocator.allocate_panel_host_id();
+        let left_center_right_split_host = allocator.allocate_panel_host_id();
+        let center_right_split_host = allocator.allocate_panel_host_id();
+        let outliner_tab_host = allocator.allocate_panel_host_id();
+        let canvas_tab_host = allocator.allocate_panel_host_id();
+        let inspector_tab_host = allocator.allocate_panel_host_id();
+        let validation_tab_host = allocator.allocate_panel_host_id();
+
+        let outliner_tab_stack = allocator.allocate_tab_stack_id();
+        let canvas_tab_stack = allocator.allocate_tab_stack_id();
+        let inspector_tab_stack = allocator.allocate_tab_stack_id();
+        let validation_tab_stack = allocator.allocate_tab_stack_id();
+
+        let outliner_panel = allocator.allocate_panel_instance_id();
+        let hierarchy_panel = allocator.allocate_panel_instance_id();
+        let canvas_panel = allocator.allocate_panel_instance_id();
+        let layout_preview_panel = allocator.allocate_panel_instance_id();
+        let style_panel = allocator.allocate_panel_instance_id();
+        let bindings_panel = allocator.allocate_panel_instance_id();
+        let validation_panel = allocator.allocate_panel_instance_id();
+        let diff_panel = allocator.allocate_panel_instance_id();
+
+        let outliner_surface = allocator.allocate_tool_surface_instance_id();
+        let hierarchy_surface = allocator.allocate_tool_surface_instance_id();
+        let canvas_surface = allocator.allocate_tool_surface_instance_id();
+        let layout_preview_surface = allocator.allocate_tool_surface_instance_id();
+        let style_surface = allocator.allocate_tool_surface_instance_id();
+        let bindings_surface = allocator.allocate_tool_surface_instance_id();
+        let validation_surface = allocator.allocate_tool_surface_instance_id();
+        let diff_surface = allocator.allocate_tool_surface_instance_id();
+
+        let mut hosts_by_id = BTreeMap::new();
+        hosts_by_id.insert(
+            body_validation_split_host,
+            PanelHostNode {
+                id: body_validation_split_host,
+                kind: PanelHostKind::SplitHost(SplitHostState {
+                    axis: WorkspaceSplitAxis::Vertical,
+                    fraction: 0.76,
+                    first_child: left_center_right_split_host,
+                    second_child: validation_tab_host,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            left_center_right_split_host,
+            PanelHostNode {
+                id: left_center_right_split_host,
+                kind: PanelHostKind::SplitHost(SplitHostState {
+                    axis: WorkspaceSplitAxis::Horizontal,
+                    fraction: 0.72,
+                    first_child: outliner_tab_host,
+                    second_child: center_right_split_host,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            center_right_split_host,
+            PanelHostNode {
+                id: center_right_split_host,
+                kind: PanelHostKind::SplitHost(SplitHostState {
+                    axis: WorkspaceSplitAxis::Horizontal,
+                    fraction: 0.68,
+                    first_child: canvas_tab_host,
+                    second_child: inspector_tab_host,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            outliner_tab_host,
+            PanelHostNode {
+                id: outliner_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: outliner_tab_stack,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            canvas_tab_host,
+            PanelHostNode {
+                id: canvas_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: canvas_tab_stack,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            inspector_tab_host,
+            PanelHostNode {
+                id: inspector_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: inspector_tab_stack,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            validation_tab_host,
+            PanelHostNode {
+                id: validation_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: validation_tab_stack,
+                }),
+            },
+        );
+
+        let mut tab_stacks_by_id = BTreeMap::new();
+        tab_stacks_by_id.insert(
+            outliner_tab_stack,
+            TabStackState {
+                id: outliner_tab_stack,
+                ordered_panels: vec![outliner_panel, hierarchy_panel],
+                active_panel: Some(outliner_panel),
+                locked_tool_surface_kind: None,
+            },
+        );
+        tab_stacks_by_id.insert(
+            canvas_tab_stack,
+            TabStackState {
+                id: canvas_tab_stack,
+                ordered_panels: vec![canvas_panel, layout_preview_panel],
+                active_panel: Some(canvas_panel),
+                locked_tool_surface_kind: None,
+            },
+        );
+        tab_stacks_by_id.insert(
+            inspector_tab_stack,
+            TabStackState {
+                id: inspector_tab_stack,
+                ordered_panels: vec![style_panel, bindings_panel],
+                active_panel: Some(style_panel),
+                locked_tool_surface_kind: None,
+            },
+        );
+        tab_stacks_by_id.insert(
+            validation_tab_stack,
+            TabStackState {
+                id: validation_tab_stack,
+                ordered_panels: vec![validation_panel, diff_panel],
+                active_panel: Some(validation_panel),
+                locked_tool_surface_kind: None,
+            },
+        );
+
+        let mut panels_by_id = BTreeMap::new();
+        for (panel_id, panel_kind, surface_id) in [
+            (
+                outliner_panel,
+                PanelKind::EditorDesignOutliner,
+                outliner_surface,
+            ),
+            (hierarchy_panel, PanelKind::UiHierarchy, hierarchy_surface),
+            (canvas_panel, PanelKind::UiCanvas, canvas_surface),
+            (
+                layout_preview_panel,
+                PanelKind::DockLayoutPreview,
+                layout_preview_surface,
+            ),
+            (style_panel, PanelKind::StyleInspector, style_surface),
+            (bindings_panel, PanelKind::Bindings, bindings_surface),
+            (
+                validation_panel,
+                PanelKind::DefinitionValidation,
+                validation_surface,
+            ),
+            (diff_panel, PanelKind::CommandDiff, diff_surface),
+        ] {
+            panels_by_id.insert(
+                panel_id,
+                PanelInstanceState {
+                    id: panel_id,
+                    panel_kind,
+                    active_tool_surface: Some(surface_id),
+                },
+            );
+        }
+
+        let mut tool_surfaces_by_id = BTreeMap::new();
+        for (surface_id, tool_surface_kind, panel_id) in [
+            (
+                outliner_surface,
+                ToolSurfaceKind::EditorDesignOutliner,
+                outliner_panel,
+            ),
+            (
+                hierarchy_surface,
+                ToolSurfaceKind::UiHierarchy,
+                hierarchy_panel,
+            ),
+            (canvas_surface, ToolSurfaceKind::UiCanvas, canvas_panel),
+            (
+                layout_preview_surface,
+                ToolSurfaceKind::DockLayoutPreview,
+                layout_preview_panel,
+            ),
+            (style_surface, ToolSurfaceKind::StyleInspector, style_panel),
+            (bindings_surface, ToolSurfaceKind::Bindings, bindings_panel),
+            (
+                validation_surface,
+                ToolSurfaceKind::DefinitionValidation,
+                validation_panel,
+            ),
+            (diff_surface, ToolSurfaceKind::CommandDiff, diff_panel),
+        ] {
+            tool_surfaces_by_id.insert(
+                surface_id,
+                ToolSurfaceState {
+                    id: surface_id,
+                    tool_surface_kind,
+                    mount: ToolSurfaceMount::Mounted { panel_id },
+                },
+            );
+        }
+
+        Self {
+            workspace_id,
+            root_host_id: body_validation_split_host,
+            hosts_by_id,
+            tab_stacks_by_id,
+            panels_by_id,
+            tool_surfaces_by_id,
+        }
     }
 
     pub fn workspace_id(&self) -> WorkspaceId {

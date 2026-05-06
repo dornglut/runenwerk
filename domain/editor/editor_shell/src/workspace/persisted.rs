@@ -111,6 +111,17 @@ pub enum PersistedPanelKindV2 {
     Viewport,
     Inspector,
     Console,
+    EditorDesignOutliner,
+    UiHierarchy,
+    UiCanvas,
+    StyleInspector,
+    Bindings,
+    DockLayoutPreview,
+    ThemeEditor,
+    ShortcutEditor,
+    MenuEditor,
+    DefinitionValidation,
+    CommandDiff,
     Placeholder,
 }
 
@@ -146,6 +157,17 @@ pub enum PersistedToolSurfaceKindV2 {
     Viewport,
     Inspector,
     Console,
+    EditorDesignOutliner,
+    UiHierarchy,
+    UiCanvas,
+    StyleInspector,
+    Bindings,
+    DockLayoutPreview,
+    ThemeEditor,
+    ShortcutEditor,
+    MenuEditor,
+    DefinitionValidation,
+    CommandDiff,
     Placeholder,
 }
 
@@ -633,6 +655,17 @@ fn persisted_panel_kind(kind: PanelKind) -> PersistedPanelKindV1 {
         PanelKind::Viewport => PersistedPanelKindV1::Viewport,
         PanelKind::Inspector => PersistedPanelKindV1::Inspector,
         PanelKind::Console => PersistedPanelKindV1::Console,
+        PanelKind::EditorDesignOutliner
+        | PanelKind::UiHierarchy
+        | PanelKind::UiCanvas
+        | PanelKind::StyleInspector
+        | PanelKind::Bindings
+        | PanelKind::DockLayoutPreview
+        | PanelKind::ThemeEditor
+        | PanelKind::ShortcutEditor
+        | PanelKind::MenuEditor
+        | PanelKind::DefinitionValidation
+        | PanelKind::CommandDiff => PersistedPanelKindV1::Placeholder,
         PanelKind::Placeholder => PersistedPanelKindV1::Placeholder,
     }
 }
@@ -644,6 +677,17 @@ fn persisted_panel_kind_v2(kind: PanelKind) -> PersistedPanelKindV2 {
         PanelKind::Viewport => PersistedPanelKindV2::Viewport,
         PanelKind::Inspector => PersistedPanelKindV2::Inspector,
         PanelKind::Console => PersistedPanelKindV2::Console,
+        PanelKind::EditorDesignOutliner => PersistedPanelKindV2::EditorDesignOutliner,
+        PanelKind::UiHierarchy => PersistedPanelKindV2::UiHierarchy,
+        PanelKind::UiCanvas => PersistedPanelKindV2::UiCanvas,
+        PanelKind::StyleInspector => PersistedPanelKindV2::StyleInspector,
+        PanelKind::Bindings => PersistedPanelKindV2::Bindings,
+        PanelKind::DockLayoutPreview => PersistedPanelKindV2::DockLayoutPreview,
+        PanelKind::ThemeEditor => PersistedPanelKindV2::ThemeEditor,
+        PanelKind::ShortcutEditor => PersistedPanelKindV2::ShortcutEditor,
+        PanelKind::MenuEditor => PersistedPanelKindV2::MenuEditor,
+        PanelKind::DefinitionValidation => PersistedPanelKindV2::DefinitionValidation,
+        PanelKind::CommandDiff => PersistedPanelKindV2::CommandDiff,
         PanelKind::Placeholder => PersistedPanelKindV2::Placeholder,
     }
 }
@@ -665,6 +709,17 @@ fn workspace_panel_kind_v2(kind: PersistedPanelKindV2) -> PanelKind {
         PersistedPanelKindV2::Viewport => PanelKind::Viewport,
         PersistedPanelKindV2::Inspector => PanelKind::Inspector,
         PersistedPanelKindV2::Console => PanelKind::Console,
+        PersistedPanelKindV2::EditorDesignOutliner => PanelKind::EditorDesignOutliner,
+        PersistedPanelKindV2::UiHierarchy => PanelKind::UiHierarchy,
+        PersistedPanelKindV2::UiCanvas => PanelKind::UiCanvas,
+        PersistedPanelKindV2::StyleInspector => PanelKind::StyleInspector,
+        PersistedPanelKindV2::Bindings => PanelKind::Bindings,
+        PersistedPanelKindV2::DockLayoutPreview => PanelKind::DockLayoutPreview,
+        PersistedPanelKindV2::ThemeEditor => PanelKind::ThemeEditor,
+        PersistedPanelKindV2::ShortcutEditor => PanelKind::ShortcutEditor,
+        PersistedPanelKindV2::MenuEditor => PanelKind::MenuEditor,
+        PersistedPanelKindV2::DefinitionValidation => PanelKind::DefinitionValidation,
+        PersistedPanelKindV2::CommandDiff => PanelKind::CommandDiff,
         PersistedPanelKindV2::Placeholder => PanelKind::Placeholder,
     }
 }
@@ -704,6 +759,17 @@ impl From<PersistedPanelKindV2> for String {
             PersistedPanelKindV2::Viewport => "viewport".to_string(),
             PersistedPanelKindV2::Inspector => "inspector".to_string(),
             PersistedPanelKindV2::Console => "console".to_string(),
+            PersistedPanelKindV2::EditorDesignOutliner => "editor_design_outliner".to_string(),
+            PersistedPanelKindV2::UiHierarchy => "ui_hierarchy".to_string(),
+            PersistedPanelKindV2::UiCanvas => "ui_canvas".to_string(),
+            PersistedPanelKindV2::StyleInspector => "style_inspector".to_string(),
+            PersistedPanelKindV2::Bindings => "bindings".to_string(),
+            PersistedPanelKindV2::DockLayoutPreview => "dock_layout_preview".to_string(),
+            PersistedPanelKindV2::ThemeEditor => "theme_editor".to_string(),
+            PersistedPanelKindV2::ShortcutEditor => "shortcut_editor".to_string(),
+            PersistedPanelKindV2::MenuEditor => "menu_editor".to_string(),
+            PersistedPanelKindV2::DefinitionValidation => "definition_validation".to_string(),
+            PersistedPanelKindV2::CommandDiff => "command_diff".to_string(),
             PersistedPanelKindV2::Placeholder => "placeholder".to_string(),
         }
     }
@@ -719,6 +785,17 @@ impl TryFrom<String> for PersistedPanelKindV2 {
             "viewport" => Ok(Self::Viewport),
             "inspector" => Ok(Self::Inspector),
             "console" => Ok(Self::Console),
+            "editor_design_outliner" => Ok(Self::EditorDesignOutliner),
+            "ui_hierarchy" => Ok(Self::UiHierarchy),
+            "ui_canvas" => Ok(Self::UiCanvas),
+            "style_inspector" => Ok(Self::StyleInspector),
+            "bindings" => Ok(Self::Bindings),
+            "dock_layout_preview" => Ok(Self::DockLayoutPreview),
+            "theme_editor" => Ok(Self::ThemeEditor),
+            "shortcut_editor" => Ok(Self::ShortcutEditor),
+            "menu_editor" => Ok(Self::MenuEditor),
+            "definition_validation" => Ok(Self::DefinitionValidation),
+            "command_diff" => Ok(Self::CommandDiff),
             "placeholder" => Ok(Self::Placeholder),
             other => Err(format!("unsupported panel kind: {other}")),
         }
@@ -732,6 +809,17 @@ fn persisted_tool_surface_kind(kind: ToolSurfaceKind) -> PersistedToolSurfaceKin
         ToolSurfaceKind::Viewport => PersistedToolSurfaceKindV1::Viewport,
         ToolSurfaceKind::Inspector => PersistedToolSurfaceKindV1::Inspector,
         ToolSurfaceKind::Console => PersistedToolSurfaceKindV1::Console,
+        ToolSurfaceKind::EditorDesignOutliner
+        | ToolSurfaceKind::UiHierarchy
+        | ToolSurfaceKind::UiCanvas
+        | ToolSurfaceKind::StyleInspector
+        | ToolSurfaceKind::Bindings
+        | ToolSurfaceKind::DockLayoutPreview
+        | ToolSurfaceKind::ThemeEditor
+        | ToolSurfaceKind::ShortcutEditor
+        | ToolSurfaceKind::MenuEditor
+        | ToolSurfaceKind::DefinitionValidation
+        | ToolSurfaceKind::CommandDiff => PersistedToolSurfaceKindV1::Placeholder,
         ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV1::Placeholder,
     }
 }
@@ -743,6 +831,17 @@ fn persisted_tool_surface_kind_v2(kind: ToolSurfaceKind) -> PersistedToolSurface
         ToolSurfaceKind::Viewport => PersistedToolSurfaceKindV2::Viewport,
         ToolSurfaceKind::Inspector => PersistedToolSurfaceKindV2::Inspector,
         ToolSurfaceKind::Console => PersistedToolSurfaceKindV2::Console,
+        ToolSurfaceKind::EditorDesignOutliner => PersistedToolSurfaceKindV2::EditorDesignOutliner,
+        ToolSurfaceKind::UiHierarchy => PersistedToolSurfaceKindV2::UiHierarchy,
+        ToolSurfaceKind::UiCanvas => PersistedToolSurfaceKindV2::UiCanvas,
+        ToolSurfaceKind::StyleInspector => PersistedToolSurfaceKindV2::StyleInspector,
+        ToolSurfaceKind::Bindings => PersistedToolSurfaceKindV2::Bindings,
+        ToolSurfaceKind::DockLayoutPreview => PersistedToolSurfaceKindV2::DockLayoutPreview,
+        ToolSurfaceKind::ThemeEditor => PersistedToolSurfaceKindV2::ThemeEditor,
+        ToolSurfaceKind::ShortcutEditor => PersistedToolSurfaceKindV2::ShortcutEditor,
+        ToolSurfaceKind::MenuEditor => PersistedToolSurfaceKindV2::MenuEditor,
+        ToolSurfaceKind::DefinitionValidation => PersistedToolSurfaceKindV2::DefinitionValidation,
+        ToolSurfaceKind::CommandDiff => PersistedToolSurfaceKindV2::CommandDiff,
         ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV2::Placeholder,
     }
 }
@@ -764,6 +863,17 @@ fn workspace_tool_surface_kind_v2(kind: PersistedToolSurfaceKindV2) -> ToolSurfa
         PersistedToolSurfaceKindV2::Viewport => ToolSurfaceKind::Viewport,
         PersistedToolSurfaceKindV2::Inspector => ToolSurfaceKind::Inspector,
         PersistedToolSurfaceKindV2::Console => ToolSurfaceKind::Console,
+        PersistedToolSurfaceKindV2::EditorDesignOutliner => ToolSurfaceKind::EditorDesignOutliner,
+        PersistedToolSurfaceKindV2::UiHierarchy => ToolSurfaceKind::UiHierarchy,
+        PersistedToolSurfaceKindV2::UiCanvas => ToolSurfaceKind::UiCanvas,
+        PersistedToolSurfaceKindV2::StyleInspector => ToolSurfaceKind::StyleInspector,
+        PersistedToolSurfaceKindV2::Bindings => ToolSurfaceKind::Bindings,
+        PersistedToolSurfaceKindV2::DockLayoutPreview => ToolSurfaceKind::DockLayoutPreview,
+        PersistedToolSurfaceKindV2::ThemeEditor => ToolSurfaceKind::ThemeEditor,
+        PersistedToolSurfaceKindV2::ShortcutEditor => ToolSurfaceKind::ShortcutEditor,
+        PersistedToolSurfaceKindV2::MenuEditor => ToolSurfaceKind::MenuEditor,
+        PersistedToolSurfaceKindV2::DefinitionValidation => ToolSurfaceKind::DefinitionValidation,
+        PersistedToolSurfaceKindV2::CommandDiff => ToolSurfaceKind::CommandDiff,
         PersistedToolSurfaceKindV2::Placeholder => ToolSurfaceKind::Placeholder,
     }
 }
@@ -803,6 +913,19 @@ impl From<PersistedToolSurfaceKindV2> for String {
             PersistedToolSurfaceKindV2::Viewport => "viewport".to_string(),
             PersistedToolSurfaceKindV2::Inspector => "inspector".to_string(),
             PersistedToolSurfaceKindV2::Console => "console".to_string(),
+            PersistedToolSurfaceKindV2::EditorDesignOutliner => {
+                "editor_design_outliner".to_string()
+            }
+            PersistedToolSurfaceKindV2::UiHierarchy => "ui_hierarchy".to_string(),
+            PersistedToolSurfaceKindV2::UiCanvas => "ui_canvas".to_string(),
+            PersistedToolSurfaceKindV2::StyleInspector => "style_inspector".to_string(),
+            PersistedToolSurfaceKindV2::Bindings => "bindings".to_string(),
+            PersistedToolSurfaceKindV2::DockLayoutPreview => "dock_layout_preview".to_string(),
+            PersistedToolSurfaceKindV2::ThemeEditor => "theme_editor".to_string(),
+            PersistedToolSurfaceKindV2::ShortcutEditor => "shortcut_editor".to_string(),
+            PersistedToolSurfaceKindV2::MenuEditor => "menu_editor".to_string(),
+            PersistedToolSurfaceKindV2::DefinitionValidation => "definition_validation".to_string(),
+            PersistedToolSurfaceKindV2::CommandDiff => "command_diff".to_string(),
             PersistedToolSurfaceKindV2::Placeholder => "placeholder".to_string(),
         }
     }
@@ -818,6 +941,17 @@ impl TryFrom<String> for PersistedToolSurfaceKindV2 {
             "viewport" => Ok(Self::Viewport),
             "inspector" => Ok(Self::Inspector),
             "console" => Ok(Self::Console),
+            "editor_design_outliner" => Ok(Self::EditorDesignOutliner),
+            "ui_hierarchy" => Ok(Self::UiHierarchy),
+            "ui_canvas" => Ok(Self::UiCanvas),
+            "style_inspector" => Ok(Self::StyleInspector),
+            "bindings" => Ok(Self::Bindings),
+            "dock_layout_preview" => Ok(Self::DockLayoutPreview),
+            "theme_editor" => Ok(Self::ThemeEditor),
+            "shortcut_editor" => Ok(Self::ShortcutEditor),
+            "menu_editor" => Ok(Self::MenuEditor),
+            "definition_validation" => Ok(Self::DefinitionValidation),
+            "command_diff" => Ok(Self::CommandDiff),
             "placeholder" => Ok(Self::Placeholder),
             other => Err(format!("unsupported tool-surface kind: {other}")),
         }

@@ -89,9 +89,9 @@ Current post-M3 gaps:
 ## Implementation Readiness
 
 - M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
-- M3.5 is the active UI/editor infrastructure slice: the closeout candidate has landed and passed validation/drift closeout as of 2026-05-06. M3.6 visual self-authoring has not started.
-- M3.6 is the promoted self-authoring/UI workspace slice: build the UI workspace, visual definition authoring, style/theme editing, validation, preview, and apply/rollback flows now so later asset, procedural, gameplay, runtime, and overlay UI can be authored through the same system.
-- M4 and M5 are the next content-pipeline track after M3.5 closes and M3.6 self-authoring lands, once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
+- M3.5 is closed as the UI/editor infrastructure slice: the closeout candidate landed and passed validation/drift closeout as of 2026-05-06.
+- M3.6 is complete as of 2026-05-06: durable UI/editor definition lifecycle contracts, an Editor Design workspace/profile, self-authoring provider surfaces, checked-in fixture document loading, retained preview, validation diagnostics, command diff summaries, retained authoring control routes, draft UI node/theme/workspace-layout edits, and explicit apply/rollback shell commands are implemented.
+- M4 and M5 are the next content-pipeline track, once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
 - M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
 - Later self-authoring packaging/extensibility is implementation-ready for the retained UI path only. Compiled-reactive or ECS-driven UI execution remains blocked; neither strategy was promoted before M2, and any future promotion requires a separate active design or accepted ADR plus a roadmap update.
@@ -114,7 +114,7 @@ Exit criteria:
 
 ### M1 - Editor Structural Core Closed
 
-Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M3.5 UI definition formation framework has a validated closeout candidate as of 2026-05-06, and M3.6 UI self-authoring workspace is the next infrastructure milestone before M4 asset pipeline foundation, while procedural domains and gameplay graph remain deferred.
+Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M3.5 UI definition formation framework is validated, M3.6 UI self-authoring is complete as of 2026-05-06, and M4 asset pipeline foundation is next while procedural domains and gameplay graph remain deferred.
 
 Purpose: close the structural seams that every later feature depends on.
 
@@ -180,7 +180,7 @@ Validation:
 
 Purpose: finish the core 3D editor before expanding into every other workspace.
 
-Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M3.5 UI definition formation framework has a validated closeout candidate as of 2026-05-06; M3.6 UI self-authoring workspace follows it before M4 asset pipeline foundation.
+Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M3.5 UI definition formation framework has a validated closeout candidate as of 2026-05-06; M3.6 UI self-authoring is complete and M4 asset pipeline foundation follows it.
 
 Implementation targets:
 
@@ -282,6 +282,8 @@ Validation:
 
 Purpose: move the former final self-authoring/UI design work into the Now track so Runenwerk can style, inspect, validate, preview, and author UI definitions before later asset, procedural, gameplay, runtime, overlay, and in-game UI surfaces are built.
 
+Status: complete as of 2026-05-06. Implemented: versioned UI definition migration wrapper, editor-owned workspace/profile/layout/theme/menu/shortcut/command-binding/panel/tool-surface schemas, editor-definition validation guards for runtime/session identity leakage, Editor Design workspace/profile, structural self-authoring tool-surface kinds, app-owned fixture document loading, retained UI preview, validation diagnostics, command diff/apply preview, retained provider control routes, draft UI hierarchy text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, explicit apply/rollback shell commands, and provider surfaces for definition outliner, UI hierarchy, UI canvas, style inspector, bindings, dock/layout preview, theme editor, shortcut editor, menu editor, definition validation, and command diff. Deferred beyond M3.6: exhaustive field-by-field visual polish, compiled-reactive UI execution, ECS-driven UI execution, asset/procedural/gameplay/runtime overlay authoring, packaging, and external marketplace workflows.
+
 Owning design:
 
 - `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`
@@ -329,13 +331,8 @@ Implementation targets:
 
 Validation:
 
-- create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, and migrate UI/editor definitions;
-- style/theme edits update retained preview without mutating active runtime state until ratified;
-- UI canvas and hierarchy edits are undoable through ratified commands;
-- validation blocks malformed definitions from becoming active;
-- editor, debug overlay, and runtime/game UI template categories can be authored as definitions even when later runtime bindings are not yet executable;
-- active runtime/session-only ids are never persisted as authored ids;
-- self-authoring follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time.
+- Implemented and covered: create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, migrate, retained provider control routing, draft UI node text edits, draft theme color edits, and draft workspace-layout add-tab/split-root/close-tab edits at the app/domain seam; validation blocks malformed definitions from becoming active; checked-in UI fixtures load as editable definition documents; retained previews form before apply; active runtime/session-only id vocabulary is rejected in editor authored ids; self-authoring follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time.
+- Deferred beyond M3.6: asset/procedural/gameplay/runtime overlay authoring, packaging/export hardening, exhaustive visual field polish, compiled-reactive UI execution, and ECS-driven UI execution.
 
 ### M4 - SDF/Field Asset Pipeline Foundation
 

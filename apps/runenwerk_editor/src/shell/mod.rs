@@ -1,6 +1,7 @@
 pub mod controller;
 pub mod dispatch_shell_command;
 pub mod providers;
+pub mod self_authoring;
 pub mod state;
 pub mod surface_session;
 pub mod ui_definition_assets;
@@ -10,6 +11,7 @@ mod toolbar_adapter;
 pub use controller::*;
 pub use dispatch_shell_command::*;
 pub use providers::*;
+pub use self_authoring::*;
 pub use state::*;
 pub use surface_session::*;
 pub use toolbar_adapter::{

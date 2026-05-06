@@ -56,6 +56,13 @@ Workspace/profile/document context
 ```
 
 Concrete providers live in `apps/runenwerk_editor/src/shell/providers/`.
+The M3.6 self-authoring workspace registers app-owned provider surfaces for
+definition outliner, UI hierarchy, UI canvas/retained preview, style inspector,
+bindings, dock/layout preview, theme editor, shortcut editor, menu editor,
+definition validation, and command diff summaries. These surfaces inspect,
+preview, and author editor/UI definition documents through retained control
+routes that propose shell commands; they do not execute app commands directly
+or move provider behavior into `domain/ui/ui_definition`.
 Provider contracts that are app/runtime neutral live in
 `domain/editor/editor_shell/src/surface_provider.rs`.
 
@@ -87,7 +94,9 @@ Default workspace profiles are defined in
 `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry`.
 The Scene and Modelling profiles are distinct workspace profiles; both currently
 use the same structural shell template while retaining separate profile identity
-and profile-addressed layout persistence.
+and profile-addressed layout persistence. The Editor Design profile uses
+`WorkspaceState::bootstrap_editor_design_layout` to expose self-authoring
+definition, preview, validation, styling, binding, and diff surfaces.
 
 The default structural layout is defined in
 `domain/editor/editor_shell/src/workspace/state.rs::WorkspaceState::bootstrap_current_layout`.
@@ -95,6 +104,18 @@ It places the viewport in the expanding left/middle area, the scene hierarchy
 above the inspector in the right sidebar, and the console/log surface in the
 bottom band. The compatibility projection for that structure is maintained in
 `domain/editor/editor_shell/src/workspace/projection.rs::project_fixed_layout`.
+
+## Self-Authoring State
+
+The app-owned self-authoring document lifecycle lives in
+`apps/runenwerk_editor/src/shell/self_authoring.rs::SelfAuthoringWorkspaceState`.
+It loads checked-in UI fixtures and editor-owned schema documents as editable
+definition documents, validates them through `domain/editor/editor_definition`,
+forms retained previews through `domain/ui/ui_definition`, edits draft UI node
+text/theme color/workspace-layout data through explicit shell commands, and
+keeps explicit applied snapshots for rollback. Apply and rollback are shell commands handled in
+`apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`, preserving the
+app/shell command boundary.
 
 ## Related Docs
 

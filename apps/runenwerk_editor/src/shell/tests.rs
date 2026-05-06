@@ -86,6 +86,164 @@ fn dispatch_shell_command_updates_active_tool() {
 }
 
 #[test]
+fn dispatch_shell_command_applies_and_rolls_back_selected_editor_definition() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::ApplySelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("selected definition fixture should apply");
+
+    assert_eq!(shell_state.self_authoring().applied_count(), 1);
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::RollbackSelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("selected applied definition should rollback");
+
+    assert_eq!(shell_state.self_authoring().applied_count(), 0);
+}
+
+#[test]
+fn dispatch_shell_command_edits_selected_ui_and_theme_definition_drafts() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let node_id = shell_state
+        .self_authoring()
+        .selected_ui_node_id()
+        .expect("selected UI definition should expose an editable node")
+        .to_string();
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SetSelectedEditorDefinitionUiNodeText {
+            node_id,
+            text: "Edited by command".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("selected UI definition node text edit should succeed");
+    assert!(
+        shell_state
+            .self_authoring()
+            .formed_selected_preview(&ThemeTokens::default())
+            .is_some()
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SelectEditorDefinitionDocument {
+            document_id: "runenwerk.editor.theme.default".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("theme document selection should succeed");
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SetSelectedEditorThemeColor {
+            token: "accent".to_string(),
+            value: "#2244ff".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("theme color draft edit should succeed");
+    let selected = shell_state
+        .self_authoring()
+        .selected_document()
+        .expect("theme document should remain selected");
+    let editor_definition::EditorDefinitionDocumentContent::Theme(theme) = &selected.content else {
+        panic!("selected document should be a theme definition");
+    };
+    assert_eq!(
+        theme.colors.get("accent").map(String::as_str),
+        Some("#2244ff")
+    );
+}
+
+#[test]
+fn dispatch_shell_command_edits_authored_workspace_layout_drafts() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SelectEditorDefinitionDocument {
+            document_id: "runenwerk.editor.layout.editor_design".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("workspace layout definition selection should succeed");
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
+            label: "Validation".to_string(),
+            tool_surface: "definition_validation".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("workspace layout tab edit should succeed");
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SplitSelectedEditorWorkspaceLayoutRoot {
+            axis: "horizontal".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("workspace layout split edit should succeed");
+
+    let selected = shell_state
+        .self_authoring()
+        .selected_document()
+        .expect("workspace layout should remain selected");
+    let editor_definition::EditorDefinitionDocumentContent::WorkspaceLayout(layout) =
+        &selected.content
+    else {
+        panic!("selected document should be a workspace layout");
+    };
+    assert!(matches!(
+        layout.root,
+        editor_definition::EditorWorkspaceHostDefinition::Split { .. }
+    ));
+}
+
+#[test]
 fn dispatch_shell_command_handles_toolbar_menu_and_workspace_commands() {
     let mut app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();

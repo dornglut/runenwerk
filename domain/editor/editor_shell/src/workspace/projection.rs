@@ -390,6 +390,17 @@ fn panel_widget_ids(panel_kind: PanelKind) -> &'static [WidgetId] {
             CONSOLE_SCROLL_WIDGET_ID,
             CONSOLE_HSCROLL_WIDGET_ID,
         ],
+        PanelKind::EditorDesignOutliner
+        | PanelKind::UiHierarchy
+        | PanelKind::UiCanvas
+        | PanelKind::StyleInspector
+        | PanelKind::Bindings
+        | PanelKind::DockLayoutPreview
+        | PanelKind::ThemeEditor
+        | PanelKind::ShortcutEditor
+        | PanelKind::MenuEditor
+        | PanelKind::DefinitionValidation
+        | PanelKind::CommandDiff => &[],
         PanelKind::Placeholder => &[],
     }
 }

@@ -19,7 +19,7 @@ related:
 
 ## Status
 
-Active M3.5 design. The implementation is at validated closeout-candidate state as of 2026-05-06; M3.6 visual self-authoring has not started.
+Active M3.5 design. The implementation is at validated closeout-candidate state as of 2026-05-06; M3.6 self-authoring is complete on top of this framework.
 
 This is an implementation design for a full first UI definition framework milestone. It is not a visual UI editor, plugin system, scripting system, or alternate UI execution runtime. The promoted M3.6 self-authoring workspace consumes this framework immediately after M3.5.
 

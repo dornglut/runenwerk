@@ -8,6 +8,8 @@ use editor_shell::{
 };
 use ui_math::{UiPoint, UiRect};
 
+use crate::shell::SelfAuthoringWorkspaceState;
+
 const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,6 +46,7 @@ pub struct RunenwerkEditorShellState {
     active_workspace_profile_id: WorkspaceProfileId,
     active_toolbar_menu: Option<ToolbarMenuKind>,
     workspace_state: WorkspaceState,
+    self_authoring: SelfAuthoringWorkspaceState,
     tab_drag_session: Option<TabDragSession>,
     split_resize_session: Option<SplitResizeSession>,
     docking_visual_state: DockingInteractionVisualState,
@@ -70,6 +73,8 @@ impl Default for RunenwerkEditorShellState {
             active_workspace_profile_id,
             active_toolbar_menu: None,
             workspace_state,
+            self_authoring: SelfAuthoringWorkspaceState::from_checked_in_fixtures()
+                .expect("checked-in self-authoring fixtures should load"),
             tab_drag_session: None,
             split_resize_session: None,
             docking_visual_state: DockingInteractionVisualState::default(),
@@ -163,6 +168,14 @@ impl RunenwerkEditorShellState {
 
     pub fn workspace_state(&self) -> &WorkspaceState {
         &self.workspace_state
+    }
+
+    pub fn self_authoring(&self) -> &SelfAuthoringWorkspaceState {
+        &self.self_authoring
+    }
+
+    pub fn self_authoring_mut(&mut self) -> &mut SelfAuthoringWorkspaceState {
+        &mut self.self_authoring
     }
 
     pub fn replace_workspace_state(&mut self, workspace_state: WorkspaceState) {

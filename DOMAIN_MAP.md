@@ -44,7 +44,7 @@ Editor inspector semantics          -> domain/editor/editor_inspector
 Editor scene authoring contracts    -> domain/editor/editor_scene
 Editor viewport semantics           -> domain/editor/editor_viewport
 Editor workspace/shell projection   -> domain/editor/editor_shell
-Editor definition bindings          -> domain/editor/editor_definition
+Editor definition lifecycle        -> domain/editor/editor_definition
 Editor persistence formats          -> domain/editor/editor_persistence
 Runtime app lifecycle               -> engine/src/app, engine/src/runtime
 Engine plugin integration           -> engine/src/plugins

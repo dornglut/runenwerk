@@ -160,6 +160,56 @@ pub fn dispatch_shell_command(
                 }
             ));
         }
+        ShellCommand::ApplySelectedEditorDefinition => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition apply",
+                    ))?;
+            match shell_state.self_authoring_mut().apply_selected() {
+                Ok(preview) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] applied {}",
+                        preview.display_name
+                    ));
+                }
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] apply blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition apply blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::RollbackSelectedEditorDefinition => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition rollback",
+                    ))?;
+            match shell_state.self_authoring_mut().rollback_selected() {
+                Ok(document) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] rolled back {}",
+                        document.display_name
+                    ));
+                }
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] rollback blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition rollback blocked",
+                    ));
+                }
+            }
+        }
         ShellCommand::SetTabStackActivePanel {
             tab_stack_id,
             panel_instance_id,
@@ -437,6 +487,288 @@ pub fn dispatch_shell_command(
                 .session_mut()
                 .mark_document_saved(document_id)
                 .map_err(|_| EditorMutationError::runtime_rejected("save document failed"))?;
+        }
+        ShellCommand::SelectEditorDefinitionDocument { document_id } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition selection",
+                    ))?;
+            if shell_state
+                .self_authoring_mut()
+                .select_document_by_str(&document_id)
+            {
+                app.append_console_line(format!("[editor-definition] selected {document_id}"));
+            } else {
+                app.append_console_line(format!(
+                    "[editor-definition] select blocked: unresolved document {document_id}"
+                ));
+            }
+        }
+        ShellCommand::DuplicateSelectedEditorDefinition => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition duplicate",
+                    ))?;
+            let new_id = shell_state
+                .self_authoring()
+                .generated_duplicate_id()
+                .ok_or(EditorMutationError::runtime_rejected(
+                    "editor definition duplicate id allocation failed",
+                ))?;
+            let display_name = format!("{} copy", new_id.as_str());
+            match shell_state
+                .self_authoring_mut()
+                .duplicate_selected(new_id.clone(), display_name)
+            {
+                Ok(id) => app
+                    .append_console_line(format!("[editor-definition] duplicated {}", id.as_str())),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] duplicate blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition duplicate blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::RenameSelectedEditorDefinition { display_name } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition rename",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .rename_selected(display_name.clone())
+            {
+                Ok(()) => app.append_console_line(format!(
+                    "[editor-definition] renamed selected definition to {display_name}"
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] rename blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition rename blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::DeleteSelectedEditorDefinition => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition delete",
+                    ))?;
+            match shell_state.self_authoring_mut().delete_selected() {
+                Ok(document) => app.append_console_line(format!(
+                    "[editor-definition] deleted {}",
+                    document.display_name
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] delete blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition delete blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::ExportSelectedEditorDefinition => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition export",
+                    ))?;
+            match shell_state.self_authoring().export_selected_to_ron() {
+                Ok(source) => app.append_console_line(format!(
+                    "[editor-definition] export preview generated ({} bytes)",
+                    source.len()
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] export blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition export blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::SelectEditorDefinitionUiNode { node_id } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition node selection",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .select_ui_node(node_id.clone())
+            {
+                Ok(()) => app
+                    .append_console_line(format!("[editor-definition] selected UI node {node_id}")),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] node selection blocked: {}",
+                        diagnostic.message
+                    ));
+                }
+            }
+        }
+        ShellCommand::SetSelectedEditorDefinitionUiNodeText { node_id, text } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition node edit",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .set_selected_ui_node_text(&node_id, text.clone())
+            {
+                Ok(()) => app.append_console_line(format!(
+                    "[editor-definition] set text on UI node {node_id}"
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] text edit blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition text edit blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::SetSelectedEditorThemeColor { token, value } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor theme edit",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .set_selected_theme_color(&token, value.clone())
+            {
+                Ok(()) => app.append_console_line(format!(
+                    "[editor-definition] set theme color {token}={value}"
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] theme edit blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor theme edit blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
+            label,
+            tool_surface,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor workspace layout edit",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .add_selected_workspace_layout_tab(label.clone(), tool_surface.clone())
+            {
+                Ok(tab_id) => app.append_console_line(format!(
+                    "[editor-definition] added workspace layout tab {tab_id}"
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] workspace layout tab edit blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor workspace layout tab edit blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::SplitSelectedEditorWorkspaceLayoutRoot { axis } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor workspace layout split",
+                    ))?;
+            let axis = match axis.as_str() {
+                "horizontal" => editor_definition::EditorWorkspaceSplitAxisDefinition::Horizontal,
+                "vertical" => editor_definition::EditorWorkspaceSplitAxisDefinition::Vertical,
+                _ => {
+                    app.append_console_line(format!(
+                        "[editor-definition] workspace split blocked: unsupported axis {axis}"
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor workspace layout split axis unsupported",
+                    ));
+                }
+            };
+            match shell_state
+                .self_authoring_mut()
+                .split_selected_workspace_layout_root(axis)
+            {
+                Ok(()) => app.append_console_line(
+                    "[editor-definition] split workspace layout root".to_string(),
+                ),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] workspace split blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor workspace layout split blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::CloseSelectedEditorWorkspaceLayoutLastTab => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor workspace layout close tab",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .close_selected_workspace_layout_last_tab()
+            {
+                Ok(tab) => app.append_console_line(format!(
+                    "[editor-definition] closed workspace layout tab {}",
+                    tab.id
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] workspace close tab blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor workspace layout close tab blocked",
+                    ));
+                }
+            }
         }
         ShellCommand::SelectEntityTableEntity {
             entity,
@@ -1246,6 +1578,17 @@ fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
         ToolSurfaceKind::Viewport => "viewport",
         ToolSurfaceKind::Inspector => "inspector",
         ToolSurfaceKind::Console => "console",
+        ToolSurfaceKind::EditorDesignOutliner => "editor_design_outliner",
+        ToolSurfaceKind::UiHierarchy => "ui_hierarchy",
+        ToolSurfaceKind::UiCanvas => "ui_canvas",
+        ToolSurfaceKind::StyleInspector => "style_inspector",
+        ToolSurfaceKind::Bindings => "bindings",
+        ToolSurfaceKind::DockLayoutPreview => "dock_layout_preview",
+        ToolSurfaceKind::ThemeEditor => "theme_editor",
+        ToolSurfaceKind::ShortcutEditor => "shortcut_editor",
+        ToolSurfaceKind::MenuEditor => "menu_editor",
+        ToolSurfaceKind::DefinitionValidation => "definition_validation",
+        ToolSurfaceKind::CommandDiff => "command_diff",
         ToolSurfaceKind::Placeholder => "placeholder",
     }
 }
@@ -1257,6 +1600,17 @@ fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {
         ToolSurfaceKind::Viewport => PanelKind::Viewport,
         ToolSurfaceKind::Inspector => PanelKind::Inspector,
         ToolSurfaceKind::Console => PanelKind::Console,
+        ToolSurfaceKind::EditorDesignOutliner => PanelKind::EditorDesignOutliner,
+        ToolSurfaceKind::UiHierarchy => PanelKind::UiHierarchy,
+        ToolSurfaceKind::UiCanvas => PanelKind::UiCanvas,
+        ToolSurfaceKind::StyleInspector => PanelKind::StyleInspector,
+        ToolSurfaceKind::Bindings => PanelKind::Bindings,
+        ToolSurfaceKind::DockLayoutPreview => PanelKind::DockLayoutPreview,
+        ToolSurfaceKind::ThemeEditor => PanelKind::ThemeEditor,
+        ToolSurfaceKind::ShortcutEditor => PanelKind::ShortcutEditor,
+        ToolSurfaceKind::MenuEditor => PanelKind::MenuEditor,
+        ToolSurfaceKind::DefinitionValidation => PanelKind::DefinitionValidation,
+        ToolSurfaceKind::CommandDiff => PanelKind::CommandDiff,
         ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
     }
 }
@@ -1446,6 +1800,27 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ActivateDocumentTab { .. } => "ActivateDocumentTab",
         ShellCommand::CloseDocumentTab { .. } => "CloseDocumentTab",
         ShellCommand::SaveDocumentTab { .. } => "SaveDocumentTab",
+        ShellCommand::SelectEditorDefinitionDocument { .. } => "SelectEditorDefinitionDocument",
+        ShellCommand::DuplicateSelectedEditorDefinition => "DuplicateSelectedEditorDefinition",
+        ShellCommand::RenameSelectedEditorDefinition { .. } => "RenameSelectedEditorDefinition",
+        ShellCommand::DeleteSelectedEditorDefinition => "DeleteSelectedEditorDefinition",
+        ShellCommand::ExportSelectedEditorDefinition => "ExportSelectedEditorDefinition",
+        ShellCommand::ApplySelectedEditorDefinition => "ApplySelectedEditorDefinition",
+        ShellCommand::RollbackSelectedEditorDefinition => "RollbackSelectedEditorDefinition",
+        ShellCommand::SelectEditorDefinitionUiNode { .. } => "SelectEditorDefinitionUiNode",
+        ShellCommand::SetSelectedEditorDefinitionUiNodeText { .. } => {
+            "SetSelectedEditorDefinitionUiNodeText"
+        }
+        ShellCommand::SetSelectedEditorThemeColor { .. } => "SetSelectedEditorThemeColor",
+        ShellCommand::AddSelectedEditorWorkspaceLayoutTab { .. } => {
+            "AddSelectedEditorWorkspaceLayoutTab"
+        }
+        ShellCommand::SplitSelectedEditorWorkspaceLayoutRoot { .. } => {
+            "SplitSelectedEditorWorkspaceLayoutRoot"
+        }
+        ShellCommand::CloseSelectedEditorWorkspaceLayoutLastTab => {
+            "CloseSelectedEditorWorkspaceLayoutLastTab"
+        }
         ShellCommand::SelectEntityTableEntity { .. } => "SelectEntityTableEntity",
         ShellCommand::AppendEntityTableSearchText { .. } => "AppendEntityTableSearchText",
         ShellCommand::BackspaceEntityTableSearch { .. } => "BackspaceEntityTableSearch",

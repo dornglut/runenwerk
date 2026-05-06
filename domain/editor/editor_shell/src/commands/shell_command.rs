@@ -110,6 +110,36 @@ pub enum ShellCommand {
     SaveDocumentTab {
         document_id: DocumentId,
     },
+    SelectEditorDefinitionDocument {
+        document_id: String,
+    },
+    DuplicateSelectedEditorDefinition,
+    RenameSelectedEditorDefinition {
+        display_name: String,
+    },
+    DeleteSelectedEditorDefinition,
+    ExportSelectedEditorDefinition,
+    ApplySelectedEditorDefinition,
+    RollbackSelectedEditorDefinition,
+    SelectEditorDefinitionUiNode {
+        node_id: String,
+    },
+    SetSelectedEditorDefinitionUiNodeText {
+        node_id: String,
+        text: String,
+    },
+    SetSelectedEditorThemeColor {
+        token: String,
+        value: String,
+    },
+    AddSelectedEditorWorkspaceLayoutTab {
+        label: String,
+        tool_surface: String,
+    },
+    SplitSelectedEditorWorkspaceLayoutRoot {
+        axis: String,
+    },
+    CloseSelectedEditorWorkspaceLayoutLastTab,
     SelectEntityTableEntity {
         entity: EntityId,
         target: StructuralCommandTarget,

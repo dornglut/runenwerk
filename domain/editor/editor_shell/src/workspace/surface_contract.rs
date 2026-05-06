@@ -14,9 +14,23 @@ pub const INSPECTOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefiniti
 pub const CONSOLE_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(4);
 pub const PLACEHOLDER_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(5);
 pub const ENTITY_TABLE_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(6);
+pub const EDITOR_DESIGN_OUTLINER_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
+    SurfaceDefinitionId::new(7);
+pub const UI_HIERARCHY_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(8);
+pub const UI_CANVAS_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(9);
+pub const STYLE_INSPECTOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(10);
+pub const BINDINGS_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(11);
+pub const DOCK_LAYOUT_PREVIEW_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
+    SurfaceDefinitionId::new(12);
+pub const THEME_EDITOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(13);
+pub const SHORTCUT_EDITOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(14);
+pub const MENU_EDITOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(15);
+pub const DEFINITION_VALIDATION_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
+    SurfaceDefinitionId::new(16);
+pub const COMMAND_DIFF_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(17);
 
-pub fn editor_surface_definitions() -> [SurfaceDefinition; 6] {
-    [
+pub fn editor_surface_definitions() -> Vec<SurfaceDefinition> {
+    vec![
         SurfaceDefinition::new(
             OUTLINER_SURFACE_DEFINITION_ID,
             "editor.tool_surface.outliner",
@@ -47,6 +61,61 @@ pub fn editor_surface_definitions() -> [SurfaceDefinition; 6] {
             "editor.tool_surface.entity_table",
             "Entity Table",
         ),
+        SurfaceDefinition::new(
+            EDITOR_DESIGN_OUTLINER_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.editor_design_outliner",
+            "Definition Outliner",
+        ),
+        SurfaceDefinition::new(
+            UI_HIERARCHY_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.ui_hierarchy",
+            "UI Hierarchy",
+        ),
+        SurfaceDefinition::new(
+            UI_CANVAS_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.ui_canvas",
+            "UI Canvas",
+        ),
+        SurfaceDefinition::new(
+            STYLE_INSPECTOR_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.style_inspector",
+            "Style Inspector",
+        ),
+        SurfaceDefinition::new(
+            BINDINGS_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.bindings",
+            "Bindings",
+        ),
+        SurfaceDefinition::new(
+            DOCK_LAYOUT_PREVIEW_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.dock_layout_preview",
+            "Dock Layout Preview",
+        ),
+        SurfaceDefinition::new(
+            THEME_EDITOR_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.theme_editor",
+            "Theme Editor",
+        ),
+        SurfaceDefinition::new(
+            SHORTCUT_EDITOR_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.shortcut_editor",
+            "Shortcut Editor",
+        ),
+        SurfaceDefinition::new(
+            MENU_EDITOR_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.menu_editor",
+            "Menu Editor",
+        ),
+        SurfaceDefinition::new(
+            DEFINITION_VALIDATION_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.definition_validation",
+            "Definition Validation",
+        ),
+        SurfaceDefinition::new(
+            COMMAND_DIFF_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.command_diff",
+            "Command Diff",
+        ),
     ]
 }
 
@@ -57,6 +126,17 @@ pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId 
         ToolSurfaceKind::Viewport => VIEWPORT_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Inspector => INSPECTOR_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Console => CONSOLE_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::EditorDesignOutliner => EDITOR_DESIGN_OUTLINER_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::UiHierarchy => UI_HIERARCHY_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::UiCanvas => UI_CANVAS_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::StyleInspector => STYLE_INSPECTOR_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::Bindings => BINDINGS_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::DockLayoutPreview => DOCK_LAYOUT_PREVIEW_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::ThemeEditor => THEME_EDITOR_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::ShortcutEditor => SHORTCUT_EDITOR_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::MenuEditor => MENU_EDITOR_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::DefinitionValidation => DEFINITION_VALIDATION_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::CommandDiff => COMMAND_DIFF_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Placeholder => PLACEHOLDER_SURFACE_DEFINITION_ID,
     }
 }
@@ -68,6 +148,17 @@ pub fn tool_surface_capability_set(kind: ToolSurfaceKind) -> SurfaceCapabilitySe
         ToolSurfaceKind::Viewport => SurfaceCapabilitySet::new(true, true, true, false),
         ToolSurfaceKind::Inspector => SurfaceCapabilitySet::new(true, true, true, false),
         ToolSurfaceKind::Console => SurfaceCapabilitySet::new(true, true, false, false),
+        ToolSurfaceKind::EditorDesignOutliner
+        | ToolSurfaceKind::UiHierarchy
+        | ToolSurfaceKind::UiCanvas
+        | ToolSurfaceKind::StyleInspector
+        | ToolSurfaceKind::Bindings
+        | ToolSurfaceKind::DockLayoutPreview
+        | ToolSurfaceKind::ThemeEditor
+        | ToolSurfaceKind::ShortcutEditor
+        | ToolSurfaceKind::MenuEditor
+        | ToolSurfaceKind::DefinitionValidation
+        | ToolSurfaceKind::CommandDiff => SurfaceCapabilitySet::new(true, true, true, true),
         ToolSurfaceKind::Placeholder => SurfaceCapabilitySet::new(true, false, false, false),
     }
 }
@@ -79,6 +170,17 @@ pub fn tool_surface_session_retention_class(kind: ToolSurfaceKind) -> SessionRet
         ToolSurfaceKind::Viewport => SessionRetentionClass::Restorable,
         ToolSurfaceKind::Inspector => SessionRetentionClass::Persistent,
         ToolSurfaceKind::Console => SessionRetentionClass::Ephemeral,
+        ToolSurfaceKind::EditorDesignOutliner
+        | ToolSurfaceKind::UiHierarchy
+        | ToolSurfaceKind::UiCanvas
+        | ToolSurfaceKind::StyleInspector
+        | ToolSurfaceKind::Bindings
+        | ToolSurfaceKind::DockLayoutPreview
+        | ToolSurfaceKind::ThemeEditor
+        | ToolSurfaceKind::ShortcutEditor
+        | ToolSurfaceKind::MenuEditor
+        | ToolSurfaceKind::DefinitionValidation
+        | ToolSurfaceKind::CommandDiff => SessionRetentionClass::Restorable,
         ToolSurfaceKind::Placeholder => SessionRetentionClass::Ephemeral,
     }
 }

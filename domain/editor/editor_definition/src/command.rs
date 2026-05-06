@@ -33,3 +33,21 @@ pub struct EditorCommandRouteBinding {
     pub route: EditorRouteId,
     pub ui_route_slot: ui_definition::UiRouteSlotId,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorCommandBindingSetDefinition {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub bindings: Vec<EditorCommandBindingDefinition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorCommandBindingDefinition {
+    pub id: String,
+    pub command: String,
+    pub route_target: String,
+    #[serde(default)]
+    pub capability_requirements: Vec<String>,
+    pub undoable: bool,
+}

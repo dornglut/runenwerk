@@ -922,6 +922,17 @@ fn panel_kind_for_tool_surface(kind: ToolSurfaceKind) -> PanelKind {
         ToolSurfaceKind::Viewport => PanelKind::Viewport,
         ToolSurfaceKind::Inspector => PanelKind::Inspector,
         ToolSurfaceKind::Console => PanelKind::Console,
+        ToolSurfaceKind::EditorDesignOutliner => PanelKind::EditorDesignOutliner,
+        ToolSurfaceKind::UiHierarchy => PanelKind::UiHierarchy,
+        ToolSurfaceKind::UiCanvas => PanelKind::UiCanvas,
+        ToolSurfaceKind::StyleInspector => PanelKind::StyleInspector,
+        ToolSurfaceKind::Bindings => PanelKind::Bindings,
+        ToolSurfaceKind::DockLayoutPreview => PanelKind::DockLayoutPreview,
+        ToolSurfaceKind::ThemeEditor => PanelKind::ThemeEditor,
+        ToolSurfaceKind::ShortcutEditor => PanelKind::ShortcutEditor,
+        ToolSurfaceKind::MenuEditor => PanelKind::MenuEditor,
+        ToolSurfaceKind::DefinitionValidation => PanelKind::DefinitionValidation,
+        ToolSurfaceKind::CommandDiff => PanelKind::CommandDiff,
         ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
     }
 }

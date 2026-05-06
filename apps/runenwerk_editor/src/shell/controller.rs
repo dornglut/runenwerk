@@ -632,6 +632,7 @@ fn shell_command_from_surface_proposal(proposal: SurfaceCommandProposal) -> Opti
                 projection_epoch: proposal.projection_epoch,
             }),
         },
+        SurfaceCommandProposal::Shell(command) => Some(command),
     }
 }
 
