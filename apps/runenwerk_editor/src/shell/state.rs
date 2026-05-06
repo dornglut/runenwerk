@@ -2,9 +2,9 @@ use editor_shell::{
     ActiveTabDragVisualState, BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
     DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
     PanelHostId, PanelInstanceId, ShellProjectionArtifacts, TabStackId, ToolSurfaceInstanceId,
-    ToolSurfaceKind, UiRuntime, UiTree, WidgetId, WorkspaceId, WorkspaceIdentityAllocator,
-    WorkspaceMutation, WorkspaceProfileId, WorkspaceState, WorkspaceStateError,
-    default_workspace_profile_registry, reduce_workspace,
+    ToolSurfaceKind, ToolbarMenuKind, UiRuntime, UiTree, WidgetId, WorkspaceId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId, WorkspaceSplitAxis,
+    WorkspaceState, WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -28,7 +28,9 @@ pub enum WorkspaceSplitKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct SplitResizeSession {
-    split_kind: WorkspaceSplitKind,
+    split_host_id: PanelHostId,
+    split_widget_id: WidgetId,
+    axis: WorkspaceSplitAxis,
 }
 
 #[derive(Debug)]
@@ -40,6 +42,7 @@ pub struct RunenwerkEditorShellState {
     projection_epoch: u64,
     identity_allocator: WorkspaceIdentityAllocator,
     active_workspace_profile_id: WorkspaceProfileId,
+    active_toolbar_menu: Option<ToolbarMenuKind>,
     workspace_state: WorkspaceState,
     tab_drag_session: Option<TabDragSession>,
     split_resize_session: Option<SplitResizeSession>,
@@ -65,6 +68,7 @@ impl Default for RunenwerkEditorShellState {
             projection_epoch: 0,
             identity_allocator,
             active_workspace_profile_id,
+            active_toolbar_menu: None,
             workspace_state,
             tab_drag_session: None,
             split_resize_session: None,
@@ -128,11 +132,32 @@ impl RunenwerkEditorShellState {
         self.active_workspace_profile_id
     }
 
+    pub fn active_toolbar_menu(&self) -> Option<ToolbarMenuKind> {
+        self.active_toolbar_menu
+    }
+
+    pub fn toggle_toolbar_menu(&mut self, menu: ToolbarMenuKind) {
+        self.active_toolbar_menu = if self.active_toolbar_menu == Some(menu) {
+            None
+        } else {
+            Some(menu)
+        };
+        self.clear_cached_projection();
+    }
+
+    pub fn close_toolbar_menu(&mut self) {
+        if self.active_toolbar_menu.is_some() {
+            self.active_toolbar_menu = None;
+            self.clear_cached_projection();
+        }
+    }
+
     pub fn set_active_workspace_profile_id(&mut self, profile_id: WorkspaceProfileId) {
         if self.active_workspace_profile_id == profile_id {
             return;
         }
         self.active_workspace_profile_id = profile_id;
+        self.active_toolbar_menu = None;
         self.clear_cached_projection();
     }
 
@@ -154,6 +179,10 @@ impl RunenwerkEditorShellState {
 
     pub fn allocate_tab_stack_id(&mut self) -> TabStackId {
         self.identity_allocator.allocate_tab_stack_id()
+    }
+
+    pub fn allocate_panel_instance_id(&mut self) -> PanelInstanceId {
+        self.identity_allocator.allocate_panel_instance_id()
     }
 
     pub fn allocate_tool_surface_instance_id(&mut self) -> ToolSurfaceInstanceId {
@@ -184,18 +213,36 @@ impl RunenwerkEditorShellState {
         Ok(())
     }
 
+    pub fn apply_workspace_mutation_with_allocations<T>(
+        &mut self,
+        build: impl FnOnce(&mut WorkspaceIdentityAllocator) -> (WorkspaceMutation, T),
+    ) -> Result<T, WorkspaceStateError> {
+        let mut allocator =
+            WorkspaceIdentityAllocator::from_seed(self.identity_allocator.seed_snapshot());
+        let (op, value) = build(&mut allocator);
+        let next_workspace_state = reduce_workspace(&self.workspace_state, op)?;
+        self.identity_allocator = allocator;
+        self.workspace_state = next_workspace_state;
+        self.clear_cached_projection();
+        Ok(value)
+    }
+
     pub fn switch_panel_tool_surface_kind(
         &mut self,
         panel_instance_id: PanelInstanceId,
         tool_surface_kind: ToolSurfaceKind,
     ) -> Result<ToolSurfaceInstanceId, WorkspaceStateError> {
-        let tool_surface_id = self.allocate_tool_surface_instance_id();
-        self.apply_workspace_mutation(WorkspaceMutation::ReplacePanelToolSurfaceKind {
-            panel_id: panel_instance_id,
-            tool_surface_id,
-            tool_surface_kind,
-        })?;
-        Ok(tool_surface_id)
+        self.apply_workspace_mutation_with_allocations(|allocator| {
+            let tool_surface_id = allocator.allocate_tool_surface_instance_id();
+            (
+                WorkspaceMutation::ReplacePanelToolSurfaceKind {
+                    panel_id: panel_instance_id,
+                    tool_surface_id,
+                    tool_surface_kind,
+                },
+                tool_surface_id,
+            )
+        })
     }
 
     pub fn docking_visual_state(&self) -> DockingInteractionVisualState {
@@ -301,19 +348,62 @@ impl RunenwerkEditorShellState {
         ))
     }
 
+    pub fn tab_drag_candidate(&self) -> Option<(PanelInstanceId, TabStackId, u64, bool)> {
+        self.tab_drag_session.map(|session| {
+            (
+                session.panel_instance_id,
+                session.source_tab_stack_id,
+                session.projection_epoch,
+                session.active,
+            )
+        })
+    }
+
     pub fn clear_tab_drag(&mut self) {
         self.tab_drag_session = None;
         self.docking_visual_state.active_tab_drag = None;
     }
 
     pub fn begin_split_resize(&mut self, split_kind: WorkspaceSplitKind) {
-        self.split_resize_session = Some(SplitResizeSession { split_kind });
-        self.docking_visual_state.active_split_border_widget =
-            Some(split_kind_widget_id(split_kind));
+        if let Some(split_host_id) = self.resolve_split_host_id(split_kind) {
+            self.begin_workspace_split_resize(
+                split_host_id,
+                split_kind_widget_id(split_kind),
+                split_kind_axis(split_kind),
+            );
+        }
+    }
+
+    pub fn begin_workspace_split_resize(
+        &mut self,
+        split_host_id: PanelHostId,
+        split_widget_id: WidgetId,
+        axis: WorkspaceSplitAxis,
+    ) {
+        self.split_resize_session = Some(SplitResizeSession {
+            split_host_id,
+            split_widget_id,
+            axis,
+        });
+        self.docking_visual_state.active_split_border_widget = Some(split_widget_id);
     }
 
     pub fn active_split_resize_kind(&self) -> Option<WorkspaceSplitKind> {
-        self.split_resize_session.map(|session| session.split_kind)
+        let session = self.split_resize_session?;
+        [
+            WorkspaceSplitKind::BodyConsole,
+            WorkspaceSplitKind::LeftRight,
+            WorkspaceSplitKind::CenterRight,
+        ]
+        .into_iter()
+        .find(|kind| self.resolve_split_host_id(*kind) == Some(session.split_host_id))
+    }
+
+    pub fn active_split_resize_session(
+        &self,
+    ) -> Option<(PanelHostId, WidgetId, WorkspaceSplitAxis)> {
+        self.split_resize_session
+            .map(|session| (session.split_host_id, session.split_widget_id, session.axis))
     }
 
     pub fn clear_split_resize(&mut self) {
@@ -331,6 +421,17 @@ impl RunenwerkEditorShellState {
                 "split host path unavailable in workspace graph",
             ));
         };
+        self.apply_workspace_mutation(WorkspaceMutation::SetSplitHostFraction {
+            split_host_id,
+            fraction,
+        })
+    }
+
+    pub fn set_workspace_split_host_fraction(
+        &mut self,
+        split_host_id: PanelHostId,
+        fraction: f32,
+    ) -> Result<(), WorkspaceStateError> {
         self.apply_workspace_mutation(WorkspaceMutation::SetSplitHostFraction {
             split_host_id,
             fraction,
@@ -371,5 +472,14 @@ fn split_kind_widget_id(kind: WorkspaceSplitKind) -> WidgetId {
         WorkspaceSplitKind::BodyConsole => BODY_CONSOLE_SPLIT_WIDGET_ID,
         WorkspaceSplitKind::LeftRight => LEFT_RIGHT_SPLIT_WIDGET_ID,
         WorkspaceSplitKind::CenterRight => CENTER_RIGHT_SPLIT_WIDGET_ID,
+    }
+}
+
+fn split_kind_axis(kind: WorkspaceSplitKind) -> WorkspaceSplitAxis {
+    match kind {
+        WorkspaceSplitKind::BodyConsole => WorkspaceSplitAxis::Vertical,
+        WorkspaceSplitKind::LeftRight | WorkspaceSplitKind::CenterRight => {
+            WorkspaceSplitAxis::Horizontal
+        }
     }
 }

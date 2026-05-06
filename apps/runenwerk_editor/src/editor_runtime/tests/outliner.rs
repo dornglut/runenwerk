@@ -176,6 +176,82 @@ fn outliner_panel_reparent_command_updates_state() {
 }
 
 #[test]
+fn outliner_panel_m3_commands_create_duplicate_and_batch_delete_subtrees() {
+    let mut app = RunenwerkEditorApp::new();
+
+    execute_scene_intent(
+        app.runtime_mut(),
+        CommandId(1),
+        SceneCommandIntent::CreateEntity {
+            parent: None,
+            display_name: "Root".to_string(),
+        },
+    )
+    .expect("create root should succeed");
+
+    let create_child = app
+        .dispatch_outliner_command(OutlinerPanelCommand::CreateChild {
+            parent: EntityId(1),
+            display_name: "Child".to_string(),
+        })
+        .expect("create child command should succeed");
+    assert!(
+        create_child
+            .state
+            .rows
+            .iter()
+            .any(|row| row.entity == EntityId(2)
+                && row.parent == Some(EntityId(1))
+                && row.display_name == "Child")
+    );
+
+    let duplicate = app
+        .dispatch_outliner_command(OutlinerPanelCommand::DuplicateSubtree {
+            source: EntityId(1),
+            new_parent: None,
+            name_suffix: " Copy".to_string(),
+        })
+        .expect("duplicate subtree command should succeed");
+    assert_eq!(duplicate.state.rows.len(), 4);
+    assert!(
+        duplicate
+            .state
+            .rows
+            .iter()
+            .any(|row| row.entity == EntityId(3) && row.display_name == "Root Copy")
+    );
+    assert!(
+        duplicate
+            .state
+            .rows
+            .iter()
+            .any(|row| row.entity == EntityId(4)
+                && row.parent == Some(EntityId(3))
+                && row.display_name == "Child Copy")
+    );
+
+    app.dispatch_outliner_command(OutlinerPanelCommand::SelectEntity {
+        entity: EntityId(2),
+    })
+    .expect("select child should succeed");
+
+    let deleted = app
+        .dispatch_outliner_command(OutlinerPanelCommand::DeleteEntities {
+            entities: vec![EntityId(1), EntityId(2)],
+        })
+        .expect("batch delete should succeed");
+    assert_eq!(deleted.state.rows.len(), 2);
+    assert!(
+        !deleted
+            .state
+            .rows
+            .iter()
+            .any(|row| row.entity == EntityId(1) || row.entity == EntityId(2))
+    );
+    assert_eq!(deleted.state.selected_entity, None);
+}
+
+#[test]
 fn outliner_panel_delete_command_clears_selection_when_selected_entity_is_deleted() {
     let mut app = RunenwerkEditorApp::new();
 

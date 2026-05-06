@@ -1,5 +1,5 @@
 use editor_core::{
-    ChangeOrigin, CommandExecutor, GoverningChangeError, HistoryEntry, RatifiedChange,
+    ChangeOrigin, GoverningChangeError, RatifiedChange, SceneChangeRatificationParams,
     SemanticOperation, TransactionId, TransactionMetadata,
 };
 use editor_scene::SceneEditorCommand;
@@ -38,30 +38,14 @@ pub(crate) fn execute_scene_transaction_and_push_history_with_origin_and_causali
     let transaction_label = transaction_label.into();
     let before_snapshot = runtime.capture_scene_snapshot();
 
+    let metadata = TransactionMetadata::new(transaction_id, transaction_label.clone());
     let executed =
         runtime.with_scene_command_context(|ctx| -> Result<_, GoverningChangeError> {
-            let metadata = TransactionMetadata::new(transaction_id, transaction_label.clone());
-            let executed = CommandExecutor::execute_transaction(ctx, metadata.clone(), commands)
-                .map_err(|error| GoverningChangeError::mutation_rejected(error.message))?;
-
-            if executed.commands.is_empty() {
-                return Ok(None);
-            }
-
-            let commands_metadata = executed
-                .commands
-                .iter()
-                .map(|command| command.metadata.clone())
-                .collect::<Vec<_>>();
-
-            ctx.session_mut()
-                .history_mut()
-                .push_applied(HistoryEntry::new(
-                    metadata.clone(),
-                    commands_metadata.clone(),
-                ));
-
-            Ok(Some((metadata, commands_metadata)))
+            editor_scene::execute_scene_transaction_and_push_history(ctx, metadata, commands).map(
+                |executed| {
+                    executed.map(|executed| (executed.transaction, executed.command_metadata))
+                },
+            )
         })?;
 
     let Some((metadata, commands_metadata)) = executed else {
@@ -70,11 +54,13 @@ pub(crate) fn execute_scene_transaction_and_push_history_with_origin_and_causali
 
     let ratified_change = ratify_scene_change(
         runtime,
-        metadata,
-        commands_metadata,
-        origin,
-        vec![SemanticOperation::SceneTransactionApplied],
-        causality_id,
+        SceneChangeRatificationParams::new(
+            metadata,
+            commands_metadata,
+            origin,
+            vec![SemanticOperation::SceneTransactionApplied],
+            causality_id,
+        ),
     );
     runtime.record_ratified_change(ratified_change.clone());
     let after_snapshot = runtime.capture_scene_snapshot();

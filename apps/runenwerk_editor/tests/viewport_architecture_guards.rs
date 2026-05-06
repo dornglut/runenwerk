@@ -1,3 +1,6 @@
+use std::fs;
+use std::path::Path;
+
 use editor_core::RealityVersion;
 use editor_shell::{
     PanelInstanceId, StructuralCommandTarget, StructuralWidgetRoutingContext, TabStackId,
@@ -363,7 +366,7 @@ fn production_shell_paths_use_app_owned_registry_and_surface_sessions() {
     let dispatcher = include_str!("../src/shell/dispatch_shell_command.rs");
     let app_state = include_str!("../src/editor_app/state.rs");
     let shell_mod = include_str!("../src/shell/mod.rs");
-    let providers = include_str!("../src/shell/providers/mod.rs");
+    let providers = provider_sources();
 
     assert!(
         !controller.contains("EditorSurfaceProviderRegistry::runenwerk_default()"),
@@ -404,6 +407,23 @@ fn production_shell_paths_use_app_owned_registry_and_surface_sessions() {
             && !providers.contains(concat!("SurfaceCommandProposal::", "shell")),
         "providers must return typed SurfaceCommandProposal variants, not boxed shell commands",
     );
+    assert!(
+        !providers.contains(concat!("SurfaceCommandProposal::", "NoOp")),
+        "providers must represent no proposal as None, not a provider-side NoOp proposal",
+    );
+    for deleted_adapter_module in [
+        "console_adapter",
+        "entity_table_adapter",
+        "inspector_adapter",
+        "outliner_adapter",
+        "viewport_adapter",
+    ] {
+        assert!(
+            !shell_mod.contains(deleted_adapter_module)
+                && !providers.contains(deleted_adapter_module),
+            "old shell adapter module {deleted_adapter_module} must not remain wired into the final provider path",
+        );
+    }
     for forbidden in [
         "inspector_ui_state_mut",
         "entity_table_ui_state_mut",
@@ -417,6 +437,93 @@ fn production_shell_paths_use_app_owned_registry_and_surface_sessions() {
             "final shell controller/dispatcher paths must not mutate app-global provider-local state through {forbidden}",
         );
     }
+}
+
+#[test]
+fn production_sources_do_not_keep_deleted_shell_adapter_modules() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for deleted_path in [
+        "src/shell/console_adapter.rs",
+        "src/shell/entity_table_adapter.rs",
+        "src/shell/inspector_adapter.rs",
+        "src/shell/outliner_adapter.rs",
+        "src/shell/viewport_adapter.rs",
+    ] {
+        assert!(
+            !manifest_dir.join(deleted_path).exists(),
+            "obsolete shell adapter file must be deleted: {deleted_path}",
+        );
+    }
+}
+
+#[test]
+fn provider_seam_has_no_legacy_aggregate_or_boxed_shell_proposal_escape_hatch() {
+    let surface_provider =
+        include_str!("../../../domain/editor/editor_shell/src/surface_provider.rs");
+    let shell_command =
+        include_str!("../../../domain/editor/editor_shell/src/commands/shell_command.rs");
+    let providers = provider_sources();
+    let controller = include_str!("../src/shell/controller.rs");
+
+    for source in [
+        surface_provider.to_string(),
+        shell_command.to_string(),
+        providers,
+        controller.to_string(),
+    ] {
+        for forbidden in [
+            concat!("EditorShell", "ViewModel"),
+            concat!("build_editor_shell", "_view_model"),
+            concat!("rebuild", "_view_model"),
+            concat!("ShellCommand", "(Box<ShellCommand>)"),
+            concat!("SurfaceCommandProposal::", "NoOp"),
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "final provider/shell source must not contain obsolete path marker {forbidden}",
+            );
+        }
+    }
+}
+
+#[test]
+fn production_sources_do_not_implement_deferred_ui_execution_strategies() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .expect("runenwerk_editor lives under apps/");
+    let production_roots = [
+        workspace_root.join("domain/ui"),
+        workspace_root.join("domain/editor/editor_shell/src"),
+        manifest_dir.join("src"),
+    ];
+    let mut offenders = Vec::new();
+    for root in &production_roots {
+        collect_source_files(root, &mut offenders);
+    }
+
+    let forbidden_terms = [
+        concat!("compiled ", "reactive"),
+        concat!("Sv", "elte"),
+        concat!("ECS-driven ", "UI"),
+        concat!("multiple execution ", "strategies"),
+    ];
+    let offenders = offenders
+        .into_iter()
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path).ok()?;
+            forbidden_terms
+                .iter()
+                .any(|term| contents.contains(term))
+                .then_some(path)
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        offenders.is_empty(),
+        "deferred UI execution strategies must not be implemented in production sources: {offenders:?}",
+    );
 }
 
 #[test]
@@ -476,7 +583,7 @@ fn production_picking_routes_only_through_viewport_scene_region() {
 #[test]
 fn viewport_details_dispatch_has_no_first_active_viewport_fallback() {
     let dispatcher = include_str!("../src/shell/dispatch_shell_command.rs");
-    let providers = include_str!("../src/shell/providers/mod.rs");
+    let providers = provider_sources();
     let shell_command =
         include_str!("../../../domain/editor/editor_shell/src/commands/shell_command.rs");
 
@@ -630,11 +737,11 @@ fn runtime_systems_share_single_viewport_bootstrap_routing_seam() {
 }
 
 #[test]
-fn viewport_adapter_does_not_use_viewport_id_zero_fallback() {
-    let viewport_adapter = include_str!("../src/shell/viewport_adapter.rs");
+fn viewport_provider_does_not_use_viewport_id_zero_fallback() {
+    let viewport_provider = provider_sources();
     assert!(
-        !viewport_adapter.contains("ViewportId(0)"),
-        "viewport adapter must not synthesize ViewportId(0) fallback identities",
+        !viewport_provider.contains("ViewportId(0)"),
+        "viewport provider must not synthesize ViewportId(0) fallback identities",
     );
 }
 
@@ -727,4 +834,31 @@ fn viewport_slot_mapping_happens_at_integration_edge() {
         !presentation_resolver.contains("UiViewportSurfaceSlot::"),
         "presentation resolver must not define a second canonical semantic slot enum in runenwerk_editor",
     );
+}
+
+fn collect_source_files(root: &Path, files: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_source_files(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+fn provider_sources() -> String {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let provider_root = manifest_dir.join("src/shell/providers");
+    let mut files = Vec::new();
+    collect_source_files(&provider_root, &mut files);
+    files.sort();
+    files
+        .into_iter()
+        .filter_map(|path| fs::read_to_string(path).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
 }

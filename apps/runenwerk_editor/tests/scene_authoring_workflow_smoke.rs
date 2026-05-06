@@ -1,6 +1,7 @@
 use editor_core::{ChangeOrigin, ComponentTypeId, EntityId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_scene::SceneCommandIntent;
+use editor_shell::ShellCommand;
 use editor_viewport::ViewportHitResult;
 use scene::{LocalTransform, Vec3Value};
 
@@ -10,6 +11,7 @@ use runenwerk_editor::editor_features::{
     execute_intent_with_history, redo_last_scene_change, undo_last_scene_change,
 };
 use runenwerk_editor::editor_panels::OutlinerPanelCommand;
+use runenwerk_editor::shell::dispatch_shell_command;
 
 #[derive(Debug, Clone, Default, ecs::Reflect)]
 struct Vec2 {
@@ -114,6 +116,81 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         .expect("local transform should exist");
     assert_eq!(transform.translation, Vec3Value::new(6.0, 0.0, 0.0));
 
+    dispatch_shell_command(
+        &mut app,
+        None,
+        ShellCommand::ActivateRotateTool,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("rotate tool activation should succeed");
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerDown {
+            hit: ViewportHitResult::gizmo_axis("Y", 0.0),
+        },
+    )
+    .expect("viewport rotate gizmo down should succeed");
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerDragAxis {
+            amount: std::f32::consts::FRAC_PI_2,
+        },
+    )
+    .expect("viewport rotate drag should succeed");
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerUp,
+    )
+    .expect("viewport rotate up should succeed");
+
+    dispatch_shell_command(
+        &mut app,
+        None,
+        ShellCommand::ActivateScaleTool,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("scale tool activation should succeed");
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerDown {
+            hit: ViewportHitResult::gizmo_axis("Z", 0.0),
+        },
+    )
+    .expect("viewport scale gizmo down should succeed");
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerDragAxis { amount: 1.5 },
+    )
+    .expect("viewport scale drag should succeed");
+    app.dispatch_viewport_interaction_for_surface(
+        viewport_surface,
+        ViewportInteractionCommand::PointerUp,
+    )
+    .expect("viewport scale up should succeed");
+    dispatch_shell_command(
+        &mut app,
+        None,
+        ShellCommand::ActivateTranslateTool,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("translate tool activation should succeed");
+
+    let transform = app
+        .runtime()
+        .world()
+        .get::<LocalTransform>(ecs_entity)
+        .expect("local transform should exist");
+    assert_eq!(transform.scale, Vec3Value::new(1.0, 1.0, 2.5));
+
     let undone = undo_last_scene_change(app.runtime_mut(), ChangeOrigin::Runtime)
         .expect("undo should succeed")
         .expect("undo should return history entry");
@@ -129,7 +206,7 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         .expect("local transform should exist after undo");
     assert_eq!(
         transform_after_undo.translation,
-        Vec3Value::new(0.0, 0.0, 0.0)
+        Vec3Value::new(6.0, 0.0, 0.0)
     );
 
     let redone = redo_last_scene_change(app.runtime_mut(), ChangeOrigin::Runtime)

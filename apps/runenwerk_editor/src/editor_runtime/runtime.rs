@@ -8,8 +8,9 @@ use editor_inspector::{InspectTarget, InspectorEditError, InspectorEditValue, In
 use editor_scene::{SceneComponentDescriptor, SceneRuntime};
 
 use crate::editor_runtime::{
-    AuthoredSceneReality, EditorRuntimeIdRegistry, HierarchySnapshot, InstantiatedSceneReality,
-    OutlinerTree, RatifiedChangeLog, RetainedSceneTransaction, RunenwerkEditorInspectorBridge,
+    AuthoredSceneReality, DocumentTabRuntimeRecord, DocumentTabRuntimeState,
+    EditorRuntimeIdRegistry, HierarchySnapshot, InstantiatedSceneReality, OutlinerTree,
+    RatifiedChangeLog, RetainedSceneTransaction, RunenwerkEditorInspectorBridge,
     RunenwerkEditorSceneRuntime, SceneComponentSnapshotRecord, SceneDocumentState, SceneEntityView,
     SceneFieldSnapshot, SceneResourceSnapshotRecord, SceneRetentionStore, SceneRuntimeSnapshot,
     SessionReality, SimulatedSceneReality, all_entity_views, build_hierarchy_snapshot,
@@ -35,6 +36,7 @@ impl SceneRealityStore {
 
 pub struct RunenwerkEditorRuntime {
     session: EditorSession,
+    document_tabs: DocumentTabRuntimeState,
     scene_realities: SceneRealityStore,
     retention_store: SceneRetentionStore,
     ratified_changes: RatifiedChangeLog,
@@ -65,8 +67,15 @@ impl RunenwerkEditorRuntime {
     pub fn new() -> Self {
         let mut session = EditorSession::new();
         ensure_default_scene_document(&mut session);
+        let mut document_tabs = DocumentTabRuntimeState::new();
+        document_tabs.upsert(DocumentTabRuntimeRecord::new(
+            DocumentId(1),
+            DocumentKind::Scene,
+            true,
+        ));
         Self {
             session,
+            document_tabs,
             scene_realities: SceneRealityStore::new(),
             retention_store: SceneRetentionStore::new(),
             ratified_changes: RatifiedChangeLog::new(),
@@ -94,6 +103,10 @@ impl RunenwerkEditorRuntime {
 
     pub fn session_mut(&mut self) -> &mut EditorSession {
         &mut self.session
+    }
+
+    pub fn document_tabs(&self) -> &DocumentTabRuntimeState {
+        &self.document_tabs
     }
 
     pub fn session_reality(&self) -> SessionReality<'_> {
@@ -445,6 +458,12 @@ impl RunenwerkEditorRuntime {
         self.clear_scene_entities_only();
         self.session = EditorSession::new();
         ensure_default_scene_document(&mut self.session);
+        self.document_tabs = DocumentTabRuntimeState::new();
+        self.document_tabs.upsert(DocumentTabRuntimeRecord::new(
+            DocumentId(1),
+            DocumentKind::Scene,
+            true,
+        ));
         self.retention_store = SceneRetentionStore::new();
         self.ratified_changes = RatifiedChangeLog::new();
         self.session_changes = editor_core::SessionChangeLog::new();
@@ -843,7 +862,9 @@ fn ensure_default_scene_document(session: &mut EditorSession) -> DocumentId {
         DocumentKind::Scene,
         "Scene",
     ));
-    session.set_active_document(Some(scene_document_id));
+    session
+        .set_active_document(Some(scene_document_id))
+        .expect("default scene document should be registered before activation");
     scene_document_id
 }
 

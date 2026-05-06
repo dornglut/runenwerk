@@ -22,9 +22,18 @@ pub enum OutlinerPanelCommand {
     SelectEntity {
         entity: EntityId,
     },
+    CreateChild {
+        parent: EntityId,
+        display_name: String,
+    },
     RenameEntity {
         entity: EntityId,
         new_display_name: String,
+    },
+    DuplicateSubtree {
+        source: EntityId,
+        new_parent: Option<EntityId>,
+        name_suffix: String,
     },
     ReparentEntity {
         entity: EntityId,
@@ -32,6 +41,9 @@ pub enum OutlinerPanelCommand {
     },
     DeleteEntity {
         entity: EntityId,
+    },
+    DeleteEntities {
+        entities: Vec<EntityId>,
     },
 }
 

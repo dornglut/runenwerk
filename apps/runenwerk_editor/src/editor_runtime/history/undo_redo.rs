@@ -1,4 +1,7 @@
-use editor_core::{ChangeOrigin, GoverningChangeError, RatifiedChange, SemanticOperation};
+use editor_core::{
+    ChangeOrigin, GoverningChangeError, RatifiedChange, SceneChangeRatificationParams,
+    SemanticOperation,
+};
 
 use crate::editor_runtime::parity::assert_scene_projection_parity;
 use crate::editor_runtime::{
@@ -42,11 +45,13 @@ pub(crate) fn undo_last_scene_transaction_with_origin(
 
     let ratified_change = ratify_scene_change(
         runtime,
-        history_entry.transaction,
-        history_entry.commands,
-        origin,
-        vec![SemanticOperation::SceneTransactionUndone],
-        Some(causality_id),
+        SceneChangeRatificationParams::new(
+            history_entry.transaction,
+            history_entry.commands,
+            origin,
+            vec![SemanticOperation::SceneTransactionUndone],
+            Some(causality_id),
+        ),
     );
     runtime.record_ratified_change(ratified_change.clone());
 
@@ -88,11 +93,13 @@ pub(crate) fn redo_last_scene_transaction_with_origin(
 
     let ratified_change = ratify_scene_change(
         runtime,
-        history_entry.transaction,
-        history_entry.commands,
-        origin,
-        vec![SemanticOperation::SceneTransactionRedone],
-        Some(causality_id),
+        SceneChangeRatificationParams::new(
+            history_entry.transaction,
+            history_entry.commands,
+            origin,
+            vec![SemanticOperation::SceneTransactionRedone],
+            Some(causality_id),
+        ),
     );
     runtime.record_ratified_change(ratified_change.clone());
 

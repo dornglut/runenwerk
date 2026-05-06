@@ -1,4 +1,5 @@
 use editor_core::{EditorMutationError, EntityId, SelectionTarget};
+use editor_viewport::SnapSettings;
 use scene::Vec3Value;
 
 use crate::editor_runtime::{TransformPreviewSession, TransformToolKind};
@@ -9,6 +10,7 @@ pub struct EditorToolRuntimeState {
     hovered_entity: Option<EntityId>,
     preview: Option<TransformPreviewSession>,
     translate_axis: Option<TranslateAxis>,
+    snap_settings: SnapSettings,
 }
 
 impl EditorToolRuntimeState {
@@ -34,6 +36,14 @@ impl EditorToolRuntimeState {
 
     pub fn translate_axis(&self) -> Option<TranslateAxis> {
         self.translate_axis
+    }
+
+    pub fn snap_settings(&self) -> SnapSettings {
+        self.snap_settings
+    }
+
+    pub fn set_snap_settings(&mut self, snap_settings: SnapSettings) {
+        self.snap_settings = snap_settings;
     }
 
     pub fn set_translate_axis(
@@ -82,6 +92,33 @@ impl EditorToolRuntimeState {
             ))?;
 
         preview.translation_delta = delta;
+        Ok(())
+    }
+
+    pub fn update_rotation_preview(
+        &mut self,
+        delta_radians: Vec3Value,
+    ) -> Result<(), EditorMutationError> {
+        let preview = self
+            .preview
+            .as_mut()
+            .ok_or(EditorMutationError::session_rejected(
+                "no active preview session",
+            ))?;
+
+        preview.rotation_delta_radians = delta_radians;
+        Ok(())
+    }
+
+    pub fn update_scale_preview(&mut self, delta: Vec3Value) -> Result<(), EditorMutationError> {
+        let preview = self
+            .preview
+            .as_mut()
+            .ok_or(EditorMutationError::session_rejected(
+                "no active preview session",
+            ))?;
+
+        preview.scale_delta = delta;
         Ok(())
     }
 

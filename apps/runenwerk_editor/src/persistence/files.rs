@@ -12,6 +12,11 @@ use crate::persistence::{apply_formed_scene_to_runtime, scene_file_from_runtime}
 
 pub fn write_scene_file(path: &Path, runtime: &RunenwerkEditorRuntime) -> Result<()> {
     let scene_file = scene_file_from_runtime(runtime);
+    let normalized = normalize_scene_file(scene_file)
+        .map_err(|error| anyhow::Error::msg(error.as_static_str()))
+        .context("failed to normalize runtime scene before save")?;
+    let formed = form_scene_for_runtime(normalized);
+    let scene_file = formed.into_scene_file();
     let ron = encode_ron_pretty(&scene_file).context("failed to encode SceneFileV2 as RON")?;
     std::fs::write(path, ron)
         .with_context(|| format!("failed to write scene file: {}", path.display()))
