@@ -38,13 +38,13 @@ Chunk/world op logs and deltas       -> domain/world_ops
 SDF world payload/collision data     -> domain/world_sdf
 UI substrate primitives             -> domain/ui/*
 UI surface semantics                -> domain/ui/ui_surface
-UI definition/formation framework   -> planned domain/ui/ui_definition
+UI definition/formation framework   -> domain/ui/ui_definition
 Editor command/session contracts    -> domain/editor/editor_core
 Editor inspector semantics          -> domain/editor/editor_inspector
 Editor scene authoring contracts    -> domain/editor/editor_scene
 Editor viewport semantics           -> domain/editor/editor_viewport
 Editor workspace/shell projection   -> domain/editor/editor_shell
-Editor definition bindings/self-authoring contracts -> planned domain/editor/editor_definition
+Editor definition bindings          -> domain/editor/editor_definition
 Editor persistence formats          -> domain/editor/editor_persistence
 Runtime app lifecycle               -> engine/src/app, engine/src/runtime
 Engine plugin integration           -> engine/src/plugins

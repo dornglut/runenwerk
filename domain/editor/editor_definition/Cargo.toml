@@ -1,0 +1,10 @@
+[package]
+name = "editor_definition"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+ron = "0.8.1"
+ui_definition.workspace = true
+ui_theme.workspace = true

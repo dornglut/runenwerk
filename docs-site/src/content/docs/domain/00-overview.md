@@ -38,18 +38,15 @@ Domain crates must not depend on:
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
 | SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
 | Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
-| UI substrate | `domain/ui/*` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
-| Editor domains | `domain/editor/*` | [`editor/README.md`](./editor/README.md) |
+| UI substrate and definitions | `domain/ui/*`, including `domain/ui/ui_definition` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
+| Editor domains and definitions | `domain/editor/*`, including `domain/editor/editor_definition` | [`editor/README.md`](./editor/README.md) |
 
 ## Planned Domain Areas
 
 These areas are roadmap-level intent, not implemented workspace members.
 Do not add crate metadata for them until their implementation milestone lands.
 
-| Area | Planned crate | Primary docs | Notes |
-| --- | --- | --- | --- |
-| UI definition and formation | `domain/ui/ui_definition` | [`ui/roadmap.md`](./ui/roadmap.md), [`../design/active/ui-definition-formation-foundation-design.md`](../design/active/ui-definition-formation-foundation-design.md) | Planned M3.5 framework for authored UI templates, slots, repeaters, embeds, menus, availability, and retained UI formation. |
-| Editor definition and self-authoring | `domain/editor/editor_definition` | [`../design/active/ui-definition-formation-foundation-design.md`](../design/active/ui-definition-formation-foundation-design.md), [`../design/active/editor-self-authoring-and-final-ui-design.md`](../design/active/editor-self-authoring-and-final-ui-design.md), [`../apps/runenwerk-editor/roadmap.md`](../apps/runenwerk-editor/roadmap.md) | Planned M3.5 editor binding layer for toolbar, menus, workspace catalogs, shell chrome, and common provider surface templates; M3.6 extends it into visual UI/style/layout authoring. |
+There are no planned domain areas listed here at this time.
 
 ## What Belongs in Domain
 

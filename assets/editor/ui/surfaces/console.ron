@@ -1,0 +1,36 @@
+(
+  id: AuthoredId("runenwerk.editor.surface.console"),
+  root: Panel(
+    id: AuthoredId("root"),
+    availability: None,
+    children: [
+      Column(
+        id: AuthoredId("body"),
+        children: [
+          Scroll(
+            id: AuthoredId("hscroll"),
+            axis: Horizontal,
+            children: [
+              Scroll(
+                id: AuthoredId("scroll"),
+                axis: Vertical,
+                children: [
+                  Repeat(id: AuthoredId("entries"), items: (id: AuthoredId("console.entries")), template: AuthoredId("runenwerk.editor.surface.console.entry"), axis: Some(Vertical)),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  ),
+  templates: [
+    (
+      id: AuthoredId("runenwerk.editor.surface.console.entry"),
+      root: Label(id: AuthoredId("entry"), label: Slot(AuthoredId("console.entry.label"))),
+      templates: [],
+      menus: [],
+    ),
+  ],
+  menus: [],
+)

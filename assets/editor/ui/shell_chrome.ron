@@ -1,0 +1,38 @@
+(
+  id: AuthoredId("runenwerk.editor.shell_chrome"),
+  root: Scroll(
+    id: AuthoredId("root"),
+    axis: Horizontal,
+    children: [
+      Row(
+        id: AuthoredId("tab_stack_chrome"),
+        children: [
+          Select(id: AuthoredId("surface_select"), items: (id: AuthoredId("shell.surface_kinds")), selected: Some((id: AuthoredId("shell.surface.active"))), route: Some((id: AuthoredId("shell.surface.switch"))), availability: None),
+          Button(id: AuthoredId("new_tab"), label: Static(Text("+")), route: Some((id: AuthoredId("shell.tab.create"))), availability: None, selected: None),
+          Repeat(id: AuthoredId("tabs"), items: (id: AuthoredId("shell.tabs")), template: AuthoredId("runenwerk.editor.shell_chrome.tab"), axis: Some(Horizontal)),
+          Button(id: AuthoredId("split_horizontal"), label: Static(Text("H")), route: Some((id: AuthoredId("shell.area.split_horizontal"))), availability: None, selected: None),
+          Button(id: AuthoredId("split_vertical"), label: Static(Text("V")), route: Some((id: AuthoredId("shell.area.split_vertical"))), availability: None, selected: None),
+          Button(id: AuthoredId("duplicate"), label: Static(Text("D")), route: Some((id: AuthoredId("shell.area.duplicate"))), availability: None, selected: None),
+          Button(id: AuthoredId("reset"), label: Static(Text("R")), route: Some((id: AuthoredId("shell.area.reset"))), availability: None, selected: None),
+          Toggle(id: AuthoredId("lock"), label: Static(Text("Lock")), checked: Slot(AuthoredId("shell.area.locked")), route: Some((id: AuthoredId("shell.area.lock"))), availability: None),
+          Button(id: AuthoredId("close"), label: Static(Text("x")), route: Some((id: AuthoredId("shell.area.close"))), availability: None, selected: None),
+        ],
+      ),
+    ],
+  ),
+  templates: [
+    (
+      id: AuthoredId("runenwerk.editor.shell_chrome.tab"),
+      root: Row(
+        id: AuthoredId("tab_item"),
+        children: [
+          Button(id: AuthoredId("tab"), label: Slot(AuthoredId("tab.label")), route: Some((id: AuthoredId("shell.tab.activate"))), availability: None, selected: Some(Slot(AuthoredId("tab.active")))),
+          Button(id: AuthoredId("close"), label: Static(Text("x")), route: Some((id: AuthoredId("shell.tab.close"))), availability: None, selected: None),
+        ],
+      ),
+      templates: [],
+      menus: [],
+    ),
+  ],
+  menus: [],
+)

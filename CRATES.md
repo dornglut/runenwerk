@@ -44,10 +44,12 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ui_theme` | `domain/ui/ui_theme` | domain | UI color, spacing, radius, typography, and theme tokens. | evolving |
 | `ui_render_data` | `domain/ui/ui_render_data` | domain | Renderer-facing UI frame, layer, primitive, color, and batching contracts. | evolving |
 | `ui_surface` | `domain/ui/ui_surface` | domain | Surface definition, mount, observation, session, presentation, intent, capability, and ratification contracts. | evolving |
+| `ui_definition` | `domain/ui/ui_definition` | domain | Authored UI templates, slots, repeaters, embeds, menus, availability, validation, normalization, and retained UI formation. | evolving |
 | `ui_tree` | `domain/ui/ui_tree` | domain | Retained UI tree, widget IDs, nodes, and computed layout records. | evolving |
 | `ui_runtime` | `domain/ui/ui_runtime` | domain | Retained UI runtime orchestration, input dispatch, layout, frame output, and runtime state. | evolving |
 | `ui_widgets` | `domain/ui/ui_widgets` | domain | Widget constructors over `ui_tree` contracts. | evolving |
 | `editor_core` | `domain/editor/editor_core` | domain | Editor command, capability, transaction, ratification, migration, selection, session, sharing, and workflow contracts. | evolving |
+| `editor_definition` | `domain/editor/editor_definition` | domain | Editor-specific UI definition bindings for toolbar, menus, workspace catalogs, shell chrome, routes, availability, and surface templates. | evolving |
 | `editor_inspector` | `domain/editor/editor_inspector` | domain | Inspector model, editing, target, resolution, bridge, schema interop, session, and validation contracts. | evolving |
 | `editor_scene` | `domain/editor/editor_scene` | domain | Editor scene model, commands, command descriptors, proposal adapter, command bridge, and scene command contracts. | evolving |
 | `editor_viewport` | `domain/editor/editor_viewport` | domain | Editor viewport camera, expression, hit, overlay, snap, and viewport contracts. | evolving |

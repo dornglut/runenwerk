@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use ui_definition::FormedUiRoute;
 use ui_layout::SizePolicy;
 use ui_math::Axis;
 use ui_text::FontId;
@@ -27,18 +28,14 @@ use crate::{
     FixedLayoutProjection, INSPECTOR_PANEL_WIDGET_ID, LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID,
     LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_PANEL_WIDGET_ID,
     PanelInstanceId, PanelKind, ROOT_WIDGET_ID, SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction,
-    SurfaceProviderId, TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID,
-    TOOLBAR_FILE_MENU_WIDGET_ID, TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
-    TOOLBAR_ROTATE_BUTTON_WIDGET_ID, TOOLBAR_SCALE_BUTTON_WIDGET_ID,
-    TOOLBAR_SCENE_WORKSPACE_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, TabStackId,
-    ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind,
-    VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis, WorkspaceState,
-    build_toolbar, tab_close_button_widget_id, tab_stack_close_area_button_widget_id,
-    tab_stack_container_widget_id, tab_stack_duplicate_button_widget_id,
-    tab_stack_kind_select_widget_id, tab_stack_lock_type_toggle_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_reset_area_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_split_vertical_button_widget_id,
-    tab_strip_scroll_widget_id,
+    SurfaceProviderId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind,
+    ToolbarMenuKind, VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
+    WorkspaceState, build_defined_toolbar, tab_close_button_widget_id,
+    tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
+    tab_stack_duplicate_button_widget_id, tab_stack_kind_select_widget_id,
+    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_split_vertical_button_widget_id, tab_strip_scroll_widget_id,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -170,8 +167,12 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
     let fixed_projection = workspace_projection.fixed_layout.clone();
     let root_host = workspace_projection.root_host.clone();
     let floating_hosts = workspace_projection.floating_hosts.clone();
-    let (widget_actions_by_id, widget_structural_context_by_id) =
-        build_frame_widget_routes(frame_model, &workspace_projection);
+    let toolbar = build_defined_toolbar(&frame_model.toolbar, theme);
+    let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
+        frame_model,
+        &workspace_projection,
+        &toolbar.routes_by_widget_id,
+    );
     let projection_artifacts = ShellProjectionArtifacts {
         projection_epoch: 0,
         widget_actions_by_id,
@@ -179,7 +180,6 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         workspace: workspace_projection,
     };
 
-    let toolbar = build_toolbar(&frame_model.toolbar, theme);
     let body_with_console = if let Some(projection) = fixed_projection.as_ref() {
         build_fixed_layout_content(projection, frame_model, theme, docking_visual_state)
     } else {
@@ -231,7 +231,7 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
             BODY_ROOT_WIDGET_ID,
             theme.spacing.sm,
             vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
-            vec![toolbar, content],
+            vec![toolbar.root, content],
         )],
     );
 
@@ -412,6 +412,9 @@ fn build_tab_strip_from_frame(
     let active_panel_id = tab_stack.active_panel.map(|panel| panel.panel_instance_id);
     let drag_visual = docking_visual_state.and_then(|value| value.active_tab_drag);
     let show_drop_slots = drag_visual.is_some();
+    if !show_drop_slots {
+        return crate::build_defined_tab_strip_from_frame(tab_stack, frame_model, theme);
+    }
     let active_tool_surface_kind = tab_stack
         .active_panel
         .and_then(|panel| panel.active_tool_surface)
@@ -736,7 +739,7 @@ fn build_split_handle(
     node
 }
 
-fn panel_kind_label(panel_kind: PanelKind) -> &'static str {
+pub(super) fn panel_kind_label(panel_kind: PanelKind) -> &'static str {
     match panel_kind {
         PanelKind::Outliner => "Outliner",
         PanelKind::EntityTable => "Entities",
@@ -747,7 +750,7 @@ fn panel_kind_label(panel_kind: PanelKind) -> &'static str {
     }
 }
 
-fn shell_tool_surface_kinds() -> Vec<ToolSurfaceKind> {
+pub(super) fn shell_tool_surface_kinds() -> Vec<ToolSurfaceKind> {
     vec![
         ToolSurfaceKind::Outliner,
         ToolSurfaceKind::EntityTable,
@@ -757,7 +760,7 @@ fn shell_tool_surface_kinds() -> Vec<ToolSurfaceKind> {
     ]
 }
 
-fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
+pub(super) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
     match kind {
         ToolSurfaceKind::Outliner => "Outliner",
         ToolSurfaceKind::EntityTable => "Entities",
@@ -797,6 +800,7 @@ fn build_empty_stack_placeholder(id: WidgetId, label_text: &str, theme: &ThemeTo
 fn build_frame_widget_routes(
     frame_model: &EditorShellFrameModel,
     workspace_projection: &WorkspaceProjectionArtifact,
+    toolbar_routes_by_widget_id: &BTreeMap<WidgetId, FormedUiRoute>,
 ) -> (
     BTreeMap<WidgetId, RoutedShellAction>,
     BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
@@ -804,141 +808,14 @@ fn build_frame_widget_routes(
     let mut actions = BTreeMap::new();
     let mut structural_contexts = workspace_projection.widget_context_by_id.clone();
 
-    for (index, button) in frame_model.toolbar.buttons.iter().enumerate() {
-        let route = match button.stable_name {
-            "menu_file" => Some((
-                TOOLBAR_FILE_MENU_WIDGET_ID,
-                RoutedShellAction::ToggleToolbarMenu {
-                    menu: ToolbarMenuKind::File,
-                },
-            )),
-            "menu_edit" => Some((
-                TOOLBAR_EDIT_MENU_WIDGET_ID,
-                RoutedShellAction::ToggleToolbarMenu {
-                    menu: ToolbarMenuKind::Edit,
-                },
-            )),
-            "menu_window" => Some((
-                TOOLBAR_WINDOW_MENU_WIDGET_ID,
-                RoutedShellAction::ToggleToolbarMenu {
-                    menu: ToolbarMenuKind::Window,
-                },
-            )),
-            "workspace_scene" => Some((
-                TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
-                RoutedShellAction::SwitchWorkspaceProfile {
-                    profile_id: SCENE_WORKSPACE_PROFILE_ID,
-                    enabled: button.enabled,
-                },
-            )),
-            "workspace_modelling" => Some((
-                TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
-                RoutedShellAction::SwitchWorkspaceProfile {
-                    profile_id: MODELLING_WORKSPACE_PROFILE_ID,
-                    enabled: button.enabled,
-                },
-            )),
-            "workspace_plus" => Some((
-                TOOLBAR_ADD_WORKSPACE_WIDGET_ID,
-                RoutedShellAction::RunToolbarCommand {
-                    command: ToolbarCommandKind::AddWorkspace,
-                    enabled: button.enabled,
-                },
-            )),
-            "file_save" => {
-                toolbar_command_route(index, ToolbarCommandKind::SaveScene, button.enabled)
-            }
-            "file_save_as" => {
-                toolbar_command_route(index, ToolbarCommandKind::SaveSceneAs, button.enabled)
-            }
-            "file_open" => {
-                toolbar_command_route(index, ToolbarCommandKind::OpenScene, button.enabled)
-            }
-            "file_open_recent" => {
-                toolbar_command_route(index, ToolbarCommandKind::OpenRecent, button.enabled)
-            }
-            "edit_undo" => toolbar_command_route(index, ToolbarCommandKind::Undo, button.enabled),
-            "edit_redo" => toolbar_command_route(index, ToolbarCommandKind::Redo, button.enabled),
-            "edit_preferences" => {
-                toolbar_command_route(index, ToolbarCommandKind::EditPreferences, button.enabled)
-            }
-            "window_new_window" => {
-                toolbar_command_route(index, ToolbarCommandKind::NewWindow, button.enabled)
-            }
-            "window_next_workspace" => {
-                toolbar_command_route(index, ToolbarCommandKind::NextWorkspace, button.enabled)
-            }
-            "window_previous_workspace" => {
-                toolbar_command_route(index, ToolbarCommandKind::PreviousWorkspace, button.enabled)
-            }
-            "window_save_workspace" => {
-                toolbar_command_route(index, ToolbarCommandKind::SaveWorkspace, button.enabled)
-            }
-            "window_load_general_scene" => toolbar_command_route(
-                index,
-                ToolbarCommandKind::LoadWorkspaceProfile(SCENE_WORKSPACE_PROFILE_ID),
-                button.enabled,
-            ),
-            "window_load_general_modelling" => toolbar_command_route(
-                index,
-                ToolbarCommandKind::LoadWorkspaceProfile(MODELLING_WORKSPACE_PROFILE_ID),
-                button.enabled,
-            ),
-            "window_load_custom" => toolbar_command_route(
-                index,
-                ToolbarCommandKind::LoadCustomWorkspace,
-                button.enabled,
-            ),
-            "select" => Some((
-                crate::TOOLBAR_SELECT_BUTTON_WIDGET_ID,
-                RoutedShellAction::ActivateSelectTool,
-            )),
-            "translate" => Some((
-                crate::TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
-                RoutedShellAction::ActivateTranslateTool,
-            )),
-            "rotate" => Some((
-                TOOLBAR_ROTATE_BUTTON_WIDGET_ID,
-                RoutedShellAction::ActivateRotateTool,
-            )),
-            "scale" => Some((
-                TOOLBAR_SCALE_BUTTON_WIDGET_ID,
-                RoutedShellAction::ActivateScaleTool,
-            )),
-            "undo" => Some((
-                crate::TOOLBAR_UNDO_BUTTON_WIDGET_ID,
-                RoutedShellAction::Undo {
-                    enabled: button.enabled,
-                },
-            )),
-            "redo" => Some((
-                crate::TOOLBAR_REDO_BUTTON_WIDGET_ID,
-                RoutedShellAction::Redo {
-                    enabled: button.enabled,
-                },
-            )),
-            "save" => Some((
-                crate::TOOLBAR_SAVE_BUTTON_WIDGET_ID,
-                RoutedShellAction::SaveScene {
-                    enabled: button.enabled,
-                },
-            )),
-            "load" => Some((
-                crate::TOOLBAR_LOAD_BUTTON_WIDGET_ID,
-                RoutedShellAction::LoadScene {
-                    enabled: button.enabled,
-                },
-            )),
-            "debug_logs" => Some((
-                crate::TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID,
-                RoutedShellAction::ToggleDebugLogs,
-            )),
-            _ => None,
-        };
-
-        if let Some((widget_id, action)) = route {
-            actions.insert(widget_id, action);
+    for (widget_id, formed_route) in toolbar_routes_by_widget_id {
+        if let Some(action) = toolbar_action_for_formed_route(formed_route) {
+            actions.insert(*widget_id, action);
         }
+    }
+
+    for (widget_id, action) in legacy_toolbar_action_routes(frame_model) {
+        actions.entry(widget_id).or_insert(action);
     }
 
     for (widget_id, route) in &workspace_projection.tab_button_route_by_widget_id {
@@ -982,15 +859,129 @@ fn build_frame_widget_routes(
     (actions, structural_contexts)
 }
 
-fn toolbar_command_route(
-    index: usize,
-    command: ToolbarCommandKind,
-    enabled: bool,
-) -> Option<(WidgetId, RoutedShellAction)> {
-    Some((
-        crate::toolbar_menu_item_widget_id(index),
-        RoutedShellAction::RunToolbarCommand { command, enabled },
-    ))
+fn toolbar_action_for_formed_route(route: &FormedUiRoute) -> Option<RoutedShellAction> {
+    let FormedUiRoute::RouteSlot(route) = route else {
+        return None;
+    };
+    match route.as_str() {
+        "editor.toolbar.menu.file" => Some(RoutedShellAction::ToggleToolbarMenu {
+            menu: ToolbarMenuKind::File,
+        }),
+        "editor.toolbar.menu.edit" => Some(RoutedShellAction::ToggleToolbarMenu {
+            menu: ToolbarMenuKind::Edit,
+        }),
+        "editor.toolbar.menu.window" => Some(RoutedShellAction::ToggleToolbarMenu {
+            menu: ToolbarMenuKind::Window,
+        }),
+        "editor.workspace.scene.activate" => Some(RoutedShellAction::SwitchWorkspaceProfile {
+            profile_id: SCENE_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        }),
+        "editor.workspace.modelling.activate" => Some(RoutedShellAction::SwitchWorkspaceProfile {
+            profile_id: MODELLING_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        }),
+        "editor.workspace.create" => Some(RoutedShellAction::RunToolbarCommand {
+            command: ToolbarCommandKind::AddWorkspace,
+            enabled: true,
+        }),
+        "editor.tool.select" => Some(RoutedShellAction::ActivateSelectTool),
+        "editor.tool.translate" => Some(RoutedShellAction::ActivateTranslateTool),
+        "editor.tool.rotate" => Some(RoutedShellAction::ActivateRotateTool),
+        "editor.tool.scale" => Some(RoutedShellAction::ActivateScaleTool),
+        "editor.toolbar.file.save" => Some(toolbar_command_action(ToolbarCommandKind::SaveScene)),
+        "editor.toolbar.file.save_as" => {
+            Some(toolbar_command_action(ToolbarCommandKind::SaveSceneAs))
+        }
+        "editor.toolbar.file.open" => Some(toolbar_command_action(ToolbarCommandKind::OpenScene)),
+        "editor.toolbar.file.open_recent" => {
+            Some(toolbar_command_action(ToolbarCommandKind::OpenRecent))
+        }
+        "editor.toolbar.edit.undo" => Some(toolbar_command_action(ToolbarCommandKind::Undo)),
+        "editor.toolbar.edit.redo" => Some(toolbar_command_action(ToolbarCommandKind::Redo)),
+        "editor.toolbar.edit.preferences" => {
+            Some(toolbar_command_action(ToolbarCommandKind::EditPreferences))
+        }
+        "editor.toolbar.window.new_window" => {
+            Some(toolbar_command_action(ToolbarCommandKind::NewWindow))
+        }
+        "editor.toolbar.window.next_workspace" => {
+            Some(toolbar_command_action(ToolbarCommandKind::NextWorkspace))
+        }
+        "editor.toolbar.window.previous_workspace" => Some(toolbar_command_action(
+            ToolbarCommandKind::PreviousWorkspace,
+        )),
+        "editor.toolbar.window.save_workspace" => {
+            Some(toolbar_command_action(ToolbarCommandKind::SaveWorkspace))
+        }
+        "editor.toolbar.window.load_scene_workspace" => Some(toolbar_command_action(
+            ToolbarCommandKind::LoadWorkspaceProfile(SCENE_WORKSPACE_PROFILE_ID),
+        )),
+        "editor.toolbar.window.load_modelling_workspace" => Some(toolbar_command_action(
+            ToolbarCommandKind::LoadWorkspaceProfile(MODELLING_WORKSPACE_PROFILE_ID),
+        )),
+        "editor.toolbar.window.load_custom_workspace" => Some(toolbar_command_action(
+            ToolbarCommandKind::LoadCustomWorkspace,
+        )),
+        _ => None,
+    }
+}
+
+fn toolbar_command_action(command: ToolbarCommandKind) -> RoutedShellAction {
+    RoutedShellAction::RunToolbarCommand {
+        command,
+        enabled: true,
+    }
+}
+
+fn legacy_toolbar_action_routes(
+    frame_model: &EditorShellFrameModel,
+) -> BTreeMap<WidgetId, RoutedShellAction> {
+    let mut routes = BTreeMap::new();
+    for button in &frame_model.toolbar.buttons {
+        match button.stable_name {
+            "undo" => {
+                routes.insert(
+                    crate::TOOLBAR_UNDO_BUTTON_WIDGET_ID,
+                    RoutedShellAction::Undo {
+                        enabled: button.enabled,
+                    },
+                );
+            }
+            "redo" => {
+                routes.insert(
+                    crate::TOOLBAR_REDO_BUTTON_WIDGET_ID,
+                    RoutedShellAction::Redo {
+                        enabled: button.enabled,
+                    },
+                );
+            }
+            "save" => {
+                routes.insert(
+                    crate::TOOLBAR_SAVE_BUTTON_WIDGET_ID,
+                    RoutedShellAction::SaveScene {
+                        enabled: button.enabled,
+                    },
+                );
+            }
+            "load" => {
+                routes.insert(
+                    crate::TOOLBAR_LOAD_BUTTON_WIDGET_ID,
+                    RoutedShellAction::LoadScene {
+                        enabled: button.enabled,
+                    },
+                );
+            }
+            "debug_logs" => {
+                routes.insert(
+                    crate::TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID,
+                    RoutedShellAction::ToggleDebugLogs,
+                );
+            }
+            _ => {}
+        }
+    }
+    routes
 }
 
 fn projected_tab_stacks_for_routes(

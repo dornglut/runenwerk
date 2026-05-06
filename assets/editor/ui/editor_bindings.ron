@@ -1,0 +1,36 @@
+(
+  toolbar: (
+    template: AuthoredId("runenwerk.editor.toolbar"),
+    workspace_catalog: Some((
+      collection_slot: AuthoredId("editor.workspace_profiles"),
+      active_selection_slot: AuthoredId("editor.workspace.active"),
+      entries: [
+        (id: "scene", label: "Scene", route: AuthoredId("editor.workspace.scene.activate")),
+        (id: "modelling", label: "Modelling", route: AuthoredId("editor.workspace.modelling.activate")),
+      ],
+    )),
+    routes: [
+      (route: EditorRouteId("editor.toolbar.menu.file"), ui_route_slot: AuthoredId("editor.toolbar.menu.file")),
+      (route: EditorRouteId("editor.toolbar.menu.edit"), ui_route_slot: AuthoredId("editor.toolbar.menu.edit")),
+      (route: EditorRouteId("editor.toolbar.menu.window"), ui_route_slot: AuthoredId("editor.toolbar.menu.window")),
+    ],
+    availability: [
+      (availability: AuthoredId("editor.workspace.create.available"), descriptor: StaticDisabled(reason: "workspace authoring is M3.6 scope")),
+      (availability: AuthoredId("editor.undo.available"), descriptor: CanUndo),
+      (availability: AuthoredId("editor.redo.available"), descriptor: CanRedo),
+    ],
+    menus: [
+      (menu_id: "file", menu_slot: AuthoredId("editor.toolbar.active_menu")),
+      (menu_id: "edit", menu_slot: AuthoredId("editor.toolbar.active_menu")),
+      (menu_id: "window", menu_slot: AuthoredId("editor.toolbar.active_menu")),
+    ],
+  ),
+  shell_chrome_template: AuthoredId("runenwerk.editor.shell_chrome"),
+  surface_templates: [
+    (kind: Inspector, template: AuthoredId("runenwerk.editor.surface.inspector"), provider_slots: ["inspector.title", "inspector.fields"]),
+    (kind: Outliner, template: AuthoredId("runenwerk.editor.surface.outliner"), provider_slots: ["outliner.rows"]),
+    (kind: EntityTable, template: AuthoredId("runenwerk.editor.surface.entity_table"), provider_slots: ["entity_table.rows"]),
+    (kind: Console, template: AuthoredId("runenwerk.editor.surface.console"), provider_slots: ["console.entries"]),
+    (kind: Viewport, template: AuthoredId("runenwerk.editor.surface.viewport"), provider_slots: ["viewport.products", "viewport.expression_product"]),
+  ],
+)

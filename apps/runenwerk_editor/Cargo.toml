@@ -11,6 +11,7 @@ engine = { path = "../../engine" }
 winit = "0.30.9"
 
 editor_core.workspace = true
+editor_definition.workspace = true
 editor_scene.workspace = true
 editor_inspector.workspace = true
 editor_shell.workspace = true
@@ -18,6 +19,7 @@ editor_viewport.workspace = true
 editor_persistence.workspace = true
 
 ui_input.workspace = true
+ui_definition.workspace = true
 ui_math.workspace = true
 ui_render_data.workspace = true
 ui_surface.workspace = true
@@ -27,3 +29,4 @@ ui_theme.workspace = true
 ecs.workspace = true
 scene.workspace = true
 glam.workspace = true
+ron = "0.8.1"

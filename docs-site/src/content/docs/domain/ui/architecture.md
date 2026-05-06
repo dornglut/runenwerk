@@ -23,7 +23,7 @@ This document covers:
 - workspace/tool-surface host ownership in `editor_shell`
 - runtime/app glue in `apps/runenwerk_editor`
 - engine render/UI integration paths used to submit and draw UI frames
-- planned general UI definition/formation contracts where they clarify `domain/ui` ownership
+- general UI definition/formation contracts where they clarify `domain/ui` ownership
 
 This document does not define visual design direction, docking product UX, or authored editor-definition workflows.
 
@@ -37,7 +37,7 @@ As of the audited repository state:
 - Viewport slot semantic ownership is in `editor_viewport`; renderer-facing embed payload slots are opaque IDs in `ui_render_data`, mapped through integration adapters.
 - Core shell control flows (outliner entity selection, viewport product selection, inspector field activation) now route through prepared `SurfacePresentationModel` + typed `SurfaceIntent` + host-side ratification adapters.
 - Engine overlay/debug UI paths now route through substrate frame generation (`ui_runtime::build_ui_frame`) instead of ad hoc primitive assembly.
-- No general UI definition/formation crate is implemented yet. Toolbar/menu structure, workspace profile defaults, and unavailable editor feature representation are still defined by editor shell/app code.
+- `domain/ui/ui_definition` now provides the first authored UI definition and retained formation layer. Toolbar/menu structure, normal shell chrome, and console surface structure form through checked-in definitions, while broader workspace/profile defaults and richer unavailable editor feature representation still need follow-up hardening.
 - Prior fallback seams removed:
   - no `first_frame()`-based routing in editor runtime systems
   - no `ViewportId(0)` fallback in shell viewport adapter
@@ -65,11 +65,11 @@ As of the audited repository state:
 - `domain/ui/ui_widgets`
   - ergonomic widget/control constructors over `ui_tree` node contracts.
 
-## Planned Adjacent Definition Layer
+## Adjacent Definition Layer
 
-The preferred long-term direction is a planned `domain/ui/ui_definition` crate inside the UI domain crate family. It is not implemented yet.
+`domain/ui/ui_definition` is the UI domain crate for general authored UI definitions and their formation pipeline.
 
-This planned layer should own general authored UI definitions and their formation pipeline:
+This layer owns general authored UI definitions and their formation pipeline:
 
 - authored UI node, layout, menu, popover, theme-reference, and action-slot definitions;
 - stable authored UI ids that are distinct from runtime `WidgetId`, focus, capture, and shell session ids;
@@ -148,7 +148,7 @@ Target ownership (partially implemented):
   - reusable control runtime
   - input/focus/invalidation behavior
   - shared testing harness
-- planned `domain/ui/ui_definition` owns general authored UI definition and formation contracts, while `domain/ui` runtime crates consume formed products.
+- `domain/ui/ui_definition` owns general authored UI definition and formation contracts, while `domain/ui` runtime crates consume formed products.
 - `editor_shell` owns workspace host semantics and shell-specific composition/command routing only.
 - `runenwerk_editor` owns app/runtime wiring and viewport/editor-specific runtime integrations.
 - engine render layer continues to own rendering integration and consumes UI frame contracts as data.

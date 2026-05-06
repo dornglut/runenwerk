@@ -19,9 +19,20 @@ related:
 
 ## Status
 
-Active M3.5 design.
+Active M3.5 design. The implementation is at validated closeout-candidate state as of 2026-05-06; M3.6 visual self-authoring has not started.
 
 This is an implementation design for a full first UI definition framework milestone. It is not a visual UI editor, plugin system, scripting system, or alternate UI execution runtime. The promoted M3.6 self-authoring workspace consumes this framework immediately after M3.5.
+
+Current implementation truth for the M3.5 closeout candidate:
+
+- `domain/ui/ui_definition` and `domain/editor/editor_definition` are active workspace crates.
+- Checked-in RON fixtures exist under `assets/editor/ui/` for toolbar, shell chrome, common provider surfaces, and editor bindings.
+- UI fixtures parse, validate, normalize, and can form retained UI products with route slots, embed slots, authored paths, diagnostics, and availability state.
+- `editor_shell` uses formed toolbar route slots for migrated toolbar routing; the toolbar compatibility entrypoint is now a thin wrapper around definition formation.
+- normal tab-stack shell chrome is formed from `assets/editor/ui/shell_chrome.ron`; dynamic drag/drop preview chrome remains live shell behavior.
+- the console provider surface structure is formed from `assets/editor/ui/surfaces/console.ron` while provider data and follow-scroll behavior stay app/shell-owned.
+- `apps/runenwerk_editor` has an app-owned checked-in fixture loading/validation path.
+- Remaining common provider fixtures are checked-in and validated, but richer inspector/outliner/entity-table/viewport migrations should only proceed when their specific row/form/embed semantics can be preserved without moving provider behavior into templates.
 
 ## Purpose
 
@@ -44,13 +55,12 @@ Today, toolbar structure and routing are mostly code-defined through:
 - `domain/editor/editor_shell/src/composition/build_toolbar.rs::build_toolbar`
 - `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_frame_widget_routes`
 
-Provider surface structure also remains code-defined through builders such as:
+Some provider surface structure still remains code-defined through builders such as:
 
 - `domain/editor/editor_shell/src/composition/build_inspector_panel.rs::build_inspector_panel`
 - `domain/editor/editor_shell/src/composition/build_outliner_panel.rs::build_outliner_panel`
 - `domain/editor/editor_shell/src/composition/build_entity_table_panel.rs::build_entity_table_panel`
 - `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::build_viewport_panel`
-- `domain/editor/editor_shell/src/composition/build_console_panel.rs::build_console_panel`
 
 M3.5 should make these stable UI structures template-formed where practical, while preserving explicit provider/domain/app command routing.
 
@@ -678,7 +688,7 @@ Responsibilities:
 Add:
 
 - `domain/editor/editor_shell/src/composition/toolbar_definition.rs`
-- `domain/editor/editor_shell/src/composition/defined_shell_chrome.rs`
+- `domain/editor/editor_shell/src/composition/shell_chrome_definition.rs`
 
 Update:
 
@@ -701,6 +711,8 @@ The toolbar path should stop depending on `stable_name` string matching for rout
 
 The tab-stack/area chrome path should use templates for stable chrome structure while keeping workspace mutation, panel identity allocation, and docking ratification in `editor_shell`.
 
+Implementation note: normal tab-stack chrome is migrated through `shell_chrome.ron`; dynamic docking preview/drop-slot rendering remains live shell behavior.
+
 ### Phase 8 - Provider Surface Structure Migration
 
 Update:
@@ -719,6 +731,8 @@ Target:
 - remove migrated ad hoc row/button/string routing code once parity tests pass.
 
 This migration is structure-only. It must not move scene editing, inspector commit, viewport picking, renderer integration, or provider execution into `ui_definition`.
+
+Implementation note: console panel structure is migrated through `surfaces/console.ron` and keeps console follow-scroll state in app/shell code. Inspector, outliner, entity-table, and viewport fixtures are checked in and validated; their retained builders should remain behavior-owned until richer row/form/embed parity can be preserved without encoding provider semantics in `ui_definition`.
 
 ### Phase 9 - App Fixture Loading
 
@@ -762,7 +776,8 @@ Policy:
 - File/Edit/Window route to `ShellCommand::ToggleToolbarMenu`;
 - toolbar routing no longer depends on `stable_name` matching.
 - tab-stack chrome routes still produce the existing shell commands;
-- surface templates preserve inspector/outliner/entity-table/console/viewport route behavior.
+- console surface formation preserves existing follow-scroll behavior;
+- validated inspector/outliner/entity-table/viewport fixtures do not execute provider behavior.
 
 `apps/runenwerk_editor`:
 

@@ -1,0 +1,18 @@
+(
+  id: AuthoredId("runenwerk.editor.surface.viewport"),
+  root: Column(
+    id: AuthoredId("root"),
+    children: [
+      Row(
+        id: AuthoredId("chrome"),
+        children: [
+          Select(id: AuthoredId("product_select"), items: (id: AuthoredId("viewport.products")), selected: Some((id: AuthoredId("viewport.active_product"))), route: Some((id: AuthoredId("viewport.select_product"))), availability: None),
+          Toggle(id: AuthoredId("details"), label: Static(Text("Details")), checked: Slot(AuthoredId("viewport.details_open")), route: Some((id: AuthoredId("viewport.toggle_details"))), availability: None),
+        ],
+      ),
+      EmbedSlot(id: AuthoredId("viewport_canvas"), slot: (id: AuthoredId("viewport.expression_product"))),
+    ],
+  ),
+  templates: [],
+  menus: [],
+)

@@ -34,7 +34,7 @@ Implemented and in use:
 - runtime viewport routing is structural-first with one explicit bootstrap-only single-viewport seam;
 - architecture guard tests enforce no `first_frame()` routing fallback and no `ViewportId(0)` synthesis;
 - viewport semantic slot taxonomy remains in `editor_viewport`, with opaque renderer-facing payload slots in `ui_render_data`.
-- no general UI definition/formation crate exists yet; top-level editor menus, workspace profile catalogs/default layouts, unavailable feature representation, and custom workspace catalog behavior remain code-defined in editor shell/app layers.
+- `ui_definition` exists with authored templates, validation, normalization, retained formation, route/embed products, and checked-in editor UI fixtures; broader workspace profile catalogs/default layouts, unavailable feature representation, and custom workspace catalog behavior still need follow-up hardening.
 
 Evidence in code:
 
@@ -111,7 +111,7 @@ Focus:
 
 ### Phase 7 - UI Definition Formation Framework
 
-Status: planned, not implemented.
+Status: M3.5 closeout candidate implemented and validated as of 2026-05-06.
 
 Owning design:
 
@@ -124,7 +124,7 @@ Decision:
 - treat authored and normalized UI definitions as execution-neutral source/IR;
 - keep compiled-reactive and ECS-driven UI execution deferred unless a future active design or accepted ADR promotes one. If promoted, they should become additional formation targets from the normalized model, not replacements for authored template identity.
 
-Owning planned crates:
+Owning crates:
 
 - `domain/ui/ui_definition`
 - `domain/editor/editor_definition`
@@ -136,6 +136,20 @@ Scope:
 - validation, normalization, diagnostics, source/path maps, and a first retained-tree formation target;
 - generic availability descriptors so disabled/unavailable UI can render without routing fake commands;
 - editor-specific bindings for toolbar, menus, workspace catalogs, shell chrome, and common provider surface templates in `domain/editor/editor_definition`.
+
+Implemented first-slice evidence:
+
+- `domain/ui/ui_definition` is an active workspace crate with the source model modules, validation, normalization, and retained formation.
+- `domain/editor/editor_definition` is an active workspace crate with toolbar, menu, workspace, surface, command route, availability, binding, validation, and editor UI formation helpers.
+- Checked-in fixtures under `assets/editor/ui/` parse and validate in tests.
+- `editor_shell` forms the toolbar fixture and maps formed route slots to existing shell actions; route slots remain inert until shell mapping.
+- `editor_shell` forms normal tab-stack shell chrome from `assets/editor/ui/shell_chrome.ron` while dynamic docking previews remain live shell behavior.
+- `editor_shell` forms the console provider surface from `assets/editor/ui/surfaces/console.ron` while provider data and follow-scroll state remain outside templates.
+- `apps/runenwerk_editor` owns checked-in fixture loading and validation policy.
+
+Remaining follow-up after M3.5 closeout:
+
+- keep remaining provider surface fixture migrations limited to cases where retained parity can be preserved without moving provider semantics into UI definitions.
 
 Non-goals:
 
@@ -157,7 +171,7 @@ Milestone placement:
 - [ ] Expand non-viewport surface maturity (entity-table/query, richer inspector controls) using existing surface contracts. Status: active/partially implemented; entity-table, console, inspector, outliner, provider routing, and independent surface-session coverage exists, but richer common workflows remain open.
 - [ ] Broaden reusable control adoption in editor surfaces. Status: active/open; controls exist in `domain/ui/*`, but shell surfaces still contain panel-specific composition and some ad hoc row/button patterns where retained tree/table/numeric/toggle/select controls should become the default.
 - [ ] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard coverage exists in `apps/runenwerk_editor/tests/viewport_architecture_guards.rs` and related shell/provider tests.
-- [ ] Add the planned UI definition formation framework before M3.6 and M4. Status: planned M3.5; docs now define the full framework, editor binding layer, and migration scope, but no crate or workspace metadata exists yet.
+- [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: closeout candidate implemented and validated as of 2026-05-06; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, normal shell chrome formation, and console surface formation exist. Remaining richer provider surface migrations are follow-up work bounded by provider-semantics preservation.
 - [ ] Implement the promoted UI self-authoring workspace before M4. Status: planned M3.6; the active self-authoring design is now Now-track and should provide visual UI/layout/style/binding authoring before later feature surfaces are built.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-05.
 

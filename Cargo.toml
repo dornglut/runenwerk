@@ -21,11 +21,13 @@ members = [
     "domain/ui/ui_theme",
     "domain/ui/ui_render_data",
     "domain/ui/ui_surface",
+    "domain/ui/ui_definition",
     "domain/ui/ui_tree",
     "domain/ui/ui_runtime",
     "domain/ui/ui_widgets",
 
     "domain/editor/editor_core",
+    "domain/editor/editor_definition",
     "domain/editor/editor_shell",
     "domain/editor/editor_viewport",
     "domain/editor/editor_scene",
@@ -65,11 +67,13 @@ ui_text = { path = "domain/ui/ui_text" }
 ui_theme = { path = "domain/ui/ui_theme" }
 ui_render_data = { path = "domain/ui/ui_render_data" }
 ui_surface = { path = "domain/ui/ui_surface" }
+ui_definition = { path = "domain/ui/ui_definition" }
 ui_tree = { path = "domain/ui/ui_tree" }
 ui_runtime = { path = "domain/ui/ui_runtime" }
 ui_widgets = { path = "domain/ui/ui_widgets" }
 
 editor_core = { path = "domain/editor/editor_core" }
+editor_definition = { path = "domain/editor/editor_definition" }
 editor_shell = { path = "domain/editor/editor_shell" }
 editor_viewport = { path = "domain/editor/editor_viewport" }
 editor_scene = { path = "domain/editor/editor_scene" }

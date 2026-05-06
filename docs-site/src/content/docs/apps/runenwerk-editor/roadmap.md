@@ -80,7 +80,7 @@ Current post-M3 gaps:
 - M1 structural seams are closed: `DocumentKind` has the explicit M1 taxonomy, `EditorSession` owns ordered document tabs, active switching, dirty/save/close transitions, document compatibility validation, and mode ids/descriptors/registry compatibility rules; app-local generic document-tab runtime state is split from scene-specific document state.
 - M2 shell seams are closed: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage.
 - M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
-- There is no general UI definition/formation crate yet; toolbar/menu structure, workspace profile catalogs/default layouts, disabled or unavailable feature representation, and custom workspace catalogs remain code-defined in editor shell/app layers.
+- The M3.5 UI definition/formation closeout candidate is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar fixture formation, normal shell chrome formation, console surface formation, and app-owned fixture validation exist. Remaining provider surface fixture migrations should proceed only where retained behavior parity can be preserved without moving provider semantics into templates.
 - There is no asset catalog, asset id model, dependency graph, import plan, artifact cache, asset browser, import diagnostics surface, project-wide asset hot reload workflow, field-product formation pipeline, SDF/world asset taxonomy, or `world_sdf` artifact/cache bridge.
 - There is no `domain/material_graph`, `domain/texture`, `domain/procgen`, `domain/particles`, `domain/physics`, or `domain/animation`.
 - There are no editor providers for material graph editing, procedural texturing, Texture3D/volume inspection, procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview.
@@ -89,9 +89,9 @@ Current post-M3 gaps:
 ## Implementation Readiness
 
 - M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
-- M3.5 is the next UI/editor infrastructure slice: add a full UI definition formation framework before M3.6 and M4 so new asset/procedural/editor-design surfaces do not add more hard-coded menu, toolbar, shell chrome, provider surface, workspace, and unavailable-feature structure.
+- M3.5 is the active UI/editor infrastructure slice: the closeout candidate has landed and passed validation/drift closeout as of 2026-05-06. M3.6 visual self-authoring has not started.
 - M3.6 is the promoted self-authoring/UI workspace slice: build the UI workspace, visual definition authoring, style/theme editing, validation, preview, and apply/rollback flows now so later asset, procedural, gameplay, runtime, and overlay UI can be authored through the same system.
-- M4 and M5 are the next content-pipeline track after M3.5 and M3.6 once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
+- M4 and M5 are the next content-pipeline track after M3.5 closes and M3.6 self-authoring lands, once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
 - M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
 - Later self-authoring packaging/extensibility is implementation-ready for the retained UI path only. Compiled-reactive or ECS-driven UI execution remains blocked; neither strategy was promoted before M2, and any future promotion requires a separate active design or accepted ADR plus a roadmap update.
@@ -114,7 +114,7 @@ Exit criteria:
 
 ### M1 - Editor Structural Core Closed
 
-Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M3.5 UI definition formation framework and M3.6 UI self-authoring workspace are the next infrastructure milestones before M4 asset pipeline foundation, while procedural domains and gameplay graph remain deferred.
+Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M3.5 UI definition formation framework has a validated closeout candidate as of 2026-05-06, and M3.6 UI self-authoring workspace is the next infrastructure milestone before M4 asset pipeline foundation, while procedural domains and gameplay graph remain deferred.
 
 Purpose: close the structural seams that every later feature depends on.
 
@@ -180,7 +180,7 @@ Validation:
 
 Purpose: finish the core 3D editor before expanding into every other workspace.
 
-Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M3.5 UI definition formation framework is the next milestone; M3.6 UI self-authoring workspace follows it before M4 asset pipeline foundation.
+Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M3.5 UI definition formation framework has a validated closeout candidate as of 2026-05-06; M3.6 UI self-authoring workspace follows it before M4 asset pipeline foundation.
 
 Implementation targets:
 
@@ -230,23 +230,23 @@ Rationale:
 
 Implementation targets:
 
-- future `domain/ui/ui_definition/src/lib.rs`
-  - add the planned engine-agnostic UI definition crate under the UI domain crate family.
-- future `domain/ui/ui_definition/src/identity.rs`
+- `domain/ui/ui_definition/src/lib.rs`
+  - add the engine-agnostic UI definition crate under the UI domain crate family.
+- `domain/ui/ui_definition/src/identity.rs`
   - define stable authored UI ids that are distinct from `WidgetId`, focus/capture ids, `PanelInstanceId`, `ToolSurfaceInstanceId`, and ECS entity ids.
-- future `domain/ui/ui_definition/src/template.rs`, `src/node.rs`, `src/slot.rs`, `src/menu.rs`, `src/embed.rs`, and `src/availability.rs`
+- `domain/ui/ui_definition/src/template.rs`, `src/node.rs`, `src/slot.rs`, `src/menu.rs`, `src/embed.rs`, and `src/availability.rs`
   - model authored UI templates, structural nodes, controls, menus, slots, repeaters, template refs, embed slots, and availability definitions without editor-specific command semantics, retained `UiNodeKind`, runtime `WidgetId`, ECS entity ids, or compiled update functions.
-- future `domain/ui/ui_definition/src/normalize.rs`
+- `domain/ui/ui_definition/src/normalize.rs`
   - canonicalize ordering, resolve generic references, and report duplicate ids or malformed structures.
-- future `domain/ui/ui_definition/src/validate.rs`
+- `domain/ui/ui_definition/src/validate.rs`
   - validate ids, slot references, template refs, repeaters, embed slots, availability refs, and unsupported node combinations with structured diagnostics.
-- future `domain/ui/ui_definition/src/form.rs`
+- `domain/ui/ui_definition/src/form.rs`
   - form validated definitions into retained UI products consumed by `ui_tree`, `ui_widgets`, and `ui_runtime` as the first target; formation emits route slots, embed slots, authored paths, and availability/diagnostic state, not command execution.
-- future `domain/editor/editor_definition/src/lib.rs`
-  - add the planned editor-specific definition crate above `ui_definition` and below `editor_shell`.
-- future `domain/editor/editor_definition/src/toolbar.rs`, `src/menu.rs`, `src/workspace.rs`, `src/surface.rs`, `src/command.rs`, `src/availability.rs`, `src/binding.rs`, `src/validate.rs`, and `src/form_editor_ui.rs`
+- `domain/editor/editor_definition/src/lib.rs`
+  - add the editor-specific definition crate above `ui_definition` and below `editor_shell`.
+- `domain/editor/editor_definition/src/toolbar.rs`, `src/menu.rs`, `src/workspace.rs`, `src/surface.rs`, `src/command.rs`, `src/availability.rs`, `src/binding.rs`, `src/validate.rs`, and `src/form_editor_ui.rs`
   - define editor menu ids, workspace catalog entries, command route ids, availability descriptors, toolbar bindings, shell chrome bindings, and common provider surface template bindings without importing active shell runtime state or app IO.
-- future `assets/editor/ui/*.ron`
+- `assets/editor/ui/*.ron`
   - add checked-in RON templates for toolbar, shell chrome, common provider surfaces, and editor bindings.
 - `domain/editor/editor_shell/src/composition/build_toolbar.rs::build_toolbar`
   - migrate toolbar structure to formed definitions and remove `stable_name` string routing as the source of truth.
@@ -255,7 +255,13 @@ Implementation targets:
 - `domain/editor/editor_shell/src/composition/build_inspector_panel.rs::build_inspector_panel`, `build_outliner_panel.rs::build_outliner_panel`, `build_entity_table_panel.rs::build_entity_table_panel`, `build_viewport_panel.rs::build_viewport_panel`, and `build_console_panel.rs::build_console_panel`
   - migrate repeated list/tree/table/form/chrome structure to templates while providers continue supplying data, embed payloads, and route results.
 - `DOMAIN_MAP.md` and `docs-site/src/content/docs/domain/00-overview.md`
-  - keep the planned ownership marked as planned until the crates are actually added to workspace metadata.
+  - keep the ownership maps aligned with the active workspace crates.
+
+Completeness status:
+
+- Implemented: crate skeletons and metadata, generic source model modules, editor definition modules, checked-in fixtures, fixture parse/validation tests, retained formation, inert route/embed/path products, app-owned fixture loading, toolbar route-slot integration, normal shell chrome formation, and console surface formation.
+- Partially implemented: toolbar structure is formed from the fixture, but legacy observation still supplies runtime labels/active state and some older toolbar buttons remain compatibility-routed until they are represented in definition data.
+- Deferred from the closeout candidate: inspector, outliner, entity-table, and viewport fixtures are authored and validated, but their retained builders still own behavior-rich structure until richer row/form/embed parity can be preserved without moving provider behavior into `ui_definition`.
 
 Non-goals:
 

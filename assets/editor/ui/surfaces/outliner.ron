@@ -1,0 +1,12 @@
+(
+  id: AuthoredId("runenwerk.editor.surface.outliner"),
+  root: Column(
+    id: AuthoredId("root"),
+    children: [
+      Label(id: AuthoredId("title"), label: Static(Text("Outliner"))),
+      Tree(id: AuthoredId("tree"), rows: (id: AuthoredId("outliner.rows")), route: Some((id: AuthoredId("outliner.select")))),
+    ],
+  ),
+  templates: [],
+  menus: [],
+)

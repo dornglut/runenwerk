@@ -51,12 +51,12 @@ Operational execution checklist:
 - workspace structural identity and routing contracts are implemented and guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated in production editor flows;
 - editor MVP acceptance is complete and the active editor/UI work has moved to the repository Now list;
-- current active editor/UI work is primarily the M3.5 UI definition formation framework, the promoted M3.6 UI self-authoring workspace/styling track, broader non-viewport surface maturity through templates, and continued guard/doc drift control before SDF/field asset and procedural workspace expansion.
+- current active editor/UI work is primarily the promoted M3.6 UI self-authoring workspace/styling track after the validated M3.5 UI definition formation closeout candidate, broader non-viewport surface maturity through templates, and continued guard/doc drift control before SDF/field asset and procedural workspace expansion.
 
 ## Recommended Near-Term Order
 
-1. Implement M3.5 UI definition formation framework.
-2. Implement M3.6 UI self-authoring workspace, styling, validation, preview, and apply/rollback.
+1. Implement M3.6 UI self-authoring workspace, styling, validation, preview, and apply/rollback.
+2. Continue richer provider surface template migrations only when retained behavior parity and provider-boundary preservation are explicit.
 3. Use the M3.6 workspace to author later editor, debug overlay, runtime overlay, and game UI templates instead of adding new hard-coded shell/app UI.
 4. Build the SDF/field-first asset pipeline and field-product foundation after the UI authoring substrate is available.
 5. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.

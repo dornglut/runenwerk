@@ -1,0 +1,12 @@
+(
+  id: AuthoredId("runenwerk.editor.surface.entity_table"),
+  root: Column(
+    id: AuthoredId("root"),
+    children: [
+      TextInput(id: AuthoredId("search"), value: Slot(AuthoredId("entity_table.search")), placeholder: Some("Search"), route: Some((id: AuthoredId("entity_table.search.edit"))), availability: None),
+      Table(id: AuthoredId("table"), rows: (id: AuthoredId("entity_table.rows")), route: Some((id: AuthoredId("entity_table.select")))),
+    ],
+  ),
+  templates: [],
+  menus: [],
+)

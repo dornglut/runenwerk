@@ -774,6 +774,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "editor_definition"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "ui_definition",
+ "ui_theme",
+]
+
+[[package]]
 name = "editor_inspector"
 version = "0.1.0"
 dependencies = [
@@ -807,13 +817,16 @@ name = "editor_shell"
 version = "0.1.0"
 dependencies = [
  "editor_core",
+ "editor_definition",
  "editor_inspector",
  "editor_scene",
  "editor_viewport",
  "id",
  "id_macros",
  "ratification",
+ "ron",
  "serde",
+ "ui_definition",
  "ui_input",
  "ui_layout",
  "ui_math",
@@ -2685,6 +2698,7 @@ dependencies = [
  "bytemuck",
  "ecs",
  "editor_core",
+ "editor_definition",
  "editor_inspector",
  "editor_persistence",
  "editor_scene",
@@ -2692,8 +2706,10 @@ dependencies = [
  "editor_viewport",
  "engine",
  "glam 0.32.1",
+ "ron",
  "scene",
  "serde",
+ "ui_definition",
  "ui_input",
  "ui_math",
  "ui_render_data",
@@ -3567,6 +3583,21 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "ui_definition"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "ui_layout",
+ "ui_math",
+ "ui_render_data",
+ "ui_text",
+ "ui_theme",
+ "ui_tree",
+ "ui_widgets",
+]
 
 [[package]]
 name = "ui_input"

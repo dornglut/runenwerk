@@ -1,0 +1,25 @@
+(
+  id: AuthoredId("runenwerk.editor.surface.inspector"),
+  root: Column(
+    id: AuthoredId("root"),
+    children: [
+      Label(id: AuthoredId("title"), label: Slot(AuthoredId("inspector.title"))),
+      Repeat(id: AuthoredId("fields"), items: (id: AuthoredId("inspector.fields")), template: AuthoredId("runenwerk.editor.surface.inspector.field_row")),
+    ],
+  ),
+  templates: [
+    (
+      id: AuthoredId("runenwerk.editor.surface.inspector.field_row"),
+      root: Row(
+        id: AuthoredId("field_row"),
+        children: [
+          Label(id: AuthoredId("name"), label: Slot(AuthoredId("field.label"))),
+          TextInput(id: AuthoredId("value"), value: Slot(AuthoredId("field.display_value")), placeholder: Some(""), route: Some((id: AuthoredId("inspector.field.edit"))), availability: Some(Ref(AuthoredId("inspector.field.editable")))),
+        ],
+      ),
+      templates: [],
+      menus: [],
+    ),
+  ],
+  menus: [],
+)
