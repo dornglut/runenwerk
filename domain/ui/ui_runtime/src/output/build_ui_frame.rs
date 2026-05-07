@@ -550,18 +550,17 @@ pub(crate) fn scrollbar_geometry(
 fn emit_viewport_surface_embed(
     embed: &ViewportSurfaceEmbedNode,
     bounds: UiRect,
-    surface_size: UiSize,
+    _surface_size: UiSize,
     layer: &mut UiLayer,
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let uv_rect = normalized_uv_rect(bounds, surface_size);
     layer.push(UiPrimitive::ViewportSurfaceEmbed(
         ViewportSurfaceEmbedPrimitive::new(
             embed.viewport_id,
             embed.slot,
             bounds,
-            uv_rect,
+            UiRect::new(0.0, 0.0, 1.0, 1.0),
             UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
             sort_key(depth, *primitive_order),
         ),
@@ -601,18 +600,6 @@ fn emit_image(
         sort_key(depth, *primitive_order),
     )));
     *primitive_order += 1;
-}
-
-fn normalized_uv_rect(bounds: UiRect, surface_size: UiSize) -> UiRect {
-    let width = surface_size.width.max(1.0);
-    let height = surface_size.height.max(1.0);
-
-    let u0 = (bounds.x / width).clamp(0.0, 1.0);
-    let v0 = (bounds.y / height).clamp(0.0, 1.0);
-    let u1 = ((bounds.x + bounds.width) / width).clamp(0.0, 1.0);
-    let v1 = ((bounds.y + bounds.height) / height).clamp(0.0, 1.0);
-
-    UiRect::new(u0, v0, (u1 - u0).max(0.0), (v1 - v0).max(0.0))
 }
 
 #[expect(
@@ -1654,7 +1641,7 @@ mod tests {
     }
 
     #[test]
-    fn build_ui_frame_emits_viewport_embed_with_normalized_uv() {
+    fn build_ui_frame_emits_viewport_embed_with_full_product_uv() {
         let atlas_source = TestAtlasSource {
             atlas: atlas_with_ascii(FontId(1)),
         };
@@ -1688,10 +1675,7 @@ mod tests {
             })
             .expect("viewport embed primitive should exist");
 
-        assert!((embed.uv_rect.x - 0.05).abs() < 0.000_1);
-        assert!((embed.uv_rect.y - 0.20).abs() < 0.000_1);
-        assert!((embed.uv_rect.width - 0.50).abs() < 0.000_1);
-        assert!((embed.uv_rect.height - 0.50).abs() < 0.000_1);
+        assert_eq!(embed.uv_rect, UiRect::new(0.0, 0.0, 1.0, 1.0));
     }
 
     #[test]

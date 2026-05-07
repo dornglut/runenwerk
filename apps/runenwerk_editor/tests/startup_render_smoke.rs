@@ -191,6 +191,11 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         panic!("viewport primary binding should resolve to a dynamic texture source");
     };
     assert_eq!(namespace.as_str(), VIEWPORT_DYNAMIC_TARGET_NAMESPACE);
+    assert_eq!(
+        viewport_embed.uv_rect,
+        ui_math::UiRect::new(0.0, 0.0, 1.0, 1.0),
+        "viewport-local dynamic products must be sampled with full-product UVs, not a screen-subrect crop",
+    );
     assert!(
         target_id.starts_with(format!("editor.viewport.{}.", viewport_embed.viewport_id).as_str()),
         "dynamic target id should be scoped to the owning viewport, got {target_id}",

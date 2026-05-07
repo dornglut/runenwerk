@@ -503,6 +503,27 @@ mod tests {
     }
 
     #[test]
+    fn viewport_center_ray_hits_seeded_box_with_viewport_local_aspect() {
+        let runtime = seeded_runtime();
+        let entity = runtime
+            .document()
+            .entity_ids()
+            .next()
+            .expect("seeded runtime should contain one entity");
+        let viewport_bounds = UiRect::new(96.0, 72.0, 960.0, 540.0);
+        let cursor = UiPoint::new(
+            viewport_bounds.x + viewport_bounds.width * 0.5,
+            viewport_bounds.y + viewport_bounds.height * 0.5,
+        );
+        let ray = viewport_ray(cursor, viewport_bounds)
+            .expect("center of a valid viewport should produce a picking ray");
+
+        let hit = compose_picking_hit(&runtime, None, None, cursor, viewport_bounds, ray);
+
+        assert_eq!(hit.target, EditorPickingTarget::Entity(entity.0));
+    }
+
+    #[test]
     fn compose_hit_returns_grid_when_no_entity_intersection() {
         let mut runtime = seeded_runtime();
         let entity = runtime
