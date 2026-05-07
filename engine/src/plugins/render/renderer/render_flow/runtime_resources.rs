@@ -53,6 +53,10 @@ pub struct BufferAllocationSpec {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RuntimeResourceKey {
     FlowOwned(RenderResourceId),
+    InvocationUniform {
+        invocation_id: String,
+        resource_id: RenderResourceId,
+    },
     DynamicTexture(RenderDynamicTextureTargetKey),
     SurfaceColor,
     SurfaceDepth,
@@ -62,6 +66,10 @@ impl fmt::Display for RuntimeResourceKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FlowOwned(id) => write!(f, "{}", id),
+            Self::InvocationUniform {
+                invocation_id,
+                resource_id,
+            } => write!(f, "{}@{}", resource_id, invocation_id),
             Self::DynamicTexture(key) => write!(f, "{}", key),
             Self::SurfaceColor => f.write_str(SURFACE_COLOR_RESOURCE_LABEL),
             Self::SurfaceDepth => f.write_str(SURFACE_DEPTH_RESOURCE_LABEL),
@@ -73,6 +81,8 @@ impl fmt::Display for RuntimeResourceKey {
 pub struct FlowRuntimeResources {
     pub textures: BTreeMap<RenderResourceId, RuntimeTextureResource>,
     pub buffers: BTreeMap<RenderResourceId, RuntimeBufferResource>,
+    pub invocation_uniform_buffers: BTreeMap<(String, RenderResourceId), RuntimeBufferResource>,
+    pub active_invocation_uniform_scope: Option<String>,
     pub kinds: BTreeMap<RenderResourceId, RuntimeResourceKind>,
     pub descriptors: BTreeMap<RenderResourceId, RenderResourceDescriptor>,
     pub resource_ids_by_label: BTreeMap<String, RenderResourceId>,

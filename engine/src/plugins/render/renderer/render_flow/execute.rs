@@ -58,8 +58,11 @@ impl Renderer {
                     packet.surface_size,
                     packet.surface_format,
                 );
-                self.last_runtime_resources
-                    .extend(runtime_resources.inspect_entries(flow.flow_id));
+                let invocation_ids = prepared_frame
+                    .flow_invocations_for_flow(flow.flow_id)
+                    .map(|invocation| invocation.invocation_id.0.as_str())
+                    .collect::<Vec<_>>();
+                runtime_resources.retain_invocation_uniform_scopes(invocation_ids);
                 for invocation in prepared_frame.flow_invocations_for_flow(flow.flow_id) {
                     let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
                         bail!(
@@ -73,146 +76,164 @@ impl Renderer {
                     invocation_packet.surface_size = view.target_size_px;
                     runtime_resources.target_alias_bindings =
                         invocation.target_alias_bindings.clone();
-                    self.upload_projected_uniform_buffers(
-                        queue,
-                        &invocation.inputs,
-                        runtime_resources,
-                    )?;
-
-                    for pass in &flow.execution.passes {
-                        if !self.pass_targets_active_view(pass, view.view_id.as_str(), view.kind) {
-                            continue;
-                        }
-                        let pass_id = execution_pass_id(pass);
-                        let pass_label = pass_id.to_string();
-                        if let Some(feature_id) = execution_pass_feature_id(pass) {
-                            match self.resolve_feature_pass_action(
-                                feature_id,
-                                pass_id,
-                                &invocation_packet,
-                            )? {
-                                FeaturePassAction::Execute => {}
-                                FeaturePassAction::Skip => continue,
-                            }
-                        }
-                        ensure_compiled_pass_is_supported(pass)?;
-                        if capture_runtime.should_attempt_stage(CaptureStage::Before) {
-                            self.queue_pass_texture_captures(
-                                device,
-                                &mut encoder,
-                                frame_texture,
-                                &invocation_packet,
-                                flow,
-                                pass,
-                                runtime_resources,
-                                CaptureStage::Before,
-                                &mut capture_runtime,
-                                &mut pending_capture_readbacks,
-                            )?;
-                        }
-                        let pass_encode_start = Instant::now();
-                        let evidence = self.encode_compiled_pass(
+                    runtime_resources
+                        .set_active_invocation_uniform_scope(invocation.invocation_id.0.clone());
+                    let invocation_result = (|| -> Result<()> {
+                        self.upload_projected_uniform_buffers(
                             device,
-                            &mut encoder,
-                            frame_texture,
-                            frame_view,
-                            &invocation_packet,
-                            flow,
+                            queue,
+                            invocation.invocation_id.0.as_str(),
                             &invocation.inputs,
-                            pass,
-                            shader_registry,
                             runtime_resources,
                         )?;
-                        if capture_runtime.should_attempt_stage(CaptureStage::After) {
-                            self.queue_pass_texture_captures(
+
+                        for pass in &flow.execution.passes {
+                            if !self.pass_targets_active_view(
+                                pass,
+                                view.view_id.as_str(),
+                                view.kind,
+                            ) {
+                                continue;
+                            }
+                            let pass_id = execution_pass_id(pass);
+                            let pass_label = pass_id.to_string();
+                            if let Some(feature_id) = execution_pass_feature_id(pass) {
+                                match self.resolve_feature_pass_action(
+                                    feature_id,
+                                    pass_id,
+                                    &invocation_packet,
+                                )? {
+                                    FeaturePassAction::Execute => {}
+                                    FeaturePassAction::Skip => continue,
+                                }
+                            }
+                            ensure_compiled_pass_is_supported(pass)?;
+                            if capture_runtime.should_attempt_stage(CaptureStage::Before) {
+                                self.queue_pass_texture_captures(
+                                    device,
+                                    &mut encoder,
+                                    frame_texture,
+                                    &invocation_packet,
+                                    flow,
+                                    pass,
+                                    runtime_resources,
+                                    CaptureStage::Before,
+                                    &mut capture_runtime,
+                                    &mut pending_capture_readbacks,
+                                )?;
+                            }
+                            let pass_encode_start = Instant::now();
+                            let evidence = self.encode_compiled_pass(
                                 device,
                                 &mut encoder,
                                 frame_texture,
+                                frame_view,
                                 &invocation_packet,
                                 flow,
+                                &invocation.inputs,
                                 pass,
+                                shader_registry,
                                 runtime_resources,
-                                CaptureStage::After,
-                                &mut capture_runtime,
-                                &mut pending_capture_readbacks,
                             )?;
-                        }
-                        self.last_pass_timings.push(PassTimingSample {
-                            flow_id: flow.flow_id.to_string(),
-                            pass_id: pass_label.clone(),
-                            pass_kind: execution_pass_kind_name(pass).to_string(),
-                            millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
-                            dispatch_workgroups: evidence.dispatch_workgroups,
-                        });
-                        if debug_control.provenance_enabled {
-                            let pass_resource_truth =
-                                collect_pass_resource_truth(flow.flow_id, pass, runtime_resources);
-                            self.last_pass_provenance.push(RenderPassProvenanceRecord {
-                                frame_index,
+                            if capture_runtime.should_attempt_stage(CaptureStage::After) {
+                                self.queue_pass_texture_captures(
+                                    device,
+                                    &mut encoder,
+                                    frame_texture,
+                                    &invocation_packet,
+                                    flow,
+                                    pass,
+                                    runtime_resources,
+                                    CaptureStage::After,
+                                    &mut capture_runtime,
+                                    &mut pending_capture_readbacks,
+                                )?;
+                            }
+                            self.last_pass_timings.push(PassTimingSample {
                                 flow_id: flow.flow_id.to_string(),
                                 pass_id: pass_label.clone(),
-                                pass_label: pass_label.clone(),
-                                pass_kind: execution_flow_pass_kind(pass),
-                                order_index: execution_pass_order_index(pass),
-                                feature_id: execution_pass_feature_id(pass)
-                                    .map(|id| id.to_string()),
-                                shader_id: evidence.shader_id,
-                                shader_revision: evidence.shader_revision,
-                                fallback_used: evidence.fallback_used,
-                                pipeline_stats_key: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(FlowPassPipelineKey::stats_key)
-                                    .unwrap_or_default(),
-                                bind_group_layout_signature_hash: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(|key| key.bind_group_layout_signature_hash)
-                                    .unwrap_or_default(),
-                                material_specialization_fragment_hash: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(|key| key.material_specialization_fragment_hash)
-                                    .unwrap_or_default(),
-                                view_signature_hash: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(|key| key.view_signature_hash)
-                                    .unwrap_or_default(),
-                                feature_runtime_version: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(|key| key.feature_runtime_version)
-                                    .unwrap_or_default(),
-                                color_formats: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(|key| key.color_formats.clone())
-                                    .unwrap_or_default(),
-                                depth_format: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .and_then(|key| key.depth_format),
-                                sample_count: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(|key| key.sample_count)
-                                    .unwrap_or(1),
-                                primitive_topology_class: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(|key| key.primitive_topology_class)
-                                    .unwrap_or(FlowPrimitiveTopologyClass::None),
-                                render_targets: pass_resource_truth.render_targets,
-                                sampled_textures: pass_resource_truth.sampled_textures,
-                                storage_textures: pass_resource_truth.storage_textures,
-                                depth_targets: pass_resource_truth.depth_targets,
-                                capture_points_available: pass_resource_truth
-                                    .capture_points_available,
+                                pass_kind: execution_pass_kind_name(pass).to_string(),
+                                millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
+                                dispatch_workgroups: evidence.dispatch_workgroups,
                             });
+                            if debug_control.provenance_enabled {
+                                let pass_resource_truth = collect_pass_resource_truth(
+                                    flow.flow_id,
+                                    pass,
+                                    runtime_resources,
+                                );
+                                self.last_pass_provenance.push(RenderPassProvenanceRecord {
+                                    frame_index,
+                                    flow_id: flow.flow_id.to_string(),
+                                    pass_id: pass_label.clone(),
+                                    pass_label: pass_label.clone(),
+                                    pass_kind: execution_flow_pass_kind(pass),
+                                    order_index: execution_pass_order_index(pass),
+                                    feature_id: execution_pass_feature_id(pass)
+                                        .map(|id| id.to_string()),
+                                    shader_id: evidence.shader_id,
+                                    shader_revision: evidence.shader_revision,
+                                    fallback_used: evidence.fallback_used,
+                                    pipeline_stats_key: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(FlowPassPipelineKey::stats_key)
+                                        .unwrap_or_default(),
+                                    bind_group_layout_signature_hash: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(|key| key.bind_group_layout_signature_hash)
+                                        .unwrap_or_default(),
+                                    material_specialization_fragment_hash: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(|key| key.material_specialization_fragment_hash)
+                                        .unwrap_or_default(),
+                                    view_signature_hash: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(|key| key.view_signature_hash)
+                                        .unwrap_or_default(),
+                                    feature_runtime_version: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(|key| key.feature_runtime_version)
+                                        .unwrap_or_default(),
+                                    color_formats: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(|key| key.color_formats.clone())
+                                        .unwrap_or_default(),
+                                    depth_format: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .and_then(|key| key.depth_format),
+                                    sample_count: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(|key| key.sample_count)
+                                        .unwrap_or(1),
+                                    primitive_topology_class: evidence
+                                        .pipeline_key
+                                        .as_ref()
+                                        .map(|key| key.primitive_topology_class)
+                                        .unwrap_or(FlowPrimitiveTopologyClass::None),
+                                    render_targets: pass_resource_truth.render_targets,
+                                    sampled_textures: pass_resource_truth.sampled_textures,
+                                    storage_textures: pass_resource_truth.storage_textures,
+                                    depth_targets: pass_resource_truth.depth_targets,
+                                    capture_points_available: pass_resource_truth
+                                        .capture_points_available,
+                                });
+                            }
                         }
-                    }
+                        Ok(())
+                    })();
+                    runtime_resources.clear_active_invocation_uniform_scope();
+                    invocation_result?;
                 }
+                self.last_runtime_resources
+                    .extend(runtime_resources.inspect_entries(flow.flow_id));
             }
             if capture_runtime.should_attempt_stage(CaptureStage::Final) {
                 self.queue_final_surface_capture(
@@ -250,7 +271,6 @@ impl Renderer {
         Ok(timings)
     }
 
-    #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
@@ -294,21 +314,29 @@ impl Renderer {
 
     fn upload_projected_uniform_buffers(
         &self,
+        device: &Device,
         queue: &Queue,
+        invocation_id: &str,
         flow_inputs: &PreparedFlowInputs,
-        runtime_resources: &FlowRuntimeResources,
+        runtime_resources: &mut FlowRuntimeResources,
     ) -> Result<()> {
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
-            let runtime_buffer = runtime_resources.resolve_uniform_buffer_for_upload(*buffer_id)?;
+            let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
+                device,
+                invocation_id,
+                *buffer_id,
+                bytes.len() as u64,
+            )?;
             if bytes.len() as u64 > runtime_buffer.size {
                 bail!(
-                    "uniform upload for '{}' writes {} bytes but runtime buffer size is {}",
+                    "uniform upload for '{}' in invocation '{}' writes {} bytes but runtime buffer size is {}",
                     buffer_id,
+                    invocation_id,
                     bytes.len(),
                     runtime_buffer.size
                 );
             }
-            queue.write_buffer(runtime_buffer.buffer, 0, bytes);
+            queue.write_buffer(&runtime_buffer.buffer, 0, bytes);
         }
 
         Ok(())

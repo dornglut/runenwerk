@@ -79,6 +79,35 @@ impl FlowRuntimeResources {
                 generation,
             });
         }
+        for ((invocation_id, id), buffer) in &self.invocation_uniform_buffers {
+            let Some(descriptor) = self.descriptors.get(id) else {
+                continue;
+            };
+            if !matches!(descriptor, RenderResourceDescriptor::UniformBuffer(_)) {
+                continue;
+            }
+            entries.push(RuntimeResourceInspectionEntry {
+                flow_id: flow_id.to_string(),
+                id: RuntimeResourceKey::InvocationUniform {
+                    invocation_id: invocation_id.clone(),
+                    resource_id: *id,
+                }
+                .to_string(),
+                kind: resource_kind_name(descriptor).to_string(),
+                lifetime: descriptor.lifetime(),
+                imported: false,
+                realized: true,
+                reuse: if buffer.reused_last_frame {
+                    RuntimeResourceReuse::Reused
+                } else {
+                    RuntimeResourceReuse::Created
+                },
+                size_bytes: Some(buffer.size),
+                texture_size: None,
+                element_count: Some(1),
+                generation: Some(buffer.generation),
+            });
+        }
         entries
     }
 }

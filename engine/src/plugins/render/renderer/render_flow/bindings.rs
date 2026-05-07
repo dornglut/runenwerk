@@ -10,6 +10,7 @@ enum RuntimeBindingResource<'a> {
 struct RuntimeBindingResolved<'a> {
     layout_ty: BindingType,
     resource: RuntimeBindingResource<'a>,
+    resource_identity: Option<RuntimeResourceKey>,
     generation_token: Option<u64>,
     cacheable: bool,
 }
@@ -84,6 +85,7 @@ impl Renderer {
                                 .texture
                                 .create_view(&TextureViewDescriptor::default()),
                         ),
+                        resource_identity: Some(texture.id),
                         generation_token: texture.generation,
                         cacheable: texture.generation.is_some(),
                     });
@@ -92,6 +94,7 @@ impl Renderer {
                     resolved_entries.push(RuntimeBindingResolved {
                         layout_ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         resource: RuntimeBindingResource::SamplerPlaceholder,
+                        resource_identity: None,
                         generation_token: Some(0),
                         cacheable: true,
                     });
@@ -132,6 +135,7 @@ impl Renderer {
                                 .texture
                                 .create_view(&TextureViewDescriptor::default()),
                         ),
+                        resource_identity: Some(texture.id),
                         generation_token: texture.generation,
                         cacheable: texture.generation.is_some(),
                     });
@@ -146,6 +150,7 @@ impl Renderer {
                             min_binding_size: None,
                         },
                         resource: RuntimeBindingResource::Buffer(buffer.buffer),
+                        resource_identity: Some(buffer.id),
                         generation_token: buffer.generation,
                         cacheable: buffer.generation.is_some(),
                     });
@@ -161,6 +166,7 @@ impl Renderer {
                             min_binding_size: None,
                         },
                         resource: RuntimeBindingResource::Buffer(buffer.buffer),
+                        resource_identity: Some(buffer.id),
                         generation_token: buffer.generation,
                         cacheable: buffer.generation.is_some(),
                     });
@@ -234,6 +240,7 @@ impl Renderer {
         for (binding, value) in resolved_entries.iter().enumerate() {
             (binding as u32).hash(&mut signature_hasher);
             if value.cacheable {
+                value.resource_identity.hash(&mut signature_hasher);
                 value.generation_token.hash(&mut signature_hasher);
             } else {
                 can_cache_bind_group = false;

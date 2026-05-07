@@ -124,6 +124,98 @@ impl FlowRuntimeResources {
 
         self.textures.retain(|id, _| declared_ids.contains(id));
         self.buffers.retain(|id, _| declared_ids.contains(id));
+        self.invocation_uniform_buffers
+            .retain(|(_, id), _| declared_ids.contains(id));
+        self.active_invocation_uniform_scope = None;
+    }
+
+    pub fn set_active_invocation_uniform_scope(&mut self, invocation_id: impl Into<String>) {
+        self.active_invocation_uniform_scope = Some(invocation_id.into());
+    }
+
+    pub fn clear_active_invocation_uniform_scope(&mut self) {
+        self.active_invocation_uniform_scope = None;
+    }
+
+    pub fn retain_invocation_uniform_scopes<'a>(
+        &mut self,
+        invocation_ids: impl IntoIterator<Item = &'a str>,
+    ) {
+        let active = invocation_ids
+            .into_iter()
+            .map(ToOwned::to_owned)
+            .collect::<BTreeSet<_>>();
+        self.invocation_uniform_buffers
+            .retain(|(invocation_id, _), _| active.contains(invocation_id));
+    }
+
+    pub fn realize_invocation_uniform_buffer(
+        &mut self,
+        device: &Device,
+        invocation_id: &str,
+        resource_id: RenderResourceId,
+        size: u64,
+    ) -> Result<&RuntimeBufferResource> {
+        let descriptor = self.descriptors.get(&resource_id).ok_or_else(|| {
+            anyhow::anyhow!(
+                "prepared invocation '{}' uploads unknown uniform buffer '{}'",
+                invocation_id,
+                resource_id
+            )
+        })?;
+        let Some(spec) = Self::buffer_allocation_spec(descriptor) else {
+            bail!(
+                "prepared invocation '{}' uploads '{}' but it is not a buffer resource",
+                invocation_id,
+                resource_id
+            );
+        };
+        if !matches!(spec.kind, RuntimeBufferKind::Uniform) {
+            bail!(
+                "prepared invocation '{}' uploads '{}' but it is not a uniform buffer",
+                invocation_id,
+                resource_id
+            );
+        }
+
+        let size = size.max(spec.size).max(1);
+        let key = (invocation_id.to_string(), resource_id);
+        let previous_generation = self
+            .invocation_uniform_buffers
+            .get(&key)
+            .map(|existing| existing.generation)
+            .unwrap_or(0);
+        let should_recreate = self
+            .invocation_uniform_buffers
+            .get(&key)
+            .map(|existing| existing.size != size || existing.kind != RuntimeBufferKind::Uniform)
+            .unwrap_or(true);
+
+        if should_recreate {
+            let label = format!("engine_invocation_uniform_{invocation_id}_{resource_id}");
+            let buffer = device.create_buffer(&BufferDescriptor {
+                label: Some(label.as_str()),
+                size,
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.invocation_uniform_buffers.insert(
+                key.clone(),
+                RuntimeBufferResource {
+                    buffer,
+                    size,
+                    kind: RuntimeBufferKind::Uniform,
+                    generation: previous_generation.saturating_add(1),
+                    reused_last_frame: false,
+                },
+            );
+        } else if let Some(existing) = self.invocation_uniform_buffers.get_mut(&key) {
+            existing.reused_last_frame = true;
+        }
+
+        self.invocation_uniform_buffers
+            .get(&key)
+            .ok_or_else(|| anyhow::anyhow!("failed to realize invocation uniform buffer"))
     }
 
     pub fn texture_allocation_spec(

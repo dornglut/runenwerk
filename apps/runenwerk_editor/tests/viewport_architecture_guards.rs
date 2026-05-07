@@ -938,6 +938,45 @@ fn viewport_embed_shader_uses_full_prepared_product_rect() {
 }
 
 #[test]
+fn renderer_uniform_uploads_are_invocation_scoped() {
+    let execute =
+        read_workspace_source("engine/src/plugins/render/renderer/render_flow/execute.rs");
+    let runtime_resources = read_workspace_source(
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources.rs",
+    );
+    let realize = read_workspace_source(
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources/realize.rs",
+    );
+    let resolve = read_workspace_source(
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs",
+    );
+    let inspect = read_workspace_source(
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources/inspect.rs",
+    );
+    let bindings =
+        read_workspace_source("engine/src/plugins/render/renderer/render_flow/bindings.rs");
+
+    assert!(
+        execute.contains("set_active_invocation_uniform_scope")
+            && execute.contains("realize_invocation_uniform_buffer"),
+        "renderer must bind invocation-local uniform storage before encoding each prepared flow invocation",
+    );
+    assert!(
+        runtime_resources.contains("invocation_uniform_buffers")
+            && runtime_resources.contains("active_invocation_uniform_scope")
+            && realize.contains("retain_invocation_uniform_scopes")
+            && inspect.contains("RuntimeResourceKey::InvocationUniform"),
+        "flow runtime resources must retain renderer-owned uniform buffers per invocation, not one mutable shared upload target",
+    );
+    assert!(
+        resolve.contains("RuntimeResourceKey::InvocationUniform")
+            && bindings.contains("resource_identity")
+            && bindings.contains("value.resource_identity.hash"),
+        "bind group caching must include resolved resource identity so invocation-local uniforms cannot reuse another invocation's bind group",
+    );
+}
+
+#[test]
 fn viewport_slot_semantics_stay_in_editor_viewport_and_payload_slots_stay_opaque() {
     let viewport_surface_embed =
         include_str!("../../../domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs");

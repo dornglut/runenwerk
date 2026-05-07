@@ -26,6 +26,7 @@ impl FlowRuntimeResources {
     fn kind_of_key(&self, key: &RuntimeResourceKey) -> Option<RuntimeResourceKind> {
         match key {
             RuntimeResourceKey::FlowOwned(id) => self.kinds.get(id).copied(),
+            RuntimeResourceKey::InvocationUniform { .. } => Some(RuntimeResourceKind::BufferLike),
             RuntimeResourceKey::DynamicTexture(_) => Some(RuntimeResourceKind::TextureLike),
             RuntimeResourceKey::SurfaceColor => Some(RuntimeResourceKind::TextureLike),
             RuntimeResourceKey::SurfaceDepth => None,
@@ -35,6 +36,9 @@ impl FlowRuntimeResources {
     fn descriptor_for_key(&self, key: &RuntimeResourceKey) -> Option<&RenderResourceDescriptor> {
         match key {
             RuntimeResourceKey::FlowOwned(id) => self.descriptors.get(id),
+            RuntimeResourceKey::InvocationUniform { resource_id, .. } => {
+                self.descriptors.get(resource_id)
+            }
             RuntimeResourceKey::SurfaceColor
             | RuntimeResourceKey::SurfaceDepth
             | RuntimeResourceKey::DynamicTexture(_) => None,
@@ -68,6 +72,7 @@ impl FlowRuntimeResources {
                 CaptureTextureClass::ImportedTexture
             }
             RuntimeResourceKey::DynamicTexture(_) => fallback_class,
+            RuntimeResourceKey::InvocationUniform { .. } => fallback_class,
             RuntimeResourceKey::FlowOwned(_) => {
                 let Some(descriptor) = self.descriptor_for_key(&resource_key) else {
                     return fallback_class;
@@ -475,58 +480,35 @@ impl FlowRuntimeResources {
         })
     }
 
-    fn resolve_flow_owned_buffer<'a>(
-        &'a self,
-        resource_id: RenderResourceId,
-    ) -> Result<ResolvedBufferRef<'a>> {
-        let kind = self.kinds.get(&resource_id).copied().ok_or_else(|| {
-            anyhow::anyhow!(
-                "uniform upload references unknown resource '{}' during runtime encoding",
-                resource_id
-            )
-        })?;
-        if matches!(kind, RuntimeResourceKind::TextureLike) {
-            bail!(
-                "uniform upload references '{}' as a buffer, but it is texture-like",
-                resource_id
-            );
-        }
-
-        let Some(buffer) = self.buffers.get(&resource_id) else {
-            bail!(
-                "uniform upload references imported buffer '{}' but core runtime execution only supports flow-owned buffers",
-                resource_id
-            );
-        };
-
-        Ok(ResolvedBufferRef {
-            id: RuntimeResourceKey::FlowOwned(resource_id),
-            buffer: &buffer.buffer,
-            size: buffer.size,
-            kind: buffer.kind,
-            generation: Some(buffer.generation),
-        })
-    }
-
-    pub fn resolve_uniform_buffer_for_upload<'a>(
-        &'a self,
-        resource_id: RenderResourceId,
-    ) -> Result<ResolvedBufferRef<'a>> {
-        let resolved = self.resolve_flow_owned_buffer(resource_id)?;
-        if !matches!(resolved.kind, RuntimeBufferKind::Uniform) {
-            bail!(
-                "uniform upload binds '{}' as a uniform buffer but the resource is not uniform",
-                resolved.id
-            );
-        }
-        Ok(resolved)
-    }
-
     pub fn resolve_uniform_buffer_for_pass<'a>(
         &'a self,
         pass_id: RenderPassId,
         resource_id: RenderResourceId,
     ) -> Result<ResolvedBufferRef<'a>> {
+        if let Some(scope) = self.active_invocation_uniform_scope.as_ref()
+            && let Some(buffer) = self
+                .invocation_uniform_buffers
+                .get(&(scope.clone(), resource_id))
+        {
+            if !matches!(buffer.kind, RuntimeBufferKind::Uniform) {
+                bail!(
+                    "pass '{}' binds invocation-scoped '{}' as a uniform buffer but the resource is not uniform",
+                    pass_id,
+                    resource_id
+                );
+            }
+            return Ok(ResolvedBufferRef {
+                id: RuntimeResourceKey::InvocationUniform {
+                    invocation_id: scope.clone(),
+                    resource_id,
+                },
+                buffer: &buffer.buffer,
+                size: buffer.size,
+                kind: buffer.kind,
+                generation: Some(buffer.generation),
+            });
+        }
+
         let resolved =
             self.resolve_buffer_key(pass_id, RuntimeResourceKey::FlowOwned(resource_id))?;
         if !matches!(resolved.kind, RuntimeBufferKind::Uniform) {

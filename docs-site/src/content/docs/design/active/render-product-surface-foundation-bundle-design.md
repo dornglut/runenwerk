@@ -216,6 +216,9 @@ Required changes:
 - add a shared resolution path for flow-owned, surface, dynamic, and history targets;
 - execute compiled flows for each prepared flow invocation;
 - resolve target aliases to dynamic or surface targets before pass encoding;
+- bind invocation-scoped uniform buffers so per-view product uniforms cannot be overwritten by later invocations before the GPU executes the command buffer;
+- include resolved resource identity in bind-group cache keys so invocation-local uniforms and dynamic targets with the same generation never alias another prepared invocation's bindings;
+- report invocation-scoped uniform buffers through runtime inspection after prepared invocations have encoded;
 - reallocate only resources whose descriptor signature changed;
 - preserve previous valid dynamic/history targets when a new request is invalid and the retention policy allows reuse-last-good;
 - fail loudly when a pass requests an unbound required dynamic target.
