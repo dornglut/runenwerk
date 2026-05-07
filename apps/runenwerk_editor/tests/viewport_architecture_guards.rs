@@ -910,6 +910,18 @@ fn inspector_activation_routes_through_surface_presentation_and_ratification() {
 }
 
 #[test]
+fn viewport_embed_shader_aspect_fits_dynamic_products() {
+    let shader = read_workspace_source("engine/src/plugins/render/renderer/mod.rs");
+
+    assert!(
+        shader.contains("textureDimensions(viewport_texture)")
+            && shader.contains("fit_origin")
+            && shader.contains("fit_size"),
+        "viewport embed shader must center aspect-fit dynamic products instead of stretching stale resize textures",
+    );
+}
+
+#[test]
 fn viewport_slot_semantics_stay_in_editor_viewport_and_payload_slots_stay_opaque() {
     let viewport_surface_embed =
         include_str!("../../../domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs");

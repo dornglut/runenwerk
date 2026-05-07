@@ -1,15 +1,20 @@
-use editor_shell::viewport_embed_slot_for;
-use editor_viewport::ViewportSurfacePresentationSlot;
+use editor_shell::{
+    PanelKind, TabStackId, ToolSurfaceKind, WorkspaceMutation, WorkspaceSplitAxis,
+    viewport_embed_slot_for,
+};
+use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
     UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
-use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
-use runenwerk_editor::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportProductTargetRegistryResource,
-    ViewportRenderJobResource, ViewportRenderStateResource,
+use runenwerk_editor::runtime::resources::{
+    EditorHostResource, EditorViewportDebugStage, EditorViewportRenderState,
 };
-use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource};
+use runenwerk_editor::runtime::viewport::{
+    EDITOR_MAIN_FLOW_ID, SCENE_COLOR_PRODUCT_ID, VIEWPORT_DYNAMIC_TARGET_NAMESPACE,
+    ViewportProductTargetRegistryResource, ViewportRenderJobResource, ViewportRenderStateResource,
+};
+use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource, ViewportSurfaceEmbedPrimitive};
 
 const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
 const SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
@@ -258,4 +263,181 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         !viewport_state.root_background_opaque,
         "root background should default to non-occluding mode",
     );
+}
+
+#[test]
+fn split_viewport_resize_keeps_each_viewport_product_sized_to_its_embed() {
+    let mut app = runenwerk_editor::runtime::build_headless_app()
+        .run_for_frames(1)
+        .expect("headless editor app should run");
+    let split_host_id = {
+        let host = app
+            .world_mut()
+            .resource_mut::<EditorHostResource>()
+            .expect("editor host should exist");
+        let viewport_stack_id = viewport_stack_id(&host.shell_state);
+        host.shell_state
+            .apply_workspace_mutation_with_allocations(|allocator| {
+                let split_host_id = allocator.allocate_panel_host_id();
+                let first_child_host_id = allocator.allocate_panel_host_id();
+                let second_child_host_id = allocator.allocate_panel_host_id();
+                let new_tab_stack_id = allocator.allocate_tab_stack_id();
+                let new_panel_id = allocator.allocate_panel_instance_id();
+                let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
+                (
+                    WorkspaceMutation::SplitTabStackArea {
+                        tab_stack_id: viewport_stack_id,
+                        axis: WorkspaceSplitAxis::Horizontal,
+                        split_host_id,
+                        first_child_host_id,
+                        second_child_host_id,
+                        new_tab_stack_id,
+                        new_panel_id,
+                        new_panel_kind: PanelKind::Viewport,
+                        new_tool_surface_id,
+                        new_tool_surface_kind: ToolSurfaceKind::Viewport,
+                        fraction: 0.50,
+                    },
+                    split_host_id,
+                )
+            })
+            .expect("viewport split should be valid")
+    };
+
+    app = app
+        .run_for_frames(3)
+        .expect("split viewport app should run");
+    assert_split_viewport_products_match_embeds(&app);
+
+    {
+        let host = app
+            .world_mut()
+            .resource_mut::<EditorHostResource>()
+            .expect("editor host should exist");
+        host.shell_state
+            .apply_workspace_mutation(WorkspaceMutation::SetSplitHostFraction {
+                split_host_id,
+                fraction: 0.68,
+            })
+            .expect("split resize should be valid");
+    }
+    app = app
+        .run_for_frames(3)
+        .expect("resized split viewport app should run");
+
+    assert_split_viewport_products_match_embeds(&app);
+}
+
+fn viewport_stack_id(
+    shell_state: &runenwerk_editor::shell::RunenwerkEditorShellState,
+) -> TabStackId {
+    shell_state
+        .workspace_state()
+        .tab_stacks()
+        .find(|stack| {
+            stack.ordered_panels.iter().any(|panel_id| {
+                shell_state
+                    .workspace_state()
+                    .panel(*panel_id)
+                    .map(|panel| panel.panel_kind == PanelKind::Viewport)
+                    .unwrap_or(false)
+            })
+        })
+        .expect("viewport tab stack should exist")
+        .id
+}
+
+fn primary_viewport_embeds(app: &engine::App) -> Vec<ViewportSurfaceEmbedPrimitive> {
+    let submissions = app
+        .world()
+        .resource::<UiFrameSubmissionRegistryResource>()
+        .expect("ui submission registry should exist");
+    let submission = submissions
+        .get(&EDITOR_SHELL_UI_PRODUCER_ID)
+        .expect("editor shell submission should exist");
+    submission
+        .frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .filter_map(|primitive| {
+            let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
+                return None;
+            };
+            (embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary))
+                .then(|| embed.clone())
+        })
+        .collect()
+}
+
+fn assert_split_viewport_products_match_embeds(app: &engine::App) {
+    let embeds = primary_viewport_embeds(app);
+    assert_eq!(
+        embeds.len(),
+        2,
+        "split viewport should render exactly two primary viewport embeds"
+    );
+    assert_ne!(
+        embeds[0].viewport_id, embeds[1].viewport_id,
+        "split viewport embeds must have distinct viewport ids"
+    );
+    assert!(
+        embeds[0].rect != embeds[1].rect,
+        "split viewport embeds must not collapse onto the same rect"
+    );
+
+    let viewport_render_states = app
+        .world()
+        .resource::<ViewportRenderStateResource>()
+        .expect("viewport render state registry should exist");
+    let viewport_product_targets = app
+        .world()
+        .resource::<ViewportProductTargetRegistryResource>()
+        .expect("viewport product target registry should exist");
+    let viewport_render_jobs = app
+        .world()
+        .resource::<ViewportRenderJobResource>()
+        .expect("viewport render job registry should exist");
+
+    for embed in embeds {
+        let viewport_id = ViewportId(embed.viewport_id);
+        let state = viewport_render_states
+            .state_for(viewport_id)
+            .expect("embedded viewport should have per-viewport render state");
+        assert!(
+            (state.bounds.x - embed.rect.x).abs() <= VIEWPORT_BOUNDS_EPSILON
+                && (state.bounds.y - embed.rect.y).abs() <= VIEWPORT_BOUNDS_EPSILON
+                && (state.bounds.width - embed.rect.width).abs() <= VIEWPORT_BOUNDS_EPSILON
+                && (state.bounds.height - embed.rect.height).abs() <= VIEWPORT_BOUNDS_EPSILON,
+            "viewport state bounds must track the matching embed rect; viewport={} state={:?} embed={:?}",
+            viewport_id.0,
+            state.bounds,
+            embed.rect,
+        );
+        let expected_size = (
+            embed.rect.width.max(1.0).round() as u32,
+            embed.rect.height.max(1.0).round() as u32,
+        );
+        let job = viewport_render_jobs
+            .job_for(viewport_id)
+            .expect("embedded viewport should have a render job");
+        assert_eq!(
+            (job.dimensions.width, job.dimensions.height),
+            expected_size,
+            "render job dimensions must follow viewport-local embed bounds"
+        );
+        let target = viewport_product_targets
+            .record_for_product(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                SCENE_COLOR_PRODUCT_ID,
+            )
+            .expect("embedded viewport should have a scene-color target");
+        assert_eq!(
+            (target.width, target.height),
+            expected_size,
+            "scene-color dynamic target dimensions must follow viewport-local embed bounds"
+        );
+    }
 }

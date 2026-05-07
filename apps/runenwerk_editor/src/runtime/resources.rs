@@ -438,7 +438,7 @@ impl EditorViewportRenderState {
 
         EditorViewportSceneProductUniform {
             surface: [width, height, 1.0 / width, 1.0 / height],
-            viewport: viewport_bounds_array(self.viewport_bounds_px),
+            viewport: [0.0, 0.0, width, height],
             reserved_rect_0: [0.0; 4],
             reserved_rect_1: [0.0; 4],
             reserved_rect_2: [0.0; 4],
@@ -477,10 +477,6 @@ impl EditorViewportRenderState {
             ],
         }
     }
-}
-
-fn viewport_bounds_array(bounds: (f32, f32, f32, f32)) -> [f32; 4] {
-    [bounds.0, bounds.1, bounds.2.max(0.0), bounds.3.max(0.0)]
 }
 
 fn approx_bounds_eq(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
@@ -552,13 +548,13 @@ mod tests {
     }
 
     #[test]
-    fn scene_product_uniform_uses_active_embed_bounds_for_camera_aspect() {
+    fn scene_product_uniform_uses_target_local_viewport_for_camera_aspect() {
         let mut state = EditorViewportRenderState::default();
         state.set_viewport_bounds((40.0, 50.0, 320.0, 180.0));
 
         let uniform = state.compose_scene_product_uniform((1280, 720));
 
-        assert_eq!(uniform.viewport, [40.0, 50.0, 320.0, 180.0]);
+        assert_eq!(uniform.viewport, [0.0, 0.0, 1280.0, 720.0]);
         assert_eq!(state.viewport_bounds_px, (40.0, 50.0, 320.0, 180.0));
     }
 
@@ -570,7 +566,7 @@ mod tests {
         let uniform = state.compose_scene_product_uniform((1280, 720));
 
         assert!(changed);
-        assert_eq!(uniform.viewport, [40.0, 50.0, 320.0, 180.0]);
+        assert_eq!(uniform.viewport, [0.0, 0.0, 1280.0, 720.0]);
         assert_eq!(uniform.reserved_rect_0, [0.0, 0.0, 0.0, 0.0]);
         assert_eq!(uniform.reserved_rect_1, [0.0, 0.0, 0.0, 0.0]);
         assert_eq!(uniform.reserved_rect_2, [0.0, 0.0, 0.0, 0.0]);

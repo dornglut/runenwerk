@@ -170,8 +170,10 @@ struct VsIn {
 
 struct VsOut {
     @builtin(position) clip_position : vec4<f32>,
-    @location(0) uv : vec2<f32>,
-    @location(1) tint : vec4<f32>,
+    @location(0) tint : vec4<f32>,
+    @location(1) local : vec2<f32>,
+    @location(2) rect_size : vec2<f32>,
+    @location(3) uv_rect : vec4<f32>,
 };
 
 struct ScreenUniform {
@@ -210,17 +212,44 @@ fn vs_main(input: VsIn, @builtin(vertex_index) vertex_index: u32) -> VsOut {
 
     var out: VsOut;
     out.clip_position = vec4<f32>(x_ndc, y_ndc, 0.0, 1.0);
-    out.uv = vec2<f32>(
-        input.uv_rect.x + input.uv_rect.z * p.x,
-        input.uv_rect.y + input.uv_rect.w * p.y
-    );
     out.tint = input.tint;
+    out.local = p;
+    out.rect_size = max(input.rect.zw, vec2<f32>(1.0, 1.0));
+    out.uv_rect = input.uv_rect;
     return out;
 }
 
 @fragment
 fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
-    let sample_color = textureSample(viewport_texture, viewport_sampler, input.uv);
+    let texture_size_u = textureDimensions(viewport_texture);
+    let texture_size = max(
+        vec2<f32>(f32(texture_size_u.x), f32(texture_size_u.y)),
+        vec2<f32>(1.0, 1.0),
+    );
+    let rect_aspect = input.rect_size.x / input.rect_size.y;
+    let texture_aspect = texture_size.x / texture_size.y;
+    var fit_origin = vec2<f32>(0.0, 0.0);
+    var fit_size = vec2<f32>(1.0, 1.0);
+    if rect_aspect > texture_aspect {
+        fit_size.x = texture_aspect / rect_aspect;
+        fit_origin.x = (1.0 - fit_size.x) * 0.5;
+    } else {
+        fit_size.y = rect_aspect / texture_aspect;
+        fit_origin.y = (1.0 - fit_size.y) * 0.5;
+    }
+    let fit_max = fit_origin + fit_size;
+    if input.local.x < fit_origin.x
+        || input.local.y < fit_origin.y
+        || input.local.x > fit_max.x
+        || input.local.y > fit_max.y {
+        return vec4<f32>(0.08, 0.09, 0.11, 1.0) * input.tint;
+    }
+    let fitted_local = (input.local - fit_origin) / fit_size;
+    let sample_uv = vec2<f32>(
+        input.uv_rect.x + input.uv_rect.z * fitted_local.x,
+        input.uv_rect.y + input.uv_rect.w * fitted_local.y,
+    );
+    let sample_color = textureSample(viewport_texture, viewport_sampler, sample_uv);
     return sample_color * input.tint;
 }
 "#;

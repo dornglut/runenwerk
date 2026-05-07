@@ -1228,6 +1228,17 @@ fn remap_surface_node_ids(
 
 fn remap_node_recursive(node: &mut editor_shell::UiNode, surface_id: ToolSurfaceInstanceId) {
     node.id = surface_scoped_widget_id(surface_id, node.id.0);
+    match &mut node.kind {
+        editor_shell::UiNodeKind::Popup(popup) => {
+            popup.anchor = remap_widget_id(surface_id, popup.anchor);
+        }
+        editor_shell::UiNodeKind::Button(button) => {
+            button.reveal_on_hover_anchor = button
+                .reveal_on_hover_anchor
+                .map(|anchor| remap_widget_id(surface_id, anchor));
+        }
+        _ => {}
+    }
     for child in &mut node.children {
         remap_node_recursive(child, surface_id);
     }
@@ -1381,6 +1392,73 @@ mod tests {
             viewport_observations: None,
             tool_surface_bindings: None,
         }
+    }
+
+    fn find_node(
+        node: &editor_shell::UiNode,
+        widget_id: editor_shell::WidgetId,
+    ) -> Option<&editor_shell::UiNode> {
+        if node.id == widget_id {
+            return Some(node);
+        }
+        node.children
+            .iter()
+            .find_map(|child| find_node(child, widget_id))
+    }
+
+    #[test]
+    fn surface_node_remap_rewrites_popup_and_reveal_anchor_widget_ids() {
+        let surface_id = ToolSurfaceInstanceId::try_from_raw(9).unwrap();
+        let anchor_id = editor_shell::WidgetId(44);
+        let popup_id = editor_shell::WidgetId(76);
+        let button_id = editor_shell::WidgetId(1_500_000);
+        let mut button = editor_shell::ButtonNode::new(
+            "x",
+            ThemeTokens::default().body_small_text_style(FontId(1)),
+            ThemeTokens::default(),
+        );
+        button.reveal_on_hover_anchor = Some(anchor_id);
+        let root = editor_shell::UiNode::with_children(
+            editor_shell::WidgetId(40),
+            editor_shell::UiNodeKind::Panel(editor_shell::PanelNode::new(ThemeTokens::default())),
+            vec![
+                editor_shell::UiNode::new(
+                    anchor_id,
+                    editor_shell::UiNodeKind::Panel(editor_shell::PanelNode::new(
+                        ThemeTokens::default(),
+                    )),
+                ),
+                editor_shell::UiNode::with_children(
+                    popup_id,
+                    editor_shell::UiNodeKind::Popup(editor_shell::PopupNode::anchored_top_start(
+                        anchor_id,
+                        ThemeTokens::default(),
+                    )),
+                    vec![editor_shell::UiNode::new(
+                        button_id,
+                        editor_shell::UiNodeKind::Button(button),
+                    )],
+                ),
+            ],
+        );
+
+        let remapped = remap_surface_node_ids(root, surface_id);
+        let remapped_anchor_id = remap_widget_id(surface_id, anchor_id);
+        let remapped_popup_id = remap_widget_id(surface_id, popup_id);
+        let remapped_button_id = remap_widget_id(surface_id, button_id);
+        let popup = find_node(&remapped, remapped_popup_id).expect("popup should be remapped");
+        let button = find_node(&remapped, remapped_button_id).expect("button should be remapped");
+
+        assert!(find_node(&remapped, remapped_anchor_id).is_some());
+        assert!(matches!(
+            &popup.kind,
+            editor_shell::UiNodeKind::Popup(popup) if popup.anchor == remapped_anchor_id
+        ));
+        assert!(matches!(
+            &button.kind,
+            editor_shell::UiNodeKind::Button(button)
+                if button.reveal_on_hover_anchor == Some(remapped_anchor_id)
+        ));
     }
 
     #[test]
