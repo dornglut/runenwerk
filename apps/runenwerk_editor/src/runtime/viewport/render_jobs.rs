@@ -7,16 +7,18 @@ use editor_viewport::{ExpressionDimensions, ViewportId, ViewportSurfacePresentat
 use engine::plugins::render::{
     PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
     PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureTargetKey, RenderFlowId,
-    RenderFlowRegistryResource,
+    RenderFlowRegistryResource, RenderResourceId,
 };
 use engine::runtime::{Res, ResMut};
 use ui_math::UiRect;
 
+use crate::runtime::resources::EditorViewportRenderState;
 use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID,
-    VIEWPORT_TARGET_ALIAS_OVERLAY, VIEWPORT_TARGET_ALIAS_PICKING_IDS,
-    VIEWPORT_TARGET_ALIAS_SCENE_COLOR, ViewportProductTargetRegistryResource,
-    ViewportRenderStateResource, expression_dimensions_for_bounds,
+    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, OVERLAY_PRODUCT_ID,
+    PICKING_IDS_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID, VIEWPORT_TARGET_ALIAS_OVERLAY,
+    VIEWPORT_TARGET_ALIAS_PICKING_IDS, VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
+    ViewportProductTargetRegistryResource, ViewportRenderStateResource,
+    expression_dimensions_for_bounds,
 };
 
 #[derive(Debug)]
@@ -60,13 +62,14 @@ impl ViewportRenderJobResource {
 
 pub fn sync_viewport_render_jobs_system(
     flow_registry: Res<RenderFlowRegistryResource>,
+    viewport_render: Res<EditorViewportRenderState>,
     viewport_render_states: Res<ViewportRenderStateResource>,
     viewport_product_targets: Res<ViewportProductTargetRegistryResource>,
     mut viewport_render_jobs: ResMut<ViewportRenderJobResource>,
     mut prepared_frame_requests: ResMut<PreparedRenderFrameRequestResource>,
 ) {
     prepared_frame_requests.clear();
-    let Some(flow_id) = editor_main_flow_id(&flow_registry) else {
+    let Some((flow_id, scene_uniform_id)) = editor_main_flow_ids(&flow_registry) else {
         viewport_render_jobs.replace_jobs(Vec::new());
         return;
     };
@@ -76,6 +79,8 @@ pub fn sync_viewport_render_jobs_system(
         .filter_map(|state| {
             build_viewport_render_job(
                 flow_id,
+                scene_uniform_id,
+                &viewport_render,
                 state.viewport_id,
                 state.bounds,
                 &viewport_product_targets,
@@ -91,6 +96,8 @@ pub fn sync_viewport_render_jobs_system(
 
 fn build_viewport_render_job(
     flow_id: RenderFlowId,
+    scene_uniform_id: RenderResourceId,
+    viewport_render: &EditorViewportRenderState,
     viewport_id: ViewportId,
     bounds: UiRect,
     product_targets: &ViewportProductTargetRegistryResource,
@@ -135,8 +142,13 @@ fn build_viewport_render_job(
             picking_ids_target.clone(),
             overlay_target.clone(),
         ),
+        uniform_overrides: BTreeMap::new(),
         history_signature: None,
-    };
+    }
+    .with_uniform_override(
+        scene_uniform_id,
+        viewport_render.compose_scene_product_uniform_bytes((dimensions.width, dimensions.height)),
+    );
 
     Some(ViewportRenderJob {
         viewport_id,
@@ -175,12 +187,18 @@ fn target_alias_bindings(
     ])
 }
 
-fn editor_main_flow_id(flow_registry: &RenderFlowRegistryResource) -> Option<RenderFlowId> {
-    flow_registry
+fn editor_main_flow_ids(
+    flow_registry: &RenderFlowRegistryResource,
+) -> Option<(RenderFlowId, RenderResourceId)> {
+    let flow = flow_registry
         .compiled_flows()
         .iter()
-        .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
-        .map(|flow| flow.flow_id)
+        .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)?;
+    let uniform_id = flow
+        .resource_ids_by_label
+        .get(EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID)
+        .copied()?;
+    Some((flow.flow_id, uniform_id))
 }
 
 #[cfg(test)]
@@ -259,8 +277,13 @@ mod tests {
         );
 
         let flow_id = RenderFlowId::try_from_raw(1).expect("test flow id should be valid");
+        let scene_uniform_id =
+            RenderResourceId::try_from_raw(9).expect("test uniform id should be valid");
+        let viewport_render = EditorViewportRenderState::default();
         let job = build_viewport_render_job(
             flow_id,
+            scene_uniform_id,
+            &viewport_render,
             viewport_id,
             UiRect::new(0.0, 0.0, 320.0, 200.0),
             &target_registry,
@@ -269,5 +292,12 @@ mod tests {
 
         assert_eq!(job.viewport_id, viewport_id);
         assert_eq!(job.dimensions, ExpressionDimensions::new(320, 200));
+        assert_eq!(
+            job.prepared_flow_invocation
+                .uniform_overrides
+                .get(&scene_uniform_id),
+            Some(&viewport_render.compose_scene_product_uniform_bytes((320, 200))),
+            "viewport render jobs must carry target-local scene uniforms in the prepared invocation"
+        );
     }
 }

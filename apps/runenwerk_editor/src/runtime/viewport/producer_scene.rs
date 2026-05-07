@@ -4,6 +4,8 @@
 use crate::runtime::viewport::ViewportSurfaceSlot;
 
 pub const EDITOR_MAIN_FLOW_ID: &str = "runenwerk.editor.main";
+pub const EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID: &str =
+    "runenwerk.editor.viewport.product.scene.uniform";
 
 pub const VIEWPORT_TARGET_ALIAS_SCENE_COLOR: &str = "viewport.scene_color";
 pub const VIEWPORT_TARGET_ALIAS_PICKING_IDS: &str = "viewport.picking_ids";

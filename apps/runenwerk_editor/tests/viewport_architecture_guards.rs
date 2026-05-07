@@ -583,6 +583,17 @@ fn production_picking_routes_only_through_viewport_scene_region() {
 }
 
 #[test]
+fn editor_frame_submission_runs_after_input_bridge() {
+    let plugin = include_str!("../src/runtime/plugin.rs");
+
+    assert!(
+        plugin.contains("submit_editor_frame_system")
+            && plugin.contains(".after(EditorRuntimeSet::InputBridge)"),
+        "editor frame submission must consume the same-frame split/input layout mutations before product targets are prepared",
+    );
+}
+
+#[test]
 fn viewport_details_dispatch_has_no_first_active_viewport_fallback() {
     let dispatcher = include_str!("../src/shell/dispatch_shell_command.rs");
     let providers = provider_sources();
@@ -910,14 +921,19 @@ fn inspector_activation_routes_through_surface_presentation_and_ratification() {
 }
 
 #[test]
-fn viewport_embed_shader_aspect_fits_dynamic_products() {
+fn viewport_embed_shader_uses_full_prepared_product_rect() {
     let shader = read_workspace_source("engine/src/plugins/render/renderer/mod.rs");
 
     assert!(
-        shader.contains("textureDimensions(viewport_texture)")
-            && shader.contains("fit_origin")
-            && shader.contains("fit_size"),
-        "viewport embed shader must center aspect-fit dynamic products instead of stretching stale resize textures",
+        shader.contains("input.uv_rect.x + input.uv_rect.z * input.local.x")
+            && shader.contains("input.uv_rect.y + input.uv_rect.w * input.local.y"),
+        "viewport embed shader must sample the full prepared product rect; product sizing owns aspect correctness",
+    );
+    assert!(
+        !shader.contains("textureDimensions(viewport_texture)")
+            && !shader.contains("fit_origin")
+            && !shader.contains("fit_size"),
+        "viewport embed shader must not apply a second implicit fit that diverges from picking bounds",
     );
 }
 

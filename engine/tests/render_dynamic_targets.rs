@@ -150,6 +150,7 @@ fn prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
         flow_id,
         view_id: "viewport.7".to_string(),
         target_alias_bindings: alias_bindings,
+        uniform_overrides: BTreeMap::new(),
         history_signature: Some("viewport.7:v1".to_string()),
     });
 
@@ -169,5 +170,9 @@ fn prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
     assert_eq!(
         invocations[0].history_signature.as_deref(),
         Some("viewport.7:v1")
+    );
+    assert!(
+        invocations[0].uniform_overrides.is_empty(),
+        "prepared invocation requests should expose an explicit override map even when unused"
     );
 }

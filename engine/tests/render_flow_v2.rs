@@ -2,6 +2,7 @@ use engine::plugins::render::{
     GpuStorage, GpuUniform, RenderFlow, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
     ShaderRegistryResource,
 };
+use std::any::TypeId;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -149,6 +150,25 @@ fn v2_uniform_projection_uses_state_bindings() {
         projections
             .pass(pass_id_by_label(&flow, "compose"))
             .is_some()
+    );
+}
+
+#[test]
+fn v2_named_uniform_buffers_support_prepared_invocation_overrides() {
+    let (flow, handle) = RenderFlow::new("v2.named-uniform")
+        .with_state::<FlowState>()
+        .uniform_buffer::<ComposeParams>("compose.per_invocation");
+
+    assert_eq!(
+        flow.resource_id("compose.per_invocation"),
+        Some(*handle.id())
+    );
+    assert_eq!(
+        flow.graph()
+            .resources
+            .uniform_buffer_ids_by_params_type(TypeId::of::<ComposeParams>()),
+        vec![*handle.id()],
+        "named uniform buffers should be real flow resources, not ad hoc request bytes"
     );
 }
 

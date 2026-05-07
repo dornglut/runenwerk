@@ -98,6 +98,7 @@ impl Plugin for EditorAppPlugin {
             Update,
             submit_editor_frame_system
                 .in_set(EditorRuntimeSet::FrameSubmit)
+                .after(EditorRuntimeSet::InputBridge)
                 .after(CoreSet::Input)
                 .after(CoreSet::Time),
         );

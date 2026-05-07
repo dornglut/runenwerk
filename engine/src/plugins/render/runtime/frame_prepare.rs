@@ -184,7 +184,54 @@ fn build_prepared_flow_invocations(
         .map(|flow| (flow.flow_id, flow))
         .collect::<BTreeMap<_, _>>();
 
+    for request in requests.requested_flow_invocations() {
+        if !flows_by_id.contains_key(&request.flow_id) {
+            anyhow::bail!(
+                "prepared flow invocation '{}' references unknown flow '{:?}'",
+                request.invocation_id.0,
+                request.flow_id
+            );
+        }
+        if !views_by_id.contains_key(request.view_id.as_str()) {
+            anyhow::bail!(
+                "prepared flow invocation '{}' references unknown view '{}'",
+                request.invocation_id.0,
+                request.view_id
+            );
+        }
+    }
+
     for flow in compiled_flows {
+        for request in requests
+            .requested_flow_invocations()
+            .iter()
+            .filter(|request| request.flow_id == flow.flow_id)
+        {
+            let view = views_by_id
+                .get(request.view_id.as_str())
+                .expect("requested invocation view should be prevalidated");
+            let inputs_by_flow = build_prepared_flow_inputs(
+                std::slice::from_ref(flow),
+                extracted_state,
+                view.target_size_px,
+            )?;
+            let mut inputs = inputs_by_flow
+                .get(&request.flow_id)
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("missing prepared inputs for flow '{:?}'", request.flow_id)
+                })?;
+            apply_invocation_uniform_overrides(flow, request, &mut inputs)?;
+            invocations.push(PreparedFlowInvocation {
+                invocation_id: request.invocation_id.clone(),
+                flow_id: request.flow_id,
+                view_id: request.view_id.clone(),
+                inputs,
+                target_alias_bindings: request.target_alias_bindings.clone(),
+                history_signature: request.history_signature.clone(),
+            });
+        }
+
         let inputs = main_inputs_by_flow
             .get(&flow.flow_id)
             .cloned()
@@ -194,43 +241,36 @@ fn build_prepared_flow_invocations(
         invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
     }
 
-    for request in requests.requested_flow_invocations() {
-        let flow = flows_by_id.get(&request.flow_id).ok_or_else(|| {
-            anyhow::anyhow!(
-                "prepared flow invocation '{}' references unknown flow '{:?}'",
+    Ok(invocations)
+}
+
+fn apply_invocation_uniform_overrides(
+    flow: &CompiledRenderFlowPlan,
+    request: &PreparedFlowInvocationRequest,
+    inputs: &mut PreparedFlowInputs,
+) -> anyhow::Result<()> {
+    for (uniform_id, bytes) in &request.uniform_overrides {
+        if !flow.resources.has_uniform_buffer(uniform_id) {
+            anyhow::bail!(
+                "prepared flow invocation '{}' overrides unknown uniform buffer '{:?}' in flow '{:?}'",
                 request.invocation_id.0,
-                request.flow_id
-            )
-        })?;
-        let view = views_by_id.get(request.view_id.as_str()).ok_or_else(|| {
-            anyhow::anyhow!(
-                "prepared flow invocation '{}' references unknown view '{}'",
+                uniform_id,
+                flow.flow_id
+            );
+        }
+        if bytes.is_empty() {
+            anyhow::bail!(
+                "prepared flow invocation '{}' overrides uniform buffer '{:?}' with empty bytes",
                 request.invocation_id.0,
-                request.view_id
-            )
-        })?;
-        let inputs_by_flow = build_prepared_flow_inputs(
-            std::slice::from_ref(*flow),
-            extracted_state,
-            view.target_size_px,
-        )?;
-        let inputs = inputs_by_flow
-            .get(&request.flow_id)
-            .cloned()
-            .ok_or_else(|| {
-                anyhow::anyhow!("missing prepared inputs for flow '{:?}'", request.flow_id)
-            })?;
-        invocations.push(PreparedFlowInvocation {
-            invocation_id: request.invocation_id.clone(),
-            flow_id: request.flow_id,
-            view_id: request.view_id.clone(),
-            inputs,
-            target_alias_bindings: request.target_alias_bindings.clone(),
-            history_signature: request.history_signature.clone(),
-        });
+                uniform_id
+            );
+        }
+        inputs
+            .projected_uniform_bytes
+            .insert(*uniform_id, bytes.clone());
     }
 
-    Ok(invocations)
+    Ok(())
 }
 
 pub(crate) fn clear_prepared_frame(world: &mut WorldMut) {
@@ -565,4 +605,53 @@ fn project_dispatch_for_pass(
     }
 
     Ok(dispatch)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn requested_offscreen_invocations_prepare_before_main_invocation() {
+        let flow = RenderFlow::new("prepare.order")
+            .with_surface_color()
+            .fullscreen_pass("main")
+            .main_surface_only()
+            .write_surface_color()
+            .finish()
+            .validate()
+            .expect("test flow should validate");
+        let compiled = compile_flow_plan(&flow).expect("test flow should compile");
+        let compiled_flows = vec![compiled.clone()];
+        let extracted = ExtractedRenderStateMap::new();
+        let main_inputs =
+            build_prepared_flow_inputs(&compiled_flows, &extracted, (800, 600)).unwrap();
+        let mut requests = PreparedRenderFrameRequestResource::default();
+        requests.add_view(PreparedViewFrame::offscreen_product(
+            "viewport.1",
+            (320, 200),
+        ));
+        requests.add_flow_invocation(PreparedFlowInvocationRequest {
+            invocation_id: PreparedFlowInvocationId::new("viewport.1.scene"),
+            flow_id: compiled.flow_id,
+            view_id: "viewport.1".to_string(),
+            target_alias_bindings: BTreeMap::new(),
+            uniform_overrides: BTreeMap::new(),
+            history_signature: None,
+        });
+        let views = build_prepared_views((800, 600), &requests);
+
+        let invocations = build_prepared_flow_invocations(
+            &compiled_flows,
+            &extracted,
+            &main_inputs,
+            &views,
+            &requests,
+        )
+        .expect("invocations should prepare");
+
+        assert_eq!(invocations.len(), 2);
+        assert_eq!(invocations[0].view_id, "viewport.1");
+        assert_eq!(invocations[1].view_id, "main");
+    }
 }

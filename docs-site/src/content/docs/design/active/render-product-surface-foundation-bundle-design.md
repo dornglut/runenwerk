@@ -126,12 +126,14 @@ This extends the existing `engine/src/plugins/render/frame/view.rs::PreparedView
 A prepared flow invocation binds a compiled flow to one prepared render view and carries the flow inputs for that invocation:
 
 - projected uniform bytes;
+- per-invocation uniform overrides for product/view-local data prepared by the caller;
 - projected dispatch workgroups;
 - target alias bindings;
 - history/resource signatures;
 - feature contribution status for that invocation.
 
 This replaces the current assumption that `engine/src/plugins/render/frame/packet.rs::PreparedFlowInputs` is one global input set per flow.
+Product invocations that produce offscreen textures must execute before a main-surface presentation invocation samples those products, so resize-time target allocation cannot expose blank newly allocated textures to UI composite.
 
 ## Engine Contract
 
@@ -190,6 +192,7 @@ Required changes:
 - extend `PreparedRenderFrame` with dynamic target request snapshots;
 - replace per-flow-only inputs with prepared flow invocations keyed by flow id and prepared view id or invocation id;
 - carry target alias bindings in the prepared packet;
+- carry invocation-local uniform bytes in the prepared packet rather than deriving product camera/target data during submit;
 - carry history signatures and invalidation causes;
 - keep submit free of live ECS extraction.
 

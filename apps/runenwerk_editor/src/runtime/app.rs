@@ -9,8 +9,8 @@ use winit::keyboard::KeyCode;
 use crate::runtime::plugin::EditorAppPlugin;
 use crate::runtime::resources::EditorViewportRenderState;
 use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, VIEWPORT_TARGET_ALIAS_OVERLAY, VIEWPORT_TARGET_ALIAS_PICKING_IDS,
-    VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
+    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, VIEWPORT_TARGET_ALIAS_OVERLAY,
+    VIEWPORT_TARGET_ALIAS_PICKING_IDS, VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
 };
 
 pub const ACTION_EDITOR_UNDO: &str = "editor.undo";
@@ -66,8 +66,12 @@ fn env_flag_or(key: &str, default: bool) -> bool {
 }
 
 fn register_editor_render_flow(app: &mut App) {
-    let flow = RenderFlow::new(EDITOR_MAIN_FLOW_ID)
+    let (flow, scene_product_uniform) = RenderFlow::new(EDITOR_MAIN_FLOW_ID)
         .with_state::<EditorViewportRenderState>()
+        .uniform_buffer::<crate::runtime::resources::EditorViewportSceneProductUniform>(
+            EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
+        );
+    let flow = flow
         .with_color_target_alias(VIEWPORT_TARGET_ALIAS_SCENE_COLOR)
         .with_color_target_alias(VIEWPORT_TARGET_ALIAS_PICKING_IDS)
         .with_color_target_alias(VIEWPORT_TARGET_ALIAS_OVERLAY)
@@ -79,7 +83,10 @@ fn register_editor_render_flow(app: &mut App) {
         .fullscreen_pass(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .offscreen_products_only()
         .shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)
-        .uniform_from_state_with_surface(EditorViewportRenderState::compose_scene_product_uniform)
+        .uniform_from_state_with_surface_to(
+            scene_product_uniform,
+            EditorViewportRenderState::compose_scene_product_uniform,
+        )
         .write_target_alias(VIEWPORT_TARGET_ALIAS_SCENE_COLOR)
         .finish()
         .fullscreen_pass(EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID)

@@ -1,4 +1,4 @@
-use engine::plugins::render::GpuUniform;
+use engine::plugins::render::{GpuParams, GpuUniform};
 use glam::{Vec3, vec3};
 use scene::Vec3Value;
 use ui_theme::ThemeTokens;
@@ -476,6 +476,11 @@ impl EditorViewportRenderState {
                 if self.root_background_opaque { 1 } else { 0 },
             ],
         }
+    }
+
+    pub fn compose_scene_product_uniform_bytes(&self, surface: (u32, u32)) -> Vec<u8> {
+        let raw = self.compose_scene_product_uniform(surface).to_gpu();
+        engine::plugins::render::bytemuck::bytes_of(&raw).to_vec()
     }
 }
 

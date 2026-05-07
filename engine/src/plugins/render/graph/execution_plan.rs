@@ -626,7 +626,7 @@ mod tests {
             .iter()
             .filter_map(|entry| match entry {
                 CompiledBindingEntry::StorageBuffer { resource, access } => {
-                    Some((*resource, *access))
+                    Some((resource.clone(), *access))
                 }
                 _ => None,
             })
@@ -680,7 +680,7 @@ mod tests {
             .iter()
             .filter_map(|entry| match entry {
                 CompiledBindingEntry::StorageBuffer { resource, access } => {
-                    Some((*resource, *access))
+                    Some((resource.clone(), *access))
                 }
                 _ => None,
             })

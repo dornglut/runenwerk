@@ -93,6 +93,14 @@ impl RenderFlow {
         self
     }
 
+    pub fn uniform_buffer<U>(mut self, label: impl Into<String>) -> (Self, UniformHandle<U>)
+    where
+        U: GpuParams + 'static,
+    {
+        let id = self.register_uniform_buffer::<U>(label.into());
+        (self, UniformHandle::new(id))
+    }
+
     pub fn with_target_alias(
         mut self,
         label: impl Into<String>,
@@ -203,6 +211,10 @@ impl RenderFlow {
 
     pub fn graph(&self) -> &RenderFlowGraph {
         &self.graph
+    }
+
+    pub fn resource_id(&self, label: &str) -> Option<RenderResourceId> {
+        self.resolve_resource_id(label)
     }
 
     pub fn project_uniforms(
@@ -372,6 +384,19 @@ impl RenderFlow {
 
         let id = self.allocate_resource_id();
         self.upsert_labeled_resource(label, id, RenderResourceDescriptor::storage_texture(id));
+        id
+    }
+
+    fn register_uniform_buffer<U>(&mut self, label: String) -> RenderResourceId
+    where
+        U: GpuParams + 'static,
+    {
+        if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            return id;
+        }
+
+        let id = self.allocate_resource_id();
+        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::uniform_buffer::<U>(id));
         id
     }
 

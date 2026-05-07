@@ -11,8 +11,9 @@ use runenwerk_editor::runtime::resources::{
     EditorHostResource, EditorViewportDebugStage, EditorViewportRenderState,
 };
 use runenwerk_editor::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, SCENE_COLOR_PRODUCT_ID, VIEWPORT_DYNAMIC_TARGET_NAMESPACE,
-    ViewportProductTargetRegistryResource, ViewportRenderJobResource, ViewportRenderStateResource,
+    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, SCENE_COLOR_PRODUCT_ID,
+    VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportProductTargetRegistryResource,
+    ViewportRenderJobResource, ViewportRenderStateResource,
 };
 use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource, ViewportSurfaceEmbedPrimitive};
 
@@ -399,6 +400,24 @@ fn assert_split_viewport_products_match_embeds(app: &engine::App) {
         .world()
         .resource::<ViewportRenderJobResource>()
         .expect("viewport render job registry should exist");
+    let flow_registry = app
+        .world()
+        .resource::<RenderFlowRegistryResource>()
+        .expect("render flow registry should exist");
+    let scene_uniform_id = flow_registry
+        .compiled_flows()
+        .iter()
+        .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
+        .and_then(|flow| {
+            flow.resource_ids_by_label
+                .get(EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID)
+        })
+        .copied()
+        .expect("editor flow should expose the scene product uniform id");
+    let viewport_render = app
+        .world()
+        .resource::<EditorViewportRenderState>()
+        .expect("viewport render state should exist");
 
     for embed in embeds {
         let viewport_id = ViewportId(embed.viewport_id);
@@ -438,6 +457,14 @@ fn assert_split_viewport_products_match_embeds(app: &engine::App) {
             (target.width, target.height),
             expected_size,
             "scene-color dynamic target dimensions must follow viewport-local embed bounds"
+        );
+        assert_eq!(
+            job.prepared_flow_invocation
+                .uniform_overrides
+                .get(&scene_uniform_id),
+            Some(&viewport_render.compose_scene_product_uniform_bytes(expected_size)),
+            "prepared viewport invocation must carry target-local scene uniforms for viewport={}",
+            viewport_id.0,
         );
     }
 }

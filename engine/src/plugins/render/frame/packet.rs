@@ -153,7 +153,15 @@ pub struct PreparedFlowInvocationRequest {
     pub flow_id: RenderFlowId,
     pub view_id: String,
     pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
+    pub uniform_overrides: BTreeMap<RenderResourceId, Vec<u8>>,
     pub history_signature: Option<String>,
+}
+
+impl PreparedFlowInvocationRequest {
+    pub fn with_uniform_override(mut self, uniform_id: RenderResourceId, bytes: Vec<u8>) -> Self {
+        self.uniform_overrides.insert(uniform_id, bytes);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
