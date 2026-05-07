@@ -47,10 +47,9 @@ Already complete:
 
 Still missing or incomplete:
 
-- full binding model for graphics/resource-heavy workflows
-- serious feature proofs on top of the new architecture
-- stronger persistent/history resource workflows
-- dynamic offscreen texture target allocation for viewport/product surfaces
+- broader graphics/resource-heavy workflow coverage beyond the current proof examples
+- additional serious feature proofs on top of the new architecture
+- persistent/history resource workflows beyond invocation-scoped history and dynamic target history signatures
 - fragment/data-driven maturation
 - better inspection/tooling polish
 - final public API ergonomics polish
@@ -416,7 +415,7 @@ The API can express both compute-heavy and graphics-heavy real workflows cleanly
 
 # Phase R-DT — Dynamic Texture Target Allocation
 
-Status: Partial. Descriptor types, request registry, and prepared-frame snapshots exist. Renderer-owned dynamic target cache allocation, UI dynamic texture resolution, and target-alias execution remain open bundle work.
+Status: Implemented for the foundation bundle. Descriptor types, producer-scoped request registry, prepared-frame snapshots, renderer-owned dynamic target cache allocation, UI dynamic texture resolution, and target-alias execution are in place.
 
 ## Goal
 
@@ -677,7 +676,7 @@ A serious SDF example proves the architecture supports your preferred rendering 
 
 # Phase R8 — Persistent and History Resource Support
 
-Status: Partial. Flow-owned history texture declarations and copy-pass proof usage exist in boids and SDF examples. Dynamic target retention descriptors and prepared view/invocation history signatures exist for inspection, but renderer-owned dynamic/history cache invalidation is still open bundle work.
+Status: Implemented foundation support. History texture declarations and copy-pass proof usage exist in boids and SDF examples. Dynamic target retention descriptors and prepared view/invocation history signatures are inspectable and participate in renderer invalidation. Invocation-scoped flow-owned history textures prevent prepared invocations from sharing stale history.
 
 ## Goal
 
@@ -742,7 +741,7 @@ The architecture cleanly supports frame-to-frame GPU resource persistence.
 
 # Phase R9 — Inspection and Debug Tooling Expansion
 
-Status: Partial. Graph/resource/texture/timing inspection exists, and prepared-frame inspection now exposes dynamic target descriptors, views, flow invocations, target alias bindings, and history signatures. Runtime resource generation for dynamic targets depends on the remaining renderer cache work.
+Status: Implemented foundation support. Graph/resource/texture/timing inspection exists, and prepared-frame inspection exposes dynamic target descriptors, views, flow invocations, target alias bindings, and history signatures. Runtime resource generation for dynamic targets is renderer-owned.
 
 ## Goal
 

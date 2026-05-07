@@ -1,9 +1,6 @@
 struct EditorViewportSceneProductUniform {
     surface : vec4<f32>,
     viewport : vec4<f32>,
-    _unused_rect_0 : vec4<f32>,
-    _unused_rect_1 : vec4<f32>,
-    _unused_rect_2 : vec4<f32>,
     camera_position : vec4<f32>,
     camera_forward : vec4<f32>,
     camera_right : vec4<f32>,

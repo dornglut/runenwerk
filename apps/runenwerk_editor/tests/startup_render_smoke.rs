@@ -192,10 +192,7 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     let ViewportSurfaceBindingSource::DynamicTexture {
         namespace,
         target_id,
-    } = &primary_binding.source
-    else {
-        panic!("viewport primary binding should resolve to a dynamic texture source");
-    };
+    } = &primary_binding.source;
     assert_eq!(namespace.as_str(), VIEWPORT_DYNAMIC_TARGET_NAMESPACE);
     assert_eq!(
         viewport_embed.uv_rect,

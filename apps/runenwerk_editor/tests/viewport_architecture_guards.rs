@@ -848,6 +848,8 @@ fn rb7_viewport_scene_product_shader_has_no_multi_rect_containment() {
         "u.viewport_b",
         "u.viewport_c",
         "u.viewport_d",
+        "reserved_rect_",
+        "_unused_rect_",
         "additional_viewport_bounds_px",
         "set_viewport_bounds_list",
         "viewport_contains_rect",
@@ -934,6 +936,58 @@ fn viewport_embed_shader_uses_full_prepared_product_rect() {
             && !shader.contains("fit_origin")
             && !shader.contains("fit_size"),
         "viewport embed shader must not apply a second implicit fit that diverges from picking bounds",
+    );
+}
+
+#[test]
+fn viewport_surface_bindings_accept_only_dynamic_texture_sources() {
+    let sources = read_workspace_sources(&[
+        "domain/ui/ui_render_data/src/lib.rs",
+        "domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs",
+        "engine/src/plugins/render/renderer/setup.rs",
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs",
+        "apps/runenwerk_editor/tests/startup_render_smoke.rs",
+    ]);
+    let forbidden_terms = [
+        concat!("ViewportSurfaceBinding", "::new("),
+        concat!("ViewportSurfaceBinding", "::flow_", "resource("),
+        concat!("ViewportSurfaceBindingSource", "::flow_", "resource("),
+        concat!("ViewportSurfaceBindingSource", "::Flow", "Resource"),
+        concat!("Legacy", "ViewportSurfaceBindingShape"),
+        concat!("flow_", "resource_parts"),
+        concat!("resolve_ui_", "texture_view("),
+    ];
+    let offenders = forbidden_source_markers(&sources, &forbidden_terms);
+
+    assert!(
+        offenders.is_empty(),
+        "viewport surface bindings must resolve only dynamic texture targets, not legacy flow resources: {offenders:?}",
+    );
+}
+
+#[test]
+fn viewport_render_product_publishers_use_producer_scoped_contributions() {
+    let sources = read_workspace_sources(&[
+        "apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs",
+        "apps/runenwerk_editor/src/runtime/viewport/product_targets.rs",
+    ]);
+    let forbidden_terms = [
+        "prepared_frame_requests.clear(",
+        ".add_view(",
+        ".add_flow_invocation(",
+        ".replace_requests(",
+    ];
+    let offenders = forbidden_source_markers(&sources, &forbidden_terms);
+
+    assert!(
+        offenders.is_empty(),
+        "viewport render product publishers must replace their own producer contribution instead of mutating global request state: {offenders:?}",
+    );
+    assert!(
+        sources
+            .iter()
+            .any(|(_, source)| source.contains(".replace_contribution(")),
+        "viewport render product publishers must use producer-scoped contribution APIs",
     );
 }
 

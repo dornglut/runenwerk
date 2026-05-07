@@ -149,9 +149,6 @@ pub struct EditorInputBridgeState {
 pub struct EditorViewportSceneProductUniform {
     pub surface: [f32; 4],
     pub viewport: [f32; 4],
-    pub reserved_rect_0: [f32; 4],
-    pub reserved_rect_1: [f32; 4],
-    pub reserved_rect_2: [f32; 4],
     pub camera_position: [f32; 4],
     pub camera_forward: [f32; 4],
     pub camera_right: [f32; 4],
@@ -265,6 +262,8 @@ pub struct EditorViewportRenderState {
     pub sphere_radius: f32,
     pub capsule_radius: f32,
     pub capsule_half_height: f32,
+    pub camera: EditorViewportCamera,
+    pub camera_fov_y_radians: f32,
     pub visibility_contradiction_active: bool,
     pub last_reported_viewport_bounds_px: Option<(f32, f32, f32, f32)>,
     pub last_reported_shell_scale: Option<f32>,
@@ -288,6 +287,8 @@ impl Default for EditorViewportRenderState {
             sphere_radius: 0.6,
             capsule_radius: 0.35,
             capsule_half_height: 0.75,
+            camera: editor_viewport_camera(),
+            camera_fov_y_radians: editor_viewport_camera_fov_y_radians(),
             visibility_contradiction_active: false,
             last_reported_viewport_bounds_px: None,
             last_reported_shell_scale: None,
@@ -434,19 +435,16 @@ impl EditorViewportRenderState {
     ) -> EditorViewportSceneProductUniform {
         let width = surface.0.max(1) as f32;
         let height = surface.1.max(1) as f32;
-        let camera = editor_viewport_camera();
+        let camera = self.camera;
 
         EditorViewportSceneProductUniform {
             surface: [width, height, 1.0 / width, 1.0 / height],
             viewport: [0.0, 0.0, width, height],
-            reserved_rect_0: [0.0; 4],
-            reserved_rect_1: [0.0; 4],
-            reserved_rect_2: [0.0; 4],
             camera_position: [
                 camera.position.x,
                 camera.position.y,
                 camera.position.z,
-                editor_viewport_camera_fov_y_radians(),
+                self.camera_fov_y_radians,
             ],
             camera_forward: [camera.forward.x, camera.forward.y, camera.forward.z, 0.0],
             camera_right: [camera.right.x, camera.right.y, camera.right.z, 0.0],
@@ -506,7 +504,7 @@ fn approx_vec4(a: [f32; 4], b: [f32; 4]) -> bool {
         && approx_f32(a[3], b[3])
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EditorViewportCamera {
     pub position: Vec3,
     pub forward: Vec3,
@@ -564,16 +562,13 @@ mod tests {
     }
 
     #[test]
-    fn scene_product_uniform_keeps_reserved_rects_empty() {
+    fn scene_product_uniform_uses_viewport_owned_camera_state() {
         let mut state = EditorViewportRenderState::default();
-        let changed = state.set_viewport_bounds((40.0, 50.0, 320.0, 180.0));
+        state.camera_fov_y_radians = 42.0_f32.to_radians();
 
         let uniform = state.compose_scene_product_uniform((1280, 720));
 
-        assert!(changed);
         assert_eq!(uniform.viewport, [0.0, 0.0, 1280.0, 720.0]);
-        assert_eq!(uniform.reserved_rect_0, [0.0, 0.0, 0.0, 0.0]);
-        assert_eq!(uniform.reserved_rect_1, [0.0, 0.0, 0.0, 0.0]);
-        assert_eq!(uniform.reserved_rect_2, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(uniform.camera_position[3], 42.0_f32.to_radians());
     }
 }

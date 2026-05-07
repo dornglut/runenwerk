@@ -113,7 +113,11 @@ pub fn submit_editor_frame_system(
         viewport_bounds,
     );
     tool_surface_bindings.rebuild_from_layout_map(&viewport_layout_map);
-    sync_viewport_render_states_from_bindings(&mut viewport_render_states, &tool_surface_bindings);
+    sync_viewport_render_states_from_bindings(
+        &mut viewport_render_states,
+        &tool_surface_bindings,
+        &viewport_render,
+    );
     mounted_surfaces.sync_from_workspace_state(shell_state.workspace_state());
     if app.debug_logs_enabled() {
         for rebind in tool_surface_bindings.latest_rebinds() {
@@ -213,14 +217,23 @@ pub fn submit_editor_frame_system(
 fn sync_viewport_render_states_from_bindings(
     viewport_render_states: &mut ViewportRenderStateResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    base_render_state: &EditorViewportRenderState,
 ) {
     let mut viewport_ids = std::collections::BTreeSet::new();
     for binding in tool_surface_bindings.bindings() {
+        let mut render_state = *base_render_state;
+        render_state.set_viewport_bounds((
+            binding.bounds.x,
+            binding.bounds.y,
+            binding.bounds.width,
+            binding.bounds.height,
+        ));
         viewport_ids.insert(binding.viewport_id);
         viewport_render_states.upsert_state(ViewportRenderStateEntry {
             viewport_id: binding.viewport_id,
             tool_surface_id: Some(binding.tool_surface_id),
             bounds: binding.bounds,
+            render_state,
         });
     }
     viewport_render_states.retain_viewports(|viewport_id| viewport_ids.contains(&viewport_id));
@@ -578,8 +591,13 @@ mod tests {
             UiRect::new(320.0, 0.0, 480.0, 240.0),
         ));
         let mut render_states = ViewportRenderStateResource::default();
+        let base_render_state = EditorViewportRenderState::default();
 
-        sync_viewport_render_states_from_bindings(&mut render_states, &bindings);
+        sync_viewport_render_states_from_bindings(
+            &mut render_states,
+            &bindings,
+            &base_render_state,
+        );
 
         assert_eq!(
             render_states.state_for(first).map(|state| state.bounds),

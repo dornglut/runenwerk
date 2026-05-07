@@ -20,11 +20,11 @@ related:
 
 ## Status
 
-Implementation-ready design for V5 of the viewport expression architecture roadmap.
+Implemented V5/V6 cutover design for the viewport expression architecture roadmap.
 
-V5 is the target-allocation phase. It makes viewport product ownership real by replacing shared static scene, picking, and overlay render resources with viewport-scoped dynamic targets. V5 alone does not finish producer execution; V6 makes the scene, picking, and overlay producer render every `ViewportRenderJob` into these targets.
+V5 made viewport product ownership real by replacing shared static scene, picking, and overlay render resources with viewport-scoped dynamic targets. V6 made the scene, picking, and overlay producer render every `ViewportRenderJob` into those targets through prepared render views and flow invocations.
 
-When the larger render update is in scope, V5 should be implemented as part of `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`. That bundle adds the missing engine-side target alias and prepared render view support so dynamic targets are not merely allocated and UI-sampled, but are also writable pass attachments in the final producer path.
+This design was implemented as part of `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`. Dynamic targets are allocated, writable pass attachments, sampleable UI resources when descriptors allow it, and scoped by viewport/product/slot ownership.
 
 ## Goal
 
@@ -216,14 +216,10 @@ Update:
 domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs
 ```
 
-Replace the single flow-resource binding shape with an explicit source enum:
+Replace the old flow-resource binding shape with a dynamic-texture-only source:
 
 ```rust
 pub enum ViewportSurfaceBindingSource {
-    FlowResource {
-        flow_id: String,
-        resource_id: String,
-    },
     DynamicTexture {
         namespace: String,
         target_id: String,
@@ -235,19 +231,15 @@ pub struct ViewportSurfaceBinding {
 }
 ```
 
-Keep a compatibility constructor for static flow resources during migration:
+Normal viewport presentation uses the dynamic constructor only:
 
 ```rust
 impl ViewportSurfaceBinding {
-    pub fn flow_resource(flow_id: impl Into<String>, resource_id: impl Into<String>) -> Self;
     pub fn dynamic_texture(namespace: impl Into<String>, target_id: impl Into<String>) -> Self;
 }
 ```
 
-`engine/src/plugins/render/renderer/setup.rs::encode_ui_pass` must resolve UI viewport embeds by matching the binding source:
-
-- `FlowResource` resolves through the current `FlowRuntimeResources` compatibility path.
-- `DynamicTexture` resolves through the renderer dynamic target cache.
+`engine/src/plugins/render/renderer/setup.rs::encode_ui_pass` resolves UI viewport embeds through the renderer dynamic target cache. Static flow-resource viewport embed compatibility was removed with the V5/V6 cutover so there is no second sampling path to preserve.
 
 The UI bind-group cache key must include the full binding source, not only `resource_id`, because two dynamic targets may share a product slot name while belonging to different viewports.
 

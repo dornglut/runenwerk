@@ -5,7 +5,8 @@ use engine::plugins::render::{
     PreparedTargetBinding, PreparedViewFrame, PreparedViewKind, RenderDynamicTextureRetention,
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetDescriptorError,
     RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource, RenderFlowId,
-    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
+    RenderFrameProducerId, RenderTextureSampleMode, RenderTextureTargetFormat,
+    RenderTextureTargetUsage,
 };
 
 fn dynamic_descriptor(
@@ -25,6 +26,10 @@ fn dynamic_descriptor(
         sample_mode,
         RenderDynamicTextureRetention::RetainWhileRequested,
     )
+}
+
+fn producer(raw: u64) -> RenderFrameProducerId {
+    RenderFrameProducerId::try_from_raw(raw).unwrap()
 }
 
 #[test]
@@ -89,24 +94,27 @@ fn dynamic_target_descriptor_validation_rejects_invalid_shapes() {
 fn dynamic_target_request_registry_snapshots_valid_requests_by_key() {
     let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
     registry
-        .request(dynamic_descriptor(
-            "b",
-            64,
-            64,
-            RenderTextureTargetFormat::Rgba8Unorm,
-            RenderTextureTargetUsage::color_sampled(),
-            RenderTextureSampleMode::FilterableFloat,
-        ))
-        .unwrap();
-    registry
-        .request(dynamic_descriptor(
-            "a",
-            128,
-            64,
-            RenderTextureTargetFormat::Rgba8UnormSrgb,
-            RenderTextureTargetUsage::color_sampled(),
-            RenderTextureSampleMode::FilterableFloat,
-        ))
+        .replace_contribution(
+            producer(1),
+            [
+                dynamic_descriptor(
+                    "b",
+                    64,
+                    64,
+                    RenderTextureTargetFormat::Rgba8Unorm,
+                    RenderTextureTargetUsage::color_sampled(),
+                    RenderTextureSampleMode::FilterableFloat,
+                ),
+                dynamic_descriptor(
+                    "a",
+                    128,
+                    64,
+                    RenderTextureTargetFormat::Rgba8UnormSrgb,
+                    RenderTextureTargetUsage::color_sampled(),
+                    RenderTextureSampleMode::FilterableFloat,
+                ),
+            ],
+        )
         .unwrap();
 
     let labels = registry
@@ -125,9 +133,51 @@ fn dynamic_target_request_registry_snapshots_valid_requests_by_key() {
         RenderTextureSampleMode::FilterableFloat,
         RenderDynamicTextureRetention::RetainWhileRequested,
     );
-    assert!(registry.request(invalid).is_err());
+    assert!(
+        registry
+            .replace_contribution(producer(2), [invalid])
+            .is_err()
+    );
     assert_eq!(registry.diagnostics().len(), 1);
     assert_eq!(registry.snapshot().len(), 2);
+}
+
+#[test]
+fn dynamic_target_request_registry_rejects_cross_producer_key_collisions() {
+    let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
+    registry
+        .replace_contribution(
+            producer(1),
+            [dynamic_descriptor(
+                "shared",
+                64,
+                64,
+                RenderTextureTargetFormat::Rgba8Unorm,
+                RenderTextureTargetUsage::color_sampled(),
+                RenderTextureSampleMode::FilterableFloat,
+            )],
+        )
+        .unwrap();
+
+    let err = registry
+        .replace_contribution(
+            producer(2),
+            [dynamic_descriptor(
+                "shared",
+                64,
+                64,
+                RenderTextureTargetFormat::Rgba8Unorm,
+                RenderTextureTargetUsage::color_sampled(),
+                RenderTextureSampleMode::FilterableFloat,
+            )],
+        )
+        .expect_err("dynamic target keys must have one owning producer");
+
+    assert!(
+        err.to_string().contains("already owned"),
+        "unexpected error: {err}"
+    );
+    assert_eq!(registry.snapshot().len(), 1);
 }
 
 #[test]
@@ -141,20 +191,25 @@ fn prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
     );
 
     let mut requests = PreparedRenderFrameRequestResource::default();
-    requests.add_view(PreparedViewFrame::offscreen_product(
-        "viewport.7",
-        (320, 180),
-    ));
-    requests.add_flow_invocation(PreparedFlowInvocationRequest {
-        invocation_id: PreparedFlowInvocationId::new("viewport.7.editor"),
-        flow_id,
-        view_id: "viewport.7".to_string(),
-        target_alias_bindings: alias_bindings,
-        uniform_overrides: BTreeMap::new(),
-        history_signature: Some("viewport.7:v1".to_string()),
-    });
+    requests
+        .replace_contribution(
+            producer(1),
+            [PreparedViewFrame::offscreen_product(
+                "viewport.7",
+                (320, 180),
+            )],
+            [PreparedFlowInvocationRequest {
+                invocation_id: PreparedFlowInvocationId::new("viewport.7.editor"),
+                flow_id,
+                view_id: "viewport.7".to_string(),
+                target_alias_bindings: alias_bindings,
+                uniform_overrides: BTreeMap::new(),
+                history_signature: Some("viewport.7:v1".to_string()),
+            }],
+        )
+        .unwrap();
 
-    let views = requests.requested_views().collect::<Vec<_>>();
+    let views = requests.requested_views();
     assert_eq!(views.len(), 1);
     assert_eq!(views[0].kind, PreparedViewKind::OffscreenProduct);
     assert_eq!(views[0].target_size_px, (320, 180));
@@ -174,5 +229,45 @@ fn prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
     assert!(
         invocations[0].uniform_overrides.is_empty(),
         "prepared invocation requests should expose an explicit override map even when unused"
+    );
+}
+
+#[test]
+fn prepared_frame_requests_reject_duplicate_invocation_ids_across_producers() {
+    let flow_id = RenderFlowId::try_from_raw(7).unwrap();
+    let request = |view_id: &str| PreparedFlowInvocationRequest {
+        invocation_id: PreparedFlowInvocationId::new("shared.invocation"),
+        flow_id,
+        view_id: view_id.to_string(),
+        target_alias_bindings: BTreeMap::new(),
+        uniform_overrides: BTreeMap::new(),
+        history_signature: None,
+    };
+    let mut requests = PreparedRenderFrameRequestResource::default();
+    requests
+        .replace_contribution(
+            producer(1),
+            [PreparedViewFrame::offscreen_product(
+                "viewport.1",
+                (320, 180),
+            )],
+            [request("viewport.1")],
+        )
+        .unwrap();
+
+    let err = requests
+        .replace_contribution(
+            producer(2),
+            [PreparedViewFrame::offscreen_product(
+                "viewport.2",
+                (320, 180),
+            )],
+            [request("viewport.2")],
+        )
+        .expect_err("invocation ids must be globally unique inside a frame");
+
+    assert!(
+        err.to_string().contains("duplicate invocation"),
+        "unexpected error: {err}"
     );
 }

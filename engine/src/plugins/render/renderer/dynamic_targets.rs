@@ -18,6 +18,7 @@ pub struct RendererDynamicTextureTarget {
     pub size: (u32, u32),
     pub descriptor: RenderDynamicTextureTargetDescriptor,
     pub signature: RenderDynamicTextureTargetSignature,
+    pub history_signature: Option<String>,
     pub generation: u64,
     pub stale: bool,
     pub last_invalidation_reason: Option<String>,
@@ -34,6 +35,7 @@ impl RendererDynamicTextureTargetCache {
         &mut self,
         device: &Device,
         requests: &[RenderDynamicTextureTargetDescriptor],
+        history_signatures: &BTreeMap<RenderDynamicTextureTargetKey, String>,
     ) -> Result<()> {
         let requested_keys = requests
             .iter()
@@ -43,15 +45,25 @@ impl RendererDynamicTextureTargetCache {
         for descriptor in requests {
             descriptor.validate()?;
             let signature = descriptor.signature();
+            let history_signature = history_signatures.get(&descriptor.key).cloned();
             let previous_generation = self
                 .targets
                 .get(&descriptor.key)
                 .map(|target| target.generation)
                 .unwrap_or(0);
+            let invalidation_reason = self.targets.get(&descriptor.key).and_then(|target| {
+                if target.signature != signature {
+                    Some("descriptor_signature_changed".to_string())
+                } else if target.history_signature != history_signature {
+                    Some("history_signature_changed".to_string())
+                } else {
+                    None
+                }
+            });
             let should_recreate = self
                 .targets
                 .get(&descriptor.key)
-                .map(|target| target.signature != signature)
+                .map(|_| invalidation_reason.is_some())
                 .unwrap_or(true);
             if should_recreate {
                 let label = format!("dynamic_render_target_{}", descriptor.key);
@@ -77,15 +89,16 @@ impl RendererDynamicTextureTargetCache {
                         size: (descriptor.width.max(1), descriptor.height.max(1)),
                         descriptor: descriptor.clone(),
                         signature,
+                        history_signature,
                         generation: previous_generation.saturating_add(1),
                         stale: false,
-                        last_invalidation_reason: should_recreate
-                            .then_some("descriptor_signature_changed".to_string()),
+                        last_invalidation_reason: invalidation_reason,
                         unrequested_frames: 0,
                     },
                 );
             } else if let Some(existing) = self.targets.get_mut(&descriptor.key) {
                 existing.descriptor = descriptor.clone();
+                existing.history_signature = history_signature;
                 existing.stale = false;
                 existing.last_invalidation_reason = None;
                 existing.unrequested_frames = 0;
@@ -216,7 +229,7 @@ pub fn dynamic_format_to_wgpu(format: RenderTextureTargetFormat) -> TextureForma
     }
 }
 
-fn dynamic_usage_to_wgpu(usage: RenderTextureTargetUsage) -> TextureUsages {
+pub fn dynamic_usage_to_wgpu(usage: RenderTextureTargetUsage) -> TextureUsages {
     let mut out = TextureUsages::empty();
     if usage.color_attachment || usage.depth_attachment {
         out |= TextureUsages::RENDER_ATTACHMENT;

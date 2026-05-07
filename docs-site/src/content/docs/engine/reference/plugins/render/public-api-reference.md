@@ -248,8 +248,8 @@ These APIs are for dynamic product surfaces, viewport products, material/asset p
 
 Current status:
 
-- dynamic target descriptors, request registry snapshots, prepared views, and prepared invocations are public inspection/prepare packet contracts;
-- renderer-owned dynamic target cache allocation and target-alias pass execution are still bundle work and should not be faked with editor-specific flow ids.
+- dynamic target descriptors, producer-scoped request registry snapshots, prepared views, and prepared invocations are public inspection/prepare packet contracts;
+- renderer-owned dynamic target cache allocation and target-alias pass execution are implemented foundation behavior and should not be faked with editor-specific flow ids.
 
 ## Compatibility Surface
 

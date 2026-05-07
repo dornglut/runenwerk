@@ -7,11 +7,14 @@ use editor_shell::ToolSurfaceInstanceId;
 use editor_viewport::ViewportId;
 use ui_math::UiRect;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+use crate::runtime::resources::EditorViewportRenderState;
+
+#[derive(Debug, Clone, Copy)]
 pub struct ViewportRenderStateEntry {
     pub viewport_id: ViewportId,
     pub tool_surface_id: Option<ToolSurfaceInstanceId>,
     pub bounds: UiRect,
+    pub render_state: EditorViewportRenderState,
 }
 
 #[derive(Debug, Default, Clone, ecs::Component, ecs::Resource)]
@@ -67,11 +70,13 @@ mod tests {
             viewport_id: first,
             tool_surface_id: Some(ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
             bounds: UiRect::new(0.0, 0.0, 320.0, 240.0),
+            render_state: EditorViewportRenderState::default(),
         });
         states.upsert_state(ViewportRenderStateEntry {
             viewport_id: second,
             tool_surface_id: Some(ToolSurfaceInstanceId::try_from_raw(2).unwrap()),
             bounds: UiRect::new(320.0, 0.0, 480.0, 240.0),
+            render_state: EditorViewportRenderState::default(),
         });
 
         assert_eq!(

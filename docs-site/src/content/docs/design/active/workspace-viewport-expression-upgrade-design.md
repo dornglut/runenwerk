@@ -13,24 +13,25 @@ related_roadmaps:
 # Viewport Expression Upgrade Design
 
 ## Status
-Draft for implementation
+Implemented foundation, active for product maturity follow-up
 
 ## Purpose
-Upgrade the editor viewport from the current fullscreen scene pass with shader-side viewport masking to a long-term panel-owned viewport presentation architecture built around typed expression products.
+Document the long-term panel-owned viewport presentation architecture built around typed expression products. The fullscreen scene pass with shader-side viewport masking has been removed from the normal render path.
 
 This design is written for the endgame architecture, not as a temporary bridge. Implementation breadth may be phased, but the ownership model, contracts, and architectural boundaries defined here are intended to remain valid long term.
 
 ## No-Compromise Update
 
-As of 2026-05-07, the editor has a migration checkpoint that gives split viewport panels distinct runtime ids and per-viewport bounds. That checkpoint is not the final architecture.
+As of 2026-05-07, the editor viewport foundation uses viewport-owned dynamic targets, prepared render views, prepared flow invocations, dynamic-only UI sampling, and viewport-local render-state snapshots.
 
-The final architecture must remove these migration-only traits:
+The foundation removed these migration-only traits:
 
 - multiple viewport rectangles inside one scene-product uniform;
 - static scene color, picking id, and overlay resource ids shared by all viewports;
-- implicit `ViewportId` derivation from `ToolSurfaceInstanceId` as the authority model;
-- viewport lifecycle and product synchronization inside frame submission;
+- viewport render-product synchronization inside frame submission;
 - fullscreen shader-side viewport containment as the primary correctness boundary.
+
+Remaining work is product maturity: richer authoritative viewport lifecycle commands, independent camera/debug/product settings for authored multi-viewport workflows, and more product producers beyond the current editor viewport, boids, and SDF proofs.
 
 The implementation roadmap that executes this design is `docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md`.
 
@@ -38,7 +39,7 @@ The implementation roadmap that executes this design is `docs-site/src/content/d
 
 ## Problem Summary
 
-The current editor viewport path behaves like this:
+The legacy editor viewport path behaved like this:
 
 1. Render a fullscreen scene pass.
 2. Attempt to restrict visibility in the shader using a viewport rectangle uniform.
@@ -695,7 +696,7 @@ No step may infer correctness from "there is only one viewport" once shell proje
 
 The final system should have architecture guards that fail if:
 
-- `EditorViewportSceneProductUniform` contains `viewport_b`, `viewport_c`, or `viewport_d`;
+- `EditorViewportSceneProductUniform` contains `viewport_b`, `viewport_c`, `viewport_d`, or reserved multi-rectangle fields;
 - normal runtime flow uses static `editor.viewport.v1.scene_color` as the shared target for multiple viewports;
 - `submit_editor_frame_system` allocates or seeds viewport identity;
 - a provider uses a lone observed viewport as the runtime identity for an unbound split/replacement surface;

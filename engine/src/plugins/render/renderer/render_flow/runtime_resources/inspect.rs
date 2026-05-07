@@ -47,8 +47,7 @@ impl FlowRuntimeResources {
                 RenderResourceDescriptor::SampledTexture(_)
                 | RenderResourceDescriptor::StorageTexture(_)
                 | RenderResourceDescriptor::ColorTarget(_)
-                | RenderResourceDescriptor::DepthTarget(_)
-                | RenderResourceDescriptor::HistoryTexture(_) => {
+                | RenderResourceDescriptor::DepthTarget(_) => {
                     if let Some(texture) = self.textures.get(id) {
                         realized = true;
                         reuse = if texture.reused_last_frame {
@@ -60,6 +59,7 @@ impl FlowRuntimeResources {
                         generation = Some(texture.generation);
                     }
                 }
+                RenderResourceDescriptor::HistoryTexture(_) => {}
                 RenderResourceDescriptor::TargetAlias(_)
                 | RenderResourceDescriptor::ImportedTexture(_)
                 | RenderResourceDescriptor::ImportedBuffer(_) => {}
@@ -106,6 +106,35 @@ impl FlowRuntimeResources {
                 texture_size: None,
                 element_count: Some(1),
                 generation: Some(buffer.generation),
+            });
+        }
+        for ((invocation_id, id), texture) in &self.invocation_history_textures {
+            let Some(descriptor) = self.descriptors.get(id) else {
+                continue;
+            };
+            if !matches!(descriptor, RenderResourceDescriptor::HistoryTexture(_)) {
+                continue;
+            }
+            entries.push(RuntimeResourceInspectionEntry {
+                flow_id: flow_id.to_string(),
+                id: RuntimeResourceKey::InvocationHistory {
+                    invocation_id: invocation_id.clone(),
+                    resource_id: *id,
+                }
+                .to_string(),
+                kind: resource_kind_name(descriptor).to_string(),
+                lifetime: descriptor.lifetime(),
+                imported: false,
+                realized: true,
+                reuse: if texture.reused_last_frame {
+                    RuntimeResourceReuse::Reused
+                } else {
+                    RuntimeResourceReuse::Created
+                },
+                size_bytes: None,
+                texture_size: Some(texture.size),
+                element_count: None,
+                generation: Some(texture.generation),
             });
         }
         entries

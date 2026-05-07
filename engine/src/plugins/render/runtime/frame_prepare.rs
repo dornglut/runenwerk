@@ -70,7 +70,7 @@ pub(crate) fn frame_render_prepare_system(
             .ok()
             .cloned()
             .unwrap_or_default();
-        let views = build_prepared_views(target_size, &frame_requests);
+        let views = build_prepared_views(target_size, &frame_requests)?;
         let flow_invocations = build_prepared_flow_invocations(
             compiled_flows,
             &extracted,
@@ -157,14 +157,19 @@ pub(crate) fn frame_render_prepare_system(
 fn build_prepared_views(
     surface_size: (u32, u32),
     requests: &PreparedRenderFrameRequestResource,
-) -> Vec<PreparedViewFrame> {
+) -> anyhow::Result<Vec<PreparedViewFrame>> {
     let mut views = BTreeMap::<String, PreparedViewFrame>::new();
     let main = PreparedViewFrame::main(surface_size);
     views.insert(main.view_id.clone(), main);
     for view in requests.requested_views() {
-        views.insert(view.view_id.clone(), view.clone());
+        if views.insert(view.view_id.clone(), view.clone()).is_some() {
+            anyhow::bail!(
+                "prepared render frame request publishes duplicate view '{}'",
+                view.view_id
+            );
+        }
     }
-    views.into_values().collect()
+    Ok(views.into_values().collect())
 }
 
 fn build_prepared_flow_invocations(
@@ -184,7 +189,15 @@ fn build_prepared_flow_invocations(
         .map(|flow| (flow.flow_id, flow))
         .collect::<BTreeMap<_, _>>();
 
-    for request in requests.requested_flow_invocations() {
+    let requested_flow_invocations = requests.requested_flow_invocations();
+    let mut invocation_ids = BTreeSet::<&PreparedFlowInvocationId>::new();
+    for request in &requested_flow_invocations {
+        if !invocation_ids.insert(&request.invocation_id) {
+            anyhow::bail!(
+                "prepared flow invocation '{}' is requested more than once",
+                request.invocation_id.0
+            );
+        }
         if !flows_by_id.contains_key(&request.flow_id) {
             anyhow::bail!(
                 "prepared flow invocation '{}' references unknown flow '{:?}'",
@@ -202,9 +215,9 @@ fn build_prepared_flow_invocations(
     }
 
     for flow in compiled_flows {
-        for request in requests
-            .requested_flow_invocations()
+        for request in requested_flow_invocations
             .iter()
+            .copied()
             .filter(|request| request.flow_id == flow.flow_id)
         {
             let view = views_by_id
@@ -627,19 +640,24 @@ mod tests {
         let main_inputs =
             build_prepared_flow_inputs(&compiled_flows, &extracted, (800, 600)).unwrap();
         let mut requests = PreparedRenderFrameRequestResource::default();
-        requests.add_view(PreparedViewFrame::offscreen_product(
-            "viewport.1",
-            (320, 200),
-        ));
-        requests.add_flow_invocation(PreparedFlowInvocationRequest {
-            invocation_id: PreparedFlowInvocationId::new("viewport.1.scene"),
-            flow_id: compiled.flow_id,
-            view_id: "viewport.1".to_string(),
-            target_alias_bindings: BTreeMap::new(),
-            uniform_overrides: BTreeMap::new(),
-            history_signature: None,
-        });
-        let views = build_prepared_views((800, 600), &requests);
+        requests
+            .replace_contribution(
+                RenderFrameProducerId::try_from_raw(1).unwrap(),
+                [PreparedViewFrame::offscreen_product(
+                    "viewport.1",
+                    (320, 200),
+                )],
+                [PreparedFlowInvocationRequest {
+                    invocation_id: PreparedFlowInvocationId::new("viewport.1.scene"),
+                    flow_id: compiled.flow_id,
+                    view_id: "viewport.1".to_string(),
+                    target_alias_bindings: BTreeMap::new(),
+                    uniform_overrides: BTreeMap::new(),
+                    history_signature: None,
+                }],
+            )
+            .unwrap();
+        let views = build_prepared_views((800, 600), &requests).unwrap();
 
         let invocations = build_prepared_flow_invocations(
             &compiled_flows,

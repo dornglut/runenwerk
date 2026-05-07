@@ -27,6 +27,7 @@ impl FlowRuntimeResources {
         match key {
             RuntimeResourceKey::FlowOwned(id) => self.kinds.get(id).copied(),
             RuntimeResourceKey::InvocationUniform { .. } => Some(RuntimeResourceKind::BufferLike),
+            RuntimeResourceKey::InvocationHistory { .. } => Some(RuntimeResourceKind::TextureLike),
             RuntimeResourceKey::DynamicTexture(_) => Some(RuntimeResourceKind::TextureLike),
             RuntimeResourceKey::SurfaceColor => Some(RuntimeResourceKind::TextureLike),
             RuntimeResourceKey::SurfaceDepth => None,
@@ -37,6 +38,9 @@ impl FlowRuntimeResources {
         match key {
             RuntimeResourceKey::FlowOwned(id) => self.descriptors.get(id),
             RuntimeResourceKey::InvocationUniform { resource_id, .. } => {
+                self.descriptors.get(resource_id)
+            }
+            RuntimeResourceKey::InvocationHistory { resource_id, .. } => {
                 self.descriptors.get(resource_id)
             }
             RuntimeResourceKey::SurfaceColor
@@ -71,9 +75,9 @@ impl FlowRuntimeResources {
             RuntimeResourceKey::SurfaceColor | RuntimeResourceKey::SurfaceDepth => {
                 CaptureTextureClass::ImportedTexture
             }
-            RuntimeResourceKey::DynamicTexture(_) => fallback_class,
-            RuntimeResourceKey::InvocationUniform { .. } => fallback_class,
-            RuntimeResourceKey::FlowOwned(_) => {
+            RuntimeResourceKey::DynamicTexture(_)
+            | RuntimeResourceKey::InvocationUniform { .. } => fallback_class,
+            RuntimeResourceKey::FlowOwned(_) | RuntimeResourceKey::InvocationHistory { .. } => {
                 let Some(descriptor) = self.descriptor_for_key(&resource_key) else {
                     return fallback_class;
                 };
@@ -107,6 +111,16 @@ impl FlowRuntimeResources {
     ) -> Result<RuntimeResourceKey> {
         match resource {
             CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => {
+                if matches!(
+                    self.descriptors.get(id),
+                    Some(RenderResourceDescriptor::HistoryTexture(_))
+                ) && let Some(invocation_id) = self.active_invocation_uniform_scope.as_ref()
+                {
+                    return Ok(RuntimeResourceKey::InvocationHistory {
+                        invocation_id: invocation_id.clone(),
+                        resource_id: *id,
+                    });
+                }
                 Ok(RuntimeResourceKey::FlowOwned(*id))
             }
             CompiledResourceRef::TargetAlias(alias) => {
@@ -126,7 +140,20 @@ impl FlowRuntimeResources {
                     }
                     PreparedTargetBinding::SurfaceColor => Ok(RuntimeResourceKey::SurfaceColor),
                     PreparedTargetBinding::SurfaceDepth => Ok(RuntimeResourceKey::SurfaceDepth),
-                    PreparedTargetBinding::FlowOwned(id) => Ok(RuntimeResourceKey::FlowOwned(*id)),
+                    PreparedTargetBinding::FlowOwned(id) => {
+                        if matches!(
+                            self.descriptors.get(id),
+                            Some(RenderResourceDescriptor::HistoryTexture(_))
+                        ) && let Some(invocation_id) =
+                            self.active_invocation_uniform_scope.as_ref()
+                        {
+                            return Ok(RuntimeResourceKey::InvocationHistory {
+                                invocation_id: invocation_id.clone(),
+                                resource_id: *id,
+                            });
+                        }
+                        Ok(RuntimeResourceKey::FlowOwned(*id))
+                    }
                 }
             }
             CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor) => {
@@ -187,16 +214,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let RuntimeResourceKey::FlowOwned(output_id) = &output_key else {
-            bail!(
-                "pass '{}' targets imported texture '{}', but only '{}' is currently supported as imported color target",
-                pass_id,
-                output_key,
-                SURFACE_COLOR_RESOURCE_LABEL
-            );
-        };
-
-        let Some(texture) = self.textures.get(output_id) else {
+        let Some(texture) = self.texture_resource_for_key(&output_key) else {
             bail!(
                 "pass '{}' targets imported texture '{}', but only '{}' is currently supported as imported color target",
                 pass_id,
@@ -254,15 +272,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let RuntimeResourceKey::FlowOwned(resource_id) = &resource_key else {
-            bail!(
-                "graphics pass '{}' uses imported depth target '{}' but runtime currently supports only flow-owned depth targets",
-                pass_id,
-                resource_key
-            );
-        };
-
-        let Some(texture) = self.textures.get(resource_id) else {
+        let Some(texture) = self.texture_resource_for_key(&resource_key) else {
             bail!(
                 "graphics pass '{}' uses imported depth target '{}' but runtime currently supports only flow-owned depth targets",
                 pass_id,
@@ -380,16 +390,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let RuntimeResourceKey::FlowOwned(resource_id) = &resource_key else {
-            bail!(
-                "pass '{}' references imported texture '{}' but only imported '{}' is supported in core runtime execution",
-                pass_label,
-                resource_key,
-                SURFACE_COLOR_RESOURCE_LABEL
-            );
-        };
-
-        let Some(texture) = self.textures.get(resource_id) else {
+        let Some(texture) = self.texture_resource_for_key(&resource_key) else {
             bail!(
                 "pass '{}' references imported texture '{}' but only imported '{}' is supported in core runtime execution",
                 pass_label,
@@ -408,31 +409,20 @@ impl FlowRuntimeResources {
         })
     }
 
-    pub fn resolve_ui_texture_view(
+    fn texture_resource_for_key(
         &self,
-        pass_id: &str,
-        resource_id: &str,
-        frame_texture: &Texture,
-        frame_size: (u32, u32),
-        frame_format: TextureFormat,
-    ) -> Result<TextureView> {
-        let texture = self.resolve_texture_from_label(
-            pass_id,
-            resource_id,
-            frame_texture,
-            frame_size,
-            frame_format,
-        )?;
-        if texture.is_depth {
-            bail!(
-                "ui composite cannot sample depth texture '{}' for pass '{}'",
+        key: &RuntimeResourceKey,
+    ) -> Option<&RuntimeTextureResource> {
+        match key {
+            RuntimeResourceKey::FlowOwned(resource_id) => self.textures.get(resource_id),
+            RuntimeResourceKey::InvocationHistory {
+                invocation_id,
                 resource_id,
-                pass_id
-            );
+            } => self
+                .invocation_history_textures
+                .get(&(invocation_id.clone(), *resource_id)),
+            _ => None,
         }
-        Ok(texture
-            .texture
-            .create_view(&TextureViewDescriptor::default()))
     }
 
     pub fn resolve_buffer_key<'a>(

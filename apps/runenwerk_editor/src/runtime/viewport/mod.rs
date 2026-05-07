@@ -4,6 +4,7 @@
 pub mod layout_map;
 pub mod picking_results;
 pub mod presentation_resolver;
+pub mod producer_ids;
 pub mod producer_scene;
 pub mod product_registry;
 pub mod product_targets;
@@ -17,6 +18,7 @@ pub mod tool_surface_binding;
 pub use layout_map::*;
 pub use picking_results::*;
 pub use presentation_resolver::*;
+pub use producer_ids::*;
 pub use producer_scene::*;
 pub use product_registry::*;
 pub use product_targets::*;

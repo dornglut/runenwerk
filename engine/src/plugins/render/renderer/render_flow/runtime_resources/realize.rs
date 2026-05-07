@@ -1,4 +1,10 @@
 use super::*;
+use crate::plugins::render::renderer::dynamic_targets::{
+    dynamic_format_to_wgpu, dynamic_usage_to_wgpu,
+};
+use crate::plugins::render::{
+    RenderTextureDescriptor, RenderTextureFormatPolicy, RenderTextureSizePolicy,
+};
 
 impl FlowRuntimeResources {
     pub fn realize_for_frame(
@@ -31,7 +37,10 @@ impl FlowRuntimeResources {
             };
             self.kinds.insert(id, kind);
 
-            if let Some(texture_spec) = Self::texture_allocation_spec(descriptor, surface_format) {
+            if !matches!(descriptor, RenderResourceDescriptor::HistoryTexture(_))
+                && let Some(texture_spec) =
+                    Self::texture_allocation_spec(descriptor, frame_size, surface_format)
+            {
                 let previous_generation = self
                     .textures
                     .get(&id)
@@ -41,7 +50,8 @@ impl FlowRuntimeResources {
                     Some(existing) => {
                         descriptor.lifetime().is_transient()
                             || existing.format != texture_spec.format
-                            || existing.size != frame_size
+                            || existing.size != texture_spec.size
+                            || existing.usage != texture_spec.usage
                             || existing.is_depth != texture_spec.is_depth
                     }
                     None => true,
@@ -52,8 +62,8 @@ impl FlowRuntimeResources {
                     let texture = device.create_texture(&TextureDescriptor {
                         label: Some(label.as_str()),
                         size: Extent3d {
-                            width: frame_size.0,
-                            height: frame_size.1,
+                            width: texture_spec.size.0,
+                            height: texture_spec.size.1,
                             depth_or_array_layers: 1,
                         },
                         mip_level_count: 1,
@@ -68,8 +78,10 @@ impl FlowRuntimeResources {
                         RuntimeTextureResource {
                             texture,
                             format: texture_spec.format,
-                            size: frame_size,
+                            size: texture_spec.size,
+                            usage: texture_spec.usage,
                             is_depth: texture_spec.is_depth,
+                            history_signature: None,
                             generation: previous_generation.saturating_add(1),
                             reused_last_frame: false,
                         },
@@ -126,6 +138,8 @@ impl FlowRuntimeResources {
         self.buffers.retain(|id, _| declared_ids.contains(id));
         self.invocation_uniform_buffers
             .retain(|(_, id), _| declared_ids.contains(id));
+        self.invocation_history_textures
+            .retain(|(_, id), _| declared_ids.contains(id));
         self.active_invocation_uniform_scope = None;
     }
 
@@ -147,6 +161,86 @@ impl FlowRuntimeResources {
             .collect::<BTreeSet<_>>();
         self.invocation_uniform_buffers
             .retain(|(invocation_id, _), _| active.contains(invocation_id));
+        self.invocation_history_textures
+            .retain(|(invocation_id, _), _| active.contains(invocation_id));
+    }
+
+    pub fn realize_invocation_history_textures(
+        &mut self,
+        device: &Device,
+        invocation_id: &str,
+        surface_size: (u32, u32),
+        surface_format: TextureFormat,
+        history_signature: Option<&str>,
+    ) -> Result<()> {
+        let history_descriptors = self
+            .descriptors
+            .iter()
+            .filter_map(|(id, descriptor)| match descriptor {
+                RenderResourceDescriptor::HistoryTexture(_) => Some((*id, descriptor.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for (resource_id, descriptor) in history_descriptors {
+            let Some(texture_spec) =
+                Self::texture_allocation_spec(&descriptor, surface_size, surface_format)
+            else {
+                continue;
+            };
+            let key = (invocation_id.to_string(), resource_id);
+            let next_history_signature = history_signature.map(ToOwned::to_owned);
+            let previous_generation = self
+                .invocation_history_textures
+                .get(&key)
+                .map(|existing| existing.generation)
+                .unwrap_or(0);
+            let should_recreate = self
+                .invocation_history_textures
+                .get(&key)
+                .map(|existing| {
+                    existing.format != texture_spec.format
+                        || existing.size != texture_spec.size
+                        || existing.usage != texture_spec.usage
+                        || existing.is_depth != texture_spec.is_depth
+                        || existing.history_signature != next_history_signature
+                })
+                .unwrap_or(true);
+
+            if should_recreate {
+                let label = format!("engine_invocation_history_{invocation_id}_{resource_id}");
+                let texture = device.create_texture(&TextureDescriptor {
+                    label: Some(label.as_str()),
+                    size: Extent3d {
+                        width: texture_spec.size.0,
+                        height: texture_spec.size.1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format: texture_spec.format,
+                    usage: texture_spec.usage,
+                    view_formats: &[],
+                });
+                self.invocation_history_textures.insert(
+                    key,
+                    RuntimeTextureResource {
+                        texture,
+                        format: texture_spec.format,
+                        size: texture_spec.size,
+                        usage: texture_spec.usage,
+                        is_depth: texture_spec.is_depth,
+                        history_signature: next_history_signature,
+                        generation: previous_generation.saturating_add(1),
+                        reused_last_frame: false,
+                    },
+                );
+            } else if let Some(existing) = self.invocation_history_textures.get_mut(&key) {
+                existing.reused_last_frame = true;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn realize_invocation_uniform_buffer(
@@ -220,40 +314,49 @@ impl FlowRuntimeResources {
 
     pub fn texture_allocation_spec(
         descriptor: &RenderResourceDescriptor,
+        surface_size: (u32, u32),
         surface_format: TextureFormat,
     ) -> Option<TextureAllocationSpec> {
-        match descriptor {
-            RenderResourceDescriptor::SampledTexture(_)
-            | RenderResourceDescriptor::ColorTarget(_)
-            | RenderResourceDescriptor::HistoryTexture(_) => Some(TextureAllocationSpec {
-                format: surface_format,
-                usage: TextureUsages::TEXTURE_BINDING
-                    | TextureUsages::COPY_SRC
-                    | TextureUsages::COPY_DST
-                    | TextureUsages::RENDER_ATTACHMENT,
-                is_depth: false,
-            }),
-            RenderResourceDescriptor::StorageTexture(_) => Some(TextureAllocationSpec {
-                format: TextureFormat::Rgba8Unorm,
-                usage: TextureUsages::TEXTURE_BINDING
-                    | TextureUsages::COPY_SRC
-                    | TextureUsages::COPY_DST
-                    | TextureUsages::STORAGE_BINDING,
-                is_depth: false,
-            }),
-            RenderResourceDescriptor::DepthTarget(_) => Some(TextureAllocationSpec {
-                format: TextureFormat::Depth32Float,
-                usage: TextureUsages::TEXTURE_BINDING
-                    | TextureUsages::COPY_SRC
-                    | TextureUsages::COPY_DST
-                    | TextureUsages::RENDER_ATTACHMENT,
-                is_depth: true,
-            }),
+        let texture = match descriptor {
+            RenderResourceDescriptor::SampledTexture(value) => &value.texture,
+            RenderResourceDescriptor::StorageTexture(value) => &value.texture,
+            RenderResourceDescriptor::ColorTarget(value) => &value.texture,
+            RenderResourceDescriptor::DepthTarget(value) => &value.texture,
+            RenderResourceDescriptor::HistoryTexture(value) => &value.texture,
             RenderResourceDescriptor::TargetAlias(_)
             | RenderResourceDescriptor::ImportedTexture(_)
             | RenderResourceDescriptor::UniformBuffer(_)
             | RenderResourceDescriptor::StorageBuffer(_)
-            | RenderResourceDescriptor::ImportedBuffer(_) => None,
+            | RenderResourceDescriptor::ImportedBuffer(_) => return None,
+        };
+        Some(Self::texture_descriptor_allocation_spec(
+            texture,
+            surface_size,
+            surface_format,
+        ))
+    }
+
+    fn texture_descriptor_allocation_spec(
+        texture: &RenderTextureDescriptor,
+        surface_size: (u32, u32),
+        surface_format: TextureFormat,
+    ) -> TextureAllocationSpec {
+        let size = match texture.size {
+            RenderTextureSizePolicy::Surface => surface_size,
+            RenderTextureSizePolicy::Fixed { width, height } => (width.max(1), height.max(1)),
+        };
+        let format = match texture.format {
+            RenderTextureFormatPolicy::Surface => surface_format,
+            RenderTextureFormatPolicy::Exact(format) => dynamic_format_to_wgpu(format),
+        };
+        TextureAllocationSpec {
+            size,
+            format,
+            usage: dynamic_usage_to_wgpu(texture.usage),
+            is_depth: texture.format
+                == RenderTextureFormatPolicy::Exact(
+                    crate::plugins::render::RenderTextureTargetFormat::Depth32Float,
+                ),
         }
     }
 

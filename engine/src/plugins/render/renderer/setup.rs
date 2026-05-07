@@ -566,14 +566,14 @@ impl Renderer {
         &self,
         device: &Device,
         encoder: &mut CommandEncoder,
-        frame_texture: &Texture,
+        _frame_texture: &Texture,
         frame_view: &TextureView,
         prepared: &UiPreparedDraws,
-        flow_id: &str,
-        runtime_resources: &super::render_flow::FlowRuntimeResources,
+        _flow_id: &str,
+        _runtime_resources: &super::render_flow::FlowRuntimeResources,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
-        surface_size: (u32, u32),
-        surface_format: TextureFormat,
+        _surface_size: (u32, u32),
+        _surface_format: TextureFormat,
     ) {
         let Some(rect_pass) = self.rect_pass.as_ref() else {
             return;
@@ -642,40 +642,16 @@ impl Renderer {
                     };
 
                     if !viewport_bind_groups.contains_key(&binding.source) {
-                        let view = match &binding.source {
-                            ViewportSurfaceBindingSource::FlowResource {
-                                flow_id: binding_flow_id,
-                                resource_id,
-                            } => {
-                                if binding_flow_id.as_str() != flow_id {
-                                    continue;
-                                }
-                                let Ok(view) = runtime_resources.resolve_ui_texture_view(
-                                    "builtin_ui_viewport_embed",
-                                    resource_id.as_str(),
-                                    frame_texture,
-                                    surface_size,
-                                    surface_format,
-                                ) else {
-                                    continue;
-                                };
-                                view
-                            }
-                            ViewportSurfaceBindingSource::DynamicTexture {
-                                namespace,
-                                target_id,
-                            } => {
-                                let key =
-                                    crate::plugins::render::RenderDynamicTextureTargetKey::new(
-                                        namespace.clone(),
-                                        target_id.clone(),
-                                    );
-                                let Ok(view) = self.dynamic_texture_targets.ui_texture_view(&key)
-                                else {
-                                    continue;
-                                };
-                                view
-                            }
+                        let ViewportSurfaceBindingSource::DynamicTexture {
+                            namespace,
+                            target_id,
+                        } = &binding.source;
+                        let key = crate::plugins::render::RenderDynamicTextureTargetKey::new(
+                            namespace.clone(),
+                            target_id.clone(),
+                        );
+                        let Ok(view) = self.dynamic_texture_targets.ui_texture_view(&key) else {
+                            continue;
                         };
                         let bind_group = device.create_bind_group(&BindGroupDescriptor {
                             label: Some("engine_ui_viewport_embed_bind_group"),

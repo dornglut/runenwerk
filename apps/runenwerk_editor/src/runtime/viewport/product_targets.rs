@@ -19,12 +19,12 @@ use engine::runtime::{Res, ResMut};
 
 use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
 use crate::runtime::viewport::{
-    MAIN_VIEWPORT_ID, ToolSurfaceRuntimeBindingRegistryResource,
-    ViewportArtifactObservationResource, ViewportPresentationStateResource,
-    ViewportProductRegistryResource, ViewportRenderStateResource, ViewportSurfaceHandle,
-    ViewportSurfaceSetResource, ViewportSurfaceSlot, build_surface_binding_registry,
-    ensure_editor_main_surface_set, expression_dimensions_for_bounds, initial_presentation_state,
-    initial_product_descriptors,
+    EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID, MAIN_VIEWPORT_ID,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource,
+    ViewportRenderStateResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
+    ViewportSurfaceSlot, build_surface_binding_registry, ensure_editor_main_surface_set,
+    expression_dimensions_for_bounds, initial_presentation_state, initial_product_descriptors,
 };
 
 pub const VIEWPORT_DYNAMIC_TARGET_NAMESPACE: &str = "runenwerk.editor.viewport";
@@ -197,8 +197,12 @@ pub fn sync_viewport_product_targets_system(
     }
 
     viewport_product_targets.replace_records(records);
-    let _ = dynamic_target_requests
-        .replace_requests(viewport_product_targets.requested_dynamic_descriptors());
+    dynamic_target_requests
+        .replace_contribution(
+            EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
+            viewport_product_targets.requested_dynamic_descriptors(),
+        )
+        .expect("editor viewport dynamic target contribution must be valid and uniquely owned");
     sync_surface_sets_from_product_targets(&viewport_product_targets, &mut viewport_surface_sets);
     viewport_surface_bindings.replace_registry(build_surface_binding_registry(
         &viewport_surface_sets,

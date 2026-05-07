@@ -25,7 +25,7 @@ related:
 
 ## Status
 
-Implementation-ready bundle plan for the next major render update.
+Implemented foundation bundle with follow-up hardening tracked in the render roadmap.
 
 This bundle replaces piecemeal render feature work with one coherent foundation: product surfaces can be declared, prepared, allocated, rendered into, sampled by UI, retained across frames, inspected, and proven with real workloads. The bundle is intentionally larger than the editor viewport V5 target-allocation phase because allocation alone would still leave producer execution dependent on another bridge.
 
@@ -234,8 +234,8 @@ engine/src/plugins/render/renderer/setup.rs
 
 Required changes:
 
-- add `ViewportSurfaceBindingSource::DynamicTexture`;
-- keep `ViewportSurfaceBindingSource::FlowResource` only as migration compatibility;
+- make `ViewportSurfaceBindingSource::DynamicTexture` the only viewport surface binding source;
+- remove the old flow-resource viewport embed compatibility path instead of preserving it as a parallel bridge;
 - key UI viewport embed bind groups by full binding source;
 - reject normal UI sampling for non-sampleable dynamic target descriptors such as picking id targets.
 
@@ -402,7 +402,7 @@ RUNENWERK_ENABLE_GPU_SMOKE=1 RUNENWERK_ENABLE_MACOS_MAIN_THREAD_GPU_SMOKE=1 carg
 
 ### RB8 - Feature Proofs
 
-Status: proof docs and compile-oriented examples updated. Boids now proves compute, storage, graphics, instance draw-buffer binding, history copy, and present through the public render API. SDF now proves compute preparation, fullscreen compose, flow-owned history copy, and present through the public render API. These proofs do not close dynamic target alias execution.
+Status: implemented. Boids now proves compute, storage, graphics, instance draw-buffer binding, history copy, and present through the public render API. SDF now proves compute preparation, fullscreen compose, invocation-scoped history copy, and present through the public render API. Dynamic target alias execution is closed through prepared render views and flow invocations.
 
 Change:
 
@@ -419,7 +419,7 @@ Exit criteria:
 
 ### RB9 - Inspection, Docs, And Cleanup
 
-Status: partial inspection/docs cleanup. Render reference docs now describe dynamic target descriptors, target aliases, prepared render views, flow invocations, UI sampling boundaries, and history retention. `engine::plugins::render::inspect::inspect_prepared_render_frame` exposes prepared views, dynamic target descriptors, flow invocations, target alias bindings, and history signatures. Remaining cleanup is gated on renderer dynamic target cache allocation and target-alias pass execution.
+Status: implemented for the foundation bundle. Render reference docs describe dynamic target descriptors, target aliases, prepared render views, flow invocations, UI sampling boundaries, dynamic-only viewport embeds, and history retention. `engine::plugins::render::inspect::inspect_prepared_render_frame` exposes prepared views, dynamic target descriptors, flow invocations, target alias bindings, and history signatures. Follow-up roadmap work is limited to broader feature maturity and API polish, not migration bridges.
 
 Change:
 

@@ -37,8 +37,13 @@ impl Renderer {
             FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
         let mut pending_capture_readbacks = Vec::<PendingCaptureReadback>::new();
 
-        self.dynamic_texture_targets
-            .realize_for_frame(device, &prepared_frame.dynamic_texture_targets)?;
+        let dynamic_target_history_signatures =
+            prepared_frame.dynamic_target_history_signatures()?;
+        self.dynamic_texture_targets.realize_for_frame(
+            device,
+            &prepared_frame.dynamic_texture_targets,
+            &dynamic_target_history_signatures,
+        )?;
 
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
         let render_result = (|| -> Result<()> {
@@ -78,7 +83,18 @@ impl Renderer {
                         invocation.target_alias_bindings.clone();
                     runtime_resources
                         .set_active_invocation_uniform_scope(invocation.invocation_id.0.clone());
+                    let effective_history_signature = invocation
+                        .history_signature
+                        .as_deref()
+                        .or(view.history_signature.as_deref());
                     let invocation_result = (|| -> Result<()> {
+                        runtime_resources.realize_invocation_history_textures(
+                            device,
+                            invocation.invocation_id.0.as_str(),
+                            invocation_packet.surface_size,
+                            invocation_packet.surface_format,
+                            effective_history_signature,
+                        )?;
                         self.upload_projected_uniform_buffers(
                             device,
                             queue,

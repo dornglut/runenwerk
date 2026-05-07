@@ -52,17 +52,18 @@ This roadmap follows the repository doctrine:
 
 ## Current State
 
-Implemented but not final:
+Implemented foundation state:
 
 - `apps/runenwerk_editor/src/runtime/viewport/product_registry.rs::viewport_id_for_tool_surface` gives each viewport tool surface a stable derived `ViewportId`.
-- `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateResource` records per-viewport bounds.
+- `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateResource` records per-viewport bounds and the viewport-local render-state snapshot used for prepared render jobs and picking.
 - `apps/runenwerk_editor/src/shell/providers/scene/viewport.rs::SceneViewportProvider::build_frame` no longer inherits an unrelated lone observed viewport for unbound panels.
 - `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::sync_viewport_presentation_products_system` updates product descriptors by viewport id and dimensions.
-- `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportSceneProductUniform` still carries `viewport`, `viewport_b`, `viewport_c`, and `viewport_d`.
-- `apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs` still exposes one static scene color, picking id, and overlay resource id.
-- `assets/shaders/editor_viewport_scene_product.wgsl` still chooses a viewport rectangle inside one global render product.
+- `apps/runenwerk_editor/src/runtime/viewport/product_targets.rs::ViewportProductTargetRegistryResource` maps every viewport/product/slot tuple to a dynamic target record.
+- `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs::ViewportRenderJobResource` publishes one prepared view and one prepared flow invocation per viewport without cloning the render flow.
+- `domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs::ViewportSurfaceBindingSource` is dynamic-texture-only; the old flow-resource embed bridge has been removed.
+- `assets/shaders/editor_viewport_scene_product.wgsl` renders a viewport-local product and no longer contains multi-rectangle containment.
 
-The current state is useful only as a migration checkpoint. It is not the doctrine-complete architecture.
+Remaining work is no longer migration cleanup. It is product maturity: richer independent viewport camera/debug settings, more producer types, and broader history workflows.
 
 ## Final Architecture
 
@@ -226,7 +227,7 @@ Implementation targets:
 - `apps/runenwerk_editor/tests/viewport_architecture_guards.rs`
   - add guards that reject adding more `viewport_b`-style uniform fields;
   - add guards that reject new code paths depending on a first observed viewport after projection exists;
-  - add guards that reject using static viewport product resource ids for more than the bootstrap compatibility path.
+  - add guards that reject using static viewport product resource ids in the normal runtime path.
 - `docs-site/src/content/docs/apps/runenwerk-editor/current-architecture.md`
   - mark the current multi-rect uniform and static render resources as migration-only.
 
@@ -421,7 +422,7 @@ Implementation targets:
   - execute overlay product per `ViewportRenderJob`;
   - publish producer health per viewport/product.
 - `assets/shaders/editor_viewport_scene_product.wgsl`
-  - remove `viewport_b`, `viewport_c`, and `viewport_d`;
+  - remove `viewport_b`, `viewport_c`, `viewport_d`, and reserved multi-rectangle fields;
   - render using local target coordinates for the current job.
 - `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportSceneProductUniform`
   - replace multi-rect fields with one viewport-local target/camera/product uniform.
@@ -516,8 +517,8 @@ The implementation is complete only when all of these are true:
 - Picking and camera interaction use viewport-local coordinates and viewport-local camera state.
 - Closing, splitting, duplicating, resizing, hiding, and restoring viewport surfaces preserve explicit lifecycle semantics.
 - Product selection, overlay selection, diagnostics visibility, and camera state are independent per viewport.
-- The shader no longer contains `viewport_b`, `viewport_c`, or `viewport_d`.
-- `submit_editor_frame_system` no longer owns viewport lifecycle or render-product synchronization.
+- The shader no longer contains `viewport_b`, `viewport_c`, `viewport_d`, or reserved multi-rectangle uniform fields.
+- `submit_editor_frame_system` owns shell frame projection and viewport layout extraction only; render-product target allocation, surface binding, and render job publication stay in viewport runtime systems.
 - Architecture guards prevent reintroducing shared viewport products, first-observed fallbacks, or shader-side panel containment.
 
 ## Future Features After V8

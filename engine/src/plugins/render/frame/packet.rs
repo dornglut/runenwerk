@@ -4,9 +4,9 @@ use super::{
 };
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlowId,
-    RenderPassId, RenderResourceId,
+    RenderFrameProducerId, RenderPassId, RenderResourceId,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use ui_render_data::ViewportSurfaceBindingRegistry;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -93,6 +93,42 @@ impl PreparedRenderFrame {
     pub fn scene_route_labels(&self) -> Option<(&str, &str)> {
         self.contributions.scene_route_labels()
     }
+
+    pub fn dynamic_target_history_signatures(
+        &self,
+    ) -> anyhow::Result<BTreeMap<RenderDynamicTextureTargetKey, String>> {
+        let mut signatures = BTreeMap::<RenderDynamicTextureTargetKey, String>::new();
+        for invocation in &self.flow_invocations {
+            let view_signature = self
+                .view(invocation.view_id.as_str())
+                .and_then(|view| view.history_signature.as_ref());
+            let Some(signature) = invocation
+                .history_signature
+                .as_ref()
+                .or(view_signature)
+                .cloned()
+            else {
+                continue;
+            };
+            for binding in invocation.target_alias_bindings.values() {
+                let PreparedTargetBinding::DynamicTexture(key) = binding else {
+                    continue;
+                };
+                if let Some(existing) = signatures.get(key)
+                    && existing != &signature
+                {
+                    anyhow::bail!(
+                        "dynamic target '{}' has incompatible history signatures '{}' and '{}'",
+                        key,
+                        existing,
+                        signature
+                    );
+                }
+                signatures.insert(key.clone(), signature.clone());
+            }
+        }
+        Ok(signatures)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -166,30 +202,128 @@ impl PreparedFlowInvocationRequest {
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct PreparedRenderFrameRequestResource {
+    contributions: BTreeMap<RenderFrameProducerId, PreparedRenderFrameRequestContribution>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedRenderFrameRequestContribution {
     views: BTreeMap<String, PreparedViewFrame>,
     flow_invocations: Vec<PreparedFlowInvocationRequest>,
 }
 
 impl PreparedRenderFrameRequestResource {
     pub fn clear(&mut self) {
-        self.views.clear();
-        self.flow_invocations.clear();
+        self.contributions.clear();
     }
 
-    pub fn add_view(&mut self, view: PreparedViewFrame) {
-        self.views.insert(view.view_id.clone(), view);
+    pub fn remove_contribution(
+        &mut self,
+        producer_id: impl Into<RenderFrameProducerId>,
+    ) -> Option<PreparedRenderFrameRequestContribution> {
+        self.contributions.remove(&producer_id.into())
     }
 
-    pub fn add_flow_invocation(&mut self, request: PreparedFlowInvocationRequest) {
-        self.flow_invocations.push(request);
+    pub fn replace_contribution(
+        &mut self,
+        producer_id: impl Into<RenderFrameProducerId>,
+        views: impl IntoIterator<Item = PreparedViewFrame>,
+        flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
+    ) -> anyhow::Result<Option<PreparedRenderFrameRequestContribution>> {
+        let producer_id = producer_id.into();
+        let contribution =
+            PreparedRenderFrameRequestContribution::from_requests(views, flow_invocations)?;
+        self.validate_replacement(&producer_id, &contribution)?;
+        Ok(self.contributions.insert(producer_id, contribution))
     }
 
-    pub fn requested_views(&self) -> impl Iterator<Item = &PreparedViewFrame> {
-        self.views.values()
+    pub fn requested_views(&self) -> Vec<&PreparedViewFrame> {
+        self.contributions
+            .values()
+            .flat_map(|contribution| contribution.views.values())
+            .collect()
     }
 
-    pub fn requested_flow_invocations(&self) -> &[PreparedFlowInvocationRequest] {
-        &self.flow_invocations
+    pub fn requested_flow_invocations(&self) -> Vec<&PreparedFlowInvocationRequest> {
+        self.contributions
+            .values()
+            .flat_map(|contribution| contribution.flow_invocations.iter())
+            .collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.contributions.is_empty()
+    }
+
+    fn validate_replacement(
+        &self,
+        producer_id: &RenderFrameProducerId,
+        replacement: &PreparedRenderFrameRequestContribution,
+    ) -> anyhow::Result<()> {
+        let mut view_ids = BTreeSet::<&str>::new();
+        let mut invocation_ids = BTreeSet::<&PreparedFlowInvocationId>::new();
+
+        for (existing_producer_id, contribution) in &self.contributions {
+            if existing_producer_id == producer_id {
+                continue;
+            }
+            for view_id in contribution.views.keys() {
+                view_ids.insert(view_id.as_str());
+            }
+            for request in &contribution.flow_invocations {
+                invocation_ids.insert(&request.invocation_id);
+            }
+        }
+
+        for view_id in replacement.views.keys() {
+            if !view_ids.insert(view_id.as_str()) {
+                anyhow::bail!(
+                    "prepared render frame producer '{:?}' publishes duplicate view '{}'",
+                    producer_id,
+                    view_id
+                );
+            }
+        }
+        for request in &replacement.flow_invocations {
+            if !invocation_ids.insert(&request.invocation_id) {
+                anyhow::bail!(
+                    "prepared render frame producer '{:?}' publishes duplicate invocation '{}'",
+                    producer_id,
+                    request.invocation_id.0
+                );
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl PreparedRenderFrameRequestContribution {
+    fn from_requests(
+        views: impl IntoIterator<Item = PreparedViewFrame>,
+        flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
+    ) -> anyhow::Result<Self> {
+        let mut view_map = BTreeMap::<String, PreparedViewFrame>::new();
+        for view in views {
+            if view_map.insert(view.view_id.clone(), view).is_some() {
+                anyhow::bail!("prepared render frame contribution contains duplicate view id");
+            }
+        }
+
+        let mut invocation_ids = BTreeSet::<PreparedFlowInvocationId>::new();
+        let flow_invocations = flow_invocations.into_iter().collect::<Vec<_>>();
+        for request in &flow_invocations {
+            if !invocation_ids.insert(request.invocation_id.clone()) {
+                anyhow::bail!(
+                    "prepared render frame contribution contains duplicate invocation '{}'",
+                    request.invocation_id.0
+                );
+            }
+        }
+
+        Ok(Self {
+            views: view_map,
+            flow_invocations,
+        })
     }
 }
 

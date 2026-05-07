@@ -88,9 +88,9 @@ Prepare/submit boundary types are public for inspection and integration:
 
 Prepared product-surface packets:
 
-- request offscreen product views through `PreparedRenderFrameRequestResource`;
+- publish offscreen product views through producer-scoped `PreparedRenderFrameRequestResource` contributions;
 - bind target aliases per `PreparedFlowInvocationRequest`;
-- request dynamic targets through `RenderDynamicTextureTargetRequestRegistryResource`;
+- publish dynamic targets through producer-scoped `RenderDynamicTextureTargetRequestRegistryResource` contributions;
 - inspect the frozen submit packet with `inspect_prepared_render_frame(...)`.
 
 ## Feature Fallback Contract

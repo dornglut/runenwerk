@@ -52,10 +52,6 @@ impl ViewportSurfaceEmbedPrimitive {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ViewportSurfaceBindingSource {
-    FlowResource {
-        flow_id: String,
-        resource_id: String,
-    },
     DynamicTexture {
         namespace: String,
         target_id: String,
@@ -63,13 +59,6 @@ pub enum ViewportSurfaceBindingSource {
 }
 
 impl ViewportSurfaceBindingSource {
-    pub fn flow_resource(flow_id: impl Into<String>, resource_id: impl Into<String>) -> Self {
-        Self::FlowResource {
-            flow_id: flow_id.into(),
-            resource_id: resource_id.into(),
-        }
-    }
-
     pub fn dynamic_texture(namespace: impl Into<String>, target_id: impl Into<String>) -> Self {
         Self::DynamicTexture {
             namespace: namespace.into(),
@@ -84,38 +73,11 @@ pub struct ViewportSurfaceBinding {
 }
 
 impl ViewportSurfaceBinding {
-    pub fn new(flow_id: impl Into<String>, resource_id: impl Into<String>) -> Self {
-        Self::flow_resource(flow_id, resource_id)
-    }
-
-    pub fn flow_resource(flow_id: impl Into<String>, resource_id: impl Into<String>) -> Self {
-        Self {
-            source: ViewportSurfaceBindingSource::flow_resource(flow_id, resource_id),
-        }
-    }
-
     pub fn dynamic_texture(namespace: impl Into<String>, target_id: impl Into<String>) -> Self {
         Self {
             source: ViewportSurfaceBindingSource::dynamic_texture(namespace, target_id),
         }
     }
-
-    pub fn flow_resource_parts(&self) -> Option<(&str, &str)> {
-        match &self.source {
-            ViewportSurfaceBindingSource::FlowResource {
-                flow_id,
-                resource_id,
-            } => Some((flow_id.as_str(), resource_id.as_str())),
-            ViewportSurfaceBindingSource::DynamicTexture { .. } => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[deprecated(note = "use ViewportSurfaceBindingSource::FlowResource or DynamicTexture")]
-pub struct LegacyViewportSurfaceBindingShape {
-    pub flow_id: String,
-    pub resource_id: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -23,27 +23,32 @@ mod tests {
         registry.bind(
             7,
             primary_slot,
-            ViewportSurfaceBinding::new("flow.a", "resource.primary"),
+            ViewportSurfaceBinding::dynamic_texture("viewport", "target.primary"),
         );
         registry.bind(
             7,
             overlay_slot,
-            ViewportSurfaceBinding::new("flow.a", "resource.overlay"),
+            ViewportSurfaceBinding::dynamic_texture("viewport", "target.overlay"),
         );
 
-        assert_eq!(
-            registry
-                .get(7, primary_slot)
-                .and_then(ViewportSurfaceBinding::flow_resource_parts)
-                .map(|(_, resource_id)| resource_id),
-            Some("resource.primary")
-        );
-        assert_eq!(
-            registry
-                .get(7, overlay_slot)
-                .and_then(ViewportSurfaceBinding::flow_resource_parts)
-                .map(|(_, resource_id)| resource_id),
-            Some("resource.overlay")
-        );
+        let primary_binding = registry
+            .get(7, primary_slot)
+            .expect("primary slot binding should exist");
+        let ViewportSurfaceBindingSource::DynamicTexture {
+            namespace,
+            target_id,
+        } = &primary_binding.source;
+        assert_eq!(namespace, "viewport");
+        assert_eq!(target_id, "target.primary");
+
+        let overlay_binding = registry
+            .get(7, overlay_slot)
+            .expect("overlay slot binding should exist");
+        let ViewportSurfaceBindingSource::DynamicTexture {
+            namespace,
+            target_id,
+        } = &overlay_binding.source;
+        assert_eq!(namespace, "viewport");
+        assert_eq!(target_id, "target.overlay");
     }
 }

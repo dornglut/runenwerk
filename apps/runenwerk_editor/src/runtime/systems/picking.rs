@@ -6,12 +6,10 @@ use scene::{LocalTransform, Vec3Value};
 use ui_math::{UiPoint, UiRect};
 
 use crate::editor_runtime::{EditorPrimitive, RunenwerkEditorRuntime};
-use crate::runtime::resources::{
-    EditorHostResource, EditorViewportCamera, editor_viewport_camera,
-    editor_viewport_camera_fov_y_radians,
-};
+use crate::runtime::resources::{EditorHostResource, EditorViewportCamera, editor_viewport_camera};
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
+    ViewportRenderStateResource,
 };
 use crate::shell::TRANSLATE_TOOL_ID;
 
@@ -38,6 +36,7 @@ pub fn produce_editor_picking_system(
     mut host: ResMut<EditorHostResource>,
     mut viewport_picking_results: ResMut<ViewportPickingResultsResource>,
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
+    viewport_render_states: Res<ViewportRenderStateResource>,
 ) {
     let cursor = UiPoint::new(input.mouse_position.0, input.mouse_position.1);
     let routed_viewport = routed_viewport_bounds(&host, &tool_surface_bindings, cursor);
@@ -46,13 +45,34 @@ pub fn produce_editor_picking_system(
             .result_for(viewport_id)
             .map(|value| value.hit)
             .unwrap_or_else(EditorPickingHit::none);
-        let next_hit = if let Some(ray) = viewport_ray(cursor, viewport_bounds) {
+        let viewport_camera = viewport_render_states
+            .state_for(viewport_id)
+            .map(|state| {
+                (
+                    state.render_state.camera,
+                    state.render_state.camera_fov_y_radians,
+                )
+            })
+            .unwrap_or_else(|| {
+                (
+                    editor_viewport_camera(),
+                    crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
+                )
+            });
+        let next_hit = if let Some(ray) = viewport_ray(
+            cursor,
+            viewport_bounds,
+            viewport_camera.0,
+            viewport_camera.1,
+        ) {
             compose_picking_hit(
                 host.app.runtime(),
                 host.app.runtime().session().active_tool(),
                 host.app.runtime().selected_entity(),
                 cursor,
                 viewport_bounds,
+                viewport_camera.0,
+                viewport_camera.1,
                 ray,
             )
         } else {
@@ -94,12 +114,20 @@ fn compose_picking_hit(
     selected_entity: Option<EntityId>,
     cursor: UiPoint,
     viewport_bounds: UiRect,
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
     ray: PickingRay,
 ) -> EditorPickingHit {
     if active_tool == Some(TRANSLATE_TOOL_ID)
         && let Some(selected) = selected_entity
         && let Some(transform) = entity_transform(runtime, selected)
-        && let Some(axis_hit) = pick_gizmo_axis(cursor, viewport_bounds, transform.translation)
+        && let Some(axis_hit) = pick_gizmo_axis(
+            cursor,
+            viewport_bounds,
+            camera,
+            camera_fov_y,
+            transform.translation,
+        )
     {
         return EditorPickingHit {
             target: EditorPickingTarget::GizmoAxis(axis_hit.axis),
@@ -184,16 +212,13 @@ fn pick_grid_hit(ray: PickingRay) -> Option<EditorPickingHit> {
 fn pick_gizmo_axis(
     cursor: UiPoint,
     viewport_bounds: UiRect,
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
     center: Vec3Value,
 ) -> Option<AxisScreenHit> {
-    let camera = editor_viewport_camera();
     let center_world = center.to_glam();
-    let center_screen = project_world_to_screen(
-        center_world,
-        camera,
-        viewport_bounds,
-        editor_viewport_camera_fov_y_radians(),
-    )?;
+    let center_screen =
+        project_world_to_screen(center_world, camera, viewport_bounds, camera_fov_y)?;
     let cursor_vec = vec2(cursor.x, cursor.y);
 
     let mut best: Option<AxisScreenHit> = None;
@@ -203,12 +228,9 @@ fn pick_gizmo_axis(
         (EditorGizmoAxis::Z, vec3(0.0, 0.0, 1.0)),
     ] {
         let end_world = center_world + direction * GIZMO_AXIS_LENGTH;
-        let Some(end_screen) = project_world_to_screen(
-            end_world,
-            camera,
-            viewport_bounds,
-            editor_viewport_camera_fov_y_radians(),
-        ) else {
+        let Some(end_screen) =
+            project_world_to_screen(end_world, camera, viewport_bounds, camera_fov_y)
+        else {
             continue;
         };
 
@@ -281,7 +303,12 @@ fn project_world_to_screen(
     ))
 }
 
-fn viewport_ray(cursor: UiPoint, viewport_bounds: UiRect) -> Option<PickingRay> {
+fn viewport_ray(
+    cursor: UiPoint,
+    viewport_bounds: UiRect,
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
+) -> Option<PickingRay> {
     let width = viewport_bounds.width;
     let height = viewport_bounds.height;
     if width <= f32::EPSILON || height <= f32::EPSILON {
@@ -292,10 +319,7 @@ fn viewport_ray(cursor: UiPoint, viewport_bounds: UiRect) -> Option<PickingRay> 
     let local_y = ((cursor.y - viewport_bounds.y) / height).clamp(0.0, 1.0);
     let ndc = vec2(local_x * 2.0 - 1.0, 1.0 - local_y * 2.0);
 
-    let camera = editor_viewport_camera();
-    let tan_half_fov = (editor_viewport_camera_fov_y_radians() * 0.5)
-        .tan()
-        .max(0.0001);
+    let tan_half_fov = (camera_fov_y * 0.5).tan().max(0.0001);
     let aspect = width / height;
     let direction = (camera.forward
         + camera.right * ndc.x * aspect * tan_half_fov
@@ -484,6 +508,7 @@ mod tests {
             .expect("seeded runtime should contain one entity");
         let transform = entity_transform(&runtime, entity).expect("entity should have transform");
         let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
         let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
 
         let hit = compose_picking_hit(
@@ -492,6 +517,8 @@ mod tests {
             None,
             UiPoint::new(640.0, 360.0),
             UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            camera,
+            camera_fov_y,
             PickingRay {
                 origin: camera.position,
                 direction,
@@ -515,10 +542,21 @@ mod tests {
             viewport_bounds.x + viewport_bounds.width * 0.5,
             viewport_bounds.y + viewport_bounds.height * 0.5,
         );
-        let ray = viewport_ray(cursor, viewport_bounds)
+        let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let ray = viewport_ray(cursor, viewport_bounds, camera, camera_fov_y)
             .expect("center of a valid viewport should produce a picking ray");
 
-        let hit = compose_picking_hit(&runtime, None, None, cursor, viewport_bounds, ray);
+        let hit = compose_picking_hit(
+            &runtime,
+            None,
+            None,
+            cursor,
+            viewport_bounds,
+            camera,
+            camera_fov_y,
+            ray,
+        );
 
         assert_eq!(hit.target, EditorPickingTarget::Entity(entity.0));
     }
@@ -536,12 +574,15 @@ mod tests {
             .expect("primitive should be removable");
 
         let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
         let hit = compose_picking_hit(
             &runtime,
             None,
             None,
             UiPoint::new(640.0, 360.0),
             UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            camera,
+            camera_fov_y,
             PickingRay {
                 origin: camera.position,
                 direction: camera.forward,
@@ -570,6 +611,8 @@ mod tests {
             None,
             UiPoint::new(0.0, 0.0),
             UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            editor_viewport_camera(),
+            crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
             PickingRay {
                 origin: vec3(0.0, 2.0, 0.0),
                 direction: vec3(1.0, 0.0, 0.0),

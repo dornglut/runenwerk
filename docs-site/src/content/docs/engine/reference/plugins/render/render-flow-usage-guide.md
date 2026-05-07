@@ -204,6 +204,7 @@ let invocation = PreparedFlowInvocationRequest {
     flow_id: flow.id(),
     view_id: view.view_id.clone(),
     target_alias_bindings,
+    uniform_overrides: BTreeMap::new(),
     history_signature: Some("camera:v1:1280x720".to_string()),
 };
 ```
@@ -212,14 +213,14 @@ Prepared render frame requests are written before `RenderPrepare`. `RenderPrepar
 
 Current implementation boundary:
 
-- `RenderDynamicTextureTargetRequestRegistryResource` validates and snapshots dynamic target descriptors into `PreparedRenderFrame`.
-- `PreparedRenderFrameRequestResource` carries offscreen product views and per-flow invocation requests.
-- Target alias execution and renderer-owned dynamic texture cache work are part of the render product surface bundle; do not model dynamic products by cloning flows or suffixing static flow resource labels.
+- `RenderDynamicTextureTargetRequestRegistryResource` validates producer-scoped dynamic target descriptor contributions and snapshots them into `PreparedRenderFrame`.
+- `PreparedRenderFrameRequestResource` carries producer-scoped offscreen product views and per-flow invocation requests.
+- Target alias execution and renderer-owned dynamic texture cache work are implemented foundation behavior; do not model dynamic products by cloning flows or suffixing static flow resource labels.
 
 History retention should be expressed through explicit history resources or dynamic target retention policy:
 
-- flow-owned history textures use `with_history_texture(...)` plus a `copy_pass(...)`;
-- dynamic product targets use `RenderDynamicTextureRetention`;
+- flow-owned history textures use `with_history_texture(...)` plus a `copy_pass(...)` and are scoped per prepared invocation;
+- dynamic product targets use `RenderDynamicTextureRetention` and prepared view/invocation history signatures;
 - prepared views and invocations carry history signatures so resize, camera, product, or descriptor changes can invalidate only the affected product/history scope.
 
 ## UI Composite After Direct Surface Writes

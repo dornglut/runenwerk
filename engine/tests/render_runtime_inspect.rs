@@ -151,7 +151,7 @@ fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
             history_signature: Some("camera:v1".to_string()),
         }],
         dynamic_texture_targets: vec![RenderDynamicTextureTargetDescriptor::new(
-            target_key,
+            target_key.clone(),
             640,
             360,
             RenderTextureTargetFormat::Rgba8Unorm,
@@ -167,8 +167,15 @@ fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
     };
 
     let inspection = inspect_prepared_render_frame(&frame);
+    let history_signatures = frame
+        .dynamic_target_history_signatures()
+        .expect("prepared frame history signatures should be coherent");
 
     assert_eq!(inspection.frame_index, 42);
+    assert_eq!(
+        history_signatures.get(&target_key).map(String::as_str),
+        Some("camera:v1")
+    );
     assert_eq!(inspection.views.len(), 2);
     assert_eq!(inspection.views[1].kind, "offscreen_product");
     assert_eq!(
@@ -201,6 +208,66 @@ fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
                 binding.alias == "viewport.scene_color"
                     && binding.binding == "dynamic_texture(editor.viewport.1:scene_color)"
             })
+    );
+}
+
+#[test]
+fn prepared_frame_rejects_conflicting_dynamic_target_history_signatures() {
+    let target_key = RenderDynamicTextureTargetKey::new("editor.viewport.1", "scene_color");
+    let flow_id = engine::plugins::render::RenderFlowId::try_from_raw(3).unwrap();
+    let binding = PreparedTargetBinding::DynamicTexture(target_key);
+    let mut first_bindings = BTreeMap::new();
+    first_bindings.insert("viewport.scene_color".to_string(), binding.clone());
+    let mut second_bindings = BTreeMap::new();
+    second_bindings.insert("viewport.scene_color".to_string(), binding);
+
+    let frame = PreparedRenderFrame {
+        context: PreparedFrameContext {
+            frame_index: 42,
+            flow_registry_revision: 1,
+            shader_registry_revision: 2,
+            prepare_epoch: 5,
+        },
+        surface: PreparedSurfaceInfo {
+            target_size_px: (1920, 1080),
+        },
+        views: vec![PreparedViewFrame::offscreen_product(
+            "viewport.1",
+            (640, 360),
+        )],
+        flows: BTreeMap::new(),
+        flow_invocations: vec![
+            PreparedFlowInvocation {
+                invocation_id: PreparedFlowInvocationId::new("viewport.1.scene.a"),
+                flow_id,
+                view_id: "viewport.1".to_string(),
+                inputs: PreparedFlowInputs::default(),
+                target_alias_bindings: first_bindings,
+                history_signature: Some("camera:a".to_string()),
+            },
+            PreparedFlowInvocation {
+                invocation_id: PreparedFlowInvocationId::new("viewport.1.scene.b"),
+                flow_id,
+                view_id: "viewport.1".to_string(),
+                inputs: PreparedFlowInputs::default(),
+                target_alias_bindings: second_bindings,
+                history_signature: Some("camera:b".to_string()),
+            },
+        ],
+        dynamic_texture_targets: Vec::new(),
+        viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
+        contributions: PreparedFrameContributions::default(),
+        shader: PreparedShaderSnapshot {
+            registry_revision: 2,
+        },
+    };
+
+    let err = frame
+        .dynamic_target_history_signatures()
+        .expect_err("one target cannot carry conflicting history signatures");
+    assert!(
+        err.to_string().contains("incompatible history signatures"),
+        "unexpected error: {err}"
     );
 }
 

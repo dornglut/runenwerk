@@ -12,13 +12,12 @@ use engine::plugins::render::{
 use engine::runtime::{Res, ResMut};
 use ui_math::UiRect;
 
-use crate::runtime::resources::EditorViewportRenderState;
 use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, OVERLAY_PRODUCT_ID,
-    PICKING_IDS_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID, VIEWPORT_TARGET_ALIAS_OVERLAY,
-    VIEWPORT_TARGET_ALIAS_PICKING_IDS, VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
-    ViewportProductTargetRegistryResource, ViewportRenderStateResource,
-    expression_dimensions_for_bounds,
+    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
+    EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID,
+    SCENE_COLOR_PRODUCT_ID, VIEWPORT_TARGET_ALIAS_OVERLAY, VIEWPORT_TARGET_ALIAS_PICKING_IDS,
+    VIEWPORT_TARGET_ALIAS_SCENE_COLOR, ViewportProductTargetRegistryResource,
+    ViewportRenderStateResource, expression_dimensions_for_bounds,
 };
 
 #[derive(Debug)]
@@ -62,15 +61,15 @@ impl ViewportRenderJobResource {
 
 pub fn sync_viewport_render_jobs_system(
     flow_registry: Res<RenderFlowRegistryResource>,
-    viewport_render: Res<EditorViewportRenderState>,
     viewport_render_states: Res<ViewportRenderStateResource>,
     viewport_product_targets: Res<ViewportProductTargetRegistryResource>,
     mut viewport_render_jobs: ResMut<ViewportRenderJobResource>,
     mut prepared_frame_requests: ResMut<PreparedRenderFrameRequestResource>,
 ) {
-    prepared_frame_requests.clear();
     let Some((flow_id, scene_uniform_id)) = editor_main_flow_ids(&flow_registry) else {
         viewport_render_jobs.replace_jobs(Vec::new());
+        let _ =
+            prepared_frame_requests.remove_contribution(EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID);
         return;
     };
 
@@ -80,24 +79,29 @@ pub fn sync_viewport_render_jobs_system(
             build_viewport_render_job(
                 flow_id,
                 scene_uniform_id,
-                &viewport_render,
+                &state.render_state,
                 state.viewport_id,
                 state.bounds,
                 &viewport_product_targets,
             )
         })
         .collect::<Vec<_>>();
-    for job in &jobs {
-        prepared_frame_requests.add_view(job.prepared_view.clone());
-        prepared_frame_requests.add_flow_invocation(job.prepared_flow_invocation.clone());
-    }
+    let views = jobs.iter().map(|job| job.prepared_view.clone());
+    let invocations = jobs.iter().map(|job| job.prepared_flow_invocation.clone());
+    prepared_frame_requests
+        .replace_contribution(
+            EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
+            views,
+            invocations,
+        )
+        .expect("editor viewport prepared frame contribution must be unique");
     viewport_render_jobs.replace_jobs(jobs);
 }
 
 fn build_viewport_render_job(
     flow_id: RenderFlowId,
     scene_uniform_id: RenderResourceId,
-    viewport_render: &EditorViewportRenderState,
+    viewport_render: &crate::runtime::resources::EditorViewportRenderState,
     viewport_id: ViewportId,
     bounds: UiRect,
     product_targets: &ViewportProductTargetRegistryResource,
@@ -204,6 +208,7 @@ fn editor_main_flow_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::resources::EditorViewportRenderState;
     use crate::runtime::viewport::{
         ViewportProductRegistryResource, ViewportProductTargetRegistryResource,
     };
