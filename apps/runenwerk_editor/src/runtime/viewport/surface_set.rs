@@ -2,6 +2,11 @@ use std::collections::BTreeMap;
 
 use editor_viewport::ViewportId;
 
+use crate::runtime::viewport::{
+    EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS,
+    VIEWPORT_RESOURCE_SCENE_COLOR,
+};
+
 /// File: apps/runenwerk_editor/src/runtime/viewport/surface_set.rs
 /// Purpose: Explicit per-viewport-owned presentation surface bundles.
 ///
@@ -109,4 +114,25 @@ impl ViewportSurfaceSetResource {
     pub fn retain_viewports(&mut self, mut keep: impl FnMut(ViewportId) -> bool) {
         self.sets.retain(|viewport_id, _| keep(*viewport_id));
     }
+}
+
+pub fn ensure_editor_main_surface_set(
+    viewport_surface_sets: &mut ViewportSurfaceSetResource,
+    viewport_id: ViewportId,
+) {
+    viewport_surface_sets.set_surface(
+        viewport_id,
+        ViewportSurfaceSlot::PrimaryColor,
+        ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
+    );
+    viewport_surface_sets.set_surface(
+        viewport_id,
+        ViewportSurfaceSlot::PickingIds,
+        ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_PICKING_IDS),
+    );
+    viewport_surface_sets.set_surface(
+        viewport_id,
+        ViewportSurfaceSlot::Overlay,
+        ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY),
+    );
 }

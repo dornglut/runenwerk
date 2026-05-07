@@ -5,7 +5,10 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
+related_designs:
+  - ../design/active/editor-native-multi-window-presentation-design.md
+  - ../design/active/render-product-surface-foundation-bundle-design.md
 ---
 
 # Render Final Architecture Migration Roadmap
@@ -26,10 +29,14 @@ This roadmap is the implementation contract for the final render architecture:
 ## Current Branch Status (March 22, 2026)
 
 - Phases 1-7 are active on the runtime path.
-- Phase 8 is intentionally deferred in active runtime behavior:
+- Phase 8 is intentionally deferred in active runtime behavior until the render product surface foundation bundle lands:
   - execution remains single-view only
   - multi-view packets fail fast to avoid misleading pseudo-support
 - Phase 9 cleanup/docs/cutoff hardening remains in progress.
+
+The active implementation plan for the next large render update is `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`. That bundle pulls the product-surface portion of Phase 8 forward with dynamic targets, target aliases, prepared render views, history invalidation, and inspection support.
+
+Native OS multi-window and multi-swapchain presentation is specified separately in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`.
 
 ## Final Target Shape
 
@@ -145,15 +152,19 @@ This roadmap is the implementation contract for the final render architecture:
 
 - Objective:
   - make view identity explicit in execution/runtime contracts and history invalidation.
+  - support product-surface prepared render views through the render product surface foundation bundle.
 - Core files:
   - `engine/src/plugins/render/frame/view.rs`
   - `engine/src/plugins/render/graph/execution_plan.rs`
   - `engine/src/plugins/render/renderer/render_flow.rs`
   - runtime resource allocation paths
+  - `engine/src/plugins/render/renderer/dynamic_targets.rs`
 - Policy:
   - multi-view execution is per-flow-per-view, with execution-compiled view masks enabling view-scoped pass subsets when needed.
+  - product-surface prepared render views are the first implementation target; broader OS/window multi-swapchain presentation remains a later concrete app requirement.
 - Gate:
   - resize/view-signature changes deterministically invalidate view-local history resources.
+  - one compiled flow can execute against multiple prepared offscreen product views without cloning the flow registry.
 
 ### Phase 9: Cutover cleanup and docs finalization
 

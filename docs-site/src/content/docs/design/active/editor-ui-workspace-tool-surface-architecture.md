@@ -492,7 +492,7 @@ The planned split is:
 
 - toolbar/menu changes requiring shell routing edits: menu/action definitions should form generic UI menu products with explicit command route slots, while editor-specific command binding remains in editor definition/app layers;
 - hard-coded workspace profiles and default layouts: editor definitions should own workspace catalogs and default shell layout definitions, then form into `editor_shell` workspace products;
-- missing real dropdown/popover primitives: generic primitives belong in `domain/ui`; authored menu/popover definitions belong in the planned UI definition layer;
+- dropdown/popover primitives: generic anchored popup nodes and renderer-respected overlay layer ordering now belong in `domain/ui`/render integration; authored menu/popover definitions still need first-class UI definition syntax and formation instead of shell-specific composition;
 - disabled/unavailable feature representation: formed products should carry availability/diagnostic state without routing fake or unavailable commands;
 - missing custom workspace catalog: editor definition should own the catalog, not the shell runtime enum alone;
 - self-authoring: M3.6 should edit the same definition families, not invent a second editor-only UI model.

@@ -9,9 +9,9 @@ use ui_math::{Axis, UiRect, UiSize};
 
 use crate::{
     ButtonNode, ComputedLayout, ComputedLayoutMap, DividerNode, ImageNode, LabelNode,
-    NumericInputNode, PanelNode, ScrollNode, SelectNode, SpacerNode, SplitNode, StackNode,
-    TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode, UiNode, UiNodeKind, UiRuntimeState,
-    UiTree, ViewportSurfaceEmbedNode,
+    NumericInputNode, PanelNode, PopupNode, PopupPlacement, ScrollNode, SelectNode, SpacerNode,
+    SplitNode, StackNode, TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode, UiNode,
+    UiNodeKind, UiRuntimeState, UiTree, ViewportSurfaceEmbedNode,
 };
 
 pub fn compute_tree_layout(
@@ -32,6 +32,7 @@ fn layout_node(
 ) -> UiSize {
     match &node.kind {
         UiNodeKind::Panel(panel) => layout_panel(node, panel, bounds, state, out),
+        UiNodeKind::Popup(popup) => layout_popup(node, popup, bounds, state, out),
         UiNodeKind::Label(label) => layout_label(node, label, bounds, out),
         UiNodeKind::Button(button) => layout_button(node, button, bounds, out),
         UiNodeKind::TextInput(text_input) => layout_text_input(node, text_input, bounds, out),
@@ -62,13 +63,18 @@ fn layout_panel(
 ) -> UiSize {
     let content_bounds = bounds.inset(panel.padding);
 
-    let content_size = if node.children.is_empty() {
+    let normal_children = node
+        .children
+        .iter()
+        .filter(|child| !is_popup_node(child))
+        .collect::<Vec<_>>();
+
+    let content_size = if normal_children.is_empty() {
         UiSize::ZERO
-    } else if node.children.len() == 1 {
-        layout_node(&node.children[0], content_bounds, state, out)
+    } else if normal_children.len() == 1 {
+        layout_node(normal_children[0], content_bounds, state, out)
     } else {
-        let child_items = node
-            .children
+        let child_items = normal_children
             .iter()
             .map(|child| StackItem::auto(measure_node(child)))
             .collect::<Vec<_>>();
@@ -78,7 +84,7 @@ fn layout_panel(
             .with_cross_align(CrossAxisAlignment::Stretch);
 
         let arranged = layout.arrange(content_bounds, &child_items);
-        for (child, child_bounds) in node.children.iter().zip(arranged.into_iter()) {
+        for (child, child_bounds) in normal_children.iter().zip(arranged.into_iter()) {
             layout_node(child, child_bounds, state, out);
         }
 
@@ -97,6 +103,10 @@ fn layout_panel(
         node.id,
         ComputedLayout::new(bounds, content_bounds, measured_size),
     );
+
+    for popup in node.children.iter().filter(|child| is_popup_node(child)) {
+        layout_node(popup, content_bounds, state, out);
+    }
 
     measured_size
 }
@@ -150,10 +160,15 @@ fn layout_button(
         (line_height + button.padding.vertical()).max(button.min_size.height),
     );
 
+    let layout_width = if button.fill_width {
+        bounds.width.max(0.0)
+    } else {
+        measured_size.width.min(bounds.width.max(0.0))
+    };
     let layout_bounds = UiRect::new(
         bounds.x,
         bounds.y,
-        measured_size.width.min(bounds.width.max(0.0)),
+        layout_width,
         measured_size.height.min(bounds.height.max(0.0)),
     );
 
@@ -409,12 +424,20 @@ fn layout_divider(
     out: &mut ComputedLayoutMap,
 ) -> UiSize {
     let measured_size = divider_size_for_bounds(divider, bounds);
-    let layout_bounds = UiRect::new(
-        bounds.x,
-        bounds.y,
-        measured_size.width,
-        measured_size.height,
-    );
+    let layout_bounds = match divider.axis {
+        Axis::Horizontal => UiRect::new(
+            bounds.x,
+            bounds.y + (bounds.height - measured_size.height).max(0.0) * 0.5,
+            measured_size.width,
+            measured_size.height,
+        ),
+        Axis::Vertical => UiRect::new(
+            bounds.x + (bounds.width - measured_size.width).max(0.0) * 0.5,
+            bounds.y + (bounds.height - measured_size.height).max(0.0) * 0.5,
+            measured_size.width,
+            measured_size.height,
+        ),
+    };
     out.insert(
         node.id,
         ComputedLayout::new(layout_bounds, layout_bounds, measured_size),
@@ -454,39 +477,7 @@ fn layout_scroll(
         .first()
         .map(measure_node)
         .unwrap_or(UiSize::ZERO);
-    let has_overflow = match scroll.axis {
-        Axis::Vertical => measured_content.height > base_content_bounds.height + f32::EPSILON,
-        Axis::Horizontal => measured_content.width > base_content_bounds.width + f32::EPSILON,
-    };
-
-    let content_bounds = if has_overflow {
-        match scroll.axis {
-            Axis::Vertical => {
-                // Keep at least a sliver of content viewport in tight sizes so clipping remains
-                // active and content cannot visually escape the scroll container.
-                let max_gutter = (bounds.width - 1.0).max(0.0);
-                let scrollbar_width = scroll.bar_thickness.min(max_gutter);
-                UiRect::new(
-                    bounds.x,
-                    bounds.y,
-                    (bounds.width - scrollbar_width).max(0.0),
-                    bounds.height.max(0.0),
-                )
-            }
-            Axis::Horizontal => {
-                let max_gutter = (bounds.height - 1.0).max(0.0);
-                let scrollbar_height = scroll.bar_thickness.min(max_gutter);
-                UiRect::new(
-                    bounds.x,
-                    bounds.y,
-                    bounds.width.max(0.0),
-                    (bounds.height - scrollbar_height).max(0.0),
-                )
-            }
-        }
-    } else {
-        base_content_bounds
-    };
+    let content_bounds = base_content_bounds;
 
     if let Some(child) = node.children.first() {
         match scroll.axis {
@@ -538,9 +529,14 @@ fn layout_stack(
     out: &mut ComputedLayoutMap,
 ) -> UiSize {
     let content_bounds = bounds.inset(stack.padding);
+    let normal_children = node
+        .children
+        .iter()
+        .filter(|child| !is_popup_node(child))
+        .collect::<Vec<_>>();
 
-    let mut child_items = Vec::with_capacity(node.children.len());
-    for (index, child) in node.children.iter().enumerate() {
+    let mut child_items = Vec::with_capacity(normal_children.len());
+    for (index, child) in normal_children.iter().enumerate() {
         let measured = measure_node(child);
         let policy = stack
             .child_main_policies
@@ -563,7 +559,7 @@ fn layout_stack(
 
     let arranged = layout.arrange(content_bounds, &child_items);
 
-    for (child, child_bounds) in node.children.iter().zip(arranged.into_iter()) {
+    for (child, child_bounds) in normal_children.iter().zip(arranged.into_iter()) {
         layout_node(child, child_bounds, state, out);
     }
 
@@ -580,6 +576,75 @@ fn layout_stack(
     out.insert(
         node.id,
         ComputedLayout::new(bounds, content_bounds, measured_size),
+    );
+
+    for popup in node.children.iter().filter(|child| is_popup_node(child)) {
+        layout_node(popup, content_bounds, state, out);
+    }
+
+    measured_size
+}
+
+fn layout_popup(
+    node: &UiNode,
+    popup: &PopupNode,
+    bounds: UiRect,
+    state: &UiRuntimeState,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let Some(anchor_layout) = out.get(&popup.anchor) else {
+        out.insert(node.id, ComputedLayout::new(bounds, bounds, UiSize::ZERO));
+        return UiSize::ZERO;
+    };
+
+    let content_size = measure_popup_content(node, popup);
+    let measured_size = UiSize::new(
+        (content_size.width + popup.padding.horizontal()).max(popup.min_size.width),
+        (content_size.height + popup.padding.vertical()).max(popup.min_size.height),
+    );
+    let popup_width = measured_size.width.min(bounds.width.max(0.0));
+    let popup_height = measured_size.height.min(bounds.height.max(0.0));
+    let anchor = anchor_layout.bounds;
+    let (target_x, target_y) = match popup.placement {
+        PopupPlacement::BottomStart => (anchor.x, anchor.y + anchor.height + popup.offset),
+        PopupPlacement::RightStart => (anchor.x + anchor.width + popup.offset, anchor.y),
+        PopupPlacement::InsideTopEnd => (
+            anchor.x + anchor.width - popup_width - popup.offset,
+            anchor.y + popup.offset,
+        ),
+        PopupPlacement::InsideBottomStart => (
+            anchor.x + popup.offset,
+            anchor.y + anchor.height - popup_height - popup.offset,
+        ),
+        PopupPlacement::TopStart => (anchor.x + popup.offset, anchor.y + popup.offset),
+    };
+    let x = target_x.clamp(bounds.x, bounds.x + (bounds.width - popup_width).max(0.0));
+    let y = target_y.clamp(bounds.y, bounds.y + (bounds.height - popup_height).max(0.0));
+    let popup_bounds = UiRect::new(x, y, popup_width, popup_height);
+    let content_bounds = popup_bounds.inset(popup.padding);
+
+    let child_items = node
+        .children
+        .iter()
+        .filter(|child| !is_popup_node(child))
+        .map(|child| StackItem::auto(measure_node(child)))
+        .collect::<Vec<_>>();
+    let arranged = StackLayout::vertical(popup.gap)
+        .with_main_align(MainAxisAlignment::Start)
+        .with_cross_align(CrossAxisAlignment::Stretch)
+        .arrange(content_bounds, &child_items);
+    for (child, child_bounds) in node
+        .children
+        .iter()
+        .filter(|child| !is_popup_node(child))
+        .zip(arranged.into_iter())
+    {
+        layout_node(child, child_bounds, state, out);
+    }
+
+    out.insert(
+        node.id,
+        ComputedLayout::new(popup_bounds, content_bounds, measured_size),
     );
 
     measured_size
@@ -668,7 +733,7 @@ fn measure_node(node: &UiNode) -> UiSize {
     match &node.kind {
         UiNodeKind::Panel(panel) => {
             let mut child_size = UiSize::ZERO;
-            for child in &node.children {
+            for child in node.children.iter().filter(|child| !is_popup_node(child)) {
                 let measured = measure_node(child);
                 child_size.width = child_size.width.max(measured.width);
                 child_size.height = child_size.height.max(measured.height);
@@ -679,6 +744,7 @@ fn measure_node(node: &UiNode) -> UiSize {
                 (child_size.height + panel.padding.vertical()).max(panel.min_size.height),
             )
         }
+        UiNodeKind::Popup(_) => UiSize::ZERO,
         UiNodeKind::Label(label) => {
             let line_height = label
                 .text_style
@@ -798,7 +864,12 @@ fn measure_node(node: &UiNode) -> UiSize {
         }
         UiNodeKind::Stack(stack) => {
             let mut items = Vec::with_capacity(node.children.len());
-            for (index, child) in node.children.iter().enumerate() {
+            for (index, child) in node
+                .children
+                .iter()
+                .filter(|child| !is_popup_node(child))
+                .enumerate()
+            {
                 let size = measure_node(child);
                 let policy = stack
                     .child_main_policies
@@ -831,6 +902,26 @@ fn measure_node(node: &UiNode) -> UiSize {
         }
         UiNodeKind::Split(split) => measure_split(node, split),
     }
+}
+
+fn measure_popup_content(node: &UiNode, popup: &PopupNode) -> UiSize {
+    let mut width = 0.0_f32;
+    let mut height = 0.0_f32;
+    let mut item_count = 0_usize;
+    for child in node.children.iter().filter(|child| !is_popup_node(child)) {
+        let measured = measure_node(child);
+        width = width.max(measured.width);
+        height += measured.height;
+        item_count += 1;
+    }
+    if item_count > 1 {
+        height += popup.gap * (item_count - 1) as f32;
+    }
+    UiSize::new(width, height)
+}
+
+fn is_popup_node(node: &UiNode) -> bool {
+    matches!(node.kind, UiNodeKind::Popup(_))
 }
 
 fn table_size(table: &TableNode) -> UiSize {
@@ -955,6 +1046,65 @@ mod tests {
         assert_eq!(spacer.measured_size, UiSize::new(160.0, 12.0));
         assert_eq!(spacer.bounds.height, 12.0);
         assert!((button.bounds.y - 16.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn popup_layout_anchors_without_consuming_stack_space() {
+        let anchor_id = WidgetId(2);
+        let content_id = WidgetId(3);
+        let popup_id = WidgetId(4);
+        let popup_item_id = WidgetId(5);
+        let theme = ui_theme::ThemeTokens::default();
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                WidgetId(10),
+                UiNodeKind::Stack(StackNode::vertical(4.0)),
+                vec![
+                    UiNode::new(
+                        anchor_id,
+                        UiNodeKind::Button(ButtonNode::new(
+                            "File",
+                            ui_text::TextStyle::default(),
+                            theme.clone(),
+                        )),
+                    ),
+                    UiNode::new(
+                        content_id,
+                        UiNodeKind::Spacer(SpacerNode::new(UiSize::new(40.0, 30.0))),
+                    ),
+                    UiNode::with_children(
+                        popup_id,
+                        UiNodeKind::Popup(PopupNode::anchored_bottom_start(anchor_id, theme)),
+                        vec![UiNode::new(
+                            popup_item_id,
+                            UiNodeKind::Button(ButtonNode::new(
+                                "Save",
+                                ui_text::TextStyle::default(),
+                                ui_theme::ThemeTokens::default(),
+                            )),
+                        )],
+                    ),
+                ],
+            )],
+        ));
+
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 220.0, 160.0),
+            &UiRuntimeState::default(),
+        );
+
+        let anchor = layouts.get(&anchor_id).expect("anchor layout should exist");
+        let content = layouts
+            .get(&content_id)
+            .expect("content layout should exist");
+        let popup = layouts.get(&popup_id).expect("popup layout should exist");
+
+        assert!((content.bounds.y - (anchor.bounds.y + anchor.bounds.height + 4.0)).abs() < 0.001);
+        assert!(popup.bounds.y >= anchor.bounds.y + anchor.bounds.height);
+        assert!(popup.bounds.y < content.bounds.y + content.bounds.height);
     }
 
     #[test]

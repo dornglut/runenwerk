@@ -5,7 +5,11 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-07
+related_designs:
+  - ../../design/active/workspace-viewport-expression-upgrade-design.md
+related_roadmaps:
+  - ./viewport-expression-implementation-roadmap.md
 ---
 
 # Runenwerk Editor Current Architecture
@@ -84,11 +88,121 @@ The app toolbar is produced by
 `apps/runenwerk_editor/src/shell/toolbar_adapter.rs::build_toolbar_observation_frame`
 and rendered by
 `domain/editor/editor_shell/src/composition/build_toolbar.rs::build_toolbar`.
-It exposes File, Edit, and Window menu controls, followed by Scene and Modelling
-workspace profile switches plus a disabled add-workspace placeholder. Menu
-items whose workflows are not implemented are emitted as disabled toolbar
-buttons so the retained UI renders them as unavailable instead of routing them
-to app behavior.
+It exposes File, Edit, and Window menu controls, followed by the currently open
+workspace profile switches plus a workspace `+` menu. The default open
+workspace row contains Scene and Modelling only; Editor Design is added to that
+row when it is activated from the `+` menu. The `+` menu opens the available
+workspace profiles; Scene and Modelling are therefore no longer duplicated under
+Window. Menu items are projected by
+`domain/editor/editor_shell/src/composition/toolbar_definition.rs::build_defined_toolbar_menu_popup`
+as a retained popup anchored to the active top-level menu button, rather than as
+an additional toolbar row. Items whose workflows are not implemented are emitted
+as disabled popup buttons so the retained UI renders them as unavailable instead
+of routing them to app behavior.
+
+The checked-in toolbar definition in `assets/editor/ui/toolbar.ron` authors the
+File/Edit/Window group, then a thin fixed-length vertical separator, then the
+default workspace controls.
+`domain/editor/editor_shell/src/composition/toolbar_definition.rs::build_defined_toolbar`
+forms that authored separator through the generic retained UI definition path
+and injects dynamic open-workspace buttons, such as Editor Design after plus
+activation, before the workspace `+` button. It also trims the toolbar root
+panel so it does not add top padding above the first toolbar row. The separator
+is not text; it is a retained `Divider` formed from
+`UiNodeDefinition::Separator`, with spacing around it supplied by the toolbar row
+gap in `build_defined_toolbar`.
+
+Tab-stack chrome is authored in `assets/editor/ui/shell_chrome.ron` and formed
+by
+`domain/editor/editor_shell/src/composition/shell_chrome_definition.rs::build_defined_tab_strip_from_frame`.
+The tab strip renders tabs first and keeps the `+` tab button as the final tab
+row control. Tab close controls are projected as small overlay buttons anchored
+inside the right side of each tab button, rather than as separate row items.
+Those close buttons use
+`ui_tree::ButtonNode::reveal_on_hover_anchor`, so they render only when the tab
+or close button is hovered; they keep a small right offset and a 50% alpha
+rounded background even when the global shell theme has square controls.
+Clicking a tab activates that panel; it does not switch the panel's
+editor/surface type. Surface type changes are available through the tab
+secondary-click action popup: the popup contains a Switch Type item that opens
+the surface-type submenu beside that item. Surface type options are projected through
+`domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_stack_surface_menu_popup`
+and routed as explicit `ShellCommand::SwitchPanelToolSurfaceKind` commands.
+Split/duplicate/reset/lock/close area commands are no longer rendered as inline
+`H V D R Lock x` controls and no `...` button is rendered in the tab strip.
+They are opened by secondary-clicking a tab, then projected by
+`domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_stack_action_menu_popup`
+as a retained popup anchored to that tab. Routing still lives in
+`domain/editor/editor_shell/src/composition/build_editor_shell.rs::register_tab_stack_chrome_routes`
+so the shell projection remains the command authority for tab-stack actions.
+Outside primary or secondary clicks close the active tab action/type popups via
+`apps/runenwerk_editor/src/shell/controller.rs::handle_tab_popup_dismiss_event`.
+Toolbar menu popups use the same outside-click close policy through
+`apps/runenwerk_editor/src/shell/controller.rs::handle_toolbar_menu_dismiss_event`.
+Closing the last tab in a tab stack is treated as an area close by
+`apps/runenwerk_editor/src/shell/dispatch_shell_command.rs::dispatch_shell_command`,
+so the empty area is removed or collapsed instead of leaving an inert one-tab
+shell.
+
+Viewport details are projected by
+`domain/editor/editor_shell/src/composition/build_viewport_panel.rs::build_viewport_panel`
+through an Options popup, not by a direct Show Details button. The Options popup
+contains checkbox-style Details and Statistics items. Enabled viewport metadata
+is rendered as a retained bottom overlay anchored inside the viewport canvas,
+uses a 50% alpha panel background, and does not push the viewport surface down.
+Dock split resizing is owned by
+`apps/runenwerk_editor/src/shell/controller.rs::handle_split_resize_event`; the
+current split hit target is the projected split border zone rather than a
+visible handle widget. Fixed-layout split hit testing uses the fixed shell
+widget ids (`BODY_CONSOLE_SPLIT_WIDGET_ID`, `LEFT_RIGHT_SPLIT_WIDGET_ID`, and
+`CENTER_RIGHT_SPLIT_WIDGET_ID`) through
+`apps/runenwerk_editor/src/shell/controller.rs::fixed_layout_split_resize_targets`,
+so cursor feedback and dragging line up with the rendered borders instead of the
+generic workspace-host ids. Split border intersections create a corner-resize session
+through
+`apps/runenwerk_editor/src/shell/state.rs::CornerSplitResizeSession`; dragging
+there updates both participating split fractions. A resize started without Shift
+may then use Shift during the drag to preserve the current first-quadrant
+width/height ratio. A pointer-down that already has Shift held does not start a
+resize session, leaving Shift-drag corner gestures available for area splitting.
+Cursor
+feedback for invisible split border and corner zones is derived by
+`apps/runenwerk_editor/src/shell/controller.rs::RunenwerkEditorShellController::cursor_intent_for_pointer`
+and written to `engine::WindowState` by
+`apps/runenwerk_editor/src/runtime/systems/input_bridge.rs::dispatch_editor_input_system`.
+Shift-dragging a non-split area corner inward creates a new split area through
+`apps/runenwerk_editor/src/shell/state.rs::CornerAreaSplitSession` and
+`ShellCommand::SplitTabStackArea`; the command still goes through the normal
+workspace reducer rather than mutating projected layout state directly.
+Tab dragging uses the same workspace projection to infer insertion from
+tab-stack/container geometry; highlighted insertion is represented as reserved
+tab-strip space, not a button-like drop-zone control. Empty dock placeholders
+and floating dock targets keep their structural hit targets without rendering
+instructional "drop here" copy. Retained popups carry explicit layer order:
+viewport-local overlays use the lower overlay layer, while menu/dropdown popups
+use the higher menu layer so viewport overlays cannot cover open menus.
+
+Viewport runtime binding is app-owned. `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::populate_viewport_layout_map_from_shell_tree`
+scans the projected shell tree for retained `ViewportSurfaceEmbed` nodes and
+binds each embedded viewport through its structural widget context. Replacement
+viewport surfaces created by the surface-type menu receive a deterministic
+viewport id through
+`apps/runenwerk_editor/src/shell/providers/scene/viewport.rs::SceneViewportProvider::build_frame`
+rather than inheriting an unrelated lone observed viewport. `apps/runenwerk_editor/src/runtime/viewport/layout_map.rs::ViewportLayoutMapResource`
+stores entries by `StructuralWidgetRoutingContext`, not only by `ViewportId`,
+so split/replacement viewport surfaces do not overwrite each other's
+shell/runtime binding. `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateResource`
+records per-viewport bounds as a migration step toward viewport-owned render
+jobs.
+
+This viewport path is still a migration checkpoint. The current shader/runtime
+bridge can carry multiple viewport rectangles in one scene-product uniform, and
+`apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs` still exposes
+static scene-color, picking-id, and overlay resource ids. The no-compromise
+target is documented in
+`docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md`;
+the end-to-end implementation sequence is
+`docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md`.
 
 Default workspace profiles are defined in
 `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry`.
@@ -104,6 +218,12 @@ It places the viewport in the expanding left/middle area, the scene hierarchy
 above the inspector in the right sidebar, and the console/log surface in the
 bottom band. The compatibility projection for that structure is maintained in
 `domain/editor/editor_shell/src/workspace/projection.rs::project_fixed_layout`.
+Workspace layout persistence is profile-addressed. When
+`apps/runenwerk_editor/src/shell/dispatch_shell_command.rs::load_workspace_profile_layout`
+loads a saved profile layout, it verifies that the saved mounted surface kinds
+match the target profile before accepting it; incompatible saved layouts fall
+back to the profile's default workspace state instead of silently booting the
+wrong workspace shape.
 
 ## Self-Authoring State
 
@@ -117,8 +237,31 @@ keeps explicit applied snapshots for rollback. Apply and rollback are shell comm
 `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`, preserving the
 app/shell command boundary.
 
+Applied definition activation is intentionally separate from draft editing and
+snapshot storage. `apps/runenwerk_editor/src/shell/applied_editor_definition.rs`
+is the app-owned activation seam from an applied editor definition document into
+live editor products. Theme documents now form `ui_theme::ThemeTokens` through
+`domain/editor/editor_definition/src/theme.rs::form_theme_tokens`; the editor
+app queues the applied document, and
+`apps/runenwerk_editor/src/runtime/resources.rs::EditorHostResource::apply_pending_editor_definition_activations`
+updates the live host theme before the next submitted shell frame is built.
+The checked-in self-authoring default theme seeded by
+`apps/runenwerk_editor/src/shell/self_authoring.rs::SelfAuthoringWorkspaceState::from_checked_in_fixtures`
+is intentionally black/dark, keeps control radius at zero, and uses compact
+panel spacing so applying that authored theme does not reintroduce the older
+lighter rounded shell look.
+
+This live activation path is currently implemented for theme definitions only.
+UI template, workspace layout, menu, shortcut, command binding, panel registry,
+and tool-surface definition documents can still be drafted, validated, previewed,
+applied as snapshots, and rolled back, but applying them does not yet replace the
+live toolbar, shell chrome, provider templates, workspace profile registry, or
+runtime command bindings. Those remain explicit follow-up activation targets
+rather than implicit side effects of snapshot apply.
+
 ## Related Docs
 
 - Domain editor contracts: [`../../domain/editor/README.md`](../../domain/editor/README.md)
+- Editor definition architecture: [`../../domain/editor/editor-definition/current-architecture.md`](../../domain/editor/editor-definition/current-architecture.md)
 - UI architecture: [`../../domain/ui/architecture.md`](../../domain/ui/architecture.md)
 - Editor roadmap: [`roadmap.md`](roadmap.md)

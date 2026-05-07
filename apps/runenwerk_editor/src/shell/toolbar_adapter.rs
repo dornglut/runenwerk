@@ -1,8 +1,9 @@
 use editor_core::ToolId;
 use editor_shell::{
-    MODELLING_WORKSPACE_PROFILE_ID, ObservationConsumerKind, ObservationFrameMetadata,
-    ObservationSourceReality, SCENE_WORKSPACE_PROFILE_ID, ToolbarButtonViewModel, ToolbarMenuKind,
-    ToolbarObservationFrame, ToolbarObservedButton, ToolbarViewModel, WorkspaceProfileId,
+    EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, ObservationConsumerKind,
+    ObservationFrameMetadata, ObservationSourceReality, SCENE_WORKSPACE_PROFILE_ID,
+    ToolbarButtonViewModel, ToolbarMenuKind, ToolbarObservationFrame, ToolbarObservedButton,
+    ToolbarViewModel, WorkspaceProfileId,
 };
 
 pub const SELECT_TOOL_ID: ToolId = ToolId(1);
@@ -20,7 +21,12 @@ const MENU_WINDOW_ID: ToolId = ToolId(2_003);
 const WORKSPACE_SCENE_ID: ToolId = ToolId(3_001);
 const WORKSPACE_MODELLING_ID: ToolId = ToolId(3_002);
 const WORKSPACE_PLUS_ID: ToolId = ToolId(3_003);
+const WORKSPACE_EDITOR_DESIGN_ID: ToolId = ToolId(3_004);
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "toolbar observation projection takes explicit shell state inputs"
+)]
 pub fn build_toolbar_observation_frame(
     _active_tool: Option<ToolId>,
     can_undo: bool,
@@ -28,6 +34,7 @@ pub fn build_toolbar_observation_frame(
     _debug_logs_enabled: bool,
     active_toolbar_menu: Option<ToolbarMenuKind>,
     active_workspace_profile_id: WorkspaceProfileId,
+    open_workspace_profile_ids: &[WorkspaceProfileId],
     source_version: editor_core::RealityVersion,
 ) -> ToolbarObservationFrame {
     let mut buttons = vec![
@@ -59,28 +66,20 @@ pub fn build_toolbar_observation_frame(
             is_active: false,
             enabled: false,
         },
-        ToolbarObservedButton {
-            id: WORKSPACE_SCENE_ID,
-            stable_name: "workspace_scene",
-            label: "Scene".to_string(),
-            is_active: active_workspace_profile_id == SCENE_WORKSPACE_PROFILE_ID,
-            enabled: true,
-        },
-        ToolbarObservedButton {
-            id: WORKSPACE_MODELLING_ID,
-            stable_name: "workspace_modelling",
-            label: "Modelling".to_string(),
-            is_active: active_workspace_profile_id == MODELLING_WORKSPACE_PROFILE_ID,
-            enabled: true,
-        },
-        ToolbarObservedButton {
-            id: WORKSPACE_PLUS_ID,
-            stable_name: "workspace_plus",
-            label: "+".to_string(),
-            is_active: false,
-            enabled: false,
-        },
     ];
+    for profile_id in open_workspace_profile_ids {
+        if let Some(button) = workspace_button_for_profile(*profile_id, active_workspace_profile_id)
+        {
+            buttons.push(button);
+        }
+    }
+    buttons.push(ToolbarObservedButton {
+        id: WORKSPACE_PLUS_ID,
+        stable_name: "workspace_plus",
+        label: "+".to_string(),
+        is_active: active_toolbar_menu == Some(ToolbarMenuKind::Workspace),
+        enabled: true,
+    });
     buttons.extend(toolbar_menu_items(active_toolbar_menu, can_undo, can_redo));
 
     ToolbarObservationFrame {
@@ -91,6 +90,32 @@ pub fn build_toolbar_observation_frame(
         ),
         buttons,
     }
+}
+
+fn workspace_button_for_profile(
+    profile_id: WorkspaceProfileId,
+    active_workspace_profile_id: WorkspaceProfileId,
+) -> Option<ToolbarObservedButton> {
+    let (id, stable_name, label) = if profile_id == SCENE_WORKSPACE_PROFILE_ID {
+        (WORKSPACE_SCENE_ID, "workspace_scene", "Scene")
+    } else if profile_id == MODELLING_WORKSPACE_PROFILE_ID {
+        (WORKSPACE_MODELLING_ID, "workspace_modelling", "Modelling")
+    } else if profile_id == EDITOR_DESIGN_WORKSPACE_PROFILE_ID {
+        (
+            WORKSPACE_EDITOR_DESIGN_ID,
+            "workspace_editor_design",
+            "Editor Design",
+        )
+    } else {
+        return None;
+    };
+    Some(ToolbarObservedButton {
+        id,
+        stable_name,
+        label: label.to_string(),
+        is_active: active_workspace_profile_id == profile_id,
+        enabled: true,
+    })
 }
 
 fn toolbar_menu_items(
@@ -120,11 +145,13 @@ fn toolbar_menu_items(
                 true,
             ),
             menu_item(2_303, "window_save_workspace", "Save Workspace", true),
-            menu_item(2_304, "window_load_general_label", "Load: General", false),
-            menu_item(2_305, "window_load_general_scene", "Scene", true),
-            menu_item(2_306, "window_load_general_modelling", "Modelling", true),
             menu_item(2_307, "window_load_custom_label", "Load: Custom", false),
             menu_item(2_308, "window_load_custom", "No Custom Workspaces", false),
+        ],
+        Some(ToolbarMenuKind::Workspace) => vec![
+            menu_item(2_400, "workspace_menu_scene", "Scene", true),
+            menu_item(2_401, "workspace_menu_modelling", "Modelling", true),
+            menu_item(2_402, "workspace_menu_editor_design", "Editor Design", true),
         ],
         None => Vec::new(),
     }

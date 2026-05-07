@@ -123,30 +123,30 @@ impl ThemeTokens {
 impl Default for ThemeTokens {
     fn default() -> Self {
         Self {
-            background: UiColor::new(0.045, 0.023, 0.026, 1.0),
-            background_panel: UiColor::new(0.088, 0.036, 0.042, 1.0),
-            foreground: UiColor::new(0.955, 0.936, 0.940, 1.0),
-            foreground_muted: UiColor::new(0.845, 0.785, 0.800, 1.0),
-            accent: UiColor::new(0.860, 0.178, 0.248, 1.0),
-            border: UiColor::new(0.392, 0.142, 0.176, 1.0),
+            background: UiColor::new(0.0, 0.0, 0.0, 1.0),
+            background_panel: UiColor::new(0.006, 0.006, 0.007, 1.0),
+            foreground: UiColor::new(0.940, 0.940, 0.940, 1.0),
+            foreground_muted: UiColor::new(0.760, 0.760, 0.775, 1.0),
+            accent: UiColor::new(0.165, 0.455, 0.980, 1.0),
+            border: UiColor::new(0.070, 0.070, 0.080, 1.0),
             border_width: 1.0,
             spacing: SpacingScale {
-                xs: 4.0,
-                sm: 8.0,
-                md: 12.0,
-                lg: 16.0,
-                xl: 24.0,
+                xs: 2.0,
+                sm: 4.0,
+                md: 6.0,
+                lg: 10.0,
+                xl: 14.0,
             },
             radius: RadiusScale {
-                sm: 4.0,
-                md: 8.0,
-                lg: 12.0,
+                sm: 0.0,
+                md: 0.0,
+                lg: 0.0,
             },
             typography: TypographyScale {
-                body: 14.0,
-                body_small: 12.0,
-                heading: 18.0,
-                monospace: 13.0,
+                body: 13.0,
+                body_small: 11.0,
+                heading: 16.0,
+                monospace: 12.0,
             },
         }
     }

@@ -5,12 +5,16 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-07
 related_designs:
   - ../../design/active/workspace-field-world-and-simulation-platform-design.md
   - ../../design/active/ui-definition-formation-foundation-design.md
   - ../../design/active/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/active/editor-native-multi-window-presentation-design.md
+  - ../../design/active/workspace-viewport-expression-upgrade-design.md
+  - ../../design/active/render-product-surface-foundation-bundle-design.md
+  - ../../design/active/viewport-dynamic-product-target-allocation-design.md
   - ../../design/active/editor-self-authoring-and-final-ui-design.md
   - ../../design/active/editor-asset-pipeline-and-content-workflow-design.md
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
@@ -24,6 +28,7 @@ related_reports:
 related:
   - ./execution-priority-checklist.md
   - ./current-architecture.md
+  - ./viewport-expression-implementation-roadmap.md
   - ./mvp/first-3d-editor-mvp.md
   - ./mvp/acceptance-criteria.md
   - ./mvp/implementation-sequence.md
@@ -90,7 +95,9 @@ Current post-M3 gaps:
 
 - M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
 - M3.5 is closed as the UI/editor infrastructure slice: the closeout candidate landed and passed validation/drift closeout as of 2026-05-06.
-- M3.6 is complete as of 2026-05-06: durable UI/editor definition lifecycle contracts, an Editor Design workspace/profile, self-authoring provider surfaces, checked-in fixture document loading, retained preview, validation diagnostics, command diff summaries, retained authoring control routes, draft UI node/theme/workspace-layout edits, and explicit apply/rollback shell commands are implemented.
+- M3.6 is complete as of 2026-05-06 for authored definition editing, retained preview, and explicit apply/rollback snapshots. A follow-up correction now wires applied theme definitions into the live editor host theme; other definition families still need explicit live activation seams.
+- M3.7 is the no-compromise viewport expression architecture closeout. It is implementation-ready through `docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md` and `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`, and must land before treating multi-viewport previews, field-product previews, asset previews, material previews, or runtime debug viewports as stable surfaces.
+- Native multi-window editing is designed in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`. It follows the render product-surface foundation and should land before second-monitor workflows are treated as product-ready.
 - M4 and M5 are the next content-pipeline track, once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
 - M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
@@ -282,7 +289,7 @@ Validation:
 
 Purpose: move the former final self-authoring/UI design work into the Now track so Runenwerk can style, inspect, validate, preview, and author UI definitions before later asset, procedural, gameplay, runtime, overlay, and in-game UI surfaces are built.
 
-Status: complete as of 2026-05-06. Implemented: versioned UI definition migration wrapper, editor-owned workspace/profile/layout/theme/menu/shortcut/command-binding/panel/tool-surface schemas, editor-definition validation guards for runtime/session identity leakage, Editor Design workspace/profile, structural self-authoring tool-surface kinds, app-owned fixture document loading, retained UI preview, validation diagnostics, command diff/apply preview, retained provider control routes, draft UI hierarchy text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, explicit apply/rollback shell commands, and provider surfaces for definition outliner, UI hierarchy, UI canvas, style inspector, bindings, dock/layout preview, theme editor, shortcut editor, menu editor, definition validation, and command diff. Deferred beyond M3.6: exhaustive field-by-field visual polish, compiled-reactive UI execution, ECS-driven UI execution, asset/procedural/gameplay/runtime overlay authoring, packaging, and external marketplace workflows.
+Status: complete as of 2026-05-06 for the self-authoring document lifecycle and retained preview path. Implemented: versioned UI definition migration wrapper, editor-owned workspace/profile/layout/theme/menu/shortcut/command-binding/panel/tool-surface schemas, editor-definition validation guards for runtime/session identity leakage, Editor Design workspace/profile, structural self-authoring tool-surface kinds, app-owned fixture document loading, retained UI preview, validation diagnostics, command diff/apply preview, retained provider control routes, draft UI hierarchy text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, explicit apply/rollback shell commands, live activation for applied theme definitions, and provider surfaces for definition outliner, UI hierarchy, UI canvas, style inspector, bindings, dock/layout preview, theme editor, shortcut editor, menu editor, definition validation, and command diff. Deferred beyond M3.6: live activation for UI template/workspace/menu/shortcut/command-binding/panel/tool-surface definitions, exhaustive field-by-field visual polish, compiled-reactive UI execution, ECS-driven UI execution, asset/procedural/gameplay/runtime overlay authoring, packaging, and external marketplace workflows.
 
 Owning design:
 
@@ -331,8 +338,58 @@ Implementation targets:
 
 Validation:
 
-- Implemented and covered: create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, migrate, retained provider control routing, draft UI node text edits, draft theme color edits, and draft workspace-layout add-tab/split-root/close-tab edits at the app/domain seam; validation blocks malformed definitions from becoming active; checked-in UI fixtures load as editable definition documents; retained previews form before apply; active runtime/session-only id vocabulary is rejected in editor authored ids; self-authoring follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time.
-- Deferred beyond M3.6: asset/procedural/gameplay/runtime overlay authoring, packaging/export hardening, exhaustive visual field polish, compiled-reactive UI execution, and ECS-driven UI execution.
+- Implemented and covered: create, duplicate, rename, delete, import, export, validate, preview, apply, rollback, migrate, retained provider control routing, draft UI node text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, and live host theme activation for applied theme definitions at the app/domain seam; validation blocks malformed definitions from becoming active; checked-in UI fixtures load as editable definition documents; retained previews form before apply; active runtime/session-only id vocabulary is rejected in editor authored ids; self-authoring follows the retained UI execution strategy closed in M0 and does not choose compiled-reactive or ECS-driven UI execution for the first time.
+- Deferred beyond M3.6: live activation for non-theme editor definition families, asset/procedural/gameplay/runtime overlay authoring, packaging/export hardening, exhaustive visual field polish, compiled-reactive UI execution, and ECS-driven UI execution.
+
+### M3.7 - Viewport Expression Architecture Closeout
+
+Purpose: replace the tactical split-viewport bridge with the final panel-owned viewport expression architecture before the editor depends on viewports for broader asset, field, material, runtime debug, and procedural previews.
+
+Owning roadmap:
+
+- `docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md`
+
+Owning design:
+
+- `docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md`
+- `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`
+
+Implementation targets:
+
+- `apps/runenwerk_editor/src/runtime/viewport/instance_registry.rs`
+  - introduce explicit viewport instance allocation, duplication, restore, close, and `ToolSurfaceInstanceId -> ViewportId` mapping.
+- `apps/runenwerk_editor/src/runtime/viewport/render_state.rs`
+  - make bounds, dimensions, camera, presentation/debug mode, source version, throttling, and target status per-viewport state.
+- `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs`
+  - derive one `ViewportRenderJob` per visible viewport.
+- `apps/runenwerk_editor/src/runtime/viewport/surface_set.rs`
+  - replace shared static surface labels with viewport-scoped concrete product targets.
+- `apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs`
+  - render scene color, picking ids, overlay, and later depth/debug products per viewport job.
+- `assets/shaders/editor_viewport_scene_product.wgsl`
+  - remove `viewport_b`, `viewport_c`, and `viewport_d`; render one viewport-local target per job.
+- `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::submit_editor_frame_system`
+  - stop owning viewport lifecycle and render-product synchronization.
+- `apps/runenwerk_editor/tests/viewport_architecture_guards.rs`
+  - reject shared viewport products, multi-rect shader uniforms, frame-submit viewport identity seeding, and first-observed viewport fallbacks.
+
+Exit criteria:
+
+- every visible viewport has explicit instance identity and independent scene color, picking, and overlay product targets;
+- viewport camera, product selection, overlay selection, diagnostics visibility, bounds, and resize state are independent per viewport;
+- UI embeds reference `(ViewportId, ViewportSurfacePresentationSlot)` and never sample a shared global viewport product accidentally;
+- picking and transform interaction use viewport-local coordinates and viewport-local camera state;
+- closing, splitting, duplicating, hiding, resizing, and restoring viewport surfaces preserve explicit lifecycle semantics;
+- no normal runtime path depends on `viewport_b`-style shader containment or shared static viewport product labels.
+
+Validation:
+
+- `cargo test -p runenwerk_editor viewport`
+- `cargo test -p runenwerk_editor --test startup_render_smoke`
+- `cargo test -p runenwerk_editor --test viewport_architecture_guards`
+- `RUNENWERK_ENABLE_GPU_SMOKE=1 RUNENWERK_ENABLE_MACOS_MAIN_THREAD_GPU_SMOKE=1 cargo test -p runenwerk_editor --test viewport_gpu_truth_smoke -- --ignored`
+- `python3 tools/docs/validate_docs.py`
+- `./quiet_full_gate.sh`
 
 ### M4 - SDF/Field Asset Pipeline Foundation
 

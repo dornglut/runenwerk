@@ -2,18 +2,17 @@
 //! Purpose: Form shell chrome from editor UI definition data.
 
 use crate::{
-    EditorShellFrameModel, ProjectedTabStackSlot, ToolSurfaceKind, UiNode, WidgetId,
-    tab_close_button_widget_id, tab_stack_close_area_button_widget_id,
-    tab_stack_duplicate_button_widget_id, tab_stack_kind_select_widget_id,
-    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_split_vertical_button_widget_id, tab_strip_scroll_widget_id,
+    EditorShellFrameModel, ProjectedTabStackSlot, TabStackPopupMenuKind, ToolSurfaceKind, UiNode,
+    WidgetId, tab_close_button_widget_id, tab_close_overlay_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_strip_scroll_widget_id,
 };
 use ui_definition::{
     AuthoredUiNodePath, AuthoredUiTemplate, UiCollectionItem, UiDefinitionContext, UiValue,
     form_retained_ui, normalize_authored_template,
 };
-use ui_theme::ThemeTokens;
+use ui_math::{UiInsets, UiSize};
+use ui_theme::{ThemeTokens, UiColor};
+use ui_tree::{PopupNode, UiNodeKind};
 
 const SHELL_CHROME_TEMPLATE_RON: &str =
     include_str!("../../../../../assets/editor/ui/shell_chrome.ron");
@@ -29,7 +28,83 @@ pub fn build_defined_tab_strip_from_frame(
     let mut context = UiDefinitionContext::new(theme.clone());
     register_shell_chrome_widget_ids(&mut context, tab_stack);
     populate_shell_chrome_values(&mut context, tab_stack, frame_model);
-    form_retained_ui(&normalized, &mut context).root
+    let mut root = form_retained_ui(&normalized, &mut context).root;
+    project_close_buttons_as_tab_overlays(&mut root, tab_stack, theme);
+    root
+}
+
+fn project_close_buttons_as_tab_overlays(
+    root: &mut UiNode,
+    tab_stack: &ProjectedTabStackSlot,
+    theme: &ThemeTokens,
+) {
+    for (index, tab) in tab_stack.tabs.iter().enumerate() {
+        promote_close_button_overlay(
+            root,
+            tab.widget_id,
+            tab_close_button_widget_id(tab_stack.tab_stack_id, index),
+            tab_close_overlay_widget_id(tab_stack.tab_stack_id, index),
+            theme,
+        );
+    }
+}
+
+fn promote_close_button_overlay(
+    node: &mut UiNode,
+    tab_widget_id: WidgetId,
+    close_widget_id: WidgetId,
+    close_overlay_widget_id: WidgetId,
+    theme: &ThemeTokens,
+) -> bool {
+    if let Some(close_index) = node
+        .children
+        .iter()
+        .position(|child| child.id == close_widget_id)
+    {
+        let mut close = node.children.remove(close_index);
+        if let UiNodeKind::Button(button) = &mut close.kind {
+            style_close_overlay_button(button, theme, tab_widget_id);
+        }
+        let mut popup = PopupNode::anchored_inside_top_end(tab_widget_id, theme.clone());
+        popup.offset = theme.spacing.xs;
+        node.children.push(UiNode::with_children(
+            close_overlay_widget_id,
+            UiNodeKind::Popup(popup),
+            vec![close],
+        ));
+        return true;
+    }
+    for child in &mut node.children {
+        if promote_close_button_overlay(
+            child,
+            tab_widget_id,
+            close_widget_id,
+            close_overlay_widget_id,
+            theme,
+        ) {
+            return true;
+        }
+    }
+    false
+}
+
+fn style_close_overlay_button(
+    button: &mut ui_tree::ButtonNode,
+    theme: &ThemeTokens,
+    anchor: WidgetId,
+) {
+    let mut close_theme = theme.clone();
+    close_theme.background_panel = UiColor::new(
+        theme.background_panel.r,
+        theme.background_panel.g,
+        theme.background_panel.b,
+        0.50,
+    );
+    button.theme = close_theme;
+    button.padding = UiInsets::ZERO;
+    button.min_size = UiSize::new(18.0, 18.0);
+    button.corner_radius = Some(f32::MAX);
+    button.reveal_on_hover_anchor = Some(anchor);
 }
 
 fn register_shell_chrome_widget_ids(
@@ -44,40 +119,12 @@ fn register_shell_chrome_widget_ids(
             tab_stack.tab_strip_widget_id,
         ),
         (
-            "root/tab_stack_chrome/surface_select".to_string(),
-            tab_stack_kind_select_widget_id(tab_stack_id),
-        ),
-        (
             "root/tab_stack_chrome/new_tab".to_string(),
             tab_stack_new_tab_button_widget_id(tab_stack_id),
         ),
         (
             "root/tab_stack_chrome/tabs".to_string(),
             WidgetId(2_600_000 + tab_stack_id.raw()),
-        ),
-        (
-            "root/tab_stack_chrome/split_horizontal".to_string(),
-            tab_stack_split_horizontal_button_widget_id(tab_stack_id),
-        ),
-        (
-            "root/tab_stack_chrome/split_vertical".to_string(),
-            tab_stack_split_vertical_button_widget_id(tab_stack_id),
-        ),
-        (
-            "root/tab_stack_chrome/duplicate".to_string(),
-            tab_stack_duplicate_button_widget_id(tab_stack_id),
-        ),
-        (
-            "root/tab_stack_chrome/reset".to_string(),
-            tab_stack_reset_area_button_widget_id(tab_stack_id),
-        ),
-        (
-            "root/tab_stack_chrome/lock".to_string(),
-            tab_stack_lock_type_toggle_widget_id(tab_stack_id),
-        ),
-        (
-            "root/tab_stack_chrome/close".to_string(),
-            tab_stack_close_area_button_widget_id(tab_stack_id),
         ),
     ];
     for (path, widget_id) in mappings {
@@ -133,6 +180,18 @@ fn populate_shell_chrome_values(
     context.values.insert(
         "shell.area.locked".into(),
         UiValue::Bool(tab_stack.locked_tool_surface_kind.is_some()),
+    );
+    context.values.insert(
+        "shell.surface.menu.active".into(),
+        UiValue::Bool(
+            frame_model
+                .active_tab_stack_popup_menu
+                .as_ref()
+                .is_some_and(|menu| {
+                    menu.kind == TabStackPopupMenuKind::SurfaceKinds
+                        && menu.tab_stack_id == tab_stack.tab_stack_id
+                }),
+        ),
     );
 
     let active_panel_id = tab_stack.active_panel.map(|panel| panel.panel_instance_id);

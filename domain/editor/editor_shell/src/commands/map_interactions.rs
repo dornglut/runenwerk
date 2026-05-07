@@ -146,6 +146,28 @@ fn command_for_activation(
         RoutedShellAction::ToggleToolbarMenu { menu } => {
             ShellCommand::ToggleToolbarMenu { menu: *menu }
         }
+        RoutedShellAction::ToggleTabStackActionMenu {
+            tab_stack_id,
+            anchor_widget_id,
+        } => ShellCommand::ToggleTabStackActionMenu {
+            tab_stack_id: *tab_stack_id,
+            anchor_widget_id: *anchor_widget_id,
+        },
+        RoutedShellAction::ToggleTabStackSurfaceMenu {
+            tab_stack_id,
+            anchor_widget_id,
+        } => ShellCommand::ToggleTabStackSurfaceMenu {
+            tab_stack_id: *tab_stack_id,
+            anchor_widget_id: *anchor_widget_id,
+        },
+        RoutedShellAction::SwitchPanelToolSurfaceKindTo {
+            panel_instance_id,
+            tool_surface_kind,
+        } => ShellCommand::SwitchPanelToolSurfaceKind {
+            panel_instance_id: *panel_instance_id,
+            tool_surface_kind: *tool_surface_kind,
+            projection_epoch: routing.projection_epoch,
+        },
         RoutedShellAction::RunToolbarCommand { command, enabled } => {
             if *enabled {
                 ShellCommand::RunToolbarCommand { command: *command }
@@ -159,6 +181,18 @@ fn command_for_activation(
         } => {
             if *enabled {
                 ShellCommand::SwitchWorkspaceProfile {
+                    profile_id: *profile_id,
+                }
+            } else {
+                ShellCommand::NoOp
+            }
+        }
+        RoutedShellAction::CloseWorkspaceProfile {
+            profile_id,
+            enabled,
+        } => {
+            if *enabled {
+                ShellCommand::CloseWorkspaceProfile {
                     profile_id: *profile_id,
                 }
             } else {

@@ -15,7 +15,7 @@ use ui_theme::ThemeTokens;
 use ui_tree::{TableColumn, TableRow, TreeRow, UiNode, UiNodeKind, WidgetId};
 use ui_widgets::{
     NumericInputConfig, button_selected, hdivider, hscroll, hstack_with_policies, label,
-    numeric_input, panel, select, split, table, tabs, text_input, toggle, tree,
+    numeric_input, panel, select, split, table, tabs, text_input, toggle, tree, vdivider,
     viewport_surface_embed, vscroll, vstack_with_policies,
 };
 
@@ -161,9 +161,18 @@ fn form_node(
             form_children(children, path, template, context, state),
         ),
         UiNodeDefinition::Spacer { .. } => ui_widgets::spacer(widget_id, UiSize::new(12.0, 4.0)),
-        UiNodeDefinition::Separator { .. } => {
-            hdivider(widget_id, 1.0, SizePolicy::Auto, context.theme.border)
-        }
+        UiNodeDefinition::Separator {
+            axis,
+            length,
+            thickness,
+            ..
+        } => form_separator(
+            widget_id,
+            axis.unwrap_or(UiAxisDefinition::Horizontal),
+            *length,
+            thickness.unwrap_or(1.0),
+            context,
+        ),
         UiNodeDefinition::Label { label: text, .. } => {
             label(widget_id, resolve_text(text, context), text_style)
         }
@@ -655,6 +664,30 @@ fn resolve_availability(
     }
 }
 
+fn form_separator(
+    widget_id: WidgetId,
+    axis: UiAxisDefinition,
+    length: Option<f32>,
+    thickness: f32,
+    context: &UiDefinitionContext,
+) -> UiNode {
+    let length_policy = length.map(SizePolicy::Fixed).unwrap_or(SizePolicy::Auto);
+    match axis {
+        UiAxisDefinition::Horizontal => hdivider(
+            widget_id,
+            thickness,
+            length_policy,
+            context.theme.foreground,
+        ),
+        UiAxisDefinition::Vertical => vdivider(
+            widget_id,
+            thickness,
+            length_policy,
+            context.theme.foreground,
+        ),
+    }
+}
+
 fn axis_to_runtime(axis: UiAxisDefinition) -> Axis {
     match axis {
         UiAxisDefinition::Horizontal => Axis::Horizontal,
@@ -690,6 +723,32 @@ mod tests {
         let product = form_retained_ui(&normalized, &mut context);
         assert!(product.routes_by_widget_id.is_empty());
         assert!(matches!(product.root.kind, UiNodeKind::Button(_)));
+    }
+
+    #[test]
+    fn vertical_separator_forms_fixed_length_divider() {
+        let template = AuthoredUiTemplate {
+            id: "test.separator".into(),
+            root: UiNodeDefinition::Separator {
+                id: UiNodeId::from("root"),
+                axis: Some(UiAxisDefinition::Vertical),
+                length: Some(18.0),
+                thickness: Some(1.0),
+            },
+            templates: Vec::new(),
+            menus: Vec::new(),
+        };
+        let normalized = crate::normalize_authored_template(template);
+        let mut context = UiDefinitionContext::new(ThemeTokens::default());
+
+        let product = form_retained_ui(&normalized, &mut context);
+
+        let UiNodeKind::Divider(divider) = product.root.kind else {
+            panic!("separator should form a divider node");
+        };
+        assert_eq!(divider.axis, Axis::Vertical);
+        assert_eq!(divider.thickness, 1.0);
+        assert_eq!(divider.length_policy, SizePolicy::Fixed(18.0));
     }
 
     #[test]

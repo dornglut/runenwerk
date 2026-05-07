@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-29
+last_reviewed: 2026-05-07
 ---
 
 # Active Designs
@@ -27,6 +27,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 ### Editor Domain
 
 - [Editor Asset Pipeline and Content Workflow Design](editor-asset-pipeline-and-content-workflow-design.md)
+- [Editor Native Multi-Window Presentation Design](editor-native-multi-window-presentation-design.md)
 - [Editor Procedural Content and Simulation Workflow Plan](editor-procedural-content-and-simulation-workflow-plan.md)
 - [Editor Self-Authoring and UI Workspace Design](editor-self-authoring-and-final-ui-design.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
@@ -37,6 +38,9 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 ### Engine Runtime
 
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Design](engine-game-runtime-editor-ecs-scripting-hot-reload-design.md)
+- [Render Fragment Data-Driven Maturity Design](render-fragment-data-driven-maturity-design.md)
+- [Render Product Surface Foundation Bundle Design](render-product-surface-foundation-bundle-design.md)
+- [Viewport Dynamic Product Target Allocation Design](viewport-dynamic-product-target-allocation-design.md)
 
 ### Gameplay
 

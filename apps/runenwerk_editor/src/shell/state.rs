@@ -1,10 +1,12 @@
 use editor_shell::{
-    ActiveTabDragVisualState, BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
-    DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
-    PanelHostId, PanelInstanceId, ShellProjectionArtifacts, TabStackId, ToolSurfaceInstanceId,
-    ToolSurfaceKind, ToolbarMenuKind, UiRuntime, UiTree, WidgetId, WorkspaceId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId, WorkspaceSplitAxis,
-    WorkspaceState, WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
+    ActiveTabDragVisualState, ActiveTabStackPopupMenu, BODY_CONSOLE_SPLIT_WIDGET_ID,
+    CENTER_RIGHT_SPLIT_WIDGET_ID, DockingInteractionVisualState, DockingPreviewDropTarget,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId,
+    SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind,
+    ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
+    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
+    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError, default_workspace_profile_registry,
+    reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -35,6 +37,22 @@ struct SplitResizeSession {
     axis: WorkspaceSplitAxis,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CornerSplitResizeSession {
+    pub horizontal_split_host_id: PanelHostId,
+    pub horizontal_split_widget_id: WidgetId,
+    pub vertical_split_host_id: PanelHostId,
+    pub vertical_split_widget_id: WidgetId,
+    pub aspect_ratio: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CornerAreaSplitSession {
+    pub tab_stack_id: TabStackId,
+    pub pointer_down: UiPoint,
+    pub projection_epoch: u64,
+}
+
 #[derive(Debug)]
 pub struct RunenwerkEditorShellState {
     runtime: UiRuntime,
@@ -44,11 +62,15 @@ pub struct RunenwerkEditorShellState {
     projection_epoch: u64,
     identity_allocator: WorkspaceIdentityAllocator,
     active_workspace_profile_id: WorkspaceProfileId,
+    open_workspace_profile_ids: Vec<WorkspaceProfileId>,
     active_toolbar_menu: Option<ToolbarMenuKind>,
+    active_tab_stack_popup_menu: Option<ActiveTabStackPopupMenu>,
     workspace_state: WorkspaceState,
     self_authoring: SelfAuthoringWorkspaceState,
     tab_drag_session: Option<TabDragSession>,
     split_resize_session: Option<SplitResizeSession>,
+    corner_split_resize_session: Option<CornerSplitResizeSession>,
+    corner_area_split_session: Option<CornerAreaSplitSession>,
     docking_visual_state: DockingInteractionVisualState,
 }
 
@@ -71,12 +93,19 @@ impl Default for RunenwerkEditorShellState {
             projection_epoch: 0,
             identity_allocator,
             active_workspace_profile_id,
+            open_workspace_profile_ids: vec![
+                SCENE_WORKSPACE_PROFILE_ID,
+                MODELLING_WORKSPACE_PROFILE_ID,
+            ],
             active_toolbar_menu: None,
+            active_tab_stack_popup_menu: None,
             workspace_state,
             self_authoring: SelfAuthoringWorkspaceState::from_checked_in_fixtures()
                 .expect("checked-in self-authoring fixtures should load"),
             tab_drag_session: None,
             split_resize_session: None,
+            corner_split_resize_session: None,
+            corner_area_split_session: None,
             docking_visual_state: DockingInteractionVisualState::default(),
         }
     }
@@ -137,6 +166,10 @@ impl RunenwerkEditorShellState {
         self.active_workspace_profile_id
     }
 
+    pub fn open_workspace_profile_ids(&self) -> &[WorkspaceProfileId] {
+        &self.open_workspace_profile_ids
+    }
+
     pub fn active_toolbar_menu(&self) -> Option<ToolbarMenuKind> {
         self.active_toolbar_menu
     }
@@ -147,7 +180,62 @@ impl RunenwerkEditorShellState {
         } else {
             Some(menu)
         };
+        self.active_tab_stack_popup_menu = None;
         self.clear_cached_projection();
+    }
+
+    pub fn active_tab_stack_popup_menu(&self) -> Option<ActiveTabStackPopupMenu> {
+        self.active_tab_stack_popup_menu.clone()
+    }
+
+    pub fn active_tab_stack_action_menu(&self) -> Option<TabStackId> {
+        self.active_tab_stack_popup_menu
+            .as_ref()
+            .filter(|menu| menu.kind == TabStackPopupMenuKind::AreaActions)
+            .map(|menu| menu.tab_stack_id)
+    }
+
+    pub fn open_tab_stack_popup_menu(
+        &mut self,
+        kind: TabStackPopupMenuKind,
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    ) {
+        self.active_tab_stack_popup_menu = Some(ActiveTabStackPopupMenu {
+            kind,
+            tab_stack_id,
+            anchor_widget_id,
+        });
+        self.active_toolbar_menu = None;
+        self.clear_cached_projection();
+    }
+
+    pub fn toggle_tab_stack_popup_menu(
+        &mut self,
+        kind: TabStackPopupMenuKind,
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    ) {
+        let next = ActiveTabStackPopupMenu {
+            kind,
+            tab_stack_id,
+            anchor_widget_id,
+        };
+        self.active_tab_stack_popup_menu = if self.active_tab_stack_popup_menu == Some(next.clone())
+        {
+            None
+        } else {
+            Some(next)
+        };
+        self.active_toolbar_menu = None;
+        self.clear_cached_projection();
+    }
+
+    pub fn close_tab_stack_action_menu(&mut self) {
+        if self.active_tab_stack_popup_menu.is_some() {
+            self.active_tab_stack_popup_menu = None;
+            self.clear_cached_projection();
+        }
     }
 
     pub fn close_toolbar_menu(&mut self) {
@@ -158,12 +246,50 @@ impl RunenwerkEditorShellState {
     }
 
     pub fn set_active_workspace_profile_id(&mut self, profile_id: WorkspaceProfileId) {
+        if !self.open_workspace_profile_ids.contains(&profile_id) {
+            self.open_workspace_profile_ids.push(profile_id);
+        }
         if self.active_workspace_profile_id == profile_id {
             return;
         }
         self.active_workspace_profile_id = profile_id;
         self.active_toolbar_menu = None;
+        self.active_tab_stack_popup_menu = None;
         self.clear_cached_projection();
+    }
+
+    pub fn close_workspace_profile_id(
+        &mut self,
+        profile_id: WorkspaceProfileId,
+    ) -> Option<WorkspaceProfileId> {
+        let close_index = self
+            .open_workspace_profile_ids
+            .iter()
+            .position(|open_profile_id| *open_profile_id == profile_id)?;
+        if self.open_workspace_profile_ids.len() <= 1 {
+            return None;
+        }
+
+        let active_before_close = self.active_workspace_profile_id;
+        let fallback_profile_id = if active_before_close == profile_id {
+            let fallback_index = if close_index + 1 < self.open_workspace_profile_ids.len() {
+                close_index + 1
+            } else {
+                close_index.saturating_sub(1)
+            };
+            self.open_workspace_profile_ids[fallback_index]
+        } else {
+            active_before_close
+        };
+
+        self.open_workspace_profile_ids.remove(close_index);
+        if active_before_close == profile_id {
+            self.active_workspace_profile_id = fallback_profile_id;
+            self.active_toolbar_menu = None;
+            self.active_tab_stack_popup_menu = None;
+        }
+        self.clear_cached_projection();
+        Some(fallback_profile_id)
     }
 
     pub fn workspace_state(&self) -> &WorkspaceState {
@@ -393,12 +519,35 @@ impl RunenwerkEditorShellState {
         split_widget_id: WidgetId,
         axis: WorkspaceSplitAxis,
     ) {
+        self.corner_split_resize_session = None;
         self.split_resize_session = Some(SplitResizeSession {
             split_host_id,
             split_widget_id,
             axis,
         });
         self.docking_visual_state.active_split_border_widget = Some(split_widget_id);
+    }
+
+    pub fn begin_workspace_corner_split_resize(&mut self, session: CornerSplitResizeSession) {
+        self.split_resize_session = None;
+        self.corner_area_split_session = None;
+        self.corner_split_resize_session = Some(session);
+        self.docking_visual_state.active_split_border_widget =
+            Some(session.horizontal_split_widget_id);
+    }
+
+    pub fn begin_corner_area_split(&mut self, session: CornerAreaSplitSession) {
+        self.split_resize_session = None;
+        self.corner_split_resize_session = None;
+        self.corner_area_split_session = Some(session);
+    }
+
+    pub fn active_corner_area_split_session(&self) -> Option<CornerAreaSplitSession> {
+        self.corner_area_split_session
+    }
+
+    pub fn clear_corner_area_split(&mut self) {
+        self.corner_area_split_session = None;
     }
 
     pub fn active_split_resize_kind(&self) -> Option<WorkspaceSplitKind> {
@@ -419,8 +568,14 @@ impl RunenwerkEditorShellState {
             .map(|session| (session.split_host_id, session.split_widget_id, session.axis))
     }
 
+    pub fn active_corner_split_resize_session(&self) -> Option<CornerSplitResizeSession> {
+        self.corner_split_resize_session
+    }
+
     pub fn clear_split_resize(&mut self) {
         self.split_resize_session = None;
+        self.corner_split_resize_session = None;
+        self.corner_area_split_session = None;
         self.docking_visual_state.active_split_border_widget = None;
     }
 
@@ -491,8 +646,7 @@ fn split_kind_widget_id(kind: WorkspaceSplitKind) -> WidgetId {
 fn split_kind_axis(kind: WorkspaceSplitKind) -> WorkspaceSplitAxis {
     match kind {
         WorkspaceSplitKind::BodyConsole => WorkspaceSplitAxis::Vertical,
-        WorkspaceSplitKind::LeftRight | WorkspaceSplitKind::CenterRight => {
-            WorkspaceSplitAxis::Horizontal
-        }
+        WorkspaceSplitKind::LeftRight => WorkspaceSplitAxis::Horizontal,
+        WorkspaceSplitKind::CenterRight => WorkspaceSplitAxis::Vertical,
     }
 }

@@ -3,6 +3,8 @@
 
 use super::super::*;
 
+use crate::runtime::viewport::viewport_id_for_tool_surface;
+
 pub struct SceneViewportProvider;
 
 impl EditorSurfaceProvider for SceneViewportProvider {
@@ -27,7 +29,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
         request: &SurfaceProviderRequest,
         session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let products = context
+        let bound_products = context
             .tool_surface_bindings
             .and_then(|bindings| {
                 bindings.binding_for_tool_surface(request.tool_surface_instance_id)
@@ -37,14 +39,23 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                     .viewport_observations
                     .and_then(|observations| observations.frame_for(binding.viewport_id))
             });
+        let expected_viewport_id = viewport_id_for_tool_surface(request.tool_surface_instance_id);
+        let products = bound_products.or_else(|| {
+            context
+                .viewport_observations
+                .and_then(|observations| observations.frame_for(expected_viewport_id))
+        });
         let tool_state = context.app.viewport_tool_state();
         let frame = build_viewport_observation_frame(
             products,
             session.viewport_details_visible,
+            session.viewport_statistics_visible,
+            session.viewport_options_menu_open,
             context.app.runtime().selected_entity(),
             session.viewport_interaction_state.drag_in_progress(),
             tool_state,
             context.app.runtime().current_scene_reality_version(),
+            Some(expected_viewport_id),
         );
         let view_model = build_viewport_view_model(&frame);
         let root = remap_surface_node_ids(
@@ -63,6 +74,20 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                 VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
             ),
             SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportDetails),
+        );
+        routes.insert(
+            remap_widget_id(
+                request.tool_surface_instance_id,
+                VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
+            ),
+            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportStatistics),
+        );
+        routes.insert(
+            remap_widget_id(
+                request.tool_surface_instance_id,
+                VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+            ),
+            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportOptionsMenu),
         );
         for (index, choice) in view_model.product_choices.iter().enumerate() {
             routes.insert(
@@ -107,6 +132,16 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                 request,
                 context.projection_epoch,
                 SurfaceSessionMutation::ToggleViewportDetails,
+            ))),
+            SurfaceLocalAction::ToggleViewportStatistics => Ok(Some(surface_session_proposal(
+                request,
+                context.projection_epoch,
+                SurfaceSessionMutation::ToggleViewportStatistics,
+            ))),
+            SurfaceLocalAction::ToggleViewportOptionsMenu => Ok(Some(surface_session_proposal(
+                request,
+                context.projection_epoch,
+                SurfaceSessionMutation::ToggleViewportOptionsMenu,
             ))),
             _ => Ok(None),
         }

@@ -23,4 +23,6 @@ pub use build_outliner_panel::build_outliner_panel;
 pub use build_toolbar::build_toolbar;
 pub use build_viewport_panel::build_viewport_panel;
 pub use shell_chrome_definition::build_defined_tab_strip_from_frame;
-pub use toolbar_definition::{build_defined_toolbar, route_slot_for_toolbar_name};
+pub use toolbar_definition::{
+    build_defined_toolbar, build_defined_toolbar_menu_popup, route_slot_for_toolbar_name,
+};

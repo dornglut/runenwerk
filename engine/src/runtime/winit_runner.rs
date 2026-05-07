@@ -5,13 +5,13 @@ use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
 };
 use crate::runtime::platform::{PlatformEvent, apply_platform_event};
-use crate::runtime::window::WindowState;
+use crate::runtime::window::{WindowCursorIcon, WindowState};
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
 pub(crate) fn run(state: WindowedAppState) -> Result<()> {
     let event_loop = EventLoop::new()?;
@@ -114,6 +114,8 @@ impl WinitRunner {
             window.set_title(&window_state.title);
         }
 
+        window.set_cursor(winit_cursor_icon(window_state.cursor_icon));
+
         if window_state.close_requested {
             event_loop.exit();
             return Ok(());
@@ -133,6 +135,18 @@ impl WinitRunner {
         tracing::error!(error = %format!("{err:#}"), "runtime windowed execution failed");
         self.fatal_error = Some(err);
         event_loop.exit();
+    }
+}
+
+fn winit_cursor_icon(cursor_icon: WindowCursorIcon) -> CursorIcon {
+    match cursor_icon {
+        WindowCursorIcon::Default => CursorIcon::Default,
+        WindowCursorIcon::ColResize => CursorIcon::ColResize,
+        WindowCursorIcon::RowResize => CursorIcon::RowResize,
+        WindowCursorIcon::NwseResize => CursorIcon::NwseResize,
+        WindowCursorIcon::NeswResize => CursorIcon::NeswResize,
+        WindowCursorIcon::Grab => CursorIcon::Grab,
+        WindowCursorIcon::Grabbing => CursorIcon::Grabbing,
     }
 }
 

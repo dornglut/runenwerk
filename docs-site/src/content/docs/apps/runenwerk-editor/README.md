@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-04-29
+last_reviewed: 2026-05-07
 ---
 
 # Runenwerk Editor
@@ -23,6 +23,7 @@ last_reviewed: 2026-04-29
 ## Roadmap
 
 - [`roadmap.md`](./roadmap.md) - final end-to-end SDF-first editor/UI implementation roadmap.
+- [`viewport-expression-implementation-roadmap.md`](./viewport-expression-implementation-roadmap.md) - no-compromise viewport expression architecture implementation sequence.
 - [`execution-priority-checklist.md`](./execution-priority-checklist.md)
 
 ## Related Domain Docs

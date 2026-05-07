@@ -16,6 +16,9 @@ Runenwerk editor app and by future editor-facing integrations.
 ## Current Crates
 
 - `editor_core`: shared editor session and core state contracts.
+- `editor_definition`: durable editor definition document schemas, validation,
+  and pure formation helpers for editor-owned UI/workspace/theme/menu/shortcut
+  definition families.
 - `editor_shell`: shell composition, observation frames, view models, commands,
   workspace identity, persistence-facing state, and surface projection
   ratification.
@@ -39,3 +42,7 @@ behavior, or app-specific persistence locations.
 - `domain/ui/*` owns retained UI substrate and surface contracts.
 - `scene`, `world_ops`, and `world_sdf` provide domain data consumed by editor
   tooling.
+
+## Current Architecture Docs
+
+- [`editor-definition/current-architecture.md`](./editor-definition/current-architecture.md)

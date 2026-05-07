@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_shell/src/ids/widget_ids.rs
 //! Purpose: Stable widget ids for first editor shell composition.
 
-use crate::{PanelHostId, TabStackId, WidgetId};
+use crate::{PanelHostId, TabStackId, WidgetId, WorkspaceProfileId};
 
 pub const ROOT_WIDGET_ID: WidgetId = WidgetId(1);
 
@@ -14,7 +14,10 @@ pub const TOOLBAR_SEPARATOR_WIDGET_ID: WidgetId = WidgetId(15);
 pub const TOOLBAR_SCENE_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(16);
 pub const TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(17);
 pub const TOOLBAR_ADD_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(18);
+pub const TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(30_018);
+pub const TOOLBAR_WORKSPACE_CLOSE_WIDGET_ID_BASE: u64 = 30_100;
 pub const TOOLBAR_MENU_ROW_WIDGET_ID: WidgetId = WidgetId(19);
+pub const TOOLBAR_MENU_POPUP_WIDGET_ID: WidgetId = WidgetId(90_997);
 pub const TOOLBAR_SELECT_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_001);
 pub const TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_002);
 pub const TOOLBAR_ROTATE_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_003);
@@ -68,6 +71,10 @@ pub const VIEWPORT_PRODUCTS_LIST_WIDGET_ID: WidgetId = WidgetId(71);
 pub const VIEWPORT_DETAILS_TOGGLE_WIDGET_ID: WidgetId = WidgetId(72);
 pub const VIEWPORT_DETAILS_PANEL_WIDGET_ID: WidgetId = WidgetId(73);
 pub const VIEWPORT_DETAILS_LABEL_WIDGET_ID: WidgetId = WidgetId(74);
+pub const VIEWPORT_OPTIONS_BUTTON_WIDGET_ID: WidgetId = WidgetId(75);
+pub const VIEWPORT_OPTIONS_POPUP_WIDGET_ID: WidgetId = WidgetId(76);
+pub const VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID: WidgetId = WidgetId(77);
+pub const VIEWPORT_STATISTICS_LABEL_WIDGET_ID: WidgetId = WidgetId(78);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);
@@ -96,8 +103,8 @@ pub const TAB_STRIP_SCROLL_WIDGET_ID_BASE: u64 = 1_100_000;
 pub const TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_200_000;
 pub const TAB_DROP_ZONE_WIDGET_ID_BASE: u64 = 1_400_000;
 pub const TAB_CLOSE_BUTTON_WIDGET_ID_BASE: u64 = 1_500_000;
+pub const TAB_CLOSE_OVERLAY_WIDGET_ID_BASE: u64 = 1_550_000;
 pub const FLOATING_HOST_WIDGET_ID_BASE: u64 = 1_600_000;
-pub const TAB_STACK_KIND_SELECT_WIDGET_ID_BASE: u64 = 1_900_000;
 pub const TAB_STACK_NEW_TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_950_000;
 pub const TAB_STACK_SPLIT_HORIZONTAL_BUTTON_WIDGET_ID_BASE: u64 = 2_000_000;
 pub const TAB_STACK_SPLIT_VERTICAL_BUTTON_WIDGET_ID_BASE: u64 = 2_050_000;
@@ -105,6 +112,11 @@ pub const TAB_STACK_DUPLICATE_BUTTON_WIDGET_ID_BASE: u64 = 2_100_000;
 pub const TAB_STACK_CLOSE_AREA_BUTTON_WIDGET_ID_BASE: u64 = 2_150_000;
 pub const TAB_STACK_RESET_AREA_BUTTON_WIDGET_ID_BASE: u64 = 2_200_000;
 pub const TAB_STACK_LOCK_TYPE_TOGGLE_WIDGET_ID_BASE: u64 = 2_250_000;
+pub const TAB_STACK_SWITCH_SURFACE_BUTTON_WIDGET_ID_BASE: u64 = 2_260_000;
+pub const TAB_STACK_ACTION_MENU_BUTTON_WIDGET_ID_BASE: u64 = 2_270_000;
+pub const TAB_STACK_ACTION_MENU_POPUP_WIDGET_ID_BASE: u64 = 2_280_000;
+pub const TAB_STACK_SURFACE_MENU_POPUP_WIDGET_ID_BASE: u64 = 2_285_000;
+pub const TAB_STACK_SURFACE_MENU_ITEM_WIDGET_ID_BASE: u64 = 2_290_000;
 pub const WORKSPACE_SPLIT_HOST_WIDGET_ID_BASE: u64 = 2_300_000;
 pub const WORKSPACE_SPLIT_HANDLE_WIDGET_ID_BASE: u64 = 2_350_000;
 pub const FLOATING_COLUMN_WIDGET_ID: WidgetId = WidgetId(1_800_001);
@@ -145,6 +157,10 @@ pub fn toolbar_menu_item_widget_id(index: usize) -> WidgetId {
     WidgetId(TOOLBAR_MENU_ITEM_WIDGET_ID_BASE + index as u64)
 }
 
+pub fn toolbar_workspace_close_widget_id(profile_id: WorkspaceProfileId) -> WidgetId {
+    WidgetId(TOOLBAR_WORKSPACE_CLOSE_WIDGET_ID_BASE + profile_id.raw())
+}
+
 pub fn tab_strip_widget_id(tab_stack_id: TabStackId) -> WidgetId {
     WidgetId(TAB_STRIP_WIDGET_ID_BASE + tab_stack_id.raw())
 }
@@ -171,16 +187,20 @@ pub fn tab_close_button_widget_id(tab_stack_id: TabStackId, tab_index: usize) ->
     )
 }
 
+pub fn tab_close_overlay_widget_id(tab_stack_id: TabStackId, tab_index: usize) -> WidgetId {
+    WidgetId(
+        TAB_CLOSE_OVERLAY_WIDGET_ID_BASE
+            + tab_stack_id.raw() * STACK_WIDGET_STRIDE
+            + tab_index as u64,
+    )
+}
+
 pub fn tab_drop_zone_widget_id(tab_stack_id: TabStackId, insert_index: usize) -> WidgetId {
     WidgetId(
         TAB_DROP_ZONE_WIDGET_ID_BASE
             + tab_stack_id.raw() * STACK_WIDGET_STRIDE
             + insert_index as u64,
     )
-}
-
-pub fn tab_stack_kind_select_widget_id(tab_stack_id: TabStackId) -> WidgetId {
-    WidgetId(TAB_STACK_KIND_SELECT_WIDGET_ID_BASE + tab_stack_id.raw())
 }
 
 pub fn tab_stack_new_tab_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
@@ -209,6 +229,33 @@ pub fn tab_stack_reset_area_button_widget_id(tab_stack_id: TabStackId) -> Widget
 
 pub fn tab_stack_lock_type_toggle_widget_id(tab_stack_id: TabStackId) -> WidgetId {
     WidgetId(TAB_STACK_LOCK_TYPE_TOGGLE_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_switch_surface_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_SWITCH_SURFACE_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_action_menu_button_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_ACTION_MENU_BUTTON_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_action_menu_popup_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_ACTION_MENU_POPUP_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_surface_menu_popup_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_SURFACE_MENU_POPUP_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_surface_menu_item_widget_id(
+    tab_stack_id: TabStackId,
+    item_index: usize,
+) -> WidgetId {
+    WidgetId(
+        TAB_STACK_SURFACE_MENU_ITEM_WIDGET_ID_BASE
+            + tab_stack_id.raw() * STACK_WIDGET_STRIDE
+            + item_index as u64,
+    )
 }
 
 pub fn floating_host_widget_id(host_id: PanelHostId) -> WidgetId {

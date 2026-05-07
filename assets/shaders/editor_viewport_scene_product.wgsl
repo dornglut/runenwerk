@@ -1,6 +1,9 @@
 struct EditorViewportSceneProductUniform {
     surface : vec4<f32>,
     viewport : vec4<f32>,
+    viewport_b : vec4<f32>,
+    viewport_c : vec4<f32>,
+    viewport_d : vec4<f32>,
     camera_position : vec4<f32>,
     camera_forward : vec4<f32>,
     camera_right : vec4<f32>,
@@ -101,13 +104,29 @@ fn estimate_normal(sample_pos: vec3<f32>) -> vec3<f32> {
     return normalize(vec3<f32>(nx, ny, nz));
 }
 
-fn viewport_contains(pixel: vec2<f32>) -> bool {
-    if u.viewport.z <= 1.0 || u.viewport.w <= 1.0 {
+fn viewport_contains_rect(pixel: vec2<f32>, viewport: vec4<f32>) -> bool {
+    if viewport.z <= 1.0 || viewport.w <= 1.0 {
         return false;
     }
-    let min_corner = u.viewport.xy;
-    let max_corner = u.viewport.xy + u.viewport.zw;
+    let min_corner = viewport.xy;
+    let max_corner = viewport.xy + viewport.zw;
     return all(pixel >= min_corner) && all(pixel <= max_corner);
+}
+
+fn viewport_for_pixel(pixel: vec2<f32>) -> vec4<f32> {
+    if viewport_contains_rect(pixel, u.viewport) {
+        return u.viewport;
+    }
+    if viewport_contains_rect(pixel, u.viewport_b) {
+        return u.viewport_b;
+    }
+    if viewport_contains_rect(pixel, u.viewport_c) {
+        return u.viewport_c;
+    }
+    if viewport_contains_rect(pixel, u.viewport_d) {
+        return u.viewport_d;
+    }
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
 }
 
 fn grid_color(sample_pos: vec3<f32>) -> vec3<f32> {
@@ -176,7 +195,8 @@ fn color_magenta() -> vec4<f32> {
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let pixel = position.xy;
     let debug_stage = u.primitive_flags.z;
-    let inside_viewport = viewport_contains(pixel);
+    let viewport = viewport_for_pixel(pixel);
+    let inside_viewport = viewport.z > 1.0 && viewport.w > 1.0;
     if debug_stage == 1u {
         if inside_viewport {
             return vec4<f32>(1.0, 0.0, 1.0, 1.0);
@@ -188,8 +208,8 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         discard;
     }
 
-    let viewport_size = max(u.viewport.zw, vec2<f32>(1.0, 1.0));
-    let viewport_local = (pixel - u.viewport.xy) / viewport_size;
+    let viewport_size = max(viewport.zw, vec2<f32>(1.0, 1.0));
+    let viewport_local = (pixel - viewport.xy) / viewport_size;
     let ndc = vec2<f32>(viewport_local.x * 2.0 - 1.0, 1.0 - viewport_local.y * 2.0);
     let has_primitive = u.primitive_flags.y != 0u;
 

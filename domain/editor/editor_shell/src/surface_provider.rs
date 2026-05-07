@@ -176,6 +176,8 @@ pub enum SurfaceLocalAction {
         enabled: bool,
     },
     ToggleViewportDetails,
+    ToggleViewportStatistics,
+    ToggleViewportOptionsMenu,
     ActivateInspectorField {
         index: usize,
     },
@@ -308,9 +310,23 @@ impl ResolvedSurfaceFrame {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TabStackPopupMenuKind {
+    AreaActions,
+    SurfaceKinds,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActiveTabStackPopupMenu {
+    pub kind: TabStackPopupMenuKind,
+    pub tab_stack_id: TabStackId,
+    pub anchor_widget_id: crate::WidgetId,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct EditorShellFrameModel {
     pub toolbar: ToolbarViewModel,
     pub surfaces: BTreeMap<ToolSurfaceInstanceId, ResolvedSurfaceFrame>,
+    pub active_tab_stack_popup_menu: Option<ActiveTabStackPopupMenu>,
 }
 
 impl EditorShellFrameModel {
@@ -318,7 +334,19 @@ impl EditorShellFrameModel {
         toolbar: ToolbarViewModel,
         surfaces: BTreeMap<ToolSurfaceInstanceId, ResolvedSurfaceFrame>,
     ) -> Self {
-        Self { toolbar, surfaces }
+        Self {
+            toolbar,
+            surfaces,
+            active_tab_stack_popup_menu: None,
+        }
+    }
+
+    pub fn with_active_tab_stack_popup_menu(
+        mut self,
+        popup_menu: Option<ActiveTabStackPopupMenu>,
+    ) -> Self {
+        self.active_tab_stack_popup_menu = popup_menu;
+        self
     }
 
     pub fn surface(&self, surface_id: ToolSurfaceInstanceId) -> Option<&ResolvedSurfaceFrame> {
@@ -346,6 +374,8 @@ pub enum SurfaceSessionMutation {
     BackspaceEntityTableSearch,
     ToggleEntityTableSort { sort_key: EntityTableSortKey },
     ToggleViewportDetails,
+    ToggleViewportStatistics,
+    ToggleViewportOptionsMenu,
     ActivateInspectorField { index: usize },
     FocusInspectorField { index: usize },
     AppendInspectorFieldText { index: usize, text: String },

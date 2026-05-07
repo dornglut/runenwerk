@@ -10,6 +10,7 @@ pub enum ToolbarMenuKind {
     File,
     Edit,
     Window,
+    Workspace,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -19,7 +19,14 @@ mod tests {
 
     #[test]
     fn scaled_theme_preserves_palette_and_scales_metrics() {
-        let theme = ThemeTokens::default();
+        let theme = ThemeTokens {
+            radius: RadiusScale {
+                sm: 2.0,
+                md: 4.0,
+                lg: 8.0,
+            },
+            ..ThemeTokens::default()
+        };
         let scaled = theme.scaled_by(1.5);
         assert_eq!(scaled.background, theme.background);
         assert!(scaled.spacing.md > theme.spacing.md);

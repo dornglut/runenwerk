@@ -51,6 +51,12 @@ pub enum UiNodeDefinition {
     },
     Separator {
         id: UiNodeId,
+        #[serde(default)]
+        axis: Option<UiAxisDefinition>,
+        #[serde(default)]
+        length: Option<f32>,
+        #[serde(default)]
+        thickness: Option<f32>,
     },
     Label {
         id: UiNodeId,
@@ -137,7 +143,7 @@ impl UiNodeDefinition {
             | Self::Scroll { id, .. }
             | Self::Split { id, .. }
             | Self::Spacer { id }
-            | Self::Separator { id }
+            | Self::Separator { id, .. }
             | Self::Label { id, .. }
             | Self::Button { id, .. }
             | Self::Toggle { id, .. }

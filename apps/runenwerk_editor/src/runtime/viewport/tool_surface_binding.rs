@@ -336,6 +336,39 @@ mod tests {
     }
 
     #[test]
+    fn rebuild_keeps_multiple_structural_surfaces_for_shared_viewport() {
+        let mut layout = ViewportLayoutMapResource::default();
+        layout.upsert_entry(seeded_entry_with_widget(
+            ViewportId(1),
+            11,
+            21,
+            Some(31),
+            101,
+        ));
+        layout.upsert_entry(seeded_entry_with_widget(
+            ViewportId(1),
+            12,
+            22,
+            Some(32),
+            202,
+        ));
+        let mut registry = ToolSurfaceRuntimeBindingRegistryResource::default();
+
+        registry.rebuild_from_layout_map(&layout);
+
+        let first = registry
+            .binding_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(31).unwrap())
+            .expect("first shared-viewport surface should remain bound");
+        let second = registry
+            .binding_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(32).unwrap())
+            .expect("second shared-viewport surface should remain bound");
+        assert_eq!(first.viewport_id, ViewportId(1));
+        assert_eq!(second.viewport_id, ViewportId(1));
+        assert_eq!(first.host_widget_id, WidgetId(101));
+        assert_eq!(second.host_widget_id, WidgetId(202));
+    }
+
+    #[test]
     fn rebuild_tracks_rebind_when_viewport_changes_for_same_tool_surface() {
         let mut layout = ViewportLayoutMapResource::default();
         layout.upsert_entry(seeded_entry(ViewportId(1), 11, 21, Some(31)));

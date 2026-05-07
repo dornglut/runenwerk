@@ -55,13 +55,16 @@ As of the audited repository state:
 - `domain/ui/ui_text`
   - text primitives and atlas-based layout contracts (`TextStyle`, buffer/cursor/selection, `TextLayouter`, `AtlasTextLayouter`).
 - `domain/ui/ui_theme`
-  - theme token scales and defaults (colors, spacing, radius, typography).
+  - theme token scales and defaults (colors, spacing, radius, typography). The
+    default editor substrate theme is a compact black/dark-gray theme with zero
+    radius tokens; app/editor-owned authored themes can override those tokens
+    through the editor definition activation path.
 - `domain/ui/ui_render_data`
   - renderer-facing `UiFrame`/surface/layer/primitive contracts used by engine renderer extraction.
 - `domain/ui/ui_tree`
-  - retained tree contracts (`WidgetId`, node kinds/payloads, tree traversal, computed layout records).
+  - retained tree contracts (`WidgetId`, node kinds/payloads, anchored popup nodes with explicit layer order, tree traversal, computed layout records).
 - `domain/ui/ui_runtime`
-  - retained runtime orchestration (layout engine, input routing, runtime state, frame output generation).
+  - retained runtime orchestration (layout engine, anchored popup layout/hit-testing, input routing, popup overlay layer ordering, runtime state, frame output generation). Button hit testing uses the full button bounds, including padding, while text and other content layout still uses content bounds. Scrollbars are overlay primitives: scroll layout no longer reserves a permanent gutter, and scrollbar primitives are emitted only for active scroll interaction state.
 - `domain/ui/ui_widgets`
   - ergonomic widget/control constructors over `ui_tree` node contracts.
 
@@ -81,6 +84,11 @@ The authored and normalized UI definition model is source/IR. It should remain s
 
 It must not own editor workspace profiles, `ToolSurfaceKind`, panel/tab identity, app provider registries, concrete command execution, or editor-specific command semantics. Those belong in editor definition/shell/app layers.
 
+Applying an editor-owned definition into the live editor is outside
+`domain/ui/ui_definition`. The generic crate can normalize and form retained UI
+products, but the app/editor activation seam decides whether an applied editor
+definition actually changes live shell/runtime resources.
+
 Related non-`domain/ui` owners currently in the runtime path:
 
 - `domain/editor/editor_shell`
@@ -97,7 +105,7 @@ Related non-`domain/ui` owners currently in the runtime path:
 - renderer-facing UI frame/primitive data model consumed by engine render feature code
 - retained runtime ownership via:
   - `ui_tree` (retained nodes/tree/layout records)
-  - `ui_runtime` (tree orchestration, input routing, frame generation)
+  - `ui_runtime` (tree orchestration, anchored popup layout/hit-testing, popup overlay layer ordering, input routing, frame generation)
   - `ui_widgets` (control/widget constructors)
 
 ## What `domain/ui/*` Does Not Yet Own

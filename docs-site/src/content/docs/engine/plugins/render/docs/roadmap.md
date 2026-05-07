@@ -5,7 +5,12 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
+related_designs:
+  - ../../../../design/active/editor-native-multi-window-presentation-design.md
+  - ../../../../design/active/render-fragment-data-driven-maturity-design.md
+  - ../../../../design/active/render-product-surface-foundation-bundle-design.md
+  - ../../../../design/active/viewport-dynamic-product-target-allocation-design.md
 ---
 
 # Render Remaining Features Roadmap
@@ -45,6 +50,7 @@ Still missing or incomplete:
 - full binding model for graphics/resource-heavy workflows
 - serious feature proofs on top of the new architecture
 - stronger persistent/history resource workflows
+- dynamic offscreen texture target allocation for viewport/product surfaces
 - fragment/data-driven maturation
 - better inspection/tooling polish
 - final public API ergonomics polish
@@ -63,6 +69,7 @@ After this roadmap, the render system should cleanly support:
 - SDF/raymarch flows
 - geometry generation and GPU-driven drawing
 - history/persistent resources
+- dynamic viewport/product texture targets
 - multi-plugin flow composition
 - fragment/data-driven flow authoring
 - hot reload
@@ -71,6 +78,12 @@ After this roadmap, the render system should cleanly support:
 ---
 
 # Roadmap Overview
+
+## Active Bundle
+
+The next large render update should be the [Render Product Surface Foundation Bundle](../../../../design/active/render-product-surface-foundation-bundle-design.md).
+
+That bundle intentionally pulls together binding model closeout, dynamic target allocation, target aliases, prepared render views, history retention, UI sampling, inspection, and proof workloads. It is the no-compromise path for editor viewports and future product preview surfaces; implementing only dynamic allocation without dynamic write targets would leave another bridge.
 
 ## Recommended implementation order
 
@@ -81,6 +94,7 @@ After this roadmap, the render system should cleanly support:
 
 ### Wave 2 — Real workflow support
 4. binding model expansion
+4a. dynamic texture target allocation for viewport/product surfaces
 5. boids feature proof
 6. SDF renderer rebuilt on the new path
 
@@ -400,6 +414,77 @@ The API can express both compute-heavy and graphics-heavy real workflows cleanly
 
 ---
 
+# Phase R-DT — Dynamic Texture Target Allocation
+
+Status: Planned. This phase is required by the Runenwerk editor viewport V5 roadmap and is specified in `docs-site/src/content/docs/design/active/viewport-dynamic-product-target-allocation-design.md`.
+
+## Goal
+
+Add renderer-owned dynamic texture targets that can be requested per prepared frame without making dynamic viewport/product surfaces part of static `RenderFlow` declarations.
+
+## Why this matters
+
+This is needed for:
+
+- editor viewport scene-color, picking, overlay, and depth products;
+- future asset/material/field preview surfaces;
+- debug texture viewers and product inspectors;
+- per-viewport resize without reallocating unrelated flow targets;
+- avoiding one render flow per viewport or string-suffixed static resource labels.
+
+## Domains
+
+- resource
+- runtime
+- renderer
+- UI composite integration
+
+## Target files
+
+- `engine/src/plugins/render/resource/dynamic_target.rs`
+- `engine/src/plugins/render/runtime/dynamic_targets.rs`
+- `engine/src/plugins/render/frame/packet.rs`
+- `engine/src/plugins/render/runtime/frame_prepare.rs`
+- `engine/src/plugins/render/renderer/dynamic_targets.rs`
+- `engine/src/plugins/render/renderer/setup.rs`
+
+## Required implementation
+
+### 1. Dynamic target descriptors
+
+Add backend-neutral target keys, formats, usage flags, sample modes, and retention policy.
+
+### 2. Prepared-frame request snapshot
+
+Copy dynamic target requests into `PreparedRenderFrame` so render submission uses the same target set as the submitted UI frame.
+
+### 3. Renderer-owned cache
+
+Allocate, reuse, resize, retain, and retire backend textures by dynamic target key. Preserve previous valid targets when later requests are invalid.
+
+### 4. UI embed resolution
+
+Allow UI viewport embeds to resolve dynamic texture target sources without storing backend texture handles in UI data.
+
+### 5. Inspection hooks
+
+Expose target key, dimensions, format, sample mode, retention state, and generation for diagnostics.
+
+## Verification
+
+### Tests
+
+- dynamic target descriptor validation test
+- prepared-frame dynamic target snapshot test
+- renderer dynamic target cache allocation/reuse/resize test
+- UI embed dynamic texture source resolution test
+
+## Exit criteria
+
+The renderer can allocate distinct dynamic texture targets for separate viewport/product keys, resize only the affected target, and expose sampleable targets to UI composition without editor-specific types entering the engine render API.
+
+---
+
 # Phase R5 — Gold-Path Ergonomics Polish
 
 ## Goal
@@ -711,6 +796,10 @@ Complex mixed flows are inspectable without digging through internal implementat
 
 # Phase R10 — Fragment and Data-Driven Maturation
 
+Owning design:
+
+- `docs-site/src/content/docs/design/active/render-fragment-data-driven-maturity-design.md`
+
 ## Goal
 
 Make fragments and hot reload feel native to the architecture rather than bridged.
@@ -775,26 +864,24 @@ Fragments and hot reload feel like first-class extensions of the architecture.
 # Recommended Concrete Order of Attack
 
 ## Immediate next steps
-1. **R4 — Binding model expansion**
-2. **R6 — Boids feature proof**
-3. **R7 — Rebuild SDF renderer on new path**
+1. **Render Product Surface Foundation Bundle** from `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`
+2. **R6 — Boids feature proof** as a bundle proof workload
+3. **R7 — Rebuild SDF renderer on new path** as a bundle proof workload
 
-Builtin pass completion is done; these are the highest-value remaining execution and feature-proof phases.
-
-## Then
-4. **R4 — Binding model expansion**
-5. **R6 — Boids feature proof**
-6. **R7 — Rebuild SDF renderer on new path**
-
-These prove real capability.
+Builtin pass completion is done. The highest-value continuation is the product-surface foundation because it removes the target/view/resource limitations blocking editor viewports and future preview surfaces.
 
 ## Then
-7. **R5 — Gold-path ergonomics polish**
-8. **R8 — Persistent/history resources**
-9. **R9 — Inspection/tooling expansion**
-10. **R10 — Fragment/data-driven maturation**
+4. **R5 — Gold-path ergonomics polish**
+5. **R8 — Persistent/history resources**
+6. **R9 — Inspection/tooling expansion**
 
-These make the system robust and pleasant long-term.
+These make the system robust and debuggable after the main execution and product-surface paths are proven.
+
+## Then
+7. **Native multi-window presentation** from `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md` when second-monitor editor workflows become the active product priority.
+8. **R10 — Fragment/data-driven maturation**
+
+These extend the stable product-surface foundation into multi-swapchain editor presentation and authored render-flow composition.
 
 ---
 
@@ -808,6 +895,7 @@ Complete when:
 
 ## Milestone M2 — Real Feature Proof
 Complete when:
+- dynamic viewport/product target allocation supports the editor V5 surface contract
 - one boids example works
 - one serious SDF example works
 - both use builtin compiled execution only
@@ -836,6 +924,7 @@ Complete when:
 - `cargo test -p engine --test render_flow_contributions`
 - `cargo test -p engine --test render_resource_model`
 - `cargo test -p engine --test render_resource_lifetime`
+- `cargo test -p engine --test render_dynamic_targets`
 - `cargo test -p engine --test render_inspect`
 - `cargo test -p engine --test render_flow_fragments`
 
@@ -878,6 +967,9 @@ History/persistent/transient distinctions must become concrete before large-worl
 ### 5. Fragments remain second-class
 The current fragment bridge is acceptable, but long-term awkwardness should be reduced.
 
+### 6. Dynamic targets become editor-specific
+Dynamic target allocation must stay keyed by backend-neutral render target descriptors. Viewport ids, shell surface ids, and expression-product semantics belong in app/domain code.
+
 ---
 
 # Final Recommendation
@@ -887,13 +979,8 @@ Use this roadmap as the implementation plan for the remaining render features.
 ## Best next step
 Implement:
 
-1. `graphics_pass`
-2. `copy_pass`
-3. `present_pass`
+1. the Render Product Surface Foundation Bundle;
+2. editor viewport V5+V6 as the first app proof;
+3. boids and SDF examples as engine proofs.
 
-Then immediately prove the architecture with:
-
-4. boids
-5. SDF renderer on the new path
-
-That is the highest-value continuation of the current architecture.
+That is the highest-value continuation of the current architecture now that builtin graphics, copy, and present execution are complete.

@@ -14,7 +14,8 @@ use editor_shell::{
     SurfacePresentationArtifactKind, SurfaceProviderAvailability, SurfaceProviderDescriptor,
     SurfaceProviderDiagnostic, SurfaceProviderId, SurfaceProviderPriority, SurfaceProviderRequest,
     SurfaceRouteTable, SurfaceSessionMutation, ToolSurfaceInstanceId, ToolSurfaceKind,
-    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, ViewportObservationFrame, ViewportProductChoiceViewModel,
+    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, ViewportObservationFrame, ViewportProductChoiceViewModel,
     ViewportProductObservation, ViewportViewModel, build_console_panel, build_entity_table_panel,
     build_inspector_panel, build_outliner_panel, build_viewport_panel, editor_domain_proposal,
     entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
@@ -229,6 +230,7 @@ pub fn build_editor_shell_frame_model(
         app.debug_logs_enabled(),
         shell_state.active_toolbar_menu(),
         shell_state.active_workspace_profile_id(),
+        shell_state.open_workspace_profile_ids(),
         scene_version,
     );
 
@@ -250,6 +252,7 @@ pub fn build_editor_shell_frame_model(
     }
 
     EditorShellFrameModel::new(build_toolbar_view_model(&toolbar_frame), surfaces)
+        .with_active_tab_stack_popup_menu(shell_state.active_tab_stack_popup_menu())
 }
 
 pub fn mounted_surface_requests(
@@ -364,15 +367,24 @@ fn build_entity_table_view_model(state: &EntityTablePanelState) -> EntityTableVi
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "viewport observation projection keeps source provider state explicit at the boundary"
+)]
 fn build_viewport_observation_frame(
     products: Option<&ArtifactObservationFrame>,
     details_visible: bool,
+    statistics_visible: bool,
+    options_menu_open: bool,
     selected_entity: Option<EntityId>,
     drag_in_progress: bool,
     tool_state: ViewportToolState,
     source_version: RealityVersion,
+    fallback_viewport_id: Option<editor_viewport::ViewportId>,
 ) -> ViewportObservationFrame {
-    let viewport_id = products.map(|value| value.viewport_id);
+    let viewport_id = products
+        .map(|value| value.viewport_id)
+        .or(fallback_viewport_id);
     let selected_primary_product_id = products.and_then(|value| value.selected_primary_product_id);
     let products = products
         .map(|value| {
@@ -416,6 +428,8 @@ fn build_viewport_observation_frame(
         selected_primary_product_id,
         products,
         details_visible,
+        statistics_visible,
+        options_menu_open,
         selected_entity,
         hovered_entity: tool_state.hovered_entity,
         drag_in_progress,
@@ -442,6 +456,8 @@ fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportViewMo
             })
             .collect::<Vec<_>>(),
         details_visible: frame.details_visible,
+        statistics_visible: frame.statistics_visible,
+        options_menu_open: frame.options_menu_open,
         selected_entity: frame.selected_entity,
         hovered_entity: frame.hovered_entity,
         drag_in_progress: frame.drag_in_progress,

@@ -4,15 +4,16 @@ use editor_core::EntityId;
 use ui_theme::ThemeTokens;
 
 use crate::{
-    EditorShellFrameModel, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, ShellCommand,
-    SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
-    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, ToolSurfaceKind,
-    ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults, WidgetId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
-    build_editor_shell_frame, label, map_interactions_to_shell_commands, reduce_workspace,
-    tab_close_button_widget_id, tab_stack_kind_select_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tool_surface_definition_id, workspace_split_host_widget_id,
+    ActiveTabStackPopupMenu, EditorShellFrameModel, PanelInstanceId, PanelKind,
+    ResolvedSurfaceFrame, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
+    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
+    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
+    UiInteraction, UiInteractionResults, WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation,
+    WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame, label,
+    map_interactions_to_shell_commands, reduce_workspace, tab_close_button_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_switch_surface_button_widget_id,
+    tool_surface_definition_id, toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
 
 #[test]
@@ -52,7 +53,7 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                     id: editor_core::ToolId(2_001),
                     stable_name: "menu_file",
                     label: "File".to_string(),
-                    is_active: false,
+                    is_active: true,
                     enabled: true,
                 },
                 ToolbarButtonViewModel {
@@ -76,6 +77,27 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                     is_active: false,
                     enabled: true,
                 },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(3_003),
+                    stable_name: "workspace_editor_design",
+                    label: "Editor Design".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(3_004),
+                    stable_name: "workspace_plus",
+                    label: "+".to_string(),
+                    is_active: true,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_402),
+                    stable_name: "workspace_menu_editor_design",
+                    label: "Editor Design".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
             ],
         },
         BTreeMap::new(),
@@ -89,6 +111,12 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                 UiInteraction::Activated(crate::toolbar_menu_item_widget_id(1)),
                 UiInteraction::Activated(crate::toolbar_menu_item_widget_id(2)),
                 UiInteraction::Activated(crate::TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID),
+                UiInteraction::Activated(toolbar_workspace_close_widget_id(
+                    crate::MODELLING_WORKSPACE_PROFILE_ID,
+                )),
+                UiInteraction::Activated(crate::TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID),
+                UiInteraction::Activated(crate::TOOLBAR_ADD_WORKSPACE_WIDGET_ID),
+                UiInteraction::Activated(crate::toolbar_menu_item_widget_id(6)),
             ],
         },
         &build.projection_artifacts,
@@ -107,7 +135,161 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
             ShellCommand::SwitchWorkspaceProfile {
                 profile_id: crate::MODELLING_WORKSPACE_PROFILE_ID,
             },
+            ShellCommand::CloseWorkspaceProfile {
+                profile_id: crate::MODELLING_WORKSPACE_PROFILE_ID,
+            },
+            ShellCommand::SwitchWorkspaceProfile {
+                profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+            },
+            ShellCommand::ToggleToolbarMenu {
+                menu: crate::ToolbarMenuKind::Workspace,
+            },
+            ShellCommand::SwitchWorkspaceProfile {
+                profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+            },
         ]
+    );
+}
+
+#[test]
+fn active_top_bar_menu_projects_as_popup_without_pushing_content_down() {
+    let active_frame_model = EditorShellFrameModel::new(
+        ToolbarViewModel {
+            buttons: vec![
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_001),
+                    stable_name: "menu_file",
+                    label: "File".to_string(),
+                    is_active: true,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_100),
+                    stable_name: "file_save",
+                    label: "Save".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+            ],
+        },
+        BTreeMap::new(),
+    );
+    let inactive_frame_model = EditorShellFrameModel::new(
+        ToolbarViewModel {
+            buttons: vec![ToolbarButtonViewModel {
+                id: editor_core::ToolId(2_001),
+                stable_name: "menu_file",
+                label: "File".to_string(),
+                is_active: false,
+                enabled: true,
+            }],
+        },
+        BTreeMap::new(),
+    );
+    let workspace = sample_workspace_state();
+    let theme = ThemeTokens::default();
+    let active = build_editor_shell_frame(&active_frame_model, &theme, &workspace);
+    let inactive = build_editor_shell_frame(&inactive_frame_model, &theme, &workspace);
+    let active_layouts = ui_runtime::compute_tree_layout(
+        &active.tree,
+        ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
+        &ui_runtime::UiRuntimeState::default(),
+    );
+    let inactive_layouts = ui_runtime::compute_tree_layout(
+        &inactive.tree,
+        ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
+        &ui_runtime::UiRuntimeState::default(),
+    );
+
+    assert!(
+        active_layouts.contains_key(&crate::TOOLBAR_MENU_POPUP_WIDGET_ID),
+        "active menu should project a retained popup"
+    );
+    assert!(
+        !inactive_layouts.contains_key(&crate::TOOLBAR_MENU_POPUP_WIDGET_ID),
+        "inactive menu should not project popup layout"
+    );
+    assert_eq!(
+        active_layouts
+            .get(&crate::BODY_ROOT_WIDGET_ID)
+            .expect("active body root")
+            .bounds,
+        inactive_layouts
+            .get(&crate::BODY_ROOT_WIDGET_ID)
+            .expect("inactive body root")
+            .bounds,
+        "opening a menu must not add a second toolbar row or push content down"
+    );
+}
+
+#[test]
+fn toolbar_separator_projects_as_centered_visible_divider() {
+    let frame_model = EditorShellFrameModel::new(
+        ToolbarViewModel {
+            buttons: vec![
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_001),
+                    stable_name: "menu_file",
+                    label: "File".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_002),
+                    stable_name: "menu_edit",
+                    label: "Edit".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_003),
+                    stable_name: "menu_window",
+                    label: "Window".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(3_001),
+                    stable_name: "workspace_scene",
+                    label: "Scene".to_string(),
+                    is_active: true,
+                    enabled: true,
+                },
+            ],
+        },
+        BTreeMap::new(),
+    );
+    let workspace = sample_workspace_state();
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let layouts = ui_runtime::compute_tree_layout(
+        &build.tree,
+        ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
+        &ui_runtime::UiRuntimeState::default(),
+    );
+    let separator_node = build
+        .tree
+        .walk()
+        .find(|node| node.id == crate::TOOLBAR_SEPARATOR_WIDGET_ID)
+        .expect("toolbar separator should exist");
+    assert!(matches!(
+        &separator_node.kind,
+        crate::UiNodeKind::Divider(_)
+    ));
+
+    let row = layouts
+        .get(&crate::TOOLBAR_ROW_WIDGET_ID)
+        .expect("toolbar row should have layout");
+    let separator = layouts
+        .get(&crate::TOOLBAR_SEPARATOR_WIDGET_ID)
+        .expect("toolbar separator should have layout");
+
+    assert!((separator.bounds.width - 1.0).abs() < 0.001);
+    assert!((separator.bounds.height - 14.0).abs() < 0.001);
+    assert!(
+        (separator.bounds.y - (row.bounds.y + (row.bounds.height - separator.bounds.height) * 0.5))
+            .abs()
+            < 0.001,
+        "toolbar separator should be centered vertically in the row"
     );
 }
 
@@ -227,10 +409,6 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
             items: vec![
-                UiInteraction::SelectChanged {
-                    target: tab_stack_kind_select_widget_id(viewport_stack),
-                    index: 3,
-                },
                 UiInteraction::Activated(tab_stack_new_tab_button_widget_id(viewport_stack)),
                 UiInteraction::Activated(tab_stack_split_horizontal_button_widget_id(
                     viewport_stack,
@@ -244,11 +422,6 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
     assert!(matches!(
         commands.as_slice(),
         [
-            ShellCommand::SwitchPanelToolSurfaceKind {
-                panel_instance_id,
-                tool_surface_kind: ToolSurfaceKind::Inspector,
-                projection_epoch: select_epoch,
-            },
             ShellCommand::CreatePanelTab {
                 tab_stack_id: create_stack,
                 ..
@@ -262,13 +435,76 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
                 panel_instance_id: close_panel,
                 projection_epoch: close_epoch,
             },
-        ] if *panel_instance_id == viewport_panel
-            && *select_epoch == projection_epoch
-            && *create_stack == viewport_stack
+        ] if *create_stack == viewport_stack
             && *split_stack == viewport_stack
             && *close_stack == viewport_stack
             && *close_panel == viewport_panel
             && *close_epoch == projection_epoch
+    ));
+}
+
+#[test]
+fn tab_stack_area_actions_are_projected_as_popup_menu() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let inactive_frame_model = frame_model_for_workspace(&workspace);
+    let inactive_build =
+        build_editor_shell_frame(&inactive_frame_model, &ThemeTokens::default(), &workspace);
+
+    assert!(!ui_tree_contains_widget(
+        &inactive_build.tree.root,
+        tab_stack_action_menu_popup_widget_id(viewport_stack)
+    ));
+    assert!(!ui_tree_contains_widget(
+        &inactive_build.tree.root,
+        tab_stack_split_horizontal_button_widget_id(viewport_stack)
+    ));
+
+    let active_frame_model = frame_model_for_workspace(&workspace)
+        .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
+            kind: TabStackPopupMenuKind::AreaActions,
+            tab_stack_id: viewport_stack,
+            anchor_widget_id: WidgetId(99_001),
+        }));
+    let active_build =
+        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+
+    assert!(ui_tree_contains_widget(
+        &active_build.tree.root,
+        tab_stack_action_menu_popup_widget_id(viewport_stack)
+    ));
+    assert!(ui_tree_contains_widget(
+        &active_build.tree.root,
+        tab_stack_split_horizontal_button_widget_id(viewport_stack)
+    ));
+
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![
+                UiInteraction::Activated(tab_stack_switch_surface_button_widget_id(viewport_stack)),
+                UiInteraction::Activated(tab_stack_split_horizontal_button_widget_id(
+                    viewport_stack,
+                )),
+            ],
+        },
+        &active_build.projection_artifacts,
+    );
+
+    assert!(matches!(
+        commands.as_slice(),
+        [
+            ShellCommand::ToggleTabStackSurfaceMenu {
+                tab_stack_id,
+                anchor_widget_id,
+            },
+            ShellCommand::SplitTabStackArea {
+                tab_stack_id: split_stack,
+                ..
+            },
+        ] if *tab_stack_id == viewport_stack
+            && *anchor_widget_id == tab_stack_switch_surface_button_widget_id(viewport_stack)
+            && *split_stack == viewport_stack
     ));
 }
 

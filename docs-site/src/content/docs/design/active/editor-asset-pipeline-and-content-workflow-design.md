@@ -312,6 +312,14 @@ Initial asset kinds:
 
 The taxonomy belongs in `domain/asset/src/kind.rs`. Document kind compatibility belongs in `domain/editor/editor_core/src/document.rs`.
 
+Theme, UI layout, workspace definition, menu, shortcut, command binding, panel
+registry, tool-surface definition, and editor definition assets should feed the
+existing `domain/editor/editor_definition` and `domain/ui/ui_definition`
+semantics. The future asset pipeline owns source identity, cataloging,
+dependencies, import/cache policy, and hot-reload delivery for those files; it
+does not replace the editor-definition or UI-definition crates as the semantic
+owners of validation, normalization, formation, or live activation contracts.
+
 Mesh/glTF kinds exist for compatibility, preview, and reference workflows. SDF and field-world kinds are the primary world-authoring content path.
 
 ## Project File Evolution

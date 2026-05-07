@@ -1,3 +1,4 @@
+pub mod applied_editor_definition;
 pub mod controller;
 pub mod dispatch_shell_command;
 pub mod providers;
@@ -8,6 +9,7 @@ pub mod ui_definition_assets;
 
 mod toolbar_adapter;
 
+pub use applied_editor_definition::*;
 pub use controller::*;
 pub use dispatch_shell_command::*;
 pub use providers::*;

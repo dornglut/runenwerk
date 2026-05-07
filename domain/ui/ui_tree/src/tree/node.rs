@@ -37,6 +37,7 @@ impl UiNode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiNodeKind {
     Panel(PanelNode),
+    Popup(PopupNode),
     Label(LabelNode),
     Button(ButtonNode),
     TextInput(TextInputNode),
@@ -56,6 +57,94 @@ pub enum UiNodeKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct PopupNode {
+    pub anchor: WidgetId,
+    pub placement: PopupPlacement,
+    pub layer_order: u32,
+    pub padding: UiInsets,
+    pub gap: f32,
+    pub offset: f32,
+    pub min_size: UiSize,
+    pub theme: ThemeTokens,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PopupPlacement {
+    BottomStart,
+    RightStart,
+    InsideTopEnd,
+    InsideBottomStart,
+    TopStart,
+}
+
+impl PopupNode {
+    pub fn anchored_bottom_start(anchor: WidgetId, theme: ThemeTokens) -> Self {
+        Self {
+            anchor,
+            placement: PopupPlacement::BottomStart,
+            layer_order: 2,
+            padding: UiInsets::all(theme.spacing.xs),
+            gap: theme.spacing.xs,
+            offset: theme.spacing.xs,
+            min_size: UiSize::new(120.0, 0.0),
+            theme,
+        }
+    }
+
+    pub fn anchored_top_start(anchor: WidgetId, theme: ThemeTokens) -> Self {
+        Self {
+            anchor,
+            placement: PopupPlacement::TopStart,
+            layer_order: 1,
+            padding: UiInsets::all(theme.spacing.xs),
+            gap: theme.spacing.xs,
+            offset: 0.0,
+            min_size: UiSize::new(120.0, 0.0),
+            theme,
+        }
+    }
+
+    pub fn anchored_right_start(anchor: WidgetId, theme: ThemeTokens) -> Self {
+        Self {
+            anchor,
+            placement: PopupPlacement::RightStart,
+            layer_order: 2,
+            padding: UiInsets::all(theme.spacing.xs),
+            gap: theme.spacing.xs,
+            offset: theme.spacing.xs,
+            min_size: UiSize::new(120.0, 0.0),
+            theme,
+        }
+    }
+
+    pub fn anchored_inside_top_end(anchor: WidgetId, theme: ThemeTokens) -> Self {
+        Self {
+            anchor,
+            placement: PopupPlacement::InsideTopEnd,
+            layer_order: 1,
+            padding: UiInsets::all(0.0),
+            gap: 0.0,
+            offset: 0.0,
+            min_size: UiSize::ZERO,
+            theme,
+        }
+    }
+
+    pub fn anchored_inside_bottom_start(anchor: WidgetId, theme: ThemeTokens) -> Self {
+        Self {
+            anchor,
+            placement: PopupPlacement::InsideBottomStart,
+            layer_order: 1,
+            padding: UiInsets::all(theme.spacing.xs),
+            gap: theme.spacing.xs,
+            offset: theme.spacing.xs,
+            min_size: UiSize::new(120.0, 0.0),
+            theme,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct PanelNode {
     pub padding: UiInsets,
     pub gap: f32,
@@ -66,7 +155,7 @@ pub struct PanelNode {
 impl PanelNode {
     pub fn new(theme: ThemeTokens) -> Self {
         Self {
-            padding: UiInsets::all(theme.spacing.sm),
+            padding: UiInsets::all(theme.spacing.xs),
             gap: theme.spacing.xs,
             min_size: UiSize::ZERO,
             theme,
@@ -102,6 +191,9 @@ pub struct ButtonNode {
     pub selected: bool,
     pub selected_fill: Option<UiColor>,
     pub selected_border: Option<UiColor>,
+    pub corner_radius: Option<f32>,
+    pub fill_width: bool,
+    pub reveal_on_hover_anchor: Option<WidgetId>,
 }
 
 impl ButtonNode {
@@ -126,6 +218,9 @@ impl ButtonNode {
             selected: false,
             selected_fill: None,
             selected_border: None,
+            corner_radius: None,
+            fill_width: false,
+            reveal_on_hover_anchor: None,
         }
     }
 }

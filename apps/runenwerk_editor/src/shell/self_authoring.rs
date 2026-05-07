@@ -656,9 +656,11 @@ fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
                 label: "Runenwerk Default".to_string(),
                 colors: BTreeMap::from([
                     ("accent".to_string(), "#5f8cff".to_string()),
-                    ("surface".to_string(), "#20232a".to_string()),
+                    ("background".to_string(), "#000000".to_string()),
+                    ("surface".to_string(), "#050506".to_string()),
+                    ("border".to_string(), "#1c1c1e".to_string()),
                 ]),
-                spacing: BTreeMap::from([("panel_gap".to_string(), 8.0)]),
+                spacing: BTreeMap::from([("panel_gap".to_string(), 4.0)]),
                 typography: BTreeMap::from([(
                     "body".to_string(),
                     EditorTypographyTokenDefinition {
@@ -667,7 +669,7 @@ fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
                         weight: 400,
                     },
                 )]),
-                radius: BTreeMap::from([("control".to_string(), 4.0)]),
+                radius: BTreeMap::from([("control".to_string(), 0.0)]),
             }),
         ),
         EditorDefinitionDocument::current(

@@ -15,7 +15,7 @@ use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportLayoutMapResource, ViewportPickingResultsResource, ViewportPresentationStateResource,
-    ViewportProductRegistryResource, ViewportSurfaceSetResource,
+    ViewportProductRegistryResource, ViewportRenderStateResource, ViewportSurfaceSetResource,
 };
 
 pub struct EditorAppPlugin;
@@ -53,6 +53,7 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportProductRegistryResource>();
         app.init_resource::<ViewportPresentationStateResource>();
         app.init_resource::<ViewportArtifactObservationResource>();
+        app.init_resource::<ViewportRenderStateResource>();
         app.init_resource::<ViewportLayoutMapResource>();
         app.init_resource::<ToolSurfaceRuntimeBindingRegistryResource>();
         app.init_resource::<SurfaceDefinitionRegistryResource>();

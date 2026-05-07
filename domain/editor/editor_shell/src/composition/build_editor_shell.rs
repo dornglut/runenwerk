@@ -5,13 +5,14 @@ use std::collections::BTreeMap;
 
 use ui_definition::FormedUiRoute;
 use ui_layout::SizePolicy;
-use ui_math::Axis;
+use ui_math::{Axis, UiInsets};
 use ui_text::FontId;
 use ui_theme::{ThemeTokens, UiColor};
+use ui_tree::PopupNode;
 
 use crate::{
     UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
-    panel, select, split, toggle, vstack_with_policies,
+    panel, spacer, split, vstack_with_policies,
 };
 use ui_math::UiSize;
 
@@ -24,18 +25,21 @@ use crate::workspace::{
 use crate::{
     BODY_CONSOLE_SPLIT_HANDLE_WIDGET_ID, BODY_CONSOLE_SPLIT_WIDGET_ID,
     BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_HANDLE_WIDGET_ID,
-    CENTER_RIGHT_SPLIT_WIDGET_ID, FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID,
-    FixedLayoutProjection, INSPECTOR_PANEL_WIDGET_ID, LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_PANEL_WIDGET_ID,
-    PanelInstanceId, PanelKind, ROOT_WIDGET_ID, SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction,
-    SurfaceProviderId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind,
+    CENTER_RIGHT_SPLIT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID, FLOATING_COLUMN_WIDGET_ID,
+    FLOATING_DROP_ZONE_WIDGET_ID, FixedLayoutProjection, INSPECTOR_PANEL_WIDGET_ID,
+    LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID, LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
+    OUTLINER_PANEL_WIDGET_ID, PanelInstanceId, PanelKind, ROOT_WIDGET_ID,
+    SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction, SurfaceProviderId, TabStackId,
+    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind,
     ToolbarMenuKind, VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
-    WorkspaceState, build_defined_toolbar, tab_close_button_widget_id,
+    WorkspaceState, build_defined_toolbar, build_defined_toolbar_menu_popup,
+    tab_close_button_widget_id, tab_close_overlay_widget_id, tab_stack_action_menu_popup_widget_id,
     tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
-    tab_stack_duplicate_button_widget_id, tab_stack_kind_select_widget_id,
-    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_split_vertical_button_widget_id, tab_strip_scroll_widget_id,
+    tab_stack_duplicate_button_widget_id, tab_stack_lock_type_toggle_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_reset_area_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_split_vertical_button_widget_id,
+    tab_stack_surface_menu_item_widget_id, tab_stack_surface_menu_popup_widget_id,
+    tab_stack_switch_surface_button_widget_id, tab_strip_scroll_widget_id,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,11 +51,23 @@ pub enum RoutedShellAction {
     ToggleToolbarMenu {
         menu: ToolbarMenuKind,
     },
+    ToggleTabStackActionMenu {
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    },
+    ToggleTabStackSurfaceMenu {
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    },
     RunToolbarCommand {
         command: ToolbarCommandKind,
         enabled: bool,
     },
     SwitchWorkspaceProfile {
+        profile_id: WorkspaceProfileId,
+        enabled: bool,
+    },
+    CloseWorkspaceProfile {
         profile_id: WorkspaceProfileId,
         enabled: bool,
     },
@@ -76,6 +92,10 @@ pub enum RoutedShellAction {
         tab_stack_id: TabStackId,
         panel_instance_id: Option<PanelInstanceId>,
         tool_surface_kinds: Vec<ToolSurfaceKind>,
+    },
+    SwitchPanelToolSurfaceKindTo {
+        panel_instance_id: PanelInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
     },
     CreatePanelTab {
         tab_stack_id: TabStackId,
@@ -168,10 +188,17 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
     let root_host = workspace_projection.root_host.clone();
     let floating_hosts = workspace_projection.floating_hosts.clone();
     let toolbar = build_defined_toolbar(&frame_model.toolbar, theme);
+    let toolbar_menu_popup = build_defined_toolbar_menu_popup(&frame_model.toolbar, theme);
+    let tab_stack_popup_menus =
+        build_tab_stack_popup_menus(frame_model, &workspace_projection, theme);
+    let mut toolbar_routes_by_widget_id = toolbar.routes_by_widget_id.clone();
+    if let Some(popup) = toolbar_menu_popup.as_ref() {
+        toolbar_routes_by_widget_id.extend(popup.routes_by_widget_id.clone());
+    }
     let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
         frame_model,
         &workspace_projection,
-        &toolbar.routes_by_widget_id,
+        &toolbar_routes_by_widget_id,
     );
     let projection_artifacts = ShellProjectionArtifacts {
         projection_epoch: 0,
@@ -224,16 +251,27 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
     };
     root_theme.border = UiColor::new(theme.border.r, theme.border.g, theme.border.b, 0.80);
 
-    let root = panel(
-        ROOT_WIDGET_ID,
-        root_theme,
-        vec![vstack_with_policies(
-            BODY_ROOT_WIDGET_ID,
-            theme.spacing.sm,
-            vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
-            vec![toolbar.root, content],
-        )],
+    let body_root = vstack_with_policies(
+        BODY_ROOT_WIDGET_ID,
+        theme.spacing.sm,
+        vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
+        vec![toolbar.root, content],
     );
+    let mut root_children = vec![body_root];
+    if let Some(popup) = toolbar_menu_popup {
+        root_children.push(popup.root);
+    }
+    root_children.extend(tab_stack_popup_menus);
+
+    let mut root = panel(ROOT_WIDGET_ID, root_theme, root_children);
+    if let UiNodeKind::Panel(panel) = &mut root.kind {
+        panel.padding = UiInsets::new(
+            theme.spacing.xs,
+            theme.spacing.sm,
+            theme.spacing.sm,
+            theme.spacing.sm,
+        );
+    }
 
     EditorShellBuildResult {
         tree: UiTree::new(root),
@@ -364,7 +402,7 @@ fn build_workspace_host_from_projection(
             )
         }
         ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { widget_id, .. } => {
-            build_empty_stack_placeholder(*widget_id, "Drop a tab here", theme)
+            build_empty_stack_placeholder(*widget_id, "", theme)
         }
     }
 }
@@ -392,9 +430,7 @@ fn build_tab_stack_host_from_frame(
                 .and_then(|surface_id| frame_model.surface(surface_id))
                 .map(|surface| surface.artifact.root.clone())
         })
-        .unwrap_or_else(|| {
-            build_empty_stack_placeholder(empty_widget_id, "Drop a tab here", theme)
-        });
+        .unwrap_or_else(|| build_empty_stack_placeholder(empty_widget_id, "", theme));
     vstack_with_policies(
         tab_stack_container_widget_id(tab_stack.tab_stack_id),
         theme.spacing.xs,
@@ -415,38 +451,11 @@ fn build_tab_strip_from_frame(
     if !show_drop_slots {
         return crate::build_defined_tab_strip_from_frame(tab_stack, frame_model, theme);
     }
-    let active_tool_surface_kind = tab_stack
-        .active_panel
-        .and_then(|panel| panel.active_tool_surface)
-        .and_then(|surface_id| frame_model.surface(surface_id))
-        .map(|surface| surface.surface_kind)
-        .unwrap_or(ToolSurfaceKind::Placeholder);
-    let tool_surface_kinds = shell_tool_surface_kinds();
-    let selected_kind_index = tool_surface_kinds
-        .iter()
-        .position(|kind| *kind == active_tool_surface_kind);
     let mut children = Vec::with_capacity(if show_drop_slots {
         tab_stack.tabs.len() * 3 + 9
     } else {
         tab_stack.tabs.len() * 2 + 8
     });
-    children.push(select(
-        tab_stack_kind_select_widget_id(tab_stack.tab_stack_id),
-        tool_surface_kinds
-            .iter()
-            .copied()
-            .map(tool_surface_kind_label),
-        selected_kind_index,
-        "Surface",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    ));
-    children.push(button(
-        tab_stack_new_tab_button_widget_id(tab_stack.tab_stack_id),
-        "+",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    ));
     for insert_index in 0..=tab_stack.tabs.len() {
         if show_drop_slots {
             let drop_slot = tab_stack
@@ -465,7 +474,7 @@ fn build_tab_strip_from_frame(
                         } if tab_stack_id == tab_stack.tab_stack_id && preview_index == insert_index
                     )
                 });
-            children.push(build_drop_slot_button(
+            children.push(build_tab_insertion_spacer(
                 drop_slot.widget_id,
                 drop_highlight,
                 theme,
@@ -495,52 +504,41 @@ fn build_tab_strip_from_frame(
                 theme.clone(),
                 is_active,
             ));
-            children.push(button(
+            let mut close_button = button(
                 tab_close_button_widget_id(tab_stack.tab_stack_id, insert_index),
                 "x",
                 theme.body_small_text_style(FontId(1)),
                 theme.clone(),
+            );
+            if let UiNodeKind::Button(button) = &mut close_button.kind {
+                let mut close_theme = theme.clone();
+                close_theme.background_panel = UiColor::new(
+                    theme.background_panel.r,
+                    theme.background_panel.g,
+                    theme.background_panel.b,
+                    0.50,
+                );
+                button.theme = close_theme;
+                button.padding = UiInsets::ZERO;
+                button.min_size = UiSize::new(18.0, 18.0);
+                button.corner_radius = Some(f32::MAX);
+                button.reveal_on_hover_anchor = Some(tab.widget_id);
+            }
+            let mut close_popup = PopupNode::anchored_inside_top_end(tab.widget_id, theme.clone());
+            close_popup.offset = theme.spacing.xs;
+            children.push(UiNode::with_children(
+                tab_close_overlay_widget_id(tab_stack.tab_stack_id, insert_index),
+                UiNodeKind::Popup(close_popup),
+                vec![close_button],
             ));
         }
     }
     children.push(button(
-        tab_stack_split_horizontal_button_widget_id(tab_stack.tab_stack_id),
-        "H",
+        tab_stack_new_tab_button_widget_id(tab_stack.tab_stack_id),
+        "+",
         theme.body_small_text_style(FontId(1)),
         theme.clone(),
     ));
-    children.push(button(
-        tab_stack_split_vertical_button_widget_id(tab_stack.tab_stack_id),
-        "V",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    ));
-    children.push(button(
-        tab_stack_duplicate_button_widget_id(tab_stack.tab_stack_id),
-        "D",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    ));
-    children.push(button(
-        tab_stack_reset_area_button_widget_id(tab_stack.tab_stack_id),
-        "R",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    ));
-    children.push(toggle(
-        tab_stack_lock_type_toggle_widget_id(tab_stack.tab_stack_id),
-        "Lock",
-        tab_stack.locked_tool_surface_kind.is_some(),
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    ));
-    children.push(button(
-        tab_stack_close_area_button_widget_id(tab_stack.tab_stack_id),
-        "x",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    ));
-
     let strip_row = hstack_with_policies(
         tab_stack.tab_strip_widget_id,
         theme.spacing.xs * 0.5,
@@ -554,24 +552,174 @@ fn build_tab_strip_from_frame(
     )
 }
 
-fn build_drop_slot_button(widget_id: WidgetId, highlighted: bool, theme: &ThemeTokens) -> UiNode {
-    let mut node = button_selected(
-        widget_id,
-        "",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-        highlighted,
+fn build_tab_stack_popup_menus(
+    frame_model: &EditorShellFrameModel,
+    workspace_projection: &WorkspaceProjectionArtifact,
+    theme: &ThemeTokens,
+) -> Vec<UiNode> {
+    let Some(active_menu) = frame_model.active_tab_stack_popup_menu.as_ref() else {
+        return Vec::new();
+    };
+
+    projected_tab_stacks_for_routes(workspace_projection)
+        .into_iter()
+        .filter(|stack| stack.tab_stack_id == active_menu.tab_stack_id)
+        .map(|stack| match active_menu.kind {
+            TabStackPopupMenuKind::AreaActions => {
+                build_tab_stack_action_menu_popup(stack, active_menu.anchor_widget_id, theme)
+            }
+            TabStackPopupMenuKind::SurfaceKinds => {
+                build_tab_stack_surface_menu_popup(stack, active_menu.anchor_widget_id, theme)
+            }
+        })
+        .collect()
+}
+
+fn build_tab_stack_action_menu_popup(
+    tab_stack: &ProjectedTabStackSlot,
+    anchor_widget_id: WidgetId,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let tab_stack_id = tab_stack.tab_stack_id;
+    let text_style = theme.body_small_text_style(FontId(1));
+    let lock_label = if tab_stack.locked_tool_surface_kind.is_some() {
+        "Unlock Type"
+    } else {
+        "Lock Type"
+    };
+    let mut children = vec![
+        tab_stack_action_menu_item(
+            tab_stack_split_horizontal_button_widget_id(tab_stack_id),
+            "Split Horizontal",
+            theme,
+            text_style.clone(),
+        ),
+        tab_stack_action_menu_item(
+            tab_stack_split_vertical_button_widget_id(tab_stack_id),
+            "Split Vertical",
+            theme,
+            text_style.clone(),
+        ),
+        tab_stack_action_menu_item(
+            tab_stack_duplicate_button_widget_id(tab_stack_id),
+            "Duplicate Area",
+            theme,
+            text_style.clone(),
+        ),
+        tab_stack_action_menu_item(
+            tab_stack_reset_area_button_widget_id(tab_stack_id),
+            "Reset Area",
+            theme,
+            text_style.clone(),
+        ),
+        tab_stack_action_menu_item(
+            tab_stack_switch_surface_button_widget_id(tab_stack_id),
+            "Switch Type",
+            theme,
+            text_style.clone(),
+        ),
+        tab_stack_action_menu_item(
+            tab_stack_lock_type_toggle_widget_id(tab_stack_id),
+            lock_label,
+            theme,
+            text_style.clone(),
+        ),
+        tab_stack_action_menu_item(
+            tab_stack_close_area_button_widget_id(tab_stack_id),
+            "Close Area",
+            theme,
+            text_style,
+        ),
+    ];
+
+    let mut popup_theme = theme.clone();
+    popup_theme.background_panel = UiColor::new(
+        theme.background_panel.r,
+        theme.background_panel.g,
+        theme.background_panel.b,
+        0.98,
     );
-    if let UiNodeKind::Button(button) = &mut node.kind {
-        button.min_size = UiSize::new((theme.spacing.xs * 1.25).max(8.0), 0.0);
-        button.padding = ui_math::UiInsets::new(
-            (theme.spacing.xs * 0.35).max(1.0),
-            (theme.spacing.xs * 0.35).max(1.0),
-            (theme.spacing.xs * 0.35).max(1.0),
-            (theme.spacing.xs * 0.35).max(1.0),
+    let mut root = UiNode::with_children(
+        tab_stack_action_menu_popup_widget_id(tab_stack_id),
+        UiNodeKind::Popup(PopupNode::anchored_bottom_start(
+            anchor_widget_id,
+            popup_theme,
+        )),
+        Vec::new(),
+    );
+    root.children.append(&mut children);
+    root
+}
+
+fn build_tab_stack_surface_menu_popup(
+    tab_stack: &ProjectedTabStackSlot,
+    anchor_widget_id: WidgetId,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let text_style = theme.body_small_text_style(FontId(1));
+    let mut children = shell_tool_surface_kinds()
+        .into_iter()
+        .enumerate()
+        .map(|(index, kind)| {
+            tab_stack_action_menu_item(
+                tab_stack_surface_menu_item_widget_id(tab_stack.tab_stack_id, index),
+                tool_surface_kind_label(kind),
+                theme,
+                text_style.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let mut popup_theme = theme.clone();
+    popup_theme.background_panel = UiColor::new(
+        theme.background_panel.r,
+        theme.background_panel.g,
+        theme.background_panel.b,
+        0.98,
+    );
+    let mut root = UiNode::with_children(
+        tab_stack_surface_menu_popup_widget_id(tab_stack.tab_stack_id),
+        UiNodeKind::Popup(PopupNode::anchored_right_start(
+            anchor_widget_id,
+            popup_theme,
+        )),
+        Vec::new(),
+    );
+    root.children.append(&mut children);
+    root
+}
+
+fn tab_stack_action_menu_item(
+    widget_id: WidgetId,
+    label_text: &str,
+    theme: &ThemeTokens,
+    text_style: ui_text::TextStyle,
+) -> UiNode {
+    let mut item = button(widget_id, label_text, text_style, theme.clone());
+    if let UiNodeKind::Button(button) = &mut item.kind {
+        button.fill_width = true;
+        button.padding = UiInsets::new(
+            theme.spacing.xs,
+            theme.spacing.sm,
+            theme.spacing.xs,
+            theme.spacing.sm,
         );
+        button.min_size = UiSize::new(112.0, 0.0);
     }
-    node
+    item
+}
+
+fn build_tab_insertion_spacer(
+    widget_id: WidgetId,
+    highlighted: bool,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let width = if highlighted {
+        (theme.spacing.lg * 2.0).max(20.0)
+    } else {
+        theme.spacing.sm.max(4.0)
+    };
+    spacer(widget_id, UiSize::new(width, 0.0))
 }
 
 fn build_floating_column_from_frame(
@@ -589,17 +737,18 @@ fn build_floating_column_from_frame(
         let drop_highlight = drag
             .preview_target
             .is_some_and(|target| matches!(target, DockingPreviewDropTarget::NewFloatingHost));
-        let floating_drop_label = if drop_highlight {
-            "Drop Here To Float"
+        let mut drop_theme = theme.clone();
+        drop_theme.background_panel = if drop_highlight {
+            UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.28)
         } else {
-            "Float Drop Zone"
+            UiColor::new(
+                theme.background_panel.r,
+                theme.background_panel.g,
+                theme.background_panel.b,
+                0.20,
+            )
         };
-        children.push(button(
-            FLOATING_DROP_ZONE_WIDGET_ID,
-            floating_drop_label,
-            theme.body_small_text_style(FontId(1)),
-            theme.clone(),
-        ));
+        children.push(panel(FLOATING_DROP_ZONE_WIDGET_ID, drop_theme, Vec::new()));
         policies.push(SizePolicy::Auto);
     }
 
@@ -662,7 +811,7 @@ fn build_resizable_split(
 )]
 fn build_resizable_split_with_handle(
     split_widget_id: WidgetId,
-    handle_widget_id: WidgetId,
+    _handle_widget_id: WidgetId,
     axis: Axis,
     ratio: f32,
     gap: f32,
@@ -671,17 +820,15 @@ fn build_resizable_split_with_handle(
     theme: &ThemeTokens,
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> UiNode {
-    let split_active = docking_visual_state
+    let active = docking_visual_state
         .and_then(|value| value.active_split_border_widget)
         .is_some_and(|value| value == split_widget_id);
-    let handle = build_split_handle(handle_widget_id, axis, split_active, theme);
-    split(
-        split_widget_id,
-        axis,
-        ratio,
-        gap,
-        vec![first, second, handle],
-    )
+    let split_gap = if active {
+        gap.max(theme.spacing.sm)
+    } else {
+        gap
+    };
+    split(split_widget_id, axis, ratio, split_gap, vec![first, second])
 }
 
 fn split_handle_widget_id(split_widget_id: WidgetId) -> WidgetId {
@@ -691,52 +838,6 @@ fn split_handle_widget_id(split_widget_id: WidgetId) -> WidgetId {
         BODY_CONSOLE_SPLIT_WIDGET_ID => BODY_CONSOLE_SPLIT_HANDLE_WIDGET_ID,
         _ => WidgetId(split_widget_id.0 + 999_999),
     }
-}
-
-fn build_split_handle(
-    widget_id: WidgetId,
-    split_axis: Axis,
-    active: bool,
-    theme: &ThemeTokens,
-) -> UiNode {
-    let mut node = button_selected(
-        widget_id,
-        "",
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-        active,
-    );
-    if let UiNodeKind::Button(button) = &mut node.kind {
-        let (width, height) = match split_axis {
-            Axis::Horizontal => (
-                (theme.spacing.xs * 0.65).max(3.0),
-                (theme.spacing.xl * 1.9).max(22.0),
-            ),
-            Axis::Vertical => (
-                (theme.spacing.xl * 1.9).max(22.0),
-                (theme.spacing.xs * 0.65).max(3.0),
-            ),
-        };
-        button.min_size = UiSize::new(width, height);
-        button.padding = ui_math::UiInsets::ZERO;
-        button.selected_fill = Some(ui_theme::UiColor::new(
-            theme.accent.r,
-            theme.accent.g,
-            theme.accent.b,
-            0.95,
-        ));
-        button.selected_border = Some(ui_theme::UiColor::new(
-            theme.accent.r,
-            theme.accent.g,
-            theme.accent.b,
-            0.95,
-        ));
-        button.theme.border_width = 0.0;
-        button.theme.background_panel =
-            ui_theme::UiColor::new(theme.border.r, theme.border.g, theme.border.b, 0.48);
-        button.theme.border = button.theme.background_panel;
-    }
-    node
 }
 
 pub(super) fn panel_kind_label(panel_kind: PanelKind) -> &'static str {
@@ -803,6 +904,9 @@ fn build_empty_stack_placeholder(id: WidgetId, label_text: &str, theme: &ThemeTo
         (theme.background_panel.b + 0.01).clamp(0.0, 1.0),
         0.9,
     );
+    if label_text.is_empty() {
+        return panel(id, panel_theme, Vec::new());
+    }
     panel(
         id,
         panel_theme,
@@ -895,12 +999,33 @@ fn toolbar_action_for_formed_route(route: &FormedUiRoute) -> Option<RoutedShellA
         "editor.toolbar.menu.window" => Some(RoutedShellAction::ToggleToolbarMenu {
             menu: ToolbarMenuKind::Window,
         }),
+        "editor.toolbar.menu.workspace" => Some(RoutedShellAction::ToggleToolbarMenu {
+            menu: ToolbarMenuKind::Workspace,
+        }),
         "editor.workspace.scene.activate" => Some(RoutedShellAction::SwitchWorkspaceProfile {
+            profile_id: SCENE_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        }),
+        "editor.workspace.scene.close" => Some(RoutedShellAction::CloseWorkspaceProfile {
             profile_id: SCENE_WORKSPACE_PROFILE_ID,
             enabled: true,
         }),
         "editor.workspace.modelling.activate" => Some(RoutedShellAction::SwitchWorkspaceProfile {
             profile_id: MODELLING_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        }),
+        "editor.workspace.modelling.close" => Some(RoutedShellAction::CloseWorkspaceProfile {
+            profile_id: MODELLING_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        }),
+        "editor.workspace.editor_design.activate" => {
+            Some(RoutedShellAction::SwitchWorkspaceProfile {
+                profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+                enabled: true,
+            })
+        }
+        "editor.workspace.editor_design.close" => Some(RoutedShellAction::CloseWorkspaceProfile {
+            profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
             enabled: true,
         }),
         "editor.workspace.create" => Some(RoutedShellAction::RunToolbarCommand {
@@ -962,6 +1087,30 @@ fn legacy_toolbar_action_routes(
     let mut routes = BTreeMap::new();
     for button in &frame_model.toolbar.buttons {
         match button.stable_name {
+            "select" => {
+                routes.insert(
+                    crate::TOOLBAR_SELECT_BUTTON_WIDGET_ID,
+                    RoutedShellAction::ActivateSelectTool,
+                );
+            }
+            "translate" => {
+                routes.insert(
+                    crate::TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
+                    RoutedShellAction::ActivateTranslateTool,
+                );
+            }
+            "rotate" => {
+                routes.insert(
+                    crate::TOOLBAR_ROTATE_BUTTON_WIDGET_ID,
+                    RoutedShellAction::ActivateRotateTool,
+                );
+            }
+            "scale" => {
+                routes.insert(
+                    crate::TOOLBAR_SCALE_BUTTON_WIDGET_ID,
+                    RoutedShellAction::ActivateScaleTool,
+                );
+            }
             "undo" => {
                 routes.insert(
                     crate::TOOLBAR_UNDO_BUTTON_WIDGET_ID,
@@ -1025,20 +1174,30 @@ fn register_tab_stack_chrome_routes(
         .and(stack.locked_tool_surface_kind)
         .unwrap_or(ToolSurfaceKind::Viewport);
     actions.insert(
-        tab_stack_kind_select_widget_id(stack.tab_stack_id),
-        RoutedShellAction::SwitchPanelToolSurfaceKind {
-            tab_stack_id: stack.tab_stack_id,
-            panel_instance_id: stack.active_panel.map(|panel| panel.panel_instance_id),
-            tool_surface_kinds: tool_surface_kinds.clone(),
-        },
-    );
-    actions.insert(
         tab_stack_new_tab_button_widget_id(stack.tab_stack_id),
         RoutedShellAction::CreatePanelTab {
             tab_stack_id: stack.tab_stack_id,
             tool_surface_kind: default_kind,
         },
     );
+    actions.insert(
+        tab_stack_switch_surface_button_widget_id(stack.tab_stack_id),
+        RoutedShellAction::ToggleTabStackSurfaceMenu {
+            tab_stack_id: stack.tab_stack_id,
+            anchor_widget_id: tab_stack_switch_surface_button_widget_id(stack.tab_stack_id),
+        },
+    );
+    if let Some(active_panel) = stack.active_panel {
+        for (index, tool_surface_kind) in tool_surface_kinds.iter().copied().enumerate() {
+            actions.insert(
+                tab_stack_surface_menu_item_widget_id(stack.tab_stack_id, index),
+                RoutedShellAction::SwitchPanelToolSurfaceKindTo {
+                    panel_instance_id: active_panel.panel_instance_id,
+                    tool_surface_kind,
+                },
+            );
+        }
+    }
     actions.insert(
         tab_stack_split_horizontal_button_widget_id(stack.tab_stack_id),
         RoutedShellAction::SplitTabStackArea {
@@ -1072,7 +1231,11 @@ fn register_tab_stack_chrome_routes(
         tab_stack_lock_type_toggle_widget_id(stack.tab_stack_id),
         RoutedShellAction::LockTabStackAreaType {
             tab_stack_id: stack.tab_stack_id,
-            locked_tool_surface_kind: Some(default_kind),
+            locked_tool_surface_kind: if stack.locked_tool_surface_kind.is_some() {
+                None
+            } else {
+                Some(default_kind)
+            },
         },
     );
     actions.insert(

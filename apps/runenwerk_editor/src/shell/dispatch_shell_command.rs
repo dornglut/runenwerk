@@ -4,8 +4,9 @@ use editor_core::{ComponentTypeId, DirtyDocumentClosePolicy, EditorMutationError
 use editor_inspector::{InspectorEditValue, InspectorValue};
 use editor_shell::{
     FloatingHostBounds, PanelKind, ShellCommand, StructuralCommandTarget, TabDropDestination,
-    ToolSurfaceKind, ToolbarCommandKind, WorkspaceMutation, default_workspace_profile_registry,
-    tool_surface_capability_set, tool_surface_session_retention_class,
+    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarCommandKind, WorkspaceMutation,
+    default_workspace_profile_registry, tool_surface_capability_set,
+    tool_surface_session_retention_class,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionProductId, ViewportId, ViewportPresentationState,
@@ -103,6 +104,38 @@ pub fn dispatch_shell_command(
                     ))?;
             shell_state.toggle_toolbar_menu(menu);
         }
+        ShellCommand::ToggleTabStackActionMenu {
+            tab_stack_id,
+            anchor_widget_id,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for tab stack action menu command",
+                    ))?;
+            shell_state.toggle_tab_stack_popup_menu(
+                TabStackPopupMenuKind::AreaActions,
+                tab_stack_id,
+                anchor_widget_id,
+            );
+        }
+        ShellCommand::ToggleTabStackSurfaceMenu {
+            tab_stack_id,
+            anchor_widget_id,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for tab stack surface menu command",
+                    ))?;
+            shell_state.toggle_tab_stack_popup_menu(
+                TabStackPopupMenuKind::SurfaceKinds,
+                tab_stack_id,
+                anchor_widget_id,
+            );
+        }
         ShellCommand::RunToolbarCommand { command } => {
             dispatch_toolbar_command(app, shell_state.as_deref_mut(), command)?;
         }
@@ -114,6 +147,15 @@ pub fn dispatch_shell_command(
                         "missing shell state for workspace switch command",
                     ))?;
             switch_workspace_profile(app, shell_state, profile_id)?;
+        }
+        ShellCommand::CloseWorkspaceProfile { profile_id } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workspace close command",
+                    ))?;
+            close_workspace_profile(app, shell_state, profile_id)?;
         }
         ShellCommand::Undo => {
             if let Some(entry) =
@@ -169,6 +211,13 @@ pub fn dispatch_shell_command(
                     ))?;
             match shell_state.self_authoring_mut().apply_selected() {
                 Ok(preview) => {
+                    if let Some(document) = shell_state
+                        .self_authoring()
+                        .applied_document(&preview.document_id)
+                        .cloned()
+                    {
+                        app.queue_editor_definition_activation(document);
+                    }
                     app.append_console_line(format!(
                         "[editor-definition] applied {}",
                         preview.display_name
@@ -276,6 +325,7 @@ pub fn dispatch_shell_command(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
+            shell_state.close_tab_stack_action_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let panel_id = allocator.allocate_panel_instance_id();
@@ -306,12 +356,23 @@ pub fn dispatch_shell_command(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
-            shell_state
-                .apply_workspace_mutation(WorkspaceMutation::ClosePanelTab {
-                    tab_stack_id,
-                    panel_id: panel_instance_id,
-                })
-                .map_err(|_| EditorMutationError::runtime_rejected("close panel tab failed"))?;
+            let tab_count = shell_state
+                .workspace_state()
+                .tab_stack(tab_stack_id)
+                .map(|stack| stack.ordered_panels.len())
+                .unwrap_or(0);
+            if tab_count <= 1 {
+                shell_state
+                    .apply_workspace_mutation(WorkspaceMutation::CloseTabStackArea { tab_stack_id })
+                    .map_err(|_| EditorMutationError::runtime_rejected("close area failed"))?;
+            } else {
+                shell_state
+                    .apply_workspace_mutation(WorkspaceMutation::ClosePanelTab {
+                        tab_stack_id,
+                        panel_id: panel_instance_id,
+                    })
+                    .map_err(|_| EditorMutationError::runtime_rejected("close panel tab failed"))?;
+            }
             app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
         }
         ShellCommand::CloseOtherPanelTabs {
@@ -347,6 +408,7 @@ pub fn dispatch_shell_command(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
+            shell_state.close_tab_stack_action_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let split_host_id = allocator.allocate_panel_host_id();
@@ -387,6 +449,7 @@ pub fn dispatch_shell_command(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
+            shell_state.close_tab_stack_action_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let new_panel_id = allocator.allocate_panel_instance_id();
@@ -415,6 +478,7 @@ pub fn dispatch_shell_command(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
+            shell_state.close_tab_stack_action_menu();
             shell_state
                 .apply_workspace_mutation(WorkspaceMutation::CloseTabStackArea { tab_stack_id })
                 .map_err(|_| {
@@ -433,6 +497,7 @@ pub fn dispatch_shell_command(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
+            shell_state.close_tab_stack_action_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let panel_id = allocator.allocate_panel_instance_id();
@@ -463,6 +528,7 @@ pub fn dispatch_shell_command(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
+            shell_state.close_tab_stack_action_menu();
             shell_state
                 .apply_workspace_mutation(WorkspaceMutation::LockTabStackAreaType {
                     tab_stack_id,
@@ -1200,6 +1266,70 @@ pub fn dispatch_shell_command(
             let session = app.surface_sessions_mut().session_mut(surface_id);
             session.viewport_details_visible = !session.viewport_details_visible;
         }
+        ShellCommand::ToggleViewportStatistics {
+            target,
+            projection_epoch: _,
+        } => {
+            let Some(surface_contract) = resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Viewport,
+            ) else {
+                app.append_console_line(
+                    "[viewport] statistics toggle ignored (missing structural tool-surface target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            if surface_contract.tool_surface_kind != ToolSurfaceKind::Viewport {
+                app.append_console_line(format!(
+                    "[viewport] statistics toggle ignored (surface-kind mismatch): expected=viewport actual={}",
+                    tool_surface_kind_label(surface_contract.tool_surface_kind),
+                ));
+                return Ok(());
+            }
+            let Some(surface_id) = target.active_tool_surface else {
+                app.append_console_line(
+                    "[viewport] statistics toggle ignored (missing tool-surface session target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            let session = app.surface_sessions_mut().session_mut(surface_id);
+            session.viewport_statistics_visible = !session.viewport_statistics_visible;
+        }
+        ShellCommand::ToggleViewportOptionsMenu {
+            target,
+            projection_epoch: _,
+        } => {
+            let Some(surface_contract) = resolve_surface_command_contract(
+                shell_state.as_deref(),
+                target,
+                ToolSurfaceKind::Viewport,
+            ) else {
+                app.append_console_line(
+                    "[viewport] options menu ignored (missing structural tool-surface target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            if surface_contract.tool_surface_kind != ToolSurfaceKind::Viewport {
+                app.append_console_line(format!(
+                    "[viewport] options menu ignored (surface-kind mismatch): expected=viewport actual={}",
+                    tool_surface_kind_label(surface_contract.tool_surface_kind),
+                ));
+                return Ok(());
+            }
+            let Some(surface_id) = target.active_tool_surface else {
+                app.append_console_line(
+                    "[viewport] options menu ignored (missing tool-surface session target)"
+                        .to_string(),
+                );
+                return Ok(());
+            };
+            let session = app.surface_sessions_mut().session_mut(surface_id);
+            session.viewport_options_menu_open = !session.viewport_options_menu_open;
+        }
         ShellCommand::ActivateInspectorField {
             index,
             target,
@@ -1779,8 +1909,11 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ActivateRotateTool => "ActivateRotateTool",
         ShellCommand::ActivateScaleTool => "ActivateScaleTool",
         ShellCommand::ToggleToolbarMenu { .. } => "ToggleToolbarMenu",
+        ShellCommand::ToggleTabStackActionMenu { .. } => "ToggleTabStackActionMenu",
+        ShellCommand::ToggleTabStackSurfaceMenu { .. } => "ToggleTabStackSurfaceMenu",
         ShellCommand::RunToolbarCommand { .. } => "RunToolbarCommand",
         ShellCommand::SwitchWorkspaceProfile { .. } => "SwitchWorkspaceProfile",
+        ShellCommand::CloseWorkspaceProfile { .. } => "CloseWorkspaceProfile",
         ShellCommand::Undo => "Undo",
         ShellCommand::Redo => "Redo",
         ShellCommand::SaveScene => "SaveScene",
@@ -1828,6 +1961,8 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::SelectOutlinerEntity { .. } => "SelectOutlinerEntity",
         ShellCommand::SelectViewportProduct { .. } => "SelectViewportProduct",
         ShellCommand::ToggleViewportDetails { .. } => "ToggleViewportDetails",
+        ShellCommand::ToggleViewportStatistics { .. } => "ToggleViewportStatistics",
+        ShellCommand::ToggleViewportOptionsMenu { .. } => "ToggleViewportOptionsMenu",
         ShellCommand::ActivateInspectorField { .. } => "ActivateInspectorField",
         ShellCommand::FocusInspectorField { .. } => "FocusInspectorField",
         ShellCommand::AppendInspectorFieldText { .. } => "AppendInspectorFieldText",
@@ -2383,6 +2518,25 @@ fn switch_workspace_profile(
     load_workspace_profile_layout(app, shell_state, profile_id)
 }
 
+fn close_workspace_profile(
+    app: &mut RunenwerkEditorApp,
+    shell_state: &mut RunenwerkEditorShellState,
+    profile_id: editor_shell::WorkspaceProfileId,
+) -> Result<(), EditorMutationError> {
+    let was_active = shell_state.active_workspace_profile_id() == profile_id;
+    let Some(next_active_profile_id) = shell_state.close_workspace_profile_id(profile_id) else {
+        app.append_console_line("[workspace] close ignored; at least one workspace remains open");
+        return Ok(());
+    };
+
+    if was_active {
+        load_workspace_profile_layout(app, shell_state, next_active_profile_id)?;
+    }
+    shell_state.close_toolbar_menu();
+    app.append_console_line(format!("[workspace] closed profile {}", profile_id.raw()));
+    Ok(())
+}
+
 fn load_workspace_profile_layout(
     app: &mut RunenwerkEditorApp,
     shell_state: &mut RunenwerkEditorShellState,
@@ -2396,8 +2550,21 @@ fn load_workspace_profile_layout(
         ))?;
     let workspace_layout_path = default_workspace_layout_path_for_profile(profile_id);
     let workspace_state = if workspace_layout_path.exists() {
-        read_workspace_layout(&workspace_layout_path)
-            .map_err(|_| EditorMutationError::runtime_rejected("failed to load workspace layout"))?
+        let saved_workspace_state =
+            read_workspace_layout(&workspace_layout_path).map_err(|_| {
+                EditorMutationError::runtime_rejected("failed to load workspace layout")
+            })?;
+        if workspace_layout_matches_profile(&saved_workspace_state, profile) {
+            saved_workspace_state
+        } else {
+            app.append_console_line(format!(
+                "[workspace] ignored incompatible saved {} workspace layout",
+                profile.label
+            ));
+            let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
+            let workspace_id = allocator.allocate_workspace_id();
+            profile.build_default_workspace_state(workspace_id, &mut allocator)
+        }
     } else {
         let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
         let workspace_id = allocator.allocate_workspace_id();
@@ -2408,6 +2575,17 @@ fn load_workspace_profile_layout(
     app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
     app.append_console_line(format!("[workspace] loaded {} workspace", profile.label));
     Ok(())
+}
+
+fn workspace_layout_matches_profile(
+    workspace_state: &editor_shell::WorkspaceState,
+    profile: &editor_shell::WorkspaceProfile,
+) -> bool {
+    profile.default_tool_surfaces.iter().all(|surface_kind| {
+        workspace_state
+            .tool_surfaces()
+            .any(|surface| surface.tool_surface_kind == *surface_kind)
+    })
 }
 
 fn save_workspace_layout_for_active_profile(

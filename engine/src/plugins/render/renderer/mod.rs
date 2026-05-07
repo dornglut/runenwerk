@@ -331,6 +331,7 @@ struct RectInstanceRaw {
 struct FlattenedUiRectInstance {
     raw: RectInstanceRaw,
     clip: Option<[f32; 4]>,
+    layer_order: u32,
 }
 
 #[repr(C)]
@@ -346,6 +347,7 @@ struct FlattenedUiGlyphInstance {
     raw: GlyphInstanceRaw,
     clip: Option<[f32; 4]>,
     texture_id: u64,
+    layer_order: u32,
 }
 
 #[repr(C)]
@@ -362,6 +364,7 @@ struct FlattenedUiViewportEmbedInstance {
     clip: Option<[f32; 4]>,
     viewport_id: u64,
     slot: ViewportSurfaceEmbedSlotId,
+    layer_order: u32,
 }
 
 #[repr(C)]
@@ -398,6 +401,7 @@ struct ViewportEmbedPass {
 
 #[derive(Debug, Clone)]
 struct UiRectBatch {
+    layer_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
     instance_buffer: Buffer,
@@ -405,6 +409,7 @@ struct UiRectBatch {
 
 #[derive(Debug, Clone)]
 struct UiGlyphBatch {
+    layer_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
     instance_buffer: Buffer,
@@ -413,6 +418,7 @@ struct UiGlyphBatch {
 
 #[derive(Debug, Clone)]
 struct UiViewportEmbedBatch {
+    layer_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
     instance_buffer: Buffer,

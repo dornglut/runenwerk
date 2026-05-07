@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-06
 ---
 
 # Engine Architecture
@@ -80,6 +80,13 @@ This contract is shared by headless and windowed runners.
 - Windowed path:
   - `engine/src/runtime/winit_runner.rs`
   - delegates startup/frame scheduling to shared runtime lifecycle helpers
+
+`WindowState` in `engine/src/runtime/window.rs` is also the runtime-owned place
+for platform window effects that app systems request declaratively. It currently
+stores title, size, scale factor, close/redraw requests, and `WindowCursorIcon`.
+Windowed execution applies the cursor icon in
+`engine/src/runtime/winit_runner.rs::WinitRunner::apply_window_effects`; app
+systems set the intent on `WindowState` rather than calling winit directly.
 
 ## Integration Boundaries
 

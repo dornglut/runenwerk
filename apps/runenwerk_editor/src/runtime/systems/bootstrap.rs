@@ -10,12 +10,9 @@ use engine::runtime::ResMut;
 use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, VIEWPORT_RESOURCE_OVERLAY,
-    VIEWPORT_RESOURCE_PICKING_IDS, VIEWPORT_RESOURCE_SCENE_COLOR,
-    ViewportArtifactObservationResource, ViewportPickingResultsResource,
-    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceHandle,
-    ViewportSurfaceSetResource, ViewportSurfaceSlot, initial_presentation_state,
-    initial_product_descriptors,
+    MAIN_VIEWPORT_ID, ViewportArtifactObservationResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceSetResource,
+    ensure_editor_main_surface_set, initial_presentation_state, initial_product_descriptors,
 };
 
 pub fn bootstrap_editor_demo_system(
@@ -40,21 +37,7 @@ pub fn seed_viewport_runtime_contracts_system(
         .surface_set(MAIN_VIEWPORT_ID)
         .is_none()
     {
-        viewport_surface_sets.set_surface(
-            MAIN_VIEWPORT_ID,
-            ViewportSurfaceSlot::PrimaryColor,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
-        );
-        viewport_surface_sets.set_surface(
-            MAIN_VIEWPORT_ID,
-            ViewportSurfaceSlot::PickingIds,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_PICKING_IDS),
-        );
-        viewport_surface_sets.set_surface(
-            MAIN_VIEWPORT_ID,
-            ViewportSurfaceSlot::Overlay,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY),
-        );
+        ensure_editor_main_surface_set(&mut viewport_surface_sets, MAIN_VIEWPORT_ID);
     }
 
     let presentation_state = viewport_presentations

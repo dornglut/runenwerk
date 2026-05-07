@@ -5,7 +5,9 @@ use engine::plugins::render::{
     UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
 use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
-use runenwerk_editor::runtime::viewport::{EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR};
+use runenwerk_editor::runtime::viewport::{
+    EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR, ViewportRenderStateResource,
+};
 use ui_render_data::UiPrimitive;
 
 const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
@@ -46,6 +48,10 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .world()
         .resource::<EditorViewportRenderState>()
         .expect("viewport render state should exist");
+    let viewport_render_states = app
+        .world()
+        .resource::<ViewportRenderStateResource>()
+        .expect("viewport render state registry should exist");
 
     assert!(
         flow_registry.flow_count() > 0,
@@ -144,19 +150,6 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         "startup path should not include a non-empty scene.overlay submission that could overwrite viewport output",
     );
 
-    let primary_binding = viewport_bindings
-        .registry()
-        .get(
-            1,
-            viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
-        )
-        .expect("viewport primary surface binding should exist");
-    assert_eq!(primary_binding.flow_id.as_str(), EDITOR_MAIN_FLOW_ID);
-    assert_eq!(
-        primary_binding.resource_id.as_str(),
-        VIEWPORT_RESOURCE_SCENE_COLOR,
-    );
-
     let viewport_embed = submission
         .frame
         .surfaces
@@ -167,15 +160,31 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
             let UiPrimitive::ViewportSurfaceEmbed(embed) = primitive else {
                 return None;
             };
-            if embed.viewport_id == 1
-                && embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary)
-            {
+            if embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary) {
                 Some(embed)
             } else {
                 None
             }
         })
         .expect("viewport embed primitive for primary slot should exist");
+    let primary_binding = viewport_bindings
+        .registry()
+        .get(
+            viewport_embed.viewport_id,
+            viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
+        )
+        .expect("viewport primary surface binding should exist");
+    assert_eq!(primary_binding.flow_id.as_str(), EDITOR_MAIN_FLOW_ID);
+    assert_eq!(
+        primary_binding.resource_id.as_str(),
+        VIEWPORT_RESOURCE_SCENE_COLOR,
+    );
+    assert!(
+        viewport_render_states
+            .state_for(editor_viewport::ViewportId(viewport_embed.viewport_id))
+            .is_some(),
+        "embedded viewport should have viewport-owned render state",
+    );
 
     assert!(
         (viewport_state.viewport_bounds_px.0 - viewport_embed.rect.x).abs()

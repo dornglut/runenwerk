@@ -2,10 +2,11 @@
 
 use crate::{
     CURRENT_EDITOR_DEFINITION_SCHEMA_VERSION, EditorDefinitionBindings, EditorDefinitionDocument,
-    EditorDefinitionDocumentContent, EditorWorkspaceHostDefinition,
+    EditorDefinitionDocumentContent, EditorWorkspaceHostDefinition, form_theme_tokens,
 };
 use std::collections::BTreeSet;
 use ui_definition::{UiDefinitionDiagnostic, UiDefinitionDiagnosticSeverity, UiTemplateId};
+use ui_theme::ThemeTokens;
 
 pub fn validate_editor_bindings(
     bindings: &EditorDefinitionBindings,
@@ -132,6 +133,9 @@ pub fn validate_editor_definition_document(
         EditorDefinitionDocumentContent::Theme(theme) => {
             guard_required(&theme.id, "editor.definition.theme.id", &mut diagnostics);
             guard_durable_id(&theme.id, "editor.definition.theme.id", &mut diagnostics);
+            if let Err(error) = form_theme_tokens(theme, &ThemeTokens::default()) {
+                diagnostics.extend(error.diagnostics);
+            }
         }
         EditorDefinitionDocumentContent::Shortcuts(shortcuts) => {
             guard_required(

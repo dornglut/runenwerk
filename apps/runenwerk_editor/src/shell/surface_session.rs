@@ -12,6 +12,8 @@ pub struct SurfaceSessionState {
     pub inspector_ui_state: EditorInspectorUiState,
     pub viewport_interaction_state: ViewportInteractionState,
     pub viewport_details_visible: bool,
+    pub viewport_statistics_visible: bool,
+    pub viewport_options_menu_open: bool,
     pub console_follow_enabled: bool,
 }
 
@@ -22,6 +24,8 @@ impl Default for SurfaceSessionState {
             inspector_ui_state: EditorInspectorUiState::new(),
             viewport_interaction_state: ViewportInteractionState::new(),
             viewport_details_visible: false,
+            viewport_statistics_visible: false,
+            viewport_options_menu_open: false,
             console_follow_enabled: true,
         }
     }

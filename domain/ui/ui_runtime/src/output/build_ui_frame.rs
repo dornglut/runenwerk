@@ -3,22 +3,25 @@
 
 use crate::{
     ButtonNode, ComputedLayoutMap, DividerNode, ImageNode, LabelNode, NumericInputNode, PanelNode,
-    ScrollNode, SelectNode, TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode, UiNode,
-    UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
+    PopupNode, ScrollNode, SelectNode, TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode,
+    UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
 };
+use std::collections::BTreeMap;
 use ui_math::{UiRect, UiSize};
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, RectPrimitive, UiDrawKey,
     UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
     ViewportSurfaceEmbedPrimitive,
 };
-use ui_text::{AtlasTextLayouter, FontAtlasSource, TextLayoutRequest, TextLayouter};
+use ui_text::{AtlasTextLayouter, FontAtlasSource, TextAlign, TextLayoutRequest, TextLayouter};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct InteractionVisualState {
     pub hovered_widget: Option<WidgetId>,
     pub pressed_widget: Option<WidgetId>,
     pub focused_widget: Option<WidgetId>,
+    pub active_scrollbar_widget: Option<WidgetId>,
+    pub scrollbar_opacity_by_widget_id: BTreeMap<WidgetId, f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -29,6 +32,10 @@ pub(crate) struct ScrollbarGeometry {
     pub thumb_rect: UiRect,
     pub max_offset: f32,
 }
+
+const BASE_LAYER_ORDER: u32 = 0;
+#[cfg(test)]
+const POPUP_LAYER_ORDER: u32 = 1;
 
 pub fn build_ui_frame(
     tree: &UiTree,
@@ -50,7 +57,7 @@ pub fn build_ui_frame(
         atlas_source,
         &layouter,
         interaction_state,
-        0,
+        BASE_LAYER_ORDER,
         &mut primitive_order,
     );
 
@@ -74,11 +81,15 @@ fn emit_node(
     atlas_source: &dyn FontAtlasSource,
     layouter: &dyn TextLayouter,
     interaction_state: InteractionVisualState,
-    depth: u32,
+    render_layer_order: u32,
     primitive_order: &mut u32,
 ) {
     let Some(layout) = layouts.get(&node.id) else {
         return;
+    };
+    let node_layer_order = match &node.kind {
+        UiNodeKind::Popup(popup) => popup.layer_order,
+        _ => render_layer_order,
     };
 
     match &node.kind {
@@ -87,7 +98,15 @@ fn emit_node(
             layout.bounds,
             layout.content_bounds,
             layer,
-            depth,
+            node_layer_order,
+            primitive_order,
+        ),
+        UiNodeKind::Popup(popup) => emit_popup(
+            popup,
+            layout.bounds,
+            layout.content_bounds,
+            layer,
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Label(label) => emit_label(
@@ -96,7 +115,7 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            depth,
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Button(button) => emit_button(
@@ -107,8 +126,8 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::TextInput(text_input) => emit_text_input(
@@ -119,8 +138,8 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Toggle(toggle) => emit_toggle(
@@ -131,8 +150,8 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::NumericInput(numeric) => emit_numeric_input(
@@ -143,8 +162,8 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Tabs(tabs) => emit_tabs(
@@ -155,8 +174,8 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Select(select) => emit_select(
@@ -167,8 +186,8 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Table(table) => emit_table(
@@ -178,8 +197,8 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Tree(tree) => emit_tree(
@@ -189,21 +208,31 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            interaction_state,
-            depth,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Spacer(_) => {}
-        UiNodeKind::Divider(divider) => {
-            emit_divider(divider, layout.bounds, layer, depth, primitive_order)
-        }
-        UiNodeKind::Image(image) => emit_image(image, layout.bounds, layer, depth, primitive_order),
+        UiNodeKind::Divider(divider) => emit_divider(
+            divider,
+            layout.bounds,
+            layer,
+            node_layer_order,
+            primitive_order,
+        ),
+        UiNodeKind::Image(image) => emit_image(
+            image,
+            layout.bounds,
+            layer,
+            node_layer_order,
+            primitive_order,
+        ),
         UiNodeKind::ViewportSurfaceEmbed(embed) => emit_viewport_surface_embed(
             embed,
             layout.bounds,
             surface_size,
             layer,
-            depth,
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Scroll(scroll) => emit_scroll_begin(
@@ -211,7 +240,7 @@ fn emit_node(
             layout.bounds,
             layout.content_bounds,
             layer,
-            depth,
+            node_layer_order,
             primitive_order,
         ),
         UiNodeKind::Stack(_) | UiNodeKind::Split(_) => {}
@@ -226,14 +255,15 @@ fn emit_node(
             surface_size,
             atlas_source,
             layouter,
-            interaction_state,
-            depth + 1,
+            interaction_state.clone(),
+            node_layer_order,
             primitive_order,
         );
     }
 
     match &node.kind {
         UiNodeKind::Panel(_)
+        | UiNodeKind::Popup(_)
         | UiNodeKind::Button(_)
         | UiNodeKind::TextInput(_)
         | UiNodeKind::NumericInput(_)
@@ -242,13 +272,13 @@ fn emit_node(
         | UiNodeKind::Table(_)
         | UiNodeKind::Tree(_) => {
             layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
-                sort_key: sort_key(depth, *primitive_order),
+                sort_key: sort_key(node_layer_order, *primitive_order),
             }));
             *primitive_order += 1;
         }
         UiNodeKind::Scroll(scroll) => {
             layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
-                sort_key: sort_key(depth, *primitive_order),
+                sort_key: sort_key(node_layer_order, *primitive_order),
             }));
             *primitive_order += 1;
 
@@ -260,7 +290,8 @@ fn emit_node(
                 layout.bounds,
                 layout.content_bounds,
                 layer,
-                depth,
+                interaction_state.clone(),
+                node_layer_order,
                 primitive_order,
             );
         }
@@ -309,6 +340,40 @@ fn emit_panel(
     *primitive_order += 1;
 }
 
+fn emit_popup(
+    popup: &PopupNode,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        bounds,
+        popup.theme.radius.md,
+        paint_from_color(popup.theme.background_panel),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        bounds,
+        popup.theme.radius.md,
+        popup.theme.border_width,
+        paint_from_color(popup.theme.border),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+        rect: content_bounds,
+        sort_key: sort_key(depth, *primitive_order),
+    }));
+    *primitive_order += 1;
+}
+
 fn emit_scroll_begin(
     _scroll: &ScrollNode,
     _bounds: UiRect,
@@ -336,12 +401,29 @@ fn emit_scrollbar(
     bounds: UiRect,
     content_bounds: UiRect,
     layer: &mut UiLayer,
+    interaction_state: InteractionVisualState,
     depth: u32,
     primitive_order: &mut u32,
 ) {
     let Some(geometry) = scrollbar_geometry(tree, node.id, layouts, bounds, content_bounds) else {
         return;
     };
+    let scrollbar_opacity = if interaction_state.active_scrollbar_widget == Some(node.id)
+        || interaction_state.hovered_widget == Some(node.id)
+        || interaction_state.pressed_widget == Some(node.id)
+    {
+        1.0
+    } else {
+        interaction_state
+            .scrollbar_opacity_by_widget_id
+            .get(&node.id)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    };
+    if scrollbar_opacity <= 0.0 {
+        return;
+    }
     let radius = match geometry.axis {
         ui_math::Axis::Vertical => {
             if let UiNodeKind::Scroll(scroll) = &node.kind {
@@ -363,7 +445,7 @@ fn emit_scrollbar(
     };
 
     let mut track_color = scroll.theme.border;
-    track_color.a = (track_color.a * 0.35).clamp(0.0, 1.0);
+    track_color.a = (track_color.a * 0.35 * scrollbar_opacity).clamp(0.0, 1.0);
     layer.push(UiPrimitive::Rect(RectPrimitive::new(
         geometry.track_rect,
         radius,
@@ -374,7 +456,7 @@ fn emit_scrollbar(
     *primitive_order += 1;
 
     let mut thumb_color = scroll.theme.accent;
-    thumb_color.a = (thumb_color.a * 0.80).clamp(0.0, 1.0);
+    thumb_color.a = (thumb_color.a * 0.80 * scrollbar_opacity).clamp(0.0, 1.0);
     layer.push(UiPrimitive::Rect(RectPrimitive::new(
         geometry.thumb_rect,
         radius,
@@ -400,28 +482,11 @@ pub(crate) fn scrollbar_geometry(
     let child_layout = layouts.get(&child.id)?;
     match scroll.axis {
         ui_math::Axis::Vertical => {
-            let track_width = (bounds.width - content_bounds.width).max(0.0);
+            let track_width = scroll.bar_thickness.min(bounds.width.max(0.0));
             if track_width <= f32::EPSILON || content_bounds.height <= f32::EPSILON {
                 return None;
             }
-            let track_x = if let Some(parent) = find_parent_node(tree, node.id) {
-                if let UiNodeKind::Scroll(parent_scroll) = &parent.kind {
-                    if parent_scroll.axis == ui_math::Axis::Horizontal {
-                        layouts
-                            .get(&parent.id)
-                            .map(|layout| {
-                                layout.content_bounds.x + layout.content_bounds.width - track_width
-                            })
-                            .unwrap_or(content_bounds.x + content_bounds.width)
-                    } else {
-                        content_bounds.x + content_bounds.width
-                    }
-                } else {
-                    content_bounds.x + content_bounds.width
-                }
-            } else {
-                content_bounds.x + content_bounds.width
-            };
+            let track_x = bounds.x + bounds.width - track_width;
             let track_rect = UiRect::new(
                 track_x,
                 content_bounds.y,
@@ -449,13 +514,13 @@ pub(crate) fn scrollbar_geometry(
             })
         }
         ui_math::Axis::Horizontal => {
-            let track_height = (bounds.height - content_bounds.height).max(0.0);
+            let track_height = scroll.bar_thickness.min(bounds.height.max(0.0));
             if track_height <= f32::EPSILON || content_bounds.width <= f32::EPSILON {
                 return None;
             }
             let track_rect = UiRect::new(
                 content_bounds.x,
-                content_bounds.y + content_bounds.height,
+                bounds.y + bounds.height - track_height,
                 content_bounds.width,
                 track_height,
             );
@@ -480,22 +545,6 @@ pub(crate) fn scrollbar_geometry(
             })
         }
     }
-}
-
-fn find_parent_node(tree: &UiTree, target: WidgetId) -> Option<&UiNode> {
-    find_parent_node_inner(&tree.root, target)
-}
-
-fn find_parent_node_inner(node: &UiNode, target: WidgetId) -> Option<&UiNode> {
-    for child in &node.children {
-        if child.id == target {
-            return Some(node);
-        }
-        if let Some(found) = find_parent_node_inner(child, target) {
-            return Some(found);
-        }
-    }
-    None
 }
 
 fn emit_viewport_surface_embed(
@@ -583,6 +632,16 @@ fn emit_button(
     primitive_order: &mut u32,
 ) {
     let interaction = interaction_state.for_widget(widget_id);
+    if let Some(anchor) = button.reveal_on_hover_anchor {
+        let anchor_interaction = interaction_state.for_widget(anchor);
+        if !(interaction.hovered
+            || interaction.pressed
+            || anchor_interaction.hovered
+            || anchor_interaction.pressed)
+        {
+            return;
+        }
+    }
     let mut background = if button.enabled {
         if button.selected {
             button.selected_fill.unwrap_or(button.theme.accent)
@@ -610,9 +669,10 @@ fn emit_button(
         border = brighten(border, 1.08);
     }
 
+    let radius = button_radius(button, bounds);
     layer.push(UiPrimitive::Rect(RectPrimitive::new(
         bounds,
-        button.theme.radius.sm,
+        radius,
         paint_from_color(background),
         default_draw_key(),
         sort_key(depth, *primitive_order),
@@ -621,7 +681,7 @@ fn emit_button(
 
     layer.push(UiPrimitive::Border(BorderPrimitive::new(
         bounds,
-        button.theme.radius.sm,
+        radius,
         button.theme.border_width,
         paint_from_color(border),
         default_draw_key(),
@@ -642,21 +702,77 @@ fn emit_button(
         content_bounds.height,
     );
 
-    let label_node = LabelNode {
-        text: button.label.clone(),
-        text_style: button_text_style(button, interaction),
-        constraints: ui_layout::LayoutConstraints::tight(text_rect.size()),
-    };
-
-    emit_label(
-        &label_node,
+    emit_button_label(
+        &button.label,
+        &button_text_style(button, interaction),
         text_rect,
         layer,
         atlas_source,
         layouter,
-        depth + 1,
+        depth,
         primitive_order,
     );
+}
+
+fn button_radius(button: &ButtonNode, bounds: UiRect) -> f32 {
+    button
+        .corner_radius
+        .unwrap_or(button.theme.radius.sm)
+        .min(bounds.width.max(0.0) * 0.5)
+        .min(bounds.height.max(0.0) * 0.5)
+        .max(0.0)
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "button label emission mirrors the surrounding primitive emission boundary"
+)]
+fn emit_button_label(
+    text: &str,
+    text_style: &ui_text::TextStyle,
+    bounds: UiRect,
+    layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    let Some(mut glyph_run) = layouter.layout(
+        atlas_source,
+        TextLayoutRequest {
+            text,
+            style: text_style,
+            max_width: Some(bounds.width.max(0.0)),
+        },
+    ) else {
+        return;
+    };
+
+    let align_offset = match text_style.align {
+        TextAlign::Start => 0.0,
+        TextAlign::Center => ((bounds.width - glyph_run.size.width) * 0.5).max(0.0),
+        TextAlign::End => (bounds.width - glyph_run.size.width).max(0.0),
+    };
+    let vertical_offset = ((bounds.height - glyph_run.size.height) * 0.5).max(0.0);
+
+    for glyph in &mut glyph_run.glyphs {
+        glyph.origin.x += bounds.x + align_offset;
+        glyph.origin.y += bounds.y + vertical_offset;
+    }
+
+    layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
+        glyph_run,
+        Some(bounds),
+        UiPaint::rgba(
+            text_style.color[0],
+            text_style.color[1],
+            text_style.color[2],
+            text_style.color[3],
+        ),
+        UiDrawKey::new(0, Some(text_style.font_id.0)),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
 }
 
 #[expect(
@@ -736,7 +852,7 @@ fn emit_text_input(
         layer,
         atlas_source,
         layouter,
-        depth + 1,
+        depth,
         primitive_order,
     );
 }
@@ -832,7 +948,7 @@ fn emit_toggle(
         layer,
         atlas_source,
         layouter,
-        depth + 1,
+        depth,
         primitive_order,
     );
 }
@@ -904,7 +1020,7 @@ fn emit_numeric_input(
         layer,
         atlas_source,
         layouter,
-        depth + 1,
+        depth,
         primitive_order,
     );
 }
@@ -1003,7 +1119,7 @@ fn emit_tabs(
             layer,
             atlas_source,
             layouter,
-            depth + 1,
+            depth,
             primitive_order,
         );
     }
@@ -1079,7 +1195,7 @@ fn emit_select(
         layer,
         atlas_source,
         layouter,
-        depth + 1,
+        depth,
         primitive_order,
     );
 }
@@ -1159,7 +1275,7 @@ fn emit_table(
         layer,
         atlas_source,
         layouter,
-        depth + 1,
+        depth,
         primitive_order,
     );
 
@@ -1191,7 +1307,7 @@ fn emit_table(
             layer,
             atlas_source,
             layouter,
-            depth + 1,
+            depth,
             primitive_order,
         );
     }
@@ -1292,7 +1408,7 @@ fn emit_tree(
             layer,
             atlas_source,
             layouter,
-            depth + 1,
+            depth,
             primitive_order,
         );
     }
@@ -1369,8 +1485,14 @@ fn emit_label(
         return;
     };
 
+    let align_offset = match label.text_style.align {
+        TextAlign::Start => 0.0,
+        TextAlign::Center => ((bounds.width - glyph_run.size.width) * 0.5).max(0.0),
+        TextAlign::End => (bounds.width - glyph_run.size.width).max(0.0),
+    };
+
     for glyph in &mut glyph_run.glyphs {
-        glyph.origin.x += bounds.x;
+        glyph.origin.x += bounds.x + align_offset;
         glyph.origin.y += bounds.y;
     }
 
@@ -1408,6 +1530,7 @@ impl InteractionVisualState {
 
 fn button_text_style(button: &ButtonNode, interaction: WidgetInteraction) -> ui_text::TextStyle {
     let mut text_style = button.text_style.clone();
+    text_style.align = TextAlign::Center;
     if !button.enabled {
         text_style.color[3] = (text_style.color[3] * 0.55).clamp(0.0, 1.0);
         return text_style;
@@ -1457,8 +1580,8 @@ fn default_draw_key() -> UiDrawKey {
     UiDrawKey::new(0, None)
 }
 
-fn sort_key(_depth: u32, primitive_order: u32) -> UiSortKey {
-    UiSortKey::new(0, 0, primitive_order)
+fn sort_key(layer_order: u32, primitive_order: u32) -> UiSortKey {
+    UiSortKey::new(0, layer_order, primitive_order)
 }
 
 #[cfg(test)]
@@ -1522,7 +1645,7 @@ mod tests {
         let expected = [
             "Rect(x=12.0 y=16.0 w=240.0 h=96.0)",
             "Border(x=12.0 y=16.0 w=240.0 h=96.0)",
-            "ClipPush(x=20.0 y=24.0 w=224.0 h=80.0)",
+            "ClipPush(x=14.0 y=18.0 w=236.0 h=92.0)",
             "GlyphRun(text=\"Overl\" clip=true)",
             "ClipPop",
         ]
@@ -1569,6 +1692,106 @@ mod tests {
         assert!((embed.uv_rect.y - 0.20).abs() < 0.000_1);
         assert!((embed.uv_rect.width - 0.50).abs() < 0.000_1);
         assert!((embed.uv_rect.height - 0.50).abs() < 0.000_1);
+    }
+
+    #[test]
+    fn popup_button_emits_text_on_popup_layer() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let theme = ThemeTokens::default();
+        let anchor_id = WidgetId(2);
+        let popup_id = WidgetId(3);
+        let item_id = WidgetId(4);
+        let text_style = theme.body_small_text_style(FontId(1));
+        let mut popup_button = ButtonNode::new("Save", text_style.clone(), theme.clone());
+        popup_button.fill_width = true;
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![
+                UiNode::new(
+                    anchor_id,
+                    UiNodeKind::Button(ButtonNode::new("File", text_style.clone(), theme.clone())),
+                ),
+                UiNode::with_children(
+                    popup_id,
+                    UiNodeKind::Popup(PopupNode::anchored_bottom_start(anchor_id, theme.clone())),
+                    vec![UiNode::new(item_id, UiNodeKind::Button(popup_button))],
+                ),
+            ],
+        ));
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 240.0, 160.0),
+            &UiRuntimeState::default(),
+        );
+
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            UiSize::new(240.0, 160.0),
+            InteractionVisualState::default(),
+            &atlas_source,
+        );
+
+        let popup_text = frame.surfaces[0].layers[0]
+            .primitives
+            .iter()
+            .find_map(|primitive| {
+                let UiPrimitive::GlyphRun(run) = primitive else {
+                    return None;
+                };
+                let text = run
+                    .glyph_run
+                    .glyphs
+                    .iter()
+                    .map(|glyph| glyph.ch)
+                    .collect::<String>();
+                (text == "Save").then_some(run)
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "popup button text should emit a glyph run; frame:\n{}",
+                    frame_signature(&frame)
+                )
+            });
+
+        assert_eq!(popup_text.sort_key.layer_order, POPUP_LAYER_ORDER + 1);
+
+        let popup_background = frame.surfaces[0].layers[0]
+            .primitives
+            .iter()
+            .find_map(|primitive| match primitive {
+                UiPrimitive::Rect(rect)
+                    if rect.sort_key.layer_order == POPUP_LAYER_ORDER + 1
+                        && rect.sort_key.primitive_order < popup_text.sort_key.primitive_order =>
+                {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "popup background should render on the popup layer before text; frame:\n{}",
+                    frame_signature(&frame)
+                )
+            });
+
+        assert_eq!(popup_background.sort_key.layer_order, POPUP_LAYER_ORDER + 1);
+        assert!(
+            popup_background.sort_key.primitive_order < popup_text.sort_key.primitive_order,
+            "popup background must not render after popup text; frame:\n{}",
+            frame_signature(&frame)
+        );
+        assert!(
+            frame.surfaces[0].layers[0]
+                .primitives
+                .iter()
+                .all(|primitive| primitive_sort_key(primitive).layer_order <= POPUP_LAYER_ORDER + 1),
+            "test popup frame should not emit a higher overlay layer than the popup text; frame:\n{}",
+            frame_signature(&frame)
+        );
     }
 
     #[test]
@@ -1710,26 +1933,43 @@ mod tests {
         let overflow_bounds = UiRect::new(0.0, 0.0, 120.0, 64.0);
         let overflow_layouts =
             compute_tree_layout(&overflow_tree, overflow_bounds, &UiRuntimeState::default());
-        let overflow_frame = build_ui_frame(
+        let inactive_overflow_frame = build_ui_frame(
             &overflow_tree,
             &overflow_layouts,
             overflow_bounds.size(),
             InteractionVisualState::default(),
             &atlas_source,
         );
+        let active_overflow_frame = build_ui_frame(
+            &overflow_tree,
+            &overflow_layouts,
+            overflow_bounds.size(),
+            InteractionVisualState {
+                active_scrollbar_widget: Some(scroll_id),
+                ..Default::default()
+            },
+            &atlas_source,
+        );
 
         let scroll_layout = overflow_layouts
             .get(&scroll_id)
             .expect("scroll layout should exist");
-        let track_rect = UiRect::new(
-            scroll_layout.content_bounds.x + scroll_layout.content_bounds.width,
-            scroll_layout.content_bounds.y,
-            (scroll_layout.bounds.width - scroll_layout.content_bounds.width).max(0.0),
-            scroll_layout.content_bounds.height,
+        let track_rect = scrollbar_geometry(
+            &overflow_tree,
+            scroll_id,
+            &overflow_layouts,
+            scroll_layout.bounds,
+            scroll_layout.content_bounds,
+        )
+        .expect("overflowing scroll should have scrollbar geometry")
+        .track_rect;
+        assert!(
+            !has_rect_primitive(&inactive_overflow_frame, track_rect),
+            "overflowing scrollbars should stay hidden until active",
         );
         assert!(
-            has_rect_primitive(&overflow_frame, track_rect),
-            "overflowing scroll should emit a scrollbar track primitive",
+            has_rect_primitive(&active_overflow_frame, track_rect),
+            "active overflowing scroll should emit an overlay scrollbar track primitive",
         );
 
         let no_overflow_tree = UiTree::new(UiNode::with_children(
@@ -1746,7 +1986,7 @@ mod tests {
             no_overflow_bounds,
             &UiRuntimeState::default(),
         );
-        let no_overflow_frame = build_ui_frame(
+        let _no_overflow_frame = build_ui_frame(
             &no_overflow_tree,
             &no_overflow_layouts,
             no_overflow_bounds.size(),
@@ -1756,14 +1996,15 @@ mod tests {
         let no_overflow_scroll = no_overflow_layouts
             .get(&WidgetId(11))
             .expect("scroll layout should exist");
-        let no_overflow_track = UiRect::new(
-            no_overflow_scroll.content_bounds.x + no_overflow_scroll.content_bounds.width,
-            no_overflow_scroll.content_bounds.y,
-            (no_overflow_scroll.bounds.width - no_overflow_scroll.content_bounds.width).max(0.0),
-            no_overflow_scroll.content_bounds.height,
-        );
         assert!(
-            !has_rect_primitive(&no_overflow_frame, no_overflow_track),
+            scrollbar_geometry(
+                &no_overflow_tree,
+                WidgetId(11),
+                &no_overflow_layouts,
+                no_overflow_scroll.bounds,
+                no_overflow_scroll.content_bounds,
+            )
+            .is_none(),
             "non-overflowing scroll should not emit a scrollbar track primitive",
         );
     }
@@ -1801,6 +2042,8 @@ mod tests {
                 hovered_widget: Some(button_id),
                 pressed_widget: None,
                 focused_widget: None,
+                active_scrollbar_widget: None,
+                scrollbar_opacity_by_widget_id: BTreeMap::new(),
             },
             &atlas_source,
         );
@@ -1812,6 +2055,8 @@ mod tests {
                 hovered_widget: None,
                 pressed_widget: None,
                 focused_widget: Some(button_id),
+                active_scrollbar_widget: None,
+                scrollbar_opacity_by_widget_id: BTreeMap::new(),
             },
             &atlas_source,
         );
@@ -1830,6 +2075,127 @@ mod tests {
         assert_ne!(
             base_border, focus_border,
             "focused button should render a different border paint"
+        );
+    }
+
+    #[test]
+    fn button_emission_supports_round_close_shape_and_centered_label() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let theme = ThemeTokens::default();
+        let button_id = WidgetId(221);
+        let style = TextStyle {
+            font_id: FontId(1),
+            font_size: 12.0,
+            ..TextStyle::default()
+        };
+        let mut button = crate::ButtonNode::new("x", style, theme);
+        button.padding = ui_math::UiInsets::ZERO;
+        button.min_size = UiSize::new(18.0, 18.0);
+        button.corner_radius = Some(f32::MAX);
+        let tree = UiTree::new(UiNode::new(button_id, UiNodeKind::Button(button)));
+        let bounds = UiRect::new(0.0, 0.0, 18.0, 18.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState::default(),
+            &atlas_source,
+        );
+
+        let rect = frame
+            .surfaces
+            .iter()
+            .flat_map(|surface| surface.layers.iter())
+            .flat_map(|layer| layer.primitives.iter())
+            .find_map(|primitive| match primitive {
+                UiPrimitive::Rect(rect) => Some(rect),
+                _ => None,
+            })
+            .expect("button should emit a background rect");
+        assert!(
+            (rect.radius - 9.0).abs() <= 0.001,
+            "full corner radius should clamp to a circular 50% radius"
+        );
+
+        let glyph = frame
+            .surfaces
+            .iter()
+            .flat_map(|surface| surface.layers.iter())
+            .flat_map(|layer| layer.primitives.iter())
+            .find_map(|primitive| match primitive {
+                UiPrimitive::GlyphRun(run) => run.glyph_run.glyphs.first(),
+                _ => None,
+            })
+            .expect("button label should emit a glyph");
+        assert!(
+            glyph.origin.x > 0.0 && glyph.origin.y > 0.0,
+            "button label should be centered away from the top-left edge"
+        );
+    }
+
+    #[test]
+    fn scroll_children_and_overlays_remain_inside_scroll_clip_stack() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let theme = ThemeTokens::default();
+        let scroll_id = WidgetId(301);
+        let anchor_id = WidgetId(302);
+        let popup_id = WidgetId(303);
+        let popup_button_id = WidgetId(304);
+        let mut anchor = crate::ButtonNode::new("Wide tab", TextStyle::default(), theme.clone());
+        anchor.min_size = UiSize::new(200.0, 24.0);
+        let mut close = crate::ButtonNode::new("x", TextStyle::default(), theme.clone());
+        close.min_size = UiSize::new(18.0, 18.0);
+        let mut popup = PopupNode::anchored_inside_top_end(anchor_id, theme.clone());
+        popup.offset = 0.0;
+        let row = UiNode::with_children(
+            WidgetId(305),
+            UiNodeKind::Stack(crate::StackNode::horizontal(0.0)),
+            vec![
+                UiNode::new(anchor_id, UiNodeKind::Button(anchor)),
+                UiNode::with_children(
+                    popup_id,
+                    UiNodeKind::Popup(popup),
+                    vec![UiNode::new(popup_button_id, UiNodeKind::Button(close))],
+                ),
+            ],
+        );
+        let tree = UiTree::new(UiNode::with_children(
+            scroll_id,
+            UiNodeKind::Scroll(crate::ScrollNode::horizontal(theme)),
+            vec![row],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 80.0, 24.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState::default(),
+            &atlas_source,
+        );
+
+        let mut clip_depth = 0_i32;
+        let mut popup_rect_depth = None;
+        for primitive in &frame.surfaces[0].layers[0].primitives {
+            match primitive {
+                UiPrimitive::Clip(ClipPrimitive::Push { .. }) => clip_depth += 1,
+                UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => clip_depth -= 1,
+                UiPrimitive::Rect(rect) if rect.rect.x >= 80.0 => {
+                    popup_rect_depth = Some(clip_depth);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            popup_rect_depth.is_some_and(|depth| depth > 0),
+            "overflowing overlay primitives should still be emitted under the scroll clip"
         );
     }
 
@@ -1876,6 +2242,18 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    fn primitive_sort_key(primitive: &UiPrimitive) -> UiSortKey {
+        match primitive {
+            UiPrimitive::Rect(value) => value.sort_key,
+            UiPrimitive::Border(value) => value.sort_key,
+            UiPrimitive::GlyphRun(value) => value.sort_key,
+            UiPrimitive::Image(value) => value.sort_key,
+            UiPrimitive::ViewportSurfaceEmbed(value) => value.sort_key,
+            UiPrimitive::Clip(ClipPrimitive::Push { sort_key, .. }) => *sort_key,
+            UiPrimitive::Clip(ClipPrimitive::Pop { sort_key }) => *sort_key,
+        }
     }
 
     fn has_rect_primitive(frame: &UiFrame, expected_rect: UiRect) -> bool {

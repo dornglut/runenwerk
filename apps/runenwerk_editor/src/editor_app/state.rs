@@ -2,6 +2,7 @@ use crate::editor_runtime::runtime::RunenwerkEditorRuntime;
 use crate::editor_runtime::tool_state::EditorToolRuntimeState;
 use std::sync::Arc;
 
+use editor_definition::EditorDefinitionDocument;
 use editor_shell::WorkspaceState;
 
 use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
@@ -14,6 +15,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) debug_logs_enabled: bool,
     pub(crate) surface_sessions: SurfaceSessionStore,
     pub(crate) surface_provider_registry: Arc<EditorSurfaceProviderRegistry>,
+    pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -32,6 +34,7 @@ impl RunenwerkEditorApp {
             debug_logs_enabled: true,
             surface_sessions: SurfaceSessionStore::default(),
             surface_provider_registry: Arc::new(EditorSurfaceProviderRegistry::runenwerk_default()),
+            pending_editor_definition_activations: Vec::new(),
         }
     }
 
@@ -107,5 +110,17 @@ impl RunenwerkEditorApp {
 
     pub fn surface_provider_registry_handle(&self) -> Arc<EditorSurfaceProviderRegistry> {
         Arc::clone(&self.surface_provider_registry)
+    }
+
+    pub fn queue_editor_definition_activation(&mut self, document: EditorDefinitionDocument) {
+        self.pending_editor_definition_activations.push(document);
+    }
+
+    pub fn take_pending_editor_definition_activations(&mut self) -> Vec<EditorDefinitionDocument> {
+        std::mem::take(&mut self.pending_editor_definition_activations)
+    }
+
+    pub fn pending_editor_definition_activation_count(&self) -> usize {
+        self.pending_editor_definition_activations.len()
     }
 }

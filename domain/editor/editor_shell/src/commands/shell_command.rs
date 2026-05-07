@@ -6,7 +6,7 @@ use editor_viewport::{ExpressionProductId, ViewportId};
 
 use crate::{
     EntityTableSortKey, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
-    ToolbarCommandKind, ToolbarMenuKind, WorkspaceProfileId, WorkspaceSplitAxis,
+    ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
 };
 use crate::{SurfaceLocalAction, SurfaceProviderId};
 
@@ -35,10 +35,21 @@ pub enum ShellCommand {
     ToggleToolbarMenu {
         menu: ToolbarMenuKind,
     },
+    ToggleTabStackActionMenu {
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    },
+    ToggleTabStackSurfaceMenu {
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    },
     RunToolbarCommand {
         command: ToolbarCommandKind,
     },
     SwitchWorkspaceProfile {
+        profile_id: WorkspaceProfileId,
+    },
+    CloseWorkspaceProfile {
         profile_id: WorkspaceProfileId,
     },
     Undo,
@@ -174,6 +185,14 @@ pub enum ShellCommand {
         target: StructuralCommandTarget,
         projection_epoch: u64,
     },
+    ToggleViewportStatistics {
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
+    ToggleViewportOptionsMenu {
+        target: StructuralCommandTarget,
+        projection_epoch: u64,
+    },
     ActivateInspectorField {
         index: usize,
         target: StructuralCommandTarget,
@@ -270,6 +289,12 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::ToggleViewportDetails {
+                projection_epoch, ..
+            }
+            | Self::ToggleViewportStatistics {
+                projection_epoch, ..
+            }
+            | Self::ToggleViewportOptionsMenu {
                 projection_epoch, ..
             }
             | Self::ActivateInspectorField {

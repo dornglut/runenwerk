@@ -5,7 +5,9 @@ use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_runtime::{EditorPrimitive, EditorPrimitiveKind};
-use crate::shell::RunenwerkEditorShellState;
+use crate::shell::{
+    EditorDefinitionActivation, RunenwerkEditorShellState, activate_editor_definition_document,
+};
 
 const SHELL_READABILITY_BUMP: f32 = 1.15;
 const SHELL_SCALE_MIN: f32 = 1.0;
@@ -82,6 +84,53 @@ impl Default for EditorHostResource {
     }
 }
 
+impl EditorHostResource {
+    pub fn apply_theme(&mut self, theme: ThemeTokens) {
+        self.theme = theme;
+    }
+
+    pub fn apply_pending_editor_definition_activations(&mut self) -> usize {
+        let pending = self.app.take_pending_editor_definition_activations();
+        let mut activated = 0;
+        for document in pending {
+            match activate_editor_definition_document(&document, &self.theme) {
+                Ok(EditorDefinitionActivation::ThemeChanged(theme)) => {
+                    self.apply_theme(theme);
+                    self.app.append_console_line(format!(
+                        "[editor-definition] activated live theme {}",
+                        document.display_name
+                    ));
+                    activated += 1;
+                }
+                Ok(EditorDefinitionActivation::NoLiveActivation) => {
+                    self.app.append_console_line(format!(
+                        "[editor-definition] no live activation for {}",
+                        document.display_name
+                    ));
+                }
+                Ok(
+                    EditorDefinitionActivation::UiTemplateChanged { .. }
+                    | EditorDefinitionActivation::WorkspaceLayoutChanged { .. },
+                ) => {
+                    self.app.append_console_line(format!(
+                        "[editor-definition] live activation deferred for {}",
+                        document.display_name
+                    ));
+                }
+                Err(diagnostics) => {
+                    for diagnostic in diagnostics {
+                        self.app.append_console_line(format!(
+                            "[editor-definition] activation blocked: {}",
+                            diagnostic.message
+                        ));
+                    }
+                }
+            }
+        }
+        activated
+    }
+}
+
 pub fn effective_shell_scale(scale_factor: f64) -> f32 {
     (scale_factor as f32).clamp(SHELL_SCALE_MIN, SHELL_SCALE_MAX) * SHELL_READABILITY_BUMP
 }
@@ -100,6 +149,9 @@ pub struct EditorInputBridgeState {
 pub struct EditorViewportSceneProductUniform {
     pub surface: [f32; 4],
     pub viewport: [f32; 4],
+    pub viewport_b: [f32; 4],
+    pub viewport_c: [f32; 4],
+    pub viewport_d: [f32; 4],
     pub camera_position: [f32; 4],
     pub camera_forward: [f32; 4],
     pub camera_right: [f32; 4],
@@ -113,6 +165,7 @@ pub struct EditorViewportSceneProductUniform {
 #[derive(Debug, Clone, Copy)]
 pub struct EditorViewportBranchTraceSnapshot {
     pub viewport_bounds_px: (f32, f32, f32, f32),
+    pub additional_viewport_bounds_px: [(f32, f32, f32, f32); 3],
     pub viewport_valid: bool,
     pub shader_loaded: bool,
     pub debug_stage: EditorViewportDebugStage,
@@ -121,6 +174,9 @@ pub struct EditorViewportBranchTraceSnapshot {
     pub primitive_translation: Vec3Value,
     pub surface: [f32; 4],
     pub viewport: [f32; 4],
+    pub viewport_b: [f32; 4],
+    pub viewport_c: [f32; 4],
+    pub viewport_d: [f32; 4],
     pub camera_position: [f32; 4],
     pub camera_forward: [f32; 4],
     pub camera_right: [f32; 4],
@@ -133,6 +189,10 @@ pub struct EditorViewportBranchTraceSnapshot {
 impl EditorViewportBranchTraceSnapshot {
     pub fn approx_eq(&self, other: &Self) -> bool {
         approx_bounds_eq(self.viewport_bounds_px, other.viewport_bounds_px)
+            && approx_bounds_list_eq(
+                self.additional_viewport_bounds_px,
+                other.additional_viewport_bounds_px,
+            )
             && self.viewport_valid == other.viewport_valid
             && self.shader_loaded == other.shader_loaded
             && self.debug_stage == other.debug_stage
@@ -141,6 +201,9 @@ impl EditorViewportBranchTraceSnapshot {
             && approx_vec3(self.primitive_translation, other.primitive_translation)
             && approx_vec4(self.surface, other.surface)
             && approx_vec4(self.viewport, other.viewport)
+            && approx_vec4(self.viewport_b, other.viewport_b)
+            && approx_vec4(self.viewport_c, other.viewport_c)
+            && approx_vec4(self.viewport_d, other.viewport_d)
             && approx_vec4(self.camera_position, other.camera_position)
             && approx_vec4(self.camera_forward, other.camera_forward)
             && approx_vec4(self.camera_right, other.camera_right)
@@ -201,6 +264,7 @@ impl EditorViewportBranchTraceSnapshot {
 #[derive(Debug, Clone, Copy, ecs::Component, ecs::Resource)]
 pub struct EditorViewportRenderState {
     pub viewport_bounds_px: (f32, f32, f32, f32),
+    pub additional_viewport_bounds_px: [(f32, f32, f32, f32); 3],
     pub effective_shell_scale: f32,
     pub viewport_valid: bool,
     pub shader_loaded: bool,
@@ -224,6 +288,7 @@ impl Default for EditorViewportRenderState {
     fn default() -> Self {
         Self {
             viewport_bounds_px: (0.0, 0.0, 0.0, 0.0),
+            additional_viewport_bounds_px: [(0.0, 0.0, 0.0, 0.0); 3],
             effective_shell_scale: 1.0,
             viewport_valid: false,
             shader_loaded: false,
@@ -247,8 +312,20 @@ impl Default for EditorViewportRenderState {
 
 impl EditorViewportRenderState {
     pub fn set_viewport_bounds(&mut self, bounds: (f32, f32, f32, f32)) -> bool {
-        let changed = !approx_bounds_eq(self.viewport_bounds_px, bounds);
-        self.viewport_bounds_px = bounds;
+        self.set_viewport_bounds_list(&[bounds])
+    }
+
+    pub fn set_viewport_bounds_list(&mut self, bounds: &[(f32, f32, f32, f32)]) -> bool {
+        let primary = bounds.first().copied().unwrap_or((0.0, 0.0, 0.0, 0.0));
+        let mut additional = [(0.0, 0.0, 0.0, 0.0); 3];
+        for (target, source) in additional.iter_mut().zip(bounds.iter().skip(1)) {
+            *target = *source;
+        }
+
+        let changed = !approx_bounds_eq(self.viewport_bounds_px, primary)
+            || !approx_bounds_list_eq(self.additional_viewport_bounds_px, additional);
+        self.viewport_bounds_px = primary;
+        self.additional_viewport_bounds_px = additional;
         changed
     }
 
@@ -344,6 +421,7 @@ impl EditorViewportRenderState {
         let uniform = self.compose_scene_product_uniform(surface);
         EditorViewportBranchTraceSnapshot {
             viewport_bounds_px: self.viewport_bounds_px,
+            additional_viewport_bounds_px: self.additional_viewport_bounds_px,
             viewport_valid: self.viewport_valid,
             shader_loaded: self.shader_loaded,
             debug_stage: self.debug_stage,
@@ -352,6 +430,9 @@ impl EditorViewportRenderState {
             primitive_translation: self.primitive_translation,
             surface: uniform.surface,
             viewport: uniform.viewport,
+            viewport_b: uniform.viewport_b,
+            viewport_c: uniform.viewport_c,
+            viewport_d: uniform.viewport_d,
             camera_position: uniform.camera_position,
             camera_forward: uniform.camera_forward,
             camera_right: uniform.camera_right,
@@ -386,12 +467,10 @@ impl EditorViewportRenderState {
 
         EditorViewportSceneProductUniform {
             surface: [width, height, 1.0 / width, 1.0 / height],
-            viewport: [
-                self.viewport_bounds_px.0,
-                self.viewport_bounds_px.1,
-                self.viewport_bounds_px.2.max(0.0),
-                self.viewport_bounds_px.3.max(0.0),
-            ],
+            viewport: viewport_bounds_array(self.viewport_bounds_px),
+            viewport_b: viewport_bounds_array(self.additional_viewport_bounds_px[0]),
+            viewport_c: viewport_bounds_array(self.additional_viewport_bounds_px[1]),
+            viewport_d: viewport_bounds_array(self.additional_viewport_bounds_px[2]),
             camera_position: [
                 camera.position.x,
                 camera.position.y,
@@ -429,11 +508,21 @@ impl EditorViewportRenderState {
     }
 }
 
+fn viewport_bounds_array(bounds: (f32, f32, f32, f32)) -> [f32; 4] {
+    [bounds.0, bounds.1, bounds.2.max(0.0), bounds.3.max(0.0)]
+}
+
 fn approx_bounds_eq(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
     (a.0 - b.0).abs() <= VIEWPORT_BOUNDS_EPSILON
         && (a.1 - b.1).abs() <= VIEWPORT_BOUNDS_EPSILON
         && (a.2 - b.2).abs() <= VIEWPORT_BOUNDS_EPSILON
         && (a.3 - b.3).abs() <= VIEWPORT_BOUNDS_EPSILON
+}
+
+fn approx_bounds_list_eq(a: [(f32, f32, f32, f32); 3], b: [(f32, f32, f32, f32); 3]) -> bool {
+    a.into_iter()
+        .zip(b)
+        .all(|(left, right)| approx_bounds_eq(left, right))
 }
 
 fn approx_f32(a: f32, b: f32) -> bool {
@@ -477,4 +566,49 @@ pub fn editor_viewport_camera() -> EditorViewportCamera {
 
 pub fn editor_viewport_camera_fov_y_radians() -> f32 {
     50.0_f32.to_radians()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ui_theme::UiColor;
+
+    #[test]
+    fn editor_host_resource_apply_theme_replaces_runtime_theme() {
+        let mut host = EditorHostResource::default();
+        let theme = ThemeTokens {
+            accent: UiColor::new(0.2, 0.4, 1.0, 1.0),
+            ..ThemeTokens::default()
+        };
+
+        host.apply_theme(theme.clone());
+
+        assert_eq!(host.theme, theme);
+    }
+
+    #[test]
+    fn scene_product_uniform_uses_active_embed_bounds_for_camera_aspect() {
+        let mut state = EditorViewportRenderState::default();
+        state.set_viewport_bounds((40.0, 50.0, 320.0, 180.0));
+
+        let uniform = state.compose_scene_product_uniform((1280, 720));
+
+        assert_eq!(uniform.viewport, [40.0, 50.0, 320.0, 180.0]);
+        assert_eq!(state.viewport_bounds_px, (40.0, 50.0, 320.0, 180.0));
+    }
+
+    #[test]
+    fn scene_product_uniform_preserves_split_viewport_bounds() {
+        let mut state = EditorViewportRenderState::default();
+        let changed = state
+            .set_viewport_bounds_list(&[(40.0, 50.0, 320.0, 180.0), (400.0, 50.0, 320.0, 180.0)]);
+
+        let uniform = state.compose_scene_product_uniform((1280, 720));
+
+        assert!(changed);
+        assert_eq!(uniform.viewport, [40.0, 50.0, 320.0, 180.0]);
+        assert_eq!(uniform.viewport_b, [400.0, 50.0, 320.0, 180.0]);
+        assert_eq!(uniform.viewport_c, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(uniform.viewport_d, [0.0, 0.0, 0.0, 0.0]);
+    }
 }

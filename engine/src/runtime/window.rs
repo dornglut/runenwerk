@@ -1,3 +1,14 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowCursorIcon {
+    Default,
+    ColResize,
+    RowResize,
+    NwseResize,
+    NeswResize,
+    Grab,
+    Grabbing,
+}
+
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct WindowState {
     pub title: String,
@@ -5,6 +16,7 @@ pub struct WindowState {
     pub scale_factor: f64,
     pub close_requested: bool,
     pub redraw_requested: bool,
+    pub cursor_icon: WindowCursorIcon,
     headless: bool,
 }
 
@@ -16,6 +28,7 @@ impl WindowState {
             scale_factor: 1.0,
             close_requested: false,
             redraw_requested: true,
+            cursor_icon: WindowCursorIcon::Default,
             headless: false,
         }
     }
@@ -27,6 +40,7 @@ impl WindowState {
             scale_factor: 1.0,
             close_requested: false,
             redraw_requested: false,
+            cursor_icon: WindowCursorIcon::Default,
             headless: true,
         }
     }
@@ -42,6 +56,13 @@ impl WindowState {
     pub fn set_title(&mut self, title: impl Into<String>) {
         self.title = title.into();
         self.request_redraw();
+    }
+
+    pub fn set_cursor_icon(&mut self, cursor_icon: WindowCursorIcon) {
+        if self.cursor_icon != cursor_icon {
+            self.cursor_icon = cursor_icon;
+            self.request_redraw();
+        }
     }
 
     pub fn is_headless(&self) -> bool {

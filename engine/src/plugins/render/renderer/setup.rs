@@ -593,95 +593,120 @@ impl Renderer {
             occlusion_query_set: None,
         });
 
-        if !prepared.rect_batches.is_empty() {
-            pass.set_pipeline(&rect_pass.pipeline);
-            pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
-            for batch in &prepared.rect_batches {
-                pass.set_scissor_rect(
-                    batch.scissor.0,
-                    batch.scissor.1,
-                    batch.scissor.2,
-                    batch.scissor.3,
-                );
-                pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
-                pass.draw(0..6, 0..batch.instance_count);
-            }
-        }
+        let mut layer_orders = std::collections::BTreeSet::<u32>::new();
+        layer_orders.extend(prepared.rect_batches.iter().map(|batch| batch.layer_order));
+        layer_orders.extend(
+            prepared
+                .viewport_embed_batches
+                .iter()
+                .map(|batch| batch.layer_order),
+        );
+        layer_orders.extend(prepared.glyph_batches.iter().map(|batch| batch.layer_order));
 
-        if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
-            let mut viewport_bind_groups = std::collections::BTreeMap::<String, BindGroup>::new();
-            pass.set_pipeline(&viewport_embed_pass.pipeline);
-            pass.set_bind_group(0, &viewport_embed_pass.screen_bind_group, &[]);
-            for batch in &prepared.viewport_embed_batches {
-                let Some(binding) = viewport_surface_bindings.get(batch.viewport_id, batch.slot)
-                else {
-                    continue;
-                };
-                if binding.flow_id.as_str() != flow_id {
-                    continue;
+        let mut viewport_bind_groups = std::collections::BTreeMap::<String, BindGroup>::new();
+        for layer_order in layer_orders {
+            if !prepared.rect_batches.is_empty() {
+                pass.set_pipeline(&rect_pass.pipeline);
+                pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
+                for batch in prepared
+                    .rect_batches
+                    .iter()
+                    .filter(|batch| batch.layer_order == layer_order)
+                {
+                    pass.set_scissor_rect(
+                        batch.scissor.0,
+                        batch.scissor.1,
+                        batch.scissor.2,
+                        batch.scissor.3,
+                    );
+                    pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
+                    pass.draw(0..6, 0..batch.instance_count);
                 }
+            }
 
-                if !viewport_bind_groups.contains_key(binding.resource_id.as_str()) {
-                    let Ok(view) = runtime_resources.resolve_ui_texture_view(
-                        "builtin_ui_viewport_embed",
-                        binding.resource_id.as_str(),
-                        frame_texture,
-                        surface_size,
-                        surface_format,
-                    ) else {
+            if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
+                pass.set_pipeline(&viewport_embed_pass.pipeline);
+                pass.set_bind_group(0, &viewport_embed_pass.screen_bind_group, &[]);
+                for batch in prepared
+                    .viewport_embed_batches
+                    .iter()
+                    .filter(|batch| batch.layer_order == layer_order)
+                {
+                    let Some(binding) =
+                        viewport_surface_bindings.get(batch.viewport_id, batch.slot)
+                    else {
                         continue;
                     };
-                    let bind_group = device.create_bind_group(&BindGroupDescriptor {
-                        label: Some("engine_ui_viewport_embed_bind_group"),
-                        layout: &viewport_embed_pass.texture_bind_group_layout,
-                        entries: &[
-                            BindGroupEntry {
-                                binding: 0,
-                                resource: BindingResource::TextureView(&view),
-                            },
-                            BindGroupEntry {
-                                binding: 1,
-                                resource: BindingResource::Sampler(
-                                    &viewport_embed_pass.texture_sampler,
-                                ),
-                            },
-                        ],
-                    });
-                    viewport_bind_groups.insert(binding.resource_id.clone(), bind_group);
+                    if binding.flow_id.as_str() != flow_id {
+                        continue;
+                    }
+
+                    if !viewport_bind_groups.contains_key(binding.resource_id.as_str()) {
+                        let Ok(view) = runtime_resources.resolve_ui_texture_view(
+                            "builtin_ui_viewport_embed",
+                            binding.resource_id.as_str(),
+                            frame_texture,
+                            surface_size,
+                            surface_format,
+                        ) else {
+                            continue;
+                        };
+                        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+                            label: Some("engine_ui_viewport_embed_bind_group"),
+                            layout: &viewport_embed_pass.texture_bind_group_layout,
+                            entries: &[
+                                BindGroupEntry {
+                                    binding: 0,
+                                    resource: BindingResource::TextureView(&view),
+                                },
+                                BindGroupEntry {
+                                    binding: 1,
+                                    resource: BindingResource::Sampler(
+                                        &viewport_embed_pass.texture_sampler,
+                                    ),
+                                },
+                            ],
+                        });
+                        viewport_bind_groups.insert(binding.resource_id.clone(), bind_group);
+                    }
+
+                    let Some(bind_group) = viewport_bind_groups.get(binding.resource_id.as_str())
+                    else {
+                        continue;
+                    };
+                    pass.set_bind_group(1, bind_group, &[]);
+                    pass.set_scissor_rect(
+                        batch.scissor.0,
+                        batch.scissor.1,
+                        batch.scissor.2,
+                        batch.scissor.3,
+                    );
+                    pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
+                    pass.draw(0..6, 0..batch.instance_count);
                 }
-
-                let Some(bind_group) = viewport_bind_groups.get(binding.resource_id.as_str())
-                else {
-                    continue;
-                };
-                pass.set_bind_group(1, bind_group, &[]);
-                pass.set_scissor_rect(
-                    batch.scissor.0,
-                    batch.scissor.1,
-                    batch.scissor.2,
-                    batch.scissor.3,
-                );
-                pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
-                pass.draw(0..6, 0..batch.instance_count);
             }
-        }
 
-        if let Some(glyph_pass) = self.glyph_pass.as_ref() {
-            pass.set_pipeline(&glyph_pass.pipeline);
-            pass.set_bind_group(0, &glyph_pass.screen_bind_group, &[]);
-            for batch in &prepared.glyph_batches {
-                let Some(atlas_gpu) = self.glyph_atlas_gpu.get(&batch.texture_id) else {
-                    continue;
-                };
-                pass.set_bind_group(1, &atlas_gpu.bind_group, &[]);
-                pass.set_scissor_rect(
-                    batch.scissor.0,
-                    batch.scissor.1,
-                    batch.scissor.2,
-                    batch.scissor.3,
-                );
-                pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
-                pass.draw(0..6, 0..batch.instance_count);
+            if let Some(glyph_pass) = self.glyph_pass.as_ref() {
+                pass.set_pipeline(&glyph_pass.pipeline);
+                pass.set_bind_group(0, &glyph_pass.screen_bind_group, &[]);
+                for batch in prepared
+                    .glyph_batches
+                    .iter()
+                    .filter(|batch| batch.layer_order == layer_order)
+                {
+                    let Some(atlas_gpu) = self.glyph_atlas_gpu.get(&batch.texture_id) else {
+                        continue;
+                    };
+                    pass.set_bind_group(1, &atlas_gpu.bind_group, &[]);
+                    pass.set_scissor_rect(
+                        batch.scissor.0,
+                        batch.scissor.1,
+                        batch.scissor.2,
+                        batch.scissor.3,
+                    );
+                    pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
+                    pass.draw(0..6, 0..batch.instance_count);
+                }
             }
         }
     }

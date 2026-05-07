@@ -1,9 +1,9 @@
 use editor_shell::ShellCommand;
 use editor_viewport::ViewportId;
-use engine::WindowState;
 use engine::plugins::input::domain::action;
 use engine::plugins::render::{EditorGizmoAxis, EditorPickingTarget};
 use engine::runtime::{Res, ResMut};
+use engine::{WindowCursorIcon, WindowState};
 use ui_input::{Modifiers, PointerButton, PointerEvent, PointerEventKind, UiInputEvent};
 use ui_math::{UiPoint, UiRect, UiVector};
 
@@ -18,8 +18,8 @@ use crate::runtime::viewport::{
     resolve_structural_viewport_products,
 };
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
-use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch_shell_command;
+use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState, ShellCursorIntent};
 
 #[derive(Debug, Clone, Copy)]
 struct ViewportPointerRoute {
@@ -33,7 +33,7 @@ struct ViewportPointerRoute {
 #[allow(clippy::too_many_arguments)]
 pub fn dispatch_editor_input_system(
     input: Res<engine::plugins::InputState>,
-    window: Res<WindowState>,
+    mut window: ResMut<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
     picking_results: Res<ViewportPickingResultsResource>,
@@ -154,6 +154,23 @@ pub fn dispatch_editor_input_system(
         );
     }
 
+    if input.right_mouse_pressed() {
+        let _ = dispatch_pointer_event(
+            &mut host,
+            &shell_theme,
+            bounds,
+            PointerEventKind::Down,
+            position,
+            UiVector::ZERO,
+            Some(PointerButton::Secondary),
+            modifiers,
+            viewport_products,
+            Some(&mut *viewport_presentations),
+            Some(&viewport_observations),
+            Some(&tool_surface_bindings),
+        );
+    }
+
     if input.left_mouse_down()
         && let Some(tool_surface_id) = host.app.surface_sessions().active_viewport_drag_surface()
         && position != previous
@@ -236,6 +253,23 @@ pub fn dispatch_editor_input_system(
         );
     }
 
+    if input.right_mouse_released() {
+        let _ = dispatch_pointer_event(
+            &mut host,
+            &shell_theme,
+            bounds,
+            PointerEventKind::Up,
+            position,
+            UiVector::ZERO,
+            Some(PointerButton::Secondary),
+            modifiers,
+            viewport_products,
+            Some(&mut *viewport_presentations),
+            Some(&viewport_observations),
+            Some(&tool_surface_bindings),
+        );
+    }
+
     dispatch_shell_keyboard_and_text(
         &input,
         &mut host,
@@ -248,7 +282,22 @@ pub fn dispatch_editor_input_system(
         Some(&tool_surface_bindings),
     );
 
+    let cursor_intent =
+        RunenwerkEditorShellController::cursor_intent_for_pointer(&host.shell_state, position);
+    window.set_cursor_icon(window_cursor_icon(cursor_intent));
     bridge.last_mouse_position = (position.x, position.y);
+}
+
+fn window_cursor_icon(cursor_intent: ShellCursorIntent) -> WindowCursorIcon {
+    match cursor_intent {
+        ShellCursorIntent::Default => WindowCursorIcon::Default,
+        ShellCursorIntent::ResizeColumn => WindowCursorIcon::ColResize,
+        ShellCursorIntent::ResizeRow => WindowCursorIcon::RowResize,
+        ShellCursorIntent::ResizeNwse => WindowCursorIcon::NwseResize,
+        ShellCursorIntent::ResizeNesw => WindowCursorIcon::NeswResize,
+        ShellCursorIntent::Grab => WindowCursorIcon::Grab,
+        ShellCursorIntent::Grabbing => WindowCursorIcon::Grabbing,
+    }
 }
 
 fn dispatch_shortcuts(

@@ -127,6 +127,7 @@ pub fn dispatch_pointer_event(
                     axis: geometry.axis,
                     pointer_grab_offset,
                 });
+                state.mark_scrollbar_active(geometry.scroll_widget_id);
                 let focus_change = FocusChange::Set(FocusTargetId(geometry.scroll_widget_id.0));
                 state.focused_target = Some(FocusTargetId(geometry.scroll_widget_id.0));
 
@@ -237,6 +238,7 @@ pub fn dispatch_pointer_event(
                 state.captured_widget = None;
                 state.middle_pan_anchor = None;
                 state.middle_pan_last_position = None;
+                state.mark_scrollbar_active(drag.scroll_widget);
 
                 let mut interactions = UiInteractionResults::new();
                 push_pressed_change_if_needed(&mut interactions, previous_pressed, None);
@@ -448,6 +450,7 @@ fn apply_scrollbar_thumb_drag(
         return false;
     }
     state.set_scroll_offset(drag.scroll_widget, next_offset);
+    state.mark_scrollbar_active(drag.scroll_widget);
     true
 }
 
@@ -554,6 +557,7 @@ fn activation_for_release(
             })
         }
         UiNodeKind::Panel(_)
+        | UiNodeKind::Popup(_)
         | UiNodeKind::Label(_)
         | UiNodeKind::TextInput(_)
         | UiNodeKind::NumericInput(_)
@@ -586,6 +590,7 @@ fn is_pointer_responsive(tree: &UiTree, widget_id: WidgetId) -> bool {
         UiNodeKind::Tree(tree) => tree.rows.iter().any(|row| row.enabled),
         UiNodeKind::Tabs(_) | UiNodeKind::ViewportSurfaceEmbed(_) | UiNodeKind::Scroll(_) => true,
         UiNodeKind::Panel(_)
+        | UiNodeKind::Popup(_)
         | UiNodeKind::Label(_)
         | UiNodeKind::Spacer(_)
         | UiNodeKind::Divider(_)
@@ -757,6 +762,7 @@ fn apply_scroll_wheel_delta(
             continue;
         }
         state.set_scroll_offset(owner, next_offset);
+        state.mark_scrollbar_active(owner);
         return Some((owner, true));
     }
 
@@ -860,6 +866,7 @@ fn apply_scroll_delta_for_axis(
             continue;
         }
         state.set_scroll_offset(owner, next_offset);
+        state.mark_scrollbar_active(owner);
         return true;
     }
     false

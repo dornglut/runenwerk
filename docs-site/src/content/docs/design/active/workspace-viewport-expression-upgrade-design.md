@@ -1,11 +1,13 @@
 ---
 title: Runenwerk Viewport Architecture Design
-description: Runenwerk Architecture Viewport Design.
+description: Long-term viewport expression product, presentation, and render-target ownership design.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
+related_roadmaps:
+  - ../../apps/runenwerk-editor/viewport-expression-implementation-roadmap.md
 ---
 
 # Viewport Expression Upgrade Design
@@ -17,6 +19,20 @@ Draft for implementation
 Upgrade the editor viewport from the current fullscreen scene pass with shader-side viewport masking to a long-term panel-owned viewport presentation architecture built around typed expression products.
 
 This design is written for the endgame architecture, not as a temporary bridge. Implementation breadth may be phased, but the ownership model, contracts, and architectural boundaries defined here are intended to remain valid long term.
+
+## No-Compromise Update
+
+As of 2026-05-07, the editor has a migration checkpoint that gives split viewport panels distinct runtime ids and per-viewport bounds. That checkpoint is not the final architecture.
+
+The final architecture must remove these migration-only traits:
+
+- multiple viewport rectangles inside one scene-product uniform;
+- static scene color, picking id, and overlay resource ids shared by all viewports;
+- implicit `ViewportId` derivation from `ToolSurfaceInstanceId` as the authority model;
+- viewport lifecycle and product synchronization inside frame submission;
+- fullscreen shader-side viewport containment as the primary correctness boundary.
+
+The implementation roadmap that executes this design is `docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md`.
 
 ---
 
@@ -636,6 +652,57 @@ This allows the viewport architecture to remain stable while supporting:
 
 ---
 
+## Final Runtime Shape
+
+The final runtime flow is:
+
+```text
+Workspace tool surface
+  -> explicit ViewportInstanceRecord
+  -> projected viewport layout entry
+  -> per-viewport render state
+  -> per-viewport render job
+  -> per-viewport product targets
+  -> presentation surface binding
+  -> UI ViewportSurfaceEmbed
+```
+
+Each step has one owner.
+
+- Viewport instance ownership lives in the editor app runtime viewport subsystem.
+- Engine-agnostic product semantics live in `domain/editor/editor_viewport`.
+- Concrete target allocation and render execution live in the app/engine runtime boundary.
+- Shell composition embeds a resolved viewport surface; it does not own product rendering.
+
+No step may infer correctness from "there is only one viewport" once shell projection artifacts exist.
+
+### Required final modules
+
+- `apps/runenwerk_editor/src/runtime/viewport/instance_registry.rs`
+  - explicit `ViewportId` allocation, restore, duplication, close, and tool-surface mapping.
+- `apps/runenwerk_editor/src/runtime/viewport/render_state.rs`
+  - per-viewport bounds, dimensions, camera, presentation/debug state, render freshness, and target status.
+- `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs`
+  - one render job per visible viewport.
+- `apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs`
+  - scene color, picking ids, overlay, and later depth/debug products rendered per viewport job.
+- `apps/runenwerk_editor/src/runtime/viewport/surface_set.rs`
+  - per-viewport concrete surface handles, not shared static labels.
+- `apps/runenwerk_editor/src/runtime/viewport/presentation_resolver.rs`
+  - selected products resolved to viewport-owned surfaces without fallback to another viewport.
+
+### Final rejection tests
+
+The final system should have architecture guards that fail if:
+
+- `EditorViewportSceneProductUniform` contains `viewport_b`, `viewport_c`, or `viewport_d`;
+- normal runtime flow uses static `editor.viewport.v1.scene_color` as the shared target for multiple viewports;
+- `submit_editor_frame_system` allocates or seeds viewport identity;
+- a provider uses a lone observed viewport as the runtime identity for an unbound split/replacement surface;
+- picking reads global screen-space state instead of viewport-local state.
+
+---
+
 ## Rendering and Ordering Model
 
 ### Current ordering problem
@@ -766,4 +833,3 @@ After the first correct implementation:
 The long-term Runenwerk viewport must be:
 
 **a panel-owned presentation architecture for typed expression products, with viewport-local interaction, explicit producer/product/presentation separation, comparative and layered viewing support, and nine-layer alignment from the first implementation.**
-

@@ -19,6 +19,8 @@ pub struct ViewportViewModel {
     pub selected_primary_product_id: Option<ExpressionProductId>,
     pub product_choices: Vec<ViewportProductChoiceViewModel>,
     pub details_visible: bool,
+    pub statistics_visible: bool,
+    pub options_menu_open: bool,
     pub selected_entity: Option<EntityId>,
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,

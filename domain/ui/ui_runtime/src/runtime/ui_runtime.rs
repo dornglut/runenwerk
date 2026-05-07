@@ -79,6 +79,11 @@ impl UiRuntime {
             hovered_widget: self.state.hovered_widget,
             pressed_widget: self.state.pressed_widget,
             focused_widget: self.state.focused_target.map(|value| WidgetId(value.0)),
+            active_scrollbar_widget: self
+                .state
+                .scrollbar_thumb_drag
+                .map(|drag| drag.scroll_widget),
+            scrollbar_opacity_by_widget_id: self.state.scrollbar_opacity_entries(),
         };
         build_ui_frame(
             tree,
@@ -248,6 +253,7 @@ fn focusable_widgets(tree: &UiTree) -> Vec<WidgetId> {
                 Some(node.id)
             }
             UiNodeKind::Panel(_)
+            | UiNodeKind::Popup(_)
             | UiNodeKind::Label(_)
             | UiNodeKind::Button(_)
             | UiNodeKind::TextInput(_)
@@ -924,9 +930,9 @@ mod tests {
         let scroll_layout = layouts
             .get(&scroll_id)
             .expect("horizontal scroll layout should exist");
-        assert!(
-            scroll_layout.content_bounds.height < scroll_layout.bounds.height,
-            "horizontal scroll should reserve a visible scrollbar gutter",
+        assert_eq!(
+            scroll_layout.content_bounds, scroll_layout.bounds,
+            "overlay scrollbars should not reserve layout gutter",
         );
 
         let max_offset = runtime
