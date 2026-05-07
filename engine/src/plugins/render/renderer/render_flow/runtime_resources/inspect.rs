@@ -60,7 +60,8 @@ impl FlowRuntimeResources {
                         generation = Some(texture.generation);
                     }
                 }
-                RenderResourceDescriptor::ImportedTexture(_)
+                RenderResourceDescriptor::TargetAlias(_)
+                | RenderResourceDescriptor::ImportedTexture(_)
                 | RenderResourceDescriptor::ImportedBuffer(_) => {}
             }
 

@@ -149,6 +149,79 @@ Compatibility path:
 - A fullscreen or graphics pass may still write `surface.color` directly with `.write_surface_color()`.
 - Use `present_pass(...)` when the flow needs a first-class terminal pass for inspection, ordering, or copy/history work.
 
+## Product Targets, Aliases, And Prepared Invocations
+
+Use flow-owned targets when one compiled flow writes one local product:
+
+```rust
+let flow = RenderFlow::new("product.flow")
+    .with_surface_color()
+    .with_color_target("product.color")
+    .with_history_texture("product.history")
+    .fullscreen_pass("product.compose")
+    .write_color_target("product.color")
+    .finish()
+    .copy_pass("product.history")
+    .source("product.color")
+    .destination("product.history")
+    .depends_on("product.compose")
+    .finish()
+    .present_pass("product.present")
+    .source("product.color")
+    .depends_on("product.history")
+    .finish()
+    .validate()?;
+```
+
+Use target aliases when authored flow topology should stay static while prepared invocations bind concrete product targets. This is the intended product-surface API shape; active runtime execution must stay on flow-owned targets until target alias validation and renderer resolution are landed:
+
+```rust
+use engine::plugins::render::{
+    PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedTargetBinding,
+    PreparedViewFrame, RenderDynamicTextureTargetKey, RenderFlow,
+};
+use std::collections::BTreeMap;
+
+let flow = RenderFlow::new("viewport.product.flow")
+    .with_color_target_alias("viewport.scene_color")
+    .fullscreen_pass("viewport.compose")
+    .offscreen_products_only()
+    .write_color_target("viewport.scene_color")
+    .finish();
+
+let view = PreparedViewFrame::offscreen_product("viewport.1", (1280, 720));
+let mut target_alias_bindings = BTreeMap::new();
+target_alias_bindings.insert(
+    "viewport.scene_color".to_string(),
+    PreparedTargetBinding::DynamicTexture(RenderDynamicTextureTargetKey::new(
+        "editor.viewport.1",
+        "scene_color",
+    )),
+);
+
+let invocation = PreparedFlowInvocationRequest {
+    invocation_id: PreparedFlowInvocationId::new("viewport.1.scene"),
+    flow_id: flow.id(),
+    view_id: view.view_id.clone(),
+    target_alias_bindings,
+    history_signature: Some("camera:v1:1280x720".to_string()),
+};
+```
+
+Prepared render frame requests are written before `RenderPrepare`. `RenderPrepare` snapshots requested views, prepared flow invocations, target alias bindings, dynamic target descriptors, projected uniform bytes, dispatch workgroups, and history signatures into `PreparedRenderFrame`. `RenderSubmit` must consume that packet rather than rediscovering product targets from live ECS state.
+
+Current implementation boundary:
+
+- `RenderDynamicTextureTargetRequestRegistryResource` validates and snapshots dynamic target descriptors into `PreparedRenderFrame`.
+- `PreparedRenderFrameRequestResource` carries offscreen product views and per-flow invocation requests.
+- Target alias execution and renderer-owned dynamic texture cache work are part of the render product surface bundle; do not model dynamic products by cloning flows or suffixing static flow resource labels.
+
+History retention should be expressed through explicit history resources or dynamic target retention policy:
+
+- flow-owned history textures use `with_history_texture(...)` plus a `copy_pass(...)`;
+- dynamic product targets use `RenderDynamicTextureRetention`;
+- prepared views and invocations carry history signatures so resize, camera, product, or descriptor changes can invalidate only the affected product/history scope.
+
 ## UI Composite After Direct Surface Writes
 
 `builtin_ui_composite_pass(...)` writes to the surface color import. It is appropriate after flows that render directly to `surface.color`:

@@ -34,13 +34,15 @@ mod tests {
         assert_eq!(
             registry
                 .get(7, primary_slot)
-                .map(|binding| binding.resource_id.as_str()),
+                .and_then(ViewportSurfaceBinding::flow_resource_parts)
+                .map(|(_, resource_id)| resource_id),
             Some("resource.primary")
         );
         assert_eq!(
             registry
                 .get(7, overlay_slot)
-                .map(|binding| binding.resource_id.as_str()),
+                .and_then(ViewportSurfaceBinding::flow_resource_parts)
+                .map(|(_, resource_id)| resource_id),
             Some("resource.overlay")
         );
     }

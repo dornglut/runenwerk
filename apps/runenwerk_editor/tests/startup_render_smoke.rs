@@ -6,9 +6,10 @@ use engine::plugins::render::{
 };
 use runenwerk_editor::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
 use runenwerk_editor::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR, ViewportRenderStateResource,
+    EDITOR_MAIN_FLOW_ID, VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportProductTargetRegistryResource,
+    ViewportRenderJobResource, ViewportRenderStateResource,
 };
-use ui_render_data::UiPrimitive;
+use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource};
 
 const LEGACY_FULLSCREEN_MASK_PASS_ID: &str = "runenwerk.editor.viewport.sdf";
 const SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
@@ -52,6 +53,14 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .world()
         .resource::<ViewportRenderStateResource>()
         .expect("viewport render state registry should exist");
+    let viewport_product_targets = app
+        .world()
+        .resource::<ViewportProductTargetRegistryResource>()
+        .expect("viewport product target registry should exist");
+    let viewport_render_jobs = app
+        .world()
+        .resource::<ViewportRenderJobResource>()
+        .expect("viewport render job registry should exist");
 
     assert!(
         flow_registry.flow_count() > 0,
@@ -104,20 +113,20 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .iter()
         .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
         .expect("editor main flow should exist");
-    let color_target_count = editor_flow
+    let target_alias_count = editor_flow
         .resources
         .resources
         .iter()
         .filter(|resource| {
             matches!(
                 resource,
-                engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)
+                engine::plugins::render::RenderResourceDescriptor::TargetAlias(_)
             )
         })
         .count();
     assert!(
-        color_target_count >= 3,
-        "editor flow resources should include the three viewport product color targets",
+        target_alias_count >= 3,
+        "editor flow resources should include the three viewport product target aliases",
     );
 
     let submission = submissions
@@ -174,10 +183,29 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
             viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
         )
         .expect("viewport primary surface binding should exist");
-    assert_eq!(primary_binding.flow_id.as_str(), EDITOR_MAIN_FLOW_ID);
-    assert_eq!(
-        primary_binding.resource_id.as_str(),
-        VIEWPORT_RESOURCE_SCENE_COLOR,
+    let ViewportSurfaceBindingSource::DynamicTexture {
+        namespace,
+        target_id,
+    } = &primary_binding.source
+    else {
+        panic!("viewport primary binding should resolve to a dynamic texture source");
+    };
+    assert_eq!(namespace.as_str(), VIEWPORT_DYNAMIC_TARGET_NAMESPACE);
+    assert!(
+        target_id.starts_with(format!("editor.viewport.{}.", viewport_embed.viewport_id).as_str()),
+        "dynamic target id should be scoped to the owning viewport, got {target_id}",
+    );
+    assert!(
+        viewport_product_targets
+            .records()
+            .any(|record| record.target_id == *target_id),
+        "dynamic primary binding should be backed by a product target record",
+    );
+    assert!(
+        viewport_render_jobs
+            .job_for(editor_viewport::ViewportId(viewport_embed.viewport_id))
+            .is_some(),
+        "embedded viewport should have a prepared render job",
     );
     assert!(
         viewport_render_states

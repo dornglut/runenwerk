@@ -5,12 +5,12 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-07
 ---
 
 # 3D SDF Render Flow Example
 
-Windowed public `RenderFlow` example that renders a raymarched 3D SDF scene with a fullscreen compose pass and an explicit terminal present pass.
+Windowed public `RenderFlow` example that renders a raymarched 3D SDF scene with compute preparation, a fullscreen compose pass, flow-owned history copy, and an explicit terminal present pass.
 
 ## Controls
 
@@ -21,13 +21,20 @@ Windowed public `RenderFlow` example that renders a raymarched 3D SDF scene with
 - `main.rs`
   - entry point
 - `rendering/graph.rs`
-  - flow declaration (`with_state`, `with_surface_color`, flow-owned color target, fullscreen compose pass, present pass)
+  - flow declaration (`with_state`, `with_surface_color`, flow-owned color/history targets, compute preparation pass, fullscreen compose pass, copy pass, present pass)
 - `rendering/state.rs`
-  - ECS-owned render state and projected uniforms
+  - ECS-owned render state, compute preparation DTOs, and projected compose uniforms
 - `runtime/app.rs`
   - app/plugin wiring and per-frame state advance
 - shader:
   - `assets/shaders/sdf_render_flow_3d_compose.wgsl`
+
+Flow chain:
+
+- `sdf.prepare` (compute, public storage/uniform bindings)
+- `sdf.compose` (fullscreen, `assets/shaders/sdf_render_flow_3d_compose.wgsl`)
+- `sdf.history` (copy, `sdf.color` -> `sdf.history`)
+- `sdf.present` (present, `sdf.color` -> surface)
 
 ## Run
 

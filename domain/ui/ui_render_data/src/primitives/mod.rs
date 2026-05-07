@@ -16,6 +16,6 @@ pub use image::ImagePrimitive;
 pub use rect::RectPrimitive;
 pub use ui_primitive::UiPrimitive;
 pub use viewport_surface_embed::{
-    ViewportSurfaceBinding, ViewportSurfaceBindingRegistry, ViewportSurfaceEmbedPrimitive,
-    ViewportSurfaceEmbedSlotId,
+    ViewportSurfaceBinding, ViewportSurfaceBindingRegistry, ViewportSurfaceBindingSource,
+    ViewportSurfaceEmbedPrimitive, ViewportSurfaceEmbedSlotId,
 };

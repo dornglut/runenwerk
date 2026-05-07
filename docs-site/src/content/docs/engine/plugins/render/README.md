@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
 ---
 
 # Render Plugin
@@ -39,7 +39,7 @@ Render runtime orchestration for the engine runtime path.
 - `composition/`
   - Direct flow registry integration and runtime compilation wiring.
 - `inspect/`
-  - Render inspection surfaces (graph dump, resource/texture inspection, timing summaries).
+  - Render inspection surfaces (graph dump, resource/texture inspection, prepared-frame product surface inspection, timing summaries).
 - `api/`
   - Public authoring surface for `RenderFlow`, pass builders, typed handles, and param projection bindings.
 - `params/`

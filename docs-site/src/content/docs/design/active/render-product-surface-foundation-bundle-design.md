@@ -396,6 +396,8 @@ RUNENWERK_ENABLE_GPU_SMOKE=1 RUNENWERK_ENABLE_MACOS_MAIN_THREAD_GPU_SMOKE=1 carg
 
 ### RB8 - Feature Proofs
 
+Status: proof docs and compile-oriented examples updated. Boids now proves compute, storage, graphics, instance draw-buffer binding, history copy, and present through the public render API. SDF now proves compute preparation, fullscreen compose, flow-owned history copy, and present through the public render API. These proofs do not close dynamic target alias execution.
+
 Change:
 
 - `engine/examples/boids_render_flow/`
@@ -410,6 +412,8 @@ Exit criteria:
 - examples use the public render API and reveal no special-case editor dependencies.
 
 ### RB9 - Inspection, Docs, And Cleanup
+
+Status: partial inspection/docs cleanup. Render reference docs now describe dynamic target descriptors, target aliases, prepared render views, flow invocations, UI sampling boundaries, and history retention. `engine::plugins::render::inspect::inspect_prepared_render_frame` exposes prepared views, dynamic target descriptors, flow invocations, target alias bindings, and history signatures. Remaining cleanup is gated on renderer dynamic target cache allocation and target-alias pass execution.
 
 Change:
 

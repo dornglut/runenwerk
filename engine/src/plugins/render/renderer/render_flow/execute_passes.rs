@@ -253,7 +253,8 @@ impl Renderer {
             );
         }
 
-        let color_target = runtime_resources.resolve_color_target_from_plan(
+        let color_target = self.resolve_color_target_from_plan(
+            runtime_resources,
             plan.pass_id,
             &plan.targets,
             frame_view,
@@ -325,7 +326,7 @@ impl Renderer {
                             compilation_options: PipelineCompilationOptions::default(),
                             targets: &[Some(ColorTargetState {
                                 format: color_target.format,
-                                blend: Some(BlendState::ALPHA_BLENDING),
+                                blend: blend_state_for_color_format(color_target.format),
                                 write_mask: ColorWrites::ALL,
                             })],
                         }),
@@ -390,14 +391,15 @@ impl Renderer {
         plan: &CompiledRasterExecutionPlan,
         shader_registry: &ShaderRegistryResource,
     ) -> Result<EncodedPipelinePass> {
-        let color_target = runtime_resources.resolve_color_target_from_plan(
+        let color_target = self.resolve_color_target_from_plan(
+            runtime_resources,
             plan.pass_id,
             &plan.targets,
             frame_view,
             packet.surface_format,
         )?;
         let depth_target =
-            runtime_resources.resolve_depth_target_from_plan(plan.pass_id, &plan.targets)?;
+            self.resolve_depth_target_from_plan(runtime_resources, plan.pass_id, &plan.targets)?;
 
         let shader = resolve_shader_material(
             plan.shader.as_ref(),
@@ -469,7 +471,7 @@ impl Renderer {
                             compilation_options: PipelineCompilationOptions::default(),
                             targets: &[Some(ColorTargetState {
                                 format: color_target.format,
-                                blend: Some(BlendState::ALPHA_BLENDING),
+                                blend: blend_state_for_color_format(color_target.format),
                                 write_mask: ColorWrites::ALL,
                             })],
                         }),
@@ -706,7 +708,7 @@ impl Renderer {
         }
 
         let source_kind = runtime_resources
-            .kind_of_resource(source_id)
+            .kind_of_resource(source_id.clone())
             .ok_or_else(|| {
                 anyhow::anyhow!(
                     "copy pass '{}' references unknown source resource '{}'",
@@ -715,7 +717,7 @@ impl Renderer {
                 )
             })?;
         let destination_kind = runtime_resources
-            .kind_of_resource(destination_id)
+            .kind_of_resource(destination_id.clone())
             .ok_or_else(|| {
                 anyhow::anyhow!(
                     "copy pass '{}' references unknown destination resource '{}'",
@@ -741,14 +743,16 @@ impl Renderer {
                 );
             }
             (RuntimeResourceKind::TextureLike, RuntimeResourceKind::TextureLike) => {
-                let source = runtime_resources.resolve_texture(
+                let source = self.resolve_texture_by_key(
+                    runtime_resources,
                     pass.pass_id,
                     source_id,
                     frame_texture,
                     packet.surface_size,
                     packet.surface_format,
                 )?;
-                let destination = runtime_resources.resolve_texture(
+                let destination = self.resolve_texture_by_key(
+                    runtime_resources,
                     pass.pass_id,
                     destination_id,
                     frame_texture,
@@ -781,7 +785,7 @@ impl Renderer {
         }
 
         let source_kind = runtime_resources
-            .kind_of_resource(source_id)
+            .kind_of_resource(source_id.clone())
             .ok_or_else(|| {
                 anyhow::anyhow!(
                     "present pass '{}' references unknown source resource '{}'",
@@ -797,7 +801,8 @@ impl Renderer {
             );
         }
 
-        let source = runtime_resources.resolve_texture(
+        let source = self.resolve_texture_by_key(
+            runtime_resources,
             pass.pass_id,
             source_id,
             frame_texture,
@@ -813,6 +818,84 @@ impl Renderer {
             generation: None,
         };
         self.encode_texture_copy(encoder, pass.pass_id, source, destination)
+    }
+
+    fn resolve_color_target_from_plan<'a>(
+        &self,
+        runtime_resources: &'a FlowRuntimeResources,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+        frame_view: &'a TextureView,
+        frame_format: TextureFormat,
+    ) -> Result<ResolvedColorTargetView<'a>> {
+        if targets.color_outputs.len() != 1 {
+            bail!(
+                "pass '{}' declares {} color outputs, but runtime execution currently requires exactly one color output",
+                pass_id,
+                targets.color_outputs.len()
+            );
+        }
+        let output = targets.color_outputs.first().ok_or_else(|| {
+            anyhow::anyhow!(
+                "pass '{}' is missing a color output target in execution plan",
+                pass_id
+            )
+        })?;
+        let output_key = runtime_resources.resolve_resource_key(pass_id, output, "color_output")?;
+        match output_key {
+            RuntimeResourceKey::DynamicTexture(key) => self
+                .dynamic_texture_targets
+                .color_target_view(pass_id, &key),
+            _ => runtime_resources.resolve_color_target_from_plan(
+                pass_id,
+                targets,
+                frame_view,
+                frame_format,
+            ),
+        }
+    }
+
+    fn resolve_depth_target_from_plan(
+        &self,
+        runtime_resources: &FlowRuntimeResources,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+    ) -> Result<Option<ResolvedDepthTargetView>> {
+        let Some(depth_target) = targets.depth_output.as_ref() else {
+            return Ok(None);
+        };
+        let resource_key =
+            runtime_resources.resolve_resource_key(pass_id, depth_target, "depth_output")?;
+        match resource_key {
+            RuntimeResourceKey::DynamicTexture(key) => self
+                .dynamic_texture_targets
+                .depth_target_view(pass_id, &key)
+                .map(Some),
+            _ => runtime_resources.resolve_depth_target_from_plan(pass_id, targets),
+        }
+    }
+
+    fn resolve_texture_by_key<'a>(
+        &'a self,
+        runtime_resources: &'a FlowRuntimeResources,
+        pass_id: RenderPassId,
+        resource_key: RuntimeResourceKey,
+        frame_texture: &'a Texture,
+        frame_size: (u32, u32),
+        frame_format: TextureFormat,
+    ) -> Result<ResolvedTextureRef<'a>> {
+        match resource_key {
+            RuntimeResourceKey::DynamicTexture(key) => {
+                self.dynamic_texture_targets.texture_ref(pass_id, &key)
+            }
+            other => runtime_resources.resolve_texture(
+                pass_id,
+                other,
+                frame_texture,
+                frame_size,
+                frame_format,
+            ),
+        }
     }
 }
 
@@ -844,6 +927,30 @@ fn build_vertex_attribute_sets(draw_buffers: &CompiledDrawBufferPlan) -> Vec<Vec
                 .collect::<Vec<_>>()
         }))
         .collect()
+}
+
+fn blend_state_for_color_format(format: TextureFormat) -> Option<BlendState> {
+    match format {
+        TextureFormat::R8Uint
+        | TextureFormat::R8Sint
+        | TextureFormat::R16Uint
+        | TextureFormat::R16Sint
+        | TextureFormat::Rg8Uint
+        | TextureFormat::Rg8Sint
+        | TextureFormat::R32Uint
+        | TextureFormat::R32Sint
+        | TextureFormat::Rg16Uint
+        | TextureFormat::Rg16Sint
+        | TextureFormat::Rgba8Uint
+        | TextureFormat::Rgba8Sint
+        | TextureFormat::Rg32Uint
+        | TextureFormat::Rg32Sint
+        | TextureFormat::Rgba16Uint
+        | TextureFormat::Rgba16Sint
+        | TextureFormat::Rgba32Uint
+        | TextureFormat::Rgba32Sint => None,
+        _ => Some(BlendState::ALPHA_BLENDING),
+    }
 }
 
 fn build_vertex_buffer_layouts<'a>(

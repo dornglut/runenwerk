@@ -1,4 +1,7 @@
-use super::{ImportedBufferSemantic, ImportedTextureSemantic, ResourceLifetime};
+use super::{
+    ImportedBufferSemantic, ImportedTextureSemantic, RenderTextureSampleMode,
+    RenderTextureTargetFormat, RenderTextureTargetUsage, ResourceLifetime,
+};
 use crate::plugins::render::GpuParams;
 use crate::plugins::render::api::RenderResourceId;
 use std::any::{TypeId, type_name};
@@ -27,29 +30,34 @@ pub struct StorageBufferDescriptor {
 pub struct SampledTextureDescriptor {
     pub id: RenderResourceId,
     pub lifetime: ResourceLifetime,
+    pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageTextureDescriptor {
     pub id: RenderResourceId,
     pub lifetime: ResourceLifetime,
+    pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColorTargetDescriptor {
     pub id: RenderResourceId,
     pub lifetime: ResourceLifetime,
+    pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepthTargetDescriptor {
     pub id: RenderResourceId,
     pub lifetime: ResourceLifetime,
+    pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryTextureDescriptor {
     pub id: RenderResourceId,
+    pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +72,78 @@ pub struct ImportedBufferDescriptor {
     pub semantic: ImportedBufferSemantic,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderTextureSizePolicy {
+    Surface,
+    Fixed { width: u32, height: u32 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderTextureFormatPolicy {
+    Surface,
+    Exact(RenderTextureTargetFormat),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderTextureDescriptor {
+    pub size: RenderTextureSizePolicy,
+    pub format: RenderTextureFormatPolicy,
+    pub usage: RenderTextureTargetUsage,
+    pub sample_mode: RenderTextureSampleMode,
+}
+
+impl RenderTextureDescriptor {
+    pub const fn surface_color() -> Self {
+        Self {
+            size: RenderTextureSizePolicy::Surface,
+            format: RenderTextureFormatPolicy::Surface,
+            usage: RenderTextureTargetUsage::color_sampled(),
+            sample_mode: RenderTextureSampleMode::FilterableFloat,
+        }
+    }
+
+    pub const fn surface_sampled() -> Self {
+        Self {
+            size: RenderTextureSizePolicy::Surface,
+            format: RenderTextureFormatPolicy::Surface,
+            usage: RenderTextureTargetUsage::sampled_only(),
+            sample_mode: RenderTextureSampleMode::FilterableFloat,
+        }
+    }
+
+    pub const fn storage_rgba8() -> Self {
+        Self {
+            size: RenderTextureSizePolicy::Surface,
+            format: RenderTextureFormatPolicy::Exact(RenderTextureTargetFormat::Rgba8Unorm),
+            usage: RenderTextureTargetUsage::storage_sampled(),
+            sample_mode: RenderTextureSampleMode::NonFilterableFloat,
+        }
+    }
+
+    pub const fn surface_depth() -> Self {
+        Self {
+            size: RenderTextureSizePolicy::Surface,
+            format: RenderTextureFormatPolicy::Exact(RenderTextureTargetFormat::Depth32Float),
+            usage: RenderTextureTargetUsage::depth_sampled(),
+            sample_mode: RenderTextureSampleMode::Depth,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderTargetAliasKind {
+    Color,
+    Depth,
+    Texture,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetAliasDescriptor {
+    pub id: RenderResourceId,
+    pub label: String,
+    pub kind: RenderTargetAliasKind,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderResourceDescriptor {
     UniformBuffer(UniformBufferDescriptor),
@@ -73,6 +153,7 @@ pub enum RenderResourceDescriptor {
     ColorTarget(ColorTargetDescriptor),
     DepthTarget(DepthTargetDescriptor),
     HistoryTexture(HistoryTextureDescriptor),
+    TargetAlias(TargetAliasDescriptor),
     ImportedTexture(ImportedTextureDescriptor),
     ImportedBuffer(ImportedBufferDescriptor),
 }
@@ -164,6 +245,7 @@ impl RenderResourceDescriptor {
         Self::SampledTexture(SampledTextureDescriptor {
             id: id.into(),
             lifetime,
+            texture: RenderTextureDescriptor::surface_sampled(),
         })
     }
 
@@ -178,6 +260,7 @@ impl RenderResourceDescriptor {
         Self::StorageTexture(StorageTextureDescriptor {
             id: id.into(),
             lifetime,
+            texture: RenderTextureDescriptor::storage_rgba8(),
         })
     }
 
@@ -192,6 +275,7 @@ impl RenderResourceDescriptor {
         Self::ColorTarget(ColorTargetDescriptor {
             id: id.into(),
             lifetime,
+            texture: RenderTextureDescriptor::surface_color(),
         })
     }
 
@@ -206,6 +290,7 @@ impl RenderResourceDescriptor {
         Self::DepthTarget(DepthTargetDescriptor {
             id: id.into(),
             lifetime,
+            texture: RenderTextureDescriptor::surface_depth(),
         })
     }
 
@@ -242,7 +327,22 @@ impl RenderResourceDescriptor {
     }
 
     pub fn history_texture(id: impl Into<RenderResourceId>) -> Self {
-        Self::HistoryTexture(HistoryTextureDescriptor { id: id.into() })
+        Self::HistoryTexture(HistoryTextureDescriptor {
+            id: id.into(),
+            texture: RenderTextureDescriptor::surface_color(),
+        })
+    }
+
+    pub fn target_alias(
+        id: impl Into<RenderResourceId>,
+        label: impl Into<String>,
+        kind: RenderTargetAliasKind,
+    ) -> Self {
+        Self::TargetAlias(TargetAliasDescriptor {
+            id: id.into(),
+            label: label.into(),
+            kind,
+        })
     }
 
     pub fn imported_history_buffer(id: impl Into<RenderResourceId>) -> Self {
@@ -272,6 +372,7 @@ impl RenderResourceDescriptor {
             Self::ColorTarget(value) => &value.id,
             Self::DepthTarget(value) => &value.id,
             Self::HistoryTexture(value) => &value.id,
+            Self::TargetAlias(value) => &value.id,
             Self::ImportedTexture(value) => &value.id,
             Self::ImportedBuffer(value) => &value.id,
         }
@@ -286,6 +387,7 @@ impl RenderResourceDescriptor {
             Self::ColorTarget(value) => value.lifetime,
             Self::DepthTarget(value) => value.lifetime,
             Self::HistoryTexture(_) => ResourceLifetime::Persistent,
+            Self::TargetAlias(_) => ResourceLifetime::Imported,
             Self::ImportedTexture(_) | Self::ImportedBuffer(_) => ResourceLifetime::Imported,
         }
     }

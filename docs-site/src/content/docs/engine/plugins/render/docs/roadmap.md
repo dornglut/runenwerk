@@ -416,7 +416,7 @@ The API can express both compute-heavy and graphics-heavy real workflows cleanly
 
 # Phase R-DT — Dynamic Texture Target Allocation
 
-Status: Planned. This phase is required by the Runenwerk editor viewport V5 roadmap and is specified in `docs-site/src/content/docs/design/active/viewport-dynamic-product-target-allocation-design.md`.
+Status: Partial. Descriptor types, request registry, and prepared-frame snapshots exist. Renderer-owned dynamic target cache allocation, UI dynamic texture resolution, and target-alias execution remain open bundle work.
 
 ## Goal
 
@@ -469,6 +469,14 @@ Allow UI viewport embeds to resolve dynamic texture target sources without stori
 ### 5. Inspection hooks
 
 Expose target key, dimensions, format, sample mode, retention state, and generation for diagnostics.
+
+Current proof/inspection notes:
+
+- `engine/src/plugins/render/resource/dynamic_target.rs` owns backend-neutral keys, descriptors, usage flags, sample modes, retention policy, signatures, and validation.
+- `engine/src/plugins/render/runtime/dynamic_targets.rs` owns deterministic request snapshots and request diagnostics.
+- `engine/src/plugins/render/frame/packet.rs::PreparedRenderFrame` carries `dynamic_texture_targets`, `views`, and `flow_invocations`.
+- `engine::plugins::render::inspect::inspect_prepared_render_frame` exposes dynamic targets, prepared views, target alias bindings, flow invocations, and history signatures without reading renderer internals.
+- Renderer dynamic target cache allocation and pass attachment resolution are not complete.
 
 ## Verification
 
@@ -551,7 +559,7 @@ The public API feels deliberate and low-friction.
 
 # Phase R6 — Boids Feature Proof
 
-Status: In progress. Added `engine/examples/boids_render_flow/main.rs` as a canonical builtin compiled boids-shaped flow declaration (compute + graphics + copy + present, no custom executors).
+Status: Proof updated. `engine/examples/boids_render_flow/` is the canonical builtin compiled boids-shaped flow declaration (compute + storage + graphics + instance draw-buffer binding + copy + present, no custom executors).
 
 ## Goal
 
@@ -615,7 +623,7 @@ Boids works entirely on the builtin compiled flow system.
 
 # Phase R7 — Rebuild SDF Renderer on the New Path
 
-Status: In progress. Added `engine/examples/sdf_render_flow/main.rs` as a canonical builtin compiled SDF-shaped flow declaration (compute + fullscreen + copy + present, no custom executors).
+Status: Proof updated. `engine/examples/sdf_render_flow/` is the canonical builtin compiled SDF-shaped flow declaration (compute preparation + fullscreen raymarch compose + flow-owned history copy + present, no custom executors).
 
 ## Goal
 
@@ -668,6 +676,8 @@ A serious SDF example proves the architecture supports your preferred rendering 
 ---
 
 # Phase R8 — Persistent and History Resource Support
+
+Status: Partial. Flow-owned history texture declarations and copy-pass proof usage exist in boids and SDF examples. Dynamic target retention descriptors and prepared view/invocation history signatures exist for inspection, but renderer-owned dynamic/history cache invalidation is still open bundle work.
 
 ## Goal
 
@@ -731,6 +741,8 @@ The architecture cleanly supports frame-to-frame GPU resource persistence.
 ---
 
 # Phase R9 — Inspection and Debug Tooling Expansion
+
+Status: Partial. Graph/resource/texture/timing inspection exists, and prepared-frame inspection now exposes dynamic target descriptors, views, flow invocations, target alias bindings, and history signatures. Runtime resource generation for dynamic targets depends on the remaining renderer cache work.
 
 ## Goal
 

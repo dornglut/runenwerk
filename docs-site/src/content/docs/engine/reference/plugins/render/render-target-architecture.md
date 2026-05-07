@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
 ---
 
 # Render Target Architecture
@@ -27,6 +27,7 @@ Render stays:
    - `engine::plugins::render::api` remains ergonomic and declarative.
 2. Prepare layer:
    - `frame_render_prepare_system` extracts render-relevant ECS state and publishes `PreparedRenderFrame`.
+   - Product-surface requests are frozen here: prepared views, flow invocations, target alias bindings, dynamic target descriptors, and history signatures.
 3. Compile layer:
    - graph compile: validation/order/inspectability.
    - execution compile: explicit pass execution metadata.
@@ -66,8 +67,24 @@ Generic external imports remain compatibility constructors and are rejected in a
 
 - Prepared frame carries a view container (`PreparedViewFrame`) even for single-view operation.
 - Execution plans carry view masks (`CompiledViewMask`) to support view-scoped pass subsets.
-- Active runtime execution is currently single-view only; multi-view packets fail fast to avoid misleading partial support.
+- Prepared frame requests can describe offscreen product views and per-flow invocations.
+- Active renderer execution for dynamic target aliases and dynamic target cache allocation remains in the render product surface foundation bundle; callers must not emulate product surfaces by cloning flows or suffixing static target labels.
 - Feature contribution status/fallback policy is resolved in prepare and executed without submit-time world extraction.
+
+## Product Surface Target Model
+
+Target identity is explicit:
+
+- flow-owned target: declared directly on a `RenderFlow`;
+- target alias: static authoring placeholder resolved by a prepared flow invocation;
+- dynamic target key: backend-neutral runtime address requested through `RenderDynamicTextureTargetRequestRegistryResource`;
+- surface target: the main swapchain surface import.
+
+History retention is explicit:
+
+- flow-owned history textures are declared with `with_history_texture(...)` and usually updated through `copy_pass(...)`;
+- dynamic targets carry `RenderDynamicTextureRetention`;
+- prepared views and invocations carry history signatures used by future cache invalidation and inspection.
 
 ## Non-goals
 

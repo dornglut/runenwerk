@@ -16,19 +16,19 @@ use engine::plugins::render::{
     UiFrameSubmissionRegistryResource,
 };
 use runenwerk_editor::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, MountedSurfaceRegistryResource, PRODUCT_ID_PICKING_IDS,
-    PRODUCT_ID_SCENE_COLOR, SurfaceDefinitionRegistryResource, ToolSurfaceRuntimeBindingRecord,
-    ToolSurfaceRuntimeBindingRegistryResource, VIEWPORT_RESOURCE_OVERLAY,
-    VIEWPORT_RESOURCE_PICKING_IDS, VIEWPORT_RESOURCE_SCENE_COLOR,
-    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
-    ViewportPickingResultsResource, ViewportPresentationStateResource,
-    ViewportProductRegistryResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
-    ViewportSurfaceSlot, build_surface_binding_registry, initial_presentation_state,
+    EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, MountedSurfaceRegistryResource,
+    SurfaceDefinitionRegistryResource, ToolSurfaceRuntimeBindingRecord,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportLayoutEntry, ViewportLayoutMapResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceHandle,
+    ViewportSurfaceSetResource, ViewportSurfaceSlot, build_surface_binding_registry,
     initial_product_descriptors,
 };
-use ui_render_data::UiPrimitive;
+use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource};
 
 const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1001);
+const TEST_RESOURCE_SCENE_COLOR: &str = "test.viewport.scene_color";
+const TEST_RESOURCE_SCENE_COLOR_B: &str = "test.viewport.scene_color.b";
 
 const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
     match UiFrameProducerId::try_from_raw(raw) {
@@ -39,10 +39,12 @@ const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
 
 #[test]
 fn viewport_presentation_state_is_product_addressed() {
-    let state = ViewportPresentationState::new(MAIN_VIEWPORT_ID, PRODUCT_ID_SCENE_COLOR);
+    let viewport_id = ViewportId(77);
+    let product_id = ExpressionProductId(177);
+    let state = ViewportPresentationState::new(viewport_id, product_id);
 
-    assert_eq!(state.viewport_id, MAIN_VIEWPORT_ID);
-    assert_eq!(state.selected_primary_product_id, PRODUCT_ID_SCENE_COLOR);
+    assert_eq!(state.viewport_id, viewport_id);
+    assert_eq!(state.selected_primary_product_id, product_id);
 }
 
 #[test]
@@ -147,29 +149,26 @@ fn derived_bindings_support_multiple_viewports_without_main_fallback() {
     let viewport_b = ViewportId(3);
 
     let mut surface_sets = ViewportSurfaceSetResource::default();
-    for viewport_id in [viewport_a, viewport_b] {
-        surface_sets.set_surface(
-            viewport_id,
-            ViewportSurfaceSlot::PrimaryColor,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
-        );
-        surface_sets.set_surface(
-            viewport_id,
-            ViewportSurfaceSlot::PickingIds,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_PICKING_IDS),
-        );
-        surface_sets.set_surface(
-            viewport_id,
-            ViewportSurfaceSlot::Overlay,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY),
-        );
-    }
+    surface_sets.set_surface(
+        viewport_a,
+        ViewportSurfaceSlot::PrimaryColor,
+        ViewportSurfaceHandle::dynamic_texture("test.viewport", TEST_RESOURCE_SCENE_COLOR, true),
+    );
+    surface_sets.set_surface(
+        viewport_b,
+        ViewportSurfaceSlot::PrimaryColor,
+        ViewportSurfaceHandle::dynamic_texture("test.viewport", TEST_RESOURCE_SCENE_COLOR_B, true),
+    );
 
     let mut presentations = ViewportPresentationStateResource::default();
-    presentations.upsert_state(initial_presentation_state(viewport_a));
-    let mut state_b = initial_presentation_state(viewport_b);
-    state_b.select_primary_product(PRODUCT_ID_PICKING_IDS);
-    presentations.upsert_state(state_b);
+    presentations.upsert_state(ViewportPresentationState::new(
+        viewport_a,
+        ExpressionProductId(1),
+    ));
+    presentations.upsert_state(ViewportPresentationState::new(
+        viewport_b,
+        ExpressionProductId(1),
+    ));
 
     let registry = build_surface_binding_registry(&surface_sets, &presentations);
     let primary_a = registry
@@ -185,14 +184,16 @@ fn derived_bindings_support_multiple_viewports_without_main_fallback() {
         )
         .expect("viewport B should retain its primary binding");
 
-    assert_eq!(
-        primary_a.resource_id.as_str(),
-        VIEWPORT_RESOURCE_SCENE_COLOR
-    );
-    assert_eq!(
-        primary_b.resource_id.as_str(),
-        VIEWPORT_RESOURCE_PICKING_IDS
-    );
+    assert!(matches!(
+        &primary_a.source,
+        ViewportSurfaceBindingSource::DynamicTexture { target_id, .. }
+            if target_id == TEST_RESOURCE_SCENE_COLOR
+    ));
+    assert!(matches!(
+        &primary_b.source,
+        ViewportSurfaceBindingSource::DynamicTexture { target_id, .. }
+            if target_id == TEST_RESOURCE_SCENE_COLOR_B
+    ));
     assert!(
         registry
             .get(
@@ -271,20 +272,21 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
             .any(|id| id == "runenwerk.editor.viewport.sdf"),
         "legacy fullscreen viewport-mask pass must not remain active",
     );
-    let color_target_count = editor_flow
+    let color_target_alias_count = editor_flow
         .resources
         .resources
         .iter()
         .filter(|resource| {
             matches!(
                 resource,
-                engine::plugins::render::RenderResourceDescriptor::ColorTarget(_)
+                engine::plugins::render::RenderResourceDescriptor::TargetAlias(alias)
+                    if alias.kind == engine::plugins::render::RenderTargetAliasKind::Color
             )
         })
         .count();
     assert!(
-        color_target_count >= 3,
-        "editor main flow must declare the three viewport product color targets",
+        color_target_alias_count >= 3,
+        "editor main flow must declare the three viewport product color target aliases",
     );
 }
 
@@ -760,6 +762,118 @@ fn viewport_product_selection_routes_through_surface_presentation_and_ratificati
 }
 
 #[test]
+fn rb0_rb7_runtime_sources_do_not_depend_on_static_shared_viewport_product_ids() {
+    let sources = read_workspace_sources(&[
+        "apps/runenwerk_editor/src/runtime/app.rs",
+        "apps/runenwerk_editor/src/runtime/systems/bootstrap.rs",
+        "apps/runenwerk_editor/src/runtime/systems/frame_submit.rs",
+        "apps/runenwerk_editor/src/runtime/viewport/product_registry.rs",
+        "apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs",
+        "apps/runenwerk_editor/src/runtime/viewport/surface_set.rs",
+        "apps/runenwerk_editor/src/runtime/viewport/presentation_resolver.rs",
+    ]);
+    let forbidden_terms = [
+        "PRODUCT_ID_SCENE_COLOR",
+        "PRODUCT_ID_PICKING_IDS",
+        "PRODUCT_ID_OVERLAY",
+        "VIEWPORT_RESOURCE_SCENE_COLOR",
+        "VIEWPORT_RESOURCE_PICKING_IDS",
+        "VIEWPORT_RESOURCE_OVERLAY",
+        "\"editor.viewport.v1.scene_color\"",
+        "\"editor.viewport.v1.picking_ids\"",
+        "\"editor.viewport.v1.overlay\"",
+    ];
+    let offenders = forbidden_source_markers(&sources, &forbidden_terms);
+
+    assert!(
+        offenders.is_empty(),
+        "RB0/RB7 viewport products must be viewport-scoped dynamic targets, not shared static ids: {offenders:?}",
+    );
+}
+
+#[test]
+fn rb0_runtime_sources_do_not_build_render_flows_per_viewport() {
+    let app_source = read_workspace_source("apps/runenwerk_editor/src/runtime/app.rs");
+    for forbidden in [
+        "RenderFlow::new(format!",
+        "RenderFlow::new(&format!",
+        "format!(\"runenwerk.editor.viewport",
+        "format!(\"runenwerk.editor.{}",
+    ] {
+        assert!(
+            !app_source.contains(forbidden),
+            "editor app render setup must not synthesize one RenderFlow per viewport through marker '{forbidden}'",
+        );
+    }
+
+    let viewport_sources = read_workspace_source_tree("apps/runenwerk_editor/src/runtime/viewport");
+    let offenders = forbidden_source_markers(
+        &viewport_sources,
+        &[
+            "RenderFlow::new(",
+            "add_render_flow(",
+            "CompiledRenderFlowPlan",
+        ],
+    );
+    assert!(
+        offenders.is_empty(),
+        "viewport runtime modules must not work around product surfaces by owning render-flow construction: {offenders:?}",
+    );
+}
+
+#[test]
+fn rb7_viewport_scene_product_shader_has_no_multi_rect_containment() {
+    let sources = read_workspace_sources(&[
+        "apps/runenwerk_editor/src/runtime/resources.rs",
+        "assets/shaders/editor_viewport_scene_product.wgsl",
+    ]);
+    let forbidden_terms = [
+        "viewport_b :",
+        "viewport_c :",
+        "viewport_d :",
+        "pub viewport_b:",
+        "pub viewport_c:",
+        "pub viewport_d:",
+        "u.viewport_b",
+        "u.viewport_c",
+        "u.viewport_d",
+        "additional_viewport_bounds_px",
+        "set_viewport_bounds_list",
+        "viewport_contains_rect",
+    ];
+    let offenders = forbidden_source_markers(&sources, &forbidden_terms);
+
+    assert!(
+        offenders.is_empty(),
+        "RB7 viewport scene products must render one viewport-local job instead of shader-side multi-rect containment: {offenders:?}",
+    );
+}
+
+#[test]
+fn rb7_editor_frame_submit_does_not_seed_or_extract_viewport_product_lifecycle() {
+    let frame_submit =
+        read_workspace_source("apps/runenwerk_editor/src/runtime/systems/frame_submit.rs");
+    for forbidden in [
+        "seed_viewport_binding_for_active_workspace",
+        "sync_viewport_presentation_products_system",
+        "build_surface_binding_registry",
+        "viewport_products_registry.update_viewport_descriptors",
+        "viewport_surface_bindings.replace_registry",
+        "ensure_editor_main_surface_set",
+        "initial_product_descriptors(",
+        "viewport_surface_sets.retain_viewports",
+        "viewport_presentations.retain_viewports",
+        "ViewportSurfaceBindingRegistryResource",
+        "ViewportProductRegistryResource",
+    ] {
+        assert!(
+            !frame_submit.contains(forbidden),
+            "editor frame submit must not own viewport identity/product binding lifecycle through marker '{forbidden}'",
+        );
+    }
+}
+
+#[test]
 fn outliner_selection_routes_through_surface_presentation_and_ratification() {
     let dispatch_shell_command = include_str!("../src/shell/dispatch_shell_command.rs");
 
@@ -834,6 +948,60 @@ fn viewport_slot_mapping_happens_at_integration_edge() {
         !presentation_resolver.contains("UiViewportSurfaceSlot::"),
         "presentation resolver must not define a second canonical semantic slot enum in runenwerk_editor",
     );
+}
+
+fn workspace_root() -> std::path::PathBuf {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .expect("runenwerk_editor lives under apps/")
+        .to_path_buf()
+}
+
+fn read_workspace_source(path: &str) -> String {
+    let full_path = workspace_root().join(path);
+    fs::read_to_string(&full_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", full_path.display()))
+}
+
+fn read_workspace_sources(paths: &[&'static str]) -> Vec<(String, String)> {
+    paths
+        .iter()
+        .map(|path| ((*path).to_string(), read_workspace_source(path)))
+        .collect()
+}
+
+fn read_workspace_source_tree(path: &str) -> Vec<(String, String)> {
+    let root = workspace_root();
+    let mut files = Vec::new();
+    collect_source_files(&root.join(path), &mut files);
+    files.sort();
+    files
+        .into_iter()
+        .filter_map(|file| {
+            let display_path = file
+                .strip_prefix(&root)
+                .unwrap_or(&file)
+                .display()
+                .to_string();
+            fs::read_to_string(&file)
+                .ok()
+                .map(|source| (display_path, source))
+        })
+        .collect()
+}
+
+fn forbidden_source_markers(sources: &[(String, String)], forbidden_terms: &[&str]) -> Vec<String> {
+    sources
+        .iter()
+        .flat_map(|(file, source)| {
+            forbidden_terms
+                .iter()
+                .filter(move |term| source.contains(**term))
+                .map(move |term| format!("{file}: {term}"))
+        })
+        .collect()
 }
 
 fn collect_source_files(root: &Path, files: &mut Vec<std::path::PathBuf>) {

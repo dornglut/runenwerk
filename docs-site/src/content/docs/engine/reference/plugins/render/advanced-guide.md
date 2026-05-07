@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
 ---
 
 # Render Plugin Advanced Guide
@@ -39,6 +39,7 @@ Use:
 - `flow.graph()` for pass/resource declarations
 - `flow.project_uniforms(...)` for frame-level uniform projection checks
 - `dump_flow_graph(...)`, `inspect_resources(...)`, `inspect_texture_resources(...)`, and `summarize_pass_timings(...)` for runtime diagnostics
+- `inspect_prepared_render_frame(...)` for prepared views, per-flow invocations, target alias bindings, dynamic target descriptors, and history signatures
 
 These APIs keep the graph explicit and testable while keeping common-path declaration compact.
 
@@ -69,6 +70,10 @@ Prepare/submit boundary types are public for inspection and integration:
 - `PreparedFrameContext`
 - `PreparedViewFrame`
 - `PreparedFlowInputs`
+- `PreparedFlowInvocation`
+- `PreparedTargetBinding`
+- `PreparedRenderFrameRequestResource`
+- `RenderDynamicTextureTargetDescriptor`
 - `PreparedSurfaceInfo`
 - `PreparedShaderSnapshot`
 - `PreparedFrameContributions`
@@ -80,6 +85,13 @@ Prepare/submit boundary types are public for inspection and integration:
 - `FeatureFallbackPolicy`
 
 `RenderFrameDataRegistry` remains available for projection helper compatibility and tests, but it is not part of the active runtime submit/render path.
+
+Prepared product-surface packets:
+
+- request offscreen product views through `PreparedRenderFrameRequestResource`;
+- bind target aliases per `PreparedFlowInvocationRequest`;
+- request dynamic targets through `RenderDynamicTextureTargetRequestRegistryResource`;
+- inspect the frozen submit packet with `inspect_prepared_render_frame(...)`.
 
 ## Feature Fallback Contract
 

@@ -46,6 +46,6 @@ pub(super) use provenance::{
     hash_view_signature, material_specialization_fragment_hash, resolve_shader_material,
 };
 pub(crate) use runtime_resources::{
-    FlowRuntimeResources, ResolvedBufferRef, ResolvedTextureRef, RuntimeResourceKey,
-    RuntimeResourceKind,
+    FlowRuntimeResources, ResolvedBufferRef, ResolvedColorTargetView, ResolvedDepthTargetView,
+    ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind, RuntimeTextureView,
 };

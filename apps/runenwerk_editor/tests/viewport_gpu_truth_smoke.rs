@@ -12,7 +12,7 @@ use winit::window::Window;
 const FLOW_ID: &str = "runenwerk.editor.main";
 const VIEWPORT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const UI_PASS_ID: &str = "runenwerk.editor.main.ui";
-const VIEWPORT_RESOURCE_ID: &str = "editor.viewport.v1.scene_color";
+const VIEWPORT_TARGET_ALIAS_SCENE_COLOR: &str = "viewport.scene_color";
 const SURFACE_RESOURCE_ID: &str = "surface.color";
 
 #[test]
@@ -33,6 +33,10 @@ fn viewport_gpu_truth_smoke() {
         eprintln!(
             "RUNENWERK_ENABLE_MACOS_MAIN_THREAD_GPU_SMOKE is not enabled; skipping macOS main-thread GPU smoke path"
         );
+        return;
+    }
+    if cfg!(target_os = "macos") && !running_on_macos_main_thread() {
+        eprintln!("macOS GPU smoke requires the test body to run on the process main thread");
         return;
     }
 
@@ -56,7 +60,7 @@ fn viewport_gpu_truth_smoke() {
                 flow_id: Some(FLOW_ID.to_string()),
                 pass_id: Some(VIEWPORT_PASS_ID.to_string()),
                 stage: CaptureStage::After,
-                resource_id: VIEWPORT_RESOURCE_ID.to_string(),
+                resource_id: VIEWPORT_TARGET_ALIAS_SCENE_COLOR.to_string(),
                 texture_class: CaptureTextureClass::ColorTarget,
             },
             RenderCaptureSelector {
@@ -90,7 +94,7 @@ fn viewport_gpu_truth_smoke() {
             FLOW_ID,
             VIEWPORT_PASS_ID,
             CaptureStage::After,
-            VIEWPORT_RESOURCE_ID,
+            VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
         )
         .expect("viewport pass after-capture should exist");
     let ui_before = captures
@@ -203,6 +207,20 @@ fn macos_main_thread_smoke_enabled() -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn running_on_macos_main_thread() -> bool {
+    unsafe extern "C" {
+        fn pthread_main_np() -> std::os::raw::c_int;
+    }
+
+    unsafe { pthread_main_np() != 0 }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn running_on_macos_main_thread() -> bool {
+    true
 }
 
 fn create_hidden_window() -> Arc<Window> {

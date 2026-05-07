@@ -1,11 +1,20 @@
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
     RenderCapturePointIdentity, RenderDebugTimingsState, RenderPassProvenanceRecord,
-    RenderPassProvenanceState, deterministic_capture_filename, resource_kind_name,
-    summarize_pass_timings,
+    RenderPassProvenanceState, deterministic_capture_filename, inspect_prepared_render_frame,
+    inspect_resources, inspect_texture_resources, resource_kind_name, summarize_pass_timings,
 };
 use engine::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
-use engine::plugins::render::{RenderResourceDescriptor, RenderResourceId};
+use engine::plugins::render::{
+    PreparedFlowInputs, PreparedFlowInvocation, PreparedFlowInvocationId, PreparedFrameContext,
+    PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo,
+    PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureRetention,
+    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlow,
+    RenderResourceDescriptor, RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat,
+    RenderTextureTargetUsage,
+};
+use std::collections::BTreeMap;
+use ui_render_data::ViewportSurfaceBindingRegistry;
 use wgpu::TextureFormat;
 
 #[derive(Debug, Clone, Copy, engine::plugins::render::GpuStorage)]
@@ -73,6 +82,126 @@ fn resource_kind_label_matches_descriptor_kind() {
         RenderResourceId::try_from_raw(1).unwrap(),
     );
     assert_eq!(resource_kind_name(&descriptor), "storage_buffer");
+}
+
+#[test]
+fn resource_inspection_exposes_target_alias_metadata() {
+    let flow = RenderFlow::new("inspect.alias")
+        .with_color_target_alias("viewport.scene_color")
+        .with_depth_target_alias("viewport.depth");
+
+    let resources = inspect_resources(&flow);
+    let color_alias = resources
+        .iter()
+        .find(|entry| entry.target_alias_label.as_deref() == Some("viewport.scene_color"))
+        .expect("color target alias should be inspectable");
+
+    assert_eq!(color_alias.kind, "target_alias(color)");
+    assert_eq!(color_alias.target_alias_kind.as_deref(), Some("color"));
+
+    let textures = inspect_texture_resources(&flow);
+    assert!(textures.iter().any(|entry| {
+        entry.category == "target_alias(depth)"
+            && entry.target_alias_label.as_deref() == Some("viewport.depth")
+            && entry.target_alias_kind.as_deref() == Some("depth")
+    }));
+}
+
+#[test]
+fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
+    let target_key = RenderDynamicTextureTargetKey::new("editor.viewport.1", "scene_color");
+    let flow_id = engine::plugins::render::RenderFlowId::try_from_raw(3).unwrap();
+    let resource_id = RenderResourceId::try_from_raw(9).unwrap();
+    let mut target_alias_bindings = BTreeMap::new();
+    target_alias_bindings.insert(
+        "viewport.scene_color".to_string(),
+        PreparedTargetBinding::DynamicTexture(target_key.clone()),
+    );
+    target_alias_bindings.insert(
+        "viewport.fallback".to_string(),
+        PreparedTargetBinding::FlowOwned(resource_id),
+    );
+
+    let frame = PreparedRenderFrame {
+        context: PreparedFrameContext {
+            frame_index: 42,
+            flow_registry_revision: 1,
+            shader_registry_revision: 2,
+            prepare_epoch: 5,
+        },
+        surface: PreparedSurfaceInfo {
+            target_size_px: (1920, 1080),
+        },
+        views: vec![
+            PreparedViewFrame::main((1920, 1080)),
+            PreparedViewFrame {
+                view_id: "viewport.1".to_string(),
+                kind: engine::plugins::render::PreparedViewKind::OffscreenProduct,
+                target_size_px: (640, 360),
+                history_signature: Some("camera:v1".to_string()),
+            },
+        ],
+        flows: BTreeMap::new(),
+        flow_invocations: vec![PreparedFlowInvocation {
+            invocation_id: PreparedFlowInvocationId::new("viewport.1.scene"),
+            flow_id,
+            view_id: "viewport.1".to_string(),
+            inputs: PreparedFlowInputs::default(),
+            target_alias_bindings,
+            history_signature: Some("camera:v1".to_string()),
+        }],
+        dynamic_texture_targets: vec![RenderDynamicTextureTargetDescriptor::new(
+            target_key,
+            640,
+            360,
+            RenderTextureTargetFormat::Rgba8Unorm,
+            RenderTextureTargetUsage::color_sampled(),
+            RenderTextureSampleMode::FilterableFloat,
+            RenderDynamicTextureRetention::RetainForFrames(2),
+        )],
+        viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
+        contributions: PreparedFrameContributions::default(),
+        shader: PreparedShaderSnapshot {
+            registry_revision: 2,
+        },
+    };
+
+    let inspection = inspect_prepared_render_frame(&frame);
+
+    assert_eq!(inspection.frame_index, 42);
+    assert_eq!(inspection.views.len(), 2);
+    assert_eq!(inspection.views[1].kind, "offscreen_product");
+    assert_eq!(
+        inspection.views[1].history_signature.as_deref(),
+        Some("camera:v1")
+    );
+    assert_eq!(
+        inspection.dynamic_texture_targets[0].key,
+        "editor.viewport.1:scene_color"
+    );
+    assert_eq!(
+        inspection.dynamic_texture_targets[0].retention,
+        "retain_for_frames(2)"
+    );
+    assert!(inspection.dynamic_texture_targets[0].displayable);
+    assert!(inspection.dynamic_texture_targets[0].sampleable);
+    assert_eq!(
+        inspection.flow_invocations[0].invocation_id,
+        "viewport.1.scene"
+    );
+    assert_eq!(
+        inspection.flow_invocations[0].history_signature.as_deref(),
+        Some("camera:v1")
+    );
+    assert!(
+        inspection.flow_invocations[0]
+            .target_alias_bindings
+            .iter()
+            .any(|binding| {
+                binding.alias == "viewport.scene_color"
+                    && binding.binding == "dynamic_texture(editor.viewport.1:scene_color)"
+            })
+    );
 }
 
 #[test]

@@ -149,9 +149,9 @@ pub struct EditorInputBridgeState {
 pub struct EditorViewportSceneProductUniform {
     pub surface: [f32; 4],
     pub viewport: [f32; 4],
-    pub viewport_b: [f32; 4],
-    pub viewport_c: [f32; 4],
-    pub viewport_d: [f32; 4],
+    pub reserved_rect_0: [f32; 4],
+    pub reserved_rect_1: [f32; 4],
+    pub reserved_rect_2: [f32; 4],
     pub camera_position: [f32; 4],
     pub camera_forward: [f32; 4],
     pub camera_right: [f32; 4],
@@ -165,7 +165,6 @@ pub struct EditorViewportSceneProductUniform {
 #[derive(Debug, Clone, Copy)]
 pub struct EditorViewportBranchTraceSnapshot {
     pub viewport_bounds_px: (f32, f32, f32, f32),
-    pub additional_viewport_bounds_px: [(f32, f32, f32, f32); 3],
     pub viewport_valid: bool,
     pub shader_loaded: bool,
     pub debug_stage: EditorViewportDebugStage,
@@ -174,9 +173,6 @@ pub struct EditorViewportBranchTraceSnapshot {
     pub primitive_translation: Vec3Value,
     pub surface: [f32; 4],
     pub viewport: [f32; 4],
-    pub viewport_b: [f32; 4],
-    pub viewport_c: [f32; 4],
-    pub viewport_d: [f32; 4],
     pub camera_position: [f32; 4],
     pub camera_forward: [f32; 4],
     pub camera_right: [f32; 4],
@@ -189,10 +185,6 @@ pub struct EditorViewportBranchTraceSnapshot {
 impl EditorViewportBranchTraceSnapshot {
     pub fn approx_eq(&self, other: &Self) -> bool {
         approx_bounds_eq(self.viewport_bounds_px, other.viewport_bounds_px)
-            && approx_bounds_list_eq(
-                self.additional_viewport_bounds_px,
-                other.additional_viewport_bounds_px,
-            )
             && self.viewport_valid == other.viewport_valid
             && self.shader_loaded == other.shader_loaded
             && self.debug_stage == other.debug_stage
@@ -201,9 +193,6 @@ impl EditorViewportBranchTraceSnapshot {
             && approx_vec3(self.primitive_translation, other.primitive_translation)
             && approx_vec4(self.surface, other.surface)
             && approx_vec4(self.viewport, other.viewport)
-            && approx_vec4(self.viewport_b, other.viewport_b)
-            && approx_vec4(self.viewport_c, other.viewport_c)
-            && approx_vec4(self.viewport_d, other.viewport_d)
             && approx_vec4(self.camera_position, other.camera_position)
             && approx_vec4(self.camera_forward, other.camera_forward)
             && approx_vec4(self.camera_right, other.camera_right)
@@ -264,7 +253,6 @@ impl EditorViewportBranchTraceSnapshot {
 #[derive(Debug, Clone, Copy, ecs::Component, ecs::Resource)]
 pub struct EditorViewportRenderState {
     pub viewport_bounds_px: (f32, f32, f32, f32),
-    pub additional_viewport_bounds_px: [(f32, f32, f32, f32); 3],
     pub effective_shell_scale: f32,
     pub viewport_valid: bool,
     pub shader_loaded: bool,
@@ -288,7 +276,6 @@ impl Default for EditorViewportRenderState {
     fn default() -> Self {
         Self {
             viewport_bounds_px: (0.0, 0.0, 0.0, 0.0),
-            additional_viewport_bounds_px: [(0.0, 0.0, 0.0, 0.0); 3],
             effective_shell_scale: 1.0,
             viewport_valid: false,
             shader_loaded: false,
@@ -312,20 +299,8 @@ impl Default for EditorViewportRenderState {
 
 impl EditorViewportRenderState {
     pub fn set_viewport_bounds(&mut self, bounds: (f32, f32, f32, f32)) -> bool {
-        self.set_viewport_bounds_list(&[bounds])
-    }
-
-    pub fn set_viewport_bounds_list(&mut self, bounds: &[(f32, f32, f32, f32)]) -> bool {
-        let primary = bounds.first().copied().unwrap_or((0.0, 0.0, 0.0, 0.0));
-        let mut additional = [(0.0, 0.0, 0.0, 0.0); 3];
-        for (target, source) in additional.iter_mut().zip(bounds.iter().skip(1)) {
-            *target = *source;
-        }
-
-        let changed = !approx_bounds_eq(self.viewport_bounds_px, primary)
-            || !approx_bounds_list_eq(self.additional_viewport_bounds_px, additional);
-        self.viewport_bounds_px = primary;
-        self.additional_viewport_bounds_px = additional;
+        let changed = !approx_bounds_eq(self.viewport_bounds_px, bounds);
+        self.viewport_bounds_px = bounds;
         changed
     }
 
@@ -421,7 +396,6 @@ impl EditorViewportRenderState {
         let uniform = self.compose_scene_product_uniform(surface);
         EditorViewportBranchTraceSnapshot {
             viewport_bounds_px: self.viewport_bounds_px,
-            additional_viewport_bounds_px: self.additional_viewport_bounds_px,
             viewport_valid: self.viewport_valid,
             shader_loaded: self.shader_loaded,
             debug_stage: self.debug_stage,
@@ -430,9 +404,6 @@ impl EditorViewportRenderState {
             primitive_translation: self.primitive_translation,
             surface: uniform.surface,
             viewport: uniform.viewport,
-            viewport_b: uniform.viewport_b,
-            viewport_c: uniform.viewport_c,
-            viewport_d: uniform.viewport_d,
             camera_position: uniform.camera_position,
             camera_forward: uniform.camera_forward,
             camera_right: uniform.camera_right,
@@ -468,9 +439,9 @@ impl EditorViewportRenderState {
         EditorViewportSceneProductUniform {
             surface: [width, height, 1.0 / width, 1.0 / height],
             viewport: viewport_bounds_array(self.viewport_bounds_px),
-            viewport_b: viewport_bounds_array(self.additional_viewport_bounds_px[0]),
-            viewport_c: viewport_bounds_array(self.additional_viewport_bounds_px[1]),
-            viewport_d: viewport_bounds_array(self.additional_viewport_bounds_px[2]),
+            reserved_rect_0: [0.0; 4],
+            reserved_rect_1: [0.0; 4],
+            reserved_rect_2: [0.0; 4],
             camera_position: [
                 camera.position.x,
                 camera.position.y,
@@ -517,12 +488,6 @@ fn approx_bounds_eq(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
         && (a.1 - b.1).abs() <= VIEWPORT_BOUNDS_EPSILON
         && (a.2 - b.2).abs() <= VIEWPORT_BOUNDS_EPSILON
         && (a.3 - b.3).abs() <= VIEWPORT_BOUNDS_EPSILON
-}
-
-fn approx_bounds_list_eq(a: [(f32, f32, f32, f32); 3], b: [(f32, f32, f32, f32); 3]) -> bool {
-    a.into_iter()
-        .zip(b)
-        .all(|(left, right)| approx_bounds_eq(left, right))
 }
 
 fn approx_f32(a: f32, b: f32) -> bool {
@@ -598,17 +563,16 @@ mod tests {
     }
 
     #[test]
-    fn scene_product_uniform_preserves_split_viewport_bounds() {
+    fn scene_product_uniform_keeps_reserved_rects_empty() {
         let mut state = EditorViewportRenderState::default();
-        let changed = state
-            .set_viewport_bounds_list(&[(40.0, 50.0, 320.0, 180.0), (400.0, 50.0, 320.0, 180.0)]);
+        let changed = state.set_viewport_bounds((40.0, 50.0, 320.0, 180.0));
 
         let uniform = state.compose_scene_product_uniform((1280, 720));
 
         assert!(changed);
         assert_eq!(uniform.viewport, [40.0, 50.0, 320.0, 180.0]);
-        assert_eq!(uniform.viewport_b, [400.0, 50.0, 320.0, 180.0]);
-        assert_eq!(uniform.viewport_c, [0.0, 0.0, 0.0, 0.0]);
-        assert_eq!(uniform.viewport_d, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(uniform.reserved_rect_0, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(uniform.reserved_rect_1, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(uniform.reserved_rect_2, [0.0, 0.0, 0.0, 0.0]);
     }
 }

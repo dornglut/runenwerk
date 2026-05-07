@@ -1,13 +1,9 @@
 use editor_shell::{ComputedLayoutMap, UiNode, UiNodeKind, viewport_embed_slot_for};
-use editor_viewport::{
-    ArtifactObservationFrame, ExpressionDimensions, ProducerHealth, ProductAvailabilityState,
-    ViewportId, ViewportSurfacePresentationSlot,
-};
+use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::WindowState;
 use engine::plugins::render::{
     EditorPickingTarget, UiFontAtlasResource, UiFrameProducerId, UiFrameRoute, UiFrameSubmission,
     UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
-    ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::{Res, ResMut};
 use scene::LocalTransform;
@@ -23,13 +19,10 @@ use crate::runtime::resources::{
     scaled_shell_theme,
 };
 use crate::runtime::viewport::{
-    MAIN_VIEWPORT_ID, MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRecord,
-    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportLayoutEntry, ViewportLayoutMapResource, ViewportPickingResultsResource,
-    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportRenderStateEntry,
-    ViewportRenderStateResource, ViewportSurfaceSetResource, build_surface_binding_registry,
-    ensure_editor_main_surface_set, expression_dimensions_for_bounds, initial_presentation_state,
-    initial_product_descriptors, resolve_structural_viewport_products,
+    MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRegistryResource,
+    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
+    ViewportPickingResultsResource, ViewportRenderStateEntry, ViewportRenderStateResource,
+    resolve_structural_viewport_products,
 };
 use crate::shell::RunenwerkEditorShellState;
 
@@ -75,9 +68,6 @@ pub fn submit_editor_frame_system(
         &tool_surface_bindings,
     );
     let active_viewport_id = viewport_products.map(|value| value.viewport_id);
-    if active_viewport_id.is_some() {
-        seed_viewport_binding_for_active_workspace(shell_state, &mut tool_surface_bindings, bounds);
-    }
     let (expression_source_version, frame) = if debug_hardcoded_ui_frame_enabled() {
         let expression = editor_shell::ShellUiExpressionFrame::new(
             app.runtime().current_scene_reality_version(),
@@ -114,12 +104,8 @@ pub fn submit_editor_frame_system(
         })
         .or_else(|| viewport_bounds_from_render_state(&viewport_render))
         .unwrap_or(bounds);
-    let viewport_bounds_changed = populate_viewport_render_state(
-        app,
-        &mut viewport_render,
-        viewport_bounds,
-        &rendered_viewport_bounds,
-    );
+    let viewport_bounds_changed =
+        populate_viewport_render_state(app, &mut viewport_render, viewport_bounds);
     viewport_layout_map.clear();
     populate_viewport_layout_map_from_shell_tree(
         shell_state,
@@ -224,49 +210,6 @@ pub fn submit_editor_frame_system(
     );
 }
 
-fn seed_viewport_binding_for_active_workspace(
-    shell_state: &RunenwerkEditorShellState,
-    tool_surface_bindings: &mut ToolSurfaceRuntimeBindingRegistryResource,
-    bounds: ui_math::UiRect,
-) {
-    let Some((panel, surface, tab_stack)) = shell_state
-        .workspace_state()
-        .panels()
-        .filter_map(|panel| {
-            let surface_id = panel.active_tool_surface?;
-            let surface = shell_state.workspace_state().tool_surface(surface_id)?;
-            if surface.tool_surface_kind != editor_shell::ToolSurfaceKind::Viewport {
-                return None;
-            }
-            let tab_stack = shell_state
-                .workspace_state()
-                .tab_stacks()
-                .find(|stack| stack.ordered_panels.contains(&panel.id))?;
-            Some((panel, surface, tab_stack))
-        })
-        .next()
-    else {
-        return;
-    };
-
-    if tool_surface_bindings
-        .binding_for_tool_surface(surface.id)
-        .is_some()
-    {
-        return;
-    }
-
-    tool_surface_bindings.upsert_binding(ToolSurfaceRuntimeBindingRecord {
-        tool_surface_id: surface.id,
-        panel_instance_id: panel.id,
-        tab_stack_id: tab_stack.id,
-        viewport_id: crate::runtime::viewport::viewport_id_for_tool_surface(surface.id),
-        host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-        bounds,
-        generation: tool_surface_bindings.generation().saturating_add(1),
-    });
-}
-
 fn sync_viewport_render_states_from_bindings(
     viewport_render_states: &mut ViewportRenderStateResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
@@ -281,104 +224,6 @@ fn sync_viewport_render_states_from_bindings(
         });
     }
     viewport_render_states.retain_viewports(|viewport_id| viewport_ids.contains(&viewport_id));
-}
-
-pub fn sync_viewport_presentation_products_system(
-    host: Res<EditorHostResource>,
-    viewport_render: Res<EditorViewportRenderState>,
-    viewport_render_states: Res<ViewportRenderStateResource>,
-    mut viewport_surface_sets: ResMut<ViewportSurfaceSetResource>,
-    tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
-    mut viewport_products_registry: ResMut<ViewportProductRegistryResource>,
-    mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
-    mut viewport_observations: ResMut<ViewportArtifactObservationResource>,
-    mut viewport_surface_bindings: ResMut<ViewportSurfaceBindingRegistryResource>,
-) {
-    let canonical_viewport_ids =
-        canonical_viewport_ids_for_sync(&viewport_surface_sets, &tool_surface_bindings);
-    for viewport_id in &canonical_viewport_ids {
-        ensure_editor_main_surface_set(&mut viewport_surface_sets, *viewport_id);
-    }
-    let source_version = host.app.runtime().current_scene_reality_version();
-    for viewport_id in &canonical_viewport_ids {
-        let product_dimensions = product_dimensions_for_viewport(
-            *viewport_id,
-            &viewport_render_states,
-            &viewport_render,
-        );
-        let descriptors = initial_product_descriptors(product_dimensions, source_version);
-        viewport_products_registry.update_viewport_descriptors(*viewport_id, descriptors.clone());
-
-        let mut presentation_state = viewport_presentations
-            .state_for(*viewport_id)
-            .cloned()
-            .unwrap_or_else(|| initial_presentation_state(*viewport_id));
-        if !descriptors
-            .iter()
-            .any(|descriptor| descriptor.id == presentation_state.selected_primary_product_id)
-        {
-            presentation_state.select_primary_product(
-                initial_presentation_state(*viewport_id).selected_primary_product_id,
-            );
-        }
-        viewport_presentations.upsert_state(presentation_state.clone());
-        viewport_observations.upsert_frame(build_artifact_observation_frame(
-            &descriptors,
-            &presentation_state,
-            source_version,
-        ));
-    }
-
-    let viewport_id_set = canonical_viewport_ids
-        .into_iter()
-        .collect::<std::collections::BTreeSet<_>>();
-    viewport_products_registry.retain_viewports(|viewport_id| {
-        viewport_id == MAIN_VIEWPORT_ID || viewport_id_set.contains(&viewport_id)
-    });
-    viewport_presentations.retain_viewports(|viewport_id| {
-        viewport_id == MAIN_VIEWPORT_ID || viewport_id_set.contains(&viewport_id)
-    });
-    viewport_observations.retain_viewports(|viewport_id| {
-        viewport_id == MAIN_VIEWPORT_ID || viewport_id_set.contains(&viewport_id)
-    });
-    viewport_surface_sets.retain_viewports(|viewport_id| {
-        viewport_id == MAIN_VIEWPORT_ID || viewport_id_set.contains(&viewport_id)
-    });
-
-    viewport_surface_bindings.replace_registry(build_surface_binding_registry(
-        &viewport_surface_sets,
-        &viewport_presentations,
-    ));
-}
-
-fn canonical_viewport_ids_for_sync(
-    viewport_surface_sets: &ViewportSurfaceSetResource,
-    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-) -> Vec<ViewportId> {
-    let mut viewport_ids = tool_surface_bindings
-        .bindings()
-        .map(|binding| binding.viewport_id)
-        .collect::<std::collections::BTreeSet<_>>();
-    if viewport_ids.is_empty() {
-        viewport_ids.extend(viewport_surface_sets.viewport_ids());
-    }
-    viewport_ids.into_iter().collect()
-}
-
-fn product_dimensions_for_viewport(
-    viewport_id: ViewportId,
-    viewport_render_states: &ViewportRenderStateResource,
-    fallback_render_state: &EditorViewportRenderState,
-) -> ExpressionDimensions {
-    viewport_render_states
-        .state_for(viewport_id)
-        .map(|state| expression_dimensions_for_bounds(state.bounds))
-        .unwrap_or_else(|| {
-            ExpressionDimensions::new(
-                fallback_render_state.viewport_bounds_px.2.max(1.0).round() as u32,
-                fallback_render_state.viewport_bounds_px.3.max(1.0).round() as u32,
-            )
-        })
 }
 
 fn debug_hardcoded_ui_frame_enabled() -> bool {
@@ -608,19 +453,8 @@ fn populate_viewport_render_state(
     app: &crate::editor_app::RunenwerkEditorApp,
     render_state: &mut EditorViewportRenderState,
     viewport_bounds: UiRect,
-    rendered_viewport_bounds: &[UiRect],
 ) -> bool {
-    let mut render_bounds = vec![viewport_bounds_tuple(viewport_bounds)];
-    for bounds in rendered_viewport_bounds.iter().copied() {
-        let bounds = viewport_bounds_tuple(bounds);
-        if !render_bounds
-            .iter()
-            .any(|existing| viewport_bounds_tuple_eq(*existing, bounds))
-        {
-            render_bounds.push(bounds);
-        }
-    }
-    let bounds_changed = render_state.set_viewport_bounds_list(&render_bounds);
+    let bounds_changed = render_state.set_viewport_bounds(viewport_bounds_tuple(viewport_bounds));
 
     let runtime = app.runtime();
     if let Some((transform, primitive)) = selected_or_first_editor_primitive(runtime) {
@@ -634,13 +468,6 @@ fn populate_viewport_render_state(
 
 fn viewport_bounds_tuple(bounds: UiRect) -> (f32, f32, f32, f32) {
     (bounds.x, bounds.y, bounds.width, bounds.height)
-}
-
-fn viewport_bounds_tuple_eq(left: (f32, f32, f32, f32), right: (f32, f32, f32, f32)) -> bool {
-    (left.0 - right.0).abs() <= f32::EPSILON
-        && (left.1 - right.1).abs() <= f32::EPSILON
-        && (left.2 - right.2).abs() <= f32::EPSILON
-        && (left.3 - right.3).abs() <= f32::EPSILON
 }
 
 fn selected_or_first_editor_primitive(
@@ -671,46 +498,12 @@ fn entity_primitive(
     Some((transform, primitive))
 }
 
-fn build_artifact_observation_frame(
-    descriptors: &[editor_viewport::ExpressionProductDescriptor],
-    presentation_state: &editor_viewport::ViewportPresentationState,
-    source_version: editor_core::RealityVersion,
-) -> ArtifactObservationFrame {
-    let mut frame = ArtifactObservationFrame::new(presentation_state.viewport_id, source_version);
-    frame.available_products = descriptors.to_vec();
-    frame.selected_primary_product_id = Some(presentation_state.selected_primary_product_id);
-    frame.selected_overlay_product_ids = presentation_state.selected_overlay_product_ids.clone();
-
-    for descriptor in descriptors {
-        frame
-            .availability_by_product
-            .insert(descriptor.id, ProductAvailabilityState::Available);
-        frame
-            .producer_health_by_product
-            .insert(descriptor.id, ProducerHealth::Healthy);
-    }
-
-    if let std::collections::btree_map::Entry::Vacant(e) = frame
-        .availability_by_product
-        .entry(presentation_state.selected_primary_product_id)
-    {
-        e.insert(ProductAvailabilityState::Unavailable);
-        frame.producer_health_by_product.insert(
-            presentation_state.selected_primary_product_id,
-            ProducerHealth::Unavailable,
-        );
-    }
-
-    frame
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::viewport::{
-        MAIN_VIEWPORT_ID, ViewportSurfaceHandle, ViewportSurfaceSlot, viewport_id_for_tool_surface,
-    };
+    use crate::runtime::viewport::{ToolSurfaceRuntimeBindingRecord, viewport_id_for_tool_surface};
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
+    use editor_viewport::ViewportId;
     use ui_render_data::ViewportSurfaceEmbedPrimitive;
 
     fn binding(
@@ -768,32 +561,6 @@ mod tests {
         assert_eq!(
             primary_viewport_bounds_from_frame(&frame),
             vec![first, second]
-        );
-    }
-
-    #[test]
-    fn viewport_presentation_sync_uses_runtime_bindings_over_bootstrap_surface_set() {
-        let mut surface_sets = ViewportSurfaceSetResource::default();
-        surface_sets.set_surface(
-            MAIN_VIEWPORT_ID,
-            ViewportSurfaceSlot::PrimaryColor,
-            ViewportSurfaceHandle::new("flow", "bootstrap"),
-        );
-        let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
-        let first = viewport_id_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(1).unwrap());
-        let second = viewport_id_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(2).unwrap());
-        bindings.upsert_binding(binding(1, 1, 1, first, UiRect::new(0.0, 0.0, 320.0, 240.0)));
-        bindings.upsert_binding(binding(
-            2,
-            2,
-            2,
-            second,
-            UiRect::new(320.0, 0.0, 480.0, 240.0),
-        ));
-
-        assert_eq!(
-            canonical_viewport_ids_for_sync(&surface_sets, &bindings),
-            vec![first, second],
         );
     }
 

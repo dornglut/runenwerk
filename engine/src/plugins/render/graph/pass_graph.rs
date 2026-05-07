@@ -12,6 +12,13 @@ pub enum RenderPassKind {
     Present,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderPassViewScope {
+    AllViews,
+    MainSurfaceOnly,
+    OffscreenProductsOnly,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderShaderReference {
     AssetPath(String),
@@ -145,6 +152,7 @@ pub struct RenderPassNode {
     pub id: RenderPassId,
     pub label: String,
     pub kind: RenderPassKind,
+    pub view_scope: RenderPassViewScope,
     pub feature_id: Option<RenderFeatureId>,
     pub shader: Option<RenderShaderReference>,
     pub reads: Vec<RenderResourceId>,
@@ -176,6 +184,7 @@ impl RenderPassNode {
             id: id.into(),
             label: label.into(),
             kind,
+            view_scope: RenderPassViewScope::AllViews,
             feature_id: None,
             shader: None,
             reads: Vec::new(),

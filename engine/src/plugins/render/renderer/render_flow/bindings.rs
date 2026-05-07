@@ -44,13 +44,23 @@ impl Renderer {
         for entry in &bindings.bind_group.entries {
             match entry {
                 CompiledBindingEntry::SampledTexture { resource } => {
-                    let texture = runtime_resources.resolve_texture_ref(
+                    let resource_key = runtime_resources.resolve_resource_key(
                         pass_id,
                         resource,
-                        frame_texture,
-                        packet.surface_size,
-                        packet.surface_format,
+                        "sampled_texture",
                     )?;
+                    let texture = match resource_key.clone() {
+                        RuntimeResourceKey::DynamicTexture(key) => {
+                            self.dynamic_texture_targets.texture_ref(pass_id, &key)?
+                        }
+                        _ => runtime_resources.resolve_texture(
+                            pass_id,
+                            resource_key,
+                            frame_texture,
+                            packet.surface_size,
+                            packet.surface_format,
+                        )?,
+                    };
                     if !allow_depth_sampling && texture.is_depth {
                         bail!(
                             "pass '{}' samples depth texture '{}' but this pass type only supports color sampled textures",
@@ -87,13 +97,23 @@ impl Renderer {
                     });
                 }
                 CompiledBindingEntry::StorageTexture { resource, access } => {
-                    let texture = runtime_resources.resolve_texture_ref(
+                    let resource_key = runtime_resources.resolve_resource_key(
                         pass_id,
                         resource,
-                        frame_texture,
-                        packet.surface_size,
-                        packet.surface_format,
+                        "storage_texture",
                     )?;
+                    let texture = match resource_key.clone() {
+                        RuntimeResourceKey::DynamicTexture(key) => {
+                            self.dynamic_texture_targets.texture_ref(pass_id, &key)?
+                        }
+                        _ => runtime_resources.resolve_texture(
+                            pass_id,
+                            resource_key,
+                            frame_texture,
+                            packet.surface_size,
+                            packet.surface_format,
+                        )?,
+                    };
                     if texture.is_depth {
                         bail!(
                             "pass '{}' declares storage texture '{}' as depth; storage-texture bindings require color-like resources",

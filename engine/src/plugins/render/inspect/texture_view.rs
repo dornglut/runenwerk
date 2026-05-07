@@ -1,6 +1,8 @@
 use crate::plugins::render::inspect::{CaptureStage, RenderCapturedTexture};
 use crate::plugins::render::resource::ImportedTextureSemantic;
-use crate::plugins::render::{RenderFlow, RenderResourceDescriptor, ResourceLifetime};
+use crate::plugins::render::{
+    RenderFlow, RenderResourceDescriptor, RenderTargetAliasKind, ResourceLifetime,
+};
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct RenderTextureInspectorState {
@@ -59,6 +61,8 @@ pub struct TextureResourceView {
     pub id: String,
     pub category: String,
     pub lifetime: ResourceLifetime,
+    pub target_alias_label: Option<String>,
+    pub target_alias_kind: Option<String>,
 }
 
 pub fn inspect_texture_resources(flow: &RenderFlow) -> Vec<TextureResourceView> {
@@ -73,6 +77,9 @@ pub fn inspect_texture_resources(flow: &RenderFlow) -> Vec<TextureResourceView> 
                 RenderResourceDescriptor::ColorTarget(_) => Some("color_target"),
                 RenderResourceDescriptor::DepthTarget(_) => Some("depth_target"),
                 RenderResourceDescriptor::HistoryTexture(_) => Some("history_texture"),
+                RenderResourceDescriptor::TargetAlias(value) => {
+                    Some(target_alias_texture_category(value.kind))
+                }
                 RenderResourceDescriptor::ImportedTexture(value) => Some(match value.semantic {
                     ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
                     ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
@@ -86,7 +93,38 @@ pub fn inspect_texture_resources(flow: &RenderFlow) -> Vec<TextureResourceView> 
                 id: resource.id().to_string(),
                 category: category.to_string(),
                 lifetime: resource.lifetime(),
+                target_alias_label: target_alias_label(resource),
+                target_alias_kind: target_alias_kind(resource),
             })
         })
         .collect()
+}
+
+fn target_alias_texture_category(kind: RenderTargetAliasKind) -> &'static str {
+    match kind {
+        RenderTargetAliasKind::Color => "target_alias(color)",
+        RenderTargetAliasKind::Depth => "target_alias(depth)",
+        RenderTargetAliasKind::Texture => "target_alias(texture)",
+    }
+}
+
+fn target_alias_label(resource: &RenderResourceDescriptor) -> Option<String> {
+    match resource {
+        RenderResourceDescriptor::TargetAlias(value) => Some(value.label.clone()),
+        _ => None,
+    }
+}
+
+fn target_alias_kind(resource: &RenderResourceDescriptor) -> Option<String> {
+    match resource {
+        RenderResourceDescriptor::TargetAlias(value) => Some(
+            match value.kind {
+                RenderTargetAliasKind::Color => "color",
+                RenderTargetAliasKind::Depth => "depth",
+                RenderTargetAliasKind::Texture => "texture",
+            }
+            .to_string(),
+        ),
+        _ => None,
+    }
 }

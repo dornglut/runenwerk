@@ -397,7 +397,6 @@ mod tests {
             surface_format: TextureFormat::Rgba8Unorm,
             surface_size: (1, 1),
             view_id: "main".to_string(),
-            view_count: 1,
             feature_gates,
             feature_runtime_signatures,
             prepared_ui: UiPreparedDraws::default(),
@@ -521,7 +520,15 @@ mod tests {
             source: None,
         });
 
-        assert!(renderer.pass_targets_active_view(&pass, "main"));
-        assert!(!renderer.pass_targets_active_view(&pass, "minimap"));
+        assert!(renderer.pass_targets_active_view(
+            &pass,
+            "main",
+            crate::plugins::render::PreparedViewKind::MainSurface
+        ));
+        assert!(!renderer.pass_targets_active_view(
+            &pass,
+            "minimap",
+            crate::plugins::render::PreparedViewKind::OffscreenProduct
+        ));
     }
 }

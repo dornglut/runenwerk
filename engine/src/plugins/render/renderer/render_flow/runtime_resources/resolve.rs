@@ -1,7 +1,10 @@
 use super::*;
 
 impl FlowRuntimeResources {
-    fn resolve_resource_key_from_input(&self, value: &str) -> Option<RuntimeResourceKey> {
+    pub(crate) fn resolve_resource_key_from_input(
+        &self,
+        value: &str,
+    ) -> Option<RuntimeResourceKey> {
         if value == SURFACE_COLOR_RESOURCE_LABEL {
             return Some(RuntimeResourceKey::SurfaceColor);
         }
@@ -20,32 +23,35 @@ impl FlowRuntimeResources {
             .map(RuntimeResourceKey::FlowOwned)
     }
 
-    fn kind_of_key(&self, key: RuntimeResourceKey) -> Option<RuntimeResourceKind> {
+    fn kind_of_key(&self, key: &RuntimeResourceKey) -> Option<RuntimeResourceKind> {
         match key {
-            RuntimeResourceKey::FlowOwned(id) => self.kinds.get(&id).copied(),
+            RuntimeResourceKey::FlowOwned(id) => self.kinds.get(id).copied(),
+            RuntimeResourceKey::DynamicTexture(_) => Some(RuntimeResourceKind::TextureLike),
             RuntimeResourceKey::SurfaceColor => Some(RuntimeResourceKind::TextureLike),
             RuntimeResourceKey::SurfaceDepth => None,
         }
     }
 
-    fn descriptor_for_key(&self, key: RuntimeResourceKey) -> Option<&RenderResourceDescriptor> {
+    fn descriptor_for_key(&self, key: &RuntimeResourceKey) -> Option<&RenderResourceDescriptor> {
         match key {
-            RuntimeResourceKey::FlowOwned(id) => self.descriptors.get(&id),
-            RuntimeResourceKey::SurfaceColor | RuntimeResourceKey::SurfaceDepth => None,
+            RuntimeResourceKey::FlowOwned(id) => self.descriptors.get(id),
+            RuntimeResourceKey::SurfaceColor
+            | RuntimeResourceKey::SurfaceDepth
+            | RuntimeResourceKey::DynamicTexture(_) => None,
         }
     }
 
     #[cfg(test)]
     pub fn kind_of(&self, id: &str) -> Option<RuntimeResourceKind> {
         self.resolve_resource_key_from_input(id)
-            .and_then(|key| self.kind_of_key(key))
+            .and_then(|key| self.kind_of_key(&key))
     }
 
     pub fn kind_of_resource(
         &self,
         resource_key: RuntimeResourceKey,
     ) -> Option<RuntimeResourceKind> {
-        self.kind_of_key(resource_key)
+        self.kind_of_key(&resource_key)
     }
 
     pub fn capture_texture_class(
@@ -61,8 +67,9 @@ impl FlowRuntimeResources {
             RuntimeResourceKey::SurfaceColor | RuntimeResourceKey::SurfaceDepth => {
                 CaptureTextureClass::ImportedTexture
             }
+            RuntimeResourceKey::DynamicTexture(_) => fallback_class,
             RuntimeResourceKey::FlowOwned(_) => {
-                let Some(descriptor) = self.descriptor_for_key(resource_key) else {
+                let Some(descriptor) = self.descriptor_for_key(&resource_key) else {
                     return fallback_class;
                 };
                 match descriptor {
@@ -76,6 +83,9 @@ impl FlowRuntimeResources {
                     RenderResourceDescriptor::SampledTexture(_)
                     | RenderResourceDescriptor::StorageTexture(_)
                     | RenderResourceDescriptor::ColorTarget(_) => CaptureTextureClass::ColorTarget,
+                    RenderResourceDescriptor::TargetAlias(_) => {
+                        CaptureTextureClass::ImportedTexture
+                    }
                     RenderResourceDescriptor::UniformBuffer(_)
                     | RenderResourceDescriptor::StorageBuffer(_)
                     | RenderResourceDescriptor::ImportedBuffer(_) => fallback_class,
@@ -93,6 +103,26 @@ impl FlowRuntimeResources {
         match resource {
             CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => {
                 Ok(RuntimeResourceKey::FlowOwned(*id))
+            }
+            CompiledResourceRef::TargetAlias(alias) => {
+                let binding = self
+                    .target_alias_bindings
+                    .get(alias.label.as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "pass '{}' references unbound target alias '{}'",
+                            pass_id,
+                            alias.label
+                        )
+                    })?;
+                match binding {
+                    PreparedTargetBinding::DynamicTexture(key) => {
+                        Ok(RuntimeResourceKey::DynamicTexture(key.clone()))
+                    }
+                    PreparedTargetBinding::SurfaceColor => Ok(RuntimeResourceKey::SurfaceColor),
+                    PreparedTargetBinding::SurfaceDepth => Ok(RuntimeResourceKey::SurfaceDepth),
+                    PreparedTargetBinding::FlowOwned(id) => Ok(RuntimeResourceKey::FlowOwned(*id)),
+                }
             }
             CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor) => {
                 Ok(RuntimeResourceKey::SurfaceColor)
@@ -137,7 +167,7 @@ impl FlowRuntimeResources {
             });
         }
 
-        let kind = self.kind_of_key(output_key).ok_or_else(|| {
+        let kind = self.kind_of_key(&output_key).ok_or_else(|| {
             anyhow::anyhow!(
                 "pass '{}' writes unknown color target '{}' during runtime encoding",
                 pass_id,
@@ -152,7 +182,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let RuntimeResourceKey::FlowOwned(output_id) = output_key else {
+        let RuntimeResourceKey::FlowOwned(output_id) = &output_key else {
             bail!(
                 "pass '{}' targets imported texture '{}', but only '{}' is currently supported as imported color target",
                 pass_id,
@@ -161,7 +191,7 @@ impl FlowRuntimeResources {
             );
         };
 
-        let Some(texture) = self.textures.get(&output_id) else {
+        let Some(texture) = self.textures.get(output_id) else {
             bail!(
                 "pass '{}' targets imported texture '{}', but only '{}' is currently supported as imported color target",
                 pass_id,
@@ -204,7 +234,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let kind = self.kind_of_key(resource_key).ok_or_else(|| {
+        let kind = self.kind_of_key(&resource_key).ok_or_else(|| {
             anyhow::anyhow!(
                 "graphics pass '{}' uses unknown depth target '{}'",
                 pass_id,
@@ -219,7 +249,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let RuntimeResourceKey::FlowOwned(resource_id) = resource_key else {
+        let RuntimeResourceKey::FlowOwned(resource_id) = &resource_key else {
             bail!(
                 "graphics pass '{}' uses imported depth target '{}' but runtime currently supports only flow-owned depth targets",
                 pass_id,
@@ -227,7 +257,7 @@ impl FlowRuntimeResources {
             );
         };
 
-        let Some(texture) = self.textures.get(&resource_id) else {
+        let Some(texture) = self.textures.get(resource_id) else {
             bail!(
                 "graphics pass '{}' uses imported depth target '{}' but runtime currently supports only flow-owned depth targets",
                 pass_id,
@@ -248,24 +278,6 @@ impl FlowRuntimeResources {
                 .create_view(&TextureViewDescriptor::default()),
             format: texture.format,
         }))
-    }
-
-    pub fn resolve_texture_ref<'a>(
-        &'a self,
-        pass_id: RenderPassId,
-        resource: &CompiledResourceRef,
-        frame_texture: &'a Texture,
-        frame_size: (u32, u32),
-        frame_format: TextureFormat,
-    ) -> Result<ResolvedTextureRef<'a>> {
-        let resource_key = self.resolve_resource_key(pass_id, resource, "texture")?;
-        self.resolve_texture(
-            pass_id,
-            resource_key,
-            frame_texture,
-            frame_size,
-            frame_format,
-        )
     }
 
     pub fn resolve_storage_buffer_ref<'a>(
@@ -340,8 +352,15 @@ impl FlowRuntimeResources {
                 generation: None,
             });
         }
+        if matches!(resource_key, RuntimeResourceKey::DynamicTexture(_)) {
+            bail!(
+                "pass '{}' references dynamic texture '{}' through flow runtime resources; dynamic textures must be resolved through the renderer dynamic target cache",
+                pass_label,
+                resource_key
+            );
+        }
 
-        let kind = self.kind_of_key(resource_key).ok_or_else(|| {
+        let kind = self.kind_of_key(&resource_key).ok_or_else(|| {
             anyhow::anyhow!(
                 "pass '{}' references unknown resource '{}' during runtime encoding",
                 pass_label,
@@ -356,7 +375,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let RuntimeResourceKey::FlowOwned(resource_id) = resource_key else {
+        let RuntimeResourceKey::FlowOwned(resource_id) = &resource_key else {
             bail!(
                 "pass '{}' references imported texture '{}' but only imported '{}' is supported in core runtime execution",
                 pass_label,
@@ -365,7 +384,7 @@ impl FlowRuntimeResources {
             );
         };
 
-        let Some(texture) = self.textures.get(&resource_id) else {
+        let Some(texture) = self.textures.get(resource_id) else {
             bail!(
                 "pass '{}' references imported texture '{}' but only imported '{}' is supported in core runtime execution",
                 pass_label,
@@ -416,7 +435,7 @@ impl FlowRuntimeResources {
         pass_id: RenderPassId,
         resource_key: RuntimeResourceKey,
     ) -> Result<ResolvedBufferRef<'a>> {
-        let kind = self.kind_of_key(resource_key).ok_or_else(|| {
+        let kind = self.kind_of_key(&resource_key).ok_or_else(|| {
             anyhow::anyhow!(
                 "pass '{}' references unknown resource '{}' during runtime encoding",
                 pass_id,
@@ -431,7 +450,7 @@ impl FlowRuntimeResources {
             );
         }
 
-        let RuntimeResourceKey::FlowOwned(resource_id) = resource_key else {
+        let RuntimeResourceKey::FlowOwned(resource_id) = &resource_key else {
             bail!(
                 "pass '{}' references imported buffer '{}' but core runtime execution only supports flow-owned buffers",
                 pass_id,
@@ -439,7 +458,7 @@ impl FlowRuntimeResources {
             );
         };
 
-        let Some(buffer) = self.buffers.get(&resource_id) else {
+        let Some(buffer) = self.buffers.get(resource_id) else {
             bail!(
                 "pass '{}' references imported buffer '{}' but core runtime execution only supports flow-owned buffers",
                 pass_id,

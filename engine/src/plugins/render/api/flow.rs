@@ -8,7 +8,7 @@ use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
     FlowValidationReport, GpuParams, RenderFlowGraph, RenderFlowId, RenderFlowValidationError,
     RenderPassId, RenderPassIdSequence, RenderPassNode, RenderResourceDescriptor, RenderResourceId,
-    RenderResourceIdSequence, validate_flow_graph,
+    RenderResourceIdSequence, RenderTargetAliasKind, validate_flow_graph,
 };
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -81,6 +81,33 @@ impl RenderFlow {
     pub fn with_history_texture(mut self, label: impl Into<String>) -> Self {
         self.register_history_texture(label.into());
         self
+    }
+
+    pub fn with_sampled_texture(mut self, label: impl Into<String>) -> Self {
+        self.register_sampled_texture(label.into());
+        self
+    }
+
+    pub fn with_storage_texture(mut self, label: impl Into<String>) -> Self {
+        self.register_storage_texture(label.into());
+        self
+    }
+
+    pub fn with_target_alias(
+        mut self,
+        label: impl Into<String>,
+        kind: RenderTargetAliasKind,
+    ) -> Self {
+        self.register_target_alias(label.into(), kind);
+        self
+    }
+
+    pub fn with_color_target_alias(self, label: impl Into<String>) -> Self {
+        self.with_target_alias(label, RenderTargetAliasKind::Color)
+    }
+
+    pub fn with_depth_target_alias(self, label: impl Into<String>) -> Self {
+        self.with_target_alias(label, RenderTargetAliasKind::Depth)
     }
 
     pub fn with_builtin_ui(self) -> Self {
@@ -325,6 +352,44 @@ impl RenderFlow {
 
         let id = self.allocate_resource_id();
         self.upsert_labeled_resource(label, id, RenderResourceDescriptor::history_texture(id));
+        id
+    }
+
+    fn register_sampled_texture(&mut self, label: String) -> RenderResourceId {
+        if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            return id;
+        }
+
+        let id = self.allocate_resource_id();
+        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::sampled_texture(id));
+        id
+    }
+
+    fn register_storage_texture(&mut self, label: String) -> RenderResourceId {
+        if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            return id;
+        }
+
+        let id = self.allocate_resource_id();
+        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::storage_texture(id));
+        id
+    }
+
+    fn register_target_alias(
+        &mut self,
+        label: String,
+        kind: RenderTargetAliasKind,
+    ) -> RenderResourceId {
+        if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            return id;
+        }
+
+        let id = self.allocate_resource_id();
+        self.upsert_labeled_resource(
+            label.clone(),
+            id,
+            RenderResourceDescriptor::target_alias(id, label, kind),
+        );
         id
     }
 

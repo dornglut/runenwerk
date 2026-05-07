@@ -2,11 +2,6 @@ use std::collections::BTreeMap;
 
 use editor_viewport::ViewportId;
 
-use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS,
-    VIEWPORT_RESOURCE_SCENE_COLOR,
-};
-
 /// File: apps/runenwerk_editor/src/runtime/viewport/surface_set.rs
 /// Purpose: Explicit per-viewport-owned presentation surface bundles.
 ///
@@ -17,17 +12,34 @@ use crate::runtime::viewport::{
 pub use editor_viewport::ViewportSurfaceSlot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewportSurfaceHandleSource {
+    DynamicTexture,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewportSurfaceHandle {
-    pub flow_id: &'static str,
-    pub resource_id: &'static str,
+    pub source: ViewportSurfaceHandleSource,
+    pub namespace: String,
+    pub target_id: String,
+    pub ui_sampleable: bool,
 }
 
 impl ViewportSurfaceHandle {
-    pub const fn new(flow_id: &'static str, resource_id: &'static str) -> Self {
+    pub fn dynamic_texture(
+        namespace: impl Into<String>,
+        target_id: impl Into<String>,
+        ui_sampleable: bool,
+    ) -> Self {
         Self {
-            flow_id,
-            resource_id,
+            source: ViewportSurfaceHandleSource::DynamicTexture,
+            namespace: namespace.into(),
+            target_id: target_id.into(),
+            ui_sampleable,
         }
+    }
+
+    pub fn is_ui_sampleable(&self) -> bool {
+        self.ui_sampleable
     }
 }
 
@@ -58,11 +70,15 @@ impl ViewportSurfaceSet {
     }
 
     pub fn get(&self, slot: ViewportSurfaceSlot) -> Option<ViewportSurfaceHandle> {
-        self.slots.get(&slot).copied()
+        self.slots.get(&slot).cloned()
     }
 
     pub fn contains(&self, slot: ViewportSurfaceSlot) -> bool {
         self.slots.contains_key(&slot)
+    }
+
+    pub fn clear(&mut self) {
+        self.slots.clear();
     }
 }
 
@@ -114,25 +130,17 @@ impl ViewportSurfaceSetResource {
     pub fn retain_viewports(&mut self, mut keep: impl FnMut(ViewportId) -> bool) {
         self.sets.retain(|viewport_id, _| keep(*viewport_id));
     }
+
+    pub fn clear_viewport_surfaces(&mut self, viewport_id: ViewportId) {
+        if let Some(set) = self.sets.get_mut(&viewport_id) {
+            set.clear();
+        }
+    }
 }
 
 pub fn ensure_editor_main_surface_set(
     viewport_surface_sets: &mut ViewportSurfaceSetResource,
     viewport_id: ViewportId,
 ) {
-    viewport_surface_sets.set_surface(
-        viewport_id,
-        ViewportSurfaceSlot::PrimaryColor,
-        ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
-    );
-    viewport_surface_sets.set_surface(
-        viewport_id,
-        ViewportSurfaceSlot::PickingIds,
-        ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_PICKING_IDS),
-    );
-    viewport_surface_sets.set_surface(
-        viewport_id,
-        ViewportSurfaceSlot::Overlay,
-        ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY),
-    );
+    viewport_surface_sets.ensure_viewport(viewport_id);
 }

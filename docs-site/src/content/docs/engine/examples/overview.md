@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
 ---
 
 # Engine Examples
@@ -20,9 +20,9 @@ Use this map to pick an entry point quickly.
   - `window_input_demo`
 - Explore the canonical RenderFlow v2 sample:
   - `game_of_life_sdf`
-- Explore boids-style compute simulation + compose rendering:
+- Explore boids-style compute simulation + graphics draw-buffer rendering:
   - `boids_render_flow`
-- Explore a 3D SDF raymarching flow:
+- Explore a 3D SDF raymarching flow with compute preparation and history copy:
   - `sdf_render_flow`
 - Explore procedural sky + noise terrain SDF rendering:
   - `procedural_sky_sdf_terrain`
@@ -52,14 +52,14 @@ Use this map to pick an entry point quickly.
   - Run: `cargo run -p engine --example game_of_life_sdf`
 - `boids_render_flow`
   - Entry: `engine/examples/boids_render_flow/main.rs`
-  - Focus: boids compute simulation with storage ping-pong, graphics draw, history copy, and explicit present.
+  - Focus: boids compute simulation with storage ping-pong, public graphics instance-buffer binding, history copy, and explicit present.
   - Shaders:
     - `assets/shaders/boids_compute.wgsl`
     - `assets/shaders/boids_compose.wgsl`
   - Run: `cargo run -p engine --example boids_render_flow`
 - `sdf_render_flow`
   - Entry: `engine/examples/sdf_render_flow/main.rs`
-  - Focus: fullscreen 3D SDF raymarch composition with ECS-projected camera/time uniforms, explicit present, and Tab-cycled debug views.
+  - Focus: compute preparation, fullscreen 3D SDF raymarch composition, flow-owned history copy, explicit present, and Tab-cycled debug views.
   - Shader:
     - `assets/shaders/sdf_render_flow_3d_compose.wgsl`
   - Run: `cargo run -p engine --example sdf_render_flow`

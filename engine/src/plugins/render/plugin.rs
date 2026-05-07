@@ -9,7 +9,7 @@ use super::features::{
     prepare_ui_feature_resource_system, sync_render_feature_registry_system,
     world::{WorldLodPolicyResource, WorldLodSelectionResource, WorldRuntimeCacheResource},
 };
-use super::frame::PreparedRenderFrameResource;
+use super::frame::{PreparedRenderFrameRequestResource, PreparedRenderFrameResource};
 use super::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
     RenderDebugFrameReportState, RenderDebugGraphDumpState, RenderDebugOverlayState,
@@ -18,8 +18,8 @@ use super::inspect::{
 };
 use super::pipelines::PipelineCacheResource;
 use super::runtime::{
-    collect_runtime_ui_frame_submissions_system, frame_render_prepare_system,
-    frame_render_submit_system,
+    RenderDynamicTextureTargetRequestRegistryResource, collect_runtime_ui_frame_submissions_system,
+    frame_render_prepare_system, frame_render_submit_system,
 };
 use super::shader::ShaderRegistryResource;
 use crate::app::App;
@@ -53,6 +53,8 @@ impl Plugin for RenderPlugin {
         app.init_resource::<WorldLodPolicyResource>();
         app.init_resource::<WorldLodSelectionResource>();
         app.init_resource::<PreparedRenderFrameResource>();
+        app.init_resource::<PreparedRenderFrameRequestResource>();
+        app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
         app.init_resource::<PipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
         app.init_resource::<RenderDebugOverlayState>();

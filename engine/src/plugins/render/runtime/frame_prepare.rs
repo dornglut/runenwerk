@@ -45,7 +45,14 @@ pub(crate) fn frame_render_prepare_system(
         )
     };
 
-    let (flow_registry_revision, compiled_flows, execution_feature_ids, flows) = {
+    let (
+        flow_registry_revision,
+        compiled_flows,
+        execution_feature_ids,
+        flows,
+        views,
+        flow_invocations,
+    ) = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
             Ok(registry) => registry,
             Err(_) => {
@@ -58,11 +65,26 @@ pub(crate) fn frame_render_prepare_system(
         let execution_feature_ids = collect_execution_feature_ids(compiled_flows);
         let extracted = collect_flow_declared_state_resources(&world, compiled_flows);
         let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
+        let frame_requests = world
+            .resource::<PreparedRenderFrameRequestResource>()
+            .ok()
+            .cloned()
+            .unwrap_or_default();
+        let views = build_prepared_views(target_size, &frame_requests);
+        let flow_invocations = build_prepared_flow_invocations(
+            compiled_flows,
+            &extracted,
+            &flows,
+            &views,
+            &frame_requests,
+        )?;
         (
             flow_registry.revision(),
             compiled_flows.len(),
             execution_feature_ids,
             flows,
+            views,
+            flow_invocations,
         )
     };
 
@@ -83,6 +105,16 @@ pub(crate) fn frame_render_prepare_system(
         manager.active_overlay().label().to_string(),
         &execution_feature_ids,
     );
+    let dynamic_texture_targets = world
+        .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
+        .ok()
+        .map(|resource| resource.snapshot())
+        .unwrap_or_default();
+    let viewport_surface_bindings = world
+        .resource::<ViewportSurfaceBindingRegistryResource>()
+        .ok()
+        .map(|resource| resource.registry().clone())
+        .unwrap_or_default();
 
     let prepared = PreparedRenderFrame {
         context: PreparedFrameContext {
@@ -94,8 +126,11 @@ pub(crate) fn frame_render_prepare_system(
         surface: PreparedSurfaceInfo {
             target_size_px: target_size,
         },
-        views: vec![PreparedViewFrame::main(target_size)],
+        views,
         flows,
+        flow_invocations,
+        dynamic_texture_targets,
+        viewport_surface_bindings,
         contributions,
         shader: PreparedShaderSnapshot {
             registry_revision: shader_registry.revision(),
@@ -117,6 +152,85 @@ pub(crate) fn frame_render_prepare_system(
     }
 
     Ok(())
+}
+
+fn build_prepared_views(
+    surface_size: (u32, u32),
+    requests: &PreparedRenderFrameRequestResource,
+) -> Vec<PreparedViewFrame> {
+    let mut views = BTreeMap::<String, PreparedViewFrame>::new();
+    let main = PreparedViewFrame::main(surface_size);
+    views.insert(main.view_id.clone(), main);
+    for view in requests.requested_views() {
+        views.insert(view.view_id.clone(), view.clone());
+    }
+    views.into_values().collect()
+}
+
+fn build_prepared_flow_invocations(
+    compiled_flows: &[CompiledRenderFlowPlan],
+    extracted_state: &ExtractedRenderStateMap<'_>,
+    main_inputs_by_flow: &BTreeMap<RenderFlowId, PreparedFlowInputs>,
+    views: &[PreparedViewFrame],
+    requests: &PreparedRenderFrameRequestResource,
+) -> anyhow::Result<Vec<PreparedFlowInvocation>> {
+    let mut invocations = Vec::<PreparedFlowInvocation>::new();
+    let views_by_id = views
+        .iter()
+        .map(|view| (view.view_id.as_str(), view))
+        .collect::<BTreeMap<_, _>>();
+    let flows_by_id = compiled_flows
+        .iter()
+        .map(|flow| (flow.flow_id, flow))
+        .collect::<BTreeMap<_, _>>();
+
+    for flow in compiled_flows {
+        let inputs = main_inputs_by_flow
+            .get(&flow.flow_id)
+            .cloned()
+            .ok_or_else(|| {
+                anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
+            })?;
+        invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
+    }
+
+    for request in requests.requested_flow_invocations() {
+        let flow = flows_by_id.get(&request.flow_id).ok_or_else(|| {
+            anyhow::anyhow!(
+                "prepared flow invocation '{}' references unknown flow '{:?}'",
+                request.invocation_id.0,
+                request.flow_id
+            )
+        })?;
+        let view = views_by_id.get(request.view_id.as_str()).ok_or_else(|| {
+            anyhow::anyhow!(
+                "prepared flow invocation '{}' references unknown view '{}'",
+                request.invocation_id.0,
+                request.view_id
+            )
+        })?;
+        let inputs_by_flow = build_prepared_flow_inputs(
+            std::slice::from_ref(*flow),
+            extracted_state,
+            view.target_size_px,
+        )?;
+        let inputs = inputs_by_flow
+            .get(&request.flow_id)
+            .cloned()
+            .ok_or_else(|| {
+                anyhow::anyhow!("missing prepared inputs for flow '{:?}'", request.flow_id)
+            })?;
+        invocations.push(PreparedFlowInvocation {
+            invocation_id: request.invocation_id.clone(),
+            flow_id: request.flow_id,
+            view_id: request.view_id.clone(),
+            inputs,
+            target_alias_bindings: request.target_alias_bindings.clone(),
+            history_signature: request.history_signature.clone(),
+        });
+    }
+
+    Ok(invocations)
 }
 
 pub(crate) fn clear_prepared_frame(world: &mut WorldMut) {

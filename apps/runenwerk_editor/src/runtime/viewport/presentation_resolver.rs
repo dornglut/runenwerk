@@ -6,7 +6,7 @@ use editor_viewport::{ExpressionProductId, ViewportId, ViewportSurfacePresentati
 use ui_render_data::{ViewportSurfaceBinding, ViewportSurfaceBindingRegistry};
 
 use crate::runtime::viewport::{
-    PRODUCT_ID_OVERLAY, PRODUCT_ID_PICKING_IDS, PRODUCT_ID_SCENE_COLOR,
+    OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID,
     ViewportPresentationStateResource, ViewportSurfaceSet, ViewportSurfaceSetResource,
     ViewportSurfaceSlot,
 };
@@ -14,11 +14,11 @@ use crate::runtime::viewport::{
 pub fn resolve_product_to_surface_slot(
     product_id: ExpressionProductId,
 ) -> Option<ViewportSurfaceSlot> {
-    if product_id == PRODUCT_ID_SCENE_COLOR {
+    if product_id == SCENE_COLOR_PRODUCT_ID {
         Some(ViewportSurfaceSlot::PrimaryColor)
-    } else if product_id == PRODUCT_ID_PICKING_IDS {
+    } else if product_id == PICKING_IDS_PRODUCT_ID {
         Some(ViewportSurfaceSlot::PickingIds)
-    } else if product_id == PRODUCT_ID_OVERLAY {
+    } else if product_id == OVERLAY_PRODUCT_ID {
         Some(ViewportSurfaceSlot::Overlay)
     } else {
         None
@@ -35,10 +35,13 @@ fn bind_surface_slot(
     let Some(surface_handle) = surface_set.get(source_slot) else {
         return;
     };
+    if !surface_handle.is_ui_sampleable() {
+        return;
+    }
     registry.bind(
         viewport_id.0,
         viewport_embed_slot_for(target_slot),
-        ViewportSurfaceBinding::new(surface_handle.flow_id, surface_handle.resource_id),
+        ViewportSurfaceBinding::dynamic_texture(surface_handle.namespace, surface_handle.target_id),
     );
 }
 
@@ -91,8 +94,7 @@ pub fn build_surface_binding_registry(
 mod tests {
     use super::*;
     use crate::runtime::viewport::{
-        EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY, VIEWPORT_RESOURCE_PICKING_IDS,
-        VIEWPORT_RESOURCE_SCENE_COLOR, ViewportSurfaceHandle, initial_presentation_state,
+        VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportSurfaceHandle, initial_presentation_state,
     };
 
     #[test]
@@ -101,40 +103,52 @@ mod tests {
     }
 
     #[test]
-    fn binding_registry_primary_slot_tracks_selected_product_by_viewport() {
+    fn binding_registry_does_not_bind_non_sampleable_product_as_visual_primary() {
         let viewport_id = ViewportId(10);
         let mut surface_sets = ViewportSurfaceSetResource::default();
         surface_sets.set_surface(
             viewport_id,
             ViewportSurfaceSlot::PrimaryColor,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
+            ViewportSurfaceHandle::dynamic_texture(
+                VIEWPORT_DYNAMIC_TARGET_NAMESPACE,
+                "editor.viewport.10.1.primary",
+                true,
+            ),
         );
         surface_sets.set_surface(
             viewport_id,
             ViewportSurfaceSlot::PickingIds,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_PICKING_IDS),
+            ViewportSurfaceHandle::dynamic_texture(
+                VIEWPORT_DYNAMIC_TARGET_NAMESPACE,
+                "editor.viewport.10.2.picking",
+                false,
+            ),
         );
         surface_sets.set_surface(
             viewport_id,
             ViewportSurfaceSlot::Overlay,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_OVERLAY),
+            ViewportSurfaceHandle::dynamic_texture(
+                VIEWPORT_DYNAMIC_TARGET_NAMESPACE,
+                "editor.viewport.10.3.overlay",
+                true,
+            ),
         );
 
         let mut presentations = ViewportPresentationStateResource::default();
         let mut state = initial_presentation_state(viewport_id);
-        state.select_primary_product(PRODUCT_ID_PICKING_IDS);
+        state.select_primary_product(PICKING_IDS_PRODUCT_ID);
         presentations.upsert_state(state);
 
         let registry = build_surface_binding_registry(&surface_sets, &presentations);
-        let binding = registry
-            .get(
-                viewport_id.0,
-                viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
-            )
-            .expect("primary binding should exist for selected product");
-
-        assert_eq!(binding.flow_id.as_str(), EDITOR_MAIN_FLOW_ID);
-        assert_eq!(binding.resource_id.as_str(), VIEWPORT_RESOURCE_PICKING_IDS);
+        assert!(
+            registry
+                .get(
+                    viewport_id.0,
+                    viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
+                )
+                .is_none(),
+            "non-sampleable picking target must not be bound as a normal visual primary surface",
+        );
     }
 
     #[test]
@@ -145,12 +159,20 @@ mod tests {
         surface_sets.set_surface(
             owned_viewport,
             ViewportSurfaceSlot::PrimaryColor,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
+            ViewportSurfaceHandle::dynamic_texture(
+                VIEWPORT_DYNAMIC_TARGET_NAMESPACE,
+                "editor.viewport.2.1.primary",
+                true,
+            ),
         );
         surface_sets.set_surface(
             unselected_viewport,
             ViewportSurfaceSlot::PrimaryColor,
-            ViewportSurfaceHandle::new(EDITOR_MAIN_FLOW_ID, VIEWPORT_RESOURCE_SCENE_COLOR),
+            ViewportSurfaceHandle::dynamic_texture(
+                VIEWPORT_DYNAMIC_TARGET_NAMESPACE,
+                "editor.viewport.3.1.primary",
+                true,
+            ),
         );
 
         let mut presentations = ViewportPresentationStateResource::default();

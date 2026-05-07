@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-07
 ---
 
 # Render Plugin Usage Guide
@@ -66,6 +66,9 @@ Feature fallback policy is resolved in prepare (`Ready | Stale | Disabled | Miss
 - surface snapshot (`PreparedSurfaceInfo`)
 - view container (`PreparedViewFrame`)
 - flow-projected uniforms and dispatch state (`PreparedFlowInputs`)
+- prepared flow invocations with view ids, target alias bindings, and history signatures (`PreparedFlowInvocation`)
+- dynamic texture target request snapshot (`RenderDynamicTextureTargetDescriptor`)
+- viewport surface binding registry for UI/product sampling
 - feature/domain contributions (`PreparedFrameContributions`)
 - shader revision snapshot (`PreparedShaderSnapshot`)
 

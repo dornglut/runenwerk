@@ -252,7 +252,6 @@ impl Renderer {
             surface_format,
             surface_size,
             view_id: view.view_id,
-            view_count: prepared_frame.views.len(),
             feature_gates,
             feature_runtime_signatures,
             prepared_ui,

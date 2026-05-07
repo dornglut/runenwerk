@@ -16,7 +16,9 @@ use bytemuck::{Pod, Zeroable};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
-use ui_render_data::{ViewportSurfaceBindingRegistry, ViewportSurfaceEmbedSlotId};
+use ui_render_data::{
+    ViewportSurfaceBindingRegistry, ViewportSurfaceBindingSource, ViewportSurfaceEmbedSlotId,
+};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 use winit::window::Window;
@@ -455,12 +457,11 @@ impl Default for FeatureExecutionGate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct RendererPreparedPacket {
     surface_format: TextureFormat,
     surface_size: (u32, u32),
     view_id: String,
-    view_count: usize,
     feature_gates: BTreeMap<RenderFeatureId, FeatureExecutionGate>,
     feature_runtime_signatures: BTreeMap<RenderFeatureId, u64>,
     prepared_ui: UiPreparedDraws,
@@ -478,6 +479,7 @@ pub struct Renderer {
     viewport_embed_pass: Option<ViewportEmbedPass>,
     viewport_embed_pass_format: Option<TextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
+    dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
     last_good_ui_prepared: Option<UiPreparedDraws>,
@@ -555,6 +557,7 @@ impl Gfx {
     }
 }
 
+mod dynamic_targets;
 mod extract;
 mod pipeline_cache;
 mod prepare;

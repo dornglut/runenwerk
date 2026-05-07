@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-07
 ---
 
 # Boids Render Flow Example
@@ -16,7 +16,7 @@ What it demonstrates:
 
 - ECS simulation state (`BoidsRenderState`) projected into flow uniforms.
 - ping-pong storage simulation (`boids.instances`) on a compute pass.
-- graphics draw pass that draws boids directly from storage.
+- graphics draw pass that binds the boid storage as an instance draw buffer through the public `instance_buffer(...)` API.
 - flow-owned color target, history copy, and explicit terminal present pass.
 - pure builtin compiled runtime path (no custom executor hooks).
 

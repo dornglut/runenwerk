@@ -29,9 +29,10 @@ This roadmap is the implementation contract for the final render architecture:
 ## Current Branch Status (March 22, 2026)
 
 - Phases 1-7 are active on the runtime path.
-- Phase 8 is intentionally deferred in active runtime behavior until the render product surface foundation bundle lands:
-  - execution remains single-view only
-  - multi-view packets fail fast to avoid misleading pseudo-support
+- Phase 8 product-surface packet work is partially present:
+  - `PreparedRenderFrame` carries main/offscreen views, prepared flow invocations, target alias bindings, dynamic target descriptors, and history signatures;
+  - dynamic target descriptor/request validation exists;
+  - renderer-owned dynamic target cache allocation and target-alias execution remain deferred until the render product surface foundation bundle lands.
 - Phase 9 cleanup/docs/cutoff hardening remains in progress.
 
 The active implementation plan for the next large render update is `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`. That bundle pulls the product-surface portion of Phase 8 forward with dynamic targets, target aliases, prepared render views, history invalidation, and inspection support.

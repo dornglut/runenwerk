@@ -157,7 +157,8 @@ impl FlowRuntimeResources {
                     | TextureUsages::RENDER_ATTACHMENT,
                 is_depth: true,
             }),
-            RenderResourceDescriptor::ImportedTexture(_)
+            RenderResourceDescriptor::TargetAlias(_)
+            | RenderResourceDescriptor::ImportedTexture(_)
             | RenderResourceDescriptor::UniformBuffer(_)
             | RenderResourceDescriptor::StorageBuffer(_)
             | RenderResourceDescriptor::ImportedBuffer(_) => None,
@@ -188,6 +189,7 @@ impl FlowRuntimeResources {
             | RenderResourceDescriptor::ColorTarget(_)
             | RenderResourceDescriptor::DepthTarget(_)
             | RenderResourceDescriptor::HistoryTexture(_)
+            | RenderResourceDescriptor::TargetAlias(_)
             | RenderResourceDescriptor::ImportedTexture(_)
             | RenderResourceDescriptor::ImportedBuffer(_) => None,
         }

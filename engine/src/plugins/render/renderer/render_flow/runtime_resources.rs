@@ -1,5 +1,8 @@
 use super::*;
-use crate::plugins::render::{RenderFlowId, RenderPassId, RenderResourceId};
+use crate::plugins::render::{
+    PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId, RenderPassId,
+    RenderResourceId,
+};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,9 +50,10 @@ pub struct BufferAllocationSpec {
     pub kind: RuntimeBufferKind,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RuntimeResourceKey {
     FlowOwned(RenderResourceId),
+    DynamicTexture(RenderDynamicTextureTargetKey),
     SurfaceColor,
     SurfaceDepth,
 }
@@ -58,6 +62,7 @@ impl fmt::Display for RuntimeResourceKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FlowOwned(id) => write!(f, "{}", id),
+            Self::DynamicTexture(key) => write!(f, "{}", key),
             Self::SurfaceColor => f.write_str(SURFACE_COLOR_RESOURCE_LABEL),
             Self::SurfaceDepth => f.write_str(SURFACE_DEPTH_RESOURCE_LABEL),
         }
@@ -71,6 +76,7 @@ pub struct FlowRuntimeResources {
     pub kinds: BTreeMap<RenderResourceId, RuntimeResourceKind>,
     pub descriptors: BTreeMap<RenderResourceId, RenderResourceDescriptor>,
     pub resource_ids_by_label: BTreeMap<String, RenderResourceId>,
+    pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
 }
 
 #[derive(Debug)]

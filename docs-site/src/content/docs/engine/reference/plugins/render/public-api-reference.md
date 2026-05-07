@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-07
 ---
 
 # Render Public API Reference
@@ -75,6 +75,11 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedSurfaceInfo`
 - `PreparedViewFrame`
 - `PreparedFlowInputs`
+- `PreparedFlowInvocation`
+- `PreparedFlowInvocationId`
+- `PreparedFlowInvocationRequest`
+- `PreparedRenderFrameRequestResource`
+- `PreparedTargetBinding`
 - `PreparedStateTypeInfo`
 - `PreparedShaderSnapshot`
 - `PreparedFrameContributions`
@@ -94,6 +99,9 @@ Contract:
 
 - `frame_render_prepare_system` publishes one owned `PreparedRenderFrame` per renderable frame.
 - `frame_render_submit_system` consumes the prepared frame and does not perform live ECS extraction for flow data.
+- `PreparedRenderFrame::views` carries main-surface and offscreen product views.
+- `PreparedRenderFrame::flow_invocations` carries per-view/per-product flow invocation requests and target alias bindings.
+- `PreparedRenderFrame::dynamic_texture_targets` carries the frame-stable dynamic target descriptor snapshot.
 
 Current UI note:
 
@@ -178,8 +186,14 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
   - `RenderFlowRegistryResource`
   - `ShaderRegistryResource`
   - `ShaderHandle`
-  - `RenderResourceDescriptor`
-  - `ImportedTextureSemantic`
+- `RenderResourceDescriptor`
+- `RenderDynamicTextureTargetDescriptor`
+- `RenderDynamicTextureTargetKey`
+- `RenderDynamicTextureRetention`
+- `RenderTextureTargetFormat`
+- `RenderTextureTargetUsage`
+- `RenderTextureSampleMode`
+- `ImportedTextureSemantic`
   - `ImportedBufferSemantic`
   - `ResourceLifetime`
   - `TransientAliasAssignment`
@@ -204,7 +218,38 @@ Pipeline-key specialization/runtime contract:
 
 Current multi-view contract:
 
-- active runtime execution is single-view only (`PreparedViewFrame::main`); multi-view activation is explicitly deferred and guarded by runtime fail-fast checks.
+- prepared frame packets can carry main-surface and offscreen product views plus per-flow invocations.
+- active renderer execution for dynamic target aliases remains part of the render product surface bundle; avoid cloning flows or suffixing static labels as a substitute.
+
+## Product Surface APIs
+
+These APIs are for dynamic product surfaces, viewport products, material/asset previews, and debug texture viewers:
+
+- `RenderFlow::with_color_target_alias`
+- `RenderFlow::with_depth_target_alias`
+- `RenderFlow::with_target_alias`
+- pass view scoping:
+  - `ComputePassBuilder::main_surface_only`
+  - `ComputePassBuilder::offscreen_products_only`
+  - `FullscreenPassBuilder::main_surface_only`
+  - `FullscreenPassBuilder::offscreen_products_only`
+  - `GraphicsPassBuilder::main_surface_only`
+  - `GraphicsPassBuilder::offscreen_products_only`
+  - `CopyPassBuilder::main_surface_only`
+  - `PresentPassBuilder::main_surface_only`
+- texture binding helpers:
+  - `RenderFlow::with_sampled_texture`
+  - `RenderFlow::with_storage_texture`
+  - `ComputePassBuilder::write_texture`
+  - `FullscreenPassBuilder::sample_texture`
+  - `FullscreenPassBuilder::write_texture`
+  - `GraphicsPassBuilder::sample_texture`
+  - `GraphicsPassBuilder::write_texture`
+
+Current status:
+
+- dynamic target descriptors, request registry snapshots, prepared views, and prepared invocations are public inspection/prepare packet contracts;
+- renderer-owned dynamic target cache allocation and target-alias pass execution are still bundle work and should not be faked with editor-specific flow ids.
 
 ## Compatibility Surface
 

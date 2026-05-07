@@ -18,6 +18,8 @@ impl Renderer {
             viewport_embed_pass: None,
             viewport_embed_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
+            dynamic_texture_targets:
+                super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
             flow_runtime_cache: std::collections::BTreeMap::new(),
             flow_pipeline_cache: super::pipeline_cache::FlowPipelineArtifactCache::default(),
             last_good_ui_prepared: None,
@@ -603,7 +605,8 @@ impl Renderer {
         );
         layer_orders.extend(prepared.glyph_batches.iter().map(|batch| batch.layer_order));
 
-        let mut viewport_bind_groups = std::collections::BTreeMap::<String, BindGroup>::new();
+        let mut viewport_bind_groups =
+            std::collections::BTreeMap::<ViewportSurfaceBindingSource, BindGroup>::new();
         for layer_order in layer_orders {
             if !prepared.rect_batches.is_empty() {
                 pass.set_pipeline(&rect_pass.pipeline);
@@ -637,19 +640,42 @@ impl Renderer {
                     else {
                         continue;
                     };
-                    if binding.flow_id.as_str() != flow_id {
-                        continue;
-                    }
 
-                    if !viewport_bind_groups.contains_key(binding.resource_id.as_str()) {
-                        let Ok(view) = runtime_resources.resolve_ui_texture_view(
-                            "builtin_ui_viewport_embed",
-                            binding.resource_id.as_str(),
-                            frame_texture,
-                            surface_size,
-                            surface_format,
-                        ) else {
-                            continue;
+                    if !viewport_bind_groups.contains_key(&binding.source) {
+                        let view = match &binding.source {
+                            ViewportSurfaceBindingSource::FlowResource {
+                                flow_id: binding_flow_id,
+                                resource_id,
+                            } => {
+                                if binding_flow_id.as_str() != flow_id {
+                                    continue;
+                                }
+                                let Ok(view) = runtime_resources.resolve_ui_texture_view(
+                                    "builtin_ui_viewport_embed",
+                                    resource_id.as_str(),
+                                    frame_texture,
+                                    surface_size,
+                                    surface_format,
+                                ) else {
+                                    continue;
+                                };
+                                view
+                            }
+                            ViewportSurfaceBindingSource::DynamicTexture {
+                                namespace,
+                                target_id,
+                            } => {
+                                let key =
+                                    crate::plugins::render::RenderDynamicTextureTargetKey::new(
+                                        namespace.clone(),
+                                        target_id.clone(),
+                                    );
+                                let Ok(view) = self.dynamic_texture_targets.ui_texture_view(&key)
+                                else {
+                                    continue;
+                                };
+                                view
+                            }
                         };
                         let bind_group = device.create_bind_group(&BindGroupDescriptor {
                             label: Some("engine_ui_viewport_embed_bind_group"),
@@ -667,11 +693,10 @@ impl Renderer {
                                 },
                             ],
                         });
-                        viewport_bind_groups.insert(binding.resource_id.clone(), bind_group);
+                        viewport_bind_groups.insert(binding.source.clone(), bind_group);
                     }
 
-                    let Some(bind_group) = viewport_bind_groups.get(binding.resource_id.as_str())
-                    else {
+                    let Some(bind_group) = viewport_bind_groups.get(&binding.source) else {
                         continue;
                     };
                     pass.set_bind_group(1, bind_group, &[]);

@@ -4,7 +4,9 @@ use crate::plugins::render::graph::{
     RenderFlowGraph, RenderPassKind, RenderPassNode, validate_builtin_ui_pass_shape,
 };
 use crate::plugins::render::resource::{ImportedBufferSemantic, ImportedTextureSemantic};
-use crate::plugins::render::{RenderPassId, RenderResourceId, RenderVertexStepMode};
+use crate::plugins::render::{
+    RenderPassId, RenderResourceId, RenderTargetAliasKind, RenderVertexStepMode,
+};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error;
 
@@ -194,6 +196,16 @@ pub enum RenderFlowValidationIssue {
 
     #[error("graphics pass '{pass_label}' declares duplicate vertex buffer slot {slot}")]
     GraphicsPassDuplicateVertexBufferSlot { pass_label: String, slot: u32 },
+
+    #[error(
+        "graphics pass '{pass_label}' declares {count} index buffers; runtime supports at most one"
+    )]
+    GraphicsPassTooManyIndexBuffers { pass_label: String, count: usize },
+
+    #[error(
+        "graphics pass '{pass_label}' declares {count} indirect buffers; runtime supports at most one"
+    )]
+    GraphicsPassTooManyIndirectBuffers { pass_label: String, count: usize },
 
     #[error(
         "graphics pass '{pass_label}' declares vertex buffer slots that must be dense from 0; expected slot {expected}, found {found}"
@@ -674,6 +686,20 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 }),
             }
             validate_graphics_vertex_layouts(pass, issues);
+            if pass.index_buffers.len() > 1 {
+                issues.push(RenderFlowValidationIssue::GraphicsPassTooManyIndexBuffers {
+                    pass_label: pass.label.clone(),
+                    count: pass.index_buffers.len(),
+                });
+            }
+            if pass.indirect_buffers.len() > 1 {
+                issues.push(
+                    RenderFlowValidationIssue::GraphicsPassTooManyIndirectBuffers {
+                        pass_label: pass.label.clone(),
+                        count: pass.indirect_buffers.len(),
+                    },
+                );
+            }
         }
         RenderPassKind::Copy => {
             if pass.reads.len() != 1 || pass.writes.len() != 1 {
@@ -816,7 +842,12 @@ fn validate_pass_resource_usage(
     if let Some(depth_target) = &pass.depth_target
         && let Some(resource) = resources_by_id.get(depth_target)
     {
-        let depth_ok = matches!(resource, RenderResourceDescriptor::DepthTarget(_));
+        let depth_ok = matches!(resource, RenderResourceDescriptor::DepthTarget(_))
+            || matches!(
+                resource,
+                RenderResourceDescriptor::TargetAlias(value)
+                    if value.kind == RenderTargetAliasKind::Depth
+            );
         if !depth_ok {
             issues.push(RenderFlowValidationIssue::InvalidDepthTargetResource {
                 pass_label: pass.label.clone(),
@@ -1074,6 +1105,7 @@ fn vertex_step_mode_name(value: RenderVertexStepMode) -> &'static str {
 fn is_raster_color_output_resource(resource: &RenderResourceDescriptor) -> bool {
     match resource {
         RenderResourceDescriptor::ColorTarget(_) => true,
+        RenderResourceDescriptor::TargetAlias(value) => value.kind == RenderTargetAliasKind::Color,
         RenderResourceDescriptor::ImportedTexture(value) => {
             value.semantic == ImportedTextureSemantic::SurfaceColor
         }
@@ -1109,6 +1141,7 @@ fn is_texture_resource(resource: &RenderResourceDescriptor) -> bool {
             | RenderResourceDescriptor::ColorTarget(_)
             | RenderResourceDescriptor::DepthTarget(_)
             | RenderResourceDescriptor::HistoryTexture(_)
+            | RenderResourceDescriptor::TargetAlias(_)
             | RenderResourceDescriptor::ImportedTexture(_)
     )
 }
@@ -1131,6 +1164,11 @@ fn resource_kind_name(resource: &RenderResourceDescriptor) -> &'static str {
         RenderResourceDescriptor::ColorTarget(_) => "color_target",
         RenderResourceDescriptor::DepthTarget(_) => "depth_target",
         RenderResourceDescriptor::HistoryTexture(_) => "history_texture",
+        RenderResourceDescriptor::TargetAlias(value) => match value.kind {
+            RenderTargetAliasKind::Color => "target_alias(color)",
+            RenderTargetAliasKind::Depth => "target_alias(depth)",
+            RenderTargetAliasKind::Texture => "target_alias(texture)",
+        },
         RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
             ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
             ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",

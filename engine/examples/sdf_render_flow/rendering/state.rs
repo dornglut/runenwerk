@@ -1,4 +1,4 @@
-use engine::plugins::render::GpuUniform;
+use engine::plugins::render::{GpuStorage, GpuUniform};
 
 pub(crate) const DEFAULT_ORBIT_SPEED: f32 = 0.38;
 
@@ -37,6 +37,17 @@ impl SdfViewMode {
             Self::Steps => "steps",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, GpuUniform)]
+pub(crate) struct SdfPrepareParams {
+    pub frame: [u32; 4],
+    pub time: [f32; 4],
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+pub(crate) struct SdfHistoryProbe {
+    pub value: [f32; 4],
 }
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -91,6 +102,18 @@ impl Sdf3dRenderState {
             .rem_euclid(std::f32::consts::TAU);
     }
 
+    pub(crate) fn prepare_params(&self) -> SdfPrepareParams {
+        SdfPrepareParams {
+            frame: [self.view_mode.as_u32(), 0, 0, 0],
+            time: [
+                self.time_seconds,
+                self.orbit_yaw_radians,
+                self.orbit_pitch_radians,
+                self.orbit_distance,
+            ],
+        }
+    }
+
     pub(crate) fn compose_params(&self, surface: (u32, u32)) -> SdfComposeParams {
         let width = surface.0.max(1) as f32;
         let height = surface.1.max(1) as f32;
@@ -141,6 +164,16 @@ mod tests {
         assert_eq!(params.surface[1], 1080.0);
         assert!((params.surface[2] - (1.0 / 1920.0)).abs() < 1.0e-6);
         assert!((params.surface[3] - (1.0 / 1080.0)).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn prepare_params_preserve_view_and_history_seed_data() {
+        let state = Sdf3dRenderState::default();
+        let params = state.prepare_params();
+
+        assert_eq!(params.frame[0], 0);
+        assert_eq!(params.time[0], 0.0);
+        assert_eq!(params.time[3], 5.2);
     }
 
     #[test]

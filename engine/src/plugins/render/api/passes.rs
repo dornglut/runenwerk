@@ -6,7 +6,7 @@ use crate::plugins::render::api::{
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
     GpuParams, RenderDrawDescriptor, RenderPassId, RenderPassKind, RenderPassNode,
-    RenderResourceId, RenderVertexBufferLayout, ShaderHandle,
+    RenderPassViewScope, RenderResourceId, RenderVertexBufferLayout, ShaderHandle,
 };
 
 #[derive(Debug)]
@@ -36,6 +36,16 @@ impl ComputePassBuilder {
         self
     }
 
+    pub fn main_surface_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::MainSurfaceOnly;
+        self
+    }
+
+    pub fn offscreen_products_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::OffscreenProductsOnly;
+        self
+    }
+
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
@@ -61,6 +71,13 @@ impl ComputePassBuilder {
         let id = *handle.id();
         push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.writes, id);
+        self
+    }
+
+    pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.write_textures, id);
         self
     }
 
@@ -134,6 +151,16 @@ impl FullscreenPassBuilder {
         self
     }
 
+    pub fn main_surface_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::MainSurfaceOnly;
+        self
+    }
+
+    pub fn offscreen_products_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::OffscreenProductsOnly;
+        self
+    }
+
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
@@ -192,6 +219,13 @@ impl FullscreenPassBuilder {
         self
     }
 
+    pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.write_textures, id);
+        self
+    }
+
     pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
         let label = label.into();
         let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
@@ -213,6 +247,10 @@ impl FullscreenPassBuilder {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
         push_unique_resource(&mut self.pass.writes, id);
         self
+    }
+
+    pub fn write_target_alias(self, target_alias: impl Into<String>) -> Self {
+        self.write_color_target(target_alias)
     }
 
     pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
@@ -252,6 +290,16 @@ impl GraphicsPassBuilder {
         self
     }
 
+    pub fn main_surface_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::MainSurfaceOnly;
+        self
+    }
+
+    pub fn offscreen_products_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::OffscreenProductsOnly;
+        self
+    }
+
     pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
@@ -318,6 +366,13 @@ impl GraphicsPassBuilder {
         self
     }
 
+    pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
+        let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.write_textures, id);
+        self
+    }
+
     pub fn write_surface_color(mut self) -> Self {
         let id = self.flow.ensure_surface_color_resource();
         push_unique_resource(&mut self.pass.writes, id);
@@ -331,6 +386,10 @@ impl GraphicsPassBuilder {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
         push_unique_resource(&mut self.pass.writes, id);
         self
+    }
+
+    pub fn write_target_alias(self, target_alias: impl Into<String>) -> Self {
+        self.write_color_target(target_alias)
     }
 
     pub fn depth_target(mut self, resource_label: impl Into<String>) -> Self {
@@ -425,6 +484,16 @@ impl CopyPassBuilder {
         Self { flow, pass }
     }
 
+    pub fn main_surface_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::MainSurfaceOnly;
+        self
+    }
+
+    pub fn offscreen_products_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::OffscreenProductsOnly;
+        self
+    }
+
     pub fn source(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
         self.pass.reads.clear();
@@ -460,6 +529,11 @@ impl PresentPassBuilder {
         flow.ensure_surface_color_resource();
         let pass = new_pass(&mut flow, label, RenderPassKind::Present);
         Self { flow, pass }
+    }
+
+    pub fn main_surface_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::MainSurfaceOnly;
+        self
     }
 
     pub fn source(mut self, resource_label: impl Into<String>) -> Self {
@@ -498,6 +572,11 @@ impl BuiltinUiCompositePassBuilder {
         let mut pass = new_pass(&mut flow, label, RenderPassKind::BuiltinUiComposite);
         push_unique_resource(&mut pass.writes, color_output);
         Self { flow, pass }
+    }
+
+    pub fn main_surface_only(mut self) -> Self {
+        self.pass.view_scope = RenderPassViewScope::MainSurfaceOnly;
+        self
     }
 
     pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {

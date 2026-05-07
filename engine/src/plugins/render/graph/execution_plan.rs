@@ -1,11 +1,14 @@
-use super::{CompiledPassDescriptor, RenderPassKind, RenderPassNode, ResourceGraph};
+use super::{
+    CompiledPassDescriptor, RenderPassKind, RenderPassNode, RenderPassViewScope, ResourceGraph,
+};
 use crate::plugins::render::api::ComputeDispatchDescriptor;
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderPassId, RenderResourceDescriptor, RenderResourceId,
-    RenderShaderReference, RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
+    RenderShaderReference, RenderTargetAliasKind, RenderVertexAttribute, RenderVertexBufferLayout,
+    RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeSet;
@@ -90,13 +93,29 @@ pub struct CompiledUiCompositeExecutionPlan {
 pub enum CompiledViewMask {
     #[default]
     AllViews,
+    MainSurfaceOnly,
+    OffscreenProductsOnly,
     Explicit(BTreeSet<String>),
 }
 
 impl CompiledViewMask {
-    pub fn includes(&self, view_id: &str) -> bool {
+    pub fn includes(
+        &self,
+        view_id: &str,
+        view_kind: crate::plugins::render::PreparedViewKind,
+    ) -> bool {
         match self {
             Self::AllViews => true,
+            Self::MainSurfaceOnly => matches!(
+                view_kind,
+                crate::plugins::render::PreparedViewKind::MainSurface
+            ),
+            Self::OffscreenProductsOnly => {
+                matches!(
+                    view_kind,
+                    crate::plugins::render::PreparedViewKind::OffscreenProduct
+                )
+            }
             Self::Explicit(values) => values.contains(view_id),
         }
     }
@@ -186,11 +205,19 @@ pub enum CompiledDispatchPlan {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompiledResourceRef {
     FlowOwned(RenderResourceId),
+    TargetAlias(CompiledTargetAliasRef),
     ImportedBuiltin(CompiledBuiltinImport),
     Imported(RenderResourceId),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompiledTargetAliasRef {
+    pub resource_id: RenderResourceId,
+    pub label: String,
+    pub kind: RenderTargetAliasKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,7 +226,7 @@ pub enum CompiledBuiltinImport {
     SurfaceDepth,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledStorageBinding {
     pub resource: CompiledResourceRef,
     pub access: CompiledStorageAccess,
@@ -325,8 +352,12 @@ fn compile_feature_id(node: &RenderPassNode) -> Option<RenderFeatureId> {
     node.feature_id
 }
 
-fn compile_view_mask(_node: &RenderPassNode) -> CompiledViewMask {
-    CompiledViewMask::AllViews
+fn compile_view_mask(node: &RenderPassNode) -> CompiledViewMask {
+    match node.view_scope {
+        RenderPassViewScope::AllViews => CompiledViewMask::AllViews,
+        RenderPassViewScope::MainSurfaceOnly => CompiledViewMask::MainSurfaceOnly,
+        RenderPassViewScope::OffscreenProductsOnly => CompiledViewMask::OffscreenProductsOnly,
+    }
 }
 
 fn compile_dispatch_plan(node: &RenderPassNode) -> Option<CompiledDispatchPlan> {
@@ -379,7 +410,7 @@ fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> Co
         bind_group
             .entries
             .push(CompiledBindingEntry::StorageBuffer {
-                resource: compiled,
+                resource: compiled.clone(),
                 access,
             });
         storage_order.push(CompiledStorageBinding {
@@ -534,6 +565,13 @@ fn compile_resource_ref(
         .iter()
         .find(|descriptor| descriptor.id() == resource)
     {
+        Some(RenderResourceDescriptor::TargetAlias(value)) => {
+            CompiledResourceRef::TargetAlias(CompiledTargetAliasRef {
+                resource_id: value.id,
+                label: value.label.clone(),
+                kind: value.kind,
+            })
+        }
         Some(RenderResourceDescriptor::ImportedTexture(value)) => match value.semantic {
             ImportedTextureSemantic::SurfaceColor => {
                 CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor)

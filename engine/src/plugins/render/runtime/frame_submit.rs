@@ -73,9 +73,11 @@ pub(crate) fn frame_render_submit_system(
     };
 
     let (target_w, target_h) = prepared_frame
-        .main_view()
-        .map(|value| value.target_size_px)
-        .unwrap_or(prepared_frame.surface.target_size_px);
+        .views
+        .iter()
+        .find(|view| matches!(view.kind, PreparedViewKind::MainSurface))
+        .ok_or_else(|| anyhow!("prepared render frame is missing a main surface view"))?
+        .target_size_px;
 
     if gfx.ctx.surface_config.width != target_w || gfx.ctx.surface_config.height != target_h {
         gfx.resize(target_w, target_h);
@@ -85,11 +87,6 @@ pub(crate) fn frame_render_submit_system(
         .resource::<UiFontAtlasResource>()
         .ok()
         .cloned()
-        .unwrap_or_default();
-    let viewport_surface_bindings = world
-        .resource::<ViewportSurfaceBindingRegistryResource>()
-        .ok()
-        .map(|resource| resource.registry().clone())
         .unwrap_or_default();
     let debug_control = world
         .resource::<RenderDebugControlResource>()
@@ -129,7 +126,7 @@ pub(crate) fn frame_render_submit_system(
             compiled_flows,
             ui_rect_shader,
             &ui_font_atlas,
-            &viewport_surface_bindings,
+            &prepared_frame.viewport_surface_bindings,
             &debug_control,
             &debug_config,
         )

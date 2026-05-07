@@ -14,16 +14,16 @@ use editor_viewport::{
 pub const MAIN_VIEWPORT_ID: ViewportId = ViewportId(1);
 const TOOL_SURFACE_VIEWPORT_ID_OFFSET: u64 = 1_000_000;
 
-pub const PRODUCT_ID_SCENE_COLOR: ExpressionProductId = ExpressionProductId(1);
-pub const PRODUCT_ID_PICKING_IDS: ExpressionProductId = ExpressionProductId(2);
-pub const PRODUCT_ID_OVERLAY: ExpressionProductId = ExpressionProductId(3);
+pub const SCENE_COLOR_PRODUCT_ID: ExpressionProductId = ExpressionProductId(1);
+pub const PICKING_IDS_PRODUCT_ID: ExpressionProductId = ExpressionProductId(2);
+pub const OVERLAY_PRODUCT_ID: ExpressionProductId = ExpressionProductId(3);
 
 pub fn viewport_id_for_tool_surface(tool_surface_id: ToolSurfaceInstanceId) -> ViewportId {
     ViewportId(TOOL_SURFACE_VIEWPORT_ID_OFFSET + tool_surface_id.raw())
 }
 
 pub fn initial_presentation_state(viewport_id: ViewportId) -> ViewportPresentationState {
-    ViewportPresentationState::new(viewport_id, PRODUCT_ID_SCENE_COLOR)
+    ViewportPresentationState::new(viewport_id, SCENE_COLOR_PRODUCT_ID)
 }
 
 pub fn initial_product_descriptors(
@@ -32,7 +32,7 @@ pub fn initial_product_descriptors(
 ) -> Vec<ExpressionProductDescriptor> {
     vec![
         ExpressionProductDescriptor::new(
-            PRODUCT_ID_SCENE_COLOR,
+            SCENE_COLOR_PRODUCT_ID,
             ExpressionProductKind::SceneColor2D,
             dimensions,
             ExpressionFormat::Rgba8Unorm,
@@ -48,7 +48,7 @@ pub fn initial_product_descriptors(
             None,
         ),
         ExpressionProductDescriptor::new(
-            PRODUCT_ID_PICKING_IDS,
+            PICKING_IDS_PRODUCT_ID,
             ExpressionProductKind::PickingIds2D,
             dimensions,
             ExpressionFormat::R32Uint,
@@ -64,7 +64,7 @@ pub fn initial_product_descriptors(
             None,
         ),
         ExpressionProductDescriptor::new(
-            PRODUCT_ID_OVERLAY,
+            OVERLAY_PRODUCT_ID,
             ExpressionProductKind::Overlay2D,
             dimensions,
             ExpressionFormat::Rgba8Unorm,
