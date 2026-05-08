@@ -2,6 +2,7 @@
 //! Purpose: ECS reflection foundation.
 
 pub mod component_registration;
+pub mod enum_info;
 pub mod field_info;
 pub mod primitives;
 pub mod registry;
@@ -13,6 +14,7 @@ pub mod type_info;
 pub mod value;
 
 pub use component_registration::*;
+pub use enum_info::*;
 pub use field_info::*;
 pub use registry::*;
 pub use resource_registration::*;

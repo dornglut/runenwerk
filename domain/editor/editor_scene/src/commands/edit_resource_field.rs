@@ -79,5 +79,11 @@ fn map_edit_error(error: InspectorEditError) -> EditorMutationError {
         InspectorEditError::FloatOutOfRange { .. } => {
             EditorMutationError::inspector_rejected("float out of range")
         }
+        InspectorEditError::ExpectedEnumField => {
+            EditorMutationError::inspector_rejected("expected inspector enum field")
+        }
+        InspectorEditError::InvalidEnumOption { .. } => {
+            EditorMutationError::inspector_rejected("invalid inspector enum option")
+        }
     }
 }

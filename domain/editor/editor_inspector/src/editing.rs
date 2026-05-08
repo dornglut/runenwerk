@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_inspector/src/editing.rs
 //! Purpose: Path-based reflective mutation for ECS-backed inspector targets.
 
-use crate::{EcsInspectorBridge, InspectorPath, InspectorPathSegment};
+use crate::{EcsInspectorBridge, InspectorPath, InspectorPathSegment, InspectorValue};
 use ecs::reflect::ReflectValueMut;
 use editor_core::{ComponentTypeId, EntityId, ResourceTypeId};
 
@@ -11,6 +11,7 @@ pub enum InspectorEditValue {
     Integer(i64),
     Float(f64),
     Text(String),
+    EnumSymbol(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +32,10 @@ pub enum InspectorEditError {
         target_type: &'static str,
         value: f64,
     },
+    ExpectedEnumField,
+    InvalidEnumOption {
+        option: String,
+    },
 }
 
 impl InspectorEditValue {
@@ -40,7 +45,25 @@ impl InspectorEditValue {
             Self::Integer(_) => "integer",
             Self::Float(_) => "float",
             Self::Text(_) => "String",
+            Self::EnumSymbol(_) => "enum",
         }
+    }
+}
+
+pub fn enum_symbol_edit_value_for_field(
+    field_value: &InspectorValue,
+    option: impl Into<String>,
+) -> Result<InspectorEditValue, InspectorEditError> {
+    let option = option.into();
+    match field_value {
+        InspectorValue::Enum { options, .. } => {
+            if options.iter().any(|candidate| candidate == &option) {
+                Ok(InspectorEditValue::EnumSymbol(option))
+            } else {
+                Err(InspectorEditError::InvalidEnumOption { option })
+            }
+        }
+        _ => Err(InspectorEditError::ExpectedEnumField),
     }
 }
 
@@ -236,6 +259,26 @@ fn apply_primitive_edit(
             *slot = next.clone();
             Ok(())
         }
+        InspectorEditValue::EnumSymbol(next) => {
+            let mut enum_mut =
+                current
+                    .enum_mut()
+                    .ok_or_else(|| InspectorEditError::UnsupportedValueType {
+                        actual_type: actual_type.clone(),
+                    })?;
+            if enum_mut.info.variant_named(next).is_none() {
+                return Err(InspectorEditError::InvalidEnumOption {
+                    option: next.clone(),
+                });
+            }
+            if enum_mut.set_unit_variant(next) {
+                Ok(())
+            } else {
+                Err(InspectorEditError::UnsupportedValueType {
+                    actual_type: actual_type.clone(),
+                })
+            }
+        }
     }
 }
 
@@ -255,6 +298,17 @@ mod tests {
         value: Vec2,
         speed: f32,
         label: String,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, ecs::Reflect)]
+    enum TextureFilter {
+        Nearest,
+        Linear,
+    }
+
+    #[derive(Debug, Clone, ecs::Component, ecs::ReflectComponent)]
+    struct SpritePreview {
+        filter: TextureFilter,
     }
 
     #[derive(Debug, Clone, ecs::Resource, ecs::ReflectResource)]
@@ -359,6 +413,70 @@ mod tests {
     }
 
     #[test]
+    fn updates_component_enum_field_by_path() {
+        let mut world = ecs::World::new();
+        world.register_component_type::<SpritePreview>();
+
+        let entity = world.spawn(SpritePreview {
+            filter: TextureFilter::Nearest,
+        });
+
+        let bridge = StaticEcsInspectorBridge::new()
+            .with_entity(EntityId(1), entity)
+            .with_component_type::<SpritePreview>(ComponentTypeId(10));
+
+        let path = InspectorPath::root().child_field("filter");
+
+        set_component_field_value(
+            &mut world,
+            &bridge,
+            EntityId(1),
+            ComponentTypeId(10),
+            &path,
+            InspectorEditValue::EnumSymbol("Linear".to_string()),
+        )
+        .expect("component enum field edit should succeed");
+
+        let preview = world
+            .get::<SpritePreview>(entity)
+            .expect("component should exist");
+        assert_eq!(preview.filter, TextureFilter::Linear);
+    }
+
+    #[test]
+    fn rejects_unknown_component_enum_symbol() {
+        let mut world = ecs::World::new();
+        world.register_component_type::<SpritePreview>();
+
+        let entity = world.spawn(SpritePreview {
+            filter: TextureFilter::Nearest,
+        });
+
+        let bridge = StaticEcsInspectorBridge::new()
+            .with_entity(EntityId(1), entity)
+            .with_component_type::<SpritePreview>(ComponentTypeId(10));
+
+        let path = InspectorPath::root().child_field("filter");
+
+        let error = set_component_field_value(
+            &mut world,
+            &bridge,
+            EntityId(1),
+            ComponentTypeId(10),
+            &path,
+            InspectorEditValue::EnumSymbol("Cubic".to_string()),
+        )
+        .expect_err("unknown enum symbol should be rejected");
+
+        assert_eq!(
+            error,
+            InspectorEditError::InvalidEnumOption {
+                option: "Cubic".to_string()
+            }
+        );
+    }
+
+    #[test]
     fn rejects_invalid_component_path() {
         let mut world = ecs::World::new();
         world.register_component_type::<Position>();
@@ -386,5 +504,36 @@ mod tests {
         .expect_err("invalid path should fail");
 
         assert_eq!(error, InspectorEditError::InvalidPath);
+    }
+
+    #[test]
+    fn validates_enum_symbol_edits_against_field_options() {
+        let field_value = InspectorValue::Enum {
+            current: "Nearest".to_string(),
+            options: vec!["Nearest".to_string(), "Linear".to_string()],
+        };
+
+        let value = enum_symbol_edit_value_for_field(&field_value, "Linear")
+            .expect("known enum option should become an edit value");
+
+        assert_eq!(value, InspectorEditValue::EnumSymbol("Linear".to_string()));
+    }
+
+    #[test]
+    fn rejects_enum_symbol_edits_outside_declared_options() {
+        let field_value = InspectorValue::Enum {
+            current: "Nearest".to_string(),
+            options: vec!["Nearest".to_string(), "Linear".to_string()],
+        };
+
+        let error = enum_symbol_edit_value_for_field(&field_value, "Cubic")
+            .expect_err("unknown enum option should be rejected");
+
+        assert_eq!(
+            error,
+            InspectorEditError::InvalidEnumOption {
+                option: "Cubic".to_string(),
+            }
+        );
     }
 }

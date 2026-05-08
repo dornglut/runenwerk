@@ -1,6 +1,7 @@
 //! File: domain/ecs/src/reflect/type_info.rs
 //! Purpose: Core reflected type metadata.
 
+use crate::reflect::EnumInfo;
 use crate::reflect::ReflectTypeId;
 use crate::reflect::StructInfo;
 
@@ -15,6 +16,7 @@ pub enum ReflectClassification {
 pub enum ReflectShape {
     Opaque,
     Struct(&'static StructInfo),
+    Enum(&'static EnumInfo),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -47,6 +49,15 @@ impl TypeInfo {
         match self.shape {
             ReflectShape::Opaque => None,
             ReflectShape::Struct(info) => Some(info),
+            ReflectShape::Enum(_) => None,
+        }
+    }
+
+    pub fn enum_info(&self) -> Option<&'static EnumInfo> {
+        match self.shape {
+            ReflectShape::Opaque => None,
+            ReflectShape::Struct(_) => None,
+            ReflectShape::Enum(info) => Some(info),
         }
     }
 

@@ -2,7 +2,7 @@
 //! Purpose: Inspector surface command dispatch.
 
 use editor_core::{ComponentTypeId, EditorMutationError};
-use editor_inspector::{InspectorEditValue, InspectorValue};
+use editor_inspector::{InspectorEditValue, InspectorValue, enum_symbol_edit_value_for_field};
 use editor_shell::{
     InspectorSessionMutation, StructuralCommandTarget, ToolSurfaceKind, inspector_field_widget_id,
 };
@@ -94,6 +94,11 @@ pub(crate) fn dispatch_session_mutation(
         InspectorSessionMutation::SetFieldNumber { index, value } => {
             mutate_inspector_surface_session(app, target, |app, state| {
                 commit_inspector_number_field(app, state, index, value)
+            })
+        }
+        InspectorSessionMutation::SetFieldEnum { index, value } => {
+            mutate_inspector_surface_session(app, target, |app, state| {
+                commit_inspector_enum_field(app, state, index, value)
             })
         }
     }
@@ -508,6 +513,29 @@ fn commit_inspector_number_field(
     )
 }
 
+fn commit_inspector_enum_field(
+    app: &mut RunenwerkEditorApp,
+    inspector_state: &mut EditorInspectorUiState,
+    index: usize,
+    value: String,
+) -> Result<(), EditorMutationError> {
+    let (entity, component_type, field) =
+        inspector_component_field_at_index(app, inspector_state, index)?;
+    let edit_value = enum_symbol_edit_value_for_field(&field.value, value).map_err(|_| {
+        EditorMutationError::inspector_rejected(
+            "inspector enum mutation requires a declared enum option",
+        )
+    })?;
+    commit_inspector_component_field_edit(
+        app,
+        inspector_state,
+        entity,
+        component_type,
+        field.path,
+        edit_value,
+    )
+}
+
 fn inspector_component_field_at_index(
     app: &mut RunenwerkEditorApp,
     inspector_state: &EditorInspectorUiState,
@@ -634,8 +662,12 @@ fn parse_inspector_field_text(
             .filter(|value| value.is_finite())
             .map(InspectorEditValue::Float),
         InspectorValue::Text(_) => Some(InspectorEditValue::Text(text.to_string())),
+        InspectorValue::Enum { options, .. } => options
+            .iter()
+            .find(|option| option.as_str() == text.trim())
+            .cloned()
+            .map(InspectorEditValue::EnumSymbol),
         InspectorValue::ReadOnlyText(_)
-        | InspectorValue::Enum { .. }
         | InspectorValue::Group
         | InspectorValue::Unsupported { .. } => None,
     }
@@ -653,8 +685,14 @@ fn editable_value_from_field(
         InspectorValue::Integer(value) => Some(InspectorEditValue::Integer(*value)),
         InspectorValue::Float(value) => Some(InspectorEditValue::Float(*value)),
         InspectorValue::Text(value) => Some(InspectorEditValue::Text(value.clone())),
+        InspectorValue::Enum { current, options } => {
+            if options.iter().any(|option| option == current) {
+                Some(InspectorEditValue::EnumSymbol(current.clone()))
+            } else {
+                None
+            }
+        }
         InspectorValue::ReadOnlyText(_)
-        | InspectorValue::Enum { .. }
         | InspectorValue::Group
         | InspectorValue::Unsupported { .. } => None,
     }
@@ -692,6 +730,9 @@ fn next_shell_edit_value(
             }
             InspectorEditValue::Float(value) => Some(InspectorEditValue::Float(value + 1.0)),
             InspectorEditValue::Text(value) => Some(InspectorEditValue::Text(format!("{value}*"))),
+            InspectorEditValue::EnumSymbol(value) => {
+                next_enum_symbol(field, value).map(InspectorEditValue::EnumSymbol)
+            }
         };
     }
 
@@ -702,11 +743,31 @@ fn next_shell_edit_value(
         }
         InspectorValue::Float(value) => Some(InspectorEditValue::Float(value + 1.0)),
         InspectorValue::Text(value) => Some(InspectorEditValue::Text(format!("{value}*"))),
+        InspectorValue::Enum { current, .. } => {
+            next_enum_symbol(field, current).map(InspectorEditValue::EnumSymbol)
+        }
         InspectorValue::ReadOnlyText(_)
-        | InspectorValue::Enum { .. }
         | InspectorValue::Group
         | InspectorValue::Unsupported { .. } => None,
     }
+}
+
+fn next_enum_symbol(
+    field: &crate::editor_panels::InspectorWidgetField,
+    current: &str,
+) -> Option<String> {
+    let InspectorValue::Enum { options, .. } = &field.value else {
+        return None;
+    };
+    if options.is_empty() {
+        return None;
+    }
+    let current_index = options
+        .iter()
+        .position(|option| option == current)
+        .unwrap_or(options.len().saturating_sub(1));
+    let next_index = (current_index + 1) % options.len();
+    options.get(next_index).cloned()
 }
 
 fn transform_stepper_value(

@@ -375,6 +375,38 @@ fn command_for_select_change(
                 projection_epoch: routing.projection_epoch,
             }
         }
+        Some(RoutedShellAction::DispatchSurfaceLocalAction {
+            provider_id,
+            tool_surface_instance_id,
+            action:
+                SurfaceLocalAction::Inspector(InspectorSurfaceAction::SelectFieldEnum {
+                    index: field_index,
+                    options,
+                }),
+            context,
+        }) => {
+            if routing
+                .widget_structural_context_by_id
+                .get(&widget_id)
+                .copied()
+                != Some(*context)
+            {
+                return ShellCommand::NoOp;
+            }
+            let Some(value) = options.get(index).cloned() else {
+                return ShellCommand::NoOp;
+            };
+            ShellCommand::DispatchSurfaceLocalAction {
+                provider_id: *provider_id,
+                tool_surface_instance_id: *tool_surface_instance_id,
+                target: command_target(*context),
+                action: SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldEnum {
+                    index: *field_index,
+                    value,
+                }),
+                projection_epoch: routing.projection_epoch,
+            }
+        }
         _ => ShellCommand::NoOp,
     }
 }

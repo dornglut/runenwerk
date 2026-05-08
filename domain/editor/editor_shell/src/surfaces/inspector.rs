@@ -28,6 +28,7 @@ pub enum InspectorFieldEditIntent {
     Bool { value: bool },
     Number { value: f64 },
     Text { text: String },
+    EnumSymbol { value: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +41,8 @@ pub enum InspectorSurfaceAction {
     CancelFieldText { index: usize },
     SetFieldBool { index: usize, value: bool },
     SetFieldNumber { index: usize, value: f64 },
+    SelectFieldEnum { index: usize, options: Vec<String> },
+    SetFieldEnum { index: usize, value: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,4 +55,5 @@ pub enum InspectorSessionMutation {
     CancelFieldText { index: usize },
     SetFieldBool { index: usize, value: bool },
     SetFieldNumber { index: usize, value: f64 },
+    SetFieldEnum { index: usize, value: String },
 }

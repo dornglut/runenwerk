@@ -447,6 +447,105 @@ mod tests {
     }
 
     #[test]
+    fn edit_component_field_command_round_trips_enum_symbols() {
+        let mut session = editor_core::EditorSession::new();
+        let mut runtime = MockSceneRuntime::default();
+        let entity = runtime
+            .create_entity(None, "Player")
+            .expect("entity create should succeed");
+        let component_type = ComponentTypeId(10);
+        let path = InspectorPath::root().child_field("filter");
+
+        runtime
+            .write_component_field(
+                entity,
+                component_type,
+                &path,
+                InspectorEditValue::EnumSymbol("Nearest".to_string()),
+            )
+            .expect("seed value should be written");
+
+        let mut ctx = SceneCommandContext::new(&mut session, &mut runtime);
+
+        let mut command = SceneEditorCommand::from_intent(
+            editor_core::CommandId(20),
+            "Edit Component Field",
+            crate::SceneCommandIntent::EditComponentField {
+                entity,
+                component_type,
+                path: path.clone(),
+                value: InspectorEditValue::EnumSymbol("Linear".to_string()),
+            },
+        );
+
+        command.apply(&mut ctx).expect("apply should succeed");
+
+        let edited = ctx
+            .runtime()
+            .read_component_field(entity, component_type, &path)
+            .expect("edited value should exist");
+        assert_eq!(edited, InspectorEditValue::EnumSymbol("Linear".to_string()));
+
+        command.undo(&mut ctx).expect("undo should succeed");
+
+        let restored = ctx
+            .runtime()
+            .read_component_field(entity, component_type, &path)
+            .expect("restored value should exist");
+        assert_eq!(
+            restored,
+            InspectorEditValue::EnumSymbol("Nearest".to_string())
+        );
+    }
+
+    #[test]
+    fn edit_resource_field_command_round_trips_enum_symbols() {
+        let mut session = editor_core::EditorSession::new();
+        let mut runtime = MockSceneRuntime::default();
+        let resource_type = ResourceTypeId(20);
+        let path = InspectorPath::root().child_field("filter");
+
+        runtime
+            .write_resource_field(
+                resource_type,
+                &path,
+                InspectorEditValue::EnumSymbol("Nearest".to_string()),
+            )
+            .expect("seed value should be written");
+
+        let mut ctx = SceneCommandContext::new(&mut session, &mut runtime);
+
+        let mut command = SceneEditorCommand::from_intent(
+            editor_core::CommandId(21),
+            "Edit Resource Field",
+            crate::SceneCommandIntent::EditResourceField {
+                resource_type,
+                path: path.clone(),
+                value: InspectorEditValue::EnumSymbol("Linear".to_string()),
+            },
+        );
+
+        command.apply(&mut ctx).expect("apply should succeed");
+
+        let edited = ctx
+            .runtime()
+            .read_resource_field(resource_type, &path)
+            .expect("edited value should exist");
+        assert_eq!(edited, InspectorEditValue::EnumSymbol("Linear".to_string()));
+
+        command.undo(&mut ctx).expect("undo should succeed");
+
+        let restored = ctx
+            .runtime()
+            .read_resource_field(resource_type, &path)
+            .expect("restored value should exist");
+        assert_eq!(
+            restored,
+            InspectorEditValue::EnumSymbol("Nearest".to_string())
+        );
+    }
+
+    #[test]
     fn rename_entity_command_round_trips() {
         let mut session = editor_core::EditorSession::new();
         let mut runtime = MockSceneRuntime::default();

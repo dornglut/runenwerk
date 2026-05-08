@@ -143,6 +143,10 @@ fn read_edit_value(
                 .value()
                 .as_string()
                 .map(|value| InspectorEditValue::Text(value.to_string())),
+            "enum" => field
+                .value()
+                .as_enum_symbol()
+                .map(|value| InspectorEditValue::EnumSymbol(value.to_string())),
             _ => None,
         };
 
@@ -290,5 +294,20 @@ mod tests {
                 ..
             } if path.segments()[0] == InspectorPathSegment::Field("transform".to_string())
         ));
+    }
+
+    #[test]
+    fn scene_edit_component_field_proposal_supports_enum_symbol_values() {
+        let value = read_edit_value(
+            &SchemaValue::object([SchemaValueObjectField::new(
+                "enum",
+                SchemaValue::enum_symbol("Linear").unwrap(),
+            )
+            .unwrap()])
+            .unwrap(),
+        )
+        .expect("enum proposal value should map to inspector enum edit value");
+
+        assert_eq!(value, InspectorEditValue::EnumSymbol("Linear".to_string()));
     }
 }

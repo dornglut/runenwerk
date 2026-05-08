@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Fields, parse_macro_input};
+use syn::{Data, DataEnum, DataStruct, DeriveInput, Fields, Ident, parse_macro_input};
 
 fn ecs_crate_path() -> proc_macro2::TokenStream {
     match crate_name("ecs") {
@@ -154,12 +154,27 @@ fn expand_reflect(input: TokenStream, classification: proc_macro2::TokenStream) 
     let stable_name = name.to_string();
     let rust_type_name = quote!(::std::any::type_name::<Self>());
 
-    let Data::Struct(data) = input.data else {
-        return TokenStream::from(quote! {
-            compile_error!("Reflect derives currently support only structs");
-        });
-    };
+    match input.data {
+        Data::Struct(data) => {
+            expand_reflect_struct(ecs, name, classification, stable_name, rust_type_name, data)
+        }
+        Data::Enum(data) => {
+            expand_reflect_enum(ecs, name, classification, stable_name, rust_type_name, data)
+        }
+        Data::Union(_) => TokenStream::from(quote! {
+            compile_error!("Reflect derives currently support only structs and unit enums");
+        }),
+    }
+}
 
+fn expand_reflect_struct(
+    ecs: proc_macro2::TokenStream,
+    name: Ident,
+    classification: proc_macro2::TokenStream,
+    stable_name: String,
+    rust_type_name: proc_macro2::TokenStream,
+    data: DataStruct,
+) -> TokenStream {
     let Fields::Named(fields) = data.fields else {
         return TokenStream::from(quote! {
             compile_error!("Reflect derives currently support only named structs");
@@ -237,6 +252,121 @@ fn expand_reflect(input: TokenStream, classification: proc_macro2::TokenStream) 
                         #stable_name,
                         #classification,
                         #ecs::reflect::ReflectShape::Struct(struct_info),
+                    )
+                })
+            }
+        }
+    })
+}
+
+fn expand_reflect_enum(
+    ecs: proc_macro2::TokenStream,
+    name: Ident,
+    classification: proc_macro2::TokenStream,
+    stable_name: String,
+    rust_type_name: proc_macro2::TokenStream,
+    data: DataEnum,
+) -> TokenStream {
+    let mut variant_idents = Vec::new();
+    let mut variant_symbols = Vec::new();
+    for variant in data.variants {
+        if !matches!(variant.fields, Fields::Unit) {
+            return TokenStream::from(quote! {
+                compile_error!("Reflect enum derives currently support only unit/no-payload variants");
+            });
+        }
+        variant_symbols.push(variant.ident.to_string());
+        variant_idents.push(variant.ident);
+    }
+
+    if variant_idents.is_empty() {
+        return TokenStream::from(quote! {
+            compile_error!("Reflect enum derives require at least one unit variant");
+        });
+    }
+
+    let variant_infos = variant_symbols.iter().map(|symbol| {
+        quote! {
+            #ecs::reflect::EnumVariantInfo::new(#symbol, #symbol)
+        }
+    });
+
+    let current_arms = variant_idents
+        .iter()
+        .zip(variant_symbols.iter())
+        .map(|(ident, symbol)| {
+            quote! {
+                #name::#ident => Some(#symbol),
+            }
+        });
+
+    let set_arms = variant_idents
+        .iter()
+        .zip(variant_symbols.iter())
+        .map(|(ident, symbol)| {
+            quote! {
+                #symbol => {
+                    *typed = #name::#ident;
+                    true
+                }
+            }
+        });
+
+    TokenStream::from(quote! {
+        impl #ecs::reflect::Reflect for #name {
+            fn type_info() -> &'static #ecs::reflect::TypeInfo
+            where
+                Self: Sized,
+            {
+                fn __ecs_reflect_current_variant(
+                    owner: &dyn ::std::any::Any
+                ) -> Option<&'static str> {
+                    let typed = owner.downcast_ref::<#name>()?;
+                    match typed {
+                        #(#current_arms)*
+                    }
+                }
+
+                fn __ecs_reflect_set_unit_variant(
+                    owner: &mut dyn ::std::any::Any,
+                    symbol: &str,
+                ) -> bool {
+                    let Some(typed) = owner.downcast_mut::<#name>() else {
+                        return false;
+                    };
+                    match symbol {
+                        #(#set_arms)*
+                        _ => false,
+                    }
+                }
+
+                static TYPE_INFO: ::std::sync::OnceLock<#ecs::reflect::TypeInfo> =
+                    ::std::sync::OnceLock::new();
+                static ENUM_INFO: ::std::sync::OnceLock<#ecs::reflect::EnumInfo> =
+                    ::std::sync::OnceLock::new();
+
+                TYPE_INFO.get_or_init(|| {
+                    let reflect_type_id = #ecs::reflect::allocate_reflect_type_id();
+
+                    let enum_info = ENUM_INFO.get_or_init(|| {
+                        let variants = vec![
+                            #(#variant_infos),*
+                        ];
+                        let leaked_variants: &'static [#ecs::reflect::EnumVariantInfo] =
+                            ::std::boxed::Box::leak(variants.into_boxed_slice());
+                        #ecs::reflect::EnumInfo::new(
+                            leaked_variants,
+                            __ecs_reflect_current_variant,
+                            __ecs_reflect_set_unit_variant,
+                        )
+                    });
+
+                    #ecs::reflect::TypeInfo::new(
+                        reflect_type_id,
+                        #rust_type_name,
+                        #stable_name,
+                        #classification,
+                        #ecs::reflect::ReflectShape::Enum(enum_info),
                     )
                 })
             }

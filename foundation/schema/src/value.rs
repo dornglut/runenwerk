@@ -185,6 +185,13 @@ impl SchemaValue {
         }
     }
 
+    pub fn as_enum_symbol(&self) -> Option<&str> {
+        match &self.kind {
+            SchemaValueKind::EnumSymbol(value) => Some(value.as_str()),
+            _ => None,
+        }
+    }
+
     pub fn as_list(&self) -> Option<&[SchemaValue]> {
         match &self.kind {
             SchemaValueKind::List(values) => Some(values.as_slice()),

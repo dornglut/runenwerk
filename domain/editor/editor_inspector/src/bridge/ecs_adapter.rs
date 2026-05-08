@@ -129,6 +129,9 @@ fn build_reflect_field(
     if let Some(struct_ref) = value.struct_ref() {
         return build_struct_field(stable_name, display_name, path, struct_ref);
     }
+    if let Some(enum_ref) = value.enum_ref() {
+        return build_enum_field(stable_name, display_name, path, enum_ref);
+    }
 
     build_leaf_field(stable_name, display_name, path, value)
 }
@@ -162,6 +165,39 @@ fn build_struct_field(
     }
 
     field
+}
+
+fn build_enum_field(
+    stable_name: String,
+    display_name: String,
+    path: InspectorPath,
+    enum_ref: ecs::reflect::EnumValueRef<'_>,
+) -> InspectorField {
+    let Some(current) = enum_ref.current_symbol() else {
+        return InspectorField::new(
+            stable_name,
+            display_name,
+            path,
+            InspectorValue::Unsupported {
+                type_name: "enum<unreadable>".to_string(),
+            },
+        )
+        .read_only(true);
+    };
+    let options = enum_ref
+        .variants()
+        .iter()
+        .map(|variant| variant.symbol.to_string())
+        .collect::<Vec<_>>();
+    InspectorField::new(
+        stable_name,
+        display_name,
+        path,
+        InspectorValue::Enum {
+            current: current.to_string(),
+            options,
+        },
+    )
 }
 
 fn build_leaf_field(
@@ -225,6 +261,17 @@ mod tests {
         speed: f32,
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, ecs::Reflect)]
+    enum TextureFilter {
+        Nearest,
+        Linear,
+    }
+
+    #[derive(Debug, Clone, ecs::Component, ecs::ReflectComponent)]
+    struct SpritePreview {
+        filter: TextureFilter,
+    }
+
     #[derive(Debug, Clone, ecs::Resource, ecs::ReflectResource)]
     struct CameraSettings {
         zoom: f32,
@@ -286,5 +333,42 @@ mod tests {
         let root = &sections[0].fields[0];
         assert!(matches!(root.value, InspectorValue::Group));
         assert_eq!(root.children.len(), 2);
+    }
+
+    #[test]
+    fn builds_enum_fields_for_reflected_component() {
+        let mut world = ecs::World::new();
+        world.register_component_type::<SpritePreview>();
+
+        let entity = world.spawn(SpritePreview {
+            filter: TextureFilter::Linear,
+        });
+
+        let bridge = StaticEcsInspectorBridge::new()
+            .with_entity(EntityId(1), entity)
+            .with_component_type::<SpritePreview>(ComponentTypeId(10));
+
+        let adapter = EcsInspectorAdapter::new(&world, &bridge);
+
+        let sections = adapter
+            .build_sections(&InspectTarget::Component {
+                entity: EntityId(1),
+                component_type: ComponentTypeId(10),
+            })
+            .expect("component sections should build");
+
+        let root = &sections[0].fields[0];
+        let filter = root
+            .children
+            .iter()
+            .find(|field| field.stable_name == "filter")
+            .expect("filter field should be reflected");
+
+        assert!(matches!(
+            &filter.value,
+            InspectorValue::Enum { current, options }
+                if current == "Linear"
+                    && options == &vec!["Nearest".to_string(), "Linear".to_string()]
+        ));
     }
 }

@@ -20,6 +20,12 @@ struct Position {
     speed: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ecs::Reflect)]
+enum TextureFilter {
+    Nearest,
+    Linear,
+}
+
 #[test]
 fn reflected_named_struct_exposes_fields() {
     let info = register_reflect_type::<Position>();
@@ -75,4 +81,34 @@ fn reflected_value_supports_field_mutation() {
     *speed = 7.0;
 
     assert_eq!(position.speed, 7.0);
+}
+
+#[test]
+fn reflected_unit_enum_exposes_variants_and_current_symbol() {
+    let info = register_reflect_type::<TextureFilter>();
+    let enum_info = info.enum_info().expect("TextureFilter should be an enum");
+
+    assert_eq!(enum_info.variant_count(), 2);
+    assert!(enum_info.variant_named("Nearest").is_some());
+    assert!(enum_info.variant_named("Linear").is_some());
+
+    let filter = TextureFilter::Linear;
+    let reflected = filter.reflect_ref();
+    let enum_ref = reflected
+        .enum_ref()
+        .expect("TextureFilter should be enum-reflectable");
+
+    assert_eq!(enum_ref.current_symbol(), Some("Linear"));
+}
+
+#[test]
+fn reflected_unit_enum_supports_variant_mutation() {
+    let mut filter = TextureFilter::Nearest;
+    let reflected = filter.reflect_mut();
+    let mut enum_mut = reflected
+        .enum_mut()
+        .expect("TextureFilter should be enum-reflectable");
+
+    assert!(enum_mut.set_unit_variant("Linear"));
+    assert_eq!(filter, TextureFilter::Linear);
 }

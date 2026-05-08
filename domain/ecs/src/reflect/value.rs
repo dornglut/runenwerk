@@ -1,7 +1,7 @@
 //! File: domain/ecs/src/reflect/value.rs
 //! Purpose: Dynamic reflected value access.
 
-use crate::reflect::{FieldInfo, Reflect, StructInfo, TypeInfo};
+use crate::reflect::{EnumInfo, EnumVariantInfo, FieldInfo, Reflect, StructInfo, TypeInfo};
 
 #[derive(Clone, Copy)]
 pub struct ReflectValueRef<'a> {
@@ -59,6 +59,13 @@ impl<'a> ReflectValueRef<'a> {
             owner: self.value,
         })
     }
+
+    pub fn enum_ref(&self) -> Option<EnumValueRef<'a>> {
+        self.type_info.enum_info().map(|info| EnumValueRef {
+            info,
+            owner: self.value,
+        })
+    }
 }
 
 impl<'a> ReflectValueMut<'a> {
@@ -98,6 +105,13 @@ impl<'a> ReflectValueMut<'a> {
             owner: self.value,
         })
     }
+
+    pub fn enum_mut(self) -> Option<EnumValueMut<'a>> {
+        self.type_info.enum_info().map(|info| EnumValueMut {
+            info,
+            owner: self.value,
+        })
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -108,6 +122,17 @@ pub struct StructValueRef<'a> {
 
 pub struct StructValueMut<'a> {
     pub info: &'static StructInfo,
+    owner: &'a mut dyn std::any::Any,
+}
+
+#[derive(Clone, Copy)]
+pub struct EnumValueRef<'a> {
+    pub info: &'static EnumInfo,
+    owner: &'a dyn std::any::Any,
+}
+
+pub struct EnumValueMut<'a> {
+    pub info: &'static EnumInfo,
     owner: &'a mut dyn std::any::Any,
 }
 
@@ -123,6 +148,22 @@ impl<'a> core::fmt::Debug for StructValueMut<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("StructValueMut")
             .field("field_count", &self.info.field_count())
+            .finish()
+    }
+}
+
+impl<'a> core::fmt::Debug for EnumValueRef<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EnumValueRef")
+            .field("variant_count", &self.info.variant_count())
+            .finish()
+    }
+}
+
+impl<'a> core::fmt::Debug for EnumValueMut<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EnumValueMut")
+            .field("variant_count", &self.info.variant_count())
             .finish()
     }
 }
@@ -156,5 +197,29 @@ impl<'a> StructValueMut<'a> {
     pub fn field_at_mut(&mut self, index: usize) -> Option<ReflectValueMut<'_>> {
         let field = self.info.field_at(index)?;
         (field.get_mut)(self.owner)
+    }
+}
+
+impl<'a> EnumValueRef<'a> {
+    pub fn variants(&self) -> &'static [EnumVariantInfo] {
+        self.info.variants
+    }
+
+    pub fn current_symbol(&self) -> Option<&'static str> {
+        (self.info.current_variant)(self.owner)
+    }
+}
+
+impl<'a> EnumValueMut<'a> {
+    pub fn variants(&self) -> &'static [EnumVariantInfo] {
+        self.info.variants
+    }
+
+    pub fn current_symbol(&self) -> Option<&'static str> {
+        (self.info.current_variant)(self.owner)
+    }
+
+    pub fn set_unit_variant(&mut self, symbol: &str) -> bool {
+        (self.info.set_unit_variant)(self.owner, symbol)
     }
 }

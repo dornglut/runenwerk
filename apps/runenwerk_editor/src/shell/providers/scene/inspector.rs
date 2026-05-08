@@ -77,7 +77,12 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
                 | InspectorFieldControlKind::Unsupported => Some(SurfaceLocalAction::Inspector(
                     InspectorSurfaceAction::ActivateField { index },
                 )),
-                InspectorFieldControlKind::EnumSelect { .. } => None,
+                InspectorFieldControlKind::EnumSelect { options, .. } => Some(
+                    SurfaceLocalAction::Inspector(InspectorSurfaceAction::SelectFieldEnum {
+                        index,
+                        options: options.clone(),
+                    }),
+                ),
             };
             if let Some(action) = action {
                 routes.insert(
@@ -193,6 +198,20 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
                     value,
                 }),
             ))),
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldEnum {
+                index,
+                value,
+            }) => Ok(Some(surface_session_proposal(
+                request,
+                projection_epoch,
+                SurfaceSessionMutation::Inspector(InspectorSessionMutation::SetFieldEnum {
+                    index,
+                    value,
+                }),
+            ))),
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::SelectFieldEnum { .. }) => {
+                Ok(None)
+            }
             _ => Ok(None),
         }
     }

@@ -56,8 +56,9 @@ pub fn inspector_value_to_schema_value(
             SchemaValue::float(*value).map_err(InspectorSchemaInteropError::InvalidSchemaValue)
         }
         InspectorValue::Text(value) => Ok(SchemaValue::string(value.clone())),
-        InspectorValue::Enum { .. }
-        | InspectorValue::ReadOnlyText(_)
+        InspectorValue::Enum { current, .. } => SchemaValue::enum_symbol(current.clone())
+            .map_err(InspectorSchemaInteropError::InvalidSchemaValue),
+        InspectorValue::ReadOnlyText(_)
         | InspectorValue::Group
         | InspectorValue::Unsupported { .. } => {
             Err(InspectorSchemaInteropError::UnsupportedInspectorValue)
@@ -75,6 +76,8 @@ pub fn inspector_edit_value_to_schema_value(
             SchemaValue::float(*value).map_err(InspectorSchemaInteropError::InvalidSchemaValue)
         }
         InspectorEditValue::Text(value) => Ok(SchemaValue::string(value.clone())),
+        InspectorEditValue::EnumSymbol(value) => SchemaValue::enum_symbol(value.clone())
+            .map_err(InspectorSchemaInteropError::InvalidSchemaValue),
     }
 }
 
@@ -149,6 +152,23 @@ mod tests {
                 .expect("supported inspector edit value should convert");
 
         assert_eq!(value, SchemaValue::string("Player"));
+    }
+
+    #[test]
+    fn enum_inspector_values_convert_to_schema_enum_symbols() {
+        let value = inspector_value_to_schema_value(&InspectorValue::Enum {
+            current: "Linear".to_string(),
+            options: vec!["Nearest".to_string(), "Linear".to_string()],
+        })
+        .expect("enum inspector value should convert to schema enum symbol");
+
+        assert_eq!(value.as_enum_symbol(), Some("Linear"));
+
+        let edit_value =
+            inspector_edit_value_to_schema_value(&InspectorEditValue::EnumSymbol("Nearest".into()))
+                .expect("enum inspector edit value should convert to schema enum symbol");
+
+        assert_eq!(edit_value.as_enum_symbol(), Some("Nearest"));
     }
 
     #[test]
