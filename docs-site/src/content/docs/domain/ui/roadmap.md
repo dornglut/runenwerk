@@ -161,7 +161,7 @@ Non-goals:
 
 Milestone placement:
 
-- the app roadmap inserts this as M3.5 before the promoted M3.6 UI self-authoring workspace and before M4 so new asset/procedural/editor-design workspace work does not add more hard-coded toolbar, menu, workspace, shell chrome, and provider surface structure.
+- the app roadmap inserts this as M3.5 before the promoted M3.6 UI self-authoring workspace and before the integrated M4 UI/editor/asset foundation so new asset/procedural/editor-design workspace work does not add more hard-coded toolbar, menu, workspace, shell chrome, and provider surface structure.
 
 ## Current Now Tasks
 
@@ -169,6 +169,7 @@ Milestone placement:
 - [x] Expose editor-area/type switching with a retained select/dropdown route. Status: implemented and test-covered; tab chrome renders an editor type selector and maps `SelectChanged` to `SwitchPanelToolSurfaceKind`.
 - [x] Add plus/new-tab affordance for tab stacks. Status: implemented and test-covered; tab chrome exposes a plus/new-tab control that allocates panel and tool-surface identities after structural ratification.
 - [x] Expand non-viewport surface maturity (entity-table/query, richer inspector controls) using existing surface contracts. Status: implemented as of 2026-05-08; provider-backed surfaces now use typed surface action/session/domain wrappers, entity-table query workflows cover search/selected-only/hierarchy/component filters plus sorting, and inspector controls render bool/numeric/text/enum/read-only alternatives without moving provider behavior into `ui_definition`.
+- [ ] Complete active UI/editor definition consumption before adding more hard-coded editor surfaces. Status: next/open; active templates and editor bindings already feed the shell frame, but active menu definitions still need toolbar/menu consumption, shortcut definitions still need runtime input dispatch consumption, command bindings must remain route-id-to-known-command mappings, and panel/tool-surface registries must drive future shell creation/switch choices without mutating existing workspace state.
 - [ ] Broaden reusable control adoption in editor surfaces. Status: active/open; controls exist in `domain/ui/*`, but shell surfaces still contain panel-specific composition and some ad hoc row/button patterns where retained tree/table/numeric/toggle/select controls should become the default.
 - [ ] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard coverage exists in `apps/runenwerk_editor/tests/viewport_architecture_guards.rs` and related shell/provider tests.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, toolbar popup binding data, normal shell chrome formation, and common provider surface fixture formation exist. Provider behavior remains outside `ui_definition`.

@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-08
 related:
   - ./ui-definition-formation-foundation-design.md
   - ./editor-ui-workspace-tool-surface-architecture.md
@@ -29,7 +29,8 @@ The required order is:
 1. M1 through M3 editor structural, shell, docking/tab, document/mode, and scene-authoring foundations;
 2. M3.5 UI definition formation framework;
 3. M3.6 UI workspace and self-authoring implementation;
-4. M4+ asset, procedural, gameplay, runtime, overlay, and in-game UI work built on authored UI/style definitions instead of new hard-coded shell/app UI.
+4. Integrated M4 UI/editor live replacement plus asset foundation work, where active menus, shortcuts, command bindings, panel registries, and tool-surface registries are consumed before new asset/import/field-product surfaces expand the editor.
+5. Later procedural, gameplay, runtime, overlay, and in-game UI work built on authored UI/style definitions instead of new hard-coded shell/app UI.
 
 ## Purpose
 
@@ -945,7 +946,7 @@ Add or preserve guards that prevent:
 
 This design is implemented as M3.6 in `docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md`.
 
-M3.6 is not a replacement for M3.5. It consumes the M3.5 definition framework and makes it usable through an editor workspace before M4 asset pipeline work begins.
+M3.6 is not a replacement for M3.5. It consumes the M3.5 definition framework and makes it usable through an editor workspace before the integrated M4 UI/editor/asset foundation expands live definition consumption and introduces asset/import/field-product surfaces.
 
 The later M8 roadmap slot is no longer the first self-authoring implementation. It is reserved for packaging, externalization, and long-lived migration hardening after the main editor feature tracks exist.
 

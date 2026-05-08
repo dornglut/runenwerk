@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-08
 related_designs:
   - ./workspace-field-world-and-simulation-platform-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
@@ -454,15 +454,21 @@ Add tests for:
 
 ## First Implementation Slice
 
-The first implementation slice should land:
+The first implementation slice should land as part of the integrated
+UI/editor/asset foundation. Asset/import/field-product tool surfaces should be
+registered and projected through active editor definition catalogs rather than
+adding another round of hard-coded shell UI.
 
-1. `domain/asset` with ids, SDF/field-first kinds, source descriptors, artifacts, catalog, import settings, import plans, diagnostics, and ratification.
-2. `ProjectFileV2` and V1 migration in `domain/editor/editor_persistence/src/project_file.rs`.
-3. App-owned asset catalog runtime in `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`.
-4. Field-product descriptors and ratification in `domain/world_sdf/src/product.rs` and `domain/world_sdf/src/ratification.rs`.
-5. App-owned field product job execution in `apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs`.
-6. Asset Browser, Import Inspector, Field Product Viewer, and SDF Brush Browser providers.
-7. Scene manifest compatibility adapter backed by the asset catalog.
-8. Blender export job execution using `tools/assets/blender_export.py::main` for configured `.blend` foreign-reference assets, with a missing-tool diagnostic path that preserves the prior valid artifact.
+The slice should land:
+
+1. Active menu, shortcut, command-binding, panel-registry, and tool-surface-registry consumption in the editor shell/app runtime so new asset surfaces can be definition-driven.
+2. `domain/asset` with ids, SDF/field-first kinds, source descriptors, artifacts, catalog, import settings, import plans, diagnostics, and ratification.
+3. `ProjectFileV2` and V1 migration in `domain/editor/editor_persistence/src/project_file.rs`.
+4. App-owned asset catalog runtime in `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`.
+5. Field-product descriptors and ratification in `domain/world_sdf/src/product.rs` and `domain/world_sdf/src/ratification.rs`.
+6. App-owned field product job execution in `apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs`.
+7. Asset Browser, Import Inspector, Field Product Viewer, and SDF Brush Browser providers.
+8. Scene manifest compatibility adapter backed by the asset catalog.
+9. Blender export job execution using `tools/assets/blender_export.py::main` for configured `.blend` foreign-reference assets, with a missing-tool diagnostic path that preserves the prior valid artifact.
 
 This makes the asset pipeline real without forcing every future asset kind to be complete in the first patch.

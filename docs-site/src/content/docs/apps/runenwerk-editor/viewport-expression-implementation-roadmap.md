@@ -73,8 +73,9 @@ workflow follow-up has landed, reusable viewport options now use retained toggle
 controls, and the viewport product catalog exposes descriptor rows for field,
 atlas, volume slice, brickmap debug, and history color products. Products whose
 runtime producers are not implemented are visible but marked unavailable. Product
-maturity now moves to real M4 SDF/field asset producers, field-product formation,
-and concrete history/temporal buffers rather than descriptor plumbing.
+maturity now moves to the integrated UI/editor/asset foundation: active catalog
+consumption, real SDF/field asset producers, field-product formation, and
+concrete history/temporal buffers rather than descriptor plumbing.
 
 ## Final Architecture
 
