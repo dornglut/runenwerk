@@ -134,7 +134,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        FontFaceMetrics, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle, TextWrap,
+        FontFaceMetrics, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle,
+        TextVerticalAlign, TextWrap,
     };
 
     #[derive(Default)]
@@ -201,6 +202,7 @@ mod tests {
             color: [1.0, 1.0, 1.0, 1.0],
             line_height: None,
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         };
@@ -289,6 +291,7 @@ mod tests {
             color: [1.0, 1.0, 1.0, 1.0],
             line_height: Some(10.0),
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         };

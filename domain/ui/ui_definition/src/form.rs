@@ -50,6 +50,7 @@ pub struct UiDefinitionContext {
     pub embed_slots: BTreeMap<UiEmbedSlotId, u16>,
     pub menus: BTreeMap<UiMenuSlotId, Vec<UiCollectionItem>>,
     pub next_widget_id: u64,
+    pub widget_id_scope: Option<WidgetIdScope>,
 }
 
 impl UiDefinitionContext {
@@ -64,7 +65,28 @@ impl UiDefinitionContext {
             embed_slots: BTreeMap::new(),
             menus: BTreeMap::new(),
             next_widget_id: 1_000_000,
+            widget_id_scope: None,
         }
+    }
+
+    pub fn with_widget_id_scope(mut self, scope: WidgetIdScope) -> Self {
+        self.widget_id_scope = Some(scope);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WidgetIdScope {
+    base: u64,
+}
+
+impl WidgetIdScope {
+    pub const fn new(base: u64) -> Self {
+        Self { base }
+    }
+
+    pub fn scoped_widget_id(self, local_id: u64) -> WidgetId {
+        WidgetId(self.base.saturating_add(local_id))
     }
 }
 
@@ -634,7 +656,10 @@ fn assign_widget_id(
     let widget_id = if let Some(widget_id) = context.widget_ids_by_path.get(path).copied() {
         widget_id
     } else {
-        let widget_id = WidgetId(context.next_widget_id);
+        let widget_id = context
+            .widget_id_scope
+            .map(|scope| scope.scoped_widget_id(context.next_widget_id))
+            .unwrap_or(WidgetId(context.next_widget_id));
         context.next_widget_id += 1;
         context.widget_ids_by_path.insert(path.clone(), widget_id);
         widget_id
@@ -993,5 +1018,45 @@ mod tests {
         assert!(formed_paths.contains("root/rows[a]/entry"));
         assert!(formed_paths.contains("root/rows[b]/entry"));
         assert!(!formed_paths.contains("root/rows/rows[a]/entry"));
+    }
+
+    #[test]
+    fn generated_widget_ids_are_scoped_during_formation() {
+        let template = AuthoredUiTemplate {
+            id: "test.scoped".into(),
+            root: UiNodeDefinition::Column {
+                id: "root".into(),
+                children: vec![UiNodeDefinition::Button {
+                    id: "action".into(),
+                    label: UiValueBinding::static_text("Action"),
+                    route: Some(UiRouteSlotRef {
+                        id: "route.action".into(),
+                    }),
+                    availability: None,
+                    selected: None,
+                }],
+            },
+            templates: Vec::new(),
+            menus: Vec::new(),
+        };
+        let normalized = crate::normalize_authored_template(template);
+        let mut first = UiDefinitionContext::new(ThemeTokens::default())
+            .with_widget_id_scope(WidgetIdScope::new(10_000_000));
+        let mut second = UiDefinitionContext::new(ThemeTokens::default())
+            .with_widget_id_scope(WidgetIdScope::new(20_000_000));
+
+        let first_product = form_retained_ui(&normalized, &mut first);
+        let second_product = form_retained_ui(&normalized, &mut second);
+
+        assert!(first_product.diagnostics.is_empty());
+        assert!(second_product.diagnostics.is_empty());
+        assert_eq!(first_product.root.id, WidgetId(11_000_000));
+        assert_eq!(second_product.root.id, WidgetId(21_000_000));
+        assert_ne!(first_product.root.id, second_product.root.id);
+        assert_ne!(
+            first_product.routes_by_widget_id.keys().next(),
+            second_product.routes_by_widget_id.keys().next(),
+            "identical authored surfaces must not collide after scoped formation",
+        );
     }
 }

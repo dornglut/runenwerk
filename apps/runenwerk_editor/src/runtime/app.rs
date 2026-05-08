@@ -17,6 +17,10 @@ pub const ACTION_EDITOR_UNDO: &str = "editor.undo";
 pub const ACTION_EDITOR_REDO: &str = "editor.redo";
 pub const ACTION_EDITOR_TOOL_SELECT: &str = "editor.tool.select";
 pub const ACTION_EDITOR_TOOL_TRANSLATE: &str = "editor.tool.translate";
+pub const ACTION_EDITOR_TOOL_ROTATE: &str = "editor.tool.rotate";
+pub const ACTION_EDITOR_TOOL_SCALE: &str = "editor.tool.scale";
+pub const ACTION_EDITOR_VIEWPORT_FOCUS: &str = "editor.viewport.focus_selected";
+pub const ACTION_EDITOR_VIEWPORT_TOOL_RADIAL: &str = "editor.viewport.tool_radial";
 
 const WINDOW_TITLE: &str = "Runenwerk Editor";
 const EDITOR_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
@@ -42,6 +46,10 @@ fn configure_app(app: &mut App) {
         (ACTION_EDITOR_REDO, KeyCode::KeyY),
         (ACTION_EDITOR_TOOL_SELECT, KeyCode::Digit1),
         (ACTION_EDITOR_TOOL_TRANSLATE, KeyCode::Digit2),
+        (ACTION_EDITOR_TOOL_ROTATE, KeyCode::Digit3),
+        (ACTION_EDITOR_TOOL_SCALE, KeyCode::Digit4),
+        (ACTION_EDITOR_VIEWPORT_FOCUS, KeyCode::KeyF),
+        (ACTION_EDITOR_VIEWPORT_TOOL_RADIAL, KeyCode::Tab),
     ]);
 }
 

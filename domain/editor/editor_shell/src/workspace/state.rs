@@ -25,6 +25,30 @@ pub enum WorkspaceSplitAxis {
     Vertical,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockSplitSide {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+impl DockSplitSide {
+    pub fn axis(self) -> WorkspaceSplitAxis {
+        match self {
+            Self::Left | Self::Right => WorkspaceSplitAxis::Horizontal,
+            Self::Top | Self::Bottom => WorkspaceSplitAxis::Vertical,
+        }
+    }
+
+    pub fn target_is_first_child(self) -> bool {
+        match self {
+            Self::Left | Self::Top => false,
+            Self::Right | Self::Bottom => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SplitHostState {
     pub axis: WorkspaceSplitAxis,
@@ -576,7 +600,56 @@ impl WorkspaceState {
         workspace_id: WorkspaceId,
         allocator: &mut WorkspaceIdentityAllocator,
     ) -> Self {
-        Self::bootstrap_current_layout(workspace_id, allocator)
+        let mut workspace = Self::bootstrap_current_layout(workspace_id, allocator);
+
+        let PanelHostKind::SplitHost(root_split) = workspace
+            .hosts_by_id
+            .get(&workspace.root_host_id)
+            .expect("bootstrap scene layout should have a root host")
+            .kind
+        else {
+            return workspace;
+        };
+        let left_center_right_host = root_split.first_child;
+        let PanelHostKind::SplitHost(scene_left_right) = workspace
+            .hosts_by_id
+            .get(&left_center_right_host)
+            .expect("bootstrap scene layout should have a body split")
+            .kind
+        else {
+            return workspace;
+        };
+        let viewport_host = scene_left_right.first_child;
+        let center_right_host = scene_left_right.second_child;
+        let PanelHostKind::SplitHost(scene_right_sidebar) = workspace
+            .hosts_by_id
+            .get(&center_right_host)
+            .expect("bootstrap scene layout should have a sidebar split")
+            .kind
+        else {
+            return workspace;
+        };
+        let outliner_host = scene_right_sidebar.first_child;
+        let inspector_host = scene_right_sidebar.second_child;
+
+        if let Some(host) = workspace.hosts_by_id.get_mut(&left_center_right_host) {
+            host.kind = PanelHostKind::SplitHost(SplitHostState {
+                axis: WorkspaceSplitAxis::Horizontal,
+                fraction: 0.20,
+                first_child: outliner_host,
+                second_child: center_right_host,
+            });
+        }
+        if let Some(host) = workspace.hosts_by_id.get_mut(&center_right_host) {
+            host.kind = PanelHostKind::SplitHost(SplitHostState {
+                axis: WorkspaceSplitAxis::Horizontal,
+                fraction: 0.76,
+                first_child: viewport_host,
+                second_child: inspector_host,
+            });
+        }
+
+        workspace
     }
 
     pub fn bootstrap_editor_design_layout(

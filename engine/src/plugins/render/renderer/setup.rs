@@ -595,27 +595,16 @@ impl Renderer {
             occlusion_query_set: None,
         });
 
-        let mut layer_orders = std::collections::BTreeSet::<u32>::new();
-        layer_orders.extend(prepared.rect_batches.iter().map(|batch| batch.layer_order));
-        layer_orders.extend(
-            prepared
-                .viewport_embed_batches
-                .iter()
-                .map(|batch| batch.layer_order),
-        );
-        layer_orders.extend(prepared.glyph_batches.iter().map(|batch| batch.layer_order));
-
         let mut viewport_bind_groups =
             std::collections::BTreeMap::<ViewportSurfaceBindingSource, BindGroup>::new();
-        for layer_order in layer_orders {
-            if !prepared.rect_batches.is_empty() {
-                pass.set_pipeline(&rect_pass.pipeline);
-                pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
-                for batch in prepared
-                    .rect_batches
-                    .iter()
-                    .filter(|batch| batch.layer_order == layer_order)
-                {
+        for command in &prepared.draw_plan {
+            match *command {
+                UiPreparedDrawCommand::Rect(index) => {
+                    let Some(batch) = prepared.rect_batches.get(index) else {
+                        continue;
+                    };
+                    pass.set_pipeline(&rect_pass.pipeline);
+                    pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
@@ -625,16 +614,15 @@ impl Renderer {
                     pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
                     pass.draw(0..6, 0..batch.instance_count);
                 }
-            }
-
-            if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
-                pass.set_pipeline(&viewport_embed_pass.pipeline);
-                pass.set_bind_group(0, &viewport_embed_pass.screen_bind_group, &[]);
-                for batch in prepared
-                    .viewport_embed_batches
-                    .iter()
-                    .filter(|batch| batch.layer_order == layer_order)
-                {
+                UiPreparedDrawCommand::ViewportEmbed(index) => {
+                    let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() else {
+                        continue;
+                    };
+                    let Some(batch) = prepared.viewport_embed_batches.get(index) else {
+                        continue;
+                    };
+                    pass.set_pipeline(&viewport_embed_pass.pipeline);
+                    pass.set_bind_group(0, &viewport_embed_pass.screen_bind_group, &[]);
                     let Some(binding) =
                         viewport_surface_bindings.get(batch.viewport_id, batch.slot)
                     else {
@@ -685,16 +673,15 @@ impl Renderer {
                     pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
                     pass.draw(0..6, 0..batch.instance_count);
                 }
-            }
-
-            if let Some(glyph_pass) = self.glyph_pass.as_ref() {
-                pass.set_pipeline(&glyph_pass.pipeline);
-                pass.set_bind_group(0, &glyph_pass.screen_bind_group, &[]);
-                for batch in prepared
-                    .glyph_batches
-                    .iter()
-                    .filter(|batch| batch.layer_order == layer_order)
-                {
+                UiPreparedDrawCommand::Glyph(index) => {
+                    let Some(glyph_pass) = self.glyph_pass.as_ref() else {
+                        continue;
+                    };
+                    let Some(batch) = prepared.glyph_batches.get(index) else {
+                        continue;
+                    };
+                    pass.set_pipeline(&glyph_pass.pipeline);
+                    pass.set_bind_group(0, &glyph_pass.screen_bind_group, &[]);
                     let Some(atlas_gpu) = self.glyph_atlas_gpu.get(&batch.texture_id) else {
                         continue;
                     };

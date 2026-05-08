@@ -249,6 +249,7 @@ impl ResolvedSurfaceFrame {
 pub enum TabStackPopupMenuKind {
     AreaActions,
     SurfaceKinds,
+    CreateSurface,
 }
 
 #[derive(Debug, Clone, PartialEq)]

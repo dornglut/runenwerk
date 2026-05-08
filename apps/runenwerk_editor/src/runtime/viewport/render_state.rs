@@ -42,6 +42,10 @@ pub enum ViewportRenderStateCommand {
         viewport_id: ViewportId,
         scroll_delta: f32,
     },
+    FocusCameraOn {
+        viewport_id: ViewportId,
+        orbit_target: [f32; 3],
+    },
     ResetCamera {
         viewport_id: ViewportId,
     },
@@ -95,6 +99,7 @@ impl ViewportRenderStateResource {
             | ViewportRenderStateCommand::OrbitCamera { viewport_id, .. }
             | ViewportRenderStateCommand::PanCamera { viewport_id, .. }
             | ViewportRenderStateCommand::ZoomCamera { viewport_id, .. }
+            | ViewportRenderStateCommand::FocusCameraOn { viewport_id, .. }
             | ViewportRenderStateCommand::ResetCamera { viewport_id }
             | ViewportRenderStateCommand::SetDebugStage { viewport_id, .. }
             | ViewportRenderStateCommand::SetRootBackgroundOpaque { viewport_id, .. } => {
@@ -116,6 +121,9 @@ impl ViewportRenderStateResource {
             }
             ViewportRenderStateCommand::ZoomCamera { scroll_delta, .. } => {
                 entry.render_state.zoom_camera(scroll_delta);
+            }
+            ViewportRenderStateCommand::FocusCameraOn { orbit_target, .. } => {
+                entry.render_state.focus_camera_on(orbit_target);
             }
             ViewportRenderStateCommand::ResetCamera { .. } => {
                 entry.render_state.reset_camera();

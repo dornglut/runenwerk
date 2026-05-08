@@ -108,6 +108,29 @@ pub enum WorkspaceMutation {
         destination_index: usize,
         activate_panel: bool,
     },
+    MovePanelToNewSplitArea {
+        panel_id: PanelInstanceId,
+        source_tab_stack_id: TabStackId,
+        target_tab_stack_id: TabStackId,
+        split_host_id: PanelHostId,
+        target_child_host_id: PanelHostId,
+        new_child_host_id: PanelHostId,
+        new_tab_stack_id: TabStackId,
+        axis: WorkspaceSplitAxis,
+        target_is_first_child: bool,
+        fraction: f32,
+    },
+    MovePanelToNewHostSplitArea {
+        panel_id: PanelInstanceId,
+        source_tab_stack_id: TabStackId,
+        target_host_id: PanelHostId,
+        split_host_id: PanelHostId,
+        new_child_host_id: PanelHostId,
+        new_tab_stack_id: TabStackId,
+        axis: WorkspaceSplitAxis,
+        target_is_first_child: bool,
+        fraction: f32,
+    },
     MovePanelToNewFloatingHost {
         panel_id: PanelInstanceId,
         source_tab_stack_id: TabStackId,
@@ -131,6 +154,25 @@ pub fn reduce_workspace(
 ) -> Result<WorkspaceState, WorkspaceStateError> {
     let mut next = state.clone();
     apply_mutation(&mut next, op)?;
+    next.validate_integrity()?;
+    Ok(next)
+}
+
+pub fn compact_empty_tab_stack_areas(
+    state: &WorkspaceState,
+) -> Result<WorkspaceState, WorkspaceStateError> {
+    let mut next = state.clone();
+    loop {
+        let empty_stack_id = next
+            .tab_stacks_by_id
+            .values()
+            .find(|stack| stack.ordered_panels.is_empty() && !is_root_tab_stack(&next, stack.id))
+            .map(|stack| stack.id);
+        let Some(tab_stack_id) = empty_stack_id else {
+            break;
+        };
+        cleanup_empty_tab_stack_area(&mut next, tab_stack_id)?;
+    }
     next.validate_integrity()?;
     Ok(next)
 }
@@ -244,7 +286,7 @@ fn apply_mutation(
         }
         WorkspaceMutation::ApplySavedLayoutPreset { workspace_state } => {
             workspace_state.validate_integrity()?;
-            *state = *workspace_state;
+            *state = compact_empty_tab_stack_areas(&workspace_state)?;
         }
         WorkspaceMutation::AttachToolSurfaceToPanel {
             panel_id,
@@ -464,6 +506,56 @@ fn apply_mutation(
                 activate_panel,
             )?;
         }
+        WorkspaceMutation::MovePanelToNewSplitArea {
+            panel_id,
+            source_tab_stack_id,
+            target_tab_stack_id,
+            split_host_id,
+            target_child_host_id,
+            new_child_host_id,
+            new_tab_stack_id,
+            axis,
+            target_is_first_child,
+            fraction,
+        } => {
+            move_panel_to_new_split_area(
+                state,
+                panel_id,
+                source_tab_stack_id,
+                target_tab_stack_id,
+                split_host_id,
+                target_child_host_id,
+                new_child_host_id,
+                new_tab_stack_id,
+                axis,
+                target_is_first_child,
+                fraction,
+            )?;
+        }
+        WorkspaceMutation::MovePanelToNewHostSplitArea {
+            panel_id,
+            source_tab_stack_id,
+            target_host_id,
+            split_host_id,
+            new_child_host_id,
+            new_tab_stack_id,
+            axis,
+            target_is_first_child,
+            fraction,
+        } => {
+            move_panel_to_new_host_split_area(
+                state,
+                panel_id,
+                source_tab_stack_id,
+                target_host_id,
+                split_host_id,
+                new_child_host_id,
+                new_tab_stack_id,
+                axis,
+                target_is_first_child,
+                fraction,
+            )?;
+        }
         WorkspaceMutation::MovePanelToNewFloatingHost {
             panel_id,
             source_tab_stack_id,
@@ -600,7 +692,7 @@ fn close_panel_tab(
     };
     let _ = removed_index;
     remove_panel_and_surface(state, panel_id)?;
-    cleanup_empty_floating_stack(state, tab_stack_id);
+    cleanup_empty_tab_stack_area(state, tab_stack_id)?;
     Ok(())
 }
 
@@ -932,6 +1024,20 @@ fn floating_host_for_tab_stack(
     })
 }
 
+fn is_root_tab_stack(state: &WorkspaceState, tab_stack_id: TabStackId) -> bool {
+    state
+        .hosts_by_id
+        .get(&state.root_host_id)
+        .is_some_and(|host| {
+            matches!(
+                host.kind,
+                PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: root_tab_stack_id,
+                }) if root_tab_stack_id == tab_stack_id
+            )
+        })
+}
+
 fn split_parent_and_sibling_for_host(
     state: &WorkspaceState,
     host_id: PanelHostId,
@@ -1074,7 +1180,249 @@ fn move_panel_between_tab_stacks(
         }
     }
 
-    cleanup_empty_floating_stack(state, source_tab_stack_id);
+    cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "structural split move carries explicit ids from the workspace allocator"
+)]
+fn move_panel_to_new_split_area(
+    state: &mut WorkspaceState,
+    panel_id: PanelInstanceId,
+    source_tab_stack_id: TabStackId,
+    target_tab_stack_id: TabStackId,
+    split_host_id: PanelHostId,
+    target_child_host_id: PanelHostId,
+    new_child_host_id: PanelHostId,
+    new_tab_stack_id: TabStackId,
+    axis: WorkspaceSplitAxis,
+    target_is_first_child: bool,
+    fraction: f32,
+) -> Result<(), WorkspaceStateError> {
+    if !(fraction > 0.0 && fraction < 1.0 && fraction.is_finite()) {
+        return Err(WorkspaceStateError::InvalidSplitFraction {
+            host_id: split_host_id,
+            fraction,
+        });
+    }
+    if state.hosts_by_id.contains_key(&split_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(split_host_id));
+    }
+    if state.hosts_by_id.contains_key(&target_child_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(target_child_host_id));
+    }
+    if state.hosts_by_id.contains_key(&new_child_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(new_child_host_id));
+    }
+    if state.tab_stacks_by_id.contains_key(&new_tab_stack_id) {
+        return Err(WorkspaceStateError::DuplicateTabStackId(new_tab_stack_id));
+    }
+    if source_tab_stack_id == target_tab_stack_id {
+        let source = state
+            .tab_stacks_by_id
+            .get(&source_tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
+        if source.ordered_panels.len() <= 1 {
+            return Err(WorkspaceStateError::ProjectionShapeMismatch(
+                "cannot split the only tab from its own area",
+            ));
+        }
+    }
+
+    {
+        let source = state
+            .tab_stacks_by_id
+            .get_mut(&source_tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
+        let source_index = source
+            .ordered_panels
+            .iter()
+            .position(|candidate| *candidate == panel_id)
+            .ok_or(WorkspaceStateError::PanelNotInTabStack {
+                tab_stack_id: source_tab_stack_id,
+                panel_id,
+            })?;
+        source.ordered_panels.remove(source_index);
+        if source.active_panel == Some(panel_id) {
+            source.active_panel = source
+                .ordered_panels
+                .get(source_index)
+                .or_else(|| {
+                    source_index
+                        .checked_sub(1)
+                        .and_then(|previous| source.ordered_panels.get(previous))
+                })
+                .copied();
+        }
+    }
+
+    if source_tab_stack_id != target_tab_stack_id {
+        cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
+    }
+
+    let target_host_id = tab_stack_host_id(state, target_tab_stack_id)?;
+    replace_host_reference(state, target_host_id, split_host_id)?;
+    state.hosts_by_id.remove(&target_host_id);
+
+    let (first_child, second_child) = if target_is_first_child {
+        (target_child_host_id, new_child_host_id)
+    } else {
+        (new_child_host_id, target_child_host_id)
+    };
+    state.hosts_by_id.insert(
+        split_host_id,
+        PanelHostNode {
+            id: split_host_id,
+            kind: PanelHostKind::SplitHost(SplitHostState {
+                axis,
+                fraction,
+                first_child,
+                second_child,
+            }),
+        },
+    );
+    state.hosts_by_id.insert(
+        target_child_host_id,
+        PanelHostNode {
+            id: target_child_host_id,
+            kind: PanelHostKind::TabStackHost(TabStackHostState {
+                tab_stack_id: target_tab_stack_id,
+            }),
+        },
+    );
+    state.hosts_by_id.insert(
+        new_child_host_id,
+        PanelHostNode {
+            id: new_child_host_id,
+            kind: PanelHostKind::TabStackHost(TabStackHostState {
+                tab_stack_id: new_tab_stack_id,
+            }),
+        },
+    );
+    state.tab_stacks_by_id.insert(
+        new_tab_stack_id,
+        TabStackState {
+            id: new_tab_stack_id,
+            ordered_panels: vec![panel_id],
+            active_panel: Some(panel_id),
+            locked_tool_surface_kind: None,
+        },
+    );
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "host split move carries explicit ids from the workspace allocator"
+)]
+fn move_panel_to_new_host_split_area(
+    state: &mut WorkspaceState,
+    panel_id: PanelInstanceId,
+    source_tab_stack_id: TabStackId,
+    target_host_id: PanelHostId,
+    split_host_id: PanelHostId,
+    new_child_host_id: PanelHostId,
+    new_tab_stack_id: TabStackId,
+    axis: WorkspaceSplitAxis,
+    target_is_first_child: bool,
+    fraction: f32,
+) -> Result<(), WorkspaceStateError> {
+    if !(fraction > 0.0 && fraction < 1.0 && fraction.is_finite()) {
+        return Err(WorkspaceStateError::InvalidSplitFraction {
+            host_id: split_host_id,
+            fraction,
+        });
+    }
+    if state.hosts_by_id.contains_key(&split_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(split_host_id));
+    }
+    if state.hosts_by_id.contains_key(&new_child_host_id) {
+        return Err(WorkspaceStateError::DuplicateHostId(new_child_host_id));
+    }
+    if state.tab_stacks_by_id.contains_key(&new_tab_stack_id) {
+        return Err(WorkspaceStateError::DuplicateTabStackId(new_tab_stack_id));
+    }
+    if !state.hosts_by_id.contains_key(&target_host_id) {
+        return Err(WorkspaceStateError::MissingHost(target_host_id));
+    }
+    if tab_stack_host_id(state, source_tab_stack_id)? == target_host_id {
+        let source = state
+            .tab_stacks_by_id
+            .get(&source_tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
+        if source.ordered_panels.len() <= 1 {
+            return Err(WorkspaceStateError::ProjectionShapeMismatch(
+                "cannot split the only tab from its own host",
+            ));
+        }
+    }
+
+    {
+        let source = state
+            .tab_stacks_by_id
+            .get_mut(&source_tab_stack_id)
+            .ok_or(WorkspaceStateError::MissingTabStack(source_tab_stack_id))?;
+        let source_index = source
+            .ordered_panels
+            .iter()
+            .position(|candidate| *candidate == panel_id)
+            .ok_or(WorkspaceStateError::PanelNotInTabStack {
+                tab_stack_id: source_tab_stack_id,
+                panel_id,
+            })?;
+        source.ordered_panels.remove(source_index);
+        if source.active_panel == Some(panel_id) {
+            source.active_panel = source
+                .ordered_panels
+                .get(source_index)
+                .or_else(|| {
+                    source_index
+                        .checked_sub(1)
+                        .and_then(|previous| source.ordered_panels.get(previous))
+                })
+                .copied();
+        }
+    }
+
+    replace_host_reference(state, target_host_id, split_host_id)?;
+    let (first_child, second_child) = if target_is_first_child {
+        (target_host_id, new_child_host_id)
+    } else {
+        (new_child_host_id, target_host_id)
+    };
+    state.hosts_by_id.insert(
+        split_host_id,
+        PanelHostNode {
+            id: split_host_id,
+            kind: PanelHostKind::SplitHost(SplitHostState {
+                axis,
+                fraction,
+                first_child,
+                second_child,
+            }),
+        },
+    );
+    state.hosts_by_id.insert(
+        new_child_host_id,
+        PanelHostNode {
+            id: new_child_host_id,
+            kind: PanelHostKind::TabStackHost(TabStackHostState {
+                tab_stack_id: new_tab_stack_id,
+            }),
+        },
+    );
+    state.tab_stacks_by_id.insert(
+        new_tab_stack_id,
+        TabStackState {
+            id: new_tab_stack_id,
+            ordered_panels: vec![panel_id],
+            active_panel: Some(panel_id),
+            locked_tool_surface_kind: None,
+        },
+    );
+    cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
     Ok(())
 }
 
@@ -1139,7 +1487,7 @@ fn move_panel_to_new_floating_host(
             }),
         },
     );
-    cleanup_empty_floating_stack(state, source_tab_stack_id);
+    cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
     Ok(())
 }
 
@@ -1167,35 +1515,30 @@ fn set_floating_host_bounds(
     Ok(())
 }
 
-fn cleanup_empty_floating_stack(state: &mut WorkspaceState, tab_stack_id: TabStackId) {
+fn cleanup_empty_tab_stack_area(
+    state: &mut WorkspaceState,
+    tab_stack_id: TabStackId,
+) -> Result<(), WorkspaceStateError> {
     let is_empty = state
         .tab_stacks_by_id
         .get(&tab_stack_id)
         .map(|stack| stack.ordered_panels.is_empty())
         .unwrap_or(false);
     if !is_empty {
-        return;
+        return Ok(());
     }
 
-    let mut hosted_by_floating = None;
-    for host in state.hosts_by_id.values() {
-        if let PanelHostKind::FloatingHostPlaceholder(placeholder) = host.kind
-            && placeholder.tab_stack_id == Some(tab_stack_id)
+    if let Some(host_id) = floating_host_for_tab_stack(state, tab_stack_id) {
+        if let Some(host) = state.hosts_by_id.get_mut(&host_id)
+            && let PanelHostKind::FloatingHostPlaceholder(placeholder) = &mut host.kind
         {
-            hosted_by_floating = Some(host.id);
-            break;
+            placeholder.tab_stack_id = None;
         }
+        state.tab_stacks_by_id.remove(&tab_stack_id);
+        return Ok(());
     }
-    let Some(host_id) = hosted_by_floating else {
-        return;
-    };
 
-    if let Some(host) = state.hosts_by_id.get_mut(&host_id)
-        && let PanelHostKind::FloatingHostPlaceholder(placeholder) = &mut host.kind
-    {
-        placeholder.tab_stack_id = None;
-    }
-    let _ = state.tab_stacks_by_id.remove(&tab_stack_id);
+    close_tab_stack_area(state, tab_stack_id)
 }
 
 #[cfg(test)]
@@ -1239,6 +1582,66 @@ mod tests {
             })
             .expect("tab stack for panel kind should exist")
             .id
+    }
+
+    #[test]
+    fn compaction_collapses_persisted_empty_docked_tab_stack_areas() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let split_host_id = allocator.allocate_panel_host_id();
+        let first_child_host_id = allocator.allocate_panel_host_id();
+        let second_child_host_id = allocator.allocate_panel_host_id();
+        let new_tab_stack_id = allocator.allocate_tab_stack_id();
+        let new_panel_id = allocator.allocate_panel_instance_id();
+        let new_surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let split = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::SplitTabStackArea {
+                tab_stack_id: viewport_stack,
+                axis: WorkspaceSplitAxis::Vertical,
+                split_host_id,
+                first_child_host_id,
+                second_child_host_id,
+                new_tab_stack_id,
+                new_panel_id,
+                new_panel_kind: PanelKind::Console,
+                new_tool_surface_id: new_surface_id,
+                new_tool_surface_kind: ToolSurfaceKind::Console,
+                fraction: 0.72,
+            },
+        )
+        .expect("split should create a valid docked area");
+
+        let mut persisted_like = split.clone();
+        {
+            let stack = persisted_like
+                .tab_stacks_by_id
+                .get_mut(&new_tab_stack_id)
+                .expect("new tab stack should exist");
+            stack.ordered_panels.clear();
+            stack.active_panel = None;
+        }
+        persisted_like.panels_by_id.remove(&new_panel_id);
+        persisted_like.tool_surfaces_by_id.remove(&new_surface_id);
+        persisted_like
+            .validate_integrity()
+            .expect("current integrity rules allow persisted empty docked stacks");
+
+        let compacted = compact_empty_tab_stack_areas(&persisted_like)
+            .expect("empty docked stack should compact");
+
+        assert!(compacted.tab_stack(new_tab_stack_id).is_none());
+        assert!(compacted.host(split_host_id).is_none());
+        assert!(compacted.host(second_child_host_id).is_none());
+        assert!(
+            compacted
+                .tab_stacks()
+                .all(|stack| !stack.ordered_panels.is_empty()
+                    || is_root_tab_stack(&compacted, stack.id)),
+            "compaction should leave no non-root empty tab-stack hosts",
+        );
     }
 
     #[test]
@@ -1509,11 +1912,8 @@ mod tests {
             viewport_surface
         );
         assert!(
-            !moved
-                .tab_stack(viewport_stack)
-                .expect("source stack should still exist")
-                .ordered_panels
-                .contains(&viewport_panel)
+            moved.tab_stack(viewport_stack).is_none(),
+            "moving the only tab out of a docked stack should remove the empty area",
         );
     }
 

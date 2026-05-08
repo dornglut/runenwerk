@@ -10,10 +10,11 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
 use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 use crate::persistence::{
-    default_workspace_layout_path_for_profile, legacy_workspace_layout_path_for_scene,
-    load_scene_file_into_runtime_classified, read_retained_change_log, read_workspace_layout,
+    WorkspaceLayoutReadResult, default_workspace_layout_path_for_profile,
+    legacy_workspace_layout_path_for_scene, load_scene_file_into_runtime_classified,
+    read_retained_change_log, read_workspace_layout_with_metadata,
     retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
-    write_workspace_layout,
+    write_workspace_layout_for_profile,
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -77,24 +78,36 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 Some(SELECT_TOOL_ID),
                 editor_core::ChangeOrigin::EditorShell,
             );
+            app.surface_sessions_mut()
+                .close_all_viewport_tool_radial_menus();
+            app.surface_sessions_mut().close_all_viewport_tools_menus();
         }
         ShellCommand::ActivateTranslateTool => {
             app.runtime_mut().set_active_tool_with_origin(
                 Some(TRANSLATE_TOOL_ID),
                 editor_core::ChangeOrigin::EditorShell,
             );
+            app.surface_sessions_mut()
+                .close_all_viewport_tool_radial_menus();
+            app.surface_sessions_mut().close_all_viewport_tools_menus();
         }
         ShellCommand::ActivateRotateTool => {
             app.runtime_mut().set_active_tool_with_origin(
                 Some(ROTATE_TOOL_ID),
                 editor_core::ChangeOrigin::EditorShell,
             );
+            app.surface_sessions_mut()
+                .close_all_viewport_tool_radial_menus();
+            app.surface_sessions_mut().close_all_viewport_tools_menus();
         }
         ShellCommand::ActivateScaleTool => {
             app.runtime_mut().set_active_tool_with_origin(
                 Some(SCALE_TOOL_ID),
                 editor_core::ChangeOrigin::EditorShell,
             );
+            app.surface_sessions_mut()
+                .close_all_viewport_tool_radial_menus();
+            app.surface_sessions_mut().close_all_viewport_tools_menus();
         }
         ShellCommand::ToggleToolbarMenu { menu } => {
             let shell_state =
@@ -133,6 +146,22 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ))?;
             shell_state.toggle_tab_stack_popup_menu(
                 TabStackPopupMenuKind::SurfaceKinds,
+                tab_stack_id,
+                anchor_widget_id,
+            );
+        }
+        ShellCommand::ToggleTabStackCreateSurfaceMenu {
+            tab_stack_id,
+            anchor_widget_id,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for tab stack create-surface menu command",
+                    ))?;
+            shell_state.toggle_tab_stack_popup_menu(
+                TabStackPopupMenuKind::CreateSurface,
                 tab_stack_id,
                 anchor_widget_id,
             );
@@ -326,7 +355,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
-            shell_state.close_tab_stack_action_menu();
+            shell_state.close_tab_stack_popup_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let panel_id = allocator.allocate_panel_instance_id();
@@ -409,7 +438,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
-            shell_state.close_tab_stack_action_menu();
+            shell_state.close_tab_stack_popup_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let split_host_id = allocator.allocate_panel_host_id();
@@ -450,7 +479,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
-            shell_state.close_tab_stack_action_menu();
+            shell_state.close_tab_stack_popup_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let new_panel_id = allocator.allocate_panel_instance_id();
@@ -479,7 +508,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
-            shell_state.close_tab_stack_action_menu();
+            shell_state.close_tab_stack_popup_menu();
             shell_state
                 .apply_workspace_mutation(WorkspaceMutation::CloseTabStackArea { tab_stack_id })
                 .map_err(|_| {
@@ -498,7 +527,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
-            shell_state.close_tab_stack_action_menu();
+            shell_state.close_tab_stack_popup_menu();
             shell_state
                 .apply_workspace_mutation_with_allocations(|allocator| {
                     let panel_id = allocator.allocate_panel_instance_id();
@@ -529,7 +558,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for workspace command",
                     ))?;
-            shell_state.close_tab_stack_action_menu();
+            shell_state.close_tab_stack_popup_menu();
             shell_state
                 .apply_workspace_mutation(WorkspaceMutation::LockTabStackAreaType {
                     tab_stack_id,
@@ -885,6 +914,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ToggleToolbarMenu { .. } => "ToggleToolbarMenu",
         ShellCommand::ToggleTabStackActionMenu { .. } => "ToggleTabStackActionMenu",
         ShellCommand::ToggleTabStackSurfaceMenu { .. } => "ToggleTabStackSurfaceMenu",
+        ShellCommand::ToggleTabStackCreateSurfaceMenu { .. } => "ToggleTabStackCreateSurfaceMenu",
         ShellCommand::RunToolbarCommand { .. } => "RunToolbarCommand",
         ShellCommand::SwitchWorkspaceProfile { .. } => "SwitchWorkspaceProfile",
         ShellCommand::CloseWorkspaceProfile { .. } => "CloseWorkspaceProfile",
@@ -956,6 +986,74 @@ fn apply_tab_drop(
             destination_index: insert_index,
             activate_panel: true,
         }),
+        TabDropDestination::SplitIntoArea {
+            target_tab_stack_id,
+            side,
+        } => shell_state.apply_workspace_mutation_with_allocations(|allocator| {
+            let split_host_id = allocator.allocate_panel_host_id();
+            let target_child_host_id = allocator.allocate_panel_host_id();
+            let new_child_host_id = allocator.allocate_panel_host_id();
+            let new_tab_stack_id = allocator.allocate_tab_stack_id();
+            (
+                WorkspaceMutation::MovePanelToNewSplitArea {
+                    panel_id: panel_instance_id,
+                    source_tab_stack_id,
+                    target_tab_stack_id,
+                    split_host_id,
+                    target_child_host_id,
+                    new_child_host_id,
+                    new_tab_stack_id,
+                    axis: side.axis(),
+                    target_is_first_child: side.target_is_first_child(),
+                    fraction: 0.5,
+                },
+                (),
+            )
+        }),
+        TabDropDestination::SplitIntoHost {
+            target_host_id,
+            side,
+        } => shell_state.apply_workspace_mutation_with_allocations(|allocator| {
+            let split_host_id = allocator.allocate_panel_host_id();
+            let new_child_host_id = allocator.allocate_panel_host_id();
+            let new_tab_stack_id = allocator.allocate_tab_stack_id();
+            (
+                WorkspaceMutation::MovePanelToNewHostSplitArea {
+                    panel_id: panel_instance_id,
+                    source_tab_stack_id,
+                    target_host_id,
+                    split_host_id,
+                    new_child_host_id,
+                    new_tab_stack_id,
+                    axis: side.axis(),
+                    target_is_first_child: side.target_is_first_child(),
+                    fraction: 0.5,
+                },
+                (),
+            )
+        }),
+        TabDropDestination::SplitIntoRoot { side } => {
+            let target_host_id = shell_state.workspace_state().root_host_id();
+            shell_state.apply_workspace_mutation_with_allocations(|allocator| {
+                let split_host_id = allocator.allocate_panel_host_id();
+                let new_child_host_id = allocator.allocate_panel_host_id();
+                let new_tab_stack_id = allocator.allocate_tab_stack_id();
+                (
+                    WorkspaceMutation::MovePanelToNewHostSplitArea {
+                        panel_id: panel_instance_id,
+                        source_tab_stack_id,
+                        target_host_id,
+                        split_host_id,
+                        new_child_host_id,
+                        new_tab_stack_id,
+                        axis: side.axis(),
+                        target_is_first_child: side.target_is_first_child(),
+                        fraction: 0.5,
+                    },
+                    (),
+                )
+            })
+        }
         TabDropDestination::NewFloatingHost => {
             let bounds = default_floating_host_bounds(shell_state);
             shell_state.apply_workspace_mutation_with_allocations(|allocator| {
@@ -1125,15 +1223,15 @@ fn load_workspace_profile_layout(
         ))?;
     let workspace_layout_path = default_workspace_layout_path_for_profile(profile_id);
     let workspace_state = if workspace_layout_path.exists() {
-        let saved_workspace_state =
-            read_workspace_layout(&workspace_layout_path).map_err(|_| {
+        let saved_workspace =
+            read_workspace_layout_with_metadata(&workspace_layout_path).map_err(|_| {
                 EditorMutationError::runtime_rejected("failed to load workspace layout")
             })?;
-        if workspace_layout_matches_profile(&saved_workspace_state, profile) {
-            saved_workspace_state
+        if workspace_layout_matches_profile(&saved_workspace, profile) {
+            saved_workspace.workspace_state
         } else {
             app.append_console_line(format!(
-                "[workspace] ignored incompatible saved {} workspace layout",
+                "[workspace] ignored stale/incompatible saved {} workspace layout; rebuilt default",
                 profile.label
             ));
             let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
@@ -1153,14 +1251,31 @@ fn load_workspace_profile_layout(
 }
 
 fn workspace_layout_matches_profile(
-    workspace_state: &editor_shell::WorkspaceState,
+    saved_workspace: &WorkspaceLayoutReadResult,
     profile: &editor_shell::WorkspaceProfile,
 ) -> bool {
-    profile.default_tool_surfaces.iter().all(|surface_kind| {
-        workspace_state
-            .tool_surfaces()
-            .any(|surface| surface.tool_surface_kind == *surface_kind)
-    })
+    if saved_workspace
+        .workspace_profile_id
+        .is_some_and(|profile_id| profile_id != profile.id)
+    {
+        return false;
+    }
+    if !profile.required_tool_surfaces_are_present(&saved_workspace.workspace_state) {
+        return false;
+    }
+
+    match (
+        saved_workspace.layout_template.as_deref(),
+        saved_workspace.layout_template_version,
+    ) {
+        (Some(template), Some(version)) => {
+            template == profile.default_layout_template.contract_id()
+                && version == profile.default_layout_template.contract_version()
+        }
+        _ => profile
+            .default_layout_template
+            .default_graph_matches(&saved_workspace.workspace_state),
+    }
 }
 
 fn save_workspace_layout_for_active_profile(
@@ -1174,8 +1289,12 @@ fn save_workspace_layout_for_active_profile(
             EditorMutationError::runtime_rejected("failed to create workspace layout folder")
         })?;
     }
-    write_workspace_layout(&workspace_layout_path, shell_state.workspace_state())
-        .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
+    write_workspace_layout_for_profile(
+        &workspace_layout_path,
+        shell_state.workspace_state(),
+        shell_state.active_workspace_profile_id(),
+    )
+    .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
     app.append_console_line(format!(
         "[workspace] saved layout {}",
         workspace_layout_path.display()
@@ -1206,8 +1325,12 @@ fn save_scene_to_default_path(
             EditorMutationError::runtime_rejected("failed to create workspace layout folder")
         })?;
     }
-    write_workspace_layout(&workspace_layout_path, shell_state.workspace_state())
-        .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
+    write_workspace_layout_for_profile(
+        &workspace_layout_path,
+        shell_state.workspace_state(),
+        shell_state.active_workspace_profile_id(),
+    )
+    .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneSaved {
             path: path.display().to_string(),
@@ -1307,14 +1430,25 @@ fn load_scene_from_default_path(
     };
 
     if let Some(layout_path_to_load) = layout_path_to_load {
-        match read_workspace_layout(&layout_path_to_load) {
-            Ok(workspace_state) => {
-                shell_state.replace_workspace_state(workspace_state);
-                app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
-                app.append_console_line(format!(
-                    "[io] loaded workspace layout {}",
-                    layout_path_to_load.display()
-                ));
+        match read_workspace_layout_with_metadata(&layout_path_to_load) {
+            Ok(saved_workspace) => {
+                let registry = default_workspace_profile_registry();
+                let active_profile = registry.profile(shell_state.active_workspace_profile_id());
+                if active_profile.is_some_and(|profile| {
+                    workspace_layout_matches_profile(&saved_workspace, profile)
+                }) {
+                    shell_state.replace_workspace_state(saved_workspace.workspace_state);
+                    app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+                    app.append_console_line(format!(
+                        "[io] loaded workspace layout {}",
+                        layout_path_to_load.display()
+                    ));
+                } else {
+                    app.append_console_line(format!(
+                        "[io] ignored workspace layout for inactive profile: {}",
+                        layout_path_to_load.display()
+                    ));
+                }
             }
             Err(error) => {
                 app.append_console_line(format!(
@@ -1339,5 +1473,116 @@ fn migration_failure_class_label(class: editor_core::MigrationFailureClass) -> &
         editor_core::MigrationFailureClass::NormalizationFailure => "normalization-failure",
         editor_core::MigrationFailureClass::FormationFailure => "formation-failure",
         editor_core::MigrationFailureClass::ApplyFailure => "apply-failure",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use editor_shell::{
+        MODELLING_WORKSPACE_PROFILE_ID, PanelKind, SCENE_WORKSPACE_PROFILE_ID,
+        WorkspaceIdentityAllocator, reduce_workspace,
+    };
+
+    fn scene_profile() -> editor_shell::WorkspaceProfile {
+        default_workspace_profile_registry()
+            .profile(SCENE_WORKSPACE_PROFILE_ID)
+            .expect("scene profile should exist")
+            .clone()
+    }
+
+    fn modelling_profile() -> editor_shell::WorkspaceProfile {
+        default_workspace_profile_registry()
+            .profile(MODELLING_WORKSPACE_PROFILE_ID)
+            .expect("modelling profile should exist")
+            .clone()
+    }
+
+    fn default_scene_workspace() -> editor_shell::WorkspaceState {
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+        scene_profile().build_default_workspace_state(workspace_id, &mut allocator)
+    }
+
+    fn panel_and_stack_by_kind(
+        workspace: &editor_shell::WorkspaceState,
+        kind: PanelKind,
+    ) -> (editor_shell::PanelInstanceId, editor_shell::TabStackId) {
+        let panel_id = workspace
+            .panels()
+            .find(|panel| panel.panel_kind == kind)
+            .expect("panel kind should exist")
+            .id;
+        let stack_id = workspace
+            .tab_stacks()
+            .find(|stack| stack.ordered_panels.contains(&panel_id))
+            .expect("panel should be in a stack")
+            .id;
+        (panel_id, stack_id)
+    }
+
+    fn legacy_layout_result(
+        workspace_state: editor_shell::WorkspaceState,
+    ) -> WorkspaceLayoutReadResult {
+        WorkspaceLayoutReadResult {
+            workspace_state,
+            workspace_profile_id: Some(SCENE_WORKSPACE_PROFILE_ID),
+            layout_template: None,
+            layout_template_version: None,
+            last_saved_at_unix_seconds: None,
+        }
+    }
+
+    #[test]
+    fn stale_legacy_profile_layout_requires_default_scene_graph() {
+        let workspace = default_scene_workspace();
+        let (viewport_panel, viewport_stack) =
+            panel_and_stack_by_kind(&workspace, PanelKind::Viewport);
+        let (_, outliner_stack) = panel_and_stack_by_kind(&workspace, PanelKind::Outliner);
+        let stale = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::MovePanelBetweenTabStacks {
+                panel_id: viewport_panel,
+                source_tab_stack_id: viewport_stack,
+                destination_tab_stack_id: outliner_stack,
+                destination_index: 0,
+                activate_panel: true,
+            },
+        )
+        .expect("stale graph should still be structurally valid");
+        let profile = scene_profile();
+        let saved = legacy_layout_result(stale);
+
+        assert!(!workspace_layout_matches_profile(&saved, &profile));
+    }
+
+    #[test]
+    fn tagged_profile_layout_accepts_matching_template_metadata() {
+        let workspace = default_scene_workspace();
+        let profile = scene_profile();
+        let saved = WorkspaceLayoutReadResult {
+            workspace_state: workspace,
+            workspace_profile_id: Some(SCENE_WORKSPACE_PROFILE_ID),
+            layout_template: Some(profile.default_layout_template.contract_id().to_string()),
+            layout_template_version: Some(profile.default_layout_template.contract_version()),
+            last_saved_at_unix_seconds: Some(1),
+        };
+
+        assert!(workspace_layout_matches_profile(&saved, &profile));
+    }
+
+    #[test]
+    fn scene_derived_modelling_template_metadata_is_rejected_as_stale() {
+        let workspace = default_scene_workspace();
+        let profile = modelling_profile();
+        let saved = WorkspaceLayoutReadResult {
+            workspace_state: workspace,
+            workspace_profile_id: Some(MODELLING_WORKSPACE_PROFILE_ID),
+            layout_template: Some("scene-derived.modelling".to_string()),
+            layout_template_version: Some(profile.default_layout_template.contract_version()),
+            last_saved_at_unix_seconds: Some(1),
+        };
+
+        assert!(!workspace_layout_matches_profile(&saved, &profile));
     }
 }

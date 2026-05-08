@@ -1,52 +1,72 @@
 use std::collections::BTreeMap;
 
 use editor_core::{ComponentTypeId, EntityId};
-use ui_input::{Key, KeyState, KeyboardEvent, Modifiers, TextInputEvent};
+use ui_input::{
+    Key, KeyState, KeyboardEvent, Modifiers, PointerEvent, PointerEventKind, TextInputEvent,
+    UiInputEvent,
+};
+use ui_math::UiRect;
 use ui_theme::ThemeTokens;
 
 use crate::{
-    ActiveTabStackPopupMenu, EditorShellFrameModel, EntityTableComponentFilter,
-    EntityTableHierarchyFilter, EntityTableSurfaceAction, InspectorSurfaceAction,
-    OutlinerSurfaceAction, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, ShellCommand,
-    SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
-    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
-    ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
-    ViewportSurfaceAction, WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation,
-    WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame, label,
+    ActiveTabDragVisualState, ActiveTabStackPopupMenu, DockDropCandidate, DockDropScope,
+    DockingInteractionVisualState, DockingPreviewDropTarget,
+    ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel,
+    EntityTableComponentFilter, EntityTableHierarchyFilter, EntityTableSurfaceAction,
+    InspectorSurfaceAction, OutlinerSurfaceAction, PanelInstanceId, PanelKind,
+    ResolvedSurfaceFrame, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
+    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
+    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
+    UiInteraction, UiInteractionResults, ViewportSurfaceAction, WidgetId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
+    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    build_entity_table_panel, dock_split_preview_label_widget_id,
+    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
     map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
     tab_close_button_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_switch_surface_button_widget_id, tool_surface_definition_id,
-    tool_surface_kind_definition_key, toolbar_workspace_close_widget_id,
-    workspace_split_host_widget_id,
+    tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
+    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_submenu_anchor_widget_id,
+    tool_surface_definition_id, tool_surface_kind_definition_key,
+    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
 
 #[test]
-fn toolbar_activation_maps_to_shell_command() {
+fn toolbar_omits_global_transform_tool_buttons() {
     let frame_model = EditorShellFrameModel::new(
         ToolbarViewModel {
-            buttons: vec![ToolbarButtonViewModel {
-                id: editor_core::ToolId(2),
-                stable_name: "translate",
-                label: "Translate".to_string(),
-                is_active: false,
-                enabled: true,
-            }],
+            buttons: vec![
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_001),
+                    stable_name: "menu_file",
+                    label: "File".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(3_001),
+                    stable_name: "workspace_scene",
+                    label: "Scene".to_string(),
+                    is_active: true,
+                    enabled: true,
+                },
+            ],
         },
         BTreeMap::new(),
     );
     let workspace = sample_workspace_state();
     let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
-    let commands = map_interactions_to_shell_commands(
-        &UiInteractionResults {
-            items: vec![UiInteraction::Activated(
-                crate::TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
-            )],
-        },
-        &build.projection_artifacts,
-    );
-
-    assert_eq!(commands, vec![ShellCommand::ActivateTranslateTool]);
+    for removed_widget in [
+        crate::TOOLBAR_SELECT_BUTTON_WIDGET_ID,
+        crate::TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
+        crate::TOOLBAR_ROTATE_BUTTON_WIDGET_ID,
+        crate::TOOLBAR_SCALE_BUTTON_WIDGET_ID,
+    ] {
+        assert!(
+            build.tree.walk().all(|node| node.id != removed_widget),
+            "global transform tool buttons should not be projected in the top toolbar",
+        );
+    }
 }
 
 #[test]
@@ -256,6 +276,59 @@ fn active_top_bar_menu_projects_as_popup_without_pushing_content_down() {
 }
 
 #[test]
+fn entity_table_control_rail_overflows_and_scrolls_from_child_controls() {
+    let theme = ThemeTokens::default();
+    let tree = ui_tree::UiTree::new(build_entity_table_panel(
+        &crate::EntityTableViewModel::default(),
+        &theme,
+        PanelInstanceId::try_from_raw(1).unwrap(),
+        None,
+    ));
+    let bounds = ui_math::UiRect::new(0.0, 0.0, 260.0, 240.0);
+    let mut runtime = ui_runtime::UiRuntime::new();
+    let layouts = runtime.compute_layout(&tree, bounds);
+    let max_offset = runtime
+        .max_scroll_offset_for_layout(&tree, &layouts, ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID)
+        .expect("entity controls rail should be a scroll node");
+
+    assert!(
+        max_offset > 0.0,
+        "entity table controls must measure to content width and overflow when narrow"
+    );
+
+    let search_bounds = layouts
+        .get(&ENTITY_TABLE_SEARCH_WIDGET_ID)
+        .expect("entity search layout should exist")
+        .bounds;
+    let pointer = ui_math::UiPoint::new(
+        search_bounds.x + search_bounds.width * 0.5,
+        search_bounds.y + search_bounds.height * 0.5,
+    );
+    assert_eq!(
+        ui_runtime::hit_test_widget(&tree, &layouts, pointer),
+        Some(ENTITY_TABLE_SEARCH_WIDGET_ID),
+        "the controls rail row must have stable identity so child controls win hit testing",
+    );
+    let _ = runtime.dispatch_input(
+        &tree,
+        &layouts,
+        &UiInputEvent::Pointer(PointerEvent {
+            kind: PointerEventKind::Scroll,
+            position: pointer,
+            delta: ui_math::UiVector::new(0.0, -8.0),
+            button: None,
+            modifiers: Modifiers::default(),
+            click_count: 0,
+        }),
+    );
+
+    assert!(
+        runtime.scroll_offset(ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID) > 0.0,
+        "wheel input over the search child should scroll the controls rail owner"
+    );
+}
+
+#[test]
 fn toolbar_separator_projects_as_centered_visible_divider() {
     let frame_model = EditorShellFrameModel::new(
         ToolbarViewModel {
@@ -330,29 +403,71 @@ fn toolbar_separator_projects_as_centered_visible_divider() {
 fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right() {
     let workspace = sample_workspace_state();
     let projection =
-        crate::project_fixed_layout(&workspace).expect("default layout should project");
+        crate::project_workspace_for_shell(&workspace).expect("default layout should project");
+    let crate::ProjectedWorkspaceHostSlot::Split {
+        axis: WorkspaceSplitAxis::Vertical,
+        fraction: body_console_fraction,
+        first_child: left_right,
+        ..
+    } = &projection.root_host
+    else {
+        panic!("default root host should be a vertical graph split");
+    };
+    let crate::ProjectedWorkspaceHostSlot::Split {
+        axis: WorkspaceSplitAxis::Horizontal,
+        fraction: left_right_fraction,
+        first_child: viewport,
+        second_child: right_sidebar,
+        ..
+    } = left_right.as_ref()
+    else {
+        panic!("default upper body should be a horizontal graph split");
+    };
+    let crate::ProjectedWorkspaceHostSlot::Split {
+        axis: WorkspaceSplitAxis::Vertical,
+        fraction: center_right_fraction,
+        first_child: outliner,
+        second_child: inspector,
+        ..
+    } = right_sidebar.as_ref()
+    else {
+        panic!("default right sidebar should be a vertical graph split");
+    };
+    let crate::ProjectedWorkspaceHostSlot::TabStack {
+        tab_stack: viewport,
+        ..
+    } = viewport.as_ref()
+    else {
+        panic!("default viewport slot should be a tab stack");
+    };
+    let crate::ProjectedWorkspaceHostSlot::TabStack {
+        tab_stack: outliner,
+        ..
+    } = outliner.as_ref()
+    else {
+        panic!("default outliner slot should be a tab stack");
+    };
+    let crate::ProjectedWorkspaceHostSlot::TabStack {
+        tab_stack: inspector,
+        ..
+    } = inspector.as_ref()
+    else {
+        panic!("default inspector slot should be a tab stack");
+    };
 
-    assert_eq!(projection.left_right_fraction, 0.72);
-    assert_eq!(projection.center_right_fraction, 0.56);
+    assert_eq!(*body_console_fraction, 0.78);
+    assert_eq!(*left_right_fraction, 0.72);
+    assert_eq!(*center_right_fraction, 0.56);
     assert_eq!(
-        projection
-            .viewport
-            .active_panel
-            .map(|panel| panel.panel_kind),
+        viewport.active_panel.map(|panel| panel.panel_kind),
         Some(PanelKind::Viewport)
     );
     assert_eq!(
-        projection
-            .outliner
-            .active_panel
-            .map(|panel| panel.panel_kind),
+        outliner.active_panel.map(|panel| panel.panel_kind),
         Some(PanelKind::Outliner)
     );
     assert_eq!(
-        projection
-            .inspector
-            .active_panel
-            .map(|panel| panel.panel_kind),
+        inspector.active_panel.map(|panel| panel.panel_kind),
         Some(PanelKind::Inspector)
     );
 }
@@ -783,9 +898,9 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
     assert!(matches!(
         commands.as_slice(),
         [
-            ShellCommand::CreatePanelTab {
+            ShellCommand::ToggleTabStackCreateSurfaceMenu {
                 tab_stack_id: create_stack,
-                ..
+                anchor_widget_id,
             },
             ShellCommand::SplitTabStackArea {
                 tab_stack_id: split_stack,
@@ -797,6 +912,7 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
                 projection_epoch: close_epoch,
             },
         ] if *create_stack == viewport_stack
+            && *anchor_widget_id == tab_stack_new_tab_button_widget_id(viewport_stack)
             && *split_stack == viewport_stack
             && *close_stack == viewport_stack
             && *close_panel == viewport_panel
@@ -843,7 +959,9 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
             items: vec![
-                UiInteraction::Activated(tab_stack_switch_surface_button_widget_id(viewport_stack)),
+                UiInteraction::Activated(tab_stack_surface_submenu_anchor_widget_id(
+                    viewport_stack,
+                )),
                 UiInteraction::Activated(tab_stack_split_horizontal_button_widget_id(
                     viewport_stack,
                 )),
@@ -864,8 +982,345 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
                 ..
             },
         ] if *tab_stack_id == viewport_stack
-            && *anchor_widget_id == tab_stack_switch_surface_button_widget_id(viewport_stack)
+            && *anchor_widget_id == tab_stack_container_widget_id(viewport_stack)
             && *split_stack == viewport_stack
+    ));
+}
+
+#[test]
+fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let available_kinds = vec![
+        ToolSurfaceKind::Outliner,
+        ToolSurfaceKind::EntityTable,
+        ToolSurfaceKind::Viewport,
+        ToolSurfaceKind::Inspector,
+        ToolSurfaceKind::Console,
+    ];
+    let frame_model = frame_model_for_workspace(&workspace)
+        .with_available_tool_surface_kinds(available_kinds.clone());
+    let inactive_build =
+        build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+
+    assert!(!ui_tree_contains_widget(
+        &inactive_build.tree.root,
+        tab_stack_new_surface_menu_popup_widget_id(viewport_stack)
+    ));
+
+    let plus_commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::Activated(
+                tab_stack_new_tab_button_widget_id(viewport_stack),
+            )],
+        },
+        &inactive_build.projection_artifacts,
+    );
+    assert_eq!(
+        plus_commands,
+        vec![ShellCommand::ToggleTabStackCreateSurfaceMenu {
+            tab_stack_id: viewport_stack,
+            anchor_widget_id: tab_stack_new_tab_button_widget_id(viewport_stack),
+        }]
+    );
+
+    let active_frame_model =
+        frame_model.with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
+            kind: TabStackPopupMenuKind::CreateSurface,
+            tab_stack_id: viewport_stack,
+            anchor_widget_id: tab_stack_new_tab_button_widget_id(viewport_stack),
+        }));
+    let active_build =
+        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+    assert!(ui_tree_contains_widget(
+        &active_build.tree.root,
+        tab_stack_new_surface_menu_popup_widget_id(viewport_stack)
+    ));
+
+    let inspector_index = available_kinds
+        .iter()
+        .position(|kind| *kind == ToolSurfaceKind::Inspector)
+        .expect("inspector kind should be present");
+    let create_commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::Activated(
+                tab_stack_new_surface_menu_item_widget_id(viewport_stack, inspector_index),
+            )],
+        },
+        &active_build.projection_artifacts,
+    );
+    assert!(matches!(
+        create_commands.as_slice(),
+        [
+            ShellCommand::CreatePanelTab {
+                tab_stack_id,
+                tool_surface_kind: ToolSurfaceKind::Inspector,
+                ..
+            }
+        ] if *tab_stack_id == viewport_stack
+    ));
+}
+
+#[test]
+fn locked_tab_plus_menu_shows_all_kinds_but_routes_only_locked_kind() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let workspace = reduce_workspace(
+        &workspace,
+        WorkspaceMutation::LockTabStackAreaType {
+            tab_stack_id: viewport_stack,
+            locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+        },
+    )
+    .expect("locking viewport tab stack should succeed");
+    let available_kinds = vec![
+        ToolSurfaceKind::Outliner,
+        ToolSurfaceKind::EntityTable,
+        ToolSurfaceKind::Viewport,
+        ToolSurfaceKind::Inspector,
+        ToolSurfaceKind::Console,
+    ];
+    let active_frame_model = frame_model_for_workspace(&workspace)
+        .with_available_tool_surface_kinds(available_kinds.clone())
+        .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
+            kind: TabStackPopupMenuKind::CreateSurface,
+            tab_stack_id: viewport_stack,
+            anchor_widget_id: tab_stack_new_tab_button_widget_id(viewport_stack),
+        }));
+    let active_build =
+        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+    let viewport_index = available_kinds
+        .iter()
+        .position(|kind| *kind == ToolSurfaceKind::Viewport)
+        .expect("viewport kind should be present");
+    let console_index = available_kinds
+        .iter()
+        .position(|kind| *kind == ToolSurfaceKind::Console)
+        .expect("console kind should be present");
+
+    assert!(button_enabled(
+        &active_build.tree.root,
+        tab_stack_new_surface_menu_item_widget_id(viewport_stack, viewport_index)
+    ));
+    assert!(!button_enabled(
+        &active_build.tree.root,
+        tab_stack_new_surface_menu_item_widget_id(viewport_stack, console_index)
+    ));
+
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![
+                UiInteraction::Activated(tab_stack_new_surface_menu_item_widget_id(
+                    viewport_stack,
+                    console_index,
+                )),
+                UiInteraction::Activated(tab_stack_new_surface_menu_item_widget_id(
+                    viewport_stack,
+                    viewport_index,
+                )),
+            ],
+        },
+        &active_build.projection_artifacts,
+    );
+    assert!(matches!(
+        commands.as_slice(),
+        [
+            ShellCommand::NoOp,
+            ShellCommand::CreatePanelTab {
+                tab_stack_id,
+                tool_surface_kind: ToolSurfaceKind::Viewport,
+                ..
+            },
+        ] if *tab_stack_id == viewport_stack
+    ));
+}
+
+#[test]
+fn dock_split_preview_projects_side_slice_without_consuming_layout() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let frame_model = frame_model_for_workspace(&workspace);
+    let theme = ThemeTokens::default();
+    let anchor_widget_id = tab_stack_container_widget_id(viewport_stack);
+    let preview_target = DockingPreviewDropTarget::SplitIntoArea {
+        target_tab_stack_id: viewport_stack,
+        side: crate::DockSplitSide::Left,
+    };
+    let docking_visual_state = DockingInteractionVisualState {
+        active_tab_drag: Some(ActiveTabDragVisualState {
+            panel_instance_id: viewport_panel,
+            source_tab_stack_id: viewport_stack,
+            preview_target: Some(preview_target),
+            preview_candidates: vec![DockDropCandidate {
+                target: preview_target,
+                scope: DockDropScope::Area,
+                side: crate::DockSplitSide::Left,
+                anchor_widget_id,
+                active: true,
+            }],
+        }),
+        active_split_border_widget: None,
+    };
+    let build = build_editor_shell_frame_with_docking_visual_state(
+        &frame_model,
+        &theme,
+        &workspace,
+        Some(&docking_visual_state),
+    );
+    assert!(ui_tree_contains_widget(
+        &build.tree.root,
+        dock_split_preview_overlay_widget_id(anchor_widget_id)
+    ));
+
+    let bounds = UiRect::new(0.0, 0.0, 960.0, 640.0);
+    let layouts = ui_runtime::compute_tree_layout(
+        &build.tree,
+        bounds,
+        &ui_runtime::UiRuntimeState::default(),
+    );
+    let anchor = layouts
+        .get(&anchor_widget_id)
+        .expect("target tab stack should have layout");
+    let preview = layouts
+        .get(&dock_split_preview_panel_widget_id(anchor_widget_id))
+        .expect("preview slice should have layout");
+    assert!((preview.bounds.x - anchor.bounds.x).abs() <= 0.001);
+    assert!((preview.bounds.height - anchor.bounds.height).abs() <= 0.001);
+    assert!(preview.bounds.width > 0.0 && preview.bounds.width <= 132.0);
+}
+
+#[test]
+fn dock_root_split_preview_spans_target_root_edge() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let frame_model = frame_model_for_workspace(&workspace);
+    let theme = ThemeTokens::default();
+    let anchor_widget_id = workspace_split_host_widget_id(workspace.root_host_id());
+    let preview_target = DockingPreviewDropTarget::SplitIntoRoot {
+        side: crate::DockSplitSide::Bottom,
+    };
+    let docking_visual_state = DockingInteractionVisualState {
+        active_tab_drag: Some(ActiveTabDragVisualState {
+            panel_instance_id: viewport_panel,
+            source_tab_stack_id: viewport_stack,
+            preview_target: Some(preview_target),
+            preview_candidates: vec![DockDropCandidate {
+                target: preview_target,
+                scope: DockDropScope::Workspace,
+                side: crate::DockSplitSide::Bottom,
+                anchor_widget_id,
+                active: true,
+            }],
+        }),
+        active_split_border_widget: None,
+    };
+    let build = build_editor_shell_frame_with_docking_visual_state(
+        &frame_model,
+        &theme,
+        &workspace,
+        Some(&docking_visual_state),
+    );
+    assert!(ui_tree_contains_widget(
+        &build.tree.root,
+        dock_split_preview_overlay_widget_id(anchor_widget_id)
+    ));
+
+    let bounds = UiRect::new(0.0, 0.0, 960.0, 640.0);
+    let layouts = ui_runtime::compute_tree_layout(
+        &build.tree,
+        bounds,
+        &ui_runtime::UiRuntimeState::default(),
+    );
+    let anchor = layouts
+        .get(&anchor_widget_id)
+        .expect("root target should have layout");
+    let preview = layouts
+        .get(&dock_split_preview_panel_widget_id(anchor_widget_id))
+        .expect("root preview slice should have layout");
+    assert!(
+        (preview.bounds.y + preview.bounds.height - (anchor.bounds.y + anchor.bounds.height)).abs()
+            <= 0.001
+    );
+    assert!((preview.bounds.width - anchor.bounds.width).abs() <= 0.001);
+    assert!(preview.bounds.height > 0.0 && preview.bounds.height <= 42.0);
+}
+
+#[test]
+fn dock_scope_previews_render_all_candidates_and_active_label() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let frame_model = frame_model_for_workspace(&workspace);
+    let theme = ThemeTokens::default();
+    let area_anchor = tab_stack_container_widget_id(viewport_stack);
+    let group_anchor = crate::CENTER_RIGHT_SPLIT_WIDGET_ID;
+    let workspace_anchor = crate::BODY_ROOT_WIDGET_ID;
+    let docking_visual_state = DockingInteractionVisualState {
+        active_tab_drag: Some(ActiveTabDragVisualState {
+            panel_instance_id: viewport_panel,
+            source_tab_stack_id: viewport_stack,
+            preview_target: Some(DockingPreviewDropTarget::SplitIntoHost {
+                target_host_id: workspace.root_host_id(),
+                side: crate::DockSplitSide::Right,
+            }),
+            preview_candidates: vec![
+                DockDropCandidate {
+                    target: DockingPreviewDropTarget::SplitIntoArea {
+                        target_tab_stack_id: viewport_stack,
+                        side: crate::DockSplitSide::Right,
+                    },
+                    scope: DockDropScope::Area,
+                    side: crate::DockSplitSide::Right,
+                    anchor_widget_id: area_anchor,
+                    active: false,
+                },
+                DockDropCandidate {
+                    target: DockingPreviewDropTarget::SplitIntoHost {
+                        target_host_id: workspace.root_host_id(),
+                        side: crate::DockSplitSide::Right,
+                    },
+                    scope: DockDropScope::Group,
+                    side: crate::DockSplitSide::Right,
+                    anchor_widget_id: group_anchor,
+                    active: true,
+                },
+                DockDropCandidate {
+                    target: DockingPreviewDropTarget::SplitIntoRoot {
+                        side: crate::DockSplitSide::Right,
+                    },
+                    scope: DockDropScope::Workspace,
+                    side: crate::DockSplitSide::Right,
+                    anchor_widget_id: workspace_anchor,
+                    active: false,
+                },
+            ],
+        }),
+        active_split_border_widget: None,
+    };
+    let build = build_editor_shell_frame_with_docking_visual_state(
+        &frame_model,
+        &theme,
+        &workspace,
+        Some(&docking_visual_state),
+    );
+
+    for anchor in [area_anchor, group_anchor, workspace_anchor] {
+        assert!(ui_tree_contains_widget(
+            &build.tree.root,
+            dock_split_preview_overlay_widget_id(anchor)
+        ));
+    }
+    assert!(ui_tree_contains_widget(
+        &build.tree.root,
+        dock_split_preview_label_widget_id(group_anchor)
+    ));
+    assert!(!ui_tree_contains_widget(
+        &build.tree.root,
+        dock_split_preview_label_widget_id(area_anchor)
     ));
 }
 
@@ -925,10 +1380,6 @@ fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
 
     let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &split_workspace);
 
-    assert!(
-        build.projection_artifacts.workspace.fixed_layout.is_none(),
-        "arbitrary split workspace should leave the legacy fixed projection path",
-    );
     assert!(
         build
             .projection_artifacts
@@ -1120,4 +1571,16 @@ fn ui_tree_contains_widget(node: &crate::UiNode, widget_id: WidgetId) -> bool {
             .children
             .iter()
             .any(|child| ui_tree_contains_widget(child, widget_id))
+}
+
+fn button_enabled(node: &crate::UiNode, widget_id: WidgetId) -> bool {
+    if node.id == widget_id {
+        if let crate::UiNodeKind::Button(button) = &node.kind {
+            return button.enabled;
+        }
+        return false;
+    }
+    node.children
+        .iter()
+        .any(|child| button_enabled(child, widget_id))
 }

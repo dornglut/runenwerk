@@ -8,14 +8,20 @@
         id: AuthoredId("body"),
         children: [
           Label(id: AuthoredId("title"), label: Static(Text("Entity Table"))),
-          Row(
-            id: AuthoredId("controls"),
+          Scroll(
+            id: AuthoredId("controls_scroll"),
+            axis: Horizontal,
             children: [
-              TextInput(id: AuthoredId("search"), value: Slot(AuthoredId("entity_table.search")), placeholder: Some("Search"), route: Some((id: AuthoredId("entity_table.search.edit"))), availability: None),
-              Button(id: AuthoredId("clear_search"), label: Static(Text("Clear")), route: Some((id: AuthoredId("entity_table.search.clear"))), availability: None, selected: None),
-              Toggle(id: AuthoredId("selected_only"), label: Static(Text("Selected")), checked: Slot(AuthoredId("entity_table.selected_only")), route: Some((id: AuthoredId("entity_table.selected_only"))), availability: None),
-              Toggle(id: AuthoredId("roots_only"), label: Static(Text("Roots")), checked: Slot(AuthoredId("entity_table.roots_only")), route: Some((id: AuthoredId("entity_table.roots_only"))), availability: None),
-              Select(id: AuthoredId("component_filter"), items: (id: AuthoredId("entity_table.component_filters")), selected: Some((id: AuthoredId("entity_table.component_filter.selected"))), route: Some((id: AuthoredId("entity_table.component_filter"))), availability: None),
+              Row(
+                id: AuthoredId("controls"),
+                children: [
+                  TextInput(id: AuthoredId("search"), value: Slot(AuthoredId("entity_table.search")), placeholder: Some("Search"), route: Some((id: AuthoredId("entity_table.search.edit"))), availability: None),
+                  Button(id: AuthoredId("clear_search"), label: Static(Text("Clear")), route: Some((id: AuthoredId("entity_table.search.clear"))), availability: None, selected: None),
+                  Toggle(id: AuthoredId("selected_only"), label: Static(Text("Selected only")), checked: Slot(AuthoredId("entity_table.selected_only")), route: Some((id: AuthoredId("entity_table.selected_only"))), availability: None),
+                  Toggle(id: AuthoredId("roots_only"), label: Static(Text("Root entities")), checked: Slot(AuthoredId("entity_table.roots_only")), route: Some((id: AuthoredId("entity_table.roots_only"))), availability: None),
+                  Select(id: AuthoredId("component_filter"), items: (id: AuthoredId("entity_table.component_filters")), selected: Some((id: AuthoredId("entity_table.component_filter.selected"))), route: Some((id: AuthoredId("entity_table.component_filter"))), availability: None),
+                ],
+              ),
             ],
           ),
           Scroll(

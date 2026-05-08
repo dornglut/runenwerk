@@ -4,7 +4,7 @@
 use crate::{
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
     OUTLINER_SCROLL_WIDGET_ID, OUTLINER_TITLE_WIDGET_ID, OutlinerViewModel, PanelInstanceId,
-    ToolSurfaceInstanceId, UiNode, UiNodeKind,
+    SurfaceWidgetScope, ToolSurfaceInstanceId, UiNode, UiNodeKind,
 };
 use ui_definition::{
     AuthoredUiNodePath, AuthoredUiTemplate, UiCollectionItem, UiDefinitionContext, UiValue,
@@ -21,13 +21,14 @@ pub fn build_outliner_panel(
     view_model: &OutlinerViewModel,
     theme: &ThemeTokens,
     _panel_instance_id: PanelInstanceId,
-    _active_tool_surface: Option<ToolSurfaceInstanceId>,
+    active_tool_surface: Option<ToolSurfaceInstanceId>,
 ) -> UiNode {
     let template: AuthoredUiTemplate =
         ron::from_str(OUTLINER_TEMPLATE_RON).expect("checked-in outliner UI fixture must parse");
     let normalized = normalize_authored_template(template);
-    let mut context = UiDefinitionContext::new(theme.clone());
-    register_outliner_widget_ids(&mut context);
+    let scope = SurfaceWidgetScope::optional(active_tool_surface);
+    let mut context = scoped_definition_context(theme, scope);
+    register_outliner_widget_ids(&mut context, scope);
     context.collections.insert(
         "outliner.rows".into(),
         view_model
@@ -49,11 +50,22 @@ pub fn build_outliner_panel(
     );
 
     let mut root = form_retained_ui(&normalized, &mut context).root;
-    polish_outliner_tree(&mut root, theme);
+    polish_outliner_tree(&mut root, theme, scope);
     root
 }
 
-fn register_outliner_widget_ids(context: &mut UiDefinitionContext) {
+fn scoped_definition_context(
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> UiDefinitionContext {
+    let mut context = UiDefinitionContext::new(theme.clone());
+    if let Some(base) = scope.base() {
+        context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
+    }
+    context
+}
+
+fn register_outliner_widget_ids(context: &mut UiDefinitionContext, scope: SurfaceWidgetScope) {
     for (path, widget_id) in [
         ("root", OUTLINER_PANEL_WIDGET_ID),
         ("root/body", OUTLINER_BODY_WIDGET_ID),
@@ -61,13 +73,14 @@ fn register_outliner_widget_ids(context: &mut UiDefinitionContext) {
         ("root/body/scroll", OUTLINER_SCROLL_WIDGET_ID),
         ("root/body/scroll/tree", OUTLINER_LIST_WIDGET_ID),
     ] {
-        context
-            .widget_ids_by_path
-            .insert(AuthoredUiNodePath(path.to_string()), widget_id);
+        context.widget_ids_by_path.insert(
+            AuthoredUiNodePath(path.to_string()),
+            scope.widget_id(widget_id),
+        );
     }
 }
 
-fn polish_outliner_tree(root: &mut UiNode, theme: &ThemeTokens) {
+fn polish_outliner_tree(root: &mut UiNode, theme: &ThemeTokens, scope: SurfaceWidgetScope) {
     if let UiNodeKind::Panel(panel) = &mut root.kind {
         panel.theme.background_panel = UiColor::new(
             (theme.background_panel.r + 0.01).clamp(0.0, 1.0),
@@ -76,17 +89,17 @@ fn polish_outliner_tree(root: &mut UiNode, theme: &ThemeTokens) {
             0.94,
         );
     }
-    if let Some(body) = find_node_mut(root, OUTLINER_BODY_WIDGET_ID)
+    if let Some(body) = find_node_mut(root, scope.widget_id(OUTLINER_BODY_WIDGET_ID))
         && let UiNodeKind::Stack(stack) = &mut body.kind
     {
         stack.child_main_policies = vec![SizePolicy::Auto, SizePolicy::flex(1.0)];
     }
-    if let Some(title) = find_node_mut(root, OUTLINER_TITLE_WIDGET_ID)
+    if let Some(title) = find_node_mut(root, scope.widget_id(OUTLINER_TITLE_WIDGET_ID))
         && let UiNodeKind::Label(label) = &mut title.kind
     {
         label.text_style = theme.heading_text_style(FontId(1));
     }
-    if let Some(tree) = find_node_mut(root, OUTLINER_LIST_WIDGET_ID)
+    if let Some(tree) = find_node_mut(root, scope.widget_id(OUTLINER_LIST_WIDGET_ID))
         && let UiNodeKind::Tree(tree) = &mut tree.kind
     {
         tree.text_style = theme.body_text_style(FontId(1));

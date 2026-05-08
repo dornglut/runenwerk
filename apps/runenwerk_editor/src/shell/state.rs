@@ -1,12 +1,12 @@
 use editor_shell::{
     ActiveTabDragVisualState, ActiveTabStackPopupMenu, BODY_CONSOLE_SPLIT_WIDGET_ID,
-    CENTER_RIGHT_SPLIT_WIDGET_ID, DockingInteractionVisualState, DockingPreviewDropTarget,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId,
-    SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind,
-    ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
-    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
-    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError, default_workspace_profile_registry,
-    reduce_workspace,
+    CENTER_RIGHT_SPLIT_WIDGET_ID, DockDropCandidate, DockSplitSide, DockingInteractionVisualState,
+    DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
+    PanelHostId, PanelInstanceId, SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId,
+    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarMenuKind, UiRuntime,
+    UiTree, WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation,
+    WorkspaceProfileId, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+    default_workspace_profile_registry, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -24,6 +24,8 @@ struct TabDragSession {
     pointer_down: UiPoint,
     projection_epoch: u64,
     active: bool,
+    drop_candidate_cycle_index: usize,
+    drop_candidate_cycle_side: Option<DockSplitSide>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -246,11 +248,15 @@ impl RunenwerkEditorShellState {
         self.clear_cached_projection();
     }
 
-    pub fn close_tab_stack_action_menu(&mut self) {
+    pub fn close_tab_stack_popup_menu(&mut self) {
         if self.active_tab_stack_popup_menu.is_some() {
             self.active_tab_stack_popup_menu = None;
             self.clear_cached_projection();
         }
+    }
+
+    pub fn close_tab_stack_action_menu(&mut self) {
+        self.close_tab_stack_popup_menu();
     }
 
     pub fn close_toolbar_menu(&mut self) {
@@ -408,7 +414,7 @@ impl RunenwerkEditorShellState {
     }
 
     pub fn docking_visual_state(&self) -> DockingInteractionVisualState {
-        self.docking_visual_state
+        self.docking_visual_state.clone()
     }
 
     pub fn begin_tab_drag_candidate(
@@ -424,6 +430,8 @@ impl RunenwerkEditorShellState {
             pointer_down,
             projection_epoch,
             active: false,
+            drop_candidate_cycle_index: 0,
+            drop_candidate_cycle_side: None,
         });
         self.docking_visual_state.active_tab_drag = None;
     }
@@ -457,13 +465,16 @@ impl RunenwerkEditorShellState {
             panel_instance_id: session.panel_instance_id,
             source_tab_stack_id: session.source_tab_stack_id,
             preview_target: None,
+            preview_candidates: Vec::new(),
         });
         true
     }
 
-    pub fn set_tab_drag_preview_target(
+    pub fn set_tab_drag_preview(
         &mut self,
         target: Option<DockingPreviewDropTarget>,
+        candidates: Vec<DockDropCandidate>,
+        active_side: Option<DockSplitSide>,
         current_projection_epoch: u64,
     ) {
         let Some(mut session) = self.tab_drag_session else {
@@ -471,6 +482,9 @@ impl RunenwerkEditorShellState {
         };
         if session.projection_epoch != current_projection_epoch {
             session.projection_epoch = current_projection_epoch;
+        }
+        if session.drop_candidate_cycle_side != active_side {
+            session.drop_candidate_cycle_side = active_side;
         }
         if !session.active {
             self.tab_drag_session = Some(session);
@@ -481,7 +495,59 @@ impl RunenwerkEditorShellState {
             panel_instance_id: session.panel_instance_id,
             source_tab_stack_id: session.source_tab_stack_id,
             preview_target: target,
+            preview_candidates: candidates,
         });
+    }
+
+    pub fn tab_drag_drop_candidate_cycle(&self) -> (usize, Option<DockSplitSide>) {
+        self.tab_drag_session
+            .map(|session| {
+                (
+                    session.drop_candidate_cycle_index,
+                    session.drop_candidate_cycle_side,
+                )
+            })
+            .unwrap_or((0, None))
+    }
+
+    pub fn cycle_active_tab_drag_preview_candidate(&mut self) -> bool {
+        let Some(session) = self.tab_drag_session.as_mut() else {
+            return false;
+        };
+        if !session.active {
+            return false;
+        }
+        let Some(drag) = self.docking_visual_state.active_tab_drag.as_mut() else {
+            return false;
+        };
+        if drag.preview_candidates.is_empty() {
+            return false;
+        }
+        let active_side = drag
+            .preview_candidates
+            .iter()
+            .find(|candidate| candidate.active)
+            .map(|candidate| candidate.side)
+            .or(session.drop_candidate_cycle_side)
+            .unwrap_or(drag.preview_candidates[0].side);
+        let same_side_indices = drag
+            .preview_candidates
+            .iter()
+            .enumerate()
+            .filter_map(|(index, candidate)| (candidate.side == active_side).then_some(index))
+            .collect::<Vec<_>>();
+        if same_side_indices.is_empty() {
+            return false;
+        }
+        session.drop_candidate_cycle_index = session.drop_candidate_cycle_index.saturating_add(1);
+        session.drop_candidate_cycle_side = Some(active_side);
+        let active_index =
+            same_side_indices[session.drop_candidate_cycle_index % same_side_indices.len()];
+        for (index, candidate) in drag.preview_candidates.iter_mut().enumerate() {
+            candidate.active = index == active_index;
+        }
+        drag.preview_target = Some(drag.preview_candidates[active_index].target);
+        true
     }
 
     pub fn finish_tab_drag(
@@ -497,6 +563,7 @@ impl RunenwerkEditorShellState {
         let preview_target = self
             .docking_visual_state
             .active_tab_drag
+            .as_ref()
             .and_then(|drag| drag.preview_target);
         self.clear_tab_drag();
         if !session.active {

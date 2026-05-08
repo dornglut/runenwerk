@@ -8,11 +8,10 @@ use crate::{
     TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID,
     TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
     TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID, TOOLBAR_ROOT_WIDGET_ID,
-    TOOLBAR_ROTATE_BUTTON_WIDGET_ID, TOOLBAR_ROW_WIDGET_ID, TOOLBAR_ROWS_WIDGET_ID,
-    TOOLBAR_SCALE_BUTTON_WIDGET_ID, TOOLBAR_SCENE_WORKSPACE_WIDGET_ID, TOOLBAR_SCROLL_WIDGET_ID,
-    TOOLBAR_SELECT_BUTTON_WIDGET_ID, TOOLBAR_SEPARATOR_WIDGET_ID,
-    TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, ToolbarViewModel,
-    WorkspaceProfileId, toolbar_menu_item_widget_id, toolbar_workspace_close_widget_id,
+    TOOLBAR_ROW_WIDGET_ID, TOOLBAR_ROWS_WIDGET_ID, TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
+    TOOLBAR_SCROLL_WIDGET_ID, TOOLBAR_SEPARATOR_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID,
+    ToolbarViewModel, WorkspaceProfileId, toolbar_menu_item_widget_id,
+    toolbar_workspace_close_overlay_widget_id, toolbar_workspace_close_widget_id,
 };
 use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
@@ -21,9 +20,11 @@ use ui_definition::{
     UiRouteSlotId, UiValue, form_retained_ui, normalize_authored_template,
 };
 use ui_math::{UiInsets, UiSize};
-use ui_text::FontId;
+use ui_text::{FontId, TextVerticalAlign};
 use ui_theme::{ThemeTokens, UiColor};
-use ui_tree::{PopupNode, UiNode, UiNodeKind};
+use ui_tree::{
+    OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide, UiNode, UiNodeKind,
+};
 use ui_widgets::{button, button_selected};
 
 const TOOLBAR_TEMPLATE_RON: &str = include_str!("../../../../../assets/editor/ui/toolbar.ron");
@@ -81,7 +82,8 @@ pub fn build_defined_toolbar_menu_popup_with_binding(
         fallback = checked_in_toolbar_binding();
         &fallback
     };
-    let text_style = theme.body_small_text_style(FontId(1));
+    let mut text_style = theme.body_small_text_style(FontId(1));
+    text_style.vertical_align = TextVerticalAlign::CapHeightCenter;
     let mut routes_by_widget_id = BTreeMap::new();
     let mut paths_by_widget_id = BTreeMap::new();
     let mut availability_by_widget_id = BTreeMap::new();
@@ -146,7 +148,13 @@ pub fn build_defined_toolbar_menu_popup_with_binding(
 
     let root = UiNode::with_children(
         TOOLBAR_MENU_POPUP_WIDGET_ID,
-        UiNodeKind::Popup(PopupNode::anchored_bottom_start(anchor, theme.clone())),
+        UiNodeKind::Popup(PopupNode::anchored_outside(
+            anchor,
+            PopupSide::Bottom,
+            PopupAlign::Start,
+            PopupFlipPolicy::FlipToFit,
+            theme.clone(),
+        )),
         children,
     );
     paths_by_widget_id.insert(
@@ -230,6 +238,7 @@ fn compact_toolbar_root(root: &mut UiNode, theme: &ThemeTokens) {
         return;
     };
     panel.padding = UiInsets::new(theme.spacing.xs, 0.0, theme.spacing.xs, theme.spacing.xs);
+    apply_compact_toolbar_text_alignment(root);
 
     if let Some(row) = root
         .children
@@ -240,6 +249,15 @@ fn compact_toolbar_root(root: &mut UiNode, theme: &ThemeTokens) {
         && let UiNodeKind::Stack(stack) = &mut row.kind
     {
         stack.gap = theme.spacing.sm;
+    }
+}
+
+fn apply_compact_toolbar_text_alignment(node: &mut UiNode) {
+    if let UiNodeKind::Button(button) = &mut node.kind {
+        button.text_style.vertical_align = TextVerticalAlign::CapHeightCenter;
+    }
+    for child in &mut node.children {
+        apply_compact_toolbar_text_alignment(child);
     }
 }
 
@@ -342,20 +360,35 @@ fn project_workspace_close_buttons(
         else {
             continue;
         };
-        if row.children.iter().any(|child| child.id == close_widget_id) {
+        let close_overlay_widget_id = toolbar_workspace_close_overlay_widget_id(profile_id);
+        if row
+            .children
+            .iter()
+            .any(|child| child.id == close_widget_id || child.id == close_overlay_widget_id)
+        {
             continue;
         }
         let mut close = button(
             close_widget_id,
             "x",
-            theme.body_small_text_style(FontId(1)),
+            toolbar_icon_text_style(theme),
             theme.clone(),
         );
         if let UiNodeKind::Button(button) = &mut close.kind {
             style_workspace_close_button(button, theme, anchor_widget_id);
             button.enabled = open_workspace_count > 1;
         }
-        row.children.insert(anchor_index + 1, close);
+        row.children.insert(
+            anchor_index + 1,
+            UiNode::with_children(
+                close_overlay_widget_id,
+                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
+                    anchor_widget_id,
+                    theme.spacing.xs,
+                )),
+                vec![close],
+            ),
+        );
         product.routes_by_widget_id.insert(
             close_widget_id,
             FormedUiRoute::RouteSlot(UiRouteSlotId::new(route)),
@@ -374,6 +407,12 @@ fn workspace_profile_for_stable_name(name: &str) -> Option<WorkspaceProfileId> {
         "workspace_editor_design" => Some(EDITOR_DESIGN_WORKSPACE_PROFILE_ID),
         _ => None,
     }
+}
+
+fn toolbar_icon_text_style(theme: &ThemeTokens) -> ui_text::TextStyle {
+    let mut text_style = theme.body_small_text_style(FontId(1));
+    text_style.vertical_align = TextVerticalAlign::InkBoundsCenter;
+    text_style
 }
 
 fn style_workspace_close_button(
@@ -432,22 +471,6 @@ fn register_toolbar_widget_ids(context: &mut UiDefinitionContext) {
         (
             "root/scroll/rows/top_row/workspace_plus",
             TOOLBAR_ADD_WORKSPACE_WIDGET_ID,
-        ),
-        (
-            "root/scroll/rows/top_row/select",
-            TOOLBAR_SELECT_BUTTON_WIDGET_ID,
-        ),
-        (
-            "root/scroll/rows/top_row/translate",
-            TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
-        ),
-        (
-            "root/scroll/rows/top_row/rotate",
-            TOOLBAR_ROTATE_BUTTON_WIDGET_ID,
-        ),
-        (
-            "root/scroll/rows/top_row/scale",
-            TOOLBAR_SCALE_BUTTON_WIDGET_ID,
         ),
     ];
     for (path, widget_id) in mappings {

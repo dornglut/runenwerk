@@ -28,7 +28,7 @@ const WORKSPACE_EDITOR_DESIGN_ID: ToolId = ToolId(3_004);
     reason = "toolbar observation projection takes explicit shell state inputs"
 )]
 pub fn build_toolbar_observation_frame(
-    active_tool: Option<ToolId>,
+    _active_tool: Option<ToolId>,
     can_undo: bool,
     can_redo: bool,
     _debug_logs_enabled: bool,
@@ -66,10 +66,6 @@ pub fn build_toolbar_observation_frame(
             is_active: false,
             enabled: false,
         },
-        tool_button(SELECT_TOOL_ID, "select", "Select", active_tool),
-        tool_button(TRANSLATE_TOOL_ID, "translate", "Move", active_tool),
-        tool_button(ROTATE_TOOL_ID, "rotate", "Rotate", active_tool),
-        tool_button(SCALE_TOOL_ID, "scale", "Scale", active_tool),
     ];
     for profile_id in open_workspace_profile_ids {
         if let Some(button) = workspace_button_for_profile(*profile_id, active_workspace_profile_id)
@@ -93,21 +89,6 @@ pub fn build_toolbar_observation_frame(
             source_version,
         ),
         buttons,
-    }
-}
-
-fn tool_button(
-    id: ToolId,
-    stable_name: &'static str,
-    label: &'static str,
-    active_tool: Option<ToolId>,
-) -> ToolbarObservedButton {
-    ToolbarObservedButton {
-        id,
-        stable_name,
-        label: label.to_string(),
-        is_active: active_tool == Some(id),
-        enabled: true,
     }
 }
 

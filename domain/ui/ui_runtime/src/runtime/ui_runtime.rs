@@ -37,6 +37,13 @@ impl UiRuntime {
         self.state.focused_target = widget_id.map(|value| FocusTargetId(value.0));
     }
 
+    pub fn focused_widget_captures_viewport_shortcuts(&self, tree: &UiTree) -> bool {
+        let Some(widget_id) = self.focused_widget_in_tree(tree) else {
+            return false;
+        };
+        focused_widget_captures_viewport_shortcuts(tree, widget_id)
+    }
+
     pub fn scroll_offset(&self, widget_id: WidgetId) -> f32 {
         self.state.scroll_offset(widget_id)
     }
@@ -254,6 +261,8 @@ fn focusable_widgets(tree: &UiTree) -> Vec<WidgetId> {
             }
             UiNodeKind::Panel(_)
             | UiNodeKind::Popup(_)
+            | UiNodeKind::RadialMenu(_)
+            | UiNodeKind::OverlayAdornment(_)
             | UiNodeKind::Label(_)
             | UiNodeKind::Button(_)
             | UiNodeKind::TextInput(_)
@@ -269,6 +278,33 @@ fn focusable_widgets(tree: &UiTree) -> Vec<WidgetId> {
             | UiNodeKind::Split(_) => None,
         })
         .collect()
+}
+
+fn focused_widget_captures_viewport_shortcuts(tree: &UiTree, widget_id: WidgetId) -> bool {
+    let Some(node) = tree.walk().find(|node| node.id == widget_id) else {
+        return false;
+    };
+    match &node.kind {
+        UiNodeKind::Button(button) => button.enabled,
+        UiNodeKind::TextInput(text_input) => text_input.editable,
+        UiNodeKind::Toggle(toggle) => toggle.enabled,
+        UiNodeKind::NumericInput(numeric) => numeric.enabled,
+        UiNodeKind::Select(select) => select.enabled,
+        UiNodeKind::Table(table) => table.rows.iter().any(|row| row.enabled),
+        UiNodeKind::Tree(tree) => tree.rows.iter().any(|row| row.enabled),
+        UiNodeKind::Tabs(_) | UiNodeKind::Scroll(_) => true,
+        UiNodeKind::ViewportSurfaceEmbed(_)
+        | UiNodeKind::Panel(_)
+        | UiNodeKind::Popup(_)
+        | UiNodeKind::RadialMenu(_)
+        | UiNodeKind::OverlayAdornment(_)
+        | UiNodeKind::Label(_)
+        | UiNodeKind::Spacer(_)
+        | UiNodeKind::Divider(_)
+        | UiNodeKind::Image(_)
+        | UiNodeKind::Stack(_)
+        | UiNodeKind::Split(_) => false,
+    }
 }
 
 fn next_focus_target(
@@ -323,13 +359,14 @@ mod tests {
     use crate::output::build_ui_frame::scrollbar_geometry;
     use crate::{
         ButtonNode, ImageNode, NumericInputNode, PanelNode, ScrollNode, SpacerNode, StackNode,
-        TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind,
+        TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind, ViewportSurfaceEmbedNode,
     };
     use ui_input::{
         FocusChange, FocusTargetId, Key, KeyState, KeyboardEvent, Modifiers, PointerButton,
         PointerEvent, PointerEventKind, TextInputEvent,
     };
     use ui_math::{UiPoint, UiRect, UiVector};
+    use ui_render_data::ViewportSurfaceEmbedSlotId;
     use ui_text::TextStyle;
     use ui_theme::ThemeTokens;
 
@@ -687,6 +724,49 @@ mod tests {
         assert_eq!(
             runtime.state().focused_target,
             Some(FocusTargetId(numeric_id.0)),
+        );
+    }
+
+    #[test]
+    fn focused_text_controls_capture_viewport_shortcuts_but_viewports_do_not() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let text_input_id = WidgetId(2);
+        let viewport_id = WidgetId(3);
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Stack(StackNode::vertical(theme.spacing.sm)),
+            vec![
+                UiNode::new(
+                    text_input_id,
+                    UiNodeKind::TextInput(TextInputNode::new(
+                        "",
+                        "Search",
+                        text_style,
+                        theme.clone(),
+                    )),
+                ),
+                UiNode::new(
+                    viewport_id,
+                    UiNodeKind::ViewportSurfaceEmbed(ViewportSurfaceEmbedNode::new(
+                        1,
+                        ViewportSurfaceEmbedSlotId::new(1),
+                    )),
+                ),
+            ],
+        ));
+        let mut runtime = UiRuntime::new();
+
+        runtime.set_focused_widget(Some(text_input_id));
+        assert!(
+            runtime.focused_widget_captures_viewport_shortcuts(&tree),
+            "focused text input should block viewport-local shortcut handling",
+        );
+
+        runtime.set_focused_widget(Some(viewport_id));
+        assert!(
+            !runtime.focused_widget_captures_viewport_shortcuts(&tree),
+            "focused viewport embed should leave viewport-local shortcuts active",
         );
     }
 
@@ -1057,7 +1137,7 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_scroll_ignores_wheel_input() {
+    fn horizontal_scroll_uses_vertical_wheel_input_when_it_overflows() {
         let theme = ThemeTokens::default();
         let text_style = TextStyle::default();
         let scroll_id = WidgetId(171);
@@ -1103,8 +1183,63 @@ mod tests {
             }),
         );
         assert!(
-            runtime.state().scroll_offset(scroll_id) <= 0.001,
-            "horizontal scroll should ignore wheel input by default",
+            runtime.state().scroll_offset(scroll_id) > 0.001,
+            "vertical wheel should scroll a horizontal-only overflow region",
+        );
+    }
+
+    #[test]
+    fn horizontal_scroll_uses_shift_wheel_input() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let scroll_id = WidgetId(173);
+        let row_id = WidgetId(174);
+        let mut row_children = Vec::new();
+        for index in 0..8 {
+            row_children.push(UiNode::new(
+                WidgetId(190 + index),
+                UiNodeKind::Button(ButtonNode::new(
+                    format!("Button {index}"),
+                    text_style.clone(),
+                    theme.clone(),
+                )),
+            ));
+        }
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                scroll_id,
+                UiNodeKind::Scroll(ScrollNode::horizontal(theme.clone())),
+                vec![UiNode::with_children(
+                    row_id,
+                    UiNodeKind::Stack(StackNode::horizontal(4.0)),
+                    row_children,
+                )],
+            )],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 96.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let scroll_point = center_of(&layouts, scroll_id);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: scroll_point,
+                delta: UiVector::new(0.0, -8.0),
+                button: None,
+                modifiers: Modifiers {
+                    shift: true,
+                    ..Modifiers::default()
+                },
+                click_count: 0,
+            }),
+        );
+        assert!(
+            runtime.state().scroll_offset(scroll_id) > 0.001,
+            "shift-wheel should scroll horizontally",
         );
     }
 
@@ -1557,6 +1692,91 @@ mod tests {
         assert!(
             runtime.state().scroll_offset(horizontal_scroll_id) > 0.0,
             "middle-button drag should pan horizontal scroll offset",
+        );
+    }
+
+    #[test]
+    fn middle_drag_without_starting_scroll_owner_does_not_switch_to_hovered_scroll() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let anchor_id = WidgetId(201);
+        let horizontal_scroll_id = WidgetId(202);
+        let row_id = WidgetId(203);
+        let row_children = (0..12)
+            .map(|index| {
+                UiNode::new(
+                    WidgetId(220 + index),
+                    UiNodeKind::Button(ButtonNode::new(
+                        format!("Button {index}"),
+                        text_style.clone(),
+                        theme.clone(),
+                    )),
+                )
+            })
+            .collect::<Vec<_>>();
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Stack(StackNode::horizontal(theme.spacing.sm)),
+            vec![
+                UiNode::new(
+                    anchor_id,
+                    UiNodeKind::Button(ButtonNode::new(
+                        "Anchor",
+                        text_style.clone(),
+                        theme.clone(),
+                    )),
+                ),
+                UiNode::with_children(
+                    horizontal_scroll_id,
+                    UiNodeKind::Scroll(ScrollNode::horizontal(theme.clone())),
+                    vec![UiNode::with_children(
+                        row_id,
+                        UiNodeKind::Stack(StackNode::horizontal(4.0)),
+                        row_children,
+                    )],
+                ),
+            ],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 360.0, 96.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let start = center_of(&layouts, anchor_id);
+        let scroll_bounds = layouts
+            .get(&horizontal_scroll_id)
+            .expect("horizontal scroll layout should exist")
+            .bounds;
+        let end = UiPoint::new(scroll_bounds.x + scroll_bounds.width * 0.5, start.y);
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Middle),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: end,
+                delta: end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+
+        assert_eq!(
+            runtime.state().scroll_offset(horizontal_scroll_id),
+            0.0,
+            "middle-drag that starts outside a scroll owner must not adopt another scroll area mid-drag",
         );
     }
 }

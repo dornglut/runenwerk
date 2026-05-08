@@ -134,7 +134,7 @@ Gap: scoped workspace/document mode sets are not implemented. Tool availability 
 
 - `domain/editor/editor_shell/src/workspace/reducer.rs` supports tab activation, move/reorder, rehome between stacks, floating host creation, and split fraction changes.
 - `domain/editor/editor_shell/src/workspace/projection.rs` produces fixed-layout tab stack projections and routing maps.
-- `domain/editor/editor_shell/src/composition/build_editor_shell.rs` renders tab strips, drop zones, floating columns, and split handles.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs` renders tab strips, drop zones, explicit shelf columns, and split handles.
 - `apps/runenwerk_editor/src/shell/controller.rs` and `apps/runenwerk_editor/src/shell/state.rs` track tab drag and split resize interactions.
 
 Gap: docking/tab behavior is real but still fixed-editor-shell oriented. The projection keeps named slots for outliner, viewport, inspector, and console, and floating behavior is represented as a column rather than a full editor windowing/docking product.

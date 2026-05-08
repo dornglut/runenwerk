@@ -1,7 +1,7 @@
 //! File: domain/ui/ui_theme/src/theme.rs
 //! Purpose: Root theme token container.
 
-use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextWrap};
+use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextVerticalAlign, TextWrap};
 
 use crate::{RadiusScale, SpacingScale, TypographyScale, UiColor};
 
@@ -11,6 +11,11 @@ pub struct ThemeTokens {
     pub background_panel: UiColor,
     pub foreground: UiColor,
     pub foreground_muted: UiColor,
+    pub status_input: UiColor,
+    pub status_error: UiColor,
+    pub status_warning: UiColor,
+    pub status_info: UiColor,
+    pub status_debug: UiColor,
     pub accent: UiColor,
     pub border: UiColor,
     pub border_width: f32,
@@ -32,6 +37,7 @@ impl ThemeTokens {
             ],
             line_height: Some((self.typography.body * 1.35).max(1.0)),
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         }
@@ -49,6 +55,7 @@ impl ThemeTokens {
             ],
             line_height: Some((self.typography.body_small * 1.35).max(1.0)),
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         }
@@ -66,6 +73,7 @@ impl ThemeTokens {
             ],
             line_height: Some((self.typography.heading * 1.25).max(1.0)),
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         }
@@ -83,6 +91,7 @@ impl ThemeTokens {
             ],
             line_height: Some((self.typography.monospace * 1.35).max(1.0)),
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         }
@@ -95,6 +104,11 @@ impl ThemeTokens {
             background_panel: self.background_panel,
             foreground: self.foreground,
             foreground_muted: self.foreground_muted,
+            status_input: self.status_input,
+            status_error: self.status_error,
+            status_warning: self.status_warning,
+            status_info: self.status_info,
+            status_debug: self.status_debug,
             accent: self.accent,
             border: self.border,
             border_width: (self.border_width * factor).clamp(0.5, 4.0),
@@ -127,6 +141,11 @@ impl Default for ThemeTokens {
             background_panel: UiColor::new(0.006, 0.006, 0.007, 1.0),
             foreground: UiColor::new(0.940, 0.940, 0.940, 1.0),
             foreground_muted: UiColor::new(0.760, 0.760, 0.775, 1.0),
+            status_input: UiColor::new(0.320, 0.610, 1.000, 1.0),
+            status_error: UiColor::new(1.000, 0.300, 0.260, 1.0),
+            status_warning: UiColor::new(1.000, 0.790, 0.250, 1.0),
+            status_info: UiColor::new(0.940, 0.940, 0.940, 1.0),
+            status_debug: UiColor::new(0.620, 0.640, 0.680, 1.0),
             accent: UiColor::new(0.165, 0.455, 0.980, 1.0),
             border: UiColor::new(0.070, 0.070, 0.080, 1.0),
             border_width: 1.0,

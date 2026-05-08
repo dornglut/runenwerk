@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use editor_shell::{ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, WorkspaceState};
+use editor_viewport::ViewportId;
+use ui_math::UiPoint;
 
 use crate::editor_features::viewport::ViewportInteractionState;
 use crate::editor_panels::EntityTablePanelUiState;
@@ -14,7 +16,17 @@ pub struct SurfaceSessionState {
     pub viewport_details_visible: bool,
     pub viewport_statistics_visible: bool,
     pub viewport_options_menu_open: bool,
+    pub viewport_tools_menu_open: bool,
+    pub viewport_tool_radial_session: Option<ViewportToolRadialSession>,
     pub console_follow_enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ViewportToolRadialSession {
+    pub tool_surface_id: ToolSurfaceInstanceId,
+    pub viewport_id: ViewportId,
+    pub anchor_position: UiPoint,
+    pub opened_by_tab_hold: bool,
 }
 
 impl Default for SurfaceSessionState {
@@ -26,6 +38,8 @@ impl Default for SurfaceSessionState {
             viewport_details_visible: false,
             viewport_statistics_visible: false,
             viewport_options_menu_open: false,
+            viewport_tools_menu_open: false,
+            viewport_tool_radial_session: None,
             console_follow_enabled: true,
         }
     }
@@ -106,6 +120,52 @@ impl SurfaceSessionStore {
 
     pub fn clear_transient(&mut self) {
         self.sessions_by_surface.clear();
+    }
+
+    pub fn close_all_viewport_options_menus(&mut self) -> bool {
+        let mut changed = false;
+        for session in self.sessions_by_surface.values_mut() {
+            if session.viewport_options_menu_open {
+                session.viewport_options_menu_open = false;
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    pub fn close_all_viewport_tool_radial_menus(&mut self) -> bool {
+        let mut changed = false;
+        for session in self.sessions_by_surface.values_mut() {
+            if session.viewport_tool_radial_session.take().is_some() {
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    pub fn close_all_viewport_tools_menus(&mut self) -> bool {
+        let mut changed = false;
+        for session in self.sessions_by_surface.values_mut() {
+            if session.viewport_tools_menu_open {
+                session.viewport_tools_menu_open = false;
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    pub fn close_tab_hold_viewport_radial_menus(&mut self) -> bool {
+        let mut changed = false;
+        for session in self.sessions_by_surface.values_mut() {
+            if session
+                .viewport_tool_radial_session
+                .is_some_and(|radial| radial.opened_by_tab_hold)
+            {
+                session.viewport_tool_radial_session = None;
+                changed = true;
+            }
+        }
+        changed
     }
 
     pub fn len(&self) -> usize {

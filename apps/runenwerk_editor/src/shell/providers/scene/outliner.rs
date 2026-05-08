@@ -33,27 +33,21 @@ impl EditorSurfaceProvider for SceneOutlinerProvider {
             context.app.runtime().current_scene_reality_version(),
         );
         let view_model = build_outliner_view_model(&frame);
-        let root = remap_surface_node_ids(
-            build_outliner_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
+        let root = build_outliner_panel(
+            &view_model,
+            context.theme,
+            request.panel_instance_id,
+            Some(request.tool_surface_instance_id),
         );
         let mut routes = SurfaceRouteTable::empty();
-        for (index, row) in view_model.rows.iter().enumerate() {
-            routes.insert(
-                remap_widget_id(
-                    request.tool_surface_instance_id,
-                    outliner_row_widget_id(index),
-                ),
-                SurfaceLocalRoute::new(SurfaceLocalAction::Outliner(
-                    OutlinerSurfaceAction::SelectEntity { entity: row.entity },
-                )),
-            );
-        }
+        routes.insert(
+            surface_widget_id(request.tool_surface_instance_id, OUTLINER_LIST_WIDGET_ID),
+            SurfaceLocalRoute::new(SurfaceLocalAction::Outliner(
+                OutlinerSurfaceAction::SelectRow {
+                    entities: view_model.rows.iter().map(|row| row.entity).collect(),
+                },
+            )),
+        );
         Ok(ProviderSurfaceFrame {
             title: "Outliner".to_string(),
             artifact: SurfacePresentationArtifact::provider(root),

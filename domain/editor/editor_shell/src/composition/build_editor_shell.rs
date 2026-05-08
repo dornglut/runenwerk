@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use ui_definition::FormedUiRoute;
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiInsets};
-use ui_text::FontId;
+use ui_text::{FontId, TextVerticalAlign};
 use ui_theme::{ThemeTokens, UiColor};
-use ui_tree::PopupNode;
+use ui_tree::{OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide};
 
 use crate::{
     UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
@@ -23,23 +23,22 @@ use crate::workspace::{
     projected_host_tab_stacks,
 };
 use crate::{
-    BODY_CONSOLE_SPLIT_HANDLE_WIDGET_ID, BODY_CONSOLE_SPLIT_WIDGET_ID,
-    BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_HANDLE_WIDGET_ID,
-    CENTER_RIGHT_SPLIT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID, FLOATING_COLUMN_WIDGET_ID,
-    FLOATING_DROP_ZONE_WIDGET_ID, FixedLayoutProjection, INSPECTOR_PANEL_WIDGET_ID,
-    LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID, LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
-    OUTLINER_PANEL_WIDGET_ID, PanelInstanceId, PanelKind, ROOT_WIDGET_ID,
-    SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction, SurfaceProviderId, TabStackId,
-    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind,
-    ToolbarMenuKind, VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
+    BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+    FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
+    PanelInstanceId, PanelKind, ROOT_WIDGET_ID, SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction,
+    SurfaceProviderId, TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind,
+    ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
     WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
-    build_defined_toolbar_with_template, tab_close_button_widget_id, tab_close_overlay_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_close_area_button_widget_id,
-    tab_stack_container_widget_id, tab_stack_duplicate_button_widget_id,
-    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
+    build_defined_toolbar_with_template, dock_split_preview_label_widget_id,
+    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id,
+    tab_close_button_widget_id, tab_close_overlay_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
+    tab_stack_content_widget_id, tab_stack_duplicate_button_widget_id,
+    tab_stack_lock_type_toggle_widget_id, tab_stack_new_surface_menu_item_widget_id,
+    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
     tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
     tab_stack_split_vertical_button_widget_id, tab_stack_surface_menu_item_widget_id,
-    tab_stack_surface_menu_popup_widget_id, tab_stack_switch_surface_button_widget_id,
+    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_submenu_anchor_widget_id,
     tab_strip_scroll_widget_id,
 };
 
@@ -57,6 +56,10 @@ pub enum RoutedShellAction {
         anchor_widget_id: WidgetId,
     },
     ToggleTabStackSurfaceMenu {
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    },
+    ToggleTabStackCreateSurfaceMenu {
         tab_stack_id: TabStackId,
         anchor_widget_id: WidgetId,
     },
@@ -139,17 +142,45 @@ pub enum DockingPreviewDropTarget {
         tab_stack_id: TabStackId,
         insert_index: usize,
     },
+    SplitIntoArea {
+        target_tab_stack_id: TabStackId,
+        side: crate::DockSplitSide,
+    },
+    SplitIntoHost {
+        target_host_id: crate::PanelHostId,
+        side: crate::DockSplitSide,
+    },
+    SplitIntoRoot {
+        side: crate::DockSplitSide,
+    },
     NewFloatingHost,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockDropScope {
+    Area,
+    Group,
+    Workspace,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DockDropCandidate {
+    pub target: DockingPreviewDropTarget,
+    pub scope: DockDropScope,
+    pub side: crate::DockSplitSide,
+    pub anchor_widget_id: WidgetId,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveTabDragVisualState {
     pub panel_instance_id: PanelInstanceId,
     pub source_tab_stack_id: TabStackId,
     pub preview_target: Option<DockingPreviewDropTarget>,
+    pub preview_candidates: Vec<DockDropCandidate>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DockingInteractionVisualState {
     pub active_tab_drag: Option<ActiveTabDragVisualState>,
     pub active_split_border_widget: Option<WidgetId>,
@@ -185,7 +216,6 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
 ) -> EditorShellBuildResult {
     let workspace_projection = project_workspace_for_shell(workspace_state)
         .expect("workspace state is invalid for editor-shell projection");
-    let fixed_projection = workspace_projection.fixed_layout.clone();
     let root_host = workspace_projection.root_host.clone();
     let floating_hosts = workspace_projection.floating_hosts.clone();
     let toolbar = build_defined_toolbar_with_template(
@@ -216,28 +246,31 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         workspace: workspace_projection,
     };
 
-    let body_with_console = if let Some(projection) = fixed_projection.as_ref() {
-        build_fixed_layout_content(projection, frame_model, theme, docking_visual_state)
+    let body_with_console =
+        build_workspace_host_from_projection(&root_host, frame_model, theme, docking_visual_state);
+
+    let active_drag = docking_visual_state.and_then(|value| value.active_tab_drag.as_ref());
+    let previewing_new_shelf_host = active_drag
+        .and_then(|drag| drag.preview_target)
+        .is_some_and(|target| matches!(target, DockingPreviewDropTarget::NewFloatingHost));
+    let show_shelf_column = !floating_hosts.is_empty() || previewing_new_shelf_host;
+    let shelf_split_ratio = if floating_hosts.is_empty() {
+        0.94
     } else {
-        build_workspace_host_from_projection(&root_host, frame_model, theme, docking_visual_state)
+        0.78
     };
 
-    let show_floating_column = !floating_hosts.is_empty()
-        || docking_visual_state
-            .and_then(|value| value.active_tab_drag)
-            .is_some();
-
-    let content = if !show_floating_column {
+    let content = if !show_shelf_column {
         body_with_console
     } else {
         split(
             BODY_FLOATING_SPLIT_WIDGET_ID,
             Axis::Horizontal,
-            0.78,
+            shelf_split_ratio,
             theme.spacing.sm,
             vec![
                 body_with_console,
-                build_floating_column_from_frame(
+                build_shelf_column_from_frame(
                     &floating_hosts,
                     frame_model,
                     theme,
@@ -271,6 +304,10 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         root_children.push(popup.root);
     }
     root_children.extend(tab_stack_popup_menus);
+    root_children.extend(build_dock_split_preview_overlays(
+        docking_visual_state,
+        theme,
+    ));
 
     let mut root = panel(ROOT_WIDGET_ID, root_theme, root_children);
     if let UiNodeKind::Panel(panel) = &mut root.kind {
@@ -285,83 +322,6 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
     EditorShellBuildResult {
         tree: UiTree::new(root),
         projection_artifacts,
-    }
-}
-
-fn build_fixed_layout_content(
-    projection: &FixedLayoutProjection,
-    frame_model: &EditorShellFrameModel,
-    theme: &ThemeTokens,
-    docking_visual_state: Option<&DockingInteractionVisualState>,
-) -> UiNode {
-    let outliner = build_tab_stack_host_from_frame(
-        &projection.outliner,
-        frame_model,
-        theme,
-        docking_visual_state,
-        OUTLINER_PANEL_WIDGET_ID,
-    );
-    let viewport = build_tab_stack_host_from_frame(
-        &projection.viewport,
-        frame_model,
-        theme,
-        docking_visual_state,
-        VIEWPORT_PANEL_WIDGET_ID,
-    );
-    let inspector = build_tab_stack_host_from_frame(
-        &projection.inspector,
-        frame_model,
-        theme,
-        docking_visual_state,
-        INSPECTOR_PANEL_WIDGET_ID,
-    );
-    let console = build_tab_stack_host_from_frame(
-        &projection.console,
-        frame_model,
-        theme,
-        docking_visual_state,
-        crate::CONSOLE_PANEL_WIDGET_ID,
-    );
-
-    let right_sidebar = build_resizable_split(
-        CENTER_RIGHT_SPLIT_WIDGET_ID,
-        Axis::Vertical,
-        projection.center_right_fraction,
-        theme.spacing.sm,
-        outliner,
-        inspector,
-        theme,
-        docking_visual_state,
-    );
-
-    let body = build_resizable_split(
-        LEFT_RIGHT_SPLIT_WIDGET_ID,
-        Axis::Horizontal,
-        projection.left_right_fraction,
-        theme.spacing.sm,
-        viewport,
-        right_sidebar,
-        theme,
-        docking_visual_state,
-    );
-
-    let show_console_slot = !projection.console.tabs.is_empty()
-        || docking_visual_state
-            .and_then(|value| value.active_tab_drag)
-            .is_some();
-    if show_console_slot {
-        build_resizable_split(
-            BODY_CONSOLE_SPLIT_WIDGET_ID,
-            Axis::Vertical,
-            projection.body_console_fraction,
-            theme.spacing.sm,
-            body,
-            console,
-            theme,
-            docking_visual_state,
-        )
-    } else {
-        body
     }
 }
 
@@ -440,12 +400,38 @@ fn build_tab_stack_host_from_frame(
                 .map(|surface| surface.artifact.root.clone())
         })
         .unwrap_or_else(|| build_empty_stack_placeholder(empty_widget_id, "", theme));
-    vstack_with_policies(
-        tab_stack_container_widget_id(tab_stack.tab_stack_id),
+    let content = vstack_with_policies(
+        tab_stack_content_widget_id(tab_stack.tab_stack_id),
         theme.spacing.xs,
         vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
         vec![tab_strip, panel_content],
-    )
+    );
+    let mut clipped_host = panel(
+        tab_stack_container_widget_id(tab_stack.tab_stack_id),
+        transparent_overlay_theme(theme),
+        vec![content],
+    );
+    if let UiNodeKind::Panel(panel) = &mut clipped_host.kind {
+        panel.padding = UiInsets::ZERO;
+        panel.min_size = UiSize::ZERO;
+        if docking_visual_state
+            .and_then(|value| value.active_tab_drag.as_ref())
+            .and_then(|drag| drag.preview_target)
+            .is_some_and(|target| {
+                matches!(
+                    target,
+                    DockingPreviewDropTarget::SplitIntoArea {
+                        target_tab_stack_id,
+                        ..
+                    } if target_tab_stack_id == tab_stack.tab_stack_id
+                )
+            })
+        {
+            panel.theme.border = UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.80);
+            panel.theme.border_width = theme.border_width.max(2.0);
+        }
+    }
+    clipped_host
 }
 
 fn build_tab_strip_from_frame(
@@ -455,11 +441,8 @@ fn build_tab_strip_from_frame(
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> UiNode {
     let active_panel_id = tab_stack.active_panel.map(|panel| panel.panel_instance_id);
-    let drag_visual = docking_visual_state.and_then(|value| value.active_tab_drag);
+    let drag_visual = docking_visual_state.and_then(|value| value.active_tab_drag.as_ref());
     let show_drop_slots = drag_visual.is_some();
-    if !show_drop_slots {
-        return crate::build_defined_tab_strip_from_frame(tab_stack, frame_model, theme);
-    }
     let mut children = Vec::with_capacity(if show_drop_slots {
         tab_stack.tabs.len() * 3 + 9
     } else {
@@ -516,7 +499,7 @@ fn build_tab_strip_from_frame(
             let mut close_button = button(
                 tab_close_button_widget_id(tab_stack.tab_stack_id, insert_index),
                 "x",
-                theme.body_small_text_style(FontId(1)),
+                icon_glyph_text_style(theme),
                 theme.clone(),
             );
             if let UiNodeKind::Button(button) = &mut close_button.kind {
@@ -533,11 +516,12 @@ fn build_tab_strip_from_frame(
                 button.corner_radius = Some(f32::MAX);
                 button.reveal_on_hover_anchor = Some(tab.widget_id);
             }
-            let mut close_popup = PopupNode::anchored_inside_top_end(tab.widget_id, theme.clone());
-            close_popup.offset = theme.spacing.xs;
             children.push(UiNode::with_children(
                 tab_close_overlay_widget_id(tab_stack.tab_stack_id, insert_index),
-                UiNodeKind::Popup(close_popup),
+                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
+                    tab.widget_id,
+                    theme.spacing.xs,
+                )),
                 vec![close_button],
             ));
         }
@@ -545,7 +529,7 @@ fn build_tab_strip_from_frame(
     children.push(button(
         tab_stack_new_tab_button_widget_id(tab_stack.tab_stack_id),
         "+",
-        theme.body_small_text_style(FontId(1)),
+        icon_glyph_text_style(theme),
         theme.clone(),
     ));
     let strip_row = hstack_with_policies(
@@ -583,6 +567,12 @@ fn build_tab_stack_popup_menus(
                 theme,
                 &available_tool_surface_kinds(frame_model),
             ),
+            TabStackPopupMenuKind::CreateSurface => build_tab_stack_create_surface_menu_popup(
+                stack,
+                active_menu.anchor_widget_id,
+                theme,
+                &available_tool_surface_kinds(frame_model),
+            ),
         })
         .collect()
 }
@@ -593,7 +583,7 @@ fn build_tab_stack_action_menu_popup(
     theme: &ThemeTokens,
 ) -> UiNode {
     let tab_stack_id = tab_stack.tab_stack_id;
-    let text_style = theme.body_small_text_style(FontId(1));
+    let text_style = compact_shell_text_style(theme);
     let lock_label = if tab_stack.locked_tool_surface_kind.is_some() {
         "Unlock Type"
     } else {
@@ -625,7 +615,7 @@ fn build_tab_stack_action_menu_popup(
             text_style.clone(),
         ),
         tab_stack_action_menu_item(
-            tab_stack_switch_surface_button_widget_id(tab_stack_id),
+            tab_stack_surface_submenu_anchor_widget_id(tab_stack_id),
             "Switch Type",
             theme,
             text_style.clone(),
@@ -653,8 +643,11 @@ fn build_tab_stack_action_menu_popup(
     );
     let mut root = UiNode::with_children(
         tab_stack_action_menu_popup_widget_id(tab_stack_id),
-        UiNodeKind::Popup(PopupNode::anchored_bottom_start(
+        UiNodeKind::Popup(PopupNode::anchored_outside(
             anchor_widget_id,
+            PopupSide::Bottom,
+            PopupAlign::Start,
+            PopupFlipPolicy::FlipToFit,
             popup_theme,
         )),
         Vec::new(),
@@ -669,7 +662,7 @@ fn build_tab_stack_surface_menu_popup(
     theme: &ThemeTokens,
     tool_surface_kinds: &[ToolSurfaceKind],
 ) -> UiNode {
-    let text_style = theme.body_small_text_style(FontId(1));
+    let text_style = compact_shell_text_style(theme);
     let mut children = tool_surface_kinds
         .iter()
         .copied()
@@ -693,14 +686,178 @@ fn build_tab_stack_surface_menu_popup(
     );
     let mut root = UiNode::with_children(
         tab_stack_surface_menu_popup_widget_id(tab_stack.tab_stack_id),
-        UiNodeKind::Popup(PopupNode::anchored_right_start(
+        UiNodeKind::Popup(PopupNode::anchored_outside(
             anchor_widget_id,
+            PopupSide::Right,
+            PopupAlign::Start,
+            PopupFlipPolicy::FlipToFit,
             popup_theme,
         )),
         Vec::new(),
     );
     root.children.append(&mut children);
     root
+}
+
+fn build_tab_stack_create_surface_menu_popup(
+    tab_stack: &ProjectedTabStackSlot,
+    anchor_widget_id: WidgetId,
+    theme: &ThemeTokens,
+    tool_surface_kinds: &[ToolSurfaceKind],
+) -> UiNode {
+    let text_style = compact_shell_text_style(theme);
+    let locked_kind = tab_stack.locked_tool_surface_kind;
+    let mut children = tool_surface_kinds
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, kind)| {
+            let mut item = tab_stack_action_menu_item(
+                tab_stack_new_surface_menu_item_widget_id(tab_stack.tab_stack_id, index),
+                tool_surface_kind_label(kind),
+                theme,
+                text_style.clone(),
+            );
+            if let UiNodeKind::Button(button) = &mut item.kind {
+                button.enabled = locked_kind.is_none_or(|locked| locked == kind);
+            }
+            item
+        })
+        .collect::<Vec<_>>();
+
+    let mut popup_theme = theme.clone();
+    popup_theme.background_panel = UiColor::new(
+        theme.background_panel.r,
+        theme.background_panel.g,
+        theme.background_panel.b,
+        0.98,
+    );
+    let mut root = UiNode::with_children(
+        tab_stack_new_surface_menu_popup_widget_id(tab_stack.tab_stack_id),
+        UiNodeKind::Popup(PopupNode::anchored_outside(
+            anchor_widget_id,
+            PopupSide::Bottom,
+            PopupAlign::Start,
+            PopupFlipPolicy::FlipToFit,
+            popup_theme,
+        )),
+        Vec::new(),
+    );
+    root.children.append(&mut children);
+    root
+}
+
+fn build_dock_split_preview_overlays(
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+    theme: &ThemeTokens,
+) -> Vec<UiNode> {
+    let Some(active_drag) = docking_visual_state.and_then(|value| value.active_tab_drag.as_ref())
+    else {
+        return Vec::new();
+    };
+
+    active_drag
+        .preview_candidates
+        .clone()
+        .into_iter()
+        .map(|candidate| build_dock_split_preview_overlay(candidate, theme))
+        .collect()
+}
+
+fn build_dock_split_preview_overlay(candidate: DockDropCandidate, theme: &ThemeTokens) -> UiNode {
+    let anchor_widget_id = candidate.anchor_widget_id;
+    let popup_side = dock_preview_side(candidate.side);
+    let thickness = if candidate.active {
+        match popup_side {
+            PopupSide::Left | PopupSide::Right => (theme.spacing.lg * 6.0).clamp(80.0, 132.0),
+            PopupSide::Top | PopupSide::Bottom => (theme.spacing.xl * 1.20).clamp(28.0, 42.0),
+        }
+    } else {
+        (theme.spacing.md * 0.45).clamp(4.0, 10.0)
+    };
+    let opacity = if candidate.active { 0.34 } else { 0.12 };
+    let border_opacity = if candidate.active { 0.92 } else { 0.38 };
+    let mut preview_theme = theme.clone();
+    preview_theme.background_panel =
+        UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, opacity);
+    preview_theme.border = UiColor::new(
+        theme.accent.r,
+        theme.accent.g,
+        theme.accent.b,
+        border_opacity,
+    );
+    preview_theme.border_width = if candidate.active {
+        theme.border_width.max(1.75)
+    } else {
+        theme.border_width.max(1.0)
+    };
+    preview_theme.radius.sm = theme.radius.sm.min(4.0);
+    preview_theme.radius.md = theme.radius.sm.min(4.0);
+    preview_theme.radius.lg = theme.radius.sm.min(4.0);
+    let mut children = Vec::new();
+    if candidate.active {
+        let mut text_style = compact_shell_text_style(theme);
+        text_style.color = [
+            theme.foreground.r,
+            theme.foreground.g,
+            theme.foreground.b,
+            theme.foreground.a,
+        ];
+        children.push(label(
+            dock_split_preview_label_widget_id(anchor_widget_id),
+            dock_drop_scope_label(candidate.scope),
+            text_style,
+        ));
+    }
+
+    let mut preview_panel = panel(
+        dock_split_preview_panel_widget_id(anchor_widget_id),
+        preview_theme,
+        children,
+    );
+    if let UiNodeKind::Panel(panel) = &mut preview_panel.kind {
+        panel.padding = if candidate.active {
+            UiInsets::new(
+                theme.spacing.xs,
+                theme.spacing.sm,
+                theme.spacing.xs,
+                theme.spacing.sm,
+            )
+        } else {
+            UiInsets::ZERO
+        };
+        panel.min_size = match popup_side {
+            PopupSide::Left | PopupSide::Right => UiSize::new(thickness, 0.0),
+            PopupSide::Top | PopupSide::Bottom => UiSize::new(0.0, thickness),
+        };
+    }
+
+    UiNode::with_children(
+        dock_split_preview_overlay_widget_id(anchor_widget_id),
+        UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_edge(
+            anchor_widget_id,
+            popup_side,
+            thickness,
+        )),
+        vec![preview_panel],
+    )
+}
+
+fn dock_drop_scope_label(scope: DockDropScope) -> &'static str {
+    match scope {
+        DockDropScope::Area => "Split area",
+        DockDropScope::Group => "Split group",
+        DockDropScope::Workspace => "Split workspace",
+    }
+}
+
+fn dock_preview_side(side: crate::DockSplitSide) -> PopupSide {
+    match side {
+        crate::DockSplitSide::Left => PopupSide::Left,
+        crate::DockSplitSide::Right => PopupSide::Right,
+        crate::DockSplitSide::Top => PopupSide::Top,
+        crate::DockSplitSide::Bottom => PopupSide::Bottom,
+    }
 }
 
 fn tab_stack_action_menu_item(
@@ -723,6 +880,18 @@ fn tab_stack_action_menu_item(
     item
 }
 
+fn compact_shell_text_style(theme: &ThemeTokens) -> ui_text::TextStyle {
+    let mut text_style = theme.body_small_text_style(FontId(1));
+    text_style.vertical_align = TextVerticalAlign::CapHeightCenter;
+    text_style
+}
+
+fn icon_glyph_text_style(theme: &ThemeTokens) -> ui_text::TextStyle {
+    let mut text_style = theme.body_small_text_style(FontId(1));
+    text_style.vertical_align = TextVerticalAlign::InkBoundsCenter;
+    text_style
+}
+
 fn build_tab_insertion_spacer(
     widget_id: WidgetId,
     highlighted: bool,
@@ -736,32 +905,24 @@ fn build_tab_insertion_spacer(
     spacer(widget_id, UiSize::new(width, 0.0))
 }
 
-fn build_floating_column_from_frame(
+fn build_shelf_column_from_frame(
     floating_hosts: &[ProjectedFloatingHostSlot],
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> UiNode {
-    let active_drag = docking_visual_state.and_then(|value| value.active_tab_drag);
+    let active_drag = docking_visual_state.and_then(|value| value.active_tab_drag.as_ref());
+    let previewing_new_shelf_host = active_drag
+        .and_then(|drag| drag.preview_target)
+        .is_some_and(|target| matches!(target, DockingPreviewDropTarget::NewFloatingHost));
     let mut children =
-        Vec::with_capacity(floating_hosts.len() + usize::from(active_drag.is_some()));
+        Vec::with_capacity(floating_hosts.len() + usize::from(previewing_new_shelf_host));
     let mut policies = Vec::with_capacity(children.capacity());
 
-    if let Some(drag) = active_drag {
-        let drop_highlight = drag
-            .preview_target
-            .is_some_and(|target| matches!(target, DockingPreviewDropTarget::NewFloatingHost));
+    if previewing_new_shelf_host {
         let mut drop_theme = theme.clone();
-        drop_theme.background_panel = if drop_highlight {
-            UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.28)
-        } else {
-            UiColor::new(
-                theme.background_panel.r,
-                theme.background_panel.g,
-                theme.background_panel.b,
-                0.20,
-            )
-        };
+        drop_theme.background_panel =
+            UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.28);
         children.push(panel(FLOATING_DROP_ZONE_WIDGET_ID, drop_theme, Vec::new()));
         policies.push(SizePolicy::Auto);
     }
@@ -795,34 +956,6 @@ fn build_floating_column_from_frame(
     clippy::too_many_arguments,
     reason = "split composition helper needs explicit split geometry and visual context"
 )]
-fn build_resizable_split(
-    split_widget_id: WidgetId,
-    axis: Axis,
-    ratio: f32,
-    gap: f32,
-    first: UiNode,
-    second: UiNode,
-    theme: &ThemeTokens,
-    docking_visual_state: Option<&DockingInteractionVisualState>,
-) -> UiNode {
-    let handle_widget_id = split_handle_widget_id(split_widget_id);
-    build_resizable_split_with_handle(
-        split_widget_id,
-        handle_widget_id,
-        axis,
-        ratio,
-        gap,
-        first,
-        second,
-        theme,
-        docking_visual_state,
-    )
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "split composition helper needs explicit split geometry and visual context"
-)]
 fn build_resizable_split_with_handle(
     split_widget_id: WidgetId,
     _handle_widget_id: WidgetId,
@@ -845,13 +978,16 @@ fn build_resizable_split_with_handle(
     split(split_widget_id, axis, ratio, split_gap, vec![first, second])
 }
 
-fn split_handle_widget_id(split_widget_id: WidgetId) -> WidgetId {
-    match split_widget_id {
-        LEFT_RIGHT_SPLIT_WIDGET_ID => LEFT_RIGHT_SPLIT_HANDLE_WIDGET_ID,
-        CENTER_RIGHT_SPLIT_WIDGET_ID => CENTER_RIGHT_SPLIT_HANDLE_WIDGET_ID,
-        BODY_CONSOLE_SPLIT_WIDGET_ID => BODY_CONSOLE_SPLIT_HANDLE_WIDGET_ID,
-        _ => WidgetId(split_widget_id.0 + 999_999),
-    }
+fn transparent_overlay_theme(theme: &ThemeTokens) -> ThemeTokens {
+    let mut overlay_theme = theme.clone();
+    overlay_theme.background_panel = UiColor::new(
+        theme.background_panel.r,
+        theme.background_panel.g,
+        theme.background_panel.b,
+        0.0,
+    );
+    overlay_theme.border = UiColor::new(theme.border.r, theme.border.g, theme.border.b, 0.0);
+    overlay_theme
 }
 
 pub(super) fn panel_kind_label(panel_kind: PanelKind) -> &'static str {
@@ -1120,16 +1256,16 @@ fn register_tab_stack_chrome_routes(
         .unwrap_or(ToolSurfaceKind::Viewport);
     actions.insert(
         tab_stack_new_tab_button_widget_id(stack.tab_stack_id),
-        RoutedShellAction::CreatePanelTab {
+        RoutedShellAction::ToggleTabStackCreateSurfaceMenu {
             tab_stack_id: stack.tab_stack_id,
-            tool_surface_kind: default_kind,
+            anchor_widget_id: tab_stack_new_tab_button_widget_id(stack.tab_stack_id),
         },
     );
     actions.insert(
-        tab_stack_switch_surface_button_widget_id(stack.tab_stack_id),
+        tab_stack_surface_submenu_anchor_widget_id(stack.tab_stack_id),
         RoutedShellAction::ToggleTabStackSurfaceMenu {
             tab_stack_id: stack.tab_stack_id,
-            anchor_widget_id: tab_stack_switch_surface_button_widget_id(stack.tab_stack_id),
+            anchor_widget_id: tab_stack_container_widget_id(stack.tab_stack_id),
         },
     );
     if let Some(active_panel) = stack.active_panel {
@@ -1138,6 +1274,20 @@ fn register_tab_stack_chrome_routes(
                 tab_stack_surface_menu_item_widget_id(stack.tab_stack_id, index),
                 RoutedShellAction::SwitchPanelToolSurfaceKindTo {
                     panel_instance_id: active_panel.panel_instance_id,
+                    tool_surface_kind,
+                },
+            );
+        }
+    }
+    for (index, tool_surface_kind) in tool_surface_kinds.iter().copied().enumerate() {
+        if stack
+            .locked_tool_surface_kind
+            .is_none_or(|locked| locked == tool_surface_kind)
+        {
+            actions.insert(
+                tab_stack_new_surface_menu_item_widget_id(stack.tab_stack_id, index),
+                RoutedShellAction::CreatePanelTab {
+                    tab_stack_id: stack.tab_stack_id,
                     tool_surface_kind,
                 },
             );

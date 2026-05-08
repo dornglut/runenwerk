@@ -1,5 +1,7 @@
-use editor_shell::{WorkspaceIdentityAllocator, form_workspace_state_from_definition};
-use editor_viewport::{ViewportCameraSettings, ViewportRuntimeSettings};
+use editor_shell::{
+    ToolSurfaceInstanceId, WorkspaceIdentityAllocator, form_workspace_state_from_definition,
+};
+use editor_viewport::{ViewportCameraSettings, ViewportId, ViewportRuntimeSettings};
 use engine::plugins::render::{GpuParams, GpuUniform};
 use glam::{Vec3, vec3};
 use scene::Vec3Value;
@@ -235,6 +237,29 @@ pub fn scaled_shell_theme(theme: &ThemeTokens, scale_factor: f64) -> ThemeTokens
 pub struct EditorInputBridgeState {
     pub last_mouse_position: (f32, f32),
     pub last_logged_picking_revision: u64,
+    pub last_target_viewport: Option<ViewportId>,
+    pub active_camera_viewport: Option<ViewportId>,
+    pub pointer_owner: EditorPointerOwner,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EditorPointerOwner {
+    #[default]
+    None,
+    UiMiddleScroll,
+    ViewportCamera {
+        viewport_id: ViewportId,
+        button: EditorCameraPointerButton,
+    },
+    ViewportTool {
+        tool_surface_id: ToolSurfaceInstanceId,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorCameraPointerButton {
+    Middle,
+    Secondary,
 }
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -456,13 +481,19 @@ impl EditorViewportRenderState {
         self.set_camera_settings(ViewportCameraSettings::default())
     }
 
+    pub fn focus_camera_on(&mut self, orbit_target: [f32; 3]) -> bool {
+        let mut settings = self.camera_settings;
+        settings.orbit_target = orbit_target;
+        self.set_camera_settings(settings)
+    }
+
     pub fn orbit_camera(&mut self, delta: UiVector) -> bool {
         if delta == UiVector::ZERO {
             return false;
         }
         let mut settings = self.camera_settings;
         settings.yaw_radians += delta.x * CAMERA_ORBIT_SENSITIVITY;
-        settings.pitch_radians = (settings.pitch_radians - delta.y * CAMERA_ORBIT_SENSITIVITY)
+        settings.pitch_radians = (settings.pitch_radians + delta.y * CAMERA_ORBIT_SENSITIVITY)
             .clamp(-CAMERA_MAX_PITCH_RADIANS, CAMERA_MAX_PITCH_RADIANS);
         self.set_camera_settings(settings)
     }

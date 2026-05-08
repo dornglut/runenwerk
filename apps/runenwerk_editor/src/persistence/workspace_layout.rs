@@ -7,12 +7,22 @@ use serde::Deserialize;
 use editor_shell::{
     PERSISTED_WORKSPACE_STATE_VERSION_V1, PERSISTED_WORKSPACE_STATE_VERSION_V2,
     PERSISTED_WORKSPACE_STATE_VERSION_V3, PersistedWorkspaceStateV1, PersistedWorkspaceStateV2,
-    PersistedWorkspaceStateV3, WorkspaceProfileId, WorkspaceState,
+    PersistedWorkspaceStateV3, WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
+    default_workspace_profile_registry,
 };
 
 #[derive(Debug, Deserialize)]
 struct PersistedWorkspaceVersionProbe {
     version: u32,
+}
+
+#[derive(Debug)]
+pub struct WorkspaceLayoutReadResult {
+    pub workspace_state: WorkspaceState,
+    pub workspace_profile_id: Option<WorkspaceProfileId>,
+    pub layout_template: Option<String>,
+    pub layout_template_version: Option<u32>,
+    pub last_saved_at_unix_seconds: Option<u64>,
 }
 
 const DEFAULT_WORKSPACE_LAYOUT_DIR: &str = "editor-scenes/workspaces";
@@ -39,7 +49,38 @@ pub fn legacy_workspace_layout_path_for_scene(scene_path: &Path) -> PathBuf {
 }
 
 pub fn write_workspace_layout(path: &Path, workspace_state: &WorkspaceState) -> Result<()> {
-    let persisted = workspace_state.to_persisted_v3();
+    write_workspace_layout_with_profile(path, workspace_state, None)
+}
+
+pub fn write_workspace_layout_for_profile(
+    path: &Path,
+    workspace_state: &WorkspaceState,
+    profile_id: WorkspaceProfileId,
+) -> Result<()> {
+    write_workspace_layout_with_profile(path, workspace_state, Some(profile_id))
+}
+
+fn write_workspace_layout_with_profile(
+    path: &Path,
+    workspace_state: &WorkspaceState,
+    profile_id: Option<WorkspaceProfileId>,
+) -> Result<()> {
+    let workspace_state = compact_empty_tab_stack_areas(workspace_state)
+        .map_err(|error| anyhow::Error::msg(error.to_string()))
+        .context("failed to normalize workspace layout before saving")?;
+    let mut persisted = workspace_state.to_persisted_v3();
+    persisted.workspace_profile_id = profile_id.map(|id| id.raw());
+    if let Some(profile_id) = profile_id
+        && let Some(profile) = default_workspace_profile_registry().profile(profile_id)
+    {
+        persisted.layout_template = Some(profile.default_layout_template.contract_id().to_string());
+        persisted.layout_template_version =
+            Some(profile.default_layout_template.contract_version());
+    }
+    persisted.last_saved_at_unix_seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs());
     let ron =
         encode_ron_pretty(&persisted).context("failed to encode persisted workspace layout")?;
     std::fs::write(path, ron)
@@ -47,31 +88,81 @@ pub fn write_workspace_layout(path: &Path, workspace_state: &WorkspaceState) -> 
 }
 
 pub fn read_workspace_layout(path: &Path) -> Result<WorkspaceState> {
+    Ok(read_workspace_layout_with_metadata(path)?.workspace_state)
+}
+
+pub fn read_workspace_layout_with_metadata(path: &Path) -> Result<WorkspaceLayoutReadResult> {
     let source = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read workspace layout: {}", path.display()))?;
     let probe: PersistedWorkspaceVersionProbe =
         decode_ron(&source).context("failed to decode persisted workspace layout version")?;
-    let workspace_state = match probe.version {
+    let (
+        workspace_state,
+        workspace_profile_id,
+        layout_template,
+        layout_template_version,
+        last_saved_at_unix_seconds,
+    ) = match probe.version {
         PERSISTED_WORKSPACE_STATE_VERSION_V1 => {
             let persisted: PersistedWorkspaceStateV1 =
                 decode_ron(&source).context("failed to decode v1 persisted workspace layout")?;
-            WorkspaceState::from_persisted_v1(persisted)
+            (
+                WorkspaceState::from_persisted_v1(persisted),
+                None,
+                None,
+                None,
+                None,
+            )
         }
         PERSISTED_WORKSPACE_STATE_VERSION_V2 => {
             let persisted: PersistedWorkspaceStateV2 =
                 decode_ron(&source).context("failed to decode v2 persisted workspace layout")?;
-            WorkspaceState::from_persisted_v2(persisted)
+            (
+                WorkspaceState::from_persisted_v2(persisted),
+                None,
+                None,
+                None,
+                None,
+            )
         }
         PERSISTED_WORKSPACE_STATE_VERSION_V3 => {
             let persisted: PersistedWorkspaceStateV3 =
                 decode_ron(&source).context("failed to decode v3 persisted workspace layout")?;
-            WorkspaceState::from_persisted_v3(persisted)
+            let workspace_profile_id = persisted
+                .workspace_profile_id
+                .and_then(|raw| WorkspaceProfileId::try_from_raw(raw).ok());
+            let layout_template = persisted.layout_template.clone();
+            let layout_template_version = persisted.layout_template_version;
+            let last_saved_at_unix_seconds = persisted.last_saved_at_unix_seconds;
+            (
+                WorkspaceState::from_persisted_v3(persisted),
+                workspace_profile_id,
+                layout_template,
+                layout_template_version,
+                last_saved_at_unix_seconds,
+            )
         }
-        version => Err(editor_shell::WorkspaceStateError::PersistedVersionUnsupported(version)),
+        version => (
+            Err(editor_shell::WorkspaceStateError::PersistedVersionUnsupported(version)),
+            None,
+            None,
+            None,
+            None,
+        ),
     };
-    workspace_state
+    let workspace_state = workspace_state
         .map_err(|error| anyhow::Error::msg(error.to_string()))
-        .context("failed to validate persisted workspace layout")
+        .context("failed to validate persisted workspace layout")?;
+    let workspace_state = compact_empty_tab_stack_areas(&workspace_state)
+        .map_err(|error| anyhow::Error::msg(error.to_string()))
+        .context("failed to normalize persisted workspace layout")?;
+    Ok(WorkspaceLayoutReadResult {
+        workspace_state,
+        workspace_profile_id,
+        layout_template,
+        layout_template_version,
+        last_saved_at_unix_seconds,
+    })
 }
 
 #[cfg(test)]
@@ -122,5 +213,29 @@ mod tests {
             path,
             PathBuf::from("editor-scenes/default.scene.ron.workspace.ron")
         );
+    }
+
+    #[test]
+    fn profile_workspace_layout_roundtrip_preserves_profile_metadata() {
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
+        let path = temp_workspace_layout_path();
+
+        write_workspace_layout_for_profile(&path, &workspace, LAYOUT_WORKSPACE_PROFILE_ID)
+            .expect("workspace layout should write with profile metadata");
+        let loaded = read_workspace_layout_with_metadata(&path)
+            .expect("workspace layout should decode with profile metadata");
+
+        assert_eq!(loaded.workspace_state, workspace);
+        assert_eq!(
+            loaded.workspace_profile_id,
+            Some(LAYOUT_WORKSPACE_PROFILE_ID)
+        );
+        assert_eq!(loaded.layout_template.as_deref(), Some("scene"));
+        assert_eq!(loaded.layout_template_version, Some(1));
+        assert!(loaded.last_saved_at_unix_seconds.is_some());
+
+        let _ = std::fs::remove_file(path);
     }
 }

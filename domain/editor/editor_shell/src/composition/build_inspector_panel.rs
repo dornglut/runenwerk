@@ -5,7 +5,7 @@ use crate::{
     INSPECTOR_BODY_WIDGET_ID, INSPECTOR_LIST_WIDGET_ID, INSPECTOR_PANEL_WIDGET_ID,
     INSPECTOR_SCROLL_WIDGET_ID, INSPECTOR_TARGET_WIDGET_ID, INSPECTOR_TITLE_WIDGET_ID,
     InspectorFieldControlKind, InspectorTargetViewModel, InspectorViewModel, PanelInstanceId,
-    ToolSurfaceInstanceId, UiNode, UiNodeKind, inspector_field_focus_widget_id,
+    SurfaceWidgetScope, ToolSurfaceInstanceId, UiNode, UiNodeKind, inspector_field_focus_widget_id,
     inspector_field_widget_id,
 };
 use ui_definition::{
@@ -25,23 +25,36 @@ pub fn build_inspector_panel(
     view_model: &InspectorViewModel,
     theme: &ThemeTokens,
     _panel_instance_id: PanelInstanceId,
-    _active_tool_surface: Option<ToolSurfaceInstanceId>,
+    active_tool_surface: Option<ToolSurfaceInstanceId>,
 ) -> UiNode {
     let template: AuthoredUiTemplate =
         ron::from_str(INSPECTOR_TEMPLATE_RON).expect("checked-in inspector UI fixture must parse");
     let normalized = normalize_authored_template(template);
-    let mut context = UiDefinitionContext::new(theme.clone());
-    register_inspector_widget_ids(view_model, &mut context);
+    let scope = SurfaceWidgetScope::optional(active_tool_surface);
+    let mut context = scoped_definition_context(theme, scope);
+    register_inspector_widget_ids(view_model, &mut context, scope);
     populate_inspector_context(view_model, &mut context);
 
     let mut root = form_retained_ui(&normalized, &mut context).root;
-    polish_inspector(&mut root, view_model, theme);
+    polish_inspector(&mut root, view_model, theme, scope);
     root
+}
+
+fn scoped_definition_context(
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> UiDefinitionContext {
+    let mut context = UiDefinitionContext::new(theme.clone());
+    if let Some(base) = scope.base() {
+        context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
+    }
+    context
 }
 
 fn register_inspector_widget_ids(
     view_model: &InspectorViewModel,
     context: &mut UiDefinitionContext,
+    scope: SurfaceWidgetScope,
 ) {
     for (path, widget_id) in [
         ("root", INSPECTOR_PANEL_WIDGET_ID),
@@ -51,9 +64,10 @@ fn register_inspector_widget_ids(
         ("root/body/scroll/list", INSPECTOR_LIST_WIDGET_ID),
         ("root/body/scroll/list/target", INSPECTOR_TARGET_WIDGET_ID),
     ] {
-        context
-            .widget_ids_by_path
-            .insert(AuthoredUiNodePath(path.to_string()), widget_id);
+        context.widget_ids_by_path.insert(
+            AuthoredUiNodePath(path.to_string()),
+            scope.widget_id(widget_id),
+        );
     }
     for (index, _) in view_model.fields.iter().enumerate() {
         let key = index.to_string();
@@ -68,14 +82,14 @@ fn register_inspector_widget_ids(
                 AuthoredUiNodePath(format!(
                     "root/body/scroll/list/fields[{key}]/field_row/{control_id}"
                 )),
-                inspector_field_widget_id(index),
+                scope.widget_id(inspector_field_widget_id(index)),
             );
         }
         context.widget_ids_by_path.insert(
             AuthoredUiNodePath(format!(
                 "root/body/scroll/list/fields[{key}]/field_row/name"
             )),
-            inspector_field_focus_widget_id(index),
+            scope.widget_id(inspector_field_focus_widget_id(index)),
         );
     }
 }
@@ -129,7 +143,12 @@ fn inspector_target_label(target: &InspectorTargetViewModel) -> String {
     }
 }
 
-fn polish_inspector(root: &mut UiNode, _view_model: &InspectorViewModel, theme: &ThemeTokens) {
+fn polish_inspector(
+    root: &mut UiNode,
+    _view_model: &InspectorViewModel,
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) {
     if let UiNodeKind::Panel(panel) = &mut root.kind {
         panel.theme.background_panel = UiColor::new(
             (theme.background_panel.r + 0.02).clamp(0.0, 1.0),
@@ -138,17 +157,17 @@ fn polish_inspector(root: &mut UiNode, _view_model: &InspectorViewModel, theme: 
             0.94,
         );
     }
-    if let Some(body) = find_node_mut(root, INSPECTOR_BODY_WIDGET_ID)
+    if let Some(body) = find_node_mut(root, scope.widget_id(INSPECTOR_BODY_WIDGET_ID))
         && let UiNodeKind::Stack(stack) = &mut body.kind
     {
         stack.child_main_policies = vec![SizePolicy::Auto, SizePolicy::flex(1.0)];
     }
-    if let Some(title) = find_node_mut(root, INSPECTOR_TITLE_WIDGET_ID)
+    if let Some(title) = find_node_mut(root, scope.widget_id(INSPECTOR_TITLE_WIDGET_ID))
         && let UiNodeKind::Label(label) = &mut title.kind
     {
         label.text_style = theme.heading_text_style(FontId(1));
     }
-    if let Some(target) = find_node_mut(root, INSPECTOR_TARGET_WIDGET_ID)
+    if let Some(target) = find_node_mut(root, scope.widget_id(INSPECTOR_TARGET_WIDGET_ID))
         && let UiNodeKind::Label(label) = &mut target.kind
     {
         label.text_style = theme.body_text_style(FontId(1));

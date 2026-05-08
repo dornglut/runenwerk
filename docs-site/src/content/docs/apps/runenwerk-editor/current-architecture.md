@@ -122,12 +122,15 @@ is not text; it is a retained `Divider` formed from
 `UiNodeDefinition::Separator`, with spacing around it supplied by the toolbar row
 gap in `build_defined_toolbar`.
 
-Tab-stack chrome is authored in `assets/editor/ui/shell_chrome.ron` and formed
-by
-`domain/editor/editor_shell/src/composition/shell_chrome_definition.rs::build_defined_tab_strip_from_frame`.
+Tab-stack chrome is projected directly from the workspace graph by
+`domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip`.
 The tab strip renders tabs first and keeps the `+` tab button as the final tab
-row control. Tab close controls are projected as small overlay buttons anchored
-inside the right side of each tab button, rather than as separate row items.
+row control. The tab-stack container is a transparent clipping panel, so tab
+headings, the `+` button, and tab adornments cannot paint into adjacent dock
+headings when a split is resized narrow. Tab close controls are emitted by the
+tab-strip projection as small overlay buttons anchored inside the right side of
+each tab button, rather than as separate row items or a post-formation promotion
+pass.
 Those close buttons use
 `ui_tree::ButtonNode::reveal_on_hover_anchor`, so they render only when the tab
 or close button is hovered; they keep a small right offset and a 50% alpha
@@ -152,7 +155,10 @@ Toolbar menu popups use the same outside-click close policy through
 Closing the last tab in a tab stack is treated as an area close by
 `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs::dispatch_shell_command`,
 so the empty area is removed or collapsed instead of leaving an inert one-tab
-shell.
+shell. Persisted workspace layouts are also normalized by
+`domain/editor/editor_shell/src/workspace/reducer.rs::compact_empty_tab_stack_areas`
+when loaded or saved, so older layouts that already contain empty non-root
+tab-stack hosts are repaired instead of being reloaded as permanent empty docks.
 
 Viewport details are projected by
 `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::build_viewport_panel`
@@ -165,18 +171,18 @@ uses a 50% alpha panel background, and does not push the viewport surface down.
 Dock split resizing is owned by
 `apps/runenwerk_editor/src/shell/controller.rs::handle_split_resize_event`; the
 current split hit target is the projected split border zone rather than a
-visible handle widget. Fixed-layout split hit testing uses the fixed shell
-widget ids (`BODY_CONSOLE_SPLIT_WIDGET_ID`, `LEFT_RIGHT_SPLIT_WIDGET_ID`, and
-`CENTER_RIGHT_SPLIT_WIDGET_ID`) through
-`apps/runenwerk_editor/src/shell/controller.rs::fixed_layout_split_resize_targets`,
-so cursor feedback and dragging line up with the rendered borders instead of the
-generic workspace-host ids. Split border intersections create a corner-resize session
-through
+visible handle widget. The workspace projection assigns stable split widget ids
+and structural metadata directly from the graph, so default profile layouts and
+dynamic user-created splits use the same resize path. Split border intersections
+create a corner-resize session through
 `apps/runenwerk_editor/src/shell/state.rs::CornerSplitResizeSession`; dragging
 there updates both participating split fractions. A resize started without Shift
 may then use Shift during the drag to preserve the current first-quadrant
 width/height ratio. A pointer-down that already has Shift held does not start a
 resize session, leaving Shift-drag corner gestures available for area splitting.
+Split-border hit testing runs before tab activation and tab dragging, so a
+pointer on the border still starts resize even when the same pixel also overlaps
+the edge of a tab button.
 Cursor
 feedback for invisible split border and corner zones is derived by
 `apps/runenwerk_editor/src/shell/controller.rs::RunenwerkEditorShellController::cursor_intent_for_pointer`
@@ -187,12 +193,21 @@ Shift-dragging a non-split area corner inward creates a new split area through
 `ShellCommand::SplitTabStackArea`; the command still goes through the normal
 workspace reducer rather than mutating projected layout state directly.
 Tab dragging uses the same workspace projection to infer insertion from
-tab-stack/container geometry; highlighted insertion is represented as reserved
-tab-strip space, not a button-like drop-zone control. Empty dock placeholders
-and floating dock targets keep their structural hit targets without rendering
-instructional "drop here" copy. Retained popups carry explicit layer order:
+tab-stack/container geometry; highlighted tab insertion is represented as
+reserved tab-strip space, not a button-like drop-zone control. Dock split
+dragging carries explicit area, group, and workspace scope candidates:
+individual panel edges split the area, enclosing split-host edges/gaps split the
+group, and outer body edges split the workspace. All valid scope candidates are
+projected as visual-only previews, the active preview receives the stronger
+accent and label, and `Tab` cycles overlapping candidates on the same side.
+Empty dock placeholders and explicit shelf targets keep their structural hit
+targets without rendering instructional "drop here" copy. Retained popups carry
+explicit layer order:
 viewport-local overlays use the lower overlay layer, while menu/dropdown popups
-use the higher menu layer so viewport overlays cannot cover open menus.
+use the higher menu layer so viewport overlays cannot cover open menus. The
+longer-term node split for menu popups, overlay adornments, dock previews, and
+radial menus is tracked in
+`docs-site/src/content/docs/design/active/editor-ui-popup-adornment-drop-preview-contract.md`.
 
 Viewport runtime binding is app-owned. `apps/runenwerk_editor/src/runtime/systems/viewport_lifecycle.rs::sync_viewport_instances_system`
 syncs explicit viewport instances from workspace state before frame submission,
@@ -233,8 +248,11 @@ the end-to-end implementation sequence is
 Default workspace profiles are defined in
 `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry`.
 The Scene and Modelling profiles are distinct workspace profiles; both currently
-use the same structural shell template while retaining separate profile identity
-and profile-addressed layout persistence. The Editor Design profile uses
+use graph-backed shell templates while retaining separate profile identity and
+profile-addressed layout persistence. Scene defaults to viewport plus right
+outliner/entity and inspector stacks above a bottom console. Modelling defaults
+to outliner/entities on the left, viewport in the middle, inspector on the
+right, and the same bottom console band. The Editor Design profile uses
 `WorkspaceState::bootstrap_editor_design_layout` to expose self-authoring
 definition, preview, validation, styling, binding, and diff surfaces.
 
@@ -242,8 +260,9 @@ The default structural layout is defined in
 `domain/editor/editor_shell/src/workspace/state.rs::WorkspaceState::bootstrap_current_layout`.
 It places the viewport in the expanding left/middle area, the scene hierarchy
 above the inspector in the right sidebar, and the console/log surface in the
-bottom band. The compatibility projection for that structure is maintained in
-`domain/editor/editor_shell/src/workspace/projection.rs::project_fixed_layout`.
+bottom band. Shell composition renders that structure through
+`domain/editor/editor_shell/src/workspace/projection.rs::project_workspace_for_shell`;
+there is no separate fixed-layout composition path.
 Workspace layout persistence is profile-addressed. When
 `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs::load_workspace_profile_layout`
 loads a saved profile layout, it verifies that the saved mounted surface kinds

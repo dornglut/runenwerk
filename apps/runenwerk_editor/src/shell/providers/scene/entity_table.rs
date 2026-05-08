@@ -32,18 +32,15 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
             &session.entity_table_ui_state,
         );
         let view_model = build_entity_table_view_model(&state);
-        let root = remap_surface_node_ids(
-            build_entity_table_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
+        let root = build_entity_table_panel(
+            &view_model,
+            context.theme,
+            request.panel_instance_id,
+            Some(request.tool_surface_instance_id),
         );
         let mut routes = SurfaceRouteTable::empty();
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_LIST_WIDGET_ID,
             ),
@@ -54,7 +51,7 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
             )),
         );
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_SEARCH_WIDGET_ID,
             ),
@@ -65,7 +62,7 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
             )),
         );
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
             ),
@@ -74,7 +71,7 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
             )),
         );
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID,
             ),
@@ -85,7 +82,7 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
             )),
         );
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID,
             ),
@@ -96,7 +93,7 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
             )),
         );
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID,
             ),
@@ -120,7 +117,7 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
         .enumerate()
         {
             routes.insert(
-                remap_widget_id(
+                surface_widget_id(
                     request.tool_surface_instance_id,
                     entity_table_sort_button_widget_id(index),
                 ),

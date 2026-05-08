@@ -558,6 +558,8 @@ fn activation_for_release(
         }
         UiNodeKind::Panel(_)
         | UiNodeKind::Popup(_)
+        | UiNodeKind::RadialMenu(_)
+        | UiNodeKind::OverlayAdornment(_)
         | UiNodeKind::Label(_)
         | UiNodeKind::TextInput(_)
         | UiNodeKind::NumericInput(_)
@@ -591,6 +593,8 @@ fn is_pointer_responsive(tree: &UiTree, widget_id: WidgetId) -> bool {
         UiNodeKind::Tabs(_) | UiNodeKind::ViewportSurfaceEmbed(_) | UiNodeKind::Scroll(_) => true,
         UiNodeKind::Panel(_)
         | UiNodeKind::Popup(_)
+        | UiNodeKind::RadialMenu(_)
+        | UiNodeKind::OverlayAdornment(_)
         | UiNodeKind::Label(_)
         | UiNodeKind::Spacer(_)
         | UiNodeKind::Divider(_)
@@ -771,20 +775,17 @@ fn apply_scroll_wheel_delta(
 
 fn scroll_owners_for_pan(
     tree: &UiTree,
-    raw_hover_target: Option<WidgetId>,
+    _raw_hover_target: Option<WidgetId>,
     pan_anchor: Option<WidgetId>,
 ) -> Vec<WidgetId> {
     // Keep middle-drag scrolling sticky to the anchor where drag started so
     // panning remains continuous even when pointer crosses other UI regions.
+    // If the anchor is not scroll-owned, this drag belongs to another owner
+    // such as the viewport bridge and must not adopt a hovered scroll later.
     if let Some(anchor) = pan_anchor {
-        let owners = find_scroll_owner_chain(tree, anchor);
-        if !owners.is_empty() {
-            return owners;
-        }
+        return find_scroll_owner_chain(tree, anchor);
     }
-    raw_hover_target
-        .map(|target| find_scroll_owner_chain(tree, target))
-        .unwrap_or_default()
+    Vec::new()
 }
 
 fn middle_pan_delta(

@@ -207,6 +207,7 @@ fn flatten_glyph_run(
                     .map(|clip_rect| [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height]),
                 texture_id,
                 layer_order: run.sort_key.layer_order,
+                primitive_order: run.sort_key.primitive_order,
             });
         }
     }
@@ -224,6 +225,7 @@ fn flattened_rect(
         rect.radius,
         clip,
         rect.sort_key.layer_order,
+        rect.sort_key.primitive_order,
     )
 }
 
@@ -244,6 +246,7 @@ fn flattened_border(
         border.radius,
         clip,
         border.sort_key.layer_order,
+        border.sort_key.primitive_order,
     )
 }
 
@@ -259,6 +262,7 @@ fn flattened_image(
         0.0,
         clip,
         image.sort_key.layer_order,
+        image.sort_key.primitive_order,
     )
 }
 
@@ -295,6 +299,7 @@ fn flattened_viewport_embed(
         viewport_id: embed.viewport_id,
         slot: embed.slot,
         layer_order: embed.sort_key.layer_order,
+        primitive_order: embed.sort_key.primitive_order,
     })
 }
 
@@ -304,6 +309,7 @@ fn flattened_rect_raw(
     radius: f32,
     clip: Option<UiRect>,
     layer_order: u32,
+    primitive_order: u32,
 ) -> Option<FlattenedUiRectInstance> {
     if rect.width <= f32::EPSILON || rect.height <= f32::EPSILON || color[3] <= f32::EPSILON {
         return None;
@@ -318,6 +324,7 @@ fn flattened_rect_raw(
         },
         clip: clip.map(|clip| [clip.x, clip.y, clip.width, clip.height]),
         layer_order,
+        primitive_order,
     })
 }
 
@@ -497,6 +504,7 @@ mod tests {
             color: [1.0, 1.0, 1.0, 1.0],
             line_height: None,
             align: TextAlign::Start,
+            vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         };
@@ -563,6 +571,7 @@ mod tests {
             color: [1.0, 1.0, 1.0, 1.0],
             line_height: None,
             align: TextAlign::Start,
+            vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         };

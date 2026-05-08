@@ -5,12 +5,13 @@ use std::sync::Arc;
 use editor_definition::EditorDefinitionDocument;
 use editor_shell::WorkspaceState;
 
+use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
     pub(crate) tool_runtime_state: EditorToolRuntimeState,
-    pub(crate) console_lines: Vec<String>,
+    pub(crate) console_lines: Vec<ConsoleMessage>,
     pub(crate) console_max_lines: usize,
     pub(crate) debug_logs_enabled: bool,
     pub(crate) surface_sessions: SurfaceSessionStore,
@@ -68,12 +69,32 @@ impl RunenwerkEditorApp {
         &mut self.tool_runtime_state
     }
 
-    pub fn console_lines(&self) -> &[String] {
+    pub fn console_lines(&self) -> &[ConsoleMessage] {
         &self.console_lines
     }
 
     pub fn append_console_line(&mut self, line: impl Into<String>) {
-        self.console_lines.push(line.into());
+        self.append_console_message(ConsoleMessageKind::Info, line);
+    }
+
+    pub fn append_console_input(&mut self, line: impl Into<String>) {
+        self.append_console_message(ConsoleMessageKind::Input, line);
+    }
+
+    pub fn append_console_warning(&mut self, line: impl Into<String>) {
+        self.append_console_message(ConsoleMessageKind::Warning, line);
+    }
+
+    pub fn append_console_error(&mut self, line: impl Into<String>) {
+        self.append_console_message(ConsoleMessageKind::Error, line);
+    }
+
+    pub fn append_console_debug(&mut self, line: impl Into<String>) {
+        self.append_console_message(ConsoleMessageKind::Debug, line);
+    }
+
+    pub fn append_console_message(&mut self, kind: ConsoleMessageKind, line: impl Into<String>) {
+        self.console_lines.push(ConsoleMessage::new(kind, line));
         if self.console_lines.len() > self.console_max_lines {
             let drain = self.console_lines.len() - self.console_max_lines;
             self.console_lines.drain(0..drain);

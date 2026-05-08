@@ -337,6 +337,7 @@ struct FlattenedUiRectInstance {
     raw: RectInstanceRaw,
     clip: Option<[f32; 4]>,
     layer_order: u32,
+    primitive_order: u32,
 }
 
 #[repr(C)]
@@ -353,6 +354,7 @@ struct FlattenedUiGlyphInstance {
     clip: Option<[f32; 4]>,
     texture_id: u64,
     layer_order: u32,
+    primitive_order: u32,
 }
 
 #[repr(C)]
@@ -370,6 +372,7 @@ struct FlattenedUiViewportEmbedInstance {
     viewport_id: u64,
     slot: ViewportSurfaceEmbedSlotId,
     layer_order: u32,
+    primitive_order: u32,
 }
 
 #[repr(C)]
@@ -407,6 +410,8 @@ struct ViewportEmbedPass {
 #[derive(Debug, Clone)]
 struct UiRectBatch {
     layer_order: u32,
+    first_primitive_order: u32,
+    last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
     instance_buffer: Buffer,
@@ -415,6 +420,8 @@ struct UiRectBatch {
 #[derive(Debug, Clone)]
 struct UiGlyphBatch {
     layer_order: u32,
+    first_primitive_order: u32,
+    last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
     instance_buffer: Buffer,
@@ -424,6 +431,8 @@ struct UiGlyphBatch {
 #[derive(Debug, Clone)]
 struct UiViewportEmbedBatch {
     layer_order: u32,
+    first_primitive_order: u32,
+    last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
     instance_buffer: Buffer,
@@ -443,6 +452,14 @@ struct UiPreparedDraws {
     rect_batches: Vec<UiRectBatch>,
     glyph_batches: Vec<UiGlyphBatch>,
     viewport_embed_batches: Vec<UiViewportEmbedBatch>,
+    draw_plan: Vec<UiPreparedDrawCommand>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UiPreparedDrawCommand {
+    Rect(usize),
+    ViewportEmbed(usize),
+    Glyph(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -92,7 +92,7 @@ pub fn produce_editor_picking_system(
         );
 
         if host.app.debug_logs_enabled() && hit_changed(previous_hit, next_hit) {
-            host.app.append_console_line(format!(
+            host.app.append_console_debug(format!(
                 "[pick] viewport={} cursor=({:.1},{:.1}) local=({:.1},{:.1}) hit={} dist={:.3}",
                 viewport_id.0,
                 cursor.x,
@@ -477,26 +477,58 @@ mod tests {
         viewport_id: ViewportId,
         bounds: UiRect,
     ) -> ToolSurfaceRuntimeBindingRegistryResource {
+        let viewport_embed_widget_id = viewport_embed_widget_id(host);
         let structural_context = host
             .shell_state
             .last_projection_artifacts()
             .and_then(|artifacts| {
                 artifacts
                     .widget_structural_context_by_id
-                    .get(&editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+                    .get(&viewport_embed_widget_id)
                     .copied()
             })
             .expect("viewport embed structural context should exist");
         let mut layout_map = ViewportLayoutMapResource::default();
         layout_map.upsert_entry(ViewportLayoutEntry {
             viewport_id,
-            host_widget_id: editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+            host_widget_id: viewport_embed_widget_id,
             structural_context,
             bounds,
         });
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
         bindings.rebuild_from_layout_map(&layout_map);
         bindings
+    }
+
+    fn viewport_surface_id(host: &EditorHostResource) -> editor_shell::ToolSurfaceInstanceId {
+        host.shell_state
+            .workspace_state()
+            .panels()
+            .filter_map(|panel| panel.active_tool_surface)
+            .find(|surface_id| {
+                host.shell_state
+                    .workspace_state()
+                    .tool_surface(*surface_id)
+                    .map(|surface| {
+                        surface.tool_surface_kind == editor_shell::ToolSurfaceKind::Viewport
+                    })
+                    .unwrap_or(false)
+            })
+            .expect("seeded host should contain an active viewport surface")
+    }
+
+    fn viewport_embed_widget_id(host: &EditorHostResource) -> editor_shell::WidgetId {
+        editor_shell::surface_widget_id(
+            viewport_surface_id(host),
+            editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        )
+    }
+
+    fn viewport_chrome_widget_id(
+        host: &EditorHostResource,
+        local_id: editor_shell::WidgetId,
+    ) -> editor_shell::WidgetId {
+        editor_shell::surface_widget_id(viewport_surface_id(host), local_id)
     }
 
     #[test]
@@ -675,8 +707,9 @@ mod tests {
     #[test]
     fn routed_viewport_ignores_hovered_viewport_chrome_widget() {
         let mut host = seeded_host_with_projection();
-        host.shell_state.runtime_mut().state_mut().hovered_widget =
-            Some(editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        let viewport_chrome_widget =
+            viewport_chrome_widget_id(&host, editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        host.shell_state.runtime_mut().state_mut().hovered_widget = Some(viewport_chrome_widget);
         host.shell_state.runtime_mut().state_mut().captured_widget = None;
         let expected_bounds = UiRect::new(90.0, 120.0, 900.0, 520.0);
         let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
@@ -692,9 +725,10 @@ mod tests {
     #[test]
     fn routed_viewport_ignores_captured_viewport_chrome_widget() {
         let mut host = seeded_host_with_projection();
+        let viewport_chrome_widget =
+            viewport_chrome_widget_id(&host, editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
         host.shell_state.runtime_mut().state_mut().hovered_widget = None;
-        host.shell_state.runtime_mut().state_mut().captured_widget =
-            Some(editor_shell::VIEWPORT_DETAILS_TOGGLE_WIDGET_ID);
+        host.shell_state.runtime_mut().state_mut().captured_widget = Some(viewport_chrome_widget);
         let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
         let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
 
@@ -709,9 +743,9 @@ mod tests {
     #[test]
     fn routed_viewport_keeps_scene_capture_when_cursor_leaves_embed() {
         let mut host = seeded_host_with_projection();
+        let viewport_embed_widget = viewport_embed_widget_id(&host);
         host.shell_state.runtime_mut().state_mut().hovered_widget = None;
-        host.shell_state.runtime_mut().state_mut().captured_widget =
-            Some(editor_shell::VIEWPORT_SURFACE_EMBED_WIDGET_ID);
+        host.shell_state.runtime_mut().state_mut().captured_widget = Some(viewport_embed_widget);
         let expected_bounds = UiRect::new(90.0, 60.0, 900.0, 520.0);
         let bindings = bind_viewport_surface(&host, ViewportId(7), expected_bounds);
 

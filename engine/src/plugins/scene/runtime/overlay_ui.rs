@@ -531,6 +531,7 @@ fn text_style_from_scene_text(text: &UiText) -> TextStyle {
         color: text.color,
         line_height: Some((text.size.max(1.0) * 1.25).max(1.0)),
         align: TextAlign::Start,
+        vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
         wrap: TextWrap::NoWrap,
         overflow: TextOverflow::Clip,
     }

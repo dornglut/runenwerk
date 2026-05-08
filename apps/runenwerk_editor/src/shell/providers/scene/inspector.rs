@@ -36,14 +36,11 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
             context.app.runtime().current_scene_reality_version(),
         );
         let view_model = build_inspector_view_model(&frame);
-        let root = remap_surface_node_ids(
-            build_inspector_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
+        let root = build_inspector_panel(
+            &view_model,
+            context.theme,
+            request.panel_instance_id,
+            Some(request.tool_surface_instance_id),
         );
         let mut routes = SurfaceRouteTable::empty();
         for (index, field) in view_model.fields.iter().enumerate() {
@@ -86,7 +83,7 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
             };
             if let Some(action) = action {
                 routes.insert(
-                    remap_widget_id(
+                    surface_widget_id(
                         request.tool_surface_instance_id,
                         inspector_field_widget_id(index),
                     ),
@@ -95,7 +92,7 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
             }
             if matches!(field.control, InspectorFieldControlKind::TextInput) {
                 routes.insert(
-                    remap_widget_id(
+                    surface_widget_id(
                         request.tool_surface_instance_id,
                         inspector_field_focus_widget_id(index),
                     ),

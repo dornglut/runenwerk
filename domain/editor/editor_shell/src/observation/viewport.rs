@@ -6,6 +6,7 @@ use editor_viewport::{
     ExpressionFreshness, ExpressionProductId, ExpressionProductKind, ProducerHealth,
     ProductAvailabilityState, ViewportDebugStage, ViewportId,
 };
+use ui_math::UiPoint;
 
 use crate::ObservationFrameMetadata;
 
@@ -21,7 +22,7 @@ pub struct ViewportProductObservation {
     pub is_selected_primary: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ViewportObservationFrame {
     pub metadata: ObservationFrameMetadata,
     pub viewport_id: Option<ViewportId>,
@@ -30,6 +31,8 @@ pub struct ViewportObservationFrame {
     pub details_visible: bool,
     pub statistics_visible: bool,
     pub options_menu_open: bool,
+    pub tools_menu_open: bool,
+    pub tool_radial_anchor_position: Option<UiPoint>,
     pub debug_stage: ViewportDebugStage,
     pub root_background_opaque: bool,
     pub selected_entity: Option<EntityId>,

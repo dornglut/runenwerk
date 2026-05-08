@@ -45,6 +45,14 @@ pub struct PersistedWorkspaceStateV2 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PersistedWorkspaceStateV3 {
     pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_profile_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout_template: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout_template_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_saved_at_unix_seconds: Option<u64>,
     pub workspace_id: u64,
     pub root_host_id: u64,
     pub hosts: Vec<PersistedPanelHostNodeV1>,
@@ -251,6 +259,10 @@ impl WorkspaceState {
     pub fn to_persisted_v3(&self) -> PersistedWorkspaceStateV3 {
         PersistedWorkspaceStateV3 {
             version: PERSISTED_WORKSPACE_STATE_VERSION_V3,
+            workspace_profile_id: None,
+            layout_template: None,
+            layout_template_version: None,
+            last_saved_at_unix_seconds: None,
             workspace_id: self.workspace_id.raw(),
             root_host_id: self.root_host_id.raw(),
             hosts: self

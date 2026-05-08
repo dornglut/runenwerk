@@ -23,6 +23,13 @@ pub enum TextOverflow {
     Ellipsis,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextVerticalAlign {
+    LineBoxCenter,
+    InkBoundsCenter,
+    CapHeightCenter,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
     pub font_id: FontId,
@@ -30,6 +37,7 @@ pub struct TextStyle {
     pub color: [f32; 4],
     pub line_height: Option<f32>,
     pub align: TextAlign,
+    pub vertical_align: TextVerticalAlign,
     pub wrap: TextWrap,
     pub overflow: TextOverflow,
 }
@@ -48,6 +56,7 @@ impl Default for TextStyle {
             color: [0.92, 0.93, 0.95, 1.0],
             line_height: None,
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         }

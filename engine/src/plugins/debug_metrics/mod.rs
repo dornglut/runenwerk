@@ -169,6 +169,7 @@ fn build_debug_metrics_frame(
         color: [0.84, 0.92, 0.98, 1.0],
         line_height: Some(line_height.max(1.0)),
         align: TextAlign::Start,
+        vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
         wrap: TextWrap::NoWrap,
         overflow: TextOverflow::Clip,
     };

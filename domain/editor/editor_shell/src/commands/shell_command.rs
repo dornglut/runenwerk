@@ -4,9 +4,9 @@
 use editor_core::DocumentId;
 
 use crate::{
-    EditorDomainMutation, PanelInstanceId, SurfaceSessionMutation, TabStackId,
-    ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, WidgetId,
-    WorkspaceProfileId, WorkspaceSplitAxis,
+    DockSplitSide, EditorDomainMutation, PanelHostId, PanelInstanceId, SurfaceSessionMutation,
+    TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind,
+    WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
 };
 use crate::{SurfaceLocalAction, SurfaceProviderId};
 
@@ -22,6 +22,17 @@ pub enum TabDropDestination {
     TabStack {
         tab_stack_id: TabStackId,
         insert_index: usize,
+    },
+    SplitIntoArea {
+        target_tab_stack_id: TabStackId,
+        side: DockSplitSide,
+    },
+    SplitIntoHost {
+        target_host_id: PanelHostId,
+        side: DockSplitSide,
+    },
+    SplitIntoRoot {
+        side: DockSplitSide,
     },
     NewFloatingHost,
 }
@@ -40,6 +51,10 @@ pub enum ShellCommand {
         anchor_widget_id: WidgetId,
     },
     ToggleTabStackSurfaceMenu {
+        tab_stack_id: TabStackId,
+        anchor_widget_id: WidgetId,
+    },
+    ToggleTabStackCreateSurfaceMenu {
         tab_stack_id: TabStackId,
         anchor_widget_id: WidgetId,
     },

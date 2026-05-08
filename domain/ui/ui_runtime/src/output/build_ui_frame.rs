@@ -3,8 +3,8 @@
 
 use crate::{
     ButtonNode, ComputedLayoutMap, DividerNode, ImageNode, LabelNode, NumericInputNode, PanelNode,
-    PopupNode, ScrollNode, SelectNode, TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode,
-    UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
+    PopupNode, RadialMenuNode, ScrollNode, SelectNode, TableNode, TabsNode, TextInputNode,
+    ToggleNode, TreeNode, UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
 };
 use std::collections::BTreeMap;
 use ui_math::{UiRect, UiSize};
@@ -13,7 +13,10 @@ use ui_render_data::{
     UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
     ViewportSurfaceEmbedPrimitive,
 };
-use ui_text::{AtlasTextLayouter, FontAtlasSource, TextAlign, TextLayoutRequest, TextLayouter};
+use ui_text::{
+    AtlasTextLayouter, FontAtlasSource, TextAlign, TextLayoutRequest, TextLayouter,
+    TextVerticalAlign,
+};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct InteractionVisualState {
@@ -89,6 +92,8 @@ fn emit_node(
     };
     let node_layer_order = match &node.kind {
         UiNodeKind::Popup(popup) => popup.layer_order,
+        UiNodeKind::RadialMenu(radial) => radial.layer_order,
+        UiNodeKind::OverlayAdornment(_) => render_layer_order,
         _ => render_layer_order,
     };
 
@@ -109,6 +114,15 @@ fn emit_node(
             node_layer_order,
             primitive_order,
         ),
+        UiNodeKind::RadialMenu(radial) => emit_radial_menu(
+            radial,
+            layout.bounds,
+            layout.content_bounds,
+            layer,
+            node_layer_order,
+            primitive_order,
+        ),
+        UiNodeKind::OverlayAdornment(_) => {}
         UiNodeKind::Label(label) => emit_label(
             label,
             layout.bounds,
@@ -264,6 +278,7 @@ fn emit_node(
     match &node.kind {
         UiNodeKind::Panel(_)
         | UiNodeKind::Popup(_)
+        | UiNodeKind::RadialMenu(_)
         | UiNodeKind::Button(_)
         | UiNodeKind::TextInput(_)
         | UiNodeKind::NumericInput(_)
@@ -296,6 +311,7 @@ fn emit_node(
             );
         }
         UiNodeKind::Label(_)
+        | UiNodeKind::OverlayAdornment(_)
         | UiNodeKind::Toggle(_)
         | UiNodeKind::Spacer(_)
         | UiNodeKind::Divider(_)
@@ -374,6 +390,40 @@ fn emit_popup(
     *primitive_order += 1;
 }
 
+fn emit_radial_menu(
+    radial: &RadialMenuNode,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    layer: &mut UiLayer,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        bounds,
+        radial.outer_radius,
+        paint_from_color(radial.theme.background_panel),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        bounds,
+        radial.outer_radius,
+        radial.theme.border_width,
+        paint_from_color(radial.theme.border),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+        rect: content_bounds,
+        sort_key: sort_key(depth, *primitive_order),
+    }));
+    *primitive_order += 1;
+}
+
 fn emit_scroll_begin(
     _scroll: &ScrollNode,
     _bounds: UiRect,
@@ -408,9 +458,15 @@ fn emit_scrollbar(
     let Some(geometry) = scrollbar_geometry(tree, node.id, layouts, bounds, content_bounds) else {
         return;
     };
+    let hover_inside_scroll = interaction_state
+        .hovered_widget
+        .is_some_and(|widget_id| widget_id == node.id || node_contains_widget(node, widget_id));
+    let press_inside_scroll = interaction_state
+        .pressed_widget
+        .is_some_and(|widget_id| widget_id == node.id || node_contains_widget(node, widget_id));
     let scrollbar_opacity = if interaction_state.active_scrollbar_widget == Some(node.id)
-        || interaction_state.hovered_widget == Some(node.id)
-        || interaction_state.pressed_widget == Some(node.id)
+        || hover_inside_scroll
+        || press_inside_scroll
     {
         1.0
     } else {
@@ -465,6 +521,12 @@ fn emit_scrollbar(
         sort_key(depth, *primitive_order),
     )));
     *primitive_order += 1;
+}
+
+fn node_contains_widget(node: &UiNode, widget_id: WidgetId) -> bool {
+    node.children
+        .iter()
+        .any(|child| child.id == widget_id || node_contains_widget(child, widget_id))
 }
 
 pub(crate) fn scrollbar_geometry(
@@ -740,7 +802,8 @@ fn emit_button_label(
         TextAlign::Center => ((bounds.width - glyph_run.size.width) * 0.5).max(0.0),
         TextAlign::End => (bounds.width - glyph_run.size.width).max(0.0),
     };
-    let vertical_offset = ((bounds.height - glyph_run.size.height) * 0.5).max(0.0);
+    let vertical_offset =
+        vertical_alignment_offset(&glyph_run, text_style, bounds.height, atlas_source);
 
     for glyph in &mut glyph_run.glyphs {
         glyph.origin.x += bounds.x + align_offset;
@@ -1478,9 +1541,11 @@ fn emit_label(
         TextAlign::End => (bounds.width - glyph_run.size.width).max(0.0),
     };
 
+    let vertical_offset =
+        vertical_alignment_offset(&glyph_run, &label.text_style, bounds.height, atlas_source);
     for glyph in &mut glyph_run.glyphs {
         glyph.origin.x += bounds.x + align_offset;
-        glyph.origin.y += bounds.y;
+        glyph.origin.y += bounds.y + vertical_offset;
     }
 
     layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
@@ -1496,6 +1561,48 @@ fn emit_label(
         sort_key(depth, *primitive_order),
     )));
     *primitive_order += 1;
+}
+
+fn vertical_alignment_offset(
+    glyph_run: &ui_text::GlyphRun,
+    text_style: &ui_text::TextStyle,
+    bounds_height: f32,
+    atlas_source: &dyn FontAtlasSource,
+) -> f32 {
+    match text_style.vertical_align {
+        TextVerticalAlign::LineBoxCenter => {
+            ((bounds_height - glyph_run.size.height) * 0.5).max(0.0)
+        }
+        TextVerticalAlign::InkBoundsCenter | TextVerticalAlign::CapHeightCenter => {
+            ink_bounds_vertical_offset(glyph_run, text_style, bounds_height, atlas_source)
+                .unwrap_or_else(|| ((bounds_height - glyph_run.size.height) * 0.5).max(0.0))
+        }
+    }
+}
+
+fn ink_bounds_vertical_offset(
+    glyph_run: &ui_text::GlyphRun,
+    text_style: &ui_text::TextStyle,
+    bounds_height: f32,
+    atlas_source: &dyn FontAtlasSource,
+) -> Option<f32> {
+    let atlas = atlas_source.atlas(text_style.font_id)?;
+    let scale = text_style.font_size / atlas.metrics.base_size.max(f32::EPSILON);
+    let mut top = f32::INFINITY;
+    let mut bottom = f32::NEG_INFINITY;
+    for glyph in &glyph_run.glyphs {
+        let metrics = atlas
+            .glyphs
+            .get(&glyph.ch)
+            .or_else(|| atlas.glyphs.get(&'?'))?;
+        top = top.min(glyph.origin.y - metrics.plane_top * scale);
+        bottom = bottom.max(glyph.origin.y - metrics.plane_bottom * scale);
+    }
+    if !top.is_finite() || !bottom.is_finite() {
+        return None;
+    }
+
+    Some(bounds_height * 0.5 - (top + bottom) * 0.5)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1580,7 +1687,7 @@ mod tests {
     use ui_render_data::ViewportSurfaceEmbedSlotId;
     use ui_text::{
         FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle,
-        TextWrap,
+        TextVerticalAlign, TextWrap,
     };
     use ui_theme::ThemeTokens;
 
@@ -1607,6 +1714,7 @@ mod tests {
             color: [0.9, 0.95, 1.0, 1.0],
             line_height: Some(18.0),
             align: TextAlign::Start,
+            vertical_align: TextVerticalAlign::LineBoxCenter,
             wrap: TextWrap::NoWrap,
             overflow: TextOverflow::Clip,
         };
@@ -1774,6 +1882,114 @@ mod tests {
                 .iter()
                 .all(|primitive| primitive_sort_key(primitive).layer_order <= POPUP_LAYER_ORDER + 1),
             "test popup frame should not emit a higher overlay layer than the popup text; frame:\n{}",
+            frame_signature(&frame)
+        );
+    }
+
+    #[test]
+    fn inside_top_end_adornment_stays_in_scroll_layer_under_scrollbar() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let theme = ThemeTokens::default();
+        let scroll_id = WidgetId(10);
+        let row_id = WidgetId(11);
+        let anchor_id = WidgetId(12);
+        let filler_id = WidgetId(13);
+        let popup_id = WidgetId(14);
+        let close_id = WidgetId(15);
+        let text_style = theme.body_small_text_style(FontId(1));
+        let mut filler = ButtonNode::new("Very wide tab title", text_style.clone(), theme.clone());
+        filler.min_size.width = 180.0;
+        let mut close = ButtonNode::new("x", text_style.clone(), theme.clone());
+        close.reveal_on_hover_anchor = Some(anchor_id);
+        close.min_size = UiSize::new(18.0, 18.0);
+        close.padding = ui_math::UiInsets::ZERO;
+        let mut popup = PopupNode::anchored_inside_top_end(anchor_id, theme.clone());
+        popup.offset = theme.spacing.xs;
+
+        let tree = UiTree::new(UiNode::with_children(
+            scroll_id,
+            UiNodeKind::Scroll(crate::ScrollNode::horizontal(theme.clone())),
+            vec![UiNode::with_children(
+                row_id,
+                UiNodeKind::Stack(crate::StackNode::horizontal(theme.spacing.xs)),
+                vec![
+                    UiNode::new(
+                        anchor_id,
+                        UiNodeKind::Button(ButtonNode::new("Tab", text_style, theme.clone())),
+                    ),
+                    UiNode::new(filler_id, UiNodeKind::Button(filler)),
+                    UiNode::with_children(
+                        popup_id,
+                        UiNodeKind::Popup(popup),
+                        vec![UiNode::new(close_id, UiNodeKind::Button(close))],
+                    ),
+                ],
+            )],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 96.0, 36.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState {
+                hovered_widget: Some(anchor_id),
+                ..Default::default()
+            },
+            &atlas_source,
+        );
+        let close_text = frame.surfaces[0].layers[0]
+            .primitives
+            .iter()
+            .find_map(|primitive| {
+                let UiPrimitive::GlyphRun(run) = primitive else {
+                    return None;
+                };
+                let text = run
+                    .glyph_run
+                    .glyphs
+                    .iter()
+                    .map(|glyph| glyph.ch)
+                    .collect::<String>();
+                (text == "x").then_some(run)
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "inside adornment close text should emit; frame:\n{}",
+                    frame_signature(&frame)
+                )
+            });
+        let scroll_layout = layouts.get(&scroll_id).expect("scroll layout should exist");
+        let scrollbar_track = scrollbar_geometry(
+            &tree,
+            scroll_id,
+            &layouts,
+            scroll_layout.bounds,
+            scroll_layout.content_bounds,
+        )
+        .expect("overflowing horizontal scroll should have a scrollbar")
+        .track_rect;
+        let track_rect = frame.surfaces[0].layers[0]
+            .primitives
+            .iter()
+            .find_map(|primitive| match primitive {
+                UiPrimitive::Rect(rect) if rect_approx_eq(rect.rect, scrollbar_track) => Some(rect),
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "active scrollbar track should emit; frame:\n{}",
+                    frame_signature(&frame)
+                )
+            });
+
+        assert_eq!(close_text.sort_key.layer_order, BASE_LAYER_ORDER);
+        assert_eq!(track_rect.sort_key.layer_order, BASE_LAYER_ORDER);
+        assert!(
+            track_rect.sort_key.primitive_order > close_text.sort_key.primitive_order,
+            "scrollbar must paint over in-scroll adornments; frame:\n{}",
             frame_signature(&frame)
         );
     }
@@ -2121,6 +2337,79 @@ mod tests {
     }
 
     #[test]
+    fn icon_button_uses_ink_bounds_vertical_centering() {
+        let mut atlas = atlas_with_ascii(FontId(1));
+        let metrics = atlas.glyphs.get_mut(&'x').expect("x glyph should exist");
+        metrics.plane_top = 3.0;
+        metrics.plane_bottom = 0.0;
+        let atlas_source = TestAtlasSource { atlas };
+        let theme = ThemeTokens::default();
+        let button_id = WidgetId(231);
+        let mut style = TextStyle {
+            font_id: FontId(1),
+            font_size: 12.0,
+            ..TextStyle::default()
+        };
+        style.vertical_align = TextVerticalAlign::InkBoundsCenter;
+        let mut button = crate::ButtonNode::new("x", style, theme);
+        button.padding = ui_math::UiInsets::ZERO;
+        button.min_size = UiSize::new(18.0, 18.0);
+        let tree = UiTree::new(UiNode::new(button_id, UiNodeKind::Button(button)));
+        let bounds = UiRect::new(0.0, 0.0, 18.0, 18.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState::default(),
+            &atlas_source,
+        );
+        let glyph = first_glyph(&frame).expect("button label should emit a glyph");
+        let rendered_top = glyph.origin.y - 3.0;
+        let rendered_bottom = glyph.origin.y;
+        let ink_center = (rendered_top + rendered_bottom) * 0.5;
+
+        assert!(
+            (ink_center - 9.0).abs() <= 0.001,
+            "icon glyph ink bounds should be centered in the button"
+        );
+    }
+
+    #[test]
+    fn normal_label_keeps_line_box_vertical_centering() {
+        let mut atlas = atlas_with_ascii(FontId(1));
+        let metrics = atlas.glyphs.get_mut(&'x').expect("x glyph should exist");
+        metrics.plane_top = 3.0;
+        metrics.plane_bottom = 0.0;
+        let atlas_source = TestAtlasSource { atlas };
+        let style = TextStyle {
+            font_id: FontId(1),
+            font_size: 12.0,
+            line_height: Some(12.0),
+            vertical_align: TextVerticalAlign::LineBoxCenter,
+            ..TextStyle::default()
+        };
+        let mut label = LabelNode::new("x", style);
+        label.constraints = ui_layout::LayoutConstraints::tight(UiSize::new(18.0, 18.0));
+        let tree = UiTree::new(UiNode::new(WidgetId(241), UiNodeKind::Label(label)));
+        let bounds = UiRect::new(0.0, 0.0, 18.0, 18.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState::default(),
+            &atlas_source,
+        );
+        let glyph = first_glyph(&frame).expect("label should emit a glyph");
+
+        assert!(
+            (glyph.origin.y - 12.0).abs() <= 0.001,
+            "normal labels should keep typographic line-box centering"
+        );
+    }
+
+    #[test]
     fn scroll_children_and_overlays_remain_inside_scroll_clip_stack() {
         let atlas_source = TestAtlasSource {
             atlas: atlas_with_ascii(FontId(1)),
@@ -2271,6 +2560,18 @@ mod tests {
             .flat_map(|layer| layer.primitives.iter())
             .find_map(|primitive| match primitive {
                 UiPrimitive::Border(value) => Some(value.paint),
+                _ => None,
+            })
+    }
+
+    fn first_glyph(frame: &UiFrame) -> Option<&ui_text::PositionedGlyph> {
+        frame
+            .surfaces
+            .iter()
+            .flat_map(|surface| surface.layers.iter())
+            .flat_map(|layer| layer.primitives.iter())
+            .find_map(|primitive| match primitive {
+                UiPrimitive::GlyphRun(run) => run.glyph_run.glyphs.first(),
                 _ => None,
             })
     }

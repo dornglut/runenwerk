@@ -679,21 +679,19 @@ Responsibilities:
 - define workspace profile catalog entries and selected profile slots;
 - define editor route ids without importing `ShellCommand`;
 - define availability rule descriptors such as `RequiresActiveDocument` and `StaticDisabled`;
-- bind editor toolbar, shell chrome, and provider surface templates to editor data sources;
+- bind editor toolbar and provider surface templates to editor data sources;
 - validate editor bindings before shell/app activation.
 
-### Phase 7 - Editor Toolbar And Shell Chrome Migration
+### Phase 7 - Editor Toolbar Migration
 
 Add:
 
 - `domain/editor/editor_shell/src/composition/toolbar_definition.rs`
-- `domain/editor/editor_shell/src/composition/shell_chrome_definition.rs`
 
 Update:
 
 - `domain/editor/editor_shell/src/composition/mod.rs`
 - `domain/editor/editor_shell/src/composition/build_toolbar.rs::build_toolbar`
-- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame`
 - `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`
 - `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_frame_widget_routes`
 
@@ -708,9 +706,10 @@ form toolbar definition
 
 The toolbar path should stop depending on `stable_name` string matching for routing.
 
-The tab-stack/area chrome path should use templates for stable chrome structure while keeping workspace mutation, panel identity allocation, and docking ratification in `editor_shell`.
-
-Implementation note: normal tab-stack chrome is migrated through `shell_chrome.ron`; dynamic docking preview/drop-slot rendering remains live shell behavior.
+Tab-stack/area chrome remains shell-projected from workspace graph state in
+`domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip`,
+because it owns panel identity, close overlays, docking previews, and reducer
+routes directly.
 
 ### Phase 8 - Provider Surface Structure Migration
 

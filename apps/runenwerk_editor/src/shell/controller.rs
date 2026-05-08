@@ -1,19 +1,21 @@
 use editor_shell::{
-    BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
-    ComputedLayoutMap, DockingPreviewDropTarget, EditorShellFrameModel, LEFT_RIGHT_SPLIT_WIDGET_ID,
-    PanelHostId, ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ShellCommand,
-    ShellUiExpressionFrame, SurfaceCommandProposal, TOOLBAR_ADD_WORKSPACE_WIDGET_ID,
-    TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID, TOOLBAR_MENU_POPUP_WIDGET_ID,
-    TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination, ToolSurfaceKind, UiInputOutcome,
-    UiInteractionResults, UiTree, WidgetId, WorkspaceSplitAxis,
+    BODY_ROOT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockDropCandidate,
+    DockDropScope, DockSplitSide, DockingPreviewDropTarget, EditorShellFrameModel, PanelHostId,
+    ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame,
+    SurfaceCommandProposal, TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID,
+    TOOLBAR_FILE_MENU_WIDGET_ID, TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID,
+    TabDropDestination, ToolSurfaceKind, ToolSurfaceMount, UiInputOutcome, UiInteractionResults,
+    UiTree, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
+    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
     build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
-    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
-    tab_stack_surface_menu_popup_widget_id,
+    surface_widget_id, tab_stack_container_widget_id, tab_stack_popup_menu_widget_id,
+    viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::{
-    EventPropagation, FocusChange, InputResponse, PointerCapture, PointerEvent, PointerEventKind,
-    UiInputEvent,
+    EventPropagation, FocusChange, InputResponse, Key, KeyState, PointerCapture, PointerEvent,
+    PointerEventKind, UiInputEvent,
 };
 use ui_math::UiRect;
 use ui_render_data::UiFrame;
@@ -39,6 +41,14 @@ const SPLIT_HIT_SLOP_PX: f32 = 12.0;
 const SPLIT_MIN_FRACTION: f32 = 0.08;
 const SPLIT_MAX_FRACTION: f32 = 0.92;
 const CORNER_AREA_SPLIT_THRESHOLD_PX: f32 = 18.0;
+const SIDE_DOCK_DROP_TARGET_EDGE_PX: f32 = 48.0;
+
+#[derive(Debug, Clone, PartialEq)]
+struct ResolvedTabDropPreview {
+    target: Option<DockingPreviewDropTarget>,
+    candidates: Vec<DockDropCandidate>,
+    active_side: Option<DockSplitSide>,
+}
 
 pub struct RunenwerkEditorShellController;
 
@@ -191,14 +201,15 @@ impl RunenwerkEditorShellController {
     ) -> ShellUiExpressionFrame {
         shell_state.set_last_bounds(bounds);
         if console_follow_enabled_for_active_surface(app, shell_state)
+            && let Some(console_scroll_widget_id) = active_console_scroll_widget(shell_state)
             && let Some(max_offset) =
                 shell_state
                     .runtime()
-                    .max_scroll_offset(&tree, bounds, CONSOLE_SCROLL_WIDGET_ID)
+                    .max_scroll_offset(&tree, bounds, console_scroll_widget_id)
         {
             shell_state
                 .runtime_mut()
-                .set_scroll_offset(CONSOLE_SCROLL_WIDGET_ID, max_offset);
+                .set_scroll_offset(console_scroll_widget_id, max_offset);
         }
         shell_state.runtime_mut().state_mut().advance_frame();
         let frame = shell_state
@@ -289,14 +300,17 @@ impl RunenwerkEditorShellController {
         shell_state.set_last_bounds(bounds);
 
         let layouts = shell_state.runtime().compute_layout(&tree, bounds);
-        let pre_offset = shell_state
-            .runtime()
-            .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
-        let pre_max = shell_state
-            .runtime()
-            .max_scroll_offset_for_layout(&tree, &layouts, CONSOLE_SCROLL_WIDGET_ID)
-            .unwrap_or(0.0);
-        let pre_at_bottom = is_at_bottom(pre_offset, pre_max);
+        let console_scroll_widget_id = active_console_scroll_widget(shell_state);
+        let pre_at_bottom = console_scroll_widget_id
+            .map(|widget_id| {
+                let pre_offset = shell_state.runtime().scroll_offset(widget_id);
+                let pre_max = shell_state
+                    .runtime()
+                    .max_scroll_offset_for_layout(&tree, &layouts, widget_id)
+                    .unwrap_or(0.0);
+                is_at_bottom(pre_offset, pre_max)
+            })
+            .unwrap_or(true);
 
         if let Some(outcome) = Self::handle_corner_area_split_event(
             app,
@@ -325,22 +339,44 @@ impl RunenwerkEditorShellController {
         {
             return Ok(outcome);
         }
+        if let Some(outcome) =
+            Self::handle_viewport_options_menu_dismiss_event(app, shell_state, event, &layouts)
+        {
+            return Ok(outcome);
+        }
+        if let Some(outcome) =
+            Self::handle_viewport_tool_radial_menu_dismiss_event(app, shell_state, event, &layouts)
+        {
+            return Ok(outcome);
+        }
+        if let Some(outcome) = Self::handle_tab_drag_scope_cycle_event(
+            shell_state,
+            event,
+            &tree,
+            &layouts,
+            &projection_artifacts,
+        ) {
+            return Ok(outcome);
+        }
 
         let outcome = shell_state
             .runtime_mut()
             .dispatch_input(&tree, &layouts, event);
 
-        if is_console_scroll_event(event, &outcome) {
+        if is_console_scroll_event(event, &outcome, console_scroll_widget_id) {
             let post_layouts = shell_state.runtime().compute_layout(&tree, bounds);
-            let post_offset = shell_state
-                .runtime()
-                .scroll_offset(CONSOLE_SCROLL_WIDGET_ID);
-            let post_max = shell_state
-                .runtime()
-                .max_scroll_offset_for_layout(&tree, &post_layouts, CONSOLE_SCROLL_WIDGET_ID)
-                .unwrap_or(0.0);
-            let post_at_bottom = is_at_bottom(post_offset, post_max);
-            if let Some(surface_id) = active_console_surface(shell_state) {
+            if let (Some(surface_id), Some(console_scroll_widget_id)) = (
+                active_console_surface(shell_state),
+                console_scroll_widget_id,
+            ) {
+                let post_offset = shell_state
+                    .runtime()
+                    .scroll_offset(console_scroll_widget_id);
+                let post_max = shell_state
+                    .runtime()
+                    .max_scroll_offset_for_layout(&tree, &post_layouts, console_scroll_widget_id)
+                    .unwrap_or(0.0);
+                let post_at_bottom = is_at_bottom(post_offset, post_max);
                 if post_at_bottom {
                     app.surface_sessions_mut()
                         .session_mut(surface_id)
@@ -438,18 +474,15 @@ impl RunenwerkEditorShellController {
             return None;
         }
         let active_menu = shell_state.active_tab_stack_popup_menu()?;
-        let area_popup = tab_stack_action_menu_popup_widget_id(active_menu.tab_stack_id);
-        let surface_popup = tab_stack_surface_menu_popup_widget_id(active_menu.tab_stack_id);
-        let inside_area = layouts
-            .get(&area_popup)
+        let active_popup =
+            tab_stack_popup_menu_widget_id(active_menu.kind, active_menu.tab_stack_id);
+        let inside_active_popup = layouts
+            .get(&active_popup)
             .is_some_and(|layout| layout.bounds.contains(pointer.position));
-        let inside_surface = layouts
-            .get(&surface_popup)
-            .is_some_and(|layout| layout.bounds.contains(pointer.position));
-        if inside_area || inside_surface {
+        if inside_active_popup {
             return None;
         }
-        shell_state.close_tab_stack_action_menu();
+        shell_state.close_tab_stack_popup_menu();
         Some(consumed_pointer_outcome(None, true))
     }
 
@@ -487,6 +520,149 @@ impl RunenwerkEditorShellController {
         }
         shell_state.close_toolbar_menu();
         Some(consumed_pointer_outcome(None, true))
+    }
+
+    fn handle_viewport_options_menu_dismiss_event(
+        app: &mut RunenwerkEditorApp,
+        shell_state: &RunenwerkEditorShellState,
+        event: &UiInputEvent,
+        layouts: &ComputedLayoutMap,
+    ) -> Option<UiInputOutcome> {
+        let UiInputEvent::Pointer(pointer) = event else {
+            return None;
+        };
+        if !matches!(pointer.kind, PointerEventKind::Down)
+            || !matches!(
+                pointer.button,
+                Some(ui_input::PointerButton::Primary | ui_input::PointerButton::Secondary)
+            )
+        {
+            return None;
+        }
+
+        let open_viewport_surfaces = shell_state
+            .workspace_state()
+            .tool_surfaces()
+            .filter(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
+            .filter(|surface| {
+                app.surface_sessions()
+                    .session(surface.id)
+                    .is_some_and(|session| session.viewport_options_menu_open)
+            })
+            .map(|surface| surface.id)
+            .collect::<Vec<_>>();
+        if open_viewport_surfaces.is_empty() {
+            return None;
+        }
+
+        let inside_open_menu = open_viewport_surfaces.iter().any(|surface_id| {
+            [
+                surface_widget_id(*surface_id, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID),
+                surface_widget_id(*surface_id, VIEWPORT_OPTIONS_POPUP_WIDGET_ID),
+            ]
+            .iter()
+            .any(|widget_id| {
+                layouts
+                    .get(widget_id)
+                    .is_some_and(|layout| layout.bounds.contains(pointer.position))
+            })
+        });
+        if inside_open_menu {
+            return None;
+        }
+
+        let changed = app
+            .surface_sessions_mut()
+            .close_all_viewport_options_menus();
+        Some(consumed_pointer_outcome(None, changed))
+    }
+
+    fn handle_viewport_tool_radial_menu_dismiss_event(
+        app: &mut RunenwerkEditorApp,
+        shell_state: &RunenwerkEditorShellState,
+        event: &UiInputEvent,
+        layouts: &ComputedLayoutMap,
+    ) -> Option<UiInputOutcome> {
+        let UiInputEvent::Pointer(pointer) = event else {
+            return None;
+        };
+        if !matches!(pointer.kind, PointerEventKind::Down)
+            || !matches!(
+                pointer.button,
+                Some(ui_input::PointerButton::Primary | ui_input::PointerButton::Secondary)
+            )
+        {
+            return None;
+        }
+
+        let open_viewport_surfaces = shell_state
+            .workspace_state()
+            .tool_surfaces()
+            .filter(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
+            .filter(|surface| {
+                app.surface_sessions()
+                    .session(surface.id)
+                    .is_some_and(|session| {
+                        session.viewport_tools_menu_open
+                            || session.viewport_tool_radial_session.is_some()
+                    })
+            })
+            .map(|surface| surface.id)
+            .collect::<Vec<_>>();
+        if open_viewport_surfaces.is_empty() {
+            return None;
+        }
+
+        let inside_open_menu = open_viewport_surfaces.iter().any(|surface_id| {
+            [
+                surface_widget_id(*surface_id, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID),
+                surface_widget_id(*surface_id, VIEWPORT_TOOLS_MENU_WIDGET_ID),
+                surface_widget_id(*surface_id, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID),
+                surface_widget_id(*surface_id, viewport_tool_radial_item_widget_id(0)),
+                surface_widget_id(*surface_id, viewport_tool_radial_item_widget_id(1)),
+                surface_widget_id(*surface_id, viewport_tool_radial_item_widget_id(2)),
+                surface_widget_id(*surface_id, viewport_tool_radial_item_widget_id(3)),
+            ]
+            .iter()
+            .any(|widget_id| {
+                layouts
+                    .get(widget_id)
+                    .is_some_and(|layout| layout.bounds.contains(pointer.position))
+            })
+        });
+        if inside_open_menu {
+            return None;
+        }
+
+        let changed = app.surface_sessions_mut().close_all_viewport_tools_menus()
+            | app
+                .surface_sessions_mut()
+                .close_all_viewport_tool_radial_menus();
+        Some(consumed_pointer_outcome(None, changed))
+    }
+
+    fn handle_tab_drag_scope_cycle_event(
+        shell_state: &mut RunenwerkEditorShellState,
+        event: &UiInputEvent,
+        _tree: &UiTree,
+        _layouts: &ComputedLayoutMap,
+        _projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    ) -> Option<UiInputOutcome> {
+        let UiInputEvent::Keyboard(keyboard) = event else {
+            return None;
+        };
+        if keyboard.key != Key::Tab
+            || !matches!(keyboard.state, KeyState::Pressed | KeyState::Repeated)
+            || shell_state.docking_visual_state().active_tab_drag.is_none()
+        {
+            return None;
+        }
+        if !shell_state.cycle_active_tab_drag_preview_candidate() {
+            return None;
+        }
+        Some(consumed_keyboard_outcome(true))
     }
 
     fn handle_corner_area_split_event(
@@ -614,32 +790,48 @@ impl RunenwerkEditorShellController {
                 );
                 if became_active || shell_state.docking_visual_state().active_tab_drag.is_some() {
                     suppress_tab_activation = true;
-                    let preview_target = resolve_tab_drop_preview_target(
+                    let (cycle_index, cycle_side) = shell_state.tab_drag_drop_candidate_cycle();
+                    let preview = resolve_tab_drop_preview_target(
                         projection_artifacts,
                         tree,
                         layouts,
                         pointer.position,
+                        pointer.modifiers.alt,
+                        cycle_index,
+                        cycle_side,
                     );
-                    shell_state.set_tab_drag_preview_target(
-                        preview_target,
+                    shell_state.set_tab_drag_preview(
+                        preview.target,
+                        preview.candidates,
+                        preview.active_side,
                         projection_artifacts.projection_epoch,
                     );
                 }
             }
             PointerEventKind::Leave => {
-                shell_state
-                    .set_tab_drag_preview_target(None, projection_artifacts.projection_epoch);
+                shell_state.set_tab_drag_preview(
+                    None,
+                    Vec::new(),
+                    None,
+                    projection_artifacts.projection_epoch,
+                );
             }
             PointerEventKind::Up => {
                 let click_candidate = shell_state.tab_drag_candidate();
-                let preview_target = resolve_tab_drop_preview_target(
+                let (cycle_index, cycle_side) = shell_state.tab_drag_drop_candidate_cycle();
+                let preview = resolve_tab_drop_preview_target(
                     projection_artifacts,
                     tree,
                     layouts,
                     pointer.position,
+                    pointer.modifiers.alt,
+                    cycle_index,
+                    cycle_side,
                 );
-                shell_state.set_tab_drag_preview_target(
-                    preview_target,
+                shell_state.set_tab_drag_preview(
+                    preview.target,
+                    preview.candidates,
+                    preview.active_side,
                     projection_artifacts.projection_epoch,
                 );
                 let finished = shell_state.finish_tab_drag(projection_artifacts.projection_epoch);
@@ -655,6 +847,23 @@ impl RunenwerkEditorShellController {
                             tab_stack_id,
                             insert_index,
                         },
+                        DockingPreviewDropTarget::SplitIntoArea {
+                            target_tab_stack_id,
+                            side,
+                        } => TabDropDestination::SplitIntoArea {
+                            target_tab_stack_id,
+                            side,
+                        },
+                        DockingPreviewDropTarget::SplitIntoHost {
+                            target_host_id,
+                            side,
+                        } => TabDropDestination::SplitIntoHost {
+                            target_host_id,
+                            side,
+                        },
+                        DockingPreviewDropTarget::SplitIntoRoot { side } => {
+                            TabDropDestination::SplitIntoRoot { side }
+                        }
                         DockingPreviewDropTarget::NewFloatingHost => {
                             TabDropDestination::NewFloatingHost
                         }
@@ -1007,7 +1216,9 @@ impl RunenwerkEditorShellController {
 
         let candidate =
             resolve_split_resize_target(pointer.position, layouts, projection_artifacts)?;
-        if tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some() {
+        if tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some()
+            && split_resize_distance(pointer.position, layouts, candidate) > 3.0
+        {
             return None;
         }
         shell_state.begin_workspace_split_resize(
@@ -1195,6 +1406,21 @@ fn split_boundary_position(
     }
 }
 
+fn split_resize_distance(
+    cursor: ui_math::UiPoint,
+    layouts: &ComputedLayoutMap,
+    target: SplitResizeTarget,
+) -> f32 {
+    let Some(layout) = layouts.get(&target.widget_id) else {
+        return f32::MAX;
+    };
+    let boundary = split_boundary_position(target.axis, layout.bounds, target.fraction);
+    match workspace_axis_to_ui_axis(target.axis) {
+        ui_math::Axis::Horizontal => (cursor.x - boundary).abs(),
+        ui_math::Axis::Vertical => (cursor.y - boundary).abs(),
+    }
+}
+
 fn split_fraction_from_pointer(
     axis: WorkspaceSplitAxis,
     bounds: ui_math::UiRect,
@@ -1218,69 +1444,9 @@ fn split_resize_target_by_host(
 fn split_resize_targets(
     projection_artifacts: &editor_shell::ShellProjectionArtifacts,
 ) -> Vec<SplitResizeTarget> {
-    if projection_artifacts.workspace.fixed_layout.is_some()
-        && let Some(targets) =
-            fixed_layout_split_resize_targets(&projection_artifacts.workspace.root_host)
-    {
-        return targets;
-    }
     let mut targets = Vec::new();
     collect_split_resize_targets(&projection_artifacts.workspace.root_host, &mut targets);
     targets
-}
-
-fn fixed_layout_split_resize_targets(
-    root_host: &ProjectedWorkspaceHostSlot,
-) -> Option<Vec<SplitResizeTarget>> {
-    let ProjectedWorkspaceHostSlot::Split {
-        host_id: body_console_host_id,
-        axis: body_console_axis,
-        fraction: body_console_fraction,
-        first_child: left_right_host,
-        ..
-    } = root_host
-    else {
-        return None;
-    };
-    let ProjectedWorkspaceHostSlot::Split {
-        host_id: left_right_host_id,
-        axis: left_right_axis,
-        fraction: left_right_fraction,
-        second_child: center_right_host,
-        ..
-    } = left_right_host.as_ref()
-    else {
-        return None;
-    };
-    let ProjectedWorkspaceHostSlot::Split {
-        host_id: center_right_host_id,
-        axis: center_right_axis,
-        fraction: center_right_fraction,
-        ..
-    } = center_right_host.as_ref()
-    else {
-        return None;
-    };
-    Some(vec![
-        SplitResizeTarget {
-            split_host_id: *body_console_host_id,
-            widget_id: BODY_CONSOLE_SPLIT_WIDGET_ID,
-            axis: *body_console_axis,
-            fraction: *body_console_fraction,
-        },
-        SplitResizeTarget {
-            split_host_id: *left_right_host_id,
-            widget_id: LEFT_RIGHT_SPLIT_WIDGET_ID,
-            axis: *left_right_axis,
-            fraction: *left_right_fraction,
-        },
-        SplitResizeTarget {
-            split_host_id: *center_right_host_id,
-            widget_id: CENTER_RIGHT_SPLIT_WIDGET_ID,
-            axis: *center_right_axis,
-            fraction: *center_right_fraction,
-        },
-    ])
 }
 
 fn collect_split_resize_targets(
@@ -1348,11 +1514,36 @@ fn consumed_pointer_outcome(
     }
 }
 
-fn is_console_scroll_event(event: &UiInputEvent, outcome: &UiInputOutcome) -> bool {
+fn consumed_keyboard_outcome(changed_layout: bool) -> UiInputOutcome {
+    UiInputOutcome {
+        dispatch: editor_shell::UiInputDispatchResult {
+            target: None,
+            response: InputResponse {
+                propagation: EventPropagation::Stop,
+                capture: PointerCapture::None,
+                focus_change: FocusChange::None,
+                repaint: changed_layout,
+                relayout: changed_layout,
+            },
+        },
+        interactions: UiInteractionResults::new(),
+        invalidation: editor_shell::UiInvalidation {
+            repaint: changed_layout,
+            relayout: changed_layout,
+        },
+    }
+}
+
+fn is_console_scroll_event(
+    event: &UiInputEvent,
+    outcome: &UiInputOutcome,
+    console_scroll_widget_id: Option<WidgetId>,
+) -> bool {
     matches!(
         event,
         UiInputEvent::Pointer(pointer) if pointer.kind == PointerEventKind::Scroll
-    ) && outcome.dispatch.target == Some(CONSOLE_SCROLL_WIDGET_ID)
+    ) && console_scroll_widget_id
+        .is_some_and(|widget_id| outcome.dispatch.target == Some(widget_id))
 }
 
 fn console_follow_enabled_for_active_surface(
@@ -1383,12 +1574,58 @@ fn active_console_surface(
         .next()
 }
 
+fn active_console_scroll_widget(shell_state: &RunenwerkEditorShellState) -> Option<WidgetId> {
+    active_console_surface(shell_state)
+        .map(|surface_id| surface_widget_id(surface_id, CONSOLE_SCROLL_WIDGET_ID))
+}
+
 fn resolve_tab_drop_preview_target(
     projection_artifacts: &editor_shell::ShellProjectionArtifacts,
     tree: &UiTree,
     layouts: &ComputedLayoutMap,
     pointer_position: ui_math::UiPoint,
-) -> Option<DockingPreviewDropTarget> {
+    explicit_float: bool,
+    cycle_index: usize,
+    cycle_side: Option<DockSplitSide>,
+) -> ResolvedTabDropPreview {
+    if let Some(route) =
+        tab_insertion_route_at_pointer(projection_artifacts, tree, layouts, pointer_position)
+    {
+        return ResolvedTabDropPreview {
+            target: Some(map_projected_tab_drop_target(route)),
+            candidates: Vec::new(),
+            active_side: None,
+        };
+    }
+
+    if explicit_float
+        && let Some(route) = new_floating_host_route_at_pointer(layouts, pointer_position)
+    {
+        return ResolvedTabDropPreview {
+            target: Some(map_projected_tab_drop_target(route)),
+            candidates: Vec::new(),
+            active_side: None,
+        };
+    }
+
+    let candidates = collect_dock_drop_candidates(projection_artifacts, layouts, pointer_position);
+    if !candidates.is_empty() {
+        return activate_dock_drop_candidate(candidates, cycle_index, cycle_side);
+    }
+
+    ResolvedTabDropPreview {
+        target: None,
+        candidates: Vec::new(),
+        active_side: None,
+    }
+}
+
+fn tab_insertion_route_at_pointer(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Option<editor_shell::ProjectedTabDropRoute> {
     editor_shell::hit_test_widget(tree, layouts, pointer_position)
         .and_then(|widget_id| {
             projection_artifacts
@@ -1397,16 +1634,17 @@ fn resolve_tab_drop_preview_target(
                 .get(&widget_id)
                 .copied()
         })
-        .or_else(|| tab_drop_route_at_pointer(projection_artifacts, layouts, pointer_position))
-        .map(map_projected_tab_drop_target)
+        .or_else(|| {
+            containing_tab_drop_route_at_pointer(projection_artifacts, layouts, pointer_position)
+        })
 }
 
-fn tab_drop_route_at_pointer(
+fn containing_tab_drop_route_at_pointer(
     projection_artifacts: &editor_shell::ShellProjectionArtifacts,
     layouts: &ComputedLayoutMap,
     pointer_position: ui_math::UiPoint,
 ) -> Option<editor_shell::ProjectedTabDropRoute> {
-    let containing = projection_artifacts
+    projection_artifacts
         .workspace
         .tab_drop_route_by_widget_id
         .iter()
@@ -1421,61 +1659,324 @@ fn tab_drop_route_at_pointer(
             })
         })
         .min_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(_, route)| route);
-    if containing.is_some() {
-        return containing;
-    }
-
-    let edge_route =
-        tab_stack_edge_drop_route_at_pointer(projection_artifacts, layouts, pointer_position);
-    if edge_route.is_some() {
-        return edge_route;
-    }
-
-    projection_artifacts
-        .workspace
-        .tab_drop_route_by_widget_id
-        .iter()
-        .filter_map(|(widget_id, route)| {
-            let layout = layouts.get(widget_id)?;
-            let y_min = layout.bounds.y - 6.0;
-            let y_max = layout.bounds.y + layout.bounds.height + 6.0;
-            if pointer_position.y < y_min || pointer_position.y > y_max {
-                return None;
-            }
-            let center_x = layout.bounds.x + layout.bounds.width * 0.5;
-            let distance = (center_x - pointer_position.x).abs();
-            (distance <= 64.0).then_some((distance, *route))
-        })
-        .min_by(|left, right| left.0.total_cmp(&right.0))
         .map(|(_, route)| route)
 }
 
-fn tab_stack_edge_drop_route_at_pointer(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+fn new_floating_host_route_at_pointer(
     layouts: &ComputedLayoutMap,
     pointer_position: ui_math::UiPoint,
 ) -> Option<editor_shell::ProjectedTabDropRoute> {
+    let body = layouts.get(&BODY_ROOT_WIDGET_ID)?;
+    let bounds = body.bounds;
+    if !bounds.contains(pointer_position) {
+        return None;
+    }
+    let edge_start = bounds.x + bounds.width - SIDE_DOCK_DROP_TARGET_EDGE_PX;
+    (pointer_position.x >= edge_start).then_some(editor_shell::ProjectedTabDropRoute {
+        target: editor_shell::ProjectedTabDropTarget::NewFloatingHost,
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ScoredDockDropCandidate {
+    candidate: DockDropCandidate,
+    edge_distance: f32,
+    anchor_area: f32,
+    pointer_inside_anchor: bool,
+}
+
+fn collect_dock_drop_candidates(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Vec<DockDropCandidate> {
+    let mut candidates = Vec::new();
+    candidates.extend(area_dock_drop_candidates(
+        projection_artifacts,
+        layouts,
+        pointer_position,
+    ));
+    candidates.extend(group_dock_drop_candidates(
+        projection_artifacts,
+        layouts,
+        pointer_position,
+    ));
+    candidates.extend(workspace_dock_drop_candidate(layouts, pointer_position));
+    rank_dock_drop_candidates(candidates)
+}
+
+fn area_dock_drop_candidates(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Vec<ScoredDockDropCandidate> {
     projected_tab_stacks_for_docking(&projection_artifacts.workspace)
         .into_iter()
         .filter_map(|stack| {
-            let container_id = editor_shell::tab_stack_container_widget_id(stack.tab_stack_id);
-            let container = layouts.get(&container_id)?;
-            container.bounds.contains(pointer_position).then(|| {
-                let insert_index = tab_insert_index_for_pointer(stack, layouts, pointer_position);
-                (
-                    edge_drop_priority(container.bounds, pointer_position),
-                    editor_shell::ProjectedTabDropRoute {
-                        target: editor_shell::ProjectedTabDropTarget::TabStack {
-                            tab_stack_id: stack.tab_stack_id,
-                            insert_index,
-                        },
+            let anchor_widget_id = editor_shell::tab_stack_container_widget_id(stack.tab_stack_id);
+            let container = layouts.get(&anchor_widget_id)?;
+            let side = tab_stack_split_side_for_pointer(container.bounds, pointer_position)?;
+            Some(ScoredDockDropCandidate {
+                candidate: DockDropCandidate {
+                    target: DockingPreviewDropTarget::SplitIntoArea {
+                        target_tab_stack_id: stack.tab_stack_id,
+                        side,
                     },
-                )
+                    scope: DockDropScope::Area,
+                    side,
+                    anchor_widget_id,
+                    active: false,
+                },
+                edge_distance: dock_split_side_priority(container.bounds, pointer_position, side),
+                anchor_area: container.bounds.width * container.bounds.height,
+                pointer_inside_anchor: container.bounds.contains(pointer_position),
             })
         })
+        .collect()
+}
+
+fn group_dock_drop_candidates(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Vec<ScoredDockDropCandidate> {
+    let root_host_id = projected_host_id(&projection_artifacts.workspace.root_host);
+    split_resize_targets(projection_artifacts)
+        .into_iter()
+        .filter(|target| Some(target.split_host_id) != root_host_id)
+        .filter_map(|target| {
+            let layout = layouts.get(&target.widget_id)?;
+            let side = dock_split_side_for_pointer(layout.bounds, pointer_position)?;
+            Some(ScoredDockDropCandidate {
+                candidate: DockDropCandidate {
+                    target: DockingPreviewDropTarget::SplitIntoHost {
+                        target_host_id: target.split_host_id,
+                        side,
+                    },
+                    scope: DockDropScope::Group,
+                    side,
+                    anchor_widget_id: target.widget_id,
+                    active: false,
+                },
+                edge_distance: dock_split_side_priority(layout.bounds, pointer_position, side),
+                anchor_area: layout.bounds.width * layout.bounds.height,
+                pointer_inside_anchor: layout.bounds.contains(pointer_position),
+            })
+        })
+        .collect()
+}
+
+fn projected_host_id(host: &ProjectedWorkspaceHostSlot) -> Option<PanelHostId> {
+    match host {
+        ProjectedWorkspaceHostSlot::Split { host_id, .. }
+        | ProjectedWorkspaceHostSlot::TabStack { host_id, .. }
+        | ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { host_id, .. } => Some(*host_id),
+    }
+}
+
+fn workspace_dock_drop_candidate(
+    layouts: &ComputedLayoutMap,
+    pointer_position: ui_math::UiPoint,
+) -> Option<ScoredDockDropCandidate> {
+    let layout = layouts.get(&BODY_ROOT_WIDGET_ID)?;
+    let side = dock_split_side_for_pointer(layout.bounds, pointer_position)?;
+    Some(ScoredDockDropCandidate {
+        candidate: DockDropCandidate {
+            target: DockingPreviewDropTarget::SplitIntoRoot { side },
+            scope: DockDropScope::Workspace,
+            side,
+            anchor_widget_id: BODY_ROOT_WIDGET_ID,
+            active: false,
+        },
+        edge_distance: dock_split_side_priority(layout.bounds, pointer_position, side),
+        anchor_area: layout.bounds.width * layout.bounds.height,
+        pointer_inside_anchor: layout.bounds.contains(pointer_position),
+    })
+}
+
+fn rank_dock_drop_candidates(
+    mut candidates: Vec<ScoredDockDropCandidate>,
+) -> Vec<DockDropCandidate> {
+    let area_interior = candidates.iter().any(|candidate| {
+        candidate.candidate.scope == DockDropScope::Area && candidate.pointer_inside_anchor
+    });
+    let group_available = candidates
+        .iter()
+        .any(|candidate| candidate.candidate.scope == DockDropScope::Group);
+    candidates.sort_by(|left, right| {
+        dock_drop_scope_priority(left, area_interior, group_available)
+            .cmp(&dock_drop_scope_priority(
+                right,
+                area_interior,
+                group_available,
+            ))
+            .then_with(|| left.edge_distance.total_cmp(&right.edge_distance))
+            .then_with(|| left.anchor_area.total_cmp(&right.anchor_area))
+    });
+    candidates
+        .into_iter()
+        .map(|candidate| candidate.candidate)
+        .collect()
+}
+
+fn dock_drop_scope_priority(
+    candidate: &ScoredDockDropCandidate,
+    area_interior: bool,
+    group_available: bool,
+) -> u8 {
+    match candidate.candidate.scope {
+        DockDropScope::Workspace
+            if candidate.edge_distance <= SPLIT_HIT_SLOP_PX
+                && (!group_available
+                    || matches!(
+                        candidate.candidate.side,
+                        DockSplitSide::Top | DockSplitSide::Bottom
+                    )) =>
+        {
+            0
+        }
+        DockDropScope::Area if candidate.pointer_inside_anchor => 1,
+        DockDropScope::Group => 2,
+        DockDropScope::Workspace if !area_interior && !group_available => 1,
+        DockDropScope::Workspace => 2,
+        DockDropScope::Area => 3,
+    }
+}
+
+fn activate_dock_drop_candidate(
+    mut candidates: Vec<DockDropCandidate>,
+    cycle_index: usize,
+    cycle_side: Option<DockSplitSide>,
+) -> ResolvedTabDropPreview {
+    let default_side = candidates[0].side;
+    let active_side =
+        cycle_side.filter(|side| candidates.iter().any(|candidate| candidate.side == *side));
+    let active_side = active_side.unwrap_or(default_side);
+    let same_side_indices = candidates
+        .iter()
+        .enumerate()
+        .filter_map(|(index, candidate)| (candidate.side == active_side).then_some(index))
+        .collect::<Vec<_>>();
+    let active_index = same_side_indices[cycle_index % same_side_indices.len()];
+    for (index, candidate) in candidates.iter_mut().enumerate() {
+        candidate.active = index == active_index;
+    }
+    ResolvedTabDropPreview {
+        target: Some(candidates[active_index].target),
+        candidates,
+        active_side: Some(active_side),
+    }
+}
+
+fn dock_split_side_for_pointer(
+    bounds: ui_math::UiRect,
+    pointer_position: ui_math::UiPoint,
+) -> Option<DockSplitSide> {
+    let left = bounds.x;
+    let right = bounds.x + bounds.width;
+    let top = bounds.y;
+    let bottom = bounds.y + bounds.height;
+    let side_slop = SPLIT_HIT_SLOP_PX;
+    let within_vertical_band =
+        pointer_position.y >= top - side_slop && pointer_position.y <= bottom + side_slop;
+    let within_horizontal_band =
+        pointer_position.x >= left - side_slop && pointer_position.x <= right + side_slop;
+
+    let mut candidates = Vec::with_capacity(4);
+    let left_delta = pointer_position.x - left;
+    if within_vertical_band
+        && left_delta >= -side_slop
+        && left_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
+    {
+        candidates.push((left_delta.abs(), DockSplitSide::Left));
+    }
+    let right_delta = pointer_position.x - right;
+    if within_vertical_band
+        && right_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
+        && right_delta <= side_slop
+    {
+        candidates.push((right_delta.abs(), DockSplitSide::Right));
+    }
+    let top_delta = pointer_position.y - top;
+    if within_horizontal_band
+        && top_delta >= -side_slop
+        && top_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
+    {
+        candidates.push((top_delta.abs(), DockSplitSide::Top));
+    }
+    let bottom_delta = pointer_position.y - bottom;
+    if within_horizontal_band
+        && bottom_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
+        && bottom_delta <= side_slop
+    {
+        candidates.push((bottom_delta.abs(), DockSplitSide::Bottom));
+    }
+
+    candidates
+        .into_iter()
         .min_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(_, route)| route)
+        .map(|(_, side)| side)
+}
+
+fn tab_stack_split_side_for_pointer(
+    bounds: ui_math::UiRect,
+    pointer_position: ui_math::UiPoint,
+) -> Option<DockSplitSide> {
+    let left = bounds.x;
+    let right = bounds.x + bounds.width;
+    let top = bounds.y;
+    let bottom = bounds.y + bounds.height;
+    let side_slop = SPLIT_HIT_SLOP_PX;
+    let within_vertical_band = pointer_position.y >= top && pointer_position.y <= bottom;
+    let within_horizontal_band = pointer_position.x >= left && pointer_position.x <= right;
+
+    let mut candidates = Vec::with_capacity(4);
+    let left_delta = pointer_position.x - left;
+    if within_vertical_band
+        && left_delta >= -side_slop
+        && left_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
+    {
+        candidates.push((left_delta.abs(), DockSplitSide::Left));
+    }
+    let right_delta = pointer_position.x - right;
+    if within_vertical_band
+        && right_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
+        && right_delta <= side_slop
+    {
+        candidates.push((right_delta.abs(), DockSplitSide::Right));
+    }
+    let top_delta = pointer_position.y - top;
+    if within_horizontal_band
+        && top_delta >= -side_slop
+        && top_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
+    {
+        candidates.push((top_delta.abs(), DockSplitSide::Top));
+    }
+    let bottom_delta = pointer_position.y - bottom;
+    if within_horizontal_band
+        && bottom_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
+        && bottom_delta <= side_slop
+    {
+        candidates.push((bottom_delta.abs(), DockSplitSide::Bottom));
+    }
+
+    candidates
+        .into_iter()
+        .min_by(|left, right| left.0.total_cmp(&right.0))
+        .map(|(_, side)| side)
+}
+
+fn dock_split_side_priority(
+    bounds: ui_math::UiRect,
+    pointer_position: ui_math::UiPoint,
+    side: DockSplitSide,
+) -> f32 {
+    match side {
+        DockSplitSide::Left => (pointer_position.x - bounds.x).abs(),
+        DockSplitSide::Right => (pointer_position.x - (bounds.x + bounds.width)).abs(),
+        DockSplitSide::Top => (pointer_position.y - bounds.y).abs(),
+        DockSplitSide::Bottom => (pointer_position.y - (bounds.y + bounds.height)).abs(),
+    }
 }
 
 fn projected_tab_stacks_for_docking(
@@ -1484,31 +1985,6 @@ fn projected_tab_stacks_for_docking(
     let mut stacks = editor_shell::projected_host_tab_stacks(&projection.root_host);
     stacks.extend(projection.floating_hosts.iter().map(|host| &host.tab_stack));
     stacks
-}
-
-fn tab_insert_index_for_pointer(
-    stack: &editor_shell::ProjectedTabStackSlot,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> usize {
-    stack
-        .tabs
-        .iter()
-        .enumerate()
-        .find_map(|(index, tab)| {
-            let layout = layouts.get(&tab.widget_id)?;
-            let midpoint = layout.bounds.x + layout.bounds.width * 0.5;
-            (pointer_position.x < midpoint).then_some(index)
-        })
-        .unwrap_or(stack.tabs.len())
-}
-
-fn edge_drop_priority(bounds: ui_math::UiRect, pointer_position: ui_math::UiPoint) -> f32 {
-    let left = (pointer_position.x - bounds.x).abs();
-    let right = (pointer_position.x - (bounds.x + bounds.width)).abs();
-    let top = (pointer_position.y - bounds.y).abs();
-    let bottom = (pointer_position.y - (bounds.y + bounds.height)).abs();
-    left.min(right).min(top).min(bottom)
 }
 
 fn tab_button_route_at_pointer(
@@ -1575,6 +2051,23 @@ fn map_projected_tab_drop_target(
             tab_stack_id,
             insert_index,
         },
+        editor_shell::ProjectedTabDropTarget::SplitIntoArea {
+            target_tab_stack_id,
+            side,
+        } => DockingPreviewDropTarget::SplitIntoArea {
+            target_tab_stack_id,
+            side,
+        },
+        editor_shell::ProjectedTabDropTarget::SplitIntoHost {
+            target_host_id,
+            side,
+        } => DockingPreviewDropTarget::SplitIntoHost {
+            target_host_id,
+            side,
+        },
+        editor_shell::ProjectedTabDropTarget::SplitIntoRoot { side } => {
+            DockingPreviewDropTarget::SplitIntoRoot { side }
+        }
         editor_shell::ProjectedTabDropTarget::NewFloatingHost => {
             DockingPreviewDropTarget::NewFloatingHost
         }

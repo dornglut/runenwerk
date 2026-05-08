@@ -25,14 +25,11 @@ impl EditorSurfaceProvider for ConsoleProvider {
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
         let view_model: ConsoleViewModel = build_console_view_model(context.app.console_lines());
-        let root = remap_surface_node_ids(
-            build_console_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
+        let root = build_console_panel(
+            &view_model,
+            context.theme,
+            request.panel_instance_id,
+            Some(request.tool_surface_instance_id),
         );
         Ok(ProviderSurfaceFrame {
             title: "Console".to_string(),

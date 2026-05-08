@@ -3,8 +3,10 @@ use crate::plugins::render::features::{UI_RENDER_FEATURE_ID, UiFontAtlasResource
 use crate::plugins::{PreparedUiFrameContribution, RenderFeatureId};
 use std::hash::{Hash, Hasher};
 
-type ScissoredRectBatch = (u32, (u32, u32, u32, u32), Vec<RectInstanceRaw>);
+type ScissoredRectBatch = (u32, u32, u32, (u32, u32, u32, u32), Vec<RectInstanceRaw>);
 type ScissoredViewportEmbedBatch = (
+    u32,
+    u32,
     u32,
     (u32, u32, u32, u32),
     u64,
@@ -46,26 +48,36 @@ impl Renderer {
             surface_height_u32,
         )
         .into_iter()
-        .filter_map(|(layer_order, scissor, instances)| {
-            if instances.is_empty() {
-                return None;
-            }
-            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                label: Some("engine_ui_rect_batch_instances"),
-                contents: bytemuck::cast_slice(&instances),
-                usage: BufferUsages::VERTEX,
-            });
-            Some(UiRectBatch {
-                layer_order,
-                scissor,
-                instance_count: instances.len() as u32,
-                instance_buffer,
-            })
-        })
+        .filter_map(
+            |(layer_order, first_order, last_order, scissor, instances)| {
+                if instances.is_empty() {
+                    return None;
+                }
+                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("engine_ui_rect_batch_instances"),
+                    contents: bytemuck::cast_slice(&instances),
+                    usage: BufferUsages::VERTEX,
+                });
+                Some(UiRectBatch {
+                    layer_order,
+                    first_primitive_order: first_order,
+                    last_primitive_order: last_order,
+                    scissor,
+                    instance_count: instances.len() as u32,
+                    instance_buffer,
+                })
+            },
+        )
         .collect::<Vec<_>>();
 
-        let mut glyph_batches_by_scissor =
-            Vec::<(u32, (u32, u32, u32, u32), u64, Vec<GlyphInstanceRaw>)>::new();
+        let mut glyph_batches_by_scissor = Vec::<(
+            u32,
+            u32,
+            u32,
+            (u32, u32, u32, u32),
+            u64,
+            Vec<GlyphInstanceRaw>,
+        )>::new();
         for instance in flattened_glyph_instances {
             let scissor = instance
                 .clip
@@ -80,16 +92,27 @@ impl Renderer {
             {
                 continue;
             }
-            if let Some((last_layer_order, last_scissor, last_texture, instances)) =
-                glyph_batches_by_scissor.last_mut()
+            if let Some((
+                last_layer_order,
+                _first_order,
+                last_order,
+                last_scissor,
+                last_texture,
+                instances,
+            )) = glyph_batches_by_scissor.last_mut()
                 && *last_layer_order == instance.layer_order
                 && *last_scissor == scissor
                 && *last_texture == instance.texture_id
+                && (*last_order == instance.primitive_order
+                    || last_order.saturating_add(1) == instance.primitive_order)
             {
                 instances.push(instance.raw);
+                *last_order = instance.primitive_order;
             } else {
                 glyph_batches_by_scissor.push((
                     instance.layer_order,
+                    instance.primitive_order,
+                    instance.primitive_order,
                     scissor,
                     instance.texture_id,
                     vec![instance.raw],
@@ -98,23 +121,27 @@ impl Renderer {
         }
         let glyph_batches = glyph_batches_by_scissor
             .into_iter()
-            .filter_map(|(layer_order, scissor, texture_id, instances)| {
-                if instances.is_empty() {
-                    return None;
-                }
-                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                    label: Some("engine_ui_glyph_batch_instances"),
-                    contents: bytemuck::cast_slice(&instances),
-                    usage: BufferUsages::VERTEX,
-                });
-                Some(UiGlyphBatch {
-                    layer_order,
-                    scissor,
-                    instance_count: instances.len() as u32,
-                    instance_buffer,
-                    texture_id,
-                })
-            })
+            .filter_map(
+                |(layer_order, first_order, last_order, scissor, texture_id, instances)| {
+                    if instances.is_empty() {
+                        return None;
+                    }
+                    let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                        label: Some("engine_ui_glyph_batch_instances"),
+                        contents: bytemuck::cast_slice(&instances),
+                        usage: BufferUsages::VERTEX,
+                    });
+                    Some(UiGlyphBatch {
+                        layer_order,
+                        first_primitive_order: first_order,
+                        last_primitive_order: last_order,
+                        scissor,
+                        instance_count: instances.len() as u32,
+                        instance_buffer,
+                        texture_id,
+                    })
+                },
+            )
             .collect::<Vec<_>>();
         let viewport_embed_batches = group_viewport_embed_batches_ordered(
             flattened_viewport_embed_instances,
@@ -122,24 +149,28 @@ impl Renderer {
             surface_height_u32,
         )
         .into_iter()
-        .filter_map(|(layer_order, scissor, viewport_id, slot, instances)| {
-            if instances.is_empty() {
-                return None;
-            }
-            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                label: Some("engine_ui_viewport_embed_batch_instances"),
-                contents: bytemuck::cast_slice(&instances),
-                usage: BufferUsages::VERTEX,
-            });
-            Some(UiViewportEmbedBatch {
-                layer_order,
-                scissor,
-                instance_count: instances.len() as u32,
-                instance_buffer,
-                viewport_id,
-                slot,
-            })
-        })
+        .filter_map(
+            |(layer_order, first_order, last_order, scissor, viewport_id, slot, instances)| {
+                if instances.is_empty() {
+                    return None;
+                }
+                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("engine_ui_viewport_embed_batch_instances"),
+                    contents: bytemuck::cast_slice(&instances),
+                    usage: BufferUsages::VERTEX,
+                });
+                Some(UiViewportEmbedBatch {
+                    layer_order,
+                    first_primitive_order: first_order,
+                    last_primitive_order: last_order,
+                    scissor,
+                    instance_count: instances.len() as u32,
+                    instance_buffer,
+                    viewport_id,
+                    slot,
+                })
+            },
+        )
         .collect::<Vec<_>>();
 
         if let Some(rect_pass) = self.rect_pass.as_ref() {
@@ -168,10 +199,13 @@ impl Renderer {
             );
         }
 
+        let draw_plan = build_ui_draw_plan(&rect_batches, &glyph_batches, &viewport_embed_batches);
+
         UiPreparedDraws {
             rect_batches,
             glyph_batches,
             viewport_embed_batches,
+            draw_plan,
         }
     }
 
@@ -313,13 +347,22 @@ fn group_rect_batches_ordered(
         let Some(scissor) = scissor else {
             continue;
         };
-        if let Some((last_layer_order, last_scissor, instances)) = grouped.last_mut()
+        if let Some((last_layer_order, _first_order, last_order, last_scissor, instances)) =
+            grouped.last_mut()
             && *last_layer_order == instance.layer_order
             && *last_scissor == scissor
+            && last_order.saturating_add(1) == instance.primitive_order
         {
             instances.push(instance.raw);
+            *last_order = instance.primitive_order;
         } else {
-            grouped.push((instance.layer_order, scissor, vec![instance.raw]));
+            grouped.push((
+                instance.layer_order,
+                instance.primitive_order,
+                instance.primitive_order,
+                scissor,
+                vec![instance.raw],
+            ));
         }
     }
     grouped
@@ -344,17 +387,28 @@ fn group_viewport_embed_batches_ordered(
         let Some(scissor) = scissor else {
             continue;
         };
-        if let Some((last_layer_order, last_scissor, last_viewport_id, last_slot, instances)) =
-            grouped.last_mut()
+        if let Some((
+            last_layer_order,
+            _first_order,
+            last_order,
+            last_scissor,
+            last_viewport_id,
+            last_slot,
+            instances,
+        )) = grouped.last_mut()
             && *last_layer_order == instance.layer_order
             && *last_scissor == scissor
             && *last_viewport_id == instance.viewport_id
             && *last_slot == instance.slot
+            && last_order.saturating_add(1) == instance.primitive_order
         {
             instances.push(instance.raw);
+            *last_order = instance.primitive_order;
         } else {
             grouped.push((
                 instance.layer_order,
+                instance.primitive_order,
+                instance.primitive_order,
                 scissor,
                 instance.viewport_id,
                 instance.slot,
@@ -363,6 +417,78 @@ fn group_viewport_embed_batches_ordered(
         }
     }
     grouped
+}
+
+fn build_ui_draw_plan(
+    rect_batches: &[UiRectBatch],
+    glyph_batches: &[UiGlyphBatch],
+    viewport_embed_batches: &[UiViewportEmbedBatch],
+) -> Vec<UiPreparedDrawCommand> {
+    let mut commands =
+        Vec::with_capacity(rect_batches.len() + glyph_batches.len() + viewport_embed_batches.len());
+    commands.extend(
+        rect_batches
+            .iter()
+            .enumerate()
+            .map(|(index, _)| UiPreparedDrawCommand::Rect(index)),
+    );
+    commands.extend(
+        viewport_embed_batches
+            .iter()
+            .enumerate()
+            .map(|(index, _)| UiPreparedDrawCommand::ViewportEmbed(index)),
+    );
+    commands.extend(
+        glyph_batches
+            .iter()
+            .enumerate()
+            .map(|(index, _)| UiPreparedDrawCommand::Glyph(index)),
+    );
+    commands.sort_by(|left, right| {
+        let left_key =
+            draw_command_sort_key(*left, rect_batches, glyph_batches, viewport_embed_batches);
+        let right_key =
+            draw_command_sort_key(*right, rect_batches, glyph_batches, viewport_embed_batches);
+        left_key.cmp(&right_key)
+    });
+    commands
+}
+
+fn draw_command_sort_key(
+    command: UiPreparedDrawCommand,
+    rect_batches: &[UiRectBatch],
+    glyph_batches: &[UiGlyphBatch],
+    viewport_embed_batches: &[UiViewportEmbedBatch],
+) -> (u32, u32, u32, u8) {
+    match command {
+        UiPreparedDrawCommand::Rect(index) => {
+            let batch = &rect_batches[index];
+            (
+                batch.layer_order,
+                batch.first_primitive_order,
+                batch.last_primitive_order,
+                0,
+            )
+        }
+        UiPreparedDrawCommand::ViewportEmbed(index) => {
+            let batch = &viewport_embed_batches[index];
+            (
+                batch.layer_order,
+                batch.first_primitive_order,
+                batch.last_primitive_order,
+                1,
+            )
+        }
+        UiPreparedDrawCommand::Glyph(index) => {
+            let batch = &glyph_batches[index];
+            (
+                batch.layer_order,
+                batch.first_primitive_order,
+                batch.last_primitive_order,
+                2,
+            )
+        }
+    }
 }
 
 fn hash_prepared_feature_contribution(
@@ -486,6 +612,7 @@ mod tests {
             },
             clip: Some([0.0, 0.0, 10.0, 10.0]),
             layer_order: 0,
+            primitive_order: 1,
         };
         let b = FlattenedUiRectInstance {
             raw: RectInstanceRaw {
@@ -496,6 +623,7 @@ mod tests {
             },
             clip: Some([20.0, 0.0, 10.0, 10.0]),
             layer_order: 0,
+            primitive_order: 3,
         };
         let c = FlattenedUiRectInstance {
             raw: RectInstanceRaw {
@@ -506,11 +634,12 @@ mod tests {
             },
             clip: Some([0.0, 0.0, 10.0, 10.0]),
             layer_order: 0,
+            primitive_order: 5,
         };
         let grouped = group_rect_batches_ordered(vec![a, b, c], 100, 100);
         assert_eq!(grouped.len(), 3);
-        assert_eq!(grouped[0].2.len(), 1);
-        assert_eq!(grouped[1].2.len(), 1);
-        assert_eq!(grouped[2].2.len(), 1);
+        assert_eq!(grouped[0].4.len(), 1);
+        assert_eq!(grouped[1].4.len(), 1);
+        assert_eq!(grouped[2].4.len(), 1);
     }
 }

@@ -24,6 +24,7 @@ use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch::{
     resolve_surface_command_contract, surface_capability_label, tool_surface_kind_label,
 };
+use crate::shell::surface_session::ViewportToolRadialSession;
 
 pub(crate) fn dispatch_session_mutation(
     app: &mut RunenwerkEditorApp,
@@ -63,6 +64,34 @@ pub(crate) fn dispatch_session_mutation(
         }
         ViewportSessionMutation::ToggleOptionsMenu => {
             session.viewport_options_menu_open = !session.viewport_options_menu_open;
+            if session.viewport_options_menu_open {
+                session.viewport_tools_menu_open = false;
+                session.viewport_tool_radial_session = None;
+            }
+        }
+        ViewportSessionMutation::ToggleToolsMenu => {
+            session.viewport_tools_menu_open = !session.viewport_tools_menu_open;
+            if session.viewport_tools_menu_open {
+                session.viewport_options_menu_open = false;
+                session.viewport_tool_radial_session = None;
+            }
+        }
+        ViewportSessionMutation::OpenToolRadialMenu {
+            viewport_id,
+            anchor_position,
+            opened_by_tab_hold,
+        } => {
+            session.viewport_options_menu_open = false;
+            session.viewport_tools_menu_open = false;
+            session.viewport_tool_radial_session = Some(ViewportToolRadialSession {
+                tool_surface_id: surface_id,
+                viewport_id,
+                anchor_position,
+                opened_by_tab_hold,
+            });
+        }
+        ViewportSessionMutation::CloseToolRadialMenu => {
+            session.viewport_tool_radial_session = None;
         }
     }
     Ok(())

@@ -58,6 +58,10 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             session.viewport_details_visible,
             session.viewport_statistics_visible,
             session.viewport_options_menu_open,
+            session.viewport_tools_menu_open,
+            session
+                .viewport_tool_radial_session
+                .map(|radial| radial.anchor_position),
             viewport_settings
                 .map(|settings| settings.debug_stage)
                 .unwrap_or(editor_viewport::ViewportDebugStage::Scene),
@@ -71,18 +75,15 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             expected_viewport_id,
         );
         let view_model = build_viewport_view_model(&frame);
-        let root = remap_surface_node_ids(
-            build_viewport_panel(
-                &view_model,
-                context.theme,
-                request.panel_instance_id,
-                Some(request.tool_surface_instance_id),
-            ),
-            request.tool_surface_instance_id,
+        let root = build_viewport_panel(
+            &view_model,
+            context.theme,
+            request.panel_instance_id,
+            Some(request.tool_surface_instance_id),
         );
         let mut routes = SurfaceRouteTable::empty();
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
             ),
@@ -91,7 +92,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             )),
         );
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
             ),
@@ -100,7 +101,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             )),
         );
         routes.insert(
-            remap_widget_id(
+            surface_widget_id(
                 request.tool_surface_instance_id,
                 VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
             ),
@@ -108,9 +109,35 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                 ViewportSurfaceAction::ToggleOptionsMenu,
             )),
         );
+        routes.insert(
+            surface_widget_id(
+                request.tool_surface_instance_id,
+                VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
+            ),
+            SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                ViewportSurfaceAction::ToggleToolsMenu,
+            )),
+        );
+        for (index, action) in [
+            ViewportSurfaceAction::ActivateSelectTool,
+            ViewportSurfaceAction::ActivateTranslateTool,
+            ViewportSurfaceAction::ActivateRotateTool,
+            ViewportSurfaceAction::ActivateScaleTool,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            routes.insert(
+                surface_widget_id(
+                    request.tool_surface_instance_id,
+                    viewport_tool_radial_item_widget_id(index),
+                ),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(action)),
+            );
+        }
         if let Some(viewport_id) = view_model.viewport_id {
             routes.insert(
-                remap_widget_id(
+                surface_widget_id(
                     request.tool_surface_instance_id,
                     VIEWPORT_RESET_CAMERA_WIDGET_ID,
                 ),
@@ -119,7 +146,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                 )),
             );
             routes.insert(
-                remap_widget_id(
+                surface_widget_id(
                     request.tool_surface_instance_id,
                     VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
                 ),
@@ -135,7 +162,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                 .enumerate()
             {
                 routes.insert(
-                    remap_widget_id(
+                    surface_widget_id(
                         request.tool_surface_instance_id,
                         viewport_debug_stage_button_widget_id(index),
                     ),
@@ -150,7 +177,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
         }
         for (index, choice) in view_model.product_choices.iter().enumerate() {
             routes.insert(
-                remap_widget_id(
+                surface_widget_id(
                     request.tool_surface_instance_id,
                     viewport_product_button_widget_id(index),
                 ),
@@ -210,6 +237,25 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                     SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleOptionsMenu),
                 )))
             }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ToggleToolsMenu) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleToolsMenu),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateSelectTool) => Ok(Some(
+                SurfaceCommandProposal::Shell(ShellCommand::ActivateSelectTool),
+            )),
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateTranslateTool) => Ok(Some(
+                SurfaceCommandProposal::Shell(ShellCommand::ActivateTranslateTool),
+            )),
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateRotateTool) => Ok(Some(
+                SurfaceCommandProposal::Shell(ShellCommand::ActivateRotateTool),
+            )),
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ActivateScaleTool) => Ok(Some(
+                SurfaceCommandProposal::Shell(ShellCommand::ActivateScaleTool),
+            )),
             SurfaceLocalAction::Viewport(ViewportSurfaceAction::ResetCamera { viewport_id }) => {
                 Ok(Some(editor_domain_proposal(
                     request,

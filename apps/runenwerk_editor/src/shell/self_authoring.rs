@@ -535,12 +535,23 @@ impl SelfAuthoringWorkspaceState {
     }
 
     pub fn formed_selected_preview(&self, theme: &ThemeTokens) -> Option<FormedRetainedUiProduct> {
+        self.formed_selected_preview_with_scope(theme, None)
+    }
+
+    pub fn formed_selected_preview_with_scope(
+        &self,
+        theme: &ThemeTokens,
+        widget_id_scope_base: Option<u64>,
+    ) -> Option<FormedRetainedUiProduct> {
         let document = self.selected_document()?;
         let EditorDefinitionDocumentContent::UiTemplate(template) = &document.content else {
             return None;
         };
         let normalized = normalize_authored_template(template.clone());
         let mut context = UiDefinitionContext::new(theme.clone());
+        if let Some(base) = widget_id_scope_base {
+            context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
+        }
         Some(ui_definition::form_retained_ui(&normalized, &mut context))
     }
 

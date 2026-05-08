@@ -3,6 +3,7 @@
 
 use editor_core::EntityId;
 use editor_viewport::{ExpressionProductId, ViewportDebugStage, ViewportId};
+use ui_math::UiPoint;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewportProductChoiceViewModel {
@@ -13,7 +14,7 @@ pub struct ViewportProductChoiceViewModel {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ViewportViewModel {
     pub viewport_id: Option<ViewportId>,
     pub selected_primary_product_id: Option<ExpressionProductId>,
@@ -21,6 +22,8 @@ pub struct ViewportViewModel {
     pub details_visible: bool,
     pub statistics_visible: bool,
     pub options_menu_open: bool,
+    pub tools_menu_open: bool,
+    pub tool_radial_anchor_position: Option<UiPoint>,
     pub debug_stage: ViewportDebugStage,
     pub root_background_opaque: bool,
     pub selected_entity: Option<EntityId>,
@@ -38,6 +41,8 @@ impl Default for ViewportViewModel {
             details_visible: false,
             statistics_visible: false,
             options_menu_open: false,
+            tools_menu_open: false,
+            tool_radial_anchor_position: None,
             debug_stage: ViewportDebugStage::Scene,
             root_background_opaque: false,
             selected_entity: None,

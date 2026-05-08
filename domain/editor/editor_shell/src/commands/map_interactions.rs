@@ -2,9 +2,9 @@
 //! Purpose: Map semantic UI interactions to shell commands.
 
 use crate::{
-    EntityTableSurfaceAction, InspectorSurfaceAction, RoutedShellAction, ShellCommand,
-    ShellProjectionArtifacts, StructuralCommandTarget, StructuralWidgetRoutingContext,
-    SurfaceLocalAction, UiInteraction, UiInteractionResults,
+    EntityTableSurfaceAction, InspectorSurfaceAction, OutlinerSurfaceAction, RoutedShellAction,
+    ShellCommand, ShellProjectionArtifacts, StructuralCommandTarget,
+    StructuralWidgetRoutingContext, SurfaceLocalAction, UiInteraction, UiInteractionResults,
 };
 use ui_input::{Key, KeyState};
 
@@ -178,6 +178,13 @@ fn command_for_activation(
             tab_stack_id,
             anchor_widget_id,
         } => ShellCommand::ToggleTabStackSurfaceMenu {
+            tab_stack_id: *tab_stack_id,
+            anchor_widget_id: *anchor_widget_id,
+        },
+        RoutedShellAction::ToggleTabStackCreateSurfaceMenu {
+            tab_stack_id,
+            anchor_widget_id,
+        } => ShellCommand::ToggleTabStackCreateSurfaceMenu {
             tab_stack_id: *tab_stack_id,
             anchor_widget_id: *anchor_widget_id,
         },
@@ -605,6 +612,35 @@ fn command_for_table_row(
                 tool_surface_instance_id: *tool_surface_instance_id,
                 target: command_target(*context),
                 action: SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectEntity {
+                    entity,
+                }),
+                projection_epoch: routing.projection_epoch,
+            }
+        }
+        Some(RoutedShellAction::DispatchSurfaceLocalAction {
+            provider_id,
+            tool_surface_instance_id,
+            action: SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectRow { entities }),
+            context,
+        }) => {
+            if routing
+                .widget_structural_context_by_id
+                .get(&widget_id)
+                .copied()
+                != Some(*context)
+            {
+                return ShellCommand::NoOp;
+            }
+
+            let Some(entity) = entities.get(row_index).copied() else {
+                return ShellCommand::NoOp;
+            };
+
+            ShellCommand::DispatchSurfaceLocalAction {
+                provider_id: *provider_id,
+                tool_surface_instance_id: *tool_surface_instance_id,
+                target: command_target(*context),
+                action: SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectEntity {
                     entity,
                 }),
                 projection_epoch: routing.projection_epoch,

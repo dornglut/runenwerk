@@ -2,6 +2,7 @@
 //! Purpose: Viewport surface workflow contracts.
 
 use editor_viewport::{ExpressionProductId, ViewportDebugStage, ViewportId};
+use ui_math::UiPoint;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewportSurfaceAction {
@@ -13,6 +14,11 @@ pub enum ViewportSurfaceAction {
     ToggleDetails,
     ToggleStatistics,
     ToggleOptionsMenu,
+    ToggleToolsMenu,
+    ActivateSelectTool,
+    ActivateTranslateTool,
+    ActivateRotateTool,
+    ActivateScaleTool,
     ResetCamera {
         viewport_id: ViewportId,
     },
@@ -26,11 +32,18 @@ pub enum ViewportSurfaceAction {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ViewportSessionMutation {
     ToggleDetails,
     ToggleStatistics,
     ToggleOptionsMenu,
+    ToggleToolsMenu,
+    OpenToolRadialMenu {
+        viewport_id: ViewportId,
+        anchor_position: UiPoint,
+        opened_by_tab_hold: bool,
+    },
+    CloseToolRadialMenu,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -278,6 +278,20 @@ mod tests {
         project_workspace_for_shell(&workspace).expect("workspace projection should succeed")
     }
 
+    fn first_tab_stack_pair(
+        artifact: &WorkspaceProjectionArtifact,
+    ) -> (&ProjectedTabStackSlot, &ProjectedTabStackSlot) {
+        let stacks = all_projected_stacks(artifact);
+        let first = stacks
+            .first()
+            .expect("workspace should project a tab stack");
+        let second = stacks
+            .iter()
+            .find(|stack| stack.tab_stack_id != first.tab_stack_id)
+            .expect("workspace should project a second tab stack");
+        (first, second)
+    }
+
     #[test]
     fn projection_route_ratifier_accepts_clean_projection_artifact() {
         let artifact = projected_workspace();
@@ -293,11 +307,8 @@ mod tests {
     #[test]
     fn projection_route_ratifier_rejects_missing_tab_button_route() {
         let mut artifact = projected_workspace();
-        let fixed_layout = artifact
-            .fixed_layout
-            .as_ref()
-            .expect("fixed layout should project");
-        let widget_id = fixed_layout.viewport.tabs[0].widget_id;
+        let (stack, _) = first_tab_stack_pair(&artifact);
+        let widget_id = stack.tabs[0].widget_id;
         artifact.tab_button_route_by_widget_id.remove(&widget_id);
 
         let report =
@@ -318,16 +329,15 @@ mod tests {
     #[test]
     fn projection_route_ratifier_rejects_mismatched_tab_button_route() {
         let mut artifact = projected_workspace();
-        let fixed_layout = artifact
-            .fixed_layout
-            .as_ref()
-            .expect("fixed layout should project");
-        let widget_id = fixed_layout.viewport.tabs[0].widget_id;
+        let (stack, other_stack) = first_tab_stack_pair(&artifact);
+        let widget_id = stack.tabs[0].widget_id;
+        let panel_instance_id = stack.tabs[0].panel.panel_instance_id;
+        let mismatched_tab_stack_id = other_stack.tab_stack_id;
         artifact.tab_button_route_by_widget_id.insert(
             widget_id,
             ProjectedTabButtonRoute {
-                panel_instance_id: fixed_layout.viewport.tabs[0].panel.panel_instance_id,
-                tab_stack_id: fixed_layout.outliner.tab_stack_id,
+                panel_instance_id,
+                tab_stack_id: mismatched_tab_stack_id,
             },
         );
 
@@ -361,17 +371,15 @@ mod tests {
     #[test]
     fn projection_route_ratifier_rejects_stale_widget_context() {
         let mut artifact = projected_workspace();
-        let fixed_layout = artifact
-            .fixed_layout
-            .as_ref()
-            .expect("fixed layout should project");
+        let (stack, _) = first_tab_stack_pair(&artifact);
+        let tab_stack_id = stack.tab_stack_id;
         let widget_id = WidgetId(999_999);
         artifact.widget_context_by_id.insert(
             widget_id,
             StructuralWidgetRoutingContext {
                 panel_instance_id: PanelInstanceId::try_from_raw(999).unwrap(),
                 active_tool_surface: None,
-                tab_stack_id: fixed_layout.viewport.tab_stack_id,
+                tab_stack_id,
             },
         );
 

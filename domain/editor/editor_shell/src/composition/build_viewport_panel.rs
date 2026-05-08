@@ -10,19 +10,21 @@ use ui_definition::{
 use ui_layout::SizePolicy;
 use ui_text::FontId;
 use ui_theme::{ThemeTokens, UiColor};
-use ui_tree::{PopupNode, UiNodeKind};
+use ui_tree::{PopupAlign, PopupFlipPolicy, PopupNode, PopupSide, RadialMenuNode, UiNodeKind};
 
 use crate::{
-    PanelInstanceId, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID,
+    PanelInstanceId, SurfaceWidgetScope, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID,
     VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID,
     VIEWPORT_CHROME_CONTENT_WIDGET_ID, VIEWPORT_CHROME_WIDGET_ID, VIEWPORT_DETAILS_LABEL_WIDGET_ID,
     VIEWPORT_DETAILS_PANEL_WIDGET_ID, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
     VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
     VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
     VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID, ViewportViewModel,
-    viewport_debug_stage_button_widget_id, viewport_embed_slot_for,
-    viewport_product_button_widget_id,
+    VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_WIDGET_ID, ViewportViewModel, viewport_debug_stage_button_widget_id,
+    viewport_embed_slot_for, viewport_product_button_widget_id,
+    viewport_tool_radial_item_widget_id,
 };
 
 use super::surface_control_polish::apply_compact_surface_control_polish;
@@ -34,25 +36,37 @@ pub fn build_viewport_panel(
     view_model: &ViewportViewModel,
     theme: &ThemeTokens,
     _panel_instance_id: PanelInstanceId,
-    _active_tool_surface: Option<ToolSurfaceInstanceId>,
+    active_tool_surface: Option<ToolSurfaceInstanceId>,
 ) -> UiNode {
     let template: AuthoredUiTemplate =
         ron::from_str(VIEWPORT_TEMPLATE_RON).expect("checked-in viewport UI fixture must parse");
     let normalized = normalize_authored_template(template);
-    let mut context = UiDefinitionContext::new(theme.clone());
-    register_viewport_widget_ids(&mut context);
+    let scope = SurfaceWidgetScope::optional(active_tool_surface);
+    let mut context = scoped_definition_context(theme, scope);
+    register_viewport_widget_ids(&mut context, scope);
     context.embed_slots.insert(
         "viewport.expression_product".into(),
         viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary).raw(),
     );
 
     let mut root = form_retained_ui(&normalized, &mut context).root;
-    polish_viewport_base(&mut root, view_model, theme);
-    inject_viewport_overlays(&mut root, view_model, theme);
+    polish_viewport_base(&mut root, view_model, theme, scope);
+    inject_viewport_overlays(&mut root, view_model, theme, scope);
     root
 }
 
-fn register_viewport_widget_ids(context: &mut UiDefinitionContext) {
+fn scoped_definition_context(
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> UiDefinitionContext {
+    let mut context = UiDefinitionContext::new(theme.clone());
+    if let Some(base) = scope.base() {
+        context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
+    }
+    context
+}
+
+fn register_viewport_widget_ids(context: &mut UiDefinitionContext, scope: SurfaceWidgetScope) {
     for (path, widget_id) in [
         ("root", VIEWPORT_PANEL_WIDGET_ID),
         ("root/body", VIEWPORT_BODY_WIDGET_ID),
@@ -66,13 +80,19 @@ fn register_viewport_widget_ids(context: &mut UiDefinitionContext) {
             VIEWPORT_SURFACE_EMBED_WIDGET_ID,
         ),
     ] {
-        context
-            .widget_ids_by_path
-            .insert(AuthoredUiNodePath(path.to_string()), widget_id);
+        context.widget_ids_by_path.insert(
+            AuthoredUiNodePath(path.to_string()),
+            scope.widget_id(widget_id),
+        );
     }
 }
 
-fn polish_viewport_base(root: &mut UiNode, view_model: &ViewportViewModel, theme: &ThemeTokens) {
+fn polish_viewport_base(
+    root: &mut UiNode,
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) {
     if let UiNodeKind::Panel(panel) = &mut root.kind {
         panel.theme.background_panel = UiColor::new(
             theme.background_panel.r,
@@ -87,13 +107,13 @@ fn polish_viewport_base(root: &mut UiNode, view_model: &ViewportViewModel, theme
             0.95,
         );
     }
-    if let Some(body) = find_node_mut(root, VIEWPORT_BODY_WIDGET_ID)
+    if let Some(body) = find_node_mut(root, scope.widget_id(VIEWPORT_BODY_WIDGET_ID))
         && let UiNodeKind::Stack(stack) = &mut body.kind
     {
         stack.gap = 0.0;
         stack.child_main_policies = vec![SizePolicy::flex(1.0)];
     }
-    if let Some(canvas) = find_node_mut(root, VIEWPORT_CANVAS_WIDGET_ID)
+    if let Some(canvas) = find_node_mut(root, scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID))
         && let UiNodeKind::Panel(panel) = &mut canvas.kind
     {
         panel.theme.background_panel = UiColor::new(
@@ -104,7 +124,7 @@ fn polish_viewport_base(root: &mut UiNode, view_model: &ViewportViewModel, theme
         );
         panel.theme.border = UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.70);
     }
-    if let Some(content) = find_node_mut(root, VIEWPORT_CANVAS_CONTENT_WIDGET_ID) {
+    if let Some(content) = find_node_mut(root, scope.widget_id(VIEWPORT_CANVAS_CONTENT_WIDGET_ID)) {
         if let UiNodeKind::Stack(stack) = &mut content.kind {
             stack.child_main_policies = if view_model.viewport_id.is_some() {
                 vec![SizePolicy::flex(1.0)]
@@ -115,10 +135,10 @@ fn polish_viewport_base(root: &mut UiNode, view_model: &ViewportViewModel, theme
         if view_model.viewport_id.is_none() {
             content
                 .children
-                .retain(|child| child.id != VIEWPORT_SURFACE_EMBED_WIDGET_ID);
+                .retain(|child| child.id != scope.widget_id(VIEWPORT_SURFACE_EMBED_WIDGET_ID));
         }
     }
-    if let Some(embed) = find_node_mut(root, VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+    if let Some(embed) = find_node_mut(root, scope.widget_id(VIEWPORT_SURFACE_EMBED_WIDGET_ID))
         && let UiNodeKind::ViewportSurfaceEmbed(embed) = &mut embed.kind
         && let Some(viewport_id) = view_model.viewport_id
     {
@@ -130,44 +150,146 @@ fn inject_viewport_overlays(
     root: &mut UiNode,
     view_model: &ViewportViewModel,
     theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
 ) {
-    let mut overlay_children = vec![viewport_chrome_overlay(view_model, theme)];
-    if let Some(options_popup) = viewport_options_popup(view_model, theme) {
+    let mut overlay_children = vec![viewport_chrome_overlay(view_model, theme, scope)];
+    if let Some(tools_menu) = viewport_tools_menu(view_model, theme, scope) {
+        overlay_children.push(tools_menu);
+    }
+    if let Some(tool_radial) = viewport_tool_radial_menu(view_model, theme, scope) {
+        overlay_children.push(tool_radial);
+    }
+    if let Some(options_popup) = viewport_options_popup(view_model, theme, scope) {
         overlay_children.push(options_popup);
     }
-    if let Some(status_overlay) = viewport_status_overlay(view_model, theme) {
+    if let Some(status_overlay) = viewport_status_overlay(view_model, theme, scope) {
         overlay_children.push(status_overlay);
     }
-    if let Some(canvas) = find_node_mut(root, VIEWPORT_CANVAS_WIDGET_ID) {
+    if let Some(canvas) = find_node_mut(root, scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID)) {
         canvas.children.extend(overlay_children);
     }
 }
 
-fn viewport_chrome_overlay(view_model: &ViewportViewModel, theme: &ThemeTokens) -> UiNode {
+fn viewport_chrome_overlay(
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> UiNode {
     let chrome = hstack_with_policies(
-        VIEWPORT_CHROME_CONTENT_WIDGET_ID,
+        scope.widget_id(VIEWPORT_CHROME_CONTENT_WIDGET_ID),
         theme.spacing.xs,
-        vec![SizePolicy::Auto],
-        vec![button_selected(
-            VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
-            "Options",
-            theme.body_small_text_style(FontId(1)),
-            theme.clone(),
-            view_model.options_menu_open,
-        )],
+        vec![SizePolicy::Auto, SizePolicy::Auto],
+        vec![
+            button_selected(
+                scope.widget_id(VIEWPORT_OPTIONS_BUTTON_WIDGET_ID),
+                "Options",
+                theme.body_small_text_style(FontId(1)),
+                theme.clone(),
+                view_model.options_menu_open,
+            ),
+            button_selected(
+                scope.widget_id(VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID),
+                "Tools",
+                theme.body_small_text_style(FontId(1)),
+                theme.clone(),
+                view_model.tools_menu_open || view_model.tool_radial_anchor_position.is_some(),
+            ),
+        ],
     );
 
     UiNode::with_children(
-        VIEWPORT_CHROME_WIDGET_ID,
+        scope.widget_id(VIEWPORT_CHROME_WIDGET_ID),
         UiNodeKind::Popup(PopupNode::anchored_top_start(
-            VIEWPORT_CANVAS_WIDGET_ID,
+            scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID),
             transparent_panel_theme(theme, 0.0),
         )),
         vec![chrome],
     )
 }
 
-fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -> Option<UiNode> {
+fn viewport_tool_radial_menu(
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> Option<UiNode> {
+    view_model
+        .tool_radial_anchor_position
+        .map(|anchor_position| {
+            let mut radial_theme = theme.clone();
+            radial_theme.background_panel = UiColor::new(
+                theme.background_panel.r,
+                theme.background_panel.g,
+                theme.background_panel.b,
+                0.94,
+            );
+            let mut radial = RadialMenuNode::anchored_at(anchor_position, radial_theme);
+            radial.inner_radius = 18.0;
+            radial.outer_radius = 78.0;
+            radial.item_size = ui_math::UiSize::new(50.0, 30.0);
+            UiNode::with_children(
+                scope.widget_id(VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID),
+                UiNodeKind::RadialMenu(radial),
+                ["Select", "Move", "Rotate", "Scale"]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, label)| {
+                        viewport_button(
+                            scope.widget_id(viewport_tool_radial_item_widget_id(index)),
+                            label,
+                            false,
+                            true,
+                            theme,
+                        )
+                    })
+                    .collect(),
+            )
+        })
+}
+
+fn viewport_tools_menu(
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> Option<UiNode> {
+    view_model.tools_menu_open.then(|| {
+        let mut popup_theme = theme.clone();
+        popup_theme.background_panel = UiColor::new(
+            theme.background_panel.r,
+            theme.background_panel.g,
+            theme.background_panel.b,
+            0.96,
+        );
+        UiNode::with_children(
+            scope.widget_id(VIEWPORT_TOOLS_MENU_WIDGET_ID),
+            UiNodeKind::Popup(PopupNode::anchored_outside(
+                scope.widget_id(VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID),
+                PopupSide::Bottom,
+                PopupAlign::Start,
+                PopupFlipPolicy::FlipToFit,
+                popup_theme,
+            )),
+            ["Select", "Move", "Rotate", "Scale"]
+                .into_iter()
+                .enumerate()
+                .map(|(index, label)| {
+                    viewport_button(
+                        scope.widget_id(viewport_tool_radial_item_widget_id(index)),
+                        label,
+                        false,
+                        true,
+                        theme,
+                    )
+                })
+                .collect(),
+        )
+    })
+}
+
+fn viewport_options_popup(
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> Option<UiNode> {
     view_model.options_menu_open.then(|| {
         let mut popup_theme = theme.clone();
         popup_theme.background_panel = UiColor::new(
@@ -178,13 +300,13 @@ fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -
         );
         let mut items = vec![
             viewport_toggle(
-                VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+                scope.widget_id(VIEWPORT_DETAILS_TOGGLE_WIDGET_ID),
                 "Details",
                 view_model.details_visible,
                 theme,
             ),
             viewport_toggle(
-                VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
+                scope.widget_id(VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID),
                 "Statistics",
                 view_model.statistics_visible,
                 theme,
@@ -192,21 +314,21 @@ fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -
         ];
         if view_model.viewport_id.is_some() {
             items.push(viewport_button(
-                VIEWPORT_RESET_CAMERA_WIDGET_ID,
+                scope.widget_id(VIEWPORT_RESET_CAMERA_WIDGET_ID),
                 "Reset Camera",
                 false,
                 true,
                 theme,
             ));
             items.push(viewport_toggle(
-                VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
+                scope.widget_id(VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID),
                 "Opaque Root",
                 view_model.root_background_opaque,
                 theme,
             ));
             for (index, stage) in ViewportDebugStage::ALL.into_iter().enumerate() {
                 items.push(viewport_button(
-                    viewport_debug_stage_button_widget_id(index),
+                    scope.widget_id(viewport_debug_stage_button_widget_id(index)),
                     format!("Debug {}", stage.display_label()),
                     view_model.debug_stage == stage,
                     true,
@@ -216,7 +338,7 @@ fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -
         }
         for (index, choice) in view_model.product_choices.iter().enumerate() {
             items.push(viewport_button(
-                viewport_product_button_widget_id(index),
+                scope.widget_id(viewport_product_button_widget_id(index)),
                 format!("Product {}", choice.label),
                 choice.selected,
                 choice.enabled,
@@ -224,9 +346,12 @@ fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -
             ));
         }
         UiNode::with_children(
-            VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
-            UiNodeKind::Popup(PopupNode::anchored_bottom_start(
-                VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+            scope.widget_id(VIEWPORT_OPTIONS_POPUP_WIDGET_ID),
+            UiNodeKind::Popup(PopupNode::anchored_outside(
+                scope.widget_id(VIEWPORT_OPTIONS_BUTTON_WIDGET_ID),
+                PopupSide::Bottom,
+                PopupAlign::Start,
+                PopupFlipPolicy::FlipToFit,
                 popup_theme,
             )),
             items,
@@ -272,31 +397,35 @@ fn viewport_button(
     node
 }
 
-fn viewport_status_overlay(view_model: &ViewportViewModel, theme: &ThemeTokens) -> Option<UiNode> {
+fn viewport_status_overlay(
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+    scope: SurfaceWidgetScope,
+) -> Option<UiNode> {
     (view_model.details_visible || view_model.statistics_visible).then(|| {
         let mut overlay_items = Vec::new();
         if view_model.details_visible {
             overlay_items.push(label(
-                VIEWPORT_DETAILS_LABEL_WIDGET_ID,
+                scope.widget_id(VIEWPORT_DETAILS_LABEL_WIDGET_ID),
                 viewport_details_text(view_model),
                 theme.body_small_text_style(FontId(1)),
             ));
         }
         if view_model.statistics_visible {
             overlay_items.push(label(
-                VIEWPORT_STATISTICS_LABEL_WIDGET_ID,
+                scope.widget_id(VIEWPORT_STATISTICS_LABEL_WIDGET_ID),
                 viewport_statistics_text(view_model),
                 theme.body_small_text_style(FontId(1)),
             ));
         }
         UiNode::with_children(
-            VIEWPORT_DETAILS_PANEL_WIDGET_ID,
+            scope.widget_id(VIEWPORT_DETAILS_PANEL_WIDGET_ID),
             UiNodeKind::Popup(PopupNode::anchored_inside_bottom_start(
-                VIEWPORT_CANVAS_WIDGET_ID,
+                scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID),
                 transparent_panel_theme(theme, 0.50),
             )),
             vec![hstack_with_policies(
-                VIEWPORT_STATUS_WIDGET_ID,
+                scope.widget_id(VIEWPORT_STATUS_WIDGET_ID),
                 theme.spacing.sm,
                 vec![SizePolicy::Auto; overlay_items.len()],
                 overlay_items,
@@ -449,6 +578,88 @@ mod tests {
             UiNodeKind::Button(button)
                 if button.label == "Product Volume Slice" && !button.selected && !button.enabled
         ));
+    }
+
+    #[test]
+    fn viewport_tool_radial_menu_projects_transform_tool_entries() {
+        let theme = ThemeTokens::default();
+        let hidden = build_viewport_panel(
+            &ViewportViewModel::default(),
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+        assert!(find_node(&hidden, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID).is_none());
+
+        let visible_model = ViewportViewModel {
+            tool_radial_anchor_position: Some(ui_math::UiPoint::new(120.0, 80.0)),
+            ..Default::default()
+        };
+        let visible = build_viewport_panel(
+            &visible_model,
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+        let menu = find_node(&visible, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID)
+            .expect("tool radial menu should exist");
+        assert!(matches!(
+            &menu.kind,
+            UiNodeKind::RadialMenu(radial)
+                if matches!(
+                    radial.anchor,
+                    ui_tree::RadialMenuAnchor::Point(point)
+                        if point == ui_math::UiPoint::new(120.0, 80.0)
+                )
+        ));
+        for (index, label) in ["Select", "Move", "Rotate", "Scale"]
+            .into_iter()
+            .enumerate()
+        {
+            let item = find_node(&visible, viewport_tool_radial_item_widget_id(index))
+                .expect("tool radial item should exist");
+            assert!(matches!(
+                &item.kind,
+                UiNodeKind::Button(button) if button.label == label
+            ));
+        }
+    }
+
+    #[test]
+    fn viewport_tools_click_menu_projects_transform_tool_entries() {
+        let theme = ThemeTokens::default();
+        let hidden = build_viewport_panel(
+            &ViewportViewModel::default(),
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+        assert!(find_node(&hidden, VIEWPORT_TOOLS_MENU_WIDGET_ID).is_none());
+
+        let visible_model = ViewportViewModel {
+            tools_menu_open: true,
+            ..Default::default()
+        };
+        let visible = build_viewport_panel(
+            &visible_model,
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+        let menu =
+            find_node(&visible, VIEWPORT_TOOLS_MENU_WIDGET_ID).expect("tools menu should exist");
+        assert!(matches!(&menu.kind, UiNodeKind::Popup(_)));
+        for (index, label) in ["Select", "Move", "Rotate", "Scale"]
+            .into_iter()
+            .enumerate()
+        {
+            let item = find_node(&visible, viewport_tool_radial_item_widget_id(index))
+                .expect("tool menu item should exist");
+            assert!(matches!(
+                &item.kind,
+                UiNodeKind::Button(button) if button.label == label
+            ));
+        }
     }
 
     #[test]

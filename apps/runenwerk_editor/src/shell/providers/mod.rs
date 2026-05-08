@@ -12,7 +12,7 @@ use editor_shell::{
     EntityTableSurfaceAction, EntityTableViewModel, InspectorFieldControlKind,
     InspectorFieldViewModel, InspectorObservationFrame, InspectorObservedField,
     InspectorObservedTarget, InspectorSessionMutation, InspectorSurfaceAction,
-    InspectorTargetViewModel, InspectorViewModel, ObservationConsumerKind,
+    InspectorTargetViewModel, InspectorViewModel, OUTLINER_LIST_WIDGET_ID, ObservationConsumerKind,
     ObservationFrameMetadata, ObservationSourceReality, OutlinerDomainMutation,
     OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel, OutlinerSurfaceAction,
     OutlinerViewModel, ResolvedSurfaceFrame, ShellCommand, SurfaceCommandProposal,
@@ -22,20 +22,21 @@ use editor_shell::{
     SurfaceRouteTable, SurfaceSessionMutation, ToolSurfaceInstanceId, ToolSurfaceKind,
     VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
     VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
-    ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
-    ViewportSurfaceAction, ViewportViewModel, build_console_panel, build_entity_table_panel,
-    build_inspector_panel, build_outliner_panel, build_viewport_panel, editor_domain_proposal,
-    entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
-    outliner_row_widget_id, surface_session_proposal, tool_surface_capability_set,
-    tool_surface_definition_id, viewport_debug_stage_button_widget_id,
-    viewport_product_button_widget_id,
+    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
+    ViewportDomainMutation, ViewportObservationFrame, ViewportProductChoiceViewModel,
+    ViewportProductObservation, ViewportSessionMutation, ViewportSurfaceAction, ViewportViewModel,
+    build_console_panel, build_entity_table_panel, build_inspector_panel, build_outliner_panel,
+    build_viewport_panel, editor_domain_proposal, entity_table_sort_button_widget_id,
+    inspector_field_focus_widget_id, inspector_field_widget_id, surface_session_proposal,
+    surface_widget_id, tool_surface_capability_set, tool_surface_definition_id,
+    viewport_debug_stage_button_widget_id, viewport_product_button_widget_id,
+    viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::{ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState};
 use ui_text::FontId;
 use ui_theme::ThemeTokens;
 
-use crate::editor_app::RunenwerkEditorApp;
+use crate::editor_app::{ConsoleMessage, ConsoleMessageKind, RunenwerkEditorApp};
 use crate::editor_panels::{
     EntityTablePanelPresenter, EntityTablePanelState, InspectorPanelPresenter,
     InspectorPanelViewModel, InspectorWidgetField, OutlinerPanelState, ViewportToolState,
@@ -330,9 +331,27 @@ pub fn active_document_context(app: &RunenwerkEditorApp) -> SurfaceDocumentConte
     SurfaceDocumentContext::NoActiveDocument
 }
 
-fn build_console_view_model(lines: &[String]) -> ConsoleViewModel {
+fn build_console_view_model(lines: &[ConsoleMessage]) -> ConsoleViewModel {
     ConsoleViewModel {
-        lines: lines.to_vec(),
+        lines: lines
+            .iter()
+            .map(|line| {
+                editor_shell::ConsoleLineViewModel::new(
+                    console_line_kind(line.kind),
+                    line.text.clone(),
+                )
+            })
+            .collect(),
+    }
+}
+
+fn console_line_kind(kind: ConsoleMessageKind) -> editor_shell::ConsoleLineKind {
+    match kind {
+        ConsoleMessageKind::Input => editor_shell::ConsoleLineKind::Input,
+        ConsoleMessageKind::Error => editor_shell::ConsoleLineKind::Error,
+        ConsoleMessageKind::Warning => editor_shell::ConsoleLineKind::Warning,
+        ConsoleMessageKind::Info => editor_shell::ConsoleLineKind::Info,
+        ConsoleMessageKind::Debug => editor_shell::ConsoleLineKind::Debug,
     }
 }
 
@@ -410,6 +429,8 @@ fn build_viewport_observation_frame(
     details_visible: bool,
     statistics_visible: bool,
     options_menu_open: bool,
+    tools_menu_open: bool,
+    tool_radial_anchor_position: Option<ui_math::UiPoint>,
     debug_stage: editor_viewport::ViewportDebugStage,
     root_background_opaque: bool,
     selected_entity: Option<EntityId>,
@@ -466,6 +487,8 @@ fn build_viewport_observation_frame(
         details_visible,
         statistics_visible,
         options_menu_open,
+        tools_menu_open,
+        tool_radial_anchor_position,
         debug_stage,
         root_background_opaque,
         selected_entity,
@@ -496,6 +519,8 @@ fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportViewMo
         details_visible: frame.details_visible,
         statistics_visible: frame.statistics_visible,
         options_menu_open: frame.options_menu_open,
+        tools_menu_open: frame.tools_menu_open,
+        tool_radial_anchor_position: frame.tool_radial_anchor_position,
         debug_stage: frame.debug_stage,
         root_background_opaque: frame.root_background_opaque,
         selected_entity: frame.selected_entity,
@@ -796,13 +821,13 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
             ToolSurfaceKind::UiCanvas => context
                 .shell_state
                 .self_authoring()
-                .formed_selected_preview(context.theme)
-                .map(|product| {
-                    (
-                        remap_surface_node_ids(product.root, request.tool_surface_instance_id),
-                        SurfaceRouteTable::empty(),
-                    )
-                })
+                .formed_selected_preview_with_scope(
+                    context.theme,
+                    Some(editor_shell::surface_widget_scope_base(
+                        request.tool_surface_instance_id,
+                    )),
+                )
+                .map(|product| (product.root, SurfaceRouteTable::empty()))
                 .unwrap_or_else(|| {
                     build_self_authoring_control_panel(
                         context,
@@ -1248,33 +1273,26 @@ fn build_self_authoring_control_panel(
     let mut children = Vec::new();
     let mut routes = SurfaceRouteTable::empty();
     for (index, line) in lines.into_iter().enumerate() {
-        children.push(editor_shell::label(
-            editor_shell::WidgetId(30_000 + index as u64),
-            line,
-            text_style.clone(),
-        ));
+        let widget_id =
+            surface_widget_id(surface_id, editor_shell::WidgetId(30_000 + index as u64));
+        children.push(editor_shell::label(widget_id, line, text_style.clone()));
     }
     for (index, (label, action)) in actions.into_iter().enumerate() {
-        let widget_id = editor_shell::WidgetId(40_000 + index as u64);
+        let widget_id =
+            surface_widget_id(surface_id, editor_shell::WidgetId(40_000 + index as u64));
         children.push(editor_shell::button(
             widget_id,
             label,
             text_style.clone(),
             context.theme.clone(),
         ));
-        routes.insert(
-            remap_widget_id(surface_id, widget_id),
-            SurfaceLocalRoute::new(action),
-        );
+        routes.insert(widget_id, SurfaceLocalRoute::new(action));
     }
     (
-        remap_surface_node_ids(
-            editor_shell::panel(
-                editor_shell::WidgetId(29_999),
-                context.theme.clone(),
-                children,
-            ),
-            surface_id,
+        editor_shell::panel(
+            surface_widget_id(surface_id, editor_shell::WidgetId(29_999)),
+            context.theme.clone(),
+            children,
         ),
         routes,
     )
@@ -1329,8 +1347,14 @@ fn diagnostic_surface_node(
     request: &SurfaceProviderRequest,
     diagnostic: &SurfaceProviderDiagnostic,
 ) -> editor_shell::UiNode {
-    let root_id = surface_scoped_widget_id(request.tool_surface_instance_id, 900_000);
-    let label_id = surface_scoped_widget_id(request.tool_surface_instance_id, 900_001);
+    let root_id = surface_widget_id(
+        request.tool_surface_instance_id,
+        editor_shell::WidgetId(900_000),
+    );
+    let label_id = surface_widget_id(
+        request.tool_surface_instance_id,
+        editor_shell::WidgetId(900_001),
+    );
     editor_shell::panel(
         root_id,
         ThemeTokens::default(),
@@ -1340,53 +1364,6 @@ fn diagnostic_surface_node(
             ThemeTokens::default().body_small_text_style(FontId(1)),
         )],
     )
-}
-
-fn surface_scoped_widget_id(
-    surface_id: ToolSurfaceInstanceId,
-    base: u64,
-) -> editor_shell::WidgetId {
-    if surface_id.raw() <= 5 {
-        editor_shell::WidgetId(base)
-    } else {
-        editor_shell::WidgetId(surface_id.raw().saturating_mul(100_000_000) + base)
-    }
-}
-
-fn remap_surface_node_ids(
-    mut node: editor_shell::UiNode,
-    surface_id: ToolSurfaceInstanceId,
-) -> editor_shell::UiNode {
-    if surface_id.raw() <= 5 {
-        return node;
-    }
-    remap_node_recursive(&mut node, surface_id);
-    node
-}
-
-fn remap_node_recursive(node: &mut editor_shell::UiNode, surface_id: ToolSurfaceInstanceId) {
-    node.id = surface_scoped_widget_id(surface_id, node.id.0);
-    match &mut node.kind {
-        editor_shell::UiNodeKind::Popup(popup) => {
-            popup.anchor = remap_widget_id(surface_id, popup.anchor);
-        }
-        editor_shell::UiNodeKind::Button(button) => {
-            button.reveal_on_hover_anchor = button
-                .reveal_on_hover_anchor
-                .map(|anchor| remap_widget_id(surface_id, anchor));
-        }
-        _ => {}
-    }
-    for child in &mut node.children {
-        remap_node_recursive(child, surface_id);
-    }
-}
-
-fn remap_widget_id(
-    surface_id: ToolSurfaceInstanceId,
-    widget_id: editor_shell::WidgetId,
-) -> editor_shell::WidgetId {
-    surface_scoped_widget_id(surface_id, widget_id.0)
 }
 
 pub mod console;
@@ -1531,73 +1508,6 @@ mod tests {
             tool_surface_bindings: None,
             viewport_instances: None,
         }
-    }
-
-    fn find_node(
-        node: &editor_shell::UiNode,
-        widget_id: editor_shell::WidgetId,
-    ) -> Option<&editor_shell::UiNode> {
-        if node.id == widget_id {
-            return Some(node);
-        }
-        node.children
-            .iter()
-            .find_map(|child| find_node(child, widget_id))
-    }
-
-    #[test]
-    fn surface_node_remap_rewrites_popup_and_reveal_anchor_widget_ids() {
-        let surface_id = ToolSurfaceInstanceId::try_from_raw(9).unwrap();
-        let anchor_id = editor_shell::WidgetId(44);
-        let popup_id = editor_shell::WidgetId(76);
-        let button_id = editor_shell::WidgetId(1_500_000);
-        let mut button = editor_shell::ButtonNode::new(
-            "x",
-            ThemeTokens::default().body_small_text_style(FontId(1)),
-            ThemeTokens::default(),
-        );
-        button.reveal_on_hover_anchor = Some(anchor_id);
-        let root = editor_shell::UiNode::with_children(
-            editor_shell::WidgetId(40),
-            editor_shell::UiNodeKind::Panel(editor_shell::PanelNode::new(ThemeTokens::default())),
-            vec![
-                editor_shell::UiNode::new(
-                    anchor_id,
-                    editor_shell::UiNodeKind::Panel(editor_shell::PanelNode::new(
-                        ThemeTokens::default(),
-                    )),
-                ),
-                editor_shell::UiNode::with_children(
-                    popup_id,
-                    editor_shell::UiNodeKind::Popup(editor_shell::PopupNode::anchored_top_start(
-                        anchor_id,
-                        ThemeTokens::default(),
-                    )),
-                    vec![editor_shell::UiNode::new(
-                        button_id,
-                        editor_shell::UiNodeKind::Button(button),
-                    )],
-                ),
-            ],
-        );
-
-        let remapped = remap_surface_node_ids(root, surface_id);
-        let remapped_anchor_id = remap_widget_id(surface_id, anchor_id);
-        let remapped_popup_id = remap_widget_id(surface_id, popup_id);
-        let remapped_button_id = remap_widget_id(surface_id, button_id);
-        let popup = find_node(&remapped, remapped_popup_id).expect("popup should be remapped");
-        let button = find_node(&remapped, remapped_button_id).expect("button should be remapped");
-
-        assert!(find_node(&remapped, remapped_anchor_id).is_some());
-        assert!(matches!(
-            &popup.kind,
-            editor_shell::UiNodeKind::Popup(popup) if popup.anchor == remapped_anchor_id
-        ));
-        assert!(matches!(
-            &button.kind,
-            editor_shell::UiNodeKind::Button(button)
-                if button.reveal_on_hover_anchor == Some(remapped_anchor_id)
-        ));
     }
 
     #[test]
