@@ -1135,6 +1135,10 @@ fn validation_gates_have_quick_and_full_paths_with_nextest_fallback() {
         ci.contains("./quiet_full_gate.sh") && ci.contains("tools/docs/validate_docs.py"),
         "CI should use the repo gate path and include docs validation",
     );
+    assert!(
+        ci.contains("get.nexte.st/latest/linux") && ci.contains("cargo nextest --version"),
+        "CI should install and verify cargo-nextest so the full gate takes the nextest path",
+    );
 }
 
 #[test]

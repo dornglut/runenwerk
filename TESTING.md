@@ -58,7 +58,9 @@ Use `./quiet_editor_gate.sh` for active editor/ECS implementation loops. It
 runs docs validation, focused clippy, and focused tests for the ECS, inspector,
 scene editor, shell, and editor app crates. Use `./quiet_full_gate.sh` for broad
 closeout and milestone validation; it prefers `cargo-nextest` when available and
-falls back to `cargo test`.
+falls back to `cargo test`. CI installs the `cargo-nextest` prebuilt binary
+before running the full gate, so CI uses the nextest path while local developer
+machines keep the zero-install fallback.
 
 Documentation validation:
 
