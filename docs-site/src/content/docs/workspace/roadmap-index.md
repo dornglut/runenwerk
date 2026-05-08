@@ -59,15 +59,20 @@ Operational execution checklist:
 
 ## Recommended Near-Term Order
 
-1. Complete UI-A live replacement: active UI templates, menus, shortcuts, and command bindings feed toolbar/menu products and input dispatch without definition data executing commands directly.
-2. Complete UI-B live replacement: active panel and tool-surface registries drive projected surface-switch/new-tab choices while existing workspace state remains unchanged unless a workspace layout definition is applied.
-3. Start the SDF/field-first asset pipeline inside the same editor surface track: add `domain/asset`, project asset catalog contracts, and first Asset Browser, Import Inspector, Field Product Viewer, and SDF Brush Browser surfaces through active provider/catalog seams.
-4. Continue broader reusable-control adoption in editor surfaces while keeping provider behavior outside `ui_definition`.
-5. Use the M3.6 workspace to author later editor, debug overlay, runtime overlay, and game UI templates instead of adding new hard-coded shell/app UI.
-6. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.
-7. Add gameplay graph ATR IR contracts after semantic graph and ECS/runtime boundaries are explicit, then lower first-slice gameplay rules into ECS query/event/schedule products.
-8. Preserve and extend architecture guards while these features land.
-9. Keep domain and workspace docs synchronized with shipped behavior.
+1. Add the active command-binding spine: authored route ids resolve to known app/domain commands, and invalid binding activation leaves the previous active catalog unchanged.
+2. Consume active shortcuts in `apps/runenwerk_editor/src/runtime/systems/input_bridge.rs::dispatch_shortcuts` through that command-binding spine.
+3. Consume active menus in `apps/runenwerk_editor/src/shell/toolbar_adapter.rs` and `domain/editor/editor_shell/src/composition/toolbar_definition.rs`, with checked-in fixtures only as fallback defaults.
+4. Finish active panel/tool-surface registry projection in `domain/editor/editor_shell/src/composition/build_editor_shell.rs` so future create/switch choices reflect active definitions while existing workspace state remains unchanged unless a workspace layout is applied.
+5. Broaden reusable-control adoption across editor surfaces before adding asset surfaces, keeping provider data, route proposals, and behavior outside `ui_definition`.
+6. Add the SDF/field-first asset domain and project-file foundation: `domain/asset`, `ProjectFileV2`, `world_sdf` product descriptors, import plans, diagnostics, ratification, and dependency graph contracts.
+7. Add first asset runtime/catalog surfaces through active provider/catalog seams: Asset Browser, Import Inspector, Field Product Viewer, and SDF Brush Browser.
+8. Add app-owned import and field-product execution jobs, failed-artifact preservation, Blender/glTF foreign-reference import, and scene-manifest migration to catalog-backed queries.
+9. Expand viewport product producers and history workflows for field, atlas, volume, brickmap, and asset-backed edits.
+10. Add runtime preview/data hot reload only after catalog, import, and formed-product contracts exist.
+11. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.
+12. Add gameplay graph ATR IR and ECS lowering only after narrower gameplay event/action/state/quest, authority, and source-map contracts are explicit.
+13. Treat compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game editors, native OS menu/shortcut mirroring, external marketplace packages, and payload ECS enum variants as design-first gates, not implementation tickets.
+14. Preserve architecture guards and keep domain/workspace docs synchronized as each phase lands.
 
 ## Rule
 

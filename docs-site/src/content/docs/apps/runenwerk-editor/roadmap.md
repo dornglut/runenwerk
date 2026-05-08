@@ -104,6 +104,419 @@ Current post-M3 gaps:
 - Later self-authoring packaging/extensibility is implementation-ready for the retained UI path only. Compiled-reactive or ECS-driven UI execution remains blocked; neither strategy was promoted before M2, and any future promotion requires a separate active design or accepted ADR plus a roadmap update.
 - M9 is release-readiness verification, not a feature construction phase.
 
+## Next Execution Order
+
+Use this order after the 2026-05-08 M3.7, surface workflow, and self-authoring maturity closeout. The sequence is intentionally more detailed than the milestone names because the next work crosses editor definitions, shell routing, input, providers, asset catalog contracts, runtime preview, and later UI execution strategies.
+
+Do not open a later implementation phase while an earlier phase still has live activation, routing, or transactional replacement gaps, except for a narrow design-only update that unblocks the next phase.
+
+### M4A - Active Command Binding Spine
+
+Purpose: make command bindings the app-owned bridge from authored route ids to known editor/app commands. This must land before shortcuts and menus consume active definitions, otherwise both paths will grow separate command mapping logic.
+
+Implementation order:
+
+- `domain/editor/editor_definition/src/command.rs::EditorCommandBindingSetDefinition`
+  - keep the schema as data only: route target, known command key, capabilities, and undoability metadata;
+  - do not add closures, script entry points, provider behavior, retained widgets, or ECS mutation details.
+- `apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs::ActiveEditorDefinitionCatalogs`
+  - add transactional command-binding replacement validation before mutation;
+  - reject duplicate route targets, duplicate binding ids in a set, and command keys that are not recognized by the app-owned dispatcher;
+  - preserve the previous active binding set on invalid activation.
+- `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`
+  - expose the app-owned known-command vocabulary that active command bindings may target;
+  - keep actual execution in the existing shell/app/domain command paths.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::route_target_to_action`
+  - route formed UI route targets through active command bindings instead of hard-coded toolbar-only route strings where possible.
+
+Validation:
+
+- add regression coverage beside the existing active catalog tests for invalid command-binding activation rollback;
+- add guard coverage that `ui_definition` has no command execution or provider behavior;
+- add focused tests proving unknown command keys fail closed before catalog replacement.
+
+Exit criteria:
+
+- an authored route id resolves to a known app/domain command through one command-binding path;
+- invalid command-binding documents leave the previous active catalog unchanged;
+- definitions still cannot execute behavior directly.
+
+### M4B - Active Shortcut Dispatch
+
+Purpose: replace hard-coded editor shortcuts with active shortcut sets that resolve through the command-binding spine.
+
+Implementation order:
+
+- `domain/editor/editor_definition/src/shortcut.rs::EditorShortcutSetDefinition`
+  - keep shortcuts as data: chord, command reference, context, and diagnostics;
+  - define conflict diagnostics in editor-definition validation instead of app input code.
+- `apps/runenwerk_editor/src/runtime/systems/input_bridge.rs::dispatch_shortcuts`
+  - resolve chords against active shortcut sets;
+  - map shortcut command references through `ActiveEditorDefinitionCatalogs::command_for_route_target` or an app-owned resolver built on the same catalog;
+  - dispatch only known app/domain commands.
+- `apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs::ActiveEditorDefinitionCatalogs`
+  - validate shortcut replacement transactionally: malformed chords, unknown command references, duplicate chords in the same context, and unsupported contexts must not replace the previous active shortcut set.
+
+Validation:
+
+- shortcut conflict tests in `domain/editor/editor_definition`;
+- app tests proving active shortcuts dispatch undo/redo/tool commands through the same command-binding resolver as menus;
+- rollback tests proving invalid shortcut activation keeps the previous active shortcut set;
+- guard test proving shortcut dispatch does not fall back to string mutation or provider-local behavior.
+
+Exit criteria:
+
+- user-authored shortcut definitions drive input dispatch before the next frame;
+- hard-coded shortcuts are reduced to fallback defaults or compatibility fixtures;
+- invalid shortcuts never partially replace a working active set.
+
+### M4C - Active Menu And Toolbar Consumption
+
+Purpose: make active menu definitions form toolbar/menu view models instead of keeping `toolbar_adapter` as a mostly hard-coded product.
+
+Implementation order:
+
+- `domain/editor/editor_definition/src/menu.rs::EditorMenuDefinition`
+  - keep menu items as labels, hierarchy, availability references, and command references;
+  - keep availability generic and descriptive, not provider behavior.
+- `apps/runenwerk_editor/src/shell/toolbar_adapter.rs`
+  - form visible toolbar/menu items from active menu definitions and command bindings;
+  - preserve checked-in fixtures only as fallback defaults when no active user definition exists.
+- `domain/editor/editor_shell/src/composition/toolbar_definition.rs`
+  - keep formation generic over menu models and route slots;
+  - avoid shell-only hard-coded menu item lists where active definitions can supply the product.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs`
+  - route menu item activation through the same app-owned command-binding resolver used by shortcuts.
+
+Validation:
+
+- app tests proving a valid menu activation changes the next shell frame;
+- invalid menu activation rollback tests;
+- tests proving disabled/unavailable menu entries render from generic availability descriptors without executing provider behavior;
+- guard coverage that menu definitions do not bypass command-binding resolution.
+
+Exit criteria:
+
+- File/Edit/Window/Workspace menu products are active-definition-driven;
+- fallback checked-in menus still work for first boot and compatibility;
+- menu commands and shortcut commands share one resolver.
+
+### M4D - Active Panel And Tool-Surface Registry Projection
+
+Purpose: finish UI-B by making active panel and tool-surface registries drive future creation/switch choices, without rewriting existing workspace state unless a workspace layout definition is applied.
+
+Implementation order:
+
+- `domain/editor/editor_definition/src/registry.rs::EditorPanelRegistryDefinition`
+  - preserve authored registry order and validate duplicate ids, unknown definition keys, workspace compatibility, and default tool-surface compatibility.
+- `domain/editor/editor_definition/src/registry.rs::EditorToolSurfaceRegistryDefinition`
+  - preserve authored order, deduplicate known ids deterministically, and ignore or diagnose unknown ids according to the existing compatibility policy.
+- `apps/runenwerk_editor/src/shell/applied_editor_definition/compatibility.rs`
+  - keep removal/incompatibility checks before active registry replacement.
+- `domain/editor/editor_shell/src/composition/build_editor_shell.rs::available_tool_surface_kinds`
+  - consume active registry-projected choices for switch/new-tab menus.
+- `domain/editor/editor_shell/src/workspace/surface_contract.rs::panel_kind_definition_key`
+  - keep structural `PanelKind` and `ToolSurfaceKind` mapping vocabulary domain-owned.
+
+Validation:
+
+- tests for removed active definitions blocking replacement when the current workspace still mounts them;
+- tests for duplicate/unknown authored registry ids and stable projected ordering;
+- tests proving existing workspace state does not change on registry activation alone;
+- tests proving future new-tab/switch choices reflect the active registry.
+
+Exit criteria:
+
+- active registries drive creation and switching choices;
+- existing workspace state is preserved unless an authored workspace layout is explicitly applied;
+- no partial panel/tool-surface catalog replacement occurs.
+
+### M4E - Reusable Control And Surface Polish Before New Asset Surfaces
+
+Purpose: keep the editor from adding new ad hoc UI while the asset surfaces are being introduced.
+
+Implementation order:
+
+- `domain/ui/ui_widgets/src`
+  - keep select, tree, table, tabs, toggle, numeric input, text input, scroll, split, and viewport embed as the default reusable controls.
+- `domain/editor/editor_shell/src/composition/surface_control_polish.rs`
+  - move repeated shell/provider control polish into shared composition helpers when the same pattern appears across surfaces.
+- `apps/runenwerk_editor/src/shell/providers/*`
+  - replace surface-specific row/button/select composition with reusable controls where the provider semantics are already represented by DTOs and route proposals.
+
+Validation:
+
+- snapshot or structural tests for surface view-model composition where stable;
+- interaction tests for reusable select/toggle/numeric/text/table/tree routes;
+- architecture guards proving provider data and route proposals stay outside `ui_definition`.
+
+Exit criteria:
+
+- new asset/import/field-product surfaces can be built through the provider/catalog seams without inventing another local control style;
+- reusable-control adoption remains a compatibility cleanup, not a behavior rewrite.
+
+### M4F - Asset Domain Contracts And Project File Foundation
+
+Purpose: add the SDF/field-first asset model before app runtime import jobs or asset surfaces depend on it.
+
+Implementation order:
+
+- `domain/asset/src/lib.rs`
+  - add the engine-agnostic asset domain crate.
+- `domain/asset/src/id.rs`
+  - define typed ids for assets, sources, artifacts, import jobs, and revisions.
+- `domain/asset/src/kind.rs`
+  - define SDF, field-world, `world_sdf`, material, texture, gameplay graph, particles, physics, animation, procgen, UI, script, shader, and foreign-reference kinds.
+- `domain/asset/src/source.rs`
+  - model source roots, source hashes, provenance, authored field documents, and foreign source roots.
+- `domain/asset/src/artifact.rs`
+  - model formed products, source maps, cache keys, generated files, and validity.
+- `domain/asset/src/dependency_graph.rs`
+  - model dependencies and reverse dependencies for invalidation and reload.
+- `domain/asset/src/import_settings.rs`
+  - model import settings without executing tools.
+- `domain/asset/src/import_plan.rs`
+  - build deterministic import plans without app IO.
+- `domain/asset/src/diagnostics.rs`
+  - define stable pipeline diagnostic codes.
+- `domain/asset/src/ratification.rs`
+  - ratify imported, migrated, generated, and externally supplied asset candidates.
+- `domain/world_sdf/src/product.rs` and `domain/world_sdf/src/ratification.rs`
+  - define and ratify formed field payload descriptors before they become catalog-visible artifacts.
+- `domain/editor/editor_persistence/src/project_file.rs`
+  - add `ProjectFileV2` with asset roots, startup document, source roots, cache roots, profile defaults, and migration from `ProjectFileV1`.
+
+Validation:
+
+- `cargo metadata --no-deps` after adding the crate;
+- `cargo test -p asset -p editor_persistence`;
+- docs update to `DOMAIN_MAP.md` and `CRATES.md` when the crate lands;
+- tests proving mesh/glTF remain foreign-reference kinds, not the primary world substrate.
+
+Exit criteria:
+
+- project files can name asset roots and cache roots;
+- import planning is deterministic and IO-free at the domain layer;
+- field-world products have domain-owned descriptor and ratification contracts.
+
+### M4G - First Asset Runtime Catalog And Editor Surfaces
+
+Purpose: make asset surfaces real editor products through active panel/tool-surface catalogs instead of hard-coded shell additions.
+
+Implementation order:
+
+- `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`
+  - own open-project asset catalog state, diagnostics, dirty asset sets, dirty field-product sets, and preview state.
+- `apps/runenwerk_editor/src/shell/providers/asset_browser.rs::AssetBrowserProvider`
+  - browse project assets through provider DTOs.
+- `apps/runenwerk_editor/src/shell/providers/import_inspector.rs::ImportInspectorProvider`
+  - inspect import settings, diagnostics, sources, artifacts, dependencies, and reimport actions.
+- `apps/runenwerk_editor/src/shell/providers/field_product_viewer.rs::FieldProductViewerProvider`
+  - preview SDF fields, material channels, `world_sdf` products, provenance, freshness, and invalidation diagnostics.
+- `apps/runenwerk_editor/src/shell/providers/sdf_brush_browser.rs::SdfBrushBrowserProvider`
+  - browse SDF brush/layer assets.
+- `apps/runenwerk_editor/src/shell/providers/mod.rs::EditorSurfaceProviderRegistry`
+  - register these surfaces through existing provider seams and make their availability visible through active panel/tool-surface catalogs.
+
+Validation:
+
+- provider tests proving asset surfaces produce DTOs without app IO leaking into domain crates;
+- shell tests proving active registries can expose the new surfaces;
+- no new hard-coded menu, shortcut, or panel insertion path outside active definition catalogs.
+
+Exit criteria:
+
+- the first asset surfaces are reachable only through active editor surface catalogs or checked-in fallback definitions;
+- provider behavior remains app-owned.
+
+### M4H - Import Execution And Field Product Jobs
+
+Purpose: execute the domain import and field-product plans with app-owned IO and failure preservation.
+
+Implementation order:
+
+- `apps/runenwerk_editor/src/asset_pipeline/import_jobs.rs::run_import_job`
+  - execute `domain/asset` import plans with app-owned IO, host configuration, external tool policy, and diagnostics.
+- `apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs::run_field_product_job`
+  - form SDF graph, field-world, material channel, and `world_sdf` products through app/engine runtime policy.
+- `tools/assets/blender_export.py::main`
+  - support `.blend` to `.glb` as foreign-reference import only, preserving the prior valid artifact on failure.
+- `engine/src/plugins/scene/manifest/catalog.rs::load_scene_manifest_descriptors`
+  - migrate loose scene manifest scanning behind an asset-catalog-backed query, with compatibility adapter coverage during migration.
+
+Validation:
+
+- import one authored SDF/field source and form a ratified field product;
+- reimport a changed source and prove dependency invalidation reaches `domain/world_ops`;
+- prove failed imports preserve the previous valid artifact;
+- prove `.blend` import diagnostics do not make mesh/glTF canonical world truth.
+
+Exit criteria:
+
+- asset catalog, import jobs, field-product jobs, diagnostics, and editor surfaces form one recoverable workflow.
+
+### M4I - Viewport Product Producer Breadth And History Workflows
+
+Purpose: connect the viewport product infrastructure to real non-scene producers and broader history behavior.
+
+Implementation order:
+
+- `apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs`
+  - keep scene color/picking/overlay products explicit and per viewport.
+- future `apps/runenwerk_editor/src/runtime/viewport/producer_field.rs`
+  - add scalar/vector field preview products.
+- future `apps/runenwerk_editor/src/runtime/viewport/producer_volume.rs`
+  - add atlas, volume, and brickmap debug products.
+- `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs`
+  - schedule producer-specific jobs per visible viewport.
+- `apps/runenwerk_editor/src/editor_runtime/history/undo_redo.rs`
+  - broaden undo/redo workflows for asset-backed scene changes, field product preview changes, and provider-driven commands only after the owning domains expose ratified commands.
+
+Validation:
+
+- product producer tests for field, volume, atlas, brickmap, and history buffer descriptors;
+- app tests proving viewport-local product selection remains per-viewport;
+- undo/redo tests for any new ratified provider command that mutates authored state.
+
+Exit criteria:
+
+- viewport products are not just descriptor placeholders;
+- history workflows cover the first asset/field product command paths without bypassing ratification.
+
+### M5 - Runtime Preview, Data Hot Reload, And Restart Boundaries
+
+Purpose: connect asset/product changes to runtime preview after catalog and import execution exist.
+
+Implementation order:
+
+- `apps/runenwerk_editor/src/editor_app/state.rs`
+  - separate edit, preview, simulate, and play session state.
+- `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`
+  - produce safe reload streams for scenes, SDF fields, `world_sdf` payloads, material products, textures, shaders, UI, graphs, scripts, and gameplay products.
+- `engine/src/plugins/shared/reload.rs`
+  - reuse reload status payloads for asset and runtime product streams.
+- `docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`
+  - keep the data hot reload versus Rust rebuild/restart boundary aligned with implementation.
+
+Validation:
+
+- data/assets reload live where safe;
+- unsafe structural changes require restart or session rebuild;
+- play/simulate cannot mutate authored documents without explicit commands.
+
+Exit criteria:
+
+- preview/play has explicit state boundaries;
+- reload failures produce diagnostics and preserve prior valid runtime products where safe.
+
+### M6 - Procedural And Gameplay Authoring Domains
+
+Purpose: build later procedural editors on the asset/product/reload foundation instead of adding disconnected graph tools.
+
+Implementation order:
+
+- shared graph/workspace substrate for new document kinds;
+- `domain/material_graph` and `domain/texture`;
+- `domain/procgen`;
+- narrower gameplay event/action/state/quest contracts;
+- `domain/gameplay_graph` ATR IR and ECS query/event/schedule lowering;
+- `domain/particles`;
+- `domain/physics`;
+- `domain/animation`;
+- simulation/world-process previews.
+
+Validation:
+
+- each domain lands as a first-slice milestone with source lineage, diagnostics, failed-product preservation, provider tests, and reload boundary tests;
+- gameplay graph lowering consumes semantic gameplay contracts and emits formed products with source maps, not live graph traversal.
+
+Exit criteria:
+
+- each implemented domain has a product contract, editor provider, diagnostics, save/load path, and runtime/preview boundary.
+
+### M7 - Scripting And Runtime Gameplay Bridge
+
+Purpose: add language-neutral scripting and runtime gameplay execution only after formed product contracts exist.
+
+Implementation order:
+
+- future `domain/script_runtime/src/lib.rs`
+  - define language-neutral script asset/runtime command contracts.
+- future `adapters/script_rhai/src/lib.rs`
+  - implement Rhai as the first adapter candidate without leaking Rhai types into domain contracts.
+- future `engine/src/plugins/gameplay_graph`
+  - instantiate formed gameplay graph products into ECS query descriptors, event subscriptions, schedule edges, source maps, and authority metadata.
+
+Validation:
+
+- scripts request domain/runtime commands instead of mutating ECS internals directly;
+- gameplay execution consumes formed products, not authored graph nodes.
+
+Exit criteria:
+
+- runtime scripting and gameplay bridge preserve Rust/domain ownership of correctness.
+
+### M8 - Packaging, Externalization, And Native Integration
+
+Purpose: harden long-lived exchange after active definitions, assets, runtime preview, and provider catalogs are stable.
+
+Implementation order:
+
+- `domain/editor/editor_definition/src/package.rs`
+  - package manifests, dependencies, compatibility ranges, and migration metadata.
+- `domain/ui/ui_definition/src/package.rs`
+  - UI-template/theme package manifests with no app IO or runtime execution.
+- `apps/runenwerk_editor/src/persistence/editor_definition_package.rs`
+  - app-owned import/export policy.
+- native OS menus/shortcuts
+  - add adapter design only after active in-editor menus/shortcuts/command bindings are already working.
+- external marketplace workflows
+  - add trust, package identity, compatibility, migration, and diagnostics design before implementation.
+
+Validation:
+
+- package import/export preserves ids, source maps, migrations, and diagnostics;
+- invalid packages cannot activate;
+- native OS integration mirrors active definition catalogs instead of becoming a second source of truth.
+
+Exit criteria:
+
+- specialized editor packages and native integration consume the same active definition model.
+
+### Design First Gates
+
+These items were easy to miss in the compressed roadmap. They are real future tracks, but they need design or ADR work before implementation:
+
+- compiled-reactive UI execution
+  - promote only through a new active design or accepted ADR;
+  - define the first surface that needs it, the formation product, scheduling model, invalidation model, debug/source-map story, and guard tests;
+  - implement it as another formation target from normalized UI definitions, not as a replacement for retained UI.
+- ECS-driven UI execution
+  - promote only for a concrete world-bound UI case where retained UI plus observation bridges is insufficient;
+  - define ECS identity, authored id mapping, command boundaries, rollback, and authority constraints;
+  - never allow ECS-driven UI to mutate editor/domain state outside command and ratification paths.
+- world-space and screen-projected runtime UI
+  - design attachment bindings, viewport projection, simulation observation, and command routing before implementation.
+- in-game editors
+  - design capability gates, command/ratification boundaries, and project safety rules before runtime surfaces can edit authored content.
+- payload ECS enum variants
+  - wait until the reflection/adapter layer exposes concrete payload-backed enum fields;
+  - no-payload enum storage remains the only implemented reflected enum mutation path until then.
+- native OS menu/shortcut integration
+  - wait until active in-editor menus, shortcuts, and command bindings are consumed live.
+- external marketplace or third-party editor packages
+  - wait for package metadata, trust policy, compatibility ranges, migration diagnostics, and rollback semantics.
+- gameplay graph ATR/ECS lowering
+  - implement only after narrower gameplay event, action, state, quest, authority, and source-map contracts exist.
+
+### What Was Missing Or Under-Specified
+
+- The previous M4/M5 split made UI live replacement and asset work look sequential but did not explain that asset surfaces must enter through active panel/tool-surface catalogs. That is now explicit.
+- Menu and shortcut consumption were listed, but the command-binding resolver was not called out as the first required spine. It is now the first M4 subphase.
+- Compiler-inspired UI and ECS-driven UI plans were mentioned as deferred, but not positioned in the future order. They are now design-first gates after retained UI, assets, runtime preview, and concrete need exist.
+- Native OS menus/shortcuts and external marketplace workflows were listed as future work, but their prerequisites were vague. They are now tied to active definition consumption and package metadata.
+- Payload ECS enums were listed as deferred, but the trigger condition was not explicit. They now wait for concrete payload-backed reflected fields.
+
 ## Milestones
 
 ### M0 - Governance And Evidence Baseline
