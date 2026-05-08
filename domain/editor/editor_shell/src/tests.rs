@@ -13,10 +13,12 @@ use crate::{
     ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
     ViewportSurfaceAction, WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation,
     WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame, label,
-    map_interactions_to_shell_commands, reduce_workspace, tab_close_button_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_switch_surface_button_widget_id,
-    tool_surface_definition_id, toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
+    map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
+    tab_close_button_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_switch_surface_button_widget_id, tool_surface_definition_id,
+    tool_surface_kind_definition_key, toolbar_workspace_close_widget_id,
+    workspace_split_host_widget_id,
 };
 
 #[test]
@@ -353,6 +355,83 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
             .map(|panel| panel.panel_kind),
         Some(PanelKind::Inspector)
     );
+}
+
+#[test]
+fn panel_and_tool_surface_definition_keys_share_workspace_vocabulary() {
+    for (panel_kind, tool_surface_kind, expected_key) in [
+        (PanelKind::Outliner, ToolSurfaceKind::Outliner, "outliner"),
+        (
+            PanelKind::EntityTable,
+            ToolSurfaceKind::EntityTable,
+            "entity_table",
+        ),
+        (PanelKind::Viewport, ToolSurfaceKind::Viewport, "viewport"),
+        (
+            PanelKind::Inspector,
+            ToolSurfaceKind::Inspector,
+            "inspector",
+        ),
+        (PanelKind::Console, ToolSurfaceKind::Console, "console"),
+        (
+            PanelKind::EditorDesignOutliner,
+            ToolSurfaceKind::EditorDesignOutliner,
+            "editor_design_outliner",
+        ),
+        (
+            PanelKind::UiHierarchy,
+            ToolSurfaceKind::UiHierarchy,
+            "ui_hierarchy",
+        ),
+        (PanelKind::UiCanvas, ToolSurfaceKind::UiCanvas, "ui_canvas"),
+        (
+            PanelKind::StyleInspector,
+            ToolSurfaceKind::StyleInspector,
+            "style_inspector",
+        ),
+        (PanelKind::Bindings, ToolSurfaceKind::Bindings, "bindings"),
+        (
+            PanelKind::DockLayoutPreview,
+            ToolSurfaceKind::DockLayoutPreview,
+            "dock_layout_preview",
+        ),
+        (
+            PanelKind::ThemeEditor,
+            ToolSurfaceKind::ThemeEditor,
+            "theme_editor",
+        ),
+        (
+            PanelKind::ShortcutEditor,
+            ToolSurfaceKind::ShortcutEditor,
+            "shortcut_editor",
+        ),
+        (
+            PanelKind::MenuEditor,
+            ToolSurfaceKind::MenuEditor,
+            "menu_editor",
+        ),
+        (
+            PanelKind::DefinitionValidation,
+            ToolSurfaceKind::DefinitionValidation,
+            "definition_validation",
+        ),
+        (
+            PanelKind::CommandDiff,
+            ToolSurfaceKind::CommandDiff,
+            "command_diff",
+        ),
+        (
+            PanelKind::Placeholder,
+            ToolSurfaceKind::Placeholder,
+            "placeholder",
+        ),
+    ] {
+        assert_eq!(panel_kind_definition_key(panel_kind), expected_key);
+        assert_eq!(
+            tool_surface_kind_definition_key(tool_surface_kind),
+            expected_key
+        );
+    }
 }
 
 #[test]

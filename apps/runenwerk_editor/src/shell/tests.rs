@@ -499,6 +499,45 @@ fn applying_menu_shortcut_and_command_binding_definitions_updates_live_catalogs(
 }
 
 #[test]
+fn invalid_editor_bindings_activation_keeps_previous_active_bindings() {
+    let mut host = EditorHostResource::default();
+    let original_bindings = host
+        .shell_state
+        .active_editor_definitions()
+        .editor_bindings()
+        .cloned()
+        .expect("default shell state should activate checked-in bindings");
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.bindings.invalid"),
+            "invalid_bindings.ron",
+            editor_definition::EditorDefinitionDocumentKind::EditorBindings,
+            editor_definition::EditorDefinitionDocumentContent::EditorBindings(
+                editor_definition::EditorDefinitionBindings {
+                    toolbar: editor_definition::EditorToolbarBinding {
+                        template: "runenwerk.editor.test.missing_toolbar".into(),
+                        ..original_bindings.toolbar.clone()
+                    },
+                    shell_chrome_template: original_bindings.shell_chrome_template.clone(),
+                    surface_templates: original_bindings.surface_templates.clone(),
+                },
+            ),
+        ),
+    );
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 0);
+    assert_eq!(
+        host.shell_state
+            .active_editor_definitions()
+            .editor_bindings(),
+        Some(&original_bindings),
+        "invalid editor bindings must not replace the previous active catalog",
+    );
+}
+
+#[test]
 fn panel_and_tool_surface_registry_activation_blocks_active_workspace_removals() {
     let mut host = EditorHostResource::default();
     let original_panel_registry = host
@@ -561,6 +600,53 @@ fn panel_and_tool_surface_registry_activation_blocks_active_workspace_removals()
             .tool_surface_registry()
             .cloned(),
         original_tool_surface_registry
+    );
+}
+
+#[test]
+fn active_tool_surface_kinds_preserve_authored_order_and_dedup_known_ids() {
+    let mut host = EditorHostResource::default();
+    let workspace = host.shell_state.workspace_state().clone();
+    host.shell_state
+        .active_editor_definitions_mut()
+        .install_tool_surface_registry(
+            editor_definition::EditorToolSurfaceRegistryDefinition {
+                id: "runenwerk.editor.test.surfaces.noisy".to_string(),
+                label: "Noisy Tool Surfaces".to_string(),
+                tool_surfaces: vec![
+                    test_tool_surface_definition("viewport", "Viewport"),
+                    test_tool_surface_definition("unknown_future_surface", "Unknown"),
+                    test_tool_surface_definition("outliner", "Outliner"),
+                    test_tool_surface_definition("viewport", "Viewport Duplicate"),
+                    test_tool_surface_definition("entity_table", "Entity Table"),
+                    test_tool_surface_definition("inspector", "Inspector"),
+                    test_tool_surface_definition("console", "Console"),
+                ],
+            },
+            &workspace,
+        )
+        .expect("noisy registry should still cover all active workspace surfaces");
+
+    let frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.surface_provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+
+    assert_eq!(
+        frame_model.available_tool_surface_kinds,
+        vec![
+            ToolSurfaceKind::Viewport,
+            ToolSurfaceKind::Outliner,
+            ToolSurfaceKind::EntityTable,
+            ToolSurfaceKind::Inspector,
+            ToolSurfaceKind::Console,
+        ],
+        "future switch/create choices should preserve first-seen authored order, skip unknown ids, and dedup known ids",
     );
 }
 

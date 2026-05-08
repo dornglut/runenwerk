@@ -163,6 +163,28 @@ pub fn tool_surface_kind_definition_key(kind: ToolSurfaceKind) -> &'static str {
     }
 }
 
+pub fn panel_kind_definition_key(kind: PanelKind) -> &'static str {
+    match kind {
+        PanelKind::Outliner => "outliner",
+        PanelKind::EntityTable => "entity_table",
+        PanelKind::Viewport => "viewport",
+        PanelKind::Inspector => "inspector",
+        PanelKind::Console => "console",
+        PanelKind::EditorDesignOutliner => "editor_design_outliner",
+        PanelKind::UiHierarchy => "ui_hierarchy",
+        PanelKind::UiCanvas => "ui_canvas",
+        PanelKind::StyleInspector => "style_inspector",
+        PanelKind::Bindings => "bindings",
+        PanelKind::DockLayoutPreview => "dock_layout_preview",
+        PanelKind::ThemeEditor => "theme_editor",
+        PanelKind::ShortcutEditor => "shortcut_editor",
+        PanelKind::MenuEditor => "menu_editor",
+        PanelKind::DefinitionValidation => "definition_validation",
+        PanelKind::CommandDiff => "command_diff",
+        PanelKind::Placeholder => "placeholder",
+    }
+}
+
 pub fn tool_surface_kind_from_definition_key(value: &str) -> Option<ToolSurfaceKind> {
     match value {
         "outliner" => Some(ToolSurfaceKind::Outliner),

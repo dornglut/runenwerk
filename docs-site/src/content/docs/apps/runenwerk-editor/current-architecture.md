@@ -265,8 +265,14 @@ app/shell command boundary.
 
 Applied definition activation is intentionally separate from draft editing and
 snapshot storage. `apps/runenwerk_editor/src/shell/applied_editor_definition.rs`
-is the app-owned activation seam from an applied editor definition document into
-live editor products. Theme documents now form `ui_theme::ThemeTokens` through
+is the stable facade for the app-owned activation seam from an applied editor
+definition document into live editor products. Activation intent mapping lives
+in `apps/runenwerk_editor/src/shell/applied_editor_definition/activation.rs`,
+active catalog storage lives in
+`apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs`, and
+replacement compatibility checks live in
+`apps/runenwerk_editor/src/shell/applied_editor_definition/compatibility.rs`.
+Theme documents now form `ui_theme::ThemeTokens` through
 `domain/editor/editor_definition/src/theme.rs::form_theme_tokens`; the editor
 app queues the applied document, and
 `apps/runenwerk_editor/src/runtime/resources.rs::EditorHostResource::apply_pending_editor_definition_activations`
@@ -289,7 +295,7 @@ instead of serializing a bare definition document.
 This live activation path is implemented for theme, workspace layout, UI
 template, editor binding, menu, shortcut, command-binding, panel-registry, and
 tool-surface-registry documents. Active definition catalogs live in
-`apps/runenwerk_editor/src/shell/applied_editor_definition.rs::ActiveEditorDefinitionCatalogs`
+`apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs::ActiveEditorDefinitionCatalogs`
 and are installed by
 `apps/runenwerk_editor/src/runtime/resources.rs::EditorHostResource::apply_pending_editor_definition_activations`
 before the next shell frame is submitted.

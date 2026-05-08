@@ -1046,11 +1046,14 @@ fn viewport_surface_binary_options_use_reusable_toggles_with_typed_routing() {
 
 #[test]
 fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_exports() {
-    let activation =
-        read_workspace_source("apps/runenwerk_editor/src/shell/applied_editor_definition.rs");
+    let activation = read_workspace_source(
+        "apps/runenwerk_editor/src/shell/applied_editor_definition/activation.rs",
+    );
     let resources = read_workspace_source("apps/runenwerk_editor/src/runtime/resources.rs");
     let shell_workspace =
         read_workspace_source("domain/editor/editor_shell/src/workspace/definition_form.rs");
+    let shell_surface_contract =
+        read_workspace_source("domain/editor/editor_shell/src/workspace/surface_contract.rs");
     let self_authoring = read_workspace_source("apps/runenwerk_editor/src/shell/self_authoring.rs");
 
     assert!(
@@ -1065,8 +1068,10 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
     );
     assert!(
         shell_workspace.contains("WorkspaceDefinitionFormationError")
-            && shell_workspace.contains("tool_surface_kind_from_definition_key"),
-        "workspace definition formation must live in editor_shell with explicit authored surface key mapping",
+            && shell_workspace.contains("tool_surface_kind_from_definition_key")
+            && shell_surface_contract.contains("panel_kind_definition_key")
+            && shell_surface_contract.contains("tool_surface_kind_definition_key"),
+        "workspace definition formation and authored panel/tool-surface key mapping must live in editor_shell",
     );
     assert!(
         self_authoring.contains("EditorDefinitionExportPackage")
@@ -1077,7 +1082,16 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
 
 #[test]
 fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_behavior() {
-    let activation =
+    let activation = read_workspace_source(
+        "apps/runenwerk_editor/src/shell/applied_editor_definition/activation.rs",
+    );
+    let catalogs = read_workspace_source(
+        "apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs",
+    );
+    let compatibility = read_workspace_source(
+        "apps/runenwerk_editor/src/shell/applied_editor_definition/compatibility.rs",
+    );
+    let facade =
         read_workspace_source("apps/runenwerk_editor/src/shell/applied_editor_definition.rs");
     let resources = read_workspace_source("apps/runenwerk_editor/src/runtime/resources.rs");
     let shell_state = read_workspace_source("apps/runenwerk_editor/src/shell/state.rs");
@@ -1086,7 +1100,9 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
         read_workspace_source("domain/editor/editor_shell/src/composition/build_editor_shell.rs");
 
     assert!(
-        activation.contains("ActiveEditorDefinitionCatalogs")
+        facade.contains("pub use activation")
+            && facade.contains("pub use catalogs")
+            && catalogs.contains("ActiveEditorDefinitionCatalogs")
             && activation.contains("UiTemplateCatalogChanged")
             && activation.contains("CommandBindingCatalogChanged")
             && activation.contains("PanelRegistryCatalogChanged")
@@ -1107,8 +1123,11 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
         "live catalog activation should feed the next shell frame instead of remaining a snapshot only",
     );
     assert!(
-        activation.contains("command_for_route_target")
-            && activation.contains("available_tool_surface_kinds"),
+        catalogs.contains("command_for_route_target")
+            && catalogs.contains("available_tool_surface_kinds")
+            && compatibility.contains("known_tool_surface_kinds_in_authored_order")
+            && compatibility.contains("panel_registry_covers_workspace")
+            && compatibility.contains("tool_surface_registry_covers_workspace"),
         "active command and tool-surface catalogs should expose app-owned routing/future-creation seams",
     );
 }

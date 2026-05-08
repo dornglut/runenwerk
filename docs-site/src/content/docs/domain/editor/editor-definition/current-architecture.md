@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-08
 ---
 
 # Editor Definition Current Architecture
@@ -45,10 +45,10 @@ app-level seam is:
 
 - `apps/runenwerk_editor/src/shell/applied_editor_definition.rs::activate_editor_definition_document`
 
-For theme documents, that seam calls `form_theme_tokens` and returns a live theme
-activation. For other editor definition document kinds, it currently returns no
-live activation rather than pretending that snapshot apply changes runtime
-behavior.
+The facade reexports the activation entry point from
+`apps/runenwerk_editor/src/shell/applied_editor_definition/activation.rs`. That
+module maps validated editor definition documents to live activation intents but
+does not install runtime state itself.
 
 ## Current Live Behavior
 
@@ -62,7 +62,14 @@ After an Editor Design apply command succeeds:
    drains the queue at the runtime host boundary.
 4. Theme documents form `ThemeTokens` and replace the live host theme through
    `EditorHostResource::apply_theme`.
+5. Workspace layout documents form a shell workspace through
+   `domain/editor/editor_shell/src/workspace/definition_form.rs::form_workspace_state_from_definition`.
+6. UI templates, editor bindings, menus, shortcuts, command bindings, panel
+   registries, and tool-surface registries install into app-owned active
+   catalogs before the next shell frame is built.
 
-UI templates, workspace layouts, menus, shortcuts, command bindings, panel
-registries, and tool-surface registries remain draft/preview/snapshot-capable
-only until their own explicit activation paths are implemented.
+Catalog storage and compatibility checks remain app-owned in
+`apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs` and
+`apps/runenwerk_editor/src/shell/applied_editor_definition/compatibility.rs`.
+Command-binding definitions map authored route targets to existing app/domain
+command ids; definition documents never execute commands directly.
