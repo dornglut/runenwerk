@@ -1,11 +1,11 @@
 use editor_shell::{
     BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
-    ComputedLayoutMap, DockingPreviewDropTarget, EditorDomainMutation, EditorShellFrameModel,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, PanelHostId, ProjectedTabStackSlot, ProjectedWorkspaceHostSlot,
-    ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal, SurfaceSessionMutation,
-    TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
-    TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination,
-    ToolSurfaceKind, UiInputOutcome, UiInteractionResults, UiTree, WidgetId, WorkspaceSplitAxis,
+    ComputedLayoutMap, DockingPreviewDropTarget, EditorShellFrameModel, LEFT_RIGHT_SPLIT_WIDGET_ID,
+    PanelHostId, ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ShellCommand,
+    ShellUiExpressionFrame, SurfaceCommandProposal, TOOLBAR_ADD_WORKSPACE_WIDGET_ID,
+    TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID, TOOLBAR_MENU_POPUP_WIDGET_ID,
+    TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination, ToolSurfaceKind, UiInputOutcome,
+    UiInteractionResults, UiTree, WidgetId, WorkspaceSplitAxis,
     build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
     tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
     tab_stack_surface_menu_popup_widget_id,
@@ -23,12 +23,14 @@ use ui_theme::ThemeTokens;
 use crate::editor_app::RunenwerkEditorApp;
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportPresentationStateResource,
+    ViewportInstanceRegistryResource, ViewportPresentationStateResource,
+    ViewportRenderStateCommandQueueResource,
 };
 use crate::shell::{
     CornerAreaSplitSession, CornerSplitResizeSession, EditorSurfaceProviderRegistry,
     RunenwerkEditorShellState, SurfaceProviderDispatchContext, active_document_context,
-    build_editor_shell_frame_model, dispatch_shell_command, mounted_surface_requests,
+    build_editor_shell_frame_model, dispatch_shell_command,
+    dispatch_shell_command_with_viewport_commands, mounted_surface_requests,
 };
 use editor_shell::TabStackPopupMenuKind;
 
@@ -71,6 +73,7 @@ impl RunenwerkEditorShellController {
             shell_state,
             theme,
             app.surface_provider_registry(),
+            None,
             None,
             None,
         );
@@ -146,6 +149,7 @@ impl RunenwerkEditorShellController {
         Self::finish_expression_frame(app, shell_state, bounds, atlas_source, tree)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn build_expression_frame_with_surface_resources(
         app: &RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
@@ -154,6 +158,7 @@ impl RunenwerkEditorShellController {
         atlas_source: &dyn FontAtlasSource,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
     ) -> ShellUiExpressionFrame {
         let frame_model = Self::rebuild_frame_model_with_provider_context(
             app,
@@ -162,6 +167,7 @@ impl RunenwerkEditorShellController {
             app.surface_provider_registry(),
             viewport_observations,
             tool_surface_bindings,
+            viewport_instances,
         );
         let docking_visual_state = shell_state.docking_visual_state();
         let build_result = build_editor_shell_frame_with_docking_visual_state(
@@ -210,6 +216,7 @@ impl RunenwerkEditorShellController {
         registry: &EditorSurfaceProviderRegistry,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
     ) -> EditorShellFrameModel {
         build_editor_shell_frame_model(
             app,
@@ -218,6 +225,7 @@ impl RunenwerkEditorShellController {
             theme,
             viewport_observations,
             tool_surface_bindings,
+            viewport_instances,
         )
     }
 
@@ -238,6 +246,8 @@ impl RunenwerkEditorShellController {
             None,
             None,
             None,
+            None,
+            None,
         )
     }
 
@@ -252,6 +262,8 @@ impl RunenwerkEditorShellController {
         viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        viewport_render_commands: Option<&mut ViewportRenderStateCommandQueueResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
         let registry = app.surface_provider_registry_handle();
         let frame_model = Self::rebuild_frame_model_with_provider_context(
@@ -261,6 +273,7 @@ impl RunenwerkEditorShellController {
             registry.as_ref(),
             viewport_observations,
             tool_surface_bindings,
+            viewport_instances,
         );
         let docking_visual_state = shell_state.docking_visual_state();
         let build_result = build_editor_shell_frame_with_docking_visual_state(
@@ -369,7 +382,7 @@ impl RunenwerkEditorShellController {
         }
         commands.append(&mut docking_commands);
 
-        Self::dispatch_commands(
+        Self::dispatch_commands_with_viewport_commands(
             app,
             shell_state,
             commands,
@@ -377,6 +390,7 @@ impl RunenwerkEditorShellController {
             viewport_presentations,
             viewport_observations,
             tool_surface_bindings,
+            viewport_render_commands,
         )?;
 
         Ok(outcome)
@@ -669,7 +683,30 @@ impl RunenwerkEditorShellController {
         (commands, suppress_tab_activation)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn dispatch_commands(
+        app: &mut RunenwerkEditorApp,
+        shell_state: &mut RunenwerkEditorShellState,
+        commands: Vec<ShellCommand>,
+        registry: &EditorSurfaceProviderRegistry,
+        viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        Self::dispatch_commands_with_viewport_commands(
+            app,
+            shell_state,
+            commands,
+            registry,
+            viewport_presentations,
+            viewport_observations,
+            tool_surface_bindings,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn dispatch_commands_with_viewport_commands(
         app: &mut RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
         commands: Vec<ShellCommand>,
@@ -677,6 +714,7 @@ impl RunenwerkEditorShellController {
         mut viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        mut viewport_render_commands: Option<&mut ViewportRenderStateCommandQueueResource>,
     ) -> Result<(), editor_core::EditorMutationError> {
         for command in commands {
             if let Some(projection_epoch) = command.projection_epoch()
@@ -718,26 +756,28 @@ impl RunenwerkEditorShellController {
                     registry.map_action(&dispatch_context, &request, provider_id, action)?
                     && let Some(command) = shell_command_from_surface_proposal(proposal)
                 {
-                    dispatch_shell_command(
+                    dispatch_shell_command_with_viewport_commands(
                         app,
                         Some(shell_state),
                         command,
                         viewport_presentations.as_deref_mut(),
                         viewport_observations,
                         tool_surface_bindings,
+                        viewport_render_commands.as_deref_mut(),
                         Some(current_epoch),
                     )?;
                 }
                 continue;
             }
 
-            dispatch_shell_command(
+            dispatch_shell_command_with_viewport_commands(
                 app,
                 Some(shell_state),
                 command,
                 viewport_presentations.as_deref_mut(),
                 viewport_observations,
                 tool_surface_bindings,
+                viewport_render_commands.as_deref_mut(),
                 Some(current_epoch),
             )?;
         }
@@ -780,115 +820,20 @@ impl RunenwerkEditorShellController {
 
 fn shell_command_from_surface_proposal(proposal: SurfaceCommandProposal) -> Option<ShellCommand> {
     match proposal {
-        SurfaceCommandProposal::SurfaceSession(proposal) => match proposal.mutation {
-            SurfaceSessionMutation::AppendEntityTableSearchText { text } => {
-                Some(ShellCommand::AppendEntityTableSearchText {
-                    text,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::BackspaceEntityTableSearch => {
-                Some(ShellCommand::BackspaceEntityTableSearch {
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::ToggleEntityTableSort { sort_key } => {
-                Some(ShellCommand::ToggleEntityTableSort {
-                    sort_key,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::ToggleViewportDetails => {
-                Some(ShellCommand::ToggleViewportDetails {
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::ToggleViewportStatistics => {
-                Some(ShellCommand::ToggleViewportStatistics {
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::ToggleViewportOptionsMenu => {
-                Some(ShellCommand::ToggleViewportOptionsMenu {
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::ActivateInspectorField { index } => {
-                Some(ShellCommand::ActivateInspectorField {
-                    index,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::FocusInspectorField { index } => {
-                Some(ShellCommand::FocusInspectorField {
-                    index,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::AppendInspectorFieldText { index, text } => {
-                Some(ShellCommand::AppendInspectorFieldText {
-                    index,
-                    text,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::BackspaceInspectorFieldText { index } => {
-                Some(ShellCommand::BackspaceInspectorFieldText {
-                    index,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::CommitInspectorFieldText { index } => {
-                Some(ShellCommand::CommitInspectorFieldText {
-                    index,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            SurfaceSessionMutation::CancelInspectorFieldText { index } => {
-                Some(ShellCommand::CancelInspectorFieldText {
-                    index,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-        },
-        SurfaceCommandProposal::EditorDomain(proposal) => match proposal.mutation {
-            EditorDomainMutation::SelectOutlinerEntity { entity } => {
-                Some(ShellCommand::SelectOutlinerEntity {
-                    entity,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            EditorDomainMutation::SelectEntityTableRow { entities } => {
-                let entity = entities.first().copied()?;
-                Some(ShellCommand::SelectEntityTableEntity {
-                    entity,
-                    target: proposal.target,
-                    projection_epoch: proposal.projection_epoch,
-                })
-            }
-            EditorDomainMutation::SelectViewportProduct {
-                viewport_id,
-                product_id,
-            } => Some(ShellCommand::SelectViewportProduct {
-                viewport_id,
-                product_id,
+        SurfaceCommandProposal::SurfaceSession(proposal) => {
+            Some(ShellCommand::ApplySurfaceSessionMutation {
                 target: proposal.target,
+                mutation: proposal.mutation,
                 projection_epoch: proposal.projection_epoch,
-            }),
-        },
+            })
+        }
+        SurfaceCommandProposal::EditorDomain(proposal) => {
+            Some(ShellCommand::ApplyEditorDomainMutation {
+                target: proposal.target,
+                mutation: proposal.mutation,
+                projection_epoch: proposal.projection_epoch,
+            })
+        }
         SurfaceCommandProposal::Shell(command) => Some(command),
     }
 }

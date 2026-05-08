@@ -10,7 +10,7 @@ use editor_shell::{
 use editor_viewport::ViewportId;
 use ui_math::{UiPoint, UiRect};
 
-use crate::runtime::viewport::ViewportLayoutMapResource;
+use crate::runtime::viewport::{ViewportInstanceRegistryResource, ViewportLayoutMapResource};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ToolSurfaceRuntimeBindingRecord {
@@ -175,6 +175,31 @@ impl ToolSurfaceRuntimeBindingRegistryResource {
     }
 
     pub fn rebuild_from_layout_map(&mut self, layout_map: &ViewportLayoutMapResource) {
+        self.rebuild_from_layout_entries(layout_map, |entry| Some(entry.viewport_id));
+    }
+
+    pub fn rebuild_from_layout_map_with_instances(
+        &mut self,
+        layout_map: &ViewportLayoutMapResource,
+        viewport_instances: &ViewportInstanceRegistryResource,
+    ) {
+        self.rebuild_from_layout_entries(layout_map, |entry| {
+            entry
+                .structural_context
+                .active_tool_surface
+                .and_then(|tool_surface_id| {
+                    viewport_instances.viewport_for_tool_surface(tool_surface_id)
+                })
+        });
+    }
+
+    fn rebuild_from_layout_entries(
+        &mut self,
+        layout_map: &ViewportLayoutMapResource,
+        mut viewport_id_for_entry: impl FnMut(
+            &crate::runtime::viewport::ViewportLayoutEntry,
+        ) -> Option<ViewportId>,
+    ) {
         self.generation = self.generation.saturating_add(1);
         let previous = self.bindings_by_tool_surface.clone();
         self.bindings_by_tool_surface.clear();
@@ -184,12 +209,15 @@ impl ToolSurfaceRuntimeBindingRegistryResource {
             let Some(tool_surface_id) = entry.structural_context.active_tool_surface else {
                 continue;
             };
+            let Some(viewport_id) = viewport_id_for_entry(entry) else {
+                continue;
+            };
 
             let binding = ToolSurfaceRuntimeBindingRecord {
                 tool_surface_id,
                 panel_instance_id: entry.structural_context.panel_instance_id,
                 tab_stack_id: entry.structural_context.tab_stack_id,
-                viewport_id: entry.viewport_id,
+                viewport_id,
                 host_widget_id: entry.host_widget_id,
                 bounds: entry.bounds,
                 generation: self.generation,

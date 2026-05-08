@@ -16,6 +16,13 @@ pub enum UiAxisDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UiTableColumnDefinition {
+    pub label: String,
+    pub width: f32,
+    pub value: UiValueBinding,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UiNodeDefinition {
     Panel {
         id: UiNodeId,
@@ -61,6 +68,8 @@ pub enum UiNodeDefinition {
     Label {
         id: UiNodeId,
         label: UiValueBinding,
+        #[serde(default)]
+        availability: Option<UiAvailabilityBinding>,
     },
     Button {
         id: UiNodeId,
@@ -105,6 +114,8 @@ pub enum UiNodeDefinition {
     Table {
         id: UiNodeId,
         rows: UiCollectionSlotRef,
+        #[serde(default)]
+        columns: Vec<UiTableColumnDefinition>,
         route: Option<UiRouteSlotRef>,
     },
     Tree {

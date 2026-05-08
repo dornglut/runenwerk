@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-08
 related:
   - ./mvp/implementation-sequence.md
   - ./mvp/acceptance-criteria.md
@@ -90,7 +90,7 @@ Representative evidence:
 - [x] Complete UI docking/tab behavior on top of existing structural identity and binding contracts. Status: Implemented and test-covered; tab reorder, rehome, floating host creation, split resizing, area split/duplicate/reset/close, dynamic split-area composition, and structural identity preservation have automated coverage.
 - [x] Expose editor-area/type switching as a reachable shell UI control. Status: Implemented and test-covered; tab chrome renders an editor type selector and maps `SelectChanged` to `SwitchPanelToolSurfaceKind`.
 - [x] Add plus/new-tab affordance for creating a new tab in a tab stack. Status: Implemented and test-covered; tab chrome exposes a plus/new-tab control that allocates panel and tool-surface identities through `WorkspaceIdentityAllocator` after structural ratification.
-- [ ] Expand non-viewport surface maturity using existing surface contracts. Status: Active/partially implemented; entity-table, console, inspector, outliner, provider routing, and independent surface-session coverage exist, but richer common workflows remain open.
+- [x] Expand non-viewport surface maturity using existing surface contracts. Status: implemented as of 2026-05-08; provider-backed surfaces now use typed surface action/session/domain wrappers, entity-table query workflows cover search, selected-only, roots-only, component filters, and sorting, and inspector controls render bool, numeric, text, enum-disabled-select, and read-only alternatives without moving provider behavior into `ui_definition`.
 - [ ] Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: Active.
 - [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: Active.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: Closeout candidate implemented and validated as of 2026-05-06; `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures, retained formation, app fixture validation, toolbar route-slot integration, normal shell chrome formation, and console surface formation exist.

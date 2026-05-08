@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 
 use editor_core::RealityVersion;
-use editor_shell::ToolSurfaceInstanceId;
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionDimensions, ExpressionFormat, ExpressionFreshness,
     ExpressionPresentationHints, ExpressionProductDescriptor, ExpressionProductId,
@@ -12,15 +11,10 @@ use editor_viewport::{
 };
 
 pub const MAIN_VIEWPORT_ID: ViewportId = ViewportId(1);
-const TOOL_SURFACE_VIEWPORT_ID_OFFSET: u64 = 1_000_000;
 
 pub const SCENE_COLOR_PRODUCT_ID: ExpressionProductId = ExpressionProductId(1);
 pub const PICKING_IDS_PRODUCT_ID: ExpressionProductId = ExpressionProductId(2);
 pub const OVERLAY_PRODUCT_ID: ExpressionProductId = ExpressionProductId(3);
-
-pub fn viewport_id_for_tool_surface(tool_surface_id: ToolSurfaceInstanceId) -> ViewportId {
-    ViewportId(TOOL_SURFACE_VIEWPORT_ID_OFFSET + tool_surface_id.raw())
-}
 
 pub fn initial_presentation_state(viewport_id: ViewportId) -> ViewportPresentationState {
     ViewportPresentationState::new(viewport_id, SCENE_COLOR_PRODUCT_ID)
@@ -194,16 +188,6 @@ mod tests {
     #[test]
     fn phase_one_uses_stable_single_viewport_session_id() {
         assert_eq!(MAIN_VIEWPORT_ID, ViewportId(1));
-    }
-
-    #[test]
-    fn tool_surface_viewport_ids_are_stable_and_do_not_collide_with_bootstrap_viewport() {
-        let first = ToolSurfaceInstanceId::try_from_raw(1).unwrap();
-        let second = ToolSurfaceInstanceId::try_from_raw(2).unwrap();
-
-        assert_eq!(viewport_id_for_tool_surface(first), ViewportId(1_000_001));
-        assert_eq!(viewport_id_for_tool_surface(second), ViewportId(1_000_002));
-        assert_ne!(viewport_id_for_tool_surface(first), MAIN_VIEWPORT_ID);
     }
 
     #[test]

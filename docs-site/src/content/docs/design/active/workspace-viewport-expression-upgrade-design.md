@@ -22,7 +22,7 @@ This design is written for the endgame architecture, not as a temporary bridge. 
 
 ## No-Compromise Update
 
-As of 2026-05-07, the editor viewport foundation uses viewport-owned dynamic targets, prepared render views, prepared flow invocations, dynamic-only UI sampling, and viewport-local render-state snapshots.
+As of 2026-05-08, the editor viewport foundation uses viewport-owned dynamic targets, prepared render views, prepared flow invocations, dynamic-only UI sampling, persisted viewport runtime settings, viewport-local camera/debug/root commands, and viewport-local render-state snapshots.
 
 The foundation removed these migration-only traits:
 
@@ -31,7 +31,7 @@ The foundation removed these migration-only traits:
 - viewport render-product synchronization inside frame submission;
 - fullscreen shader-side viewport containment as the primary correctness boundary.
 
-Remaining work is product maturity: richer authoritative viewport lifecycle commands, independent camera/debug/product settings for authored multi-viewport workflows, and more product producers beyond the current editor viewport, boids, and SDF proofs.
+Remaining work is product maturity: richer non-viewport editor surfaces, more product producers beyond the current editor viewport, boids, and SDF proofs, and broader history/workflow polish.
 
 The implementation roadmap that executes this design is `docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md`.
 

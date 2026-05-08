@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-08
 related_designs:
   - ../../design/active/workspace-viewport-expression-upgrade-design.md
   - ../../design/active/render-product-surface-foundation-bundle-design.md
@@ -54,16 +54,21 @@ This roadmap follows the repository doctrine:
 
 Implemented foundation state:
 
-- `apps/runenwerk_editor/src/runtime/viewport/product_registry.rs::viewport_id_for_tool_surface` gives each viewport tool surface a stable derived `ViewportId`.
+- `apps/runenwerk_editor/src/runtime/viewport/instance_registry.rs::ViewportInstanceRegistryResource` owns explicit viewport instance allocation, lookup, close, duplicate, and persisted restore mapping.
+- `domain/editor/editor_shell/src/workspace/state.rs::ToolSurfaceState` carries optional `ViewportId` restore metadata and viewport runtime settings for saved viewport surfaces without making `ViewportId` a structural workspace id.
+- `domain/editor/editor_viewport/src/camera.rs::ViewportRuntimeSettings` owns the engine-agnostic camera, debug, root-background, and selected-product settings that persistence and shell commands share.
 - `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateResource` records per-viewport bounds and the viewport-local render-state snapshot used for prepared render jobs and picking.
+- `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateCommandQueueResource` applies per-viewport camera, debug, and root-background commands after input and before lifecycle/frame submission.
+- `apps/runenwerk_editor/src/runtime/systems/input_bridge.rs::dispatch_editor_input_system` routes viewport-local orbit, pan, and zoom input to the owning viewport id.
+- `apps/runenwerk_editor/src/runtime/systems/viewport_lifecycle.rs::sync_viewport_instances_system` syncs viewport instances from workspace state before shell frame projection, prunes closed viewport runtime state, and persists viewport-owned settings back to workspace state; frame submit no longer allocates/restores viewport identity or owns live viewport singleton state.
 - `apps/runenwerk_editor/src/shell/providers/scene/viewport.rs::SceneViewportProvider::build_frame` no longer inherits an unrelated lone observed viewport for unbound panels.
-- `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::sync_viewport_presentation_products_system` updates product descriptors by viewport id and dimensions.
+- `apps/runenwerk_editor/src/runtime/viewport/product_targets.rs::sync_viewport_presentation_products_system` updates product descriptors by viewport id and dimensions.
 - `apps/runenwerk_editor/src/runtime/viewport/product_targets.rs::ViewportProductTargetRegistryResource` maps every viewport/product/slot tuple to a dynamic target record.
 - `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs::ViewportRenderJobResource` publishes one prepared view and one prepared flow invocation per viewport without cloning the render flow.
 - `domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs::ViewportSurfaceBindingSource` is dynamic-texture-only; the old flow-resource embed bridge has been removed.
 - `assets/shaders/editor_viewport_scene_product.wgsl` renders a viewport-local product and no longer contains multi-rectangle containment.
 
-Remaining work is no longer migration cleanup. It is product maturity: richer independent viewport camera/debug settings, more producer types, and broader history workflows.
+Remaining work is no longer migration cleanup. The planned non-viewport surface workflow follow-up has landed; product maturity now moves to broader reusable-control adoption, more viewport producer types, the M4 SDF/field asset pipeline, and broader history workflows.
 
 ## Final Architecture
 
@@ -83,8 +88,6 @@ Final responsibilities:
 - record document/workspace context for the viewport;
 - define duplication policy: copy camera and presentation state, then fork future mutations;
 - remove viewport instances when their owning tool surface is closed and no durable restored reference remains.
-
-`viewport_id_for_tool_surface` may remain only as a compatibility migration helper until explicit instance allocation is complete. It must not remain the final source of truth.
 
 ### Viewport Product Contracts
 
@@ -266,7 +269,7 @@ Exit criteria:
 - Creating a viewport surface creates an explicit viewport instance.
 - Duplicating a viewport creates a new viewport instance with copied camera/presentation state.
 - Closing a viewport removes its transient instance and product state after the owning surface disappears.
-- `viewport_id_for_tool_surface` is no longer used by normal runtime flow.
+- no derived `ToolSurfaceInstanceId -> ViewportId` helper remains in code or tests.
 
 Validation:
 
@@ -282,7 +285,7 @@ Purpose: move viewport lifecycle out of `submit_editor_frame_system`.
 
 Implementation targets:
 
-- `apps/runenwerk_editor/src/runtime/viewport/lifecycle.rs`
+- `apps/runenwerk_editor/src/runtime/systems/viewport_lifecycle.rs`
   - add a system that syncs viewport instances from workspace state before shell frame projection.
 - `apps/runenwerk_editor/src/runtime/viewport/layout_map.rs::ViewportLayoutMapResource`
   - keep layout as derived projection output only.
@@ -313,7 +316,10 @@ Purpose: make all live viewport state viewport-owned.
 Implementation targets:
 
 - `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateResource`
-  - add camera, projection, dimensions, scale policy, source version, debug mode, render throttling, and target status.
+  - preserve viewport-local camera/debug state across shell-frame render-state refreshes;
+  - continue adding projection, scale policy, source version, render throttling, and target status as product needs require.
+- `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateCommandQueueResource`
+  - route per-viewport camera reset/set and debug state commands by `ViewportId`.
 - `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportRenderState`
   - remove live singleton viewport fields after equivalent per-viewport fields exist;
   - keep only shared default helpers if still useful.
@@ -481,8 +487,6 @@ Implementation targets:
   - remove multi-rect viewport fields and singleton live viewport state.
 - `assets/shaders/editor_viewport_scene_product.wgsl`
   - remove rectangle-selection logic and fullscreen discard containment.
-- `apps/runenwerk_editor/src/runtime/viewport/product_registry.rs`
-  - remove `viewport_id_for_tool_surface` from normal runtime usage and delete it if migration no longer needs it.
 - `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs`
   - remove viewport lifecycle/render-state/product sync responsibilities.
 - `apps/runenwerk_editor/tests/viewport_architecture_guards.rs`

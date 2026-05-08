@@ -1,5 +1,8 @@
 use editor_core::EntityId;
-use editor_shell::EntityTableSortKey;
+use editor_shell::{
+    EntityTableComponentFilter, EntityTableComponentFilterItem, EntityTableHierarchyFilter,
+    EntityTableQuery, EntityTableSort, EntityTableSortKey,
+};
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
 
@@ -14,17 +17,17 @@ pub struct EntityTableRow {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityTablePanelState {
+    pub query: EntityTableQuery,
     pub search_query: String,
     pub sort_key: EntityTableSortKey,
     pub sort_ascending: bool,
+    pub component_filters: Vec<EntityTableComponentFilterItem>,
     pub rows: Vec<EntityTableRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityTablePanelUiState {
-    search_query: String,
-    sort_key: EntityTableSortKey,
-    sort_ascending: bool,
+    query: EntityTableQuery,
 }
 
 impl Default for EntityTablePanelUiState {
@@ -36,43 +39,63 @@ impl Default for EntityTablePanelUiState {
 impl EntityTablePanelUiState {
     pub fn new() -> Self {
         Self {
-            search_query: String::new(),
-            sort_key: EntityTableSortKey::DisplayName,
-            sort_ascending: true,
+            query: EntityTableQuery::default(),
         }
     }
 
+    pub fn query(&self) -> &EntityTableQuery {
+        &self.query
+    }
+
     pub fn search_query(&self) -> &str {
-        &self.search_query
+        &self.query.search_text
     }
 
     pub fn append_search_text(&mut self, text: &str) {
-        self.search_query.push_str(text);
+        self.query.search_text.push_str(text);
     }
 
     pub fn backspace_search_query(&mut self) {
-        self.search_query.pop();
+        self.query.search_text.pop();
+    }
+
+    pub fn clear_search_query(&mut self) {
+        self.query.search_text.clear();
     }
 
     pub fn set_search_query(&mut self, query: impl Into<String>) {
-        self.search_query = query.into();
+        self.query.search_text = query.into();
+    }
+
+    pub fn set_selected_only(&mut self, selected_only: bool) {
+        self.query.selected_only = selected_only;
+    }
+
+    pub fn set_hierarchy_filter(&mut self, filter: EntityTableHierarchyFilter) {
+        self.query.hierarchy_filter = filter;
+    }
+
+    pub fn set_component_filter(&mut self, filter: EntityTableComponentFilter) {
+        self.query.component_filter = filter;
     }
 
     pub fn toggle_sort(&mut self, sort_key: EntityTableSortKey) {
-        if self.sort_key == sort_key {
-            self.sort_ascending = !self.sort_ascending;
+        if self.query.sort.key == sort_key {
+            self.query.sort.ascending = !self.query.sort.ascending;
         } else {
-            self.sort_key = sort_key;
-            self.sort_ascending = true;
+            self.query.sort = EntityTableSort {
+                key: sort_key,
+                ascending: true,
+            };
         }
     }
 
     pub fn sort_key(&self) -> EntityTableSortKey {
-        self.sort_key
+        self.query.sort.key
     }
 
     pub fn sort_ascending(&self) -> bool {
-        self.sort_ascending
+        self.query.sort.ascending
     }
 }
 
@@ -97,7 +120,8 @@ impl EntityTablePanelPresenter {
         ui_state: &EntityTablePanelUiState,
     ) -> EntityTablePanelState {
         let selected_entity = runtime.selected_entity();
-        let search = ui_state.search_query().trim().to_ascii_lowercase();
+        let query = ui_state.query().clone();
+        let search = query.search_text.trim().to_ascii_lowercase();
         let mut rows = runtime
             .list_scene_entities()
             .into_iter()
@@ -108,18 +132,43 @@ impl EntityTablePanelPresenter {
                 display_name: entity.display_name,
                 parent: entity.parent,
             })
-            .filter(|row| search_matches(row, &search))
+            .filter(|row| query_matches(runtime, row, &query, &search))
             .collect::<Vec<_>>();
 
-        sort_rows(&mut rows, ui_state.sort_key(), ui_state.sort_ascending());
+        sort_rows(&mut rows, query.sort.key, query.sort.ascending);
 
         EntityTablePanelState {
-            search_query: ui_state.search_query().to_string(),
-            sort_key: ui_state.sort_key(),
-            sort_ascending: ui_state.sort_ascending(),
+            search_query: query.search_text.clone(),
+            sort_key: query.sort.key,
+            sort_ascending: query.sort.ascending,
+            component_filters: component_filter_items(runtime),
+            query,
             rows,
         }
     }
+}
+
+fn query_matches(
+    runtime: &RunenwerkEditorRuntime,
+    row: &EntityTableRow,
+    query: &EntityTableQuery,
+    normalized_search: &str,
+) -> bool {
+    if query.selected_only && !row.is_selected {
+        return false;
+    }
+    if query.hierarchy_filter == EntityTableHierarchyFilter::RootsOnly && row.parent.is_some() {
+        return false;
+    }
+    match query.component_filter {
+        EntityTableComponentFilter::All => {}
+        EntityTableComponentFilter::Has(component_type) => {
+            if !runtime.entity_has_component(row.entity, component_type) {
+                return false;
+            }
+        }
+    }
+    search_matches(row, normalized_search)
 }
 
 fn search_matches(row: &EntityTableRow, search: &str) -> bool {
@@ -132,6 +181,21 @@ fn search_matches(row: &EntityTableRow, search: &str) -> bool {
             .parent
             .map(|parent| parent.0.to_string().contains(search))
             .unwrap_or(false)
+}
+
+fn component_filter_items(runtime: &RunenwerkEditorRuntime) -> Vec<EntityTableComponentFilterItem> {
+    let mut items = Vec::with_capacity(runtime.list_registered_component_types().len() + 1);
+    items.push(EntityTableComponentFilterItem {
+        filter: EntityTableComponentFilter::All,
+        label: "All components".to_string(),
+    });
+    items.extend(runtime.list_registered_component_types().into_iter().map(
+        |(component_type, display_name)| EntityTableComponentFilterItem {
+            filter: EntityTableComponentFilter::Has(component_type),
+            label: display_name,
+        },
+    ));
+    items
 }
 
 fn sort_rows(rows: &mut [EntityTableRow], sort_key: EntityTableSortKey, ascending: bool) {

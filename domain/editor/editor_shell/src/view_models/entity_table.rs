@@ -3,6 +3,8 @@
 
 use editor_core::EntityId;
 
+use crate::{EntityTableComponentFilterItem, EntityTableQuery};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityTableSortKey {
     EntityId,
@@ -23,18 +25,22 @@ pub struct EntityTableRowViewModel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityTableViewModel {
+    pub query: EntityTableQuery,
     pub search_query: String,
     pub sort_key: EntityTableSortKey,
     pub sort_ascending: bool,
+    pub component_filters: Vec<EntityTableComponentFilterItem>,
     pub rows: Vec<EntityTableRowViewModel>,
 }
 
 impl Default for EntityTableViewModel {
     fn default() -> Self {
         Self {
+            query: EntityTableQuery::default(),
             search_query: String::new(),
             sort_key: EntityTableSortKey::DisplayName,
             sort_ascending: true,
+            component_filters: Vec::new(),
             rows: Vec::new(),
         }
     }

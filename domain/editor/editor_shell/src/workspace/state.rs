@@ -7,9 +7,12 @@
 //! - `TabStackId` identifies tab containers only.
 //! - `PanelInstanceId` identifies panel structure instances only.
 //! - `ToolSurfaceInstanceId` identifies tool-surface content instances only.
-//! - runtime `editor_viewport::ViewportId` is never a workspace structural id.
+//! - runtime `editor_viewport::ViewportId` can be retained for viewport restore metadata, but
+//!   it is never a workspace structural id.
 
 use std::collections::{BTreeMap, BTreeSet};
+
+use editor_viewport::{ViewportId, ViewportRuntimeSettings};
 
 use crate::{
     PanelHostId, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WorkspaceId,
@@ -145,11 +148,13 @@ pub struct PanelInstanceState {
     pub active_tool_surface: Option<ToolSurfaceInstanceId>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ToolSurfaceState {
     pub id: ToolSurfaceInstanceId,
     pub tool_surface_kind: ToolSurfaceKind,
     pub mount: ToolSurfaceMount,
+    pub viewport_instance_id: Option<ViewportId>,
+    pub viewport_settings: Option<ViewportRuntimeSettings>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -504,6 +509,8 @@ impl WorkspaceState {
                 mount: ToolSurfaceMount::Mounted {
                     panel_id: outliner_panel,
                 },
+                viewport_instance_id: None,
+                viewport_settings: None,
             },
         );
         tool_surfaces_by_id.insert(
@@ -514,6 +521,8 @@ impl WorkspaceState {
                 mount: ToolSurfaceMount::Mounted {
                     panel_id: entity_table_panel,
                 },
+                viewport_instance_id: None,
+                viewport_settings: None,
             },
         );
         tool_surfaces_by_id.insert(
@@ -524,6 +533,8 @@ impl WorkspaceState {
                 mount: ToolSurfaceMount::Mounted {
                     panel_id: viewport_panel,
                 },
+                viewport_instance_id: None,
+                viewport_settings: None,
             },
         );
         tool_surfaces_by_id.insert(
@@ -534,6 +545,8 @@ impl WorkspaceState {
                 mount: ToolSurfaceMount::Mounted {
                     panel_id: inspector_panel,
                 },
+                viewport_instance_id: None,
+                viewport_settings: None,
             },
         );
         tool_surfaces_by_id.insert(
@@ -544,6 +557,8 @@ impl WorkspaceState {
                 mount: ToolSurfaceMount::Mounted {
                     panel_id: console_panel,
                 },
+                viewport_instance_id: None,
+                viewport_settings: None,
             },
         );
 
@@ -777,6 +792,8 @@ impl WorkspaceState {
                     id: surface_id,
                     tool_surface_kind,
                     mount: ToolSurfaceMount::Mounted { panel_id },
+                    viewport_instance_id: None,
+                    viewport_settings: None,
                 },
             );
         }
@@ -962,6 +979,14 @@ impl WorkspaceState {
         }
 
         for tool_surface in self.tool_surfaces_by_id.values() {
+            if (tool_surface.viewport_instance_id.is_some()
+                || tool_surface.viewport_settings.is_some())
+                && tool_surface.tool_surface_kind != ToolSurfaceKind::Viewport
+            {
+                return Err(WorkspaceStateError::ProjectionShapeMismatch(
+                    "viewport restore metadata must belong to viewport tool surfaces",
+                ));
+            }
             if let ToolSurfaceMount::Mounted { panel_id } = tool_surface.mount {
                 if !self.panels_by_id.contains_key(&panel_id) {
                     return Err(WorkspaceStateError::MissingPanel(panel_id));

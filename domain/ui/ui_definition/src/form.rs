@@ -378,7 +378,12 @@ fn form_node(
                 context.theme.clone(),
             )
         }
-        UiNodeDefinition::Table { rows, route, .. } => {
+        UiNodeDefinition::Table {
+            rows,
+            columns,
+            route,
+            ..
+        } => {
             let items = context
                 .collections
                 .get(&rows.id)
@@ -389,11 +394,27 @@ fn form_node(
                     .routes_by_widget_id
                     .insert(widget_id, FormedUiRoute::RouteSlot(route.id.clone()));
             }
+            let formed_columns = if columns.is_empty() {
+                vec![TableColumn::new("Item", 160.0)]
+            } else {
+                columns
+                    .iter()
+                    .map(|column| TableColumn::new(column.label.clone(), column.width))
+                    .collect()
+            };
             table(
                 widget_id,
-                [TableColumn::new("Item", 160.0)],
+                formed_columns,
                 items.iter().map(|item| {
-                    let mut row = TableRow::new([item.label.clone()]);
+                    let cells = if columns.is_empty() {
+                        vec![item.label.clone()]
+                    } else {
+                        columns
+                            .iter()
+                            .map(|column| resolve_item_text(item, &column.value, context))
+                            .collect()
+                    };
+                    let mut row = TableRow::new(cells);
                     row.selected = item.selected;
                     row.enabled = item.enabled;
                     row
@@ -417,9 +438,25 @@ fn form_node(
             tree(
                 widget_id,
                 items.iter().map(|item| {
-                    let mut row = TreeRow::new(item.label.clone(), 0, false);
+                    let depth = item
+                        .values
+                        .get(&"tree.depth".into())
+                        .and_then(UiValue::as_number)
+                        .map(|value| value.max(0.0) as usize)
+                        .unwrap_or(0);
+                    let has_children = item
+                        .values
+                        .get(&"tree.has_children".into())
+                        .and_then(UiValue::as_bool)
+                        .unwrap_or(false);
+                    let mut row = TreeRow::new(item.label.clone(), depth, has_children);
                     row.selected = item.selected;
                     row.enabled = item.enabled;
+                    row.expanded = item
+                        .values
+                        .get(&"tree.expanded".into())
+                        .and_then(UiValue::as_bool)
+                        .unwrap_or(false);
                     row
                 }),
                 text_style,
@@ -557,16 +594,36 @@ fn form_children(
 ) -> Vec<UiNode> {
     children
         .iter()
-        .map(|child| {
-            form_node(
+        .filter_map(|child| {
+            if node_is_unavailable(child, context) {
+                return None;
+            }
+            Some(form_node(
                 child,
                 &parent_path.child(child.id()),
                 template,
                 context,
                 state,
-            )
+            ))
         })
         .collect()
+}
+
+fn node_is_unavailable(node: &UiNodeDefinition, context: &UiDefinitionContext) -> bool {
+    let availability = match node {
+        UiNodeDefinition::Panel { availability, .. }
+        | UiNodeDefinition::Label { availability, .. }
+        | UiNodeDefinition::Button { availability, .. }
+        | UiNodeDefinition::Toggle { availability, .. }
+        | UiNodeDefinition::TextInput { availability, .. }
+        | UiNodeDefinition::NumericInput { availability, .. }
+        | UiNodeDefinition::Select { availability, .. } => availability.as_ref(),
+        _ => None,
+    };
+    matches!(
+        resolve_availability(availability, context),
+        UiAvailability::Unavailable { .. }
+    )
 }
 
 fn assign_widget_id(
@@ -608,34 +665,92 @@ fn resolve_value(binding: &UiValueBinding, context: &UiDefinitionContext) -> UiV
     }
 }
 
+fn resolve_item_text(
+    item: &UiCollectionItem,
+    binding: &UiValueBinding,
+    context: &UiDefinitionContext,
+) -> String {
+    match binding {
+        UiValueBinding::Static(value) => value.as_text(),
+        UiValueBinding::Slot(slot) => item
+            .values
+            .get(slot)
+            .or_else(|| context.values.get(slot))
+            .cloned()
+            .unwrap_or_else(|| UiValue::Text(String::new()))
+            .as_text(),
+    }
+}
+
+#[derive(Default)]
+struct RepeatItemBindings {
+    values: BTreeMap<UiValueSlotId, Option<UiValue>>,
+    collections: BTreeMap<UiCollectionSlotId, Option<Vec<UiCollectionItem>>>,
+    selections: BTreeMap<UiSelectionSlotId, Option<String>>,
+}
+
 fn install_repeat_item_values(
     item: &UiCollectionItem,
     context: &mut UiDefinitionContext,
-) -> BTreeMap<UiValueSlotId, Option<UiValue>> {
+) -> RepeatItemBindings {
     let mut values = item.values.clone();
     values.insert("item.key".into(), UiValue::Text(item.key.clone()));
     values.insert("item.label".into(), UiValue::Text(item.label.clone()));
     values.insert("item.selected".into(), UiValue::Bool(item.selected));
     values.insert("item.enabled".into(), UiValue::Bool(item.enabled));
 
-    let mut previous = BTreeMap::new();
+    let mut previous = RepeatItemBindings::default();
     for (slot, value) in values {
-        previous.insert(slot.clone(), context.values.insert(slot, value));
+        previous
+            .values
+            .insert(slot.clone(), context.values.insert(slot, value));
+    }
+    for (slot, collection) in &item.collections {
+        previous.collections.insert(
+            slot.clone(),
+            context.collections.insert(slot.clone(), collection.clone()),
+        );
+    }
+    for (slot, selection) in &item.selections {
+        previous.selections.insert(
+            slot.clone(),
+            context.selections.insert(slot.clone(), selection.clone()),
+        );
     }
     previous
 }
 
 fn restore_repeat_item_values(
-    previous_values: BTreeMap<UiValueSlotId, Option<UiValue>>,
+    previous_values: RepeatItemBindings,
     context: &mut UiDefinitionContext,
 ) {
-    for (slot, previous) in previous_values {
+    for (slot, previous) in previous_values.values {
         match previous {
             Some(value) => {
                 context.values.insert(slot, value);
             }
             None => {
                 context.values.remove(&slot);
+            }
+        }
+    }
+    for (slot, previous) in previous_values.collections {
+        match previous {
+            Some(collection) => {
+                context.collections.insert(slot, collection);
+            }
+            None => {
+                context.collections.remove(&slot);
+            }
+        }
+    }
+    for (slot, previous) in previous_values.selections {
+        match previous {
+            Some(selection) => {
+                context.selections.insert(slot, selection);
+            }
+            None => {
+                context.selections.remove(&slot);
             }
         }
     }
@@ -651,15 +766,29 @@ fn resolve_availability(
 ) -> UiAvailability {
     match binding {
         Some(UiAvailabilityBinding::Static(value)) => value.clone(),
-        Some(UiAvailabilityBinding::Ref(id)) => {
-            context
-                .availability
-                .get(id)
-                .cloned()
-                .unwrap_or(UiAvailability::Unavailable {
-                    reason: format!("unresolved availability '{}'", id),
-                })
-        }
+        Some(UiAvailabilityBinding::Ref(id)) => context
+            .availability
+            .get(id)
+            .cloned()
+            .or_else(|| context.values.get(id).and_then(UiValue::as_availability))
+            .or_else(|| {
+                context
+                    .values
+                    .get(id)
+                    .and_then(UiValue::as_bool)
+                    .map(|enabled| {
+                        if enabled {
+                            UiAvailability::Available
+                        } else {
+                            UiAvailability::Disabled {
+                                reason: format!("availability '{}' is false", id),
+                            }
+                        }
+                    })
+            })
+            .unwrap_or(UiAvailability::Unavailable {
+                reason: format!("unresolved availability '{}'", id),
+            }),
         None => UiAvailability::Available,
     }
 }
@@ -726,6 +855,72 @@ mod tests {
     }
 
     #[test]
+    fn unavailable_children_are_omitted_while_disabled_children_remain_non_interactive() {
+        let template = AuthoredUiTemplate {
+            id: "test.availability".into(),
+            root: UiNodeDefinition::Column {
+                id: "root".into(),
+                children: vec![
+                    UiNodeDefinition::Label {
+                        id: "available".into(),
+                        label: UiValueBinding::static_text("Available"),
+                        availability: None,
+                    },
+                    UiNodeDefinition::Button {
+                        id: "disabled".into(),
+                        label: UiValueBinding::static_text("Disabled"),
+                        route: Some(UiRouteSlotRef {
+                            id: "route.disabled".into(),
+                        }),
+                        availability: Some(UiAvailabilityBinding::Static(
+                            UiAvailability::Disabled {
+                                reason: "fixture disabled".to_string(),
+                            },
+                        )),
+                        selected: None,
+                    },
+                    UiNodeDefinition::Button {
+                        id: "unavailable".into(),
+                        label: UiValueBinding::static_text("Unavailable"),
+                        route: Some(UiRouteSlotRef {
+                            id: "route.unavailable".into(),
+                        }),
+                        availability: Some(UiAvailabilityBinding::Ref(
+                            "availability.unavailable".into(),
+                        )),
+                        selected: None,
+                    },
+                ],
+            },
+            templates: Vec::new(),
+            menus: Vec::new(),
+        };
+        let normalized = crate::normalize_authored_template(template);
+        let mut context = UiDefinitionContext::new(ThemeTokens::default());
+        context.values.insert(
+            "availability.unavailable".into(),
+            UiValue::Availability(UiAvailability::Unavailable {
+                reason: "wrong control kind".to_string(),
+            }),
+        );
+
+        let product = form_retained_ui(&normalized, &mut context);
+        let formed_paths = product
+            .paths_by_widget_id
+            .values()
+            .map(AuthoredUiNodePath::as_str)
+            .collect::<BTreeSet<_>>();
+
+        assert!(formed_paths.contains("root/available"));
+        assert!(formed_paths.contains("root/disabled"));
+        assert!(!formed_paths.contains("root/unavailable"));
+        assert!(
+            product.routes_by_widget_id.is_empty(),
+            "disabled and unavailable nodes must not expose route entries"
+        );
+    }
+
+    #[test]
     fn vertical_separator_forms_fixed_length_divider() {
         let template = AuthoredUiTemplate {
             id: "test.separator".into(),
@@ -771,6 +966,7 @@ mod tests {
                 root: UiNodeDefinition::Label {
                     id: "entry".into(),
                     label: UiValueBinding::static_text("row"),
+                    availability: None,
                 },
                 templates: Vec::new(),
                 menus: Vec::new(),

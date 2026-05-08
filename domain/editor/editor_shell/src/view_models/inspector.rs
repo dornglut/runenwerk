@@ -1,11 +1,14 @@
 //! File: domain/editor/editor_shell/src/view_models/inspector.rs
 //! Purpose: Inspector shell view model.
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+use crate::InspectorFieldControlKind;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct InspectorFieldViewModel {
     pub label: String,
     pub path_key: Option<String>,
     pub value_summary: String,
+    pub control: InspectorFieldControlKind,
     pub is_focused: bool,
     pub editable: bool,
 }
@@ -31,7 +34,7 @@ pub enum InspectorTargetViewModel {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InspectorViewModel {
     pub target: InspectorTargetViewModel,
     pub fields: Vec<InspectorFieldViewModel>,

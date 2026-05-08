@@ -1,6 +1,8 @@
 //! File: domain/editor/editor_shell/src/workspace/reducer.rs
 //! Purpose: Explicit reducer-style structural mutations for workspace graph state.
 
+use editor_viewport::{ViewportId, ViewportRuntimeSettings};
+
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
     PanelInstanceId, PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId,
@@ -79,6 +81,14 @@ pub enum WorkspaceMutation {
     SetToolSurfaceMount {
         tool_surface_id: ToolSurfaceInstanceId,
         mount: ToolSurfaceMount,
+    },
+    SetToolSurfaceViewportInstanceId {
+        tool_surface_id: ToolSurfaceInstanceId,
+        viewport_instance_id: Option<ViewportId>,
+    },
+    SetToolSurfaceViewportSettings {
+        tool_surface_id: ToolSurfaceInstanceId,
+        viewport_settings: Option<ViewportRuntimeSettings>,
     },
     ReplacePanelToolSurfaceKind {
         panel_id: PanelInstanceId,
@@ -347,6 +357,39 @@ fn apply_mutation(
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?
                 .mount = mount;
         }
+        WorkspaceMutation::SetToolSurfaceViewportInstanceId {
+            tool_surface_id,
+            viewport_instance_id,
+        } => {
+            let surface = state
+                .tool_surfaces_by_id
+                .get_mut(&tool_surface_id)
+                .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
+            if viewport_instance_id.is_some()
+                && surface.tool_surface_kind != ToolSurfaceKind::Viewport
+            {
+                return Err(WorkspaceStateError::ProjectionShapeMismatch(
+                    "viewport instance id can only be assigned to viewport tool surfaces",
+                ));
+            }
+            surface.viewport_instance_id = viewport_instance_id;
+        }
+        WorkspaceMutation::SetToolSurfaceViewportSettings {
+            tool_surface_id,
+            viewport_settings,
+        } => {
+            let surface = state
+                .tool_surfaces_by_id
+                .get_mut(&tool_surface_id)
+                .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
+            if viewport_settings.is_some() && surface.tool_surface_kind != ToolSurfaceKind::Viewport
+            {
+                return Err(WorkspaceStateError::ProjectionShapeMismatch(
+                    "viewport settings can only be assigned to viewport tool surfaces",
+                ));
+            }
+            surface.viewport_settings = viewport_settings;
+        }
         WorkspaceMutation::ReplacePanelToolSurfaceKind {
             panel_id,
             tool_surface_id,
@@ -387,6 +430,8 @@ fn apply_mutation(
                     id: tool_surface_id,
                     tool_surface_kind,
                     mount: ToolSurfaceMount::Mounted { panel_id },
+                    viewport_instance_id: None,
+                    viewport_settings: None,
                 },
             );
             state
@@ -510,6 +555,8 @@ fn add_panel_tab(
             id: tool_surface_id,
             tool_surface_kind,
             mount: ToolSurfaceMount::Mounted { panel_id },
+            viewport_instance_id: None,
+            viewport_settings: None,
         },
     );
     stack.ordered_panels.push(panel_id);
@@ -691,6 +738,8 @@ fn split_tab_stack_area(
             mount: ToolSurfaceMount::Mounted {
                 panel_id: new_panel_id,
             },
+            viewport_instance_id: None,
+            viewport_settings: None,
         },
     );
     Ok(())
@@ -711,9 +760,11 @@ fn duplicate_tab_stack_area(
         .ok_or(WorkspaceStateError::ProjectionShapeMismatch(
             "cannot duplicate an empty tab stack",
         ))?;
-    let source_surface_kind = source_panel
+    let source_surface = source_panel
         .active_tool_surface
         .and_then(|surface_id| state.tool_surfaces_by_id.get(&surface_id))
+        .copied();
+    let source_surface_kind = source_surface
         .map(|surface| surface.tool_surface_kind)
         .unwrap_or(ToolSurfaceKind::Placeholder);
     add_panel_tab(
@@ -724,7 +775,14 @@ fn duplicate_tab_stack_area(
         new_tool_surface_id,
         source_surface_kind,
         true,
-    )
+    )?;
+    if source_surface_kind == ToolSurfaceKind::Viewport
+        && let Some(settings) = source_surface.and_then(|surface| surface.viewport_settings)
+        && let Some(target_surface) = state.tool_surfaces_by_id.get_mut(&new_tool_surface_id)
+    {
+        target_surface.viewport_settings = Some(settings);
+    }
+    Ok(())
 }
 
 fn reset_tab_stack_area(

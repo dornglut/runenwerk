@@ -12,6 +12,8 @@ AI must use the same contracts as humans, tests, editor tools, and scripts. Ther
 
 For documentation placement, lifecycle states, frontmatter, and naming rules, follow `docs-site/src/content/docs/workspace/documentation-structure.md`.
 
+For planning, implementation, routine selection, and closeout shape, follow `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
+
 Read the relevant root docs:
 
 ```text

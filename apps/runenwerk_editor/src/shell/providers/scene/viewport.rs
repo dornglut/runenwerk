@@ -3,8 +3,6 @@
 
 use super::super::*;
 
-use crate::runtime::viewport::viewport_id_for_tool_surface;
-
 pub struct SceneViewportProvider;
 
 impl EditorSurfaceProvider for SceneViewportProvider {
@@ -29,6 +27,9 @@ impl EditorSurfaceProvider for SceneViewportProvider {
         request: &SurfaceProviderRequest,
         session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
+        let expected_viewport_id = context.viewport_instances.and_then(|instances| {
+            instances.viewport_for_tool_surface(request.tool_surface_instance_id)
+        });
         let bound_products = context
             .tool_surface_bindings
             .and_then(|bindings| {
@@ -39,23 +40,35 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                     .viewport_observations
                     .and_then(|observations| observations.frame_for(binding.viewport_id))
             });
-        let expected_viewport_id = viewport_id_for_tool_surface(request.tool_surface_instance_id);
         let products = bound_products.or_else(|| {
-            context
-                .viewport_observations
-                .and_then(|observations| observations.frame_for(expected_viewport_id))
+            expected_viewport_id.and_then(|viewport_id| {
+                context
+                    .viewport_observations
+                    .and_then(|observations| observations.frame_for(viewport_id))
+            })
         });
         let tool_state = context.app.viewport_tool_state();
+        let viewport_settings = context
+            .shell_state
+            .workspace_state()
+            .tool_surface(request.tool_surface_instance_id)
+            .and_then(|surface| surface.viewport_settings);
         let frame = build_viewport_observation_frame(
             products,
             session.viewport_details_visible,
             session.viewport_statistics_visible,
             session.viewport_options_menu_open,
+            viewport_settings
+                .map(|settings| settings.debug_stage)
+                .unwrap_or(editor_viewport::ViewportDebugStage::Scene),
+            viewport_settings
+                .map(|settings| settings.root_background_opaque)
+                .unwrap_or(false),
             context.app.runtime().selected_entity(),
             session.viewport_interaction_state.drag_in_progress(),
             tool_state,
             context.app.runtime().current_scene_reality_version(),
-            Some(expected_viewport_id),
+            expected_viewport_id,
         );
         let view_model = build_viewport_view_model(&frame);
         let root = remap_surface_node_ids(
@@ -73,33 +86,81 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                 request.tool_surface_instance_id,
                 VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
             ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportDetails),
+            SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                ViewportSurfaceAction::ToggleDetails,
+            )),
         );
         routes.insert(
             remap_widget_id(
                 request.tool_surface_instance_id,
                 VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
             ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportStatistics),
+            SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                ViewportSurfaceAction::ToggleStatistics,
+            )),
         );
         routes.insert(
             remap_widget_id(
                 request.tool_surface_instance_id,
                 VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
             ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportOptionsMenu),
+            SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                ViewportSurfaceAction::ToggleOptionsMenu,
+            )),
         );
+        if let Some(viewport_id) = view_model.viewport_id {
+            routes.insert(
+                remap_widget_id(
+                    request.tool_surface_instance_id,
+                    VIEWPORT_RESET_CAMERA_WIDGET_ID,
+                ),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                    ViewportSurfaceAction::ResetCamera { viewport_id },
+                )),
+            );
+            routes.insert(
+                remap_widget_id(
+                    request.tool_surface_instance_id,
+                    VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
+                ),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                    ViewportSurfaceAction::SetRootBackgroundOpaque {
+                        viewport_id,
+                        enabled: !view_model.root_background_opaque,
+                    },
+                )),
+            );
+            for (index, debug_stage) in editor_viewport::ViewportDebugStage::ALL
+                .into_iter()
+                .enumerate()
+            {
+                routes.insert(
+                    remap_widget_id(
+                        request.tool_surface_instance_id,
+                        viewport_debug_stage_button_widget_id(index),
+                    ),
+                    SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                        ViewportSurfaceAction::SetDebugStage {
+                            viewport_id,
+                            debug_stage,
+                        },
+                    )),
+                );
+            }
+        }
         for (index, choice) in view_model.product_choices.iter().enumerate() {
             routes.insert(
                 remap_widget_id(
                     request.tool_surface_instance_id,
                     viewport_product_button_widget_id(index),
                 ),
-                SurfaceLocalRoute::new(SurfaceLocalAction::SelectViewportProduct {
-                    viewport_id: choice.viewport_id,
-                    product_id: choice.product_id,
-                    enabled: choice.enabled,
-                }),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                    ViewportSurfaceAction::SelectProduct {
+                        viewport_id: choice.viewport_id,
+                        product_id: choice.product_id,
+                        enabled: choice.enabled,
+                    },
+                )),
             );
         }
         Ok(ProviderSurfaceFrame {
@@ -116,32 +177,69 @@ impl EditorSurfaceProvider for SceneViewportProvider {
         action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         match action {
-            SurfaceLocalAction::SelectViewportProduct {
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::SelectProduct {
                 viewport_id,
                 product_id,
                 enabled,
-            } if enabled => Ok(Some(editor_domain_proposal(
+            }) if enabled => Ok(Some(editor_domain_proposal(
                 request,
                 context.projection_epoch,
-                EditorDomainMutation::SelectViewportProduct {
+                EditorDomainMutation::Viewport(ViewportDomainMutation::SelectProduct {
                     viewport_id,
                     product_id,
-                },
+                }),
             ))),
-            SurfaceLocalAction::ToggleViewportDetails => Ok(Some(surface_session_proposal(
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ToggleDetails) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleDetails),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ToggleStatistics) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleStatistics),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ToggleOptionsMenu) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    context.projection_epoch,
+                    SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleOptionsMenu),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::ResetCamera { viewport_id }) => {
+                Ok(Some(editor_domain_proposal(
+                    request,
+                    context.projection_epoch,
+                    EditorDomainMutation::Viewport(ViewportDomainMutation::ResetCamera {
+                        viewport_id,
+                    }),
+                )))
+            }
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::SetDebugStage {
+                viewport_id,
+                debug_stage,
+            }) => Ok(Some(editor_domain_proposal(
                 request,
                 context.projection_epoch,
-                SurfaceSessionMutation::ToggleViewportDetails,
+                EditorDomainMutation::Viewport(ViewportDomainMutation::SetDebugStage {
+                    viewport_id,
+                    debug_stage,
+                }),
             ))),
-            SurfaceLocalAction::ToggleViewportStatistics => Ok(Some(surface_session_proposal(
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::SetRootBackgroundOpaque {
+                viewport_id,
+                enabled,
+            }) => Ok(Some(editor_domain_proposal(
                 request,
                 context.projection_epoch,
-                SurfaceSessionMutation::ToggleViewportStatistics,
-            ))),
-            SurfaceLocalAction::ToggleViewportOptionsMenu => Ok(Some(surface_session_proposal(
-                request,
-                context.projection_epoch,
-                SurfaceSessionMutation::ToggleViewportOptionsMenu,
+                EditorDomainMutation::Viewport(ViewportDomainMutation::SetRootBackgroundOpaque {
+                    viewport_id,
+                    enabled,
+                }),
             ))),
             _ => Ok(None),
         }

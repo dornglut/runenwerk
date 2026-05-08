@@ -47,28 +47,56 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
         );
         let mut routes = SurfaceRouteTable::empty();
         for (index, field) in view_model.fields.iter().enumerate() {
-            let action = if field.editable {
-                SurfaceLocalAction::EditInspectorFieldText {
-                    index,
-                    text: String::new(),
-                }
-            } else {
-                SurfaceLocalAction::ActivateInspectorField { index }
-            };
-            routes.insert(
-                remap_widget_id(
-                    request.tool_surface_instance_id,
-                    inspector_field_widget_id(index),
+            let action = match &field.control {
+                InspectorFieldControlKind::BoolToggle { checked } => Some(
+                    SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldBool {
+                        index,
+                        value: *checked,
+                    }),
                 ),
-                SurfaceLocalRoute::new(action),
-            );
-            if field.editable {
+                InspectorFieldControlKind::IntegerInput { value } => Some(
+                    SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldNumber {
+                        index,
+                        value: *value as f64,
+                    }),
+                ),
+                InspectorFieldControlKind::FloatInput { value } => Some(
+                    SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldNumber {
+                        index,
+                        value: *value,
+                    }),
+                ),
+                InspectorFieldControlKind::TextInput => Some(SurfaceLocalAction::Inspector(
+                    InspectorSurfaceAction::EditFieldText {
+                        index,
+                        text: String::new(),
+                    },
+                )),
+                InspectorFieldControlKind::ReadOnly
+                | InspectorFieldControlKind::Group
+                | InspectorFieldControlKind::Unsupported => Some(SurfaceLocalAction::Inspector(
+                    InspectorSurfaceAction::ActivateField { index },
+                )),
+                InspectorFieldControlKind::EnumSelect { .. } => None,
+            };
+            if let Some(action) = action {
+                routes.insert(
+                    remap_widget_id(
+                        request.tool_surface_instance_id,
+                        inspector_field_widget_id(index),
+                    ),
+                    SurfaceLocalRoute::new(action),
+                );
+            }
+            if matches!(field.control, InspectorFieldControlKind::TextInput) {
                 routes.insert(
                     remap_widget_id(
                         request.tool_surface_instance_id,
                         inspector_field_focus_widget_id(index),
                     ),
-                    SurfaceLocalRoute::new(SurfaceLocalAction::FocusInspectorField { index }),
+                    SurfaceLocalRoute::new(SurfaceLocalAction::Inspector(
+                        InspectorSurfaceAction::FocusField { index },
+                    )),
                 );
             }
         }
@@ -87,48 +115,84 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         let projection_epoch = context.projection_epoch;
         match action {
-            SurfaceLocalAction::ActivateInspectorField { index } => {
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::ActivateField { index }) => {
                 Ok(Some(surface_session_proposal(
                     request,
                     projection_epoch,
-                    SurfaceSessionMutation::ActivateInspectorField { index },
+                    SurfaceSessionMutation::Inspector(InspectorSessionMutation::ActivateField {
+                        index,
+                    }),
                 )))
             }
-            SurfaceLocalAction::FocusInspectorField { index } => {
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::FocusField { index }) => {
                 Ok(Some(surface_session_proposal(
                     request,
                     projection_epoch,
-                    SurfaceSessionMutation::FocusInspectorField { index },
+                    SurfaceSessionMutation::Inspector(InspectorSessionMutation::FocusField {
+                        index,
+                    }),
                 )))
             }
-            SurfaceLocalAction::EditInspectorFieldText { index, text } => {
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText {
+                index,
+                text,
+            }) => Ok(Some(surface_session_proposal(
+                request,
+                projection_epoch,
+                SurfaceSessionMutation::Inspector(InspectorSessionMutation::AppendFieldText {
+                    index,
+                    text,
+                }),
+            ))),
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::BackspaceFieldText { index }) => {
                 Ok(Some(surface_session_proposal(
                     request,
                     projection_epoch,
-                    SurfaceSessionMutation::AppendInspectorFieldText { index, text },
+                    SurfaceSessionMutation::Inspector(
+                        InspectorSessionMutation::BackspaceFieldText { index },
+                    ),
                 )))
             }
-            SurfaceLocalAction::BackspaceInspectorFieldText { index } => {
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::CommitFieldText { index }) => {
                 Ok(Some(surface_session_proposal(
                     request,
                     projection_epoch,
-                    SurfaceSessionMutation::BackspaceInspectorFieldText { index },
+                    SurfaceSessionMutation::Inspector(InspectorSessionMutation::CommitFieldText {
+                        index,
+                    }),
                 )))
             }
-            SurfaceLocalAction::CommitInspectorFieldText { index } => {
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::CancelFieldText { index }) => {
                 Ok(Some(surface_session_proposal(
                     request,
                     projection_epoch,
-                    SurfaceSessionMutation::CommitInspectorFieldText { index },
+                    SurfaceSessionMutation::Inspector(InspectorSessionMutation::CancelFieldText {
+                        index,
+                    }),
                 )))
             }
-            SurfaceLocalAction::CancelInspectorFieldText { index } => {
-                Ok(Some(surface_session_proposal(
-                    request,
-                    projection_epoch,
-                    SurfaceSessionMutation::CancelInspectorFieldText { index },
-                )))
-            }
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldBool {
+                index,
+                value,
+            }) => Ok(Some(surface_session_proposal(
+                request,
+                projection_epoch,
+                SurfaceSessionMutation::Inspector(InspectorSessionMutation::SetFieldBool {
+                    index,
+                    value,
+                }),
+            ))),
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldNumber {
+                index,
+                value,
+            }) => Ok(Some(surface_session_proposal(
+                request,
+                projection_epoch,
+                SurfaceSessionMutation::Inspector(InspectorSessionMutation::SetFieldNumber {
+                    index,
+                    value,
+                }),
+            ))),
             _ => Ok(None),
         }
     }

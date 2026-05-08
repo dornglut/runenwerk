@@ -1,8 +1,12 @@
 //! File: domain/editor/editor_shell/src/workspace/persisted.rs
 //! Purpose: Versioned persisted DTO semantics for workspace structural identity.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use editor_viewport::{
+    ExpressionProductId, ViewportCameraSettings, ViewportDebugStage, ViewportId,
+    ViewportRuntimeSettings,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -14,6 +18,7 @@ use crate::{
 
 pub const PERSISTED_WORKSPACE_STATE_VERSION_V1: u32 = 1;
 pub const PERSISTED_WORKSPACE_STATE_VERSION_V2: u32 = 2;
+pub const PERSISTED_WORKSPACE_STATE_VERSION_V3: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PersistedWorkspaceStateV1 {
@@ -35,6 +40,17 @@ pub struct PersistedWorkspaceStateV2 {
     pub tab_stacks: Vec<PersistedTabStackStateV1>,
     pub panels: Vec<PersistedPanelInstanceStateV2>,
     pub tool_surfaces: Vec<PersistedToolSurfaceStateV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PersistedWorkspaceStateV3 {
+    pub version: u32,
+    pub workspace_id: u64,
+    pub root_host_id: u64,
+    pub hosts: Vec<PersistedPanelHostNodeV1>,
+    pub tab_stacks: Vec<PersistedTabStackStateV1>,
+    pub panels: Vec<PersistedPanelInstanceStateV2>,
+    pub tool_surfaces: Vec<PersistedToolSurfaceStateV3>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -178,6 +194,45 @@ pub struct PersistedToolSurfaceStateV2 {
     pub mount: PersistedToolSurfaceMountV1,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PersistedToolSurfaceStateV3 {
+    pub id: u64,
+    pub tool_surface_kind: PersistedToolSurfaceKindV2,
+    pub mount: PersistedToolSurfaceMountV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewport_instance_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewport_settings: Option<PersistedViewportSettingsV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PersistedViewportSettingsV1 {
+    pub camera: PersistedViewportCameraSettingsV1,
+    pub debug_stage: PersistedViewportDebugStageV1,
+    pub root_background_opaque: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_primary_product_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PersistedViewportCameraSettingsV1 {
+    pub orbit_target: [f32; 3],
+    pub distance: f32,
+    pub yaw_radians: f32,
+    pub pitch_radians: f32,
+    pub fov_y_radians: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum PersistedViewportDebugStageV1 {
+    Scene,
+    ViewportCoverage,
+    ViewportUvGradient,
+    PrimitiveAvailability,
+    PickingHitMiss,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PersistedToolSurfaceMountV1 {
@@ -193,6 +248,54 @@ macro_rules! persisted_id {
 }
 
 impl WorkspaceState {
+    pub fn to_persisted_v3(&self) -> PersistedWorkspaceStateV3 {
+        PersistedWorkspaceStateV3 {
+            version: PERSISTED_WORKSPACE_STATE_VERSION_V3,
+            workspace_id: self.workspace_id.raw(),
+            root_host_id: self.root_host_id.raw(),
+            hosts: self
+                .hosts_by_id
+                .values()
+                .map(|host| PersistedPanelHostNodeV1 {
+                    id: host.id.raw(),
+                    kind: persisted_host_kind(host.kind),
+                })
+                .collect(),
+            tab_stacks: self
+                .tab_stacks_by_id
+                .values()
+                .map(|stack| PersistedTabStackStateV1 {
+                    id: stack.id.raw(),
+                    ordered_panels: stack.ordered_panels.iter().map(|id| id.raw()).collect(),
+                    active_panel: stack.active_panel.map(|id| id.raw()),
+                    locked_tool_surface_kind: stack
+                        .locked_tool_surface_kind
+                        .map(persisted_tool_surface_kind_v2),
+                })
+                .collect(),
+            panels: self
+                .panels_by_id
+                .values()
+                .map(|panel| PersistedPanelInstanceStateV2 {
+                    id: panel.id.raw(),
+                    panel_kind: persisted_panel_kind_v2(panel.panel_kind),
+                    active_tool_surface: panel.active_tool_surface.map(|id| id.raw()),
+                })
+                .collect(),
+            tool_surfaces: self
+                .tool_surfaces_by_id
+                .values()
+                .map(|surface| PersistedToolSurfaceStateV3 {
+                    id: surface.id.raw(),
+                    tool_surface_kind: persisted_tool_surface_kind_v2(surface.tool_surface_kind),
+                    mount: persisted_mount(surface.mount),
+                    viewport_instance_id: surface.viewport_instance_id.map(|id| id.0),
+                    viewport_settings: surface.viewport_settings.map(persisted_viewport_settings),
+                })
+                .collect(),
+        }
+    }
+
     pub fn to_persisted_v2(&self) -> PersistedWorkspaceStateV2 {
         PersistedWorkspaceStateV2 {
             version: PERSISTED_WORKSPACE_STATE_VERSION_V2,
@@ -381,6 +484,8 @@ impl WorkspaceState {
                     id: surface_id,
                     tool_surface_kind: workspace_tool_surface_kind(surface.tool_surface_kind),
                     mount: workspace_mount(surface.mount)?,
+                    viewport_instance_id: None,
+                    viewport_settings: None,
                 },
             );
         }
@@ -503,6 +608,8 @@ impl WorkspaceState {
                     id: surface_id,
                     tool_surface_kind: workspace_tool_surface_kind_v2(surface.tool_surface_kind),
                     mount: workspace_mount(surface.mount)?,
+                    viewport_instance_id: None,
+                    viewport_settings: None,
                 },
             );
         }
@@ -525,6 +632,215 @@ impl WorkspaceState {
         };
         state.validate_integrity()?;
         Ok(state)
+    }
+
+    pub fn from_persisted_v3(
+        persisted: PersistedWorkspaceStateV3,
+    ) -> Result<Self, WorkspaceStateError> {
+        if persisted.version != PERSISTED_WORKSPACE_STATE_VERSION_V3 {
+            return Err(WorkspaceStateError::PersistedVersionUnsupported(
+                persisted.version,
+            ));
+        }
+
+        let viewport_instance_ids = persisted
+            .tool_surfaces
+            .iter()
+            .filter_map(|surface| {
+                surface
+                    .viewport_instance_id
+                    .map(|viewport_id| (surface.id, viewport_id))
+            })
+            .collect::<Vec<_>>();
+        let viewport_settings = persisted
+            .tool_surfaces
+            .iter()
+            .filter_map(|surface| {
+                surface
+                    .viewport_settings
+                    .clone()
+                    .map(|settings| (surface.id, settings))
+            })
+            .collect::<Vec<_>>();
+        let mut seen_viewport_instance_ids = BTreeSet::new();
+        for (_, viewport_id) in viewport_instance_ids.iter().copied() {
+            if !seen_viewport_instance_ids.insert(viewport_id) {
+                return Err(WorkspaceStateError::PersistedSchemaViolation(
+                    "persisted viewport instance id must be unique",
+                ));
+            }
+        }
+        let mut state = Self::from_persisted_v2(PersistedWorkspaceStateV2 {
+            version: PERSISTED_WORKSPACE_STATE_VERSION_V2,
+            workspace_id: persisted.workspace_id,
+            root_host_id: persisted.root_host_id,
+            hosts: persisted.hosts,
+            tab_stacks: persisted.tab_stacks,
+            panels: persisted.panels,
+            tool_surfaces: persisted
+                .tool_surfaces
+                .into_iter()
+                .map(|surface| PersistedToolSurfaceStateV2 {
+                    id: surface.id,
+                    tool_surface_kind: surface.tool_surface_kind,
+                    mount: surface.mount,
+                })
+                .collect(),
+        })?;
+
+        for (surface_raw, viewport_raw) in viewport_instance_ids {
+            let surface_id = persisted_id!(
+                ToolSurfaceInstanceId,
+                surface_raw,
+                "persisted viewport tool-surface id must be non-zero"
+            )?;
+            let viewport_id = persisted_viewport_id(viewport_raw)?;
+            let surface = state
+                .tool_surfaces_by_id
+                .get_mut(&surface_id)
+                .ok_or(WorkspaceStateError::MissingToolSurface(surface_id))?;
+            if surface.tool_surface_kind != ToolSurfaceKind::Viewport {
+                return Err(WorkspaceStateError::PersistedSchemaViolation(
+                    "persisted viewport instance id must belong to a viewport tool surface",
+                ));
+            }
+            surface.viewport_instance_id = Some(viewport_id);
+        }
+
+        for (surface_raw, settings) in viewport_settings {
+            let surface_id = persisted_id!(
+                ToolSurfaceInstanceId,
+                surface_raw,
+                "persisted viewport settings tool-surface id must be non-zero"
+            )?;
+            let settings = workspace_viewport_settings(settings)?;
+            let surface = state
+                .tool_surfaces_by_id
+                .get_mut(&surface_id)
+                .ok_or(WorkspaceStateError::MissingToolSurface(surface_id))?;
+            if surface.tool_surface_kind != ToolSurfaceKind::Viewport {
+                return Err(WorkspaceStateError::PersistedSchemaViolation(
+                    "persisted viewport settings must belong to a viewport tool surface",
+                ));
+            }
+            surface.viewport_settings = Some(settings);
+        }
+
+        state.validate_integrity()?;
+        Ok(state)
+    }
+}
+
+fn persisted_viewport_id(raw: u64) -> Result<ViewportId, WorkspaceStateError> {
+    if raw == 0 {
+        Err(WorkspaceStateError::PersistedSchemaViolation(
+            "persisted viewport instance id must be non-zero",
+        ))
+    } else {
+        Ok(ViewportId(raw))
+    }
+}
+
+fn persisted_viewport_settings(settings: ViewportRuntimeSettings) -> PersistedViewportSettingsV1 {
+    PersistedViewportSettingsV1 {
+        camera: PersistedViewportCameraSettingsV1 {
+            orbit_target: settings.camera.orbit_target,
+            distance: settings.camera.distance,
+            yaw_radians: settings.camera.yaw_radians,
+            pitch_radians: settings.camera.pitch_radians,
+            fov_y_radians: settings.camera.fov_y_radians,
+        },
+        debug_stage: persisted_viewport_debug_stage(settings.debug_stage),
+        root_background_opaque: settings.root_background_opaque,
+        selected_primary_product_id: settings.selected_primary_product_id.map(|id| id.0),
+    }
+}
+
+fn workspace_viewport_settings(
+    settings: PersistedViewportSettingsV1,
+) -> Result<ViewportRuntimeSettings, WorkspaceStateError> {
+    let selected_primary_product_id = settings
+        .selected_primary_product_id
+        .map(|product_id| {
+            if product_id == 0 {
+                Err(WorkspaceStateError::PersistedSchemaViolation(
+                    "persisted viewport selected product id must be non-zero",
+                ))
+            } else {
+                Ok(ExpressionProductId(product_id))
+            }
+        })
+        .transpose()?;
+    let camera = ViewportCameraSettings {
+        orbit_target: settings.camera.orbit_target,
+        distance: settings.camera.distance,
+        yaw_radians: settings.camera.yaw_radians,
+        pitch_radians: settings.camera.pitch_radians,
+        fov_y_radians: settings.camera.fov_y_radians,
+    };
+    if !camera.is_valid() {
+        return Err(WorkspaceStateError::PersistedSchemaViolation(
+            "persisted viewport camera settings must be finite and positive",
+        ));
+    }
+    Ok(ViewportRuntimeSettings {
+        camera,
+        debug_stage: workspace_viewport_debug_stage(settings.debug_stage),
+        root_background_opaque: settings.root_background_opaque,
+        selected_primary_product_id,
+    })
+}
+
+fn persisted_viewport_debug_stage(stage: ViewportDebugStage) -> PersistedViewportDebugStageV1 {
+    match stage {
+        ViewportDebugStage::Scene => PersistedViewportDebugStageV1::Scene,
+        ViewportDebugStage::ViewportCoverage => PersistedViewportDebugStageV1::ViewportCoverage,
+        ViewportDebugStage::ViewportUvGradient => PersistedViewportDebugStageV1::ViewportUvGradient,
+        ViewportDebugStage::PrimitiveAvailability => {
+            PersistedViewportDebugStageV1::PrimitiveAvailability
+        }
+        ViewportDebugStage::PickingHitMiss => PersistedViewportDebugStageV1::PickingHitMiss,
+    }
+}
+
+fn workspace_viewport_debug_stage(stage: PersistedViewportDebugStageV1) -> ViewportDebugStage {
+    match stage {
+        PersistedViewportDebugStageV1::Scene => ViewportDebugStage::Scene,
+        PersistedViewportDebugStageV1::ViewportCoverage => ViewportDebugStage::ViewportCoverage,
+        PersistedViewportDebugStageV1::ViewportUvGradient => ViewportDebugStage::ViewportUvGradient,
+        PersistedViewportDebugStageV1::PrimitiveAvailability => {
+            ViewportDebugStage::PrimitiveAvailability
+        }
+        PersistedViewportDebugStageV1::PickingHitMiss => ViewportDebugStage::PickingHitMiss,
+    }
+}
+
+impl From<PersistedViewportDebugStageV1> for String {
+    fn from(value: PersistedViewportDebugStageV1) -> Self {
+        match value {
+            PersistedViewportDebugStageV1::Scene => "scene".to_string(),
+            PersistedViewportDebugStageV1::ViewportCoverage => "viewport_coverage".to_string(),
+            PersistedViewportDebugStageV1::ViewportUvGradient => "viewport_uv_gradient".to_string(),
+            PersistedViewportDebugStageV1::PrimitiveAvailability => {
+                "primitive_availability".to_string()
+            }
+            PersistedViewportDebugStageV1::PickingHitMiss => "picking_hit_miss".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedViewportDebugStageV1 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "scene" => Ok(Self::Scene),
+            "viewport_coverage" => Ok(Self::ViewportCoverage),
+            "viewport_uv_gradient" => Ok(Self::ViewportUvGradient),
+            "primitive_availability" => Ok(Self::PrimitiveAvailability),
+            "picking_hit_miss" => Ok(Self::PickingHitMiss),
+            other => Err(format!("unsupported viewport debug stage: {other}")),
+        }
     }
 }
 
@@ -1002,6 +1318,21 @@ mod tests {
         WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator)
     }
 
+    fn test_viewport_settings() -> ViewportRuntimeSettings {
+        ViewportRuntimeSettings {
+            camera: ViewportCameraSettings {
+                orbit_target: [1.0, 2.0, 3.0],
+                distance: 12.0,
+                yaw_radians: 0.25,
+                pitch_radians: -0.15,
+                fov_y_radians: 60.0_f32.to_radians(),
+            },
+            debug_stage: ViewportDebugStage::PrimitiveAvailability,
+            root_background_opaque: true,
+            selected_primary_product_id: Some(ExpressionProductId(2)),
+        }
+    }
+
     #[test]
     fn persisted_roundtrip_preserves_structural_identity() {
         let workspace = bootstrap_workspace();
@@ -1105,6 +1436,161 @@ mod tests {
         let restored =
             WorkspaceState::from_persisted_v2(persisted).expect("locked state should decode");
         assert_eq!(locked, restored);
+    }
+
+    #[test]
+    fn persisted_v3_roundtrip_preserves_viewport_instance_restore_ids() {
+        let mut workspace = bootstrap_workspace();
+        let viewport_surface = workspace
+            .tool_surfaces_by_id
+            .values()
+            .find(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .map(|surface| surface.id)
+            .expect("bootstrap workspace should contain a viewport surface");
+        workspace
+            .tool_surfaces_by_id
+            .get_mut(&viewport_surface)
+            .expect("viewport surface should exist")
+            .viewport_instance_id = Some(ViewportId(77));
+
+        let persisted = workspace.to_persisted_v3();
+        assert_eq!(
+            persisted
+                .tool_surfaces
+                .iter()
+                .find(|surface| surface.id == viewport_surface.raw())
+                .and_then(|surface| surface.viewport_instance_id),
+            Some(77)
+        );
+        let restored =
+            WorkspaceState::from_persisted_v3(persisted).expect("v3 state should decode");
+
+        assert_eq!(workspace, restored);
+    }
+
+    #[test]
+    fn persisted_v3_roundtrip_preserves_viewport_runtime_settings() {
+        let mut workspace = bootstrap_workspace();
+        let viewport_surface = workspace
+            .tool_surfaces_by_id
+            .values()
+            .find(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .map(|surface| surface.id)
+            .expect("bootstrap workspace should contain a viewport surface");
+        workspace
+            .tool_surfaces_by_id
+            .get_mut(&viewport_surface)
+            .expect("viewport surface should exist")
+            .viewport_settings = Some(test_viewport_settings());
+
+        let persisted = workspace.to_persisted_v3();
+        assert_eq!(
+            persisted
+                .tool_surfaces
+                .iter()
+                .find(|surface| surface.id == viewport_surface.raw())
+                .and_then(|surface| surface.viewport_settings.as_ref())
+                .map(|settings| settings.debug_stage),
+            Some(PersistedViewportDebugStageV1::PrimitiveAvailability)
+        );
+        let restored =
+            WorkspaceState::from_persisted_v3(persisted).expect("v3 state should decode");
+
+        assert_eq!(workspace, restored);
+    }
+
+    #[test]
+    fn persisted_v3_decode_rejects_invalid_viewport_settings_product_id() {
+        let workspace = bootstrap_workspace();
+        let mut persisted = workspace.to_persisted_v3();
+        let surface = persisted
+            .tool_surfaces
+            .iter_mut()
+            .find(|surface| surface.tool_surface_kind == PersistedToolSurfaceKindV2::Viewport)
+            .expect("persisted workspace should contain a viewport surface");
+        let mut settings = persisted_viewport_settings(test_viewport_settings());
+        settings.selected_primary_product_id = Some(0);
+        surface.viewport_settings = Some(settings);
+
+        let error = WorkspaceState::from_persisted_v3(persisted)
+            .expect_err("zero selected product ids must fail decode");
+
+        assert!(matches!(
+            error,
+            WorkspaceStateError::PersistedSchemaViolation(_)
+        ));
+    }
+
+    #[test]
+    fn duplicated_viewport_area_copies_runtime_settings_not_restore_identity() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = workspace
+            .tab_stacks_by_id
+            .values()
+            .find(|stack| {
+                stack.ordered_panels.iter().any(|panel| {
+                    workspace.panel(*panel).map(|value| value.panel_kind)
+                        == Some(PanelKind::Viewport)
+                })
+            })
+            .expect("viewport stack should exist")
+            .id;
+        let viewport_surface = workspace
+            .tool_surfaces_by_id
+            .values()
+            .find(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .map(|surface| surface.id)
+            .expect("bootstrap workspace should contain a viewport surface");
+        let workspace = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::SetToolSurfaceViewportSettings {
+                tool_surface_id: viewport_surface,
+                viewport_settings: Some(test_viewport_settings()),
+            },
+        )
+        .expect("viewport settings mutation should be valid");
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let new_panel_id = allocator.allocate_panel_instance_id();
+        let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let duplicated = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::DuplicateTabStackArea {
+                tab_stack_id: viewport_stack,
+                new_panel_id,
+                new_tool_surface_id,
+            },
+        )
+        .expect("duplicating a viewport area should be valid");
+        let duplicated_surface = duplicated
+            .tool_surface(new_tool_surface_id)
+            .expect("duplicate surface should exist");
+
+        assert_eq!(
+            duplicated_surface.viewport_settings,
+            Some(test_viewport_settings())
+        );
+        assert_eq!(duplicated_surface.viewport_instance_id, None);
+    }
+
+    #[test]
+    fn persisted_v3_decode_rejects_zero_viewport_instance_id() {
+        let workspace = bootstrap_workspace();
+        let mut persisted = workspace.to_persisted_v3();
+        persisted
+            .tool_surfaces
+            .iter_mut()
+            .find(|surface| surface.tool_surface_kind == PersistedToolSurfaceKindV2::Viewport)
+            .expect("persisted workspace should contain a viewport surface")
+            .viewport_instance_id = Some(0);
+
+        let error = WorkspaceState::from_persisted_v3(persisted)
+            .expect_err("zero viewport ids must fail decode");
+
+        assert!(matches!(
+            error,
+            WorkspaceStateError::PersistedSchemaViolation(_)
+        ));
     }
 
     #[test]

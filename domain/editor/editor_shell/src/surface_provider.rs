@@ -3,14 +3,16 @@
 
 use std::collections::BTreeMap;
 
-use editor_core::{DocumentId, DocumentKind, EntityId};
-use editor_viewport::{ExpressionProductId, ViewportId};
+use editor_core::{DocumentId, DocumentKind};
 use id_macros::id;
 use ui_surface::{SurfaceCapability, SurfaceCapabilitySet, SurfaceDefinitionId};
 
 use crate::{
-    EntityTableSortKey, PanelInstanceId, StructuralCommandTarget, TabStackId,
-    ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarViewModel, UiNode, WidgetId,
+    EditorDefinitionSurfaceAction, EntityTableDomainMutation, EntityTableSessionMutation,
+    EntityTableSurfaceAction, InspectorSessionMutation, InspectorSurfaceAction,
+    OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId, StructuralCommandTarget,
+    TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarViewModel, UiNode,
+    ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction, WidgetId,
 };
 
 #[id]
@@ -152,84 +154,16 @@ impl SurfacePresentationArtifact {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SurfaceLocalAction {
-    SelectOutlinerEntity {
-        entity: EntityId,
-    },
-    SelectEntityTableEntity {
-        entity: EntityId,
-    },
-    SelectEntityTableRow {
-        entities: Vec<EntityId>,
-    },
-    AppendEntityTableSearchText {
-        text: String,
-    },
-    BackspaceEntityTableSearch,
-    ToggleEntityTableSort {
-        sort_key: EntityTableSortKey,
-    },
-    SelectViewportProduct {
-        viewport_id: ViewportId,
-        product_id: ExpressionProductId,
-        enabled: bool,
-    },
-    ToggleViewportDetails,
-    ToggleViewportStatistics,
-    ToggleViewportOptionsMenu,
-    ActivateInspectorField {
-        index: usize,
-    },
-    FocusInspectorField {
-        index: usize,
-    },
-    EditInspectorFieldText {
-        index: usize,
-        text: String,
-    },
-    BackspaceInspectorFieldText {
-        index: usize,
-    },
-    CommitInspectorFieldText {
-        index: usize,
-    },
-    CancelInspectorFieldText {
-        index: usize,
-    },
-    SelectEditorDefinitionDocument {
-        document_id: String,
-    },
-    DuplicateSelectedEditorDefinition,
-    RenameSelectedEditorDefinition {
-        display_name: String,
-    },
-    DeleteSelectedEditorDefinition,
-    ExportSelectedEditorDefinition,
-    ApplySelectedEditorDefinition,
-    RollbackSelectedEditorDefinition,
-    SelectEditorDefinitionUiNode {
-        node_id: String,
-    },
-    SetSelectedEditorDefinitionUiNodeText {
-        node_id: String,
-        text: String,
-    },
-    SetSelectedEditorThemeColor {
-        token: String,
-        value: String,
-    },
-    AddSelectedEditorWorkspaceLayoutTab {
-        label: String,
-        tool_surface: String,
-    },
-    SplitSelectedEditorWorkspaceLayoutRoot {
-        axis: String,
-    },
-    CloseSelectedEditorWorkspaceLayoutLastTab,
+    Outliner(OutlinerSurfaceAction),
+    EntityTable(EntityTableSurfaceAction),
+    Inspector(InspectorSurfaceAction),
+    Viewport(ViewportSurfaceAction),
+    EditorDefinition(EditorDefinitionSurfaceAction),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SurfaceLocalRoute {
     pub action: SurfaceLocalAction,
 }
@@ -240,7 +174,7 @@ impl SurfaceLocalRoute {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SurfaceRouteTable {
     routes_by_widget_id: BTreeMap<WidgetId, SurfaceLocalRoute>,
 }
@@ -354,55 +288,39 @@ impl EditorShellFrameModel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SurfaceCommandProposal {
     SurfaceSession(SurfaceSessionMutationProposal),
     EditorDomain(EditorDomainProposal),
     Shell(crate::ShellCommand),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SurfaceSessionMutationProposal {
     pub target: StructuralCommandTarget,
     pub projection_epoch: u64,
     pub mutation: SurfaceSessionMutation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SurfaceSessionMutation {
-    AppendEntityTableSearchText { text: String },
-    BackspaceEntityTableSearch,
-    ToggleEntityTableSort { sort_key: EntityTableSortKey },
-    ToggleViewportDetails,
-    ToggleViewportStatistics,
-    ToggleViewportOptionsMenu,
-    ActivateInspectorField { index: usize },
-    FocusInspectorField { index: usize },
-    AppendInspectorFieldText { index: usize, text: String },
-    BackspaceInspectorFieldText { index: usize },
-    CommitInspectorFieldText { index: usize },
-    CancelInspectorFieldText { index: usize },
+    EntityTable(EntityTableSessionMutation),
+    Inspector(InspectorSessionMutation),
+    Viewport(ViewportSessionMutation),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EditorDomainProposal {
     pub target: StructuralCommandTarget,
     pub projection_epoch: u64,
     pub mutation: EditorDomainMutation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EditorDomainMutation {
-    SelectOutlinerEntity {
-        entity: EntityId,
-    },
-    SelectEntityTableRow {
-        entities: Vec<EntityId>,
-    },
-    SelectViewportProduct {
-        viewport_id: ViewportId,
-        product_id: ExpressionProductId,
-    },
+    Outliner(OutlinerDomainMutation),
+    EntityTable(EntityTableDomainMutation),
+    Viewport(ViewportDomainMutation),
 }
 
 pub fn surface_session_proposal(

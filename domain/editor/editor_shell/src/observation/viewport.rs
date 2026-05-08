@@ -4,7 +4,7 @@
 use editor_core::EntityId;
 use editor_viewport::{
     ExpressionFreshness, ExpressionProductId, ExpressionProductKind, ProducerHealth,
-    ProductAvailabilityState, ViewportId,
+    ProductAvailabilityState, ViewportDebugStage, ViewportId,
 };
 
 use crate::ObservationFrameMetadata;
@@ -30,6 +30,8 @@ pub struct ViewportObservationFrame {
     pub details_visible: bool,
     pub statistics_visible: bool,
     pub options_menu_open: bool,
+    pub debug_stage: ViewportDebugStage,
+    pub root_background_opaque: bool,
     pub selected_entity: Option<EntityId>,
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,

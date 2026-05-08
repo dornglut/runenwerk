@@ -1,10 +1,22 @@
 (
   id: AuthoredId("runenwerk.editor.surface.outliner"),
-  root: Column(
+  root: Panel(
     id: AuthoredId("root"),
+    availability: None,
     children: [
-      Label(id: AuthoredId("title"), label: Static(Text("Outliner"))),
-      Tree(id: AuthoredId("tree"), rows: (id: AuthoredId("outliner.rows")), route: Some((id: AuthoredId("outliner.select")))),
+      Column(
+        id: AuthoredId("body"),
+        children: [
+          Label(id: AuthoredId("title"), label: Static(Text("Outliner"))),
+          Scroll(
+            id: AuthoredId("scroll"),
+            axis: Vertical,
+            children: [
+              Tree(id: AuthoredId("tree"), rows: (id: AuthoredId("outliner.rows")), route: Some((id: AuthoredId("outliner.select")))),
+            ],
+          ),
+        ],
+      ),
     ],
   ),
   templates: [],

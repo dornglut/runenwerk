@@ -55,6 +55,10 @@ pub const ENTITY_TABLE_SCROLL_WIDGET_ID: WidgetId = WidgetId(65);
 pub const ENTITY_TABLE_BODY_WIDGET_ID: WidgetId = WidgetId(66);
 pub const ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID: WidgetId = WidgetId(67);
 pub const ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID: WidgetId = WidgetId(68);
+pub const ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID: WidgetId = WidgetId(81);
+pub const ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID: WidgetId = WidgetId(82);
+pub const ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID: WidgetId = WidgetId(83);
+pub const ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID: WidgetId = WidgetId(84);
 
 pub const VIEWPORT_PANEL_WIDGET_ID: WidgetId = WidgetId(40);
 pub const VIEWPORT_TITLE_WIDGET_ID: WidgetId = WidgetId(41);
@@ -75,6 +79,8 @@ pub const VIEWPORT_OPTIONS_BUTTON_WIDGET_ID: WidgetId = WidgetId(75);
 pub const VIEWPORT_OPTIONS_POPUP_WIDGET_ID: WidgetId = WidgetId(76);
 pub const VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID: WidgetId = WidgetId(77);
 pub const VIEWPORT_STATISTICS_LABEL_WIDGET_ID: WidgetId = WidgetId(78);
+pub const VIEWPORT_RESET_CAMERA_WIDGET_ID: WidgetId = WidgetId(79);
+pub const VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID: WidgetId = WidgetId(80);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);
@@ -95,6 +101,7 @@ pub const OUTLINER_ROW_WIDGET_ID_BASE: u64 = 1_000;
 pub const INSPECTOR_FIELD_WIDGET_ID_BASE: u64 = 10_000;
 pub const INSPECTOR_FIELD_FOCUS_WIDGET_ID_BASE: u64 = 15_000;
 pub const VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE: u64 = 30_000;
+pub const VIEWPORT_DEBUG_STAGE_BUTTON_WIDGET_ID_BASE: u64 = 31_000;
 pub const ENTITY_TABLE_ROW_WIDGET_ID_BASE: u64 = 40_000;
 pub const ENTITY_TABLE_SORT_BUTTON_WIDGET_ID_BASE: u64 = 41_000;
 pub const TAB_STRIP_WIDGET_ID_BASE: u64 = 1_000_000;
@@ -143,6 +150,10 @@ pub fn console_line_widget_id(index: usize) -> WidgetId {
 
 pub fn viewport_product_button_widget_id(index: usize) -> WidgetId {
     WidgetId(VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn viewport_debug_stage_button_widget_id(index: usize) -> WidgetId {
+    WidgetId(VIEWPORT_DEBUG_STAGE_BUTTON_WIDGET_ID_BASE + index as u64)
 }
 
 pub fn entity_table_row_widget_id(index: usize) -> WidgetId {
@@ -305,4 +316,12 @@ pub fn viewport_product_button_index(widget_id: WidgetId) -> Option<usize> {
 
     let raw = widget_id.0 - VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE;
     usize::try_from(raw).ok()
+}
+
+pub fn viewport_debug_stage_button_index(widget_id: WidgetId) -> Option<usize> {
+    if widget_id.0 < VIEWPORT_DEBUG_STAGE_BUTTON_WIDGET_ID_BASE {
+        return None;
+    }
+    let raw = widget_id.0 - VIEWPORT_DEBUG_STAGE_BUTTON_WIDGET_ID_BASE;
+    (raw < 1_000).then_some(raw as usize)
 }

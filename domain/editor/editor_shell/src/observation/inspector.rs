@@ -1,13 +1,14 @@
 //! File: domain/editor/editor_shell/src/observation/inspector.rs
 //! Purpose: Inspector observation frame contracts.
 
-use crate::ObservationFrameMetadata;
+use crate::{InspectorFieldControlKind, ObservationFrameMetadata};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InspectorObservedField {
     pub label: String,
     pub path_key: Option<String>,
     pub value_summary: String,
+    pub control: InspectorFieldControlKind,
     pub is_focused: bool,
     pub editable: bool,
 }
@@ -33,7 +34,7 @@ pub enum InspectorObservedTarget {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InspectorObservationFrame {
     pub metadata: ObservationFrameMetadata,
     pub target: InspectorObservedTarget,

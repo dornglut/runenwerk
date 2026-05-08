@@ -17,7 +17,7 @@ use engine::plugins::render::{
 };
 use engine::runtime::{Res, ResMut};
 
-use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
+use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
     EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID, MAIN_VIEWPORT_ID,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -85,14 +85,14 @@ impl ViewportProductTargetRecord {
         if self.status != ViewportProductTargetStatus::Requested {
             return None;
         }
-        let target_format = self.target_format.clone()?;
+        let target_format = self.target_format?;
         Some(RenderDynamicTextureTargetDescriptor {
             key: self.dynamic_key(),
             width: self.width,
             height: self.height,
             format: target_format,
-            usage: self.usage.clone(),
-            sample_mode: self.sample_mode.clone(),
+            usage: self.usage,
+            sample_mode: self.sample_mode,
             retention: RenderDynamicTextureRetention::RetainWhileRequested,
         })
     }
@@ -210,9 +210,9 @@ pub fn sync_viewport_product_targets_system(
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn sync_viewport_presentation_products_system(
     host: Res<EditorHostResource>,
-    viewport_render: Res<EditorViewportRenderState>,
     viewport_render_states: Res<ViewportRenderStateResource>,
     mut viewport_surface_sets: ResMut<ViewportSurfaceSetResource>,
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
@@ -228,11 +228,8 @@ pub fn sync_viewport_presentation_products_system(
 
     let source_version = host.app.runtime().current_scene_reality_version();
     for viewport_id in &canonical_viewport_ids {
-        let product_dimensions = product_dimensions_for_viewport(
-            *viewport_id,
-            &viewport_render_states,
-            &viewport_render,
-        );
+        let product_dimensions =
+            product_dimensions_for_viewport(*viewport_id, &viewport_render_states);
         let descriptors = initial_product_descriptors(product_dimensions, source_version);
         viewport_products_registry.update_viewport_descriptors(*viewport_id, descriptors.clone());
 
@@ -290,17 +287,11 @@ fn canonical_viewport_ids_for_sync(
 fn product_dimensions_for_viewport(
     viewport_id: ViewportId,
     viewport_render_states: &ViewportRenderStateResource,
-    fallback_render_state: &EditorViewportRenderState,
 ) -> ExpressionDimensions {
     viewport_render_states
         .state_for(viewport_id)
         .map(|state| expression_dimensions_for_bounds(state.bounds))
-        .unwrap_or_else(|| {
-            ExpressionDimensions::new(
-                fallback_render_state.viewport_bounds_px.2.max(1.0).round() as u32,
-                fallback_render_state.viewport_bounds_px.3.max(1.0).round() as u32,
-            )
-        })
+        .unwrap_or_else(|| ExpressionDimensions::new(1, 1))
 }
 
 fn build_artifact_observation_frame(
@@ -511,7 +502,7 @@ mod tests {
     use super::*;
     use crate::runtime::viewport::{
         OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID,
-        ToolSurfaceRuntimeBindingRecord, viewport_id_for_tool_surface,
+        ToolSurfaceRuntimeBindingRecord,
     };
     use editor_core::RealityVersion;
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
@@ -618,8 +609,8 @@ mod tests {
         let mut surface_sets = ViewportSurfaceSetResource::default();
         ensure_editor_main_surface_set(&mut surface_sets, MAIN_VIEWPORT_ID);
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
-        let first = viewport_id_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(1).unwrap());
-        let second = viewport_id_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(2).unwrap());
+        let first = ViewportId(2);
+        let second = ViewportId(3);
         bindings.upsert_binding(binding(1, 1, 1, first, UiRect::new(0.0, 0.0, 320.0, 240.0)));
         bindings.upsert_binding(binding(
             2,

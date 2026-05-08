@@ -108,6 +108,7 @@ pub fn produce_editor_picking_system(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn compose_picking_hit(
     runtime: &RunenwerkEditorRuntime,
     active_tool: Option<ToolId>,

@@ -1,6 +1,8 @@
+use editor_viewport::{ViewportCameraSettings, ViewportRuntimeSettings};
 use engine::plugins::render::{GpuParams, GpuUniform};
 use glam::{Vec3, vec3};
 use scene::Vec3Value;
+use ui_math::UiVector;
 use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
@@ -14,58 +16,14 @@ const SHELL_SCALE_MIN: f32 = 1.0;
 const SHELL_SCALE_MAX: f32 = 3.0;
 const VIEWPORT_BOUNDS_EPSILON: f32 = 0.25;
 const BRANCH_TRACE_FLOAT_EPSILON: f32 = 0.0005;
+const CAMERA_MIN_DISTANCE: f32 = 0.25;
+const CAMERA_MAX_DISTANCE: f32 = 500.0;
+const CAMERA_ORBIT_SENSITIVITY: f32 = 0.006;
+const CAMERA_PAN_SENSITIVITY: f32 = 0.0015;
+const CAMERA_ZOOM_SENSITIVITY: f32 = 0.08;
+const CAMERA_MAX_PITCH_RADIANS: f32 = 1.553_343;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EditorViewportDebugStage {
-    Scene,
-    ViewportCoverage,
-    ViewportUvGradient,
-    PrimitiveAvailability,
-    PickingHitMiss,
-}
-
-impl EditorViewportDebugStage {
-    pub fn as_u32(self) -> u32 {
-        match self {
-            Self::Scene => 0,
-            Self::ViewportCoverage => 1,
-            Self::ViewportUvGradient => 2,
-            Self::PrimitiveAvailability => 3,
-            Self::PickingHitMiss => 4,
-        }
-    }
-
-    pub fn from_env_value(value: &str) -> Self {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "viewport_coverage" | "viewport-coverage" | "coverage" | "mask" => {
-                Self::ViewportCoverage
-            }
-            "viewport_uv_gradient" | "viewport-uv-gradient" | "uv_gradient" | "gradient" => {
-                Self::ViewportUvGradient
-            }
-            "primitive_availability"
-            | "primitive-availability"
-            | "primitive_gate"
-            | "primitive-gate"
-            | "primitivegate" => Self::PrimitiveAvailability,
-            "picking_hit_miss" | "picking-hit-miss" | "hit_miss" | "hit-miss" | "hitmiss" => {
-                Self::PickingHitMiss
-            }
-            "scene" | "" => Self::Scene,
-            _ => Self::Scene,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Scene => "scene",
-            Self::ViewportCoverage => "viewport_coverage",
-            Self::ViewportUvGradient => "viewport_uv_gradient",
-            Self::PrimitiveAvailability => "primitive_availability",
-            Self::PickingHitMiss => "picking_hit_miss",
-        }
-    }
-}
+pub use editor_viewport::ViewportDebugStage as EditorViewportDebugStage;
 
 #[derive(ecs::Component, ecs::Resource)]
 pub struct EditorHostResource {
@@ -262,6 +220,7 @@ pub struct EditorViewportRenderState {
     pub sphere_radius: f32,
     pub capsule_radius: f32,
     pub capsule_half_height: f32,
+    pub camera_settings: ViewportCameraSettings,
     pub camera: EditorViewportCamera,
     pub camera_fov_y_radians: f32,
     pub visibility_contradiction_active: bool,
@@ -287,6 +246,7 @@ impl Default for EditorViewportRenderState {
             sphere_radius: 0.6,
             capsule_radius: 0.35,
             capsule_half_height: 0.75,
+            camera_settings: ViewportCameraSettings::default(),
             camera: editor_viewport_camera(),
             camera_fov_y_radians: editor_viewport_camera_fov_y_radians(),
             visibility_contradiction_active: false,
@@ -321,6 +281,83 @@ impl EditorViewportRenderState {
         let changed = self.root_background_opaque != enabled;
         self.root_background_opaque = enabled;
         changed
+    }
+
+    pub fn from_viewport_settings(settings: ViewportRuntimeSettings) -> Self {
+        let mut state = Self::default();
+        state.apply_viewport_settings(settings);
+        state
+    }
+
+    pub fn viewport_settings(
+        &self,
+        selected_primary_product_id: Option<editor_viewport::ExpressionProductId>,
+    ) -> ViewportRuntimeSettings {
+        ViewportRuntimeSettings {
+            camera: self.camera_settings,
+            debug_stage: self.debug_stage,
+            root_background_opaque: self.root_background_opaque,
+            selected_primary_product_id,
+        }
+    }
+
+    pub fn apply_viewport_settings(&mut self, settings: ViewportRuntimeSettings) -> bool {
+        let camera_changed = self.set_camera_settings(settings.camera);
+        let debug_changed = self.set_debug_stage(settings.debug_stage);
+        let root_changed = self.set_root_background_opaque(settings.root_background_opaque);
+        camera_changed || debug_changed || root_changed
+    }
+
+    pub fn set_camera_settings(&mut self, settings: ViewportCameraSettings) -> bool {
+        let settings = sanitized_camera_settings(settings);
+        let changed = self.camera_settings != settings
+            || (self.camera_fov_y_radians - settings.fov_y_radians).abs() > f32::EPSILON;
+        self.camera_settings = settings;
+        self.camera = editor_viewport_camera_from_settings(settings);
+        self.camera_fov_y_radians = settings.fov_y_radians;
+        changed
+    }
+
+    pub fn reset_camera(&mut self) -> bool {
+        self.set_camera_settings(ViewportCameraSettings::default())
+    }
+
+    pub fn orbit_camera(&mut self, delta: UiVector) -> bool {
+        if delta == UiVector::ZERO {
+            return false;
+        }
+        let mut settings = self.camera_settings;
+        settings.yaw_radians += delta.x * CAMERA_ORBIT_SENSITIVITY;
+        settings.pitch_radians = (settings.pitch_radians - delta.y * CAMERA_ORBIT_SENSITIVITY)
+            .clamp(-CAMERA_MAX_PITCH_RADIANS, CAMERA_MAX_PITCH_RADIANS);
+        self.set_camera_settings(settings)
+    }
+
+    pub fn pan_camera(&mut self, delta: UiVector) -> bool {
+        if delta == UiVector::ZERO {
+            return false;
+        }
+        let distance = self
+            .camera_settings
+            .distance
+            .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
+        let amount = distance * CAMERA_PAN_SENSITIVITY;
+        let world_delta = (-self.camera.right * delta.x + self.camera.up * delta.y) * amount;
+        let mut settings = self.camera_settings;
+        settings.orbit_target[0] += world_delta.x;
+        settings.orbit_target[1] += world_delta.y;
+        settings.orbit_target[2] += world_delta.z;
+        self.set_camera_settings(settings)
+    }
+
+    pub fn zoom_camera(&mut self, scroll_delta: f32) -> bool {
+        if scroll_delta.abs() <= f32::EPSILON {
+            return false;
+        }
+        let mut settings = self.camera_settings;
+        settings.distance = (settings.distance * (-scroll_delta * CAMERA_ZOOM_SENSITIVITY).exp())
+            .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
+        self.set_camera_settings(settings)
     }
 
     pub fn should_report_bounds_change(&mut self) -> bool {
@@ -513,11 +550,28 @@ pub struct EditorViewportCamera {
 }
 
 pub fn editor_viewport_camera() -> EditorViewportCamera {
-    let position = vec3(4.0, 3.0, 4.0);
-    let target = Vec3::ZERO;
+    editor_viewport_camera_from_settings(ViewportCameraSettings::default())
+}
+
+pub fn editor_viewport_camera_from_settings(
+    settings: ViewportCameraSettings,
+) -> EditorViewportCamera {
+    let settings = sanitized_camera_settings(settings);
+    let target = vec3(
+        settings.orbit_target[0],
+        settings.orbit_target[1],
+        settings.orbit_target[2],
+    );
+    let (sin_yaw, cos_yaw) = settings.yaw_radians.sin_cos();
+    let (sin_pitch, cos_pitch) = settings.pitch_radians.sin_cos();
+    let offset = vec3(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw) * settings.distance;
+    let position = target + offset;
     let world_up = Vec3::Y;
     let forward = (target - position).normalize_or_zero();
-    let right = forward.cross(world_up).normalize_or_zero();
+    let mut right = forward.cross(world_up).normalize_or_zero();
+    if right.length_squared() <= f32::EPSILON {
+        right = Vec3::X;
+    }
     let up = right.cross(forward).normalize_or_zero();
 
     EditorViewportCamera {
@@ -529,7 +583,26 @@ pub fn editor_viewport_camera() -> EditorViewportCamera {
 }
 
 pub fn editor_viewport_camera_fov_y_radians() -> f32 {
-    50.0_f32.to_radians()
+    ViewportCameraSettings::default().fov_y_radians
+}
+
+fn sanitized_camera_settings(settings: ViewportCameraSettings) -> ViewportCameraSettings {
+    if !settings.is_valid() {
+        return ViewportCameraSettings::default();
+    }
+    ViewportCameraSettings {
+        orbit_target: settings.orbit_target,
+        distance: settings
+            .distance
+            .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE),
+        yaw_radians: settings.yaw_radians,
+        pitch_radians: settings
+            .pitch_radians
+            .clamp(-CAMERA_MAX_PITCH_RADIANS, CAMERA_MAX_PITCH_RADIANS),
+        fov_y_radians: settings
+            .fov_y_radians
+            .clamp(1.0_f32.to_radians(), 175.0_f32.to_radians()),
+    }
 }
 
 #[cfg(test)]
@@ -563,8 +636,10 @@ mod tests {
 
     #[test]
     fn scene_product_uniform_uses_viewport_owned_camera_state() {
-        let mut state = EditorViewportRenderState::default();
-        state.camera_fov_y_radians = 42.0_f32.to_radians();
+        let state = EditorViewportRenderState {
+            camera_fov_y_radians: 42.0_f32.to_radians(),
+            ..Default::default()
+        };
 
         let uniform = state.compose_scene_product_uniform((1280, 720));
 

@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_shell/src/composition/toolbar_definition.rs
 //! Purpose: Form the editor toolbar from UI definition data.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, SCENE_WORKSPACE_PROFILE_ID,
@@ -14,9 +14,10 @@ use crate::{
     TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, ToolbarViewModel,
     WorkspaceProfileId, toolbar_menu_item_widget_id, toolbar_workspace_close_widget_id,
 };
+use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
     AuthoredUiNodePath, AuthoredUiTemplate, FormedRetainedUiProduct, FormedUiRoute, UiAvailability,
-    UiDefinitionContext, UiNodeId, UiRouteSlotId, UiValue, form_retained_ui,
+    UiAvailabilityBinding, UiDefinitionContext, UiRouteSlotId, UiValue, form_retained_ui,
     normalize_authored_template,
 };
 use ui_math::{UiInsets, UiSize};
@@ -26,6 +27,8 @@ use ui_tree::{PopupNode, UiNode, UiNodeKind};
 use ui_widgets::{button, button_selected};
 
 const TOOLBAR_TEMPLATE_RON: &str = include_str!("../../../../../assets/editor/ui/toolbar.ron");
+const EDITOR_BINDINGS_RON: &str =
+    include_str!("../../../../../assets/editor/ui/editor_bindings.ron");
 
 pub fn build_defined_toolbar(
     view_model: &ToolbarViewModel,
@@ -35,7 +38,7 @@ pub fn build_defined_toolbar(
         ron::from_str(TOOLBAR_TEMPLATE_RON).expect("checked-in toolbar UI fixture must parse");
     let normalized = normalize_authored_template(template);
     let mut context = UiDefinitionContext::new(theme.clone());
-    register_toolbar_widget_ids(&mut context, view_model);
+    register_toolbar_widget_ids(&mut context);
     populate_toolbar_values(&mut context, view_model);
     let mut product = form_retained_ui(&normalized, &mut context);
     insert_dynamic_workspace_buttons(&mut product, view_model, theme);
@@ -48,45 +51,63 @@ pub fn build_defined_toolbar_menu_popup(
     view_model: &ToolbarViewModel,
     theme: &ThemeTokens,
 ) -> Option<FormedRetainedUiProduct> {
-    let anchor = active_toolbar_menu_anchor(view_model)?;
+    let (active_menu_id, anchor) = active_toolbar_menu_anchor(view_model)?;
+    let toolbar = checked_in_toolbar_binding();
     let text_style = theme.body_small_text_style(FontId(1));
     let mut routes_by_widget_id = BTreeMap::new();
     let mut paths_by_widget_id = BTreeMap::new();
     let mut availability_by_widget_id = BTreeMap::new();
     let mut children = Vec::new();
+    let mut used_widget_indices = BTreeSet::new();
 
-    for (index, button) in view_model.buttons.iter().enumerate() {
-        let Some(route) = route_slot_for_toolbar_name(button.stable_name) else {
-            continue;
-        };
-        let widget_id = toolbar_menu_item_widget_id(index);
+    for (fallback_index, item) in toolbar
+        .menu_items
+        .iter()
+        .filter(|item| item.menu_id == active_menu_id)
+        .enumerate()
+    {
+        let preferred_widget_index = view_model
+            .buttons
+            .iter()
+            .position(|button| button.stable_name == item.item_id)
+            .unwrap_or(fallback_index);
+        let widget_index = next_available_toolbar_menu_item_index(
+            preferred_widget_index,
+            &mut used_widget_indices,
+        );
+        let widget_id = toolbar_menu_item_widget_id(widget_index);
+        let runtime_enabled = view_model
+            .buttons
+            .iter()
+            .find(|button| button.stable_name == item.item_id)
+            .is_none_or(|button| button.enabled);
+        let availability = resolve_toolbar_menu_item_availability(
+            item.availability.as_ref(),
+            view_model,
+            runtime_enabled,
+        );
+        let enabled = availability.is_enabled();
         let mut child = button_selected(
             widget_id,
-            button.label.clone(),
+            item.label.clone(),
             text_style.clone(),
             theme.clone(),
-            button.is_active,
+            false,
         );
         if let UiNodeKind::Button(button_node) = &mut child.kind {
-            button_node.enabled = button.enabled;
+            button_node.enabled = enabled;
             button_node.fill_width = true;
         }
         paths_by_widget_id.insert(
             widget_id,
-            AuthoredUiNodePath(format!("root/menu_popup/{}", route.as_str())),
+            AuthoredUiNodePath(format!(
+                "root/menu_popup/{}/{}",
+                active_menu_id, item.item_id
+            )),
         );
-        availability_by_widget_id.insert(
-            widget_id,
-            if button.enabled {
-                UiAvailability::Available
-            } else {
-                UiAvailability::Disabled {
-                    reason: "toolbar menu item unavailable".to_string(),
-                }
-            },
-        );
-        if button.enabled {
-            routes_by_widget_id.insert(widget_id, FormedUiRoute::RouteSlot(route));
+        availability_by_widget_id.insert(widget_id, availability);
+        if enabled {
+            routes_by_widget_id.insert(widget_id, FormedUiRoute::RouteSlot(item.route.clone()));
         }
         children.push(child);
     }
@@ -113,6 +134,67 @@ pub fn build_defined_toolbar_menu_popup(
         diagnostics: Vec::new(),
         availability_by_widget_id,
     })
+}
+
+fn next_available_toolbar_menu_item_index(preferred: usize, used: &mut BTreeSet<usize>) -> usize {
+    let mut candidate = preferred;
+    while used.contains(&candidate) {
+        candidate = candidate.saturating_add(1);
+    }
+    used.insert(candidate);
+    candidate
+}
+
+fn checked_in_toolbar_binding() -> EditorToolbarBinding {
+    ron::from_str::<EditorDefinitionBindings>(EDITOR_BINDINGS_RON)
+        .expect("checked-in editor bindings fixture must parse")
+        .toolbar
+}
+
+fn resolve_toolbar_menu_item_availability(
+    binding: Option<&UiAvailabilityBinding>,
+    view_model: &ToolbarViewModel,
+    runtime_enabled: bool,
+) -> UiAvailability {
+    let resolved = match binding {
+        Some(UiAvailabilityBinding::Static(value)) => value.clone(),
+        Some(UiAvailabilityBinding::Ref(id)) => {
+            toolbar_availability_for_ref(id.as_str(), view_model)
+        }
+        None => UiAvailability::Available,
+    };
+    if runtime_enabled || !resolved.is_enabled() {
+        resolved
+    } else {
+        UiAvailability::Disabled {
+            reason: "toolbar menu item unavailable".to_string(),
+        }
+    }
+}
+
+fn toolbar_availability_for_ref(id: &str, view_model: &ToolbarViewModel) -> UiAvailability {
+    let enabled = match id {
+        "editor.undo.available" => menu_item_enabled(view_model, "edit_undo"),
+        "editor.redo.available" => menu_item_enabled(view_model, "edit_redo"),
+        _ => None,
+    };
+    match enabled {
+        Some(true) => UiAvailability::Available,
+        Some(false) => UiAvailability::Disabled {
+            reason: "toolbar menu item unavailable".to_string(),
+        },
+        None => UiAvailability::Unavailable {
+            reason: format!("toolbar availability '{id}' is not supplied"),
+        },
+    }
+}
+
+fn menu_item_enabled(view_model: &ToolbarViewModel, stable_name: &str) -> Option<bool> {
+    view_model
+        .buttons
+        .iter()
+        .find(|button| button.stable_name == stable_name)
+        .map(|button| button.enabled)
 }
 
 fn compact_toolbar_root(root: &mut UiNode, theme: &ThemeTokens) {
@@ -285,7 +367,7 @@ fn style_workspace_close_button(
     button.reveal_on_hover_anchor = Some(anchor);
 }
 
-fn register_toolbar_widget_ids(context: &mut UiDefinitionContext, view_model: &ToolbarViewModel) {
+fn register_toolbar_widget_ids(context: &mut UiDefinitionContext) {
     let mappings = [
         ("root", TOOLBAR_ROOT_WIDGET_ID),
         ("root/scroll", TOOLBAR_SCROLL_WIDGET_ID),
@@ -344,15 +426,6 @@ fn register_toolbar_widget_ids(context: &mut UiDefinitionContext, view_model: &T
         context
             .widget_ids_by_path
             .insert(AuthoredUiNodePath(path.to_string()), widget_id);
-    }
-
-    for (index, button) in view_model.buttons.iter().enumerate() {
-        if let Some(route) = route_slot_for_toolbar_name(button.stable_name) {
-            let path = format!("root/scroll/rows/active_menu_row/{route}");
-            context
-                .widget_ids_by_path
-                .insert(AuthoredUiNodePath(path), toolbar_menu_item_widget_id(index));
-        }
     }
 }
 
@@ -416,45 +489,17 @@ fn populate_toolbar_values(context: &mut UiDefinitionContext, view_model: &Toolb
     );
 }
 
-fn active_toolbar_menu_anchor(view_model: &ToolbarViewModel) -> Option<ui_tree::WidgetId> {
+fn active_toolbar_menu_anchor(
+    view_model: &ToolbarViewModel,
+) -> Option<(&'static str, ui_tree::WidgetId)> {
     view_model
         .buttons
         .iter()
         .find_map(|button| match (button.stable_name, button.is_active) {
-            ("menu_file", true) => Some(TOOLBAR_FILE_MENU_WIDGET_ID),
-            ("menu_edit", true) => Some(TOOLBAR_EDIT_MENU_WIDGET_ID),
-            ("menu_window", true) => Some(TOOLBAR_WINDOW_MENU_WIDGET_ID),
-            ("workspace_plus", true) => Some(TOOLBAR_ADD_WORKSPACE_WIDGET_ID),
+            ("menu_file", true) => Some(("file", TOOLBAR_FILE_MENU_WIDGET_ID)),
+            ("menu_edit", true) => Some(("edit", TOOLBAR_EDIT_MENU_WIDGET_ID)),
+            ("menu_window", true) => Some(("window", TOOLBAR_WINDOW_MENU_WIDGET_ID)),
+            ("workspace_plus", true) => Some(("workspace", TOOLBAR_ADD_WORKSPACE_WIDGET_ID)),
             _ => None,
         })
-}
-
-pub fn route_slot_for_toolbar_name(name: &str) -> Option<UiRouteSlotId> {
-    let route = match name {
-        "file_save" => "editor.toolbar.file.save",
-        "file_save_as" => "editor.toolbar.file.save_as",
-        "file_open" => "editor.toolbar.file.open",
-        "file_open_recent" => "editor.toolbar.file.open_recent",
-        "edit_undo" => "editor.toolbar.edit.undo",
-        "edit_redo" => "editor.toolbar.edit.redo",
-        "edit_preferences" => "editor.toolbar.edit.preferences",
-        "window_new_window" => "editor.toolbar.window.new_window",
-        "window_next_workspace" => "editor.toolbar.window.next_workspace",
-        "window_previous_workspace" => "editor.toolbar.window.previous_workspace",
-        "window_save_workspace" => "editor.toolbar.window.save_workspace",
-        "window_load_custom" => "editor.toolbar.window.load_custom_workspace",
-        "workspace_menu_scene" => "editor.workspace.scene.activate",
-        "workspace_menu_modelling" => "editor.workspace.modelling.activate",
-        "workspace_menu_editor_design" => "editor.workspace.editor_design.activate",
-        "workspace_scene_close" => "editor.workspace.scene.close",
-        "workspace_modelling_close" => "editor.workspace.modelling.close",
-        "workspace_editor_design_close" => "editor.workspace.editor_design.close",
-        _ => return None,
-    };
-    Some(UiRouteSlotId::new(route))
-}
-
-#[allow(dead_code)]
-fn _typed_path(value: &str) -> AuthoredUiNodePath {
-    AuthoredUiNodePath::root(&UiNodeId::new(value))
 }

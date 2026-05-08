@@ -8,6 +8,7 @@ pub mod ids;
 pub mod observation;
 pub mod runtime;
 pub mod surface_provider;
+pub mod surfaces;
 pub mod view_models;
 pub mod workspace;
 
@@ -21,6 +22,14 @@ pub use ids::*;
 pub use observation::*;
 pub use runtime::*;
 pub use surface_provider::*;
+pub use surfaces::{
+    EditorDefinitionSurfaceAction, EntityTableComponentFilter, EntityTableComponentFilterItem,
+    EntityTableDomainMutation, EntityTableFilter, EntityTableHierarchyFilter, EntityTableQuery,
+    EntityTableSessionMutation, EntityTableSort, EntityTableSurfaceAction,
+    InspectorFieldControlKind, InspectorFieldEditIntent, InspectorSessionMutation,
+    InspectorSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction, ViewportDomainMutation,
+    ViewportSessionMutation, ViewportSurfaceAction,
+};
 pub use view_models::*;
 pub use workspace::{
     BINDINGS_SURFACE_DEFINITION_ID, COMMAND_DIFF_SURFACE_DEFINITION_ID,
@@ -30,13 +39,14 @@ pub use workspace::{
     FloatingHostBounds, FloatingHostPlaceholderState, INSPECTOR_SURFACE_DEFINITION_ID,
     LAYOUT_WORKSPACE_PROFILE_ID, MENU_EDITOR_SURFACE_DEFINITION_ID, MODELLING_WORKSPACE_PROFILE_ID,
     OUTLINER_SURFACE_DEFINITION_ID, PERSISTED_WORKSPACE_STATE_VERSION_V1,
-    PERSISTED_WORKSPACE_STATE_VERSION_V2, PLACEHOLDER_SURFACE_DEFINITION_ID, PanelHostId,
-    PanelHostKind, PanelHostNode, PanelInstanceId, PanelInstanceState, PanelKind,
-    PersistedPanelHostKindV1, PersistedPanelHostNodeV1, PersistedPanelInstanceStateV1,
-    PersistedPanelInstanceStateV2, PersistedPanelKindV1, PersistedPanelKindV2,
-    PersistedTabStackStateV1, PersistedToolSurfaceKindV1, PersistedToolSurfaceKindV2,
-    PersistedToolSurfaceMountV1, PersistedToolSurfaceStateV1, PersistedToolSurfaceStateV2,
-    PersistedWorkspaceSplitAxisV1, PersistedWorkspaceStateV1, PersistedWorkspaceStateV2,
+    PERSISTED_WORKSPACE_STATE_VERSION_V2, PERSISTED_WORKSPACE_STATE_VERSION_V3,
+    PLACEHOLDER_SURFACE_DEFINITION_ID, PanelHostId, PanelHostKind, PanelHostNode, PanelInstanceId,
+    PanelInstanceState, PanelKind, PersistedPanelHostKindV1, PersistedPanelHostNodeV1,
+    PersistedPanelInstanceStateV1, PersistedPanelInstanceStateV2, PersistedPanelKindV1,
+    PersistedPanelKindV2, PersistedTabStackStateV1, PersistedToolSurfaceKindV1,
+    PersistedToolSurfaceKindV2, PersistedToolSurfaceMountV1, PersistedToolSurfaceStateV1,
+    PersistedToolSurfaceStateV2, PersistedToolSurfaceStateV3, PersistedWorkspaceSplitAxisV1,
+    PersistedWorkspaceStateV1, PersistedWorkspaceStateV2, PersistedWorkspaceStateV3,
     ProjectedFloatingHostSlot, ProjectedPanelSlot, ProjectedTabButton, ProjectedTabButtonRoute,
     ProjectedTabDropRoute, ProjectedTabDropSlot, ProjectedTabDropTarget, ProjectedTabStackSlot,
     ProjectedWorkspaceHostSlot, SCENE_WORKSPACE_PROFILE_ID, SHORTCUT_EDITOR_SURFACE_DEFINITION_ID,

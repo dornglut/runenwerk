@@ -42,7 +42,7 @@ use crate::{
     tab_stack_switch_surface_button_widget_id, tab_strip_scroll_widget_id,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RoutedShellAction {
     ActivateSelectTool,
     ActivateTranslateTool,
@@ -940,10 +940,6 @@ fn build_frame_widget_routes(
         }
     }
 
-    for (widget_id, action) in legacy_toolbar_action_routes(frame_model) {
-        actions.entry(widget_id).or_insert(action);
-    }
-
     for (widget_id, route) in &workspace_projection.tab_button_route_by_widget_id {
         actions.insert(
             *widget_id,
@@ -1079,80 +1075,6 @@ fn toolbar_command_action(command: ToolbarCommandKind) -> RoutedShellAction {
         command,
         enabled: true,
     }
-}
-
-fn legacy_toolbar_action_routes(
-    frame_model: &EditorShellFrameModel,
-) -> BTreeMap<WidgetId, RoutedShellAction> {
-    let mut routes = BTreeMap::new();
-    for button in &frame_model.toolbar.buttons {
-        match button.stable_name {
-            "select" => {
-                routes.insert(
-                    crate::TOOLBAR_SELECT_BUTTON_WIDGET_ID,
-                    RoutedShellAction::ActivateSelectTool,
-                );
-            }
-            "translate" => {
-                routes.insert(
-                    crate::TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
-                    RoutedShellAction::ActivateTranslateTool,
-                );
-            }
-            "rotate" => {
-                routes.insert(
-                    crate::TOOLBAR_ROTATE_BUTTON_WIDGET_ID,
-                    RoutedShellAction::ActivateRotateTool,
-                );
-            }
-            "scale" => {
-                routes.insert(
-                    crate::TOOLBAR_SCALE_BUTTON_WIDGET_ID,
-                    RoutedShellAction::ActivateScaleTool,
-                );
-            }
-            "undo" => {
-                routes.insert(
-                    crate::TOOLBAR_UNDO_BUTTON_WIDGET_ID,
-                    RoutedShellAction::Undo {
-                        enabled: button.enabled,
-                    },
-                );
-            }
-            "redo" => {
-                routes.insert(
-                    crate::TOOLBAR_REDO_BUTTON_WIDGET_ID,
-                    RoutedShellAction::Redo {
-                        enabled: button.enabled,
-                    },
-                );
-            }
-            "save" => {
-                routes.insert(
-                    crate::TOOLBAR_SAVE_BUTTON_WIDGET_ID,
-                    RoutedShellAction::SaveScene {
-                        enabled: button.enabled,
-                    },
-                );
-            }
-            "load" => {
-                routes.insert(
-                    crate::TOOLBAR_LOAD_BUTTON_WIDGET_ID,
-                    RoutedShellAction::LoadScene {
-                        enabled: button.enabled,
-                    },
-                );
-            }
-            "debug_logs" => {
-                routes.insert(
-                    crate::TOOLBAR_DEBUG_LOGS_BUTTON_WIDGET_ID,
-                    RoutedShellAction::ToggleDebugLogs,
-                );
-            }
-            _ => {}
-        }
-    }
-    routes
 }
 
 fn projected_tab_stacks_for_routes(

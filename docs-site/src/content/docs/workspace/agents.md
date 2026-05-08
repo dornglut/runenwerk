@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: false
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-08
 ---
 # AGENTS.md
 
@@ -25,6 +25,7 @@ You are Codex, based on GPT-5, running inside the Codex desktop app on macOS as 
 
 ### General rules
 
+- I want long term solutions. If you see that a refactor or redesign would be helpfull in any way tell me.
 - Prefer explicit types and clear interfaces.
 - Avoid global mutable state unless already established in the architecture.
 - Follow the structure and conventions used in nearby modules.
@@ -93,7 +94,11 @@ For full documentation placement, lifecycle states, frontmatter, refactor update
 
 For bounded repository workflows, follow `docs-site/src/content/docs/workspace/routines/README.md`.
 
+For planning, implementation, routine selection, and closeout shape, follow `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
+
 For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
+
+After completing any phased implementation, run the phase completion drift-check routine before starting the next phase.
 
 For documentation moves, renames, pruning, or restructuring, follow `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md`.
 

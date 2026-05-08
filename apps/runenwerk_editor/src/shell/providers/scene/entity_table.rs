@@ -47,18 +47,68 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_LIST_WIDGET_ID,
             ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::SelectEntityTableRow {
-                entities: view_model.rows.iter().map(|row| row.entity).collect(),
-            }),
+            SurfaceLocalRoute::new(SurfaceLocalAction::EntityTable(
+                EntityTableSurfaceAction::SelectRow {
+                    entities: view_model.rows.iter().map(|row| row.entity).collect(),
+                },
+            )),
         );
         routes.insert(
             remap_widget_id(
                 request.tool_surface_instance_id,
                 ENTITY_TABLE_SEARCH_WIDGET_ID,
             ),
-            SurfaceLocalRoute::new(SurfaceLocalAction::AppendEntityTableSearchText {
-                text: String::new(),
-            }),
+            SurfaceLocalRoute::new(SurfaceLocalAction::EntityTable(
+                EntityTableSurfaceAction::AppendSearchText {
+                    text: String::new(),
+                },
+            )),
+        );
+        routes.insert(
+            remap_widget_id(
+                request.tool_surface_instance_id,
+                ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
+            ),
+            SurfaceLocalRoute::new(SurfaceLocalAction::EntityTable(
+                EntityTableSurfaceAction::ClearSearch,
+            )),
+        );
+        routes.insert(
+            remap_widget_id(
+                request.tool_surface_instance_id,
+                ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID,
+            ),
+            SurfaceLocalRoute::new(SurfaceLocalAction::EntityTable(
+                EntityTableSurfaceAction::SetSelectedOnly {
+                    selected_only: view_model.query.selected_only,
+                },
+            )),
+        );
+        routes.insert(
+            remap_widget_id(
+                request.tool_surface_instance_id,
+                ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID,
+            ),
+            SurfaceLocalRoute::new(SurfaceLocalAction::EntityTable(
+                EntityTableSurfaceAction::SetHierarchyFilter {
+                    filter: view_model.query.hierarchy_filter,
+                },
+            )),
+        );
+        routes.insert(
+            remap_widget_id(
+                request.tool_surface_instance_id,
+                ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID,
+            ),
+            SurfaceLocalRoute::new(SurfaceLocalAction::EntityTable(
+                EntityTableSurfaceAction::SelectComponentFilter {
+                    filters: view_model
+                        .component_filters
+                        .iter()
+                        .map(|item| item.filter)
+                        .collect(),
+                },
+            )),
         );
         for (index, sort_key) in [
             EntityTableSortKey::EntityId,
@@ -74,7 +124,9 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
                     request.tool_surface_instance_id,
                     entity_table_sort_button_widget_id(index),
                 ),
-                SurfaceLocalRoute::new(SurfaceLocalAction::ToggleEntityTableSort { sort_key }),
+                SurfaceLocalRoute::new(SurfaceLocalAction::EntityTable(
+                    EntityTableSurfaceAction::ToggleSort { sort_key },
+                )),
             );
         }
         Ok(ProviderSurfaceFrame {
@@ -92,39 +144,86 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         let projection_epoch = context.projection_epoch;
         match action {
-            SurfaceLocalAction::SelectEntityTableEntity { entity } => {
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectEntity { entity }) => {
                 Ok(Some(editor_domain_proposal(
                     request,
                     projection_epoch,
-                    EditorDomainMutation::SelectEntityTableRow {
+                    EditorDomainMutation::EntityTable(EntityTableDomainMutation::SelectRow {
                         entities: vec![entity],
-                    },
+                    }),
                 )))
             }
-            SurfaceLocalAction::SelectEntityTableRow { entities } => {
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectRow { entities }) => {
                 Ok(Some(editor_domain_proposal(
                     request,
                     projection_epoch,
-                    EditorDomainMutation::SelectEntityTableRow { entities },
+                    EditorDomainMutation::EntityTable(EntityTableDomainMutation::SelectRow {
+                        entities,
+                    }),
                 )))
             }
-            SurfaceLocalAction::AppendEntityTableSearchText { text } => {
-                Ok(Some(surface_session_proposal(
-                    request,
-                    projection_epoch,
-                    SurfaceSessionMutation::AppendEntityTableSearchText { text },
-                )))
-            }
-            SurfaceLocalAction::BackspaceEntityTableSearch => Ok(Some(surface_session_proposal(
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::AppendSearchText {
+                text,
+            }) => Ok(Some(surface_session_proposal(
                 request,
                 projection_epoch,
-                SurfaceSessionMutation::BackspaceEntityTableSearch,
+                SurfaceSessionMutation::EntityTable(EntityTableSessionMutation::AppendSearchText {
+                    text,
+                }),
             ))),
-            SurfaceLocalAction::ToggleEntityTableSort { sort_key } => {
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::BackspaceSearch) => {
                 Ok(Some(surface_session_proposal(
                     request,
                     projection_epoch,
-                    SurfaceSessionMutation::ToggleEntityTableSort { sort_key },
+                    SurfaceSessionMutation::EntityTable(
+                        EntityTableSessionMutation::BackspaceSearch,
+                    ),
+                )))
+            }
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::ClearSearch) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    projection_epoch,
+                    SurfaceSessionMutation::EntityTable(EntityTableSessionMutation::ClearSearch),
+                )))
+            }
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetSelectedOnly {
+                selected_only,
+            }) => Ok(Some(surface_session_proposal(
+                request,
+                projection_epoch,
+                SurfaceSessionMutation::EntityTable(EntityTableSessionMutation::SetSelectedOnly {
+                    selected_only,
+                }),
+            ))),
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetHierarchyFilter {
+                filter,
+            }) => Ok(Some(surface_session_proposal(
+                request,
+                projection_epoch,
+                SurfaceSessionMutation::EntityTable(
+                    EntityTableSessionMutation::SetHierarchyFilter { filter },
+                ),
+            ))),
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetComponentFilter {
+                filter,
+            }) => Ok(Some(surface_session_proposal(
+                request,
+                projection_epoch,
+                SurfaceSessionMutation::EntityTable(
+                    EntityTableSessionMutation::SetComponentFilter { filter },
+                ),
+            ))),
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectComponentFilter {
+                ..
+            }) => Ok(None),
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::ToggleSort { sort_key }) => {
+                Ok(Some(surface_session_proposal(
+                    request,
+                    projection_epoch,
+                    SurfaceSessionMutation::EntityTable(EntityTableSessionMutation::ToggleSort {
+                        sort_key,
+                    }),
                 )))
             }
             _ => Ok(None),

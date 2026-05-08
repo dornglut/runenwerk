@@ -916,6 +916,7 @@ mod tests {
                 root: ui_definition::UiNodeDefinition::Label {
                     id: "root".into(),
                     label: ui_definition::UiValueBinding::static_text("Imported"),
+                    availability: None,
                 },
                 templates: Vec::new(),
                 menus: Vec::new(),

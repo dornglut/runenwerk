@@ -1,18 +1,21 @@
 //! File: domain/editor/editor_shell/src/composition/build_outliner_panel.rs
-//! Purpose: Compose outliner panel widgets.
-
-use crate::{UiNode, label, panel, vscroll, vstack_with_policies};
-use ui_layout::SizePolicy;
-use ui_text::{FontId, TextOverflow};
-use ui_theme::{ThemeTokens, UiColor};
-use ui_tree::TreeRow;
-use ui_widgets::tree;
+//! Purpose: Compose outliner panel widgets from the checked-in surface fixture.
 
 use crate::{
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
     OUTLINER_SCROLL_WIDGET_ID, OUTLINER_TITLE_WIDGET_ID, OutlinerViewModel, PanelInstanceId,
-    ToolSurfaceInstanceId,
+    ToolSurfaceInstanceId, UiNode, UiNodeKind,
 };
+use ui_definition::{
+    AuthoredUiNodePath, AuthoredUiTemplate, UiCollectionItem, UiDefinitionContext, UiValue,
+    form_retained_ui, normalize_authored_template,
+};
+use ui_layout::SizePolicy;
+use ui_text::{FontId, TextOverflow};
+use ui_theme::{ThemeTokens, UiColor};
+
+const OUTLINER_TEMPLATE_RON: &str =
+    include_str!("../../../../../assets/editor/ui/surfaces/outliner.ron");
 
 pub fn build_outliner_panel(
     view_model: &OutlinerViewModel,
@@ -20,40 +23,85 @@ pub fn build_outliner_panel(
     _panel_instance_id: PanelInstanceId,
     _active_tool_surface: Option<ToolSurfaceInstanceId>,
 ) -> UiNode {
-    let title = label(
-        OUTLINER_TITLE_WIDGET_ID,
-        "Outliner",
-        theme.heading_text_style(FontId(1)),
+    let template: AuthoredUiTemplate =
+        ron::from_str(OUTLINER_TEMPLATE_RON).expect("checked-in outliner UI fixture must parse");
+    let normalized = normalize_authored_template(template);
+    let mut context = UiDefinitionContext::new(theme.clone());
+    register_outliner_widget_ids(&mut context);
+    context.collections.insert(
+        "outliner.rows".into(),
+        view_model
+            .rows
+            .iter()
+            .map(|row| {
+                let mut item =
+                    UiCollectionItem::new(row.entity.0.to_string(), row.display_name.clone());
+                item.selected = row.is_selected;
+                item.values
+                    .insert("tree.depth".into(), UiValue::Number(row.depth as f64));
+                item.values
+                    .insert("tree.has_children".into(), UiValue::Bool(row.has_children));
+                item.values
+                    .insert("tree.expanded".into(), UiValue::Bool(true));
+                item
+            })
+            .collect(),
     );
 
-    let mut row_style = theme.body_text_style(FontId(1));
-    row_style.overflow = TextOverflow::Ellipsis;
+    let mut root = form_retained_ui(&normalized, &mut context).root;
+    polish_outliner_tree(&mut root, theme);
+    root
+}
 
-    let rows = view_model
-        .rows
-        .iter()
-        .map(|row| {
-            let mut tree_row = TreeRow::new(row.display_name.clone(), row.depth, row.has_children);
-            tree_row.selected = row.is_selected;
-            tree_row.expanded = true;
-            tree_row
-        })
-        .collect::<Vec<_>>();
+fn register_outliner_widget_ids(context: &mut UiDefinitionContext) {
+    for (path, widget_id) in [
+        ("root", OUTLINER_PANEL_WIDGET_ID),
+        ("root/body", OUTLINER_BODY_WIDGET_ID),
+        ("root/body/title", OUTLINER_TITLE_WIDGET_ID),
+        ("root/body/scroll", OUTLINER_SCROLL_WIDGET_ID),
+        ("root/body/scroll/tree", OUTLINER_LIST_WIDGET_ID),
+    ] {
+        context
+            .widget_ids_by_path
+            .insert(AuthoredUiNodePath(path.to_string()), widget_id);
+    }
+}
 
-    let list = tree(OUTLINER_LIST_WIDGET_ID, rows, row_style, theme.clone());
-    let scroll = vscroll(OUTLINER_SCROLL_WIDGET_ID, theme.clone(), vec![list]);
-    let body = vstack_with_policies(
-        OUTLINER_BODY_WIDGET_ID,
-        theme.spacing.xs,
-        vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
-        vec![title, scroll],
-    );
-    let mut panel_theme = theme.clone();
-    panel_theme.background_panel = UiColor::new(
-        (theme.background_panel.r + 0.01).clamp(0.0, 1.0),
-        (theme.background_panel.g + 0.01).clamp(0.0, 1.0),
-        (theme.background_panel.b + 0.01).clamp(0.0, 1.0),
-        0.94,
-    );
-    panel(OUTLINER_PANEL_WIDGET_ID, panel_theme, vec![body])
+fn polish_outliner_tree(root: &mut UiNode, theme: &ThemeTokens) {
+    if let UiNodeKind::Panel(panel) = &mut root.kind {
+        panel.theme.background_panel = UiColor::new(
+            (theme.background_panel.r + 0.01).clamp(0.0, 1.0),
+            (theme.background_panel.g + 0.01).clamp(0.0, 1.0),
+            (theme.background_panel.b + 0.01).clamp(0.0, 1.0),
+            0.94,
+        );
+    }
+    if let Some(body) = find_node_mut(root, OUTLINER_BODY_WIDGET_ID)
+        && let UiNodeKind::Stack(stack) = &mut body.kind
+    {
+        stack.child_main_policies = vec![SizePolicy::Auto, SizePolicy::flex(1.0)];
+    }
+    if let Some(title) = find_node_mut(root, OUTLINER_TITLE_WIDGET_ID)
+        && let UiNodeKind::Label(label) = &mut title.kind
+    {
+        label.text_style = theme.heading_text_style(FontId(1));
+    }
+    if let Some(tree) = find_node_mut(root, OUTLINER_LIST_WIDGET_ID)
+        && let UiNodeKind::Tree(tree) = &mut tree.kind
+    {
+        tree.text_style = theme.body_text_style(FontId(1));
+        tree.text_style.overflow = TextOverflow::Ellipsis;
+    }
+}
+
+fn find_node_mut(node: &mut UiNode, widget_id: crate::WidgetId) -> Option<&mut UiNode> {
+    if node.id == widget_id {
+        return Some(node);
+    }
+    for child in &mut node.children {
+        if let Some(found) = find_node_mut(child, widget_id) {
+            return Some(found);
+        }
+    }
+    None
 }

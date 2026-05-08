@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-08
 ---
 
 # Prompt Templates
@@ -38,6 +38,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 
 ## Related Docs
 
+- [`../planning-and-implementation-workflow.md`](../planning-and-implementation-workflow.md)
 - [`../agents.md`](../agents.md)
 - [`../routines/README.md`](../routines/README.md)
 - [`../documentation-structure.md`](../documentation-structure.md)

@@ -23,3 +23,20 @@ Optional output path:
 ```bash
 python3 tools/context/export_repo_context.py --output ./Runenwerk-content.txt
 ```
+
+## AI Workflow Kickoff
+
+Use this to generate a task-shaped AI workflow prompt and checklist:
+
+```bash
+./workflow list
+./workflow implementation --task "<task>" --scope "<scope>"
+./workflow closeout --task "<completed phase>" --roadmap "<roadmap/design>"
+```
+
+Use these validation shortcuts from the repository root:
+
+```bash
+./workflow docs
+./workflow full-gate
+```

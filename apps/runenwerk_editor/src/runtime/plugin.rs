@@ -11,13 +11,16 @@ use crate::runtime::resources::{
 use crate::runtime::systems::{
     bootstrap_editor_demo_system, dispatch_editor_input_system, produce_editor_picking_system,
     seed_viewport_runtime_contracts_system, submit_editor_frame_system,
+    sync_viewport_instances_system,
 };
 use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportLayoutMapResource, ViewportPickingResultsResource, ViewportPresentationStateResource,
-    ViewportProductRegistryResource, ViewportProductTargetRegistryResource,
-    ViewportRenderJobResource, ViewportRenderStateResource, ViewportSurfaceSetResource,
+    ViewportInstanceRegistryResource, ViewportLayoutMapResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportProductRegistryResource,
+    ViewportProductTargetRegistryResource, ViewportRenderJobResource,
+    ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
+    ViewportSurfaceSetResource, apply_viewport_render_state_commands_system,
     sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
     sync_viewport_render_jobs_system,
 };
@@ -28,7 +31,9 @@ pub struct EditorAppPlugin;
 pub enum EditorRuntimeSet {
     Picking,
     InputBridge,
+    ViewportLifecycle,
     FrameSubmit,
+    ViewportRenderStateCommands,
     ViewportPresentationSync,
     ViewportProductTargets,
     ViewportRenderJobs,
@@ -41,9 +46,15 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::InputBridge => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::InputBridge")
             }
+            Self::ViewportLifecycle => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportLifecycle")
+            }
             Self::FrameSubmit => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::FrameSubmit")
             }
+            Self::ViewportRenderStateCommands => SystemSetKey::of::<EditorRuntimeSet>(
+                "EditorRuntimeSet::ViewportRenderStateCommands",
+            ),
             Self::ViewportPresentationSync => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportPresentationSync")
             }
@@ -68,6 +79,8 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportArtifactObservationResource>();
         app.init_resource::<ViewportRenderJobResource>();
         app.init_resource::<ViewportRenderStateResource>();
+        app.init_resource::<ViewportRenderStateCommandQueueResource>();
+        app.init_resource::<ViewportInstanceRegistryResource>();
         app.init_resource::<ViewportLayoutMapResource>();
         app.init_resource::<ToolSurfaceRuntimeBindingRegistryResource>();
         app.init_resource::<SurfaceDefinitionRegistryResource>();
@@ -96,9 +109,25 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
+            apply_viewport_render_state_commands_system
+                .in_set(EditorRuntimeSet::ViewportRenderStateCommands)
+                .after(EditorRuntimeSet::InputBridge)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
+            sync_viewport_instances_system
+                .in_set(EditorRuntimeSet::ViewportLifecycle)
+                .after(EditorRuntimeSet::ViewportRenderStateCommands)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
             submit_editor_frame_system
                 .in_set(EditorRuntimeSet::FrameSubmit)
-                .after(EditorRuntimeSet::InputBridge)
+                .after(EditorRuntimeSet::ViewportLifecycle)
                 .after(CoreSet::Input)
                 .after(CoreSet::Time),
         );

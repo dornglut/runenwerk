@@ -1,6 +1,9 @@
 //! Generic value and collection slot values supplied during formation.
 
-use crate::identity::{UiCollectionSlotId, UiSelectionSlotId, UiValueSlotId};
+use crate::{
+    UiAvailability,
+    identity::{UiCollectionSlotId, UiSelectionSlotId, UiValueSlotId},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -9,6 +12,7 @@ pub enum UiValue {
     Text(String),
     Bool(bool),
     Number(f64),
+    Availability(UiAvailability),
 }
 
 impl UiValue {
@@ -17,6 +21,11 @@ impl UiValue {
             Self::Text(value) => value.clone(),
             Self::Bool(value) => value.to_string(),
             Self::Number(value) => value.to_string(),
+            Self::Availability(value) => match value {
+                UiAvailability::Available => "available".to_string(),
+                UiAvailability::Disabled { reason } => format!("disabled: {reason}"),
+                UiAvailability::Unavailable { reason } => format!("unavailable: {reason}"),
+            },
         }
     }
 
@@ -30,6 +39,13 @@ impl UiValue {
     pub fn as_number(&self) -> Option<f64> {
         match self {
             Self::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_availability(&self) -> Option<UiAvailability> {
+        match self {
+            Self::Availability(value) => Some(value.clone()),
             _ => None,
         }
     }
@@ -55,6 +71,10 @@ pub struct UiCollectionItem {
     pub enabled: bool,
     #[serde(default)]
     pub values: BTreeMap<UiValueSlotId, UiValue>,
+    #[serde(default)]
+    pub collections: BTreeMap<UiCollectionSlotId, Vec<UiCollectionItem>>,
+    #[serde(default)]
+    pub selections: BTreeMap<UiSelectionSlotId, String>,
 }
 
 impl UiCollectionItem {
@@ -65,6 +85,8 @@ impl UiCollectionItem {
             selected: false,
             enabled: true,
             values: BTreeMap::new(),
+            collections: BTreeMap::new(),
+            selections: BTreeMap::new(),
         }
     }
 

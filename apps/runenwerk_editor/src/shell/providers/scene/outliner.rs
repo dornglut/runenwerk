@@ -49,9 +49,9 @@ impl EditorSurfaceProvider for SceneOutlinerProvider {
                     request.tool_surface_instance_id,
                     outliner_row_widget_id(index),
                 ),
-                SurfaceLocalRoute::new(SurfaceLocalAction::SelectOutlinerEntity {
-                    entity: row.entity,
-                }),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Outliner(
+                    OutlinerSurfaceAction::SelectEntity { entity: row.entity },
+                )),
             );
         }
         Ok(ProviderSurfaceFrame {
@@ -68,11 +68,11 @@ impl EditorSurfaceProvider for SceneOutlinerProvider {
         action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         match action {
-            SurfaceLocalAction::SelectOutlinerEntity { entity } => {
+            SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectEntity { entity }) => {
                 Ok(Some(editor_domain_proposal(
                     request,
                     context.projection_epoch,
-                    EditorDomainMutation::SelectOutlinerEntity { entity },
+                    EditorDomainMutation::Outliner(OutlinerDomainMutation::SelectEntity { entity }),
                 )))
             }
             _ => Ok(None),

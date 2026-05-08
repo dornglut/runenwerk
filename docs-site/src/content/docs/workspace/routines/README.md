@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-08
 ---
 
 # Workspace Routines
@@ -34,6 +34,7 @@ Use routines when a task needs repeated inspection, patching, validation, and re
 
 ## Related Docs
 
+- [`../planning-and-implementation-workflow.md`](../planning-and-implementation-workflow.md)
 - [`../prompt-templates/README.md`](../prompt-templates/README.md)
 - [`../agents.md`](../agents.md)
 - [`../documentation-structure.md`](../documentation-structure.md)

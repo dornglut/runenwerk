@@ -23,16 +23,15 @@ Active M3.5 design. The implementation is at validated closeout-candidate state 
 
 This is an implementation design for a full first UI definition framework milestone. It is not a visual UI editor, plugin system, scripting system, or alternate UI execution runtime. The promoted M3.6 self-authoring workspace consumes this framework immediately after M3.5.
 
-Current implementation truth for the M3.5 closeout candidate:
+Current implementation truth for the M3.5 closeout:
 
 - `domain/ui/ui_definition` and `domain/editor/editor_definition` are active workspace crates.
 - Checked-in RON fixtures exist under `assets/editor/ui/` for toolbar, shell chrome, common provider surfaces, and editor bindings.
 - UI fixtures parse, validate, normalize, and can form retained UI products with route slots, embed slots, authored paths, diagnostics, and availability state.
-- `editor_shell` uses formed toolbar route slots for migrated toolbar routing; the toolbar compatibility entrypoint is now a thin wrapper around definition formation.
+- `editor_shell` uses formed toolbar route slots and editor binding menu-item data for migrated toolbar routing; the toolbar compatibility entrypoint is now a thin wrapper around definition formation.
 - normal tab-stack shell chrome is formed from `assets/editor/ui/shell_chrome.ron`; dynamic drag/drop preview chrome remains live shell behavior.
-- the console provider surface structure is formed from `assets/editor/ui/surfaces/console.ron` while provider data and follow-scroll behavior stay app/shell-owned.
+- common provider surface structure is formed from `assets/editor/ui/surfaces/*.ron` for console, inspector, outliner, entity-table, and viewport while provider data, route proposals, viewport overlays, render/embed payload ownership, and follow-scroll behavior stay app/shell-owned.
 - `apps/runenwerk_editor` has an app-owned checked-in fixture loading/validation path.
-- Remaining common provider fixtures are checked-in and validated, but richer inspector/outliner/entity-table/viewport migrations should only proceed when their specific row/form/embed semantics can be preserved without moving provider behavior into templates.
 
 ## Purpose
 
@@ -732,7 +731,7 @@ Target:
 
 This migration is structure-only. It must not move scene editing, inspector commit, viewport picking, renderer integration, or provider execution into `ui_definition`.
 
-Implementation note: console panel structure is migrated through `surfaces/console.ron` and keeps console follow-scroll state in app/shell code. Inspector, outliner, entity-table, and viewport fixtures are checked in and validated; their retained builders should remain behavior-owned until richer row/form/embed parity can be preserved without encoding provider semantics in `ui_definition`.
+Implementation note: console, inspector, outliner, entity-table, and viewport stable structures are formed through checked-in `surfaces/*.ron` fixtures. Provider DTO construction, route proposals, viewport overlays, renderer integration, and follow-scroll behavior remain app/shell-owned instead of being encoded as `ui_definition` semantics.
 
 ### Phase 9 - App Fixture Loading
 

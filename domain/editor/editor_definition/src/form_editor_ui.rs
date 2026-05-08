@@ -92,6 +92,7 @@ mod tests {
                 descriptor: EditorAvailabilityDescriptor::CanUndo,
             }],
             menus: Vec::new(),
+            menu_items: Vec::new(),
         };
         let mut context = UiDefinitionContext::new(ThemeTokens::default());
         populate_toolbar_context(

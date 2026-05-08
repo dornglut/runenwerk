@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-08
 related:
   - ./architecture.md
   - ../../design/active/ui-definition-formation-foundation-design.md
@@ -111,7 +111,7 @@ Focus:
 
 ### Phase 7 - UI Definition Formation Framework
 
-Status: M3.5 closeout candidate implemented and validated as of 2026-05-06.
+Status: M3.5 implemented and validated as of 2026-05-06.
 
 Owning design:
 
@@ -142,14 +142,14 @@ Implemented first-slice evidence:
 - `domain/ui/ui_definition` is an active workspace crate with the source model modules, validation, normalization, and retained formation.
 - `domain/editor/editor_definition` is an active workspace crate with toolbar, menu, workspace, surface, command route, availability, binding, validation, and editor UI formation helpers.
 - Checked-in fixtures under `assets/editor/ui/` parse and validate in tests.
-- `editor_shell` forms the toolbar fixture and maps formed route slots to existing shell actions; route slots remain inert until shell mapping.
+- `editor_shell` forms the toolbar fixture, toolbar popup item bindings, and maps formed route slots to existing shell actions; route slots remain inert until shell mapping.
 - `editor_shell` forms normal tab-stack shell chrome from `assets/editor/ui/shell_chrome.ron` while dynamic docking previews remain live shell behavior.
-- `editor_shell` forms the console provider surface from `assets/editor/ui/surfaces/console.ron` while provider data and follow-scroll state remain outside templates.
+- `editor_shell` forms common provider surface structure from `assets/editor/ui/surfaces/*.ron` for console, inspector, outliner, entity-table, and viewport. Provider data, route proposals, follow-scroll state, viewport overlays, and render/embed payload ownership remain outside templates.
 - `apps/runenwerk_editor` owns checked-in fixture loading and validation policy.
 
 Remaining follow-up after M3.5 closeout:
 
-- keep remaining provider surface fixture migrations limited to cases where retained parity can be preserved without moving provider semantics into UI definitions.
+- continue broadening reusable controls and richer surface workflows without moving provider semantics into UI definitions.
 
 Non-goals:
 
@@ -168,12 +168,12 @@ Milestone placement:
 - [x] Finish docking/tab behavior on top of existing structural identity and binding contracts. Status: implemented and test-covered; automated coverage exists for tab reorder, rehome, floating host creation, split resizing, area split/duplicate/reset/close, dynamic split-area composition, and structural identity preservation.
 - [x] Expose editor-area/type switching with a retained select/dropdown route. Status: implemented and test-covered; tab chrome renders an editor type selector and maps `SelectChanged` to `SwitchPanelToolSurfaceKind`.
 - [x] Add plus/new-tab affordance for tab stacks. Status: implemented and test-covered; tab chrome exposes a plus/new-tab control that allocates panel and tool-surface identities after structural ratification.
-- [ ] Expand non-viewport surface maturity (entity-table/query, richer inspector controls) using existing surface contracts. Status: active/partially implemented; entity-table, console, inspector, outliner, provider routing, and independent surface-session coverage exists, but richer common workflows remain open.
+- [x] Expand non-viewport surface maturity (entity-table/query, richer inspector controls) using existing surface contracts. Status: implemented as of 2026-05-08; provider-backed surfaces now use typed surface action/session/domain wrappers, entity-table query workflows cover search/selected-only/hierarchy/component filters plus sorting, and inspector controls render bool/numeric/text/enum/read-only alternatives without moving provider behavior into `ui_definition`.
 - [ ] Broaden reusable control adoption in editor surfaces. Status: active/open; controls exist in `domain/ui/*`, but shell surfaces still contain panel-specific composition and some ad hoc row/button patterns where retained tree/table/numeric/toggle/select controls should become the default.
 - [ ] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard coverage exists in `apps/runenwerk_editor/tests/viewport_architecture_guards.rs` and related shell/provider tests.
-- [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: closeout candidate implemented and validated as of 2026-05-06; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, normal shell chrome formation, and console surface formation exist. Remaining richer provider surface migrations are follow-up work bounded by provider-semantics preservation.
+- [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, toolbar popup binding data, normal shell chrome formation, and common provider surface fixture formation exist. Provider behavior remains outside `ui_definition`.
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
-- [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-05.
+- [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-08.
 
 ## Non-Goals for This Track
 

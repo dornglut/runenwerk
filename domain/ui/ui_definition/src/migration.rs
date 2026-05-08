@@ -82,6 +82,7 @@ mod tests {
                 root: UiNodeDefinition::Label {
                     id: UiNodeId::from("root"),
                     label: UiValueBinding::static_text("Root"),
+                    availability: None,
                 },
                 templates: Vec::new(),
                 menus: Vec::new(),
@@ -106,6 +107,7 @@ mod tests {
                 root: UiNodeDefinition::Label {
                     id: UiNodeId::from("root"),
                     label: UiValueBinding::static_text("Root"),
+                    availability: None,
                 },
                 templates: Vec::new(),
                 menus: Vec::new(),

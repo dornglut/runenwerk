@@ -1,7 +1,7 @@
-use engine::WindowState;
 use glam::{Vec3, vec3};
-use runenwerk_editor::runtime::resources::{
-    EditorViewportRenderState, EditorViewportSceneProductUniform,
+use runenwerk_editor::runtime::resources::EditorViewportSceneProductUniform;
+use runenwerk_editor::runtime::viewport::{
+    ViewportRenderStateResource, expression_dimensions_for_bounds,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,15 +18,17 @@ fn viewport_branch_truth_smoke() {
         .run_for_frames(2)
         .expect("headless editor app should run");
 
-    let window = app
+    let viewport_states = app
         .world()
-        .resource::<WindowState>()
-        .expect("window state should exist");
-    let viewport_state = app
-        .world()
-        .resource::<EditorViewportRenderState>()
-        .expect("viewport render state should exist");
-    let surface = (window.size_px.0.max(1), window.size_px.1.max(1));
+        .resource::<ViewportRenderStateResource>()
+        .expect("viewport render state registry should exist");
+    let viewport_state = viewport_states
+        .entries()
+        .next()
+        .expect("headless startup should produce viewport-owned render state");
+    let dimensions = expression_dimensions_for_bounds(viewport_state.bounds);
+    let surface = (dimensions.width.max(1), dimensions.height.max(1));
+    let viewport_state = &viewport_state.render_state;
     let snapshot = viewport_state.branch_trace_snapshot(surface);
     let uniform = viewport_state.compose_scene_product_uniform(surface);
 

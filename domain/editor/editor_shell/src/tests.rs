@@ -1,19 +1,22 @@
 use std::collections::BTreeMap;
 
-use editor_core::EntityId;
+use editor_core::{ComponentTypeId, EntityId};
+use ui_input::{Key, KeyState, KeyboardEvent, Modifiers, TextInputEvent};
 use ui_theme::ThemeTokens;
 
 use crate::{
-    ActiveTabStackPopupMenu, EditorShellFrameModel, PanelInstanceId, PanelKind,
-    ResolvedSurfaceFrame, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
-    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
-    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
-    UiInteraction, UiInteractionResults, WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation,
-    WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame, label,
-    map_interactions_to_shell_commands, reduce_workspace, tab_close_button_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_switch_surface_button_widget_id,
-    tool_surface_definition_id, toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
+    ActiveTabStackPopupMenu, EditorShellFrameModel, EntityTableComponentFilter,
+    EntityTableHierarchyFilter, EntityTableSurfaceAction, InspectorSurfaceAction,
+    OutlinerSurfaceAction, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, ShellCommand,
+    SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
+    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
+    ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
+    WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
+    build_editor_shell_frame, label, map_interactions_to_shell_commands, reduce_workspace,
+    tab_close_button_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_switch_surface_button_widget_id, tool_surface_definition_id,
+    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
 
 #[test]
@@ -116,7 +119,6 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                 )),
                 UiInteraction::Activated(crate::TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID),
                 UiInteraction::Activated(crate::TOOLBAR_ADD_WORKSPACE_WIDGET_ID),
-                UiInteraction::Activated(crate::toolbar_menu_item_widget_id(6)),
             ],
         },
         &build.projection_artifacts,
@@ -144,10 +146,39 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
             ShellCommand::ToggleToolbarMenu {
                 menu: crate::ToolbarMenuKind::Workspace,
             },
-            ShellCommand::SwitchWorkspaceProfile {
-                profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-            },
         ]
+    );
+
+    let workspace_menu_frame_model = EditorShellFrameModel::new(
+        ToolbarViewModel {
+            buttons: vec![ToolbarButtonViewModel {
+                id: editor_core::ToolId(3_004),
+                stable_name: "workspace_plus",
+                label: "+".to_string(),
+                is_active: true,
+                enabled: true,
+            }],
+        },
+        BTreeMap::new(),
+    );
+    let workspace_menu_build = build_editor_shell_frame(
+        &workspace_menu_frame_model,
+        &ThemeTokens::default(),
+        &workspace,
+    );
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::Activated(
+                crate::toolbar_menu_item_widget_id(2),
+            )],
+        },
+        &workspace_menu_build.projection_artifacts,
+    );
+    assert_eq!(
+        commands,
+        vec![ShellCommand::SwitchWorkspaceProfile {
+            profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+        }]
     );
 }
 
@@ -332,9 +363,9 @@ fn provider_route_activation_maps_to_surface_local_dispatch_command() {
         &workspace,
         surface_id,
         WidgetId(50_000),
-        SurfaceLocalAction::SelectOutlinerEntity {
+        SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectEntity {
             entity: EntityId(42),
-        },
+        }),
     );
 
     let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
@@ -351,7 +382,7 @@ fn provider_route_activation_maps_to_surface_local_dispatch_command() {
             provider_id,
             tool_surface_instance_id,
             target,
-            action: SurfaceLocalAction::SelectOutlinerEntity { entity },
+            action: SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectEntity { entity }),
             projection_epoch,
         }] if *provider_id == SurfaceProviderId::try_from_raw(77).unwrap()
             && *tool_surface_instance_id == surface_id
@@ -370,9 +401,9 @@ fn provider_route_rejects_mismatched_structural_context() {
         &workspace,
         surface_id,
         WidgetId(50_001),
-        SurfaceLocalAction::SelectOutlinerEntity {
+        SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectEntity {
             entity: EntityId(42),
-        },
+        }),
     );
     let mut build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
     build
@@ -395,6 +426,213 @@ fn provider_route_rejects_mismatched_structural_context() {
     );
 
     assert_eq!(commands, vec![ShellCommand::NoOp]);
+}
+
+#[test]
+fn surface_text_and_keyboard_input_map_to_typed_entity_table_actions() {
+    let widget_id = WidgetId(50_100);
+    let actions = mapped_surface_actions_for_route(
+        PanelKind::EntityTable,
+        widget_id,
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::AppendSearchText {
+            text: String::new(),
+        }),
+        vec![
+            UiInteraction::TextInput {
+                target: widget_id,
+                event: TextInputEvent {
+                    text: "alpha".to_string(),
+                },
+            },
+            UiInteraction::KeyboardInput {
+                target: widget_id,
+                event: keyboard_event(Key::Backspace),
+            },
+        ],
+    );
+
+    assert_eq!(
+        actions,
+        vec![
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::AppendSearchText {
+                text: "alpha".to_string(),
+            }),
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::BackspaceSearch),
+        ]
+    );
+}
+
+#[test]
+fn surface_toggle_select_and_table_row_input_map_to_typed_entity_table_actions() {
+    let selected_only_actions = mapped_surface_actions_for_route(
+        PanelKind::EntityTable,
+        WidgetId(50_110),
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetSelectedOnly {
+            selected_only: false,
+        }),
+        vec![UiInteraction::Toggled {
+            target: WidgetId(50_110),
+            checked: true,
+        }],
+    );
+    assert_eq!(
+        selected_only_actions,
+        vec![SurfaceLocalAction::EntityTable(
+            EntityTableSurfaceAction::SetSelectedOnly {
+                selected_only: true,
+            }
+        )]
+    );
+
+    let roots_only_actions = mapped_surface_actions_for_route(
+        PanelKind::EntityTable,
+        WidgetId(50_111),
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetHierarchyFilter {
+            filter: EntityTableHierarchyFilter::All,
+        }),
+        vec![UiInteraction::Toggled {
+            target: WidgetId(50_111),
+            checked: true,
+        }],
+    );
+    assert_eq!(
+        roots_only_actions,
+        vec![SurfaceLocalAction::EntityTable(
+            EntityTableSurfaceAction::SetHierarchyFilter {
+                filter: EntityTableHierarchyFilter::RootsOnly,
+            }
+        )]
+    );
+
+    let component_filter = EntityTableComponentFilter::Has(ComponentTypeId(9));
+    let select_actions = mapped_surface_actions_for_route(
+        PanelKind::EntityTable,
+        WidgetId(50_112),
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectComponentFilter {
+            filters: vec![EntityTableComponentFilter::All, component_filter],
+        }),
+        vec![UiInteraction::SelectChanged {
+            target: WidgetId(50_112),
+            index: 1,
+        }],
+    );
+    assert_eq!(
+        select_actions,
+        vec![SurfaceLocalAction::EntityTable(
+            EntityTableSurfaceAction::SetComponentFilter {
+                filter: component_filter,
+            }
+        )]
+    );
+
+    let row_actions = mapped_surface_actions_for_route(
+        PanelKind::EntityTable,
+        WidgetId(50_113),
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectRow {
+            entities: vec![EntityId(7), EntityId(8)],
+        }),
+        vec![UiInteraction::TableRowSelected {
+            target: WidgetId(50_113),
+            row_index: 1,
+        }],
+    );
+    assert_eq!(
+        row_actions,
+        vec![SurfaceLocalAction::EntityTable(
+            EntityTableSurfaceAction::SelectEntity {
+                entity: EntityId(8),
+            }
+        )]
+    );
+}
+
+#[test]
+fn surface_text_keyboard_toggle_and_numeric_input_map_to_typed_inspector_actions() {
+    let text_widget_id = WidgetId(50_120);
+    let text_actions = mapped_surface_actions_for_route(
+        PanelKind::Inspector,
+        text_widget_id,
+        SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText {
+            index: 3,
+            text: String::new(),
+        }),
+        vec![
+            UiInteraction::TextInput {
+                target: text_widget_id,
+                event: TextInputEvent {
+                    text: "Beta".to_string(),
+                },
+            },
+            UiInteraction::KeyboardInput {
+                target: text_widget_id,
+                event: keyboard_event(Key::Backspace),
+            },
+            UiInteraction::KeyboardInput {
+                target: text_widget_id,
+                event: keyboard_event(Key::Enter),
+            },
+            UiInteraction::KeyboardInput {
+                target: text_widget_id,
+                event: keyboard_event(Key::Escape),
+            },
+        ],
+    );
+    assert_eq!(
+        text_actions,
+        vec![
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText {
+                index: 3,
+                text: "Beta".to_string(),
+            }),
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::BackspaceFieldText { index: 3 }),
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::CommitFieldText { index: 3 }),
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::CancelFieldText { index: 3 }),
+        ]
+    );
+
+    let bool_actions = mapped_surface_actions_for_route(
+        PanelKind::Inspector,
+        WidgetId(50_121),
+        SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldBool {
+            index: 4,
+            value: false,
+        }),
+        vec![UiInteraction::Toggled {
+            target: WidgetId(50_121),
+            checked: true,
+        }],
+    );
+    assert_eq!(
+        bool_actions,
+        vec![SurfaceLocalAction::Inspector(
+            InspectorSurfaceAction::SetFieldBool {
+                index: 4,
+                value: true,
+            }
+        )]
+    );
+
+    let numeric_actions = mapped_surface_actions_for_route(
+        PanelKind::Inspector,
+        WidgetId(50_122),
+        SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldNumber {
+            index: 5,
+            value: 0.0,
+        }),
+        vec![UiInteraction::NumericStepped {
+            target: WidgetId(50_122),
+            value: 12.5,
+        }],
+    );
+    assert_eq!(
+        numeric_actions,
+        vec![SurfaceLocalAction::Inspector(
+            InspectorSurfaceAction::SetFieldNumber {
+                index: 5,
+                value: 12.5,
+            }
+        )]
+    );
 }
 
 #[test]
@@ -607,6 +845,39 @@ fn frame_model_with_surface_route(
         ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
     );
     frame_model
+}
+
+fn mapped_surface_actions_for_route(
+    panel_kind: PanelKind,
+    widget_id: WidgetId,
+    action: SurfaceLocalAction,
+    interactions: Vec<UiInteraction>,
+) -> Vec<SurfaceLocalAction> {
+    let workspace = sample_workspace_state();
+    let (_, surface_id) = panel_and_surface_by_kind(&workspace, panel_kind);
+    let frame_model = frame_model_with_surface_route(&workspace, surface_id, widget_id, action);
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+
+    map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: interactions,
+        },
+        &build.projection_artifacts,
+    )
+    .into_iter()
+    .map(|command| match command {
+        ShellCommand::DispatchSurfaceLocalAction { action, .. } => action,
+        other => panic!("expected surface dispatch command, got {other:?}"),
+    })
+    .collect()
+}
+
+fn keyboard_event(key: Key) -> KeyboardEvent {
+    KeyboardEvent {
+        key,
+        state: KeyState::Pressed,
+        modifiers: Modifiers::default(),
+    }
 }
 
 fn frame_model_with_only_surface(

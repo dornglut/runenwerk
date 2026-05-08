@@ -1,5 +1,6 @@
 pub mod applied_editor_definition;
 pub mod controller;
+pub mod dispatch;
 pub mod dispatch_shell_command;
 pub mod providers;
 pub mod self_authoring;

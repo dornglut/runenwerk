@@ -1,11 +1,12 @@
 //! File: domain/editor/editor_shell/src/composition/build_viewport_panel.rs
 //! Purpose: Compose viewport panel widgets.
 
-use crate::{
-    UiNode, button_selected, hstack_with_policies, label, panel, viewport_surface_embed,
-    vstack_with_policies,
+use crate::{UiNode, button_selected, hstack_with_policies, label};
+use editor_viewport::{ViewportDebugStage, ViewportSurfacePresentationSlot};
+use ui_definition::{
+    AuthoredUiNodePath, AuthoredUiTemplate, UiDefinitionContext, form_retained_ui,
+    normalize_authored_template,
 };
-use editor_viewport::ViewportSurfacePresentationSlot;
 use ui_layout::SizePolicy;
 use ui_text::FontId;
 use ui_theme::{ThemeTokens, UiColor};
@@ -17,10 +18,14 @@ use crate::{
     VIEWPORT_CHROME_CONTENT_WIDGET_ID, VIEWPORT_CHROME_WIDGET_ID, VIEWPORT_DETAILS_LABEL_WIDGET_ID,
     VIEWPORT_DETAILS_PANEL_WIDGET_ID, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
     VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
+    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
     VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
     VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID, ViewportViewModel,
-    viewport_embed_slot_for,
+    viewport_debug_stage_button_widget_id, viewport_embed_slot_for,
 };
+
+const VIEWPORT_TEMPLATE_RON: &str =
+    include_str!("../../../../../assets/editor/ui/surfaces/viewport.ron");
 
 pub fn build_viewport_panel(
     view_model: &ViewportViewModel,
@@ -28,35 +33,114 @@ pub fn build_viewport_panel(
     _panel_instance_id: PanelInstanceId,
     _active_tool_surface: Option<ToolSurfaceInstanceId>,
 ) -> UiNode {
-    let viewport_children = view_model
-        .viewport_id
-        .map(|viewport_id| {
-            vec![viewport_surface_embed(
-                VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-                viewport_id.0,
-                viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
-            )]
-        })
-        .unwrap_or_default();
-    let viewport_child_policies = if viewport_children.is_empty() {
-        Vec::new()
-    } else {
-        vec![SizePolicy::flex(1.0)]
-    };
-    let canvas_content = vstack_with_policies(
-        VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
-        theme.spacing.xs,
-        viewport_child_policies,
-        viewport_children,
+    let template: AuthoredUiTemplate =
+        ron::from_str(VIEWPORT_TEMPLATE_RON).expect("checked-in viewport UI fixture must parse");
+    let normalized = normalize_authored_template(template);
+    let mut context = UiDefinitionContext::new(theme.clone());
+    register_viewport_widget_ids(&mut context);
+    context.embed_slots.insert(
+        "viewport.expression_product".into(),
+        viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary).raw(),
     );
-    let mut canvas_theme = theme.clone();
-    canvas_theme.background_panel = UiColor::new(
-        theme.background_panel.r,
-        theme.background_panel.g,
-        theme.background_panel.b,
-        0.0,
-    );
-    canvas_theme.border = UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.70);
+
+    let mut root = form_retained_ui(&normalized, &mut context).root;
+    polish_viewport_base(&mut root, view_model, theme);
+    inject_viewport_overlays(&mut root, view_model, theme);
+    root
+}
+
+fn register_viewport_widget_ids(context: &mut UiDefinitionContext) {
+    for (path, widget_id) in [
+        ("root", VIEWPORT_PANEL_WIDGET_ID),
+        ("root/body", VIEWPORT_BODY_WIDGET_ID),
+        ("root/body/canvas", VIEWPORT_CANVAS_WIDGET_ID),
+        (
+            "root/body/canvas/canvas_content",
+            VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
+        ),
+        (
+            "root/body/canvas/canvas_content/viewport_canvas",
+            VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        ),
+    ] {
+        context
+            .widget_ids_by_path
+            .insert(AuthoredUiNodePath(path.to_string()), widget_id);
+    }
+}
+
+fn polish_viewport_base(root: &mut UiNode, view_model: &ViewportViewModel, theme: &ThemeTokens) {
+    if let UiNodeKind::Panel(panel) = &mut root.kind {
+        panel.theme.background_panel = UiColor::new(
+            theme.background_panel.r,
+            theme.background_panel.g,
+            theme.background_panel.b,
+            0.0,
+        );
+        panel.theme.border = UiColor::new(
+            (theme.border.r + 0.05).clamp(0.0, 1.0),
+            (theme.border.g + 0.06).clamp(0.0, 1.0),
+            (theme.border.b + 0.09).clamp(0.0, 1.0),
+            0.95,
+        );
+    }
+    if let Some(body) = find_node_mut(root, VIEWPORT_BODY_WIDGET_ID)
+        && let UiNodeKind::Stack(stack) = &mut body.kind
+    {
+        stack.gap = 0.0;
+        stack.child_main_policies = vec![SizePolicy::flex(1.0)];
+    }
+    if let Some(canvas) = find_node_mut(root, VIEWPORT_CANVAS_WIDGET_ID)
+        && let UiNodeKind::Panel(panel) = &mut canvas.kind
+    {
+        panel.theme.background_panel = UiColor::new(
+            theme.background_panel.r,
+            theme.background_panel.g,
+            theme.background_panel.b,
+            0.0,
+        );
+        panel.theme.border = UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.70);
+    }
+    if let Some(content) = find_node_mut(root, VIEWPORT_CANVAS_CONTENT_WIDGET_ID) {
+        if let UiNodeKind::Stack(stack) = &mut content.kind {
+            stack.child_main_policies = if view_model.viewport_id.is_some() {
+                vec![SizePolicy::flex(1.0)]
+            } else {
+                Vec::new()
+            };
+        }
+        if view_model.viewport_id.is_none() {
+            content
+                .children
+                .retain(|child| child.id != VIEWPORT_SURFACE_EMBED_WIDGET_ID);
+        }
+    }
+    if let Some(embed) = find_node_mut(root, VIEWPORT_SURFACE_EMBED_WIDGET_ID)
+        && let UiNodeKind::ViewportSurfaceEmbed(embed) = &mut embed.kind
+        && let Some(viewport_id) = view_model.viewport_id
+    {
+        embed.viewport_id = viewport_id.0;
+    }
+}
+
+fn inject_viewport_overlays(
+    root: &mut UiNode,
+    view_model: &ViewportViewModel,
+    theme: &ThemeTokens,
+) {
+    let mut overlay_children = vec![viewport_chrome_overlay(view_model, theme)];
+    if let Some(options_popup) = viewport_options_popup(view_model, theme) {
+        overlay_children.push(options_popup);
+    }
+    if let Some(status_overlay) = viewport_status_overlay(view_model, theme) {
+        overlay_children.push(status_overlay);
+    }
+    if let Some(canvas) = find_node_mut(root, VIEWPORT_CANVAS_WIDGET_ID) {
+        canvas.children.extend(overlay_children);
+    }
+}
+
+fn viewport_chrome_overlay(view_model: &ViewportViewModel, theme: &ThemeTokens) -> UiNode {
     let chrome = hstack_with_policies(
         VIEWPORT_CHROME_CONTENT_WIDGET_ID,
         theme.spacing.xs,
@@ -70,16 +154,18 @@ pub fn build_viewport_panel(
         )],
     );
 
-    let chrome_overlay = UiNode::with_children(
+    UiNode::with_children(
         VIEWPORT_CHROME_WIDGET_ID,
         UiNodeKind::Popup(PopupNode::anchored_top_start(
             VIEWPORT_CANVAS_WIDGET_ID,
             transparent_panel_theme(theme, 0.0),
         )),
         vec![chrome],
-    );
+    )
+}
 
-    let options_popup = view_model.options_menu_open.then(|| {
+fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -> Option<UiNode> {
+    view_model.options_menu_open.then(|| {
         let mut popup_theme = theme.clone();
         popup_theme.background_panel = UiColor::new(
             theme.background_panel.r,
@@ -87,40 +173,72 @@ pub fn build_viewport_panel(
             theme.background_panel.b,
             0.96,
         );
+        let mut items = vec![
+            button_selected(
+                VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+                if view_model.details_visible {
+                    "Details [x]"
+                } else {
+                    "Details [ ]"
+                },
+                theme.body_small_text_style(FontId(1)),
+                theme.clone(),
+                view_model.details_visible,
+            ),
+            button_selected(
+                VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
+                if view_model.statistics_visible {
+                    "Statistics [x]"
+                } else {
+                    "Statistics [ ]"
+                },
+                theme.body_small_text_style(FontId(1)),
+                theme.clone(),
+                view_model.statistics_visible,
+            ),
+        ];
+        if view_model.viewport_id.is_some() {
+            items.push(button_selected(
+                VIEWPORT_RESET_CAMERA_WIDGET_ID,
+                "Reset Camera",
+                theme.body_small_text_style(FontId(1)),
+                theme.clone(),
+                false,
+            ));
+            items.push(button_selected(
+                VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
+                if view_model.root_background_opaque {
+                    "Opaque Root [x]"
+                } else {
+                    "Opaque Root [ ]"
+                },
+                theme.body_small_text_style(FontId(1)),
+                theme.clone(),
+                view_model.root_background_opaque,
+            ));
+            for (index, stage) in ViewportDebugStage::ALL.into_iter().enumerate() {
+                items.push(button_selected(
+                    viewport_debug_stage_button_widget_id(index),
+                    format!("Debug {}", stage.display_label()),
+                    theme.body_small_text_style(FontId(1)),
+                    theme.clone(),
+                    view_model.debug_stage == stage,
+                ));
+            }
+        }
         UiNode::with_children(
             VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
             UiNodeKind::Popup(PopupNode::anchored_bottom_start(
                 VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
                 popup_theme,
             )),
-            vec![
-                button_selected(
-                    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-                    if view_model.details_visible {
-                        "Details [x]"
-                    } else {
-                        "Details [ ]"
-                    },
-                    theme.body_small_text_style(FontId(1)),
-                    theme.clone(),
-                    view_model.details_visible,
-                ),
-                button_selected(
-                    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
-                    if view_model.statistics_visible {
-                        "Statistics [x]"
-                    } else {
-                        "Statistics [ ]"
-                    },
-                    theme.body_small_text_style(FontId(1)),
-                    theme.clone(),
-                    view_model.statistics_visible,
-                ),
-            ],
+            items,
         )
-    });
+    })
+}
 
-    let status_overlay = (view_model.details_visible || view_model.statistics_visible).then(|| {
+fn viewport_status_overlay(view_model: &ViewportViewModel, theme: &ThemeTokens) -> Option<UiNode> {
+    (view_model.details_visible || view_model.statistics_visible).then(|| {
         let mut overlay_items = Vec::new();
         if view_model.details_visible {
             overlay_items.push(label(
@@ -149,41 +267,7 @@ pub fn build_viewport_panel(
                 overlay_items,
             )],
         )
-    });
-
-    let mut overlay_children = vec![chrome_overlay];
-    if let Some(options_popup) = options_popup {
-        overlay_children.push(options_popup);
-    }
-    if let Some(status_overlay) = status_overlay {
-        overlay_children.push(status_overlay);
-    }
-
-    let mut canvas_children = vec![canvas_content];
-    canvas_children.extend(overlay_children);
-    let canvas_panel = panel(VIEWPORT_CANVAS_WIDGET_ID, canvas_theme, canvas_children);
-
-    let body = vstack_with_policies(
-        VIEWPORT_BODY_WIDGET_ID,
-        0.0,
-        vec![SizePolicy::flex(1.0)],
-        vec![canvas_panel],
-    );
-
-    let mut viewport_theme = theme.clone();
-    viewport_theme.background_panel = UiColor::new(
-        theme.background_panel.r,
-        theme.background_panel.g,
-        theme.background_panel.b,
-        0.0,
-    );
-    viewport_theme.border = UiColor::new(
-        (theme.border.r + 0.05).clamp(0.0, 1.0),
-        (theme.border.g + 0.06).clamp(0.0, 1.0),
-        (theme.border.b + 0.09).clamp(0.0, 1.0),
-        0.95,
-    );
-    panel(VIEWPORT_PANEL_WIDGET_ID, viewport_theme, vec![body])
+    })
 }
 
 fn transparent_panel_theme(theme: &ThemeTokens, alpha: f32) -> ThemeTokens {
@@ -215,6 +299,18 @@ fn viewport_statistics_text(view_model: &ViewportViewModel) -> String {
         "Statistics: drag={} preview={}",
         view_model.drag_in_progress, view_model.preview_active
     )
+}
+
+fn find_node_mut(node: &mut UiNode, widget_id: crate::WidgetId) -> Option<&mut UiNode> {
+    if node.id == widget_id {
+        return Some(node);
+    }
+    for child in &mut node.children {
+        if let Some(found) = find_node_mut(child, widget_id) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

@@ -587,15 +587,20 @@ fn editor_frame_submission_runs_after_input_bridge() {
     let plugin = include_str!("../src/runtime/plugin.rs");
 
     assert!(
-        plugin.contains("submit_editor_frame_system")
+        plugin.contains("sync_viewport_instances_system")
             && plugin.contains(".after(EditorRuntimeSet::InputBridge)"),
-        "editor frame submission must consume the same-frame split/input layout mutations before product targets are prepared",
+        "viewport lifecycle must consume the same-frame split/input layout mutations before frame projection",
+    );
+    assert!(
+        plugin.contains("submit_editor_frame_system")
+            && plugin.contains(".after(EditorRuntimeSet::ViewportLifecycle)"),
+        "editor frame submission must consume resolved viewport lifecycle before product targets are prepared",
     );
 }
 
 #[test]
 fn viewport_details_dispatch_has_no_first_active_viewport_fallback() {
-    let dispatcher = include_str!("../src/shell/dispatch_shell_command.rs");
+    let dispatcher = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/viewport.rs");
     let providers = provider_sources();
     let shell_command =
         include_str!("../../../domain/editor/editor_shell/src/commands/shell_command.rs");
@@ -609,8 +614,9 @@ fn viewport_details_dispatch_has_no_first_active_viewport_fallback() {
         "viewport details dispatch must not map from viewport kind to an arbitrary active surface",
     );
     assert!(
-        shell_command.contains("ToggleViewportDetails {\n        target: StructuralCommandTarget"),
-        "viewport details command must carry structural ToolSurfaceInstanceId context",
+        shell_command.contains("ApplySurfaceSessionMutation")
+            && dispatcher.contains("ViewportSessionMutation::ToggleDetails"),
+        "viewport details command must route through the generic surface-session mutation wrapper",
     );
     assert!(
         dispatcher.contains("target.active_tool_surface"),
@@ -621,12 +627,13 @@ fn viewport_details_dispatch_has_no_first_active_viewport_fallback() {
         "viewport details mutation must update the routed surface session",
     );
     assert!(
-        providers.contains("SurfaceLocalAction::ToggleViewportDetails"),
+        providers.contains("SurfaceLocalAction::Viewport")
+            && providers.contains("ViewportSurfaceAction::ToggleDetails"),
         "viewport provider must emit a provider-local details-toggle action",
     );
     assert!(
         providers.contains("VIEWPORT_DETAILS_TOGGLE_WIDGET_ID")
-            && !providers.contains("VIEWPORT_PANEL_WIDGET_ID,\n            SurfaceLocalRoute::new(SurfaceLocalAction::ToggleViewportDetails)"),
+            && !providers.contains("VIEWPORT_PANEL_WIDGET_ID,\n            SurfaceLocalRoute::new(SurfaceLocalAction::Viewport"),
         "viewport details route must be attached to the dedicated details-toggle widget id",
     );
 }
@@ -760,14 +767,15 @@ fn viewport_provider_does_not_use_viewport_id_zero_fallback() {
 
 #[test]
 fn viewport_product_selection_routes_through_surface_presentation_and_ratification() {
-    let dispatch_shell_command = include_str!("../src/shell/dispatch_shell_command.rs");
+    let viewport_dispatch =
+        read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/viewport.rs");
 
     assert!(
-        dispatch_shell_command.contains("SurfacePresentationModel"),
+        viewport_dispatch.contains("SurfacePresentationModel"),
         "viewport product command path should build from a prepared surface presentation model",
     );
     assert!(
-        dispatch_shell_command.contains("ratify_surface_intent"),
+        viewport_dispatch.contains("ratify_surface_intent"),
         "viewport product command path should route mutation through a ratification adapter",
     );
 }
@@ -888,7 +896,8 @@ fn rb7_editor_frame_submit_does_not_seed_or_extract_viewport_product_lifecycle()
 
 #[test]
 fn outliner_selection_routes_through_surface_presentation_and_ratification() {
-    let dispatch_shell_command = include_str!("../src/shell/dispatch_shell_command.rs");
+    let dispatch_shell_command =
+        read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/outliner.rs");
 
     assert!(
         dispatch_shell_command.contains("build_outliner_surface_presentation_model"),
@@ -906,7 +915,8 @@ fn outliner_selection_routes_through_surface_presentation_and_ratification() {
 
 #[test]
 fn inspector_activation_routes_through_surface_presentation_and_ratification() {
-    let dispatch_shell_command = include_str!("../src/shell/dispatch_shell_command.rs");
+    let dispatch_shell_command =
+        read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/inspector.rs");
 
     assert!(
         dispatch_shell_command.contains("build_inspector_surface_presentation_model"),
@@ -919,6 +929,66 @@ fn inspector_activation_routes_through_surface_presentation_and_ratification() {
     assert!(
         dispatch_shell_command.contains("InspectorFieldActivationRatificationAdapter"),
         "inspector activation should ratify through adapter boundary, not direct mutation shortcut",
+    );
+}
+
+#[test]
+fn surface_dispatch_facade_delegates_to_surface_handlers() {
+    let facade = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch_shell_command.rs");
+    let handlers = [
+        "apps/runenwerk_editor/src/shell/dispatch/outliner.rs",
+        "apps/runenwerk_editor/src/shell/dispatch/entity_table.rs",
+        "apps/runenwerk_editor/src/shell/dispatch/inspector.rs",
+        "apps/runenwerk_editor/src/shell/dispatch/viewport.rs",
+    ];
+
+    assert!(
+        facade.contains("ShellCommand::ApplySurfaceSessionMutation")
+            && facade.contains("ShellCommand::ApplyEditorDomainMutation")
+            && facade.contains("dispatch_surface_session_mutation")
+            && facade.contains("dispatch_editor_domain_mutation"),
+        "surface command facade must delegate through the typed generic wrappers",
+    );
+    for forbidden in [
+        "ShellCommand::SelectEntityTableEntity",
+        "ShellCommand::ToggleEntityTableSort",
+        "ShellCommand::SelectOutlinerEntity",
+        "ShellCommand::SelectViewportProduct",
+        "ShellCommand::ToggleViewportDetails",
+        "ShellCommand::ActivateInspectorField",
+        "ShellCommand::AppendInspectorFieldText",
+    ] {
+        assert!(
+            !facade.contains(forbidden),
+            "surface-specific command branch must not remain in dispatch facade: {forbidden}",
+        );
+    }
+    for path in handlers {
+        let source = read_workspace_source(path);
+        assert!(
+            source.contains("dispatch_"),
+            "surface handler '{path}' must own concrete dispatch behavior",
+        );
+    }
+}
+
+#[test]
+fn ui_definition_does_not_import_editor_provider_behavior() {
+    let sources = read_workspace_source_tree("domain/ui/ui_definition/src");
+    let forbidden_terms = [
+        "RunenwerkEditorApp",
+        "SurfaceLocalAction",
+        "SurfaceSessionMutation",
+        "EditorDomainMutation",
+        "EntityTableSurfaceAction",
+        "InspectorSurfaceAction",
+        "ViewportSurfaceAction",
+        "OutlinerSurfaceAction",
+    ];
+    let offenders = forbidden_source_markers(&sources, &forbidden_terms);
+    assert!(
+        offenders.is_empty(),
+        "ui_definition must stay generic and provider-behavior free: {offenders:?}",
     );
 }
 

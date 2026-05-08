@@ -3,24 +3,33 @@ use std::collections::{BTreeMap, BTreeSet};
 use editor_core::{DocumentKind, EditorMutationError, EntityId, RealityVersion};
 use editor_inspector::InspectorValue;
 use editor_shell::{
-    ConsoleViewModel, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID,
-    EditorDomainMutation, EditorShellFrameModel, EntityTableRowViewModel, EntityTableSortKey,
-    EntityTableViewModel, InspectorFieldViewModel, InspectorObservationFrame,
-    InspectorObservedField, InspectorObservedTarget, InspectorTargetViewModel, InspectorViewModel,
-    ObservationConsumerKind, ObservationFrameMetadata, ObservationSourceReality,
-    OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel, OutlinerViewModel,
-    ResolvedSurfaceFrame, ShellCommand, SurfaceCommandProposal, SurfaceDocumentContext,
-    SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
+    ConsoleViewModel, ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
+    ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID, ENTITY_TABLE_LIST_WIDGET_ID,
+    ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID,
+    ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID, EditorDefinitionSurfaceAction,
+    EditorDomainMutation, EditorShellFrameModel, EntityTableDomainMutation,
+    EntityTableRowViewModel, EntityTableSessionMutation, EntityTableSortKey,
+    EntityTableSurfaceAction, EntityTableViewModel, InspectorFieldControlKind,
+    InspectorFieldViewModel, InspectorObservationFrame, InspectorObservedField,
+    InspectorObservedTarget, InspectorSessionMutation, InspectorSurfaceAction,
+    InspectorTargetViewModel, InspectorViewModel, ObservationConsumerKind,
+    ObservationFrameMetadata, ObservationSourceReality, OutlinerDomainMutation,
+    OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel, OutlinerSurfaceAction,
+    OutlinerViewModel, ResolvedSurfaceFrame, ShellCommand, SurfaceCommandProposal,
+    SurfaceDocumentContext, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
     SurfacePresentationArtifactKind, SurfaceProviderAvailability, SurfaceProviderDescriptor,
     SurfaceProviderDiagnostic, SurfaceProviderId, SurfaceProviderPriority, SurfaceProviderRequest,
     SurfaceRouteTable, SurfaceSessionMutation, ToolSurfaceInstanceId, ToolSurfaceKind,
     VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
-    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, ViewportObservationFrame, ViewportProductChoiceViewModel,
-    ViewportProductObservation, ViewportViewModel, build_console_panel, build_entity_table_panel,
+    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
+    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
+    ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
+    ViewportSurfaceAction, ViewportViewModel, build_console_panel, build_entity_table_panel,
     build_inspector_panel, build_outliner_panel, build_viewport_panel, editor_domain_proposal,
     entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
     outliner_row_widget_id, surface_session_proposal, tool_surface_capability_set,
-    tool_surface_definition_id, viewport_product_button_widget_id,
+    tool_surface_definition_id, viewport_debug_stage_button_widget_id,
+    viewport_product_button_widget_id,
 };
 use editor_viewport::{ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState};
 use ui_text::FontId;
@@ -33,6 +42,7 @@ use crate::editor_panels::{
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportInstanceRegistryResource,
 };
 use crate::shell::toolbar_adapter::{build_toolbar_observation_frame, build_toolbar_view_model};
 use crate::shell::{RunenwerkEditorShellState, SurfaceSessionState};
@@ -57,6 +67,7 @@ pub struct SurfaceProviderBuildContext<'a> {
     pub theme: &'a ThemeTokens,
     pub viewport_observations: Option<&'a ViewportArtifactObservationResource>,
     pub tool_surface_bindings: Option<&'a ToolSurfaceRuntimeBindingRegistryResource>,
+    pub viewport_instances: Option<&'a ViewportInstanceRegistryResource>,
 }
 
 pub struct SurfaceProviderDispatchContext<'a> {
@@ -219,6 +230,7 @@ pub fn build_editor_shell_frame_model(
     theme: &ThemeTokens,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
     tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    viewport_instances: Option<&ViewportInstanceRegistryResource>,
 ) -> EditorShellFrameModel {
     let scene_version = app.runtime().current_scene_reality_version();
     let session = app.runtime().session_reality();
@@ -240,6 +252,7 @@ pub fn build_editor_shell_frame_model(
         theme,
         viewport_observations,
         tool_surface_bindings,
+        viewport_instances,
     };
     let document_context = active_document_context(app);
     let mut surfaces = BTreeMap::new();
@@ -346,9 +359,11 @@ fn build_outliner_view_model(frame: &OutlinerObservationFrame) -> OutlinerViewMo
 
 fn build_entity_table_view_model(state: &EntityTablePanelState) -> EntityTableViewModel {
     EntityTableViewModel {
+        query: state.query.clone(),
         search_query: state.search_query.clone(),
         sort_key: state.sort_key,
         sort_ascending: state.sort_ascending,
+        component_filters: state.component_filters.clone(),
         rows: state
             .rows
             .iter()
@@ -376,6 +391,8 @@ fn build_viewport_observation_frame(
     details_visible: bool,
     statistics_visible: bool,
     options_menu_open: bool,
+    debug_stage: editor_viewport::ViewportDebugStage,
+    root_background_opaque: bool,
     selected_entity: Option<EntityId>,
     drag_in_progress: bool,
     tool_state: ViewportToolState,
@@ -430,6 +447,8 @@ fn build_viewport_observation_frame(
         details_visible,
         statistics_visible,
         options_menu_open,
+        debug_stage,
+        root_background_opaque,
         selected_entity,
         hovered_entity: tool_state.hovered_entity,
         drag_in_progress,
@@ -458,6 +477,8 @@ fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportViewMo
         details_visible: frame.details_visible,
         statistics_visible: frame.statistics_visible,
         options_menu_open: frame.options_menu_open,
+        debug_stage: frame.debug_stage,
+        root_background_opaque: frame.root_background_opaque,
         selected_entity: frame.selected_entity,
         hovered_entity: frame.hovered_entity,
         drag_in_progress: frame.drag_in_progress,
@@ -502,6 +523,7 @@ fn build_inspector_observation_frame(
                         } else {
                             "attached".to_string()
                         },
+                        control: InspectorFieldControlKind::ReadOnly,
                         is_focused: false,
                         editable: false,
                     })
@@ -514,6 +536,7 @@ fn build_inspector_observation_frame(
                             } else {
                                 "available".to_string()
                             },
+                            control: InspectorFieldControlKind::ReadOnly,
                             is_focused: false,
                             editable: false,
                         }
@@ -594,6 +617,7 @@ fn build_inspector_view_model(frame: &InspectorObservationFrame) -> InspectorVie
                 label: field.label.clone(),
                 path_key: field.path_key.clone(),
                 value_summary: field.value_summary.clone(),
+                control: field.control.clone(),
                 is_focused: field.is_focused,
                 editable: field.editable,
             })
@@ -607,12 +631,66 @@ fn build_inspector_observed_field(field: &InspectorWidgetField) -> InspectorObse
         .clone()
         .unwrap_or_else(|| inspector_value_summary(&field.value));
 
+    let control = inspector_field_control_kind(field);
+    let editable = matches!(
+        control,
+        InspectorFieldControlKind::BoolToggle { .. }
+            | InspectorFieldControlKind::IntegerInput { .. }
+            | InspectorFieldControlKind::FloatInput { .. }
+            | InspectorFieldControlKind::TextInput
+    );
+
     InspectorObservedField {
         label: field.display_name.clone(),
         path_key: Some(field.path.stable_key()),
         value_summary: value_text,
+        control,
         is_focused: field.is_focused,
-        editable: true,
+        editable,
+    }
+}
+
+fn inspector_field_control_kind(field: &InspectorWidgetField) -> InspectorFieldControlKind {
+    match &field.value {
+        InspectorValue::Bool(value) => InspectorFieldControlKind::BoolToggle {
+            checked: field
+                .draft_value
+                .as_ref()
+                .and_then(|draft| match draft {
+                    editor_inspector::InspectorEditValue::Bool(value) => Some(*value),
+                    _ => None,
+                })
+                .unwrap_or(*value),
+        },
+        InspectorValue::Integer(value) => InspectorFieldControlKind::IntegerInput {
+            value: field
+                .draft_value
+                .as_ref()
+                .and_then(|draft| match draft {
+                    editor_inspector::InspectorEditValue::Integer(value) => Some(*value),
+                    _ => None,
+                })
+                .unwrap_or(*value),
+        },
+        InspectorValue::Float(value) => InspectorFieldControlKind::FloatInput {
+            value: field
+                .draft_value
+                .as_ref()
+                .and_then(|draft| match draft {
+                    editor_inspector::InspectorEditValue::Float(value) => Some(*value),
+                    _ => None,
+                })
+                .unwrap_or(*value),
+        },
+        InspectorValue::Text(_) => InspectorFieldControlKind::TextInput,
+        InspectorValue::Enum { current, options } => InspectorFieldControlKind::EnumSelect {
+            current: current.clone(),
+            options: options.clone(),
+            selected_index: options.iter().position(|option| option == current),
+        },
+        InspectorValue::ReadOnlyText(_) => InspectorFieldControlKind::ReadOnly,
+        InspectorValue::Group => InspectorFieldControlKind::Group,
+        InspectorValue::Unsupported { .. } => InspectorFieldControlKind::Unsupported,
     }
 }
 
@@ -725,49 +803,51 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
         action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         let command = match action {
-            SurfaceLocalAction::SelectEditorDefinitionDocument { document_id } => {
-                ShellCommand::SelectEditorDefinitionDocument { document_id }
-            }
-            SurfaceLocalAction::DuplicateSelectedEditorDefinition => {
-                ShellCommand::DuplicateSelectedEditorDefinition
-            }
-            SurfaceLocalAction::RenameSelectedEditorDefinition { display_name } => {
-                ShellCommand::RenameSelectedEditorDefinition { display_name }
-            }
-            SurfaceLocalAction::DeleteSelectedEditorDefinition => {
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SelectDocument { document_id },
+            ) => ShellCommand::SelectEditorDefinitionDocument { document_id },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::DuplicateSelected,
+            ) => ShellCommand::DuplicateSelectedEditorDefinition,
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::RenameSelected { display_name },
+            ) => ShellCommand::RenameSelectedEditorDefinition { display_name },
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::DeleteSelected) => {
                 ShellCommand::DeleteSelectedEditorDefinition
             }
-            SurfaceLocalAction::ExportSelectedEditorDefinition => {
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ExportSelected) => {
                 ShellCommand::ExportSelectedEditorDefinition
             }
-            SurfaceLocalAction::ApplySelectedEditorDefinition => {
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected) => {
                 ShellCommand::ApplySelectedEditorDefinition
             }
-            SurfaceLocalAction::RollbackSelectedEditorDefinition => {
-                ShellCommand::RollbackSelectedEditorDefinition
-            }
-            SurfaceLocalAction::SelectEditorDefinitionUiNode { node_id } => {
-                ShellCommand::SelectEditorDefinitionUiNode { node_id }
-            }
-            SurfaceLocalAction::SetSelectedEditorDefinitionUiNodeText { node_id, text } => {
-                ShellCommand::SetSelectedEditorDefinitionUiNodeText { node_id, text }
-            }
-            SurfaceLocalAction::SetSelectedEditorThemeColor { token, value } => {
-                ShellCommand::SetSelectedEditorThemeColor { token, value }
-            }
-            SurfaceLocalAction::AddSelectedEditorWorkspaceLayoutTab {
-                label,
-                tool_surface,
-            } => ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::RollbackSelected,
+            ) => ShellCommand::RollbackSelectedEditorDefinition,
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SelectUiNode {
+                node_id,
+            }) => ShellCommand::SelectEditorDefinitionUiNode { node_id },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SetUiNodeText { node_id, text },
+            ) => ShellCommand::SetSelectedEditorDefinitionUiNodeText { node_id, text },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SetThemeColor { token, value },
+            ) => ShellCommand::SetSelectedEditorThemeColor { token, value },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab {
+                    label,
+                    tool_surface,
+                },
+            ) => ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
                 label,
                 tool_surface,
             },
-            SurfaceLocalAction::SplitSelectedEditorWorkspaceLayoutRoot { axis } => {
-                ShellCommand::SplitSelectedEditorWorkspaceLayoutRoot { axis }
-            }
-            SurfaceLocalAction::CloseSelectedEditorWorkspaceLayoutLastTab => {
-                ShellCommand::CloseSelectedEditorWorkspaceLayoutLastTab
-            }
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SplitWorkspaceLayoutRoot { axis },
+            ) => ShellCommand::SplitSelectedEditorWorkspaceLayoutRoot { axis },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::CloseWorkspaceLayoutLastTab,
+            ) => ShellCommand::CloseSelectedEditorWorkspaceLayoutLastTab,
             _ => return Ok(None),
         };
         Ok(Some(SurfaceCommandProposal::Shell(command)))
@@ -911,24 +991,32 @@ fn self_authoring_actions(
                 .map(|document| {
                     (
                         format!("Select {}", document.display_name),
-                        SurfaceLocalAction::SelectEditorDefinitionDocument {
-                            document_id: document.id.as_str().to_string(),
-                        },
+                        SurfaceLocalAction::EditorDefinition(
+                            EditorDefinitionSurfaceAction::SelectDocument {
+                                document_id: document.id.as_str().to_string(),
+                            },
+                        ),
                     )
                 })
                 .collect::<Vec<_>>();
             actions.extend([
                 (
                     "Duplicate".to_string(),
-                    SurfaceLocalAction::DuplicateSelectedEditorDefinition,
+                    SurfaceLocalAction::EditorDefinition(
+                        EditorDefinitionSurfaceAction::DuplicateSelected,
+                    ),
                 ),
                 (
                     "Delete".to_string(),
-                    SurfaceLocalAction::DeleteSelectedEditorDefinition,
+                    SurfaceLocalAction::EditorDefinition(
+                        EditorDefinitionSurfaceAction::DeleteSelected,
+                    ),
                 ),
                 (
                     "Export".to_string(),
-                    SurfaceLocalAction::ExportSelectedEditorDefinition,
+                    SurfaceLocalAction::EditorDefinition(
+                        EditorDefinitionSurfaceAction::ExportSelected,
+                    ),
                 ),
             ]);
             actions
@@ -936,66 +1024,82 @@ fn self_authoring_actions(
         ToolSurfaceKind::UiHierarchy => selected_ui_node_actions(state),
         ToolSurfaceKind::StyleInspector => vec![(
             "Rename Draft".to_string(),
-            SurfaceLocalAction::RenameSelectedEditorDefinition {
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::RenameSelected {
                 display_name: "Retained draft".to_string(),
-            },
+            }),
         )],
         ToolSurfaceKind::ThemeEditor => vec![
             (
                 "Select Theme".to_string(),
-                SurfaceLocalAction::SelectEditorDefinitionDocument {
-                    document_id: "runenwerk.editor.theme.default".to_string(),
-                },
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::SelectDocument {
+                        document_id: "runenwerk.editor.theme.default".to_string(),
+                    },
+                ),
             ),
             (
                 "Set Accent".to_string(),
-                SurfaceLocalAction::SetSelectedEditorThemeColor {
-                    token: "accent".to_string(),
-                    value: "#5f8cff".to_string(),
-                },
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::SetThemeColor {
+                        token: "accent".to_string(),
+                        value: "#5f8cff".to_string(),
+                    },
+                ),
             ),
         ],
         ToolSurfaceKind::DefinitionValidation | ToolSurfaceKind::CommandDiff => vec![
             (
                 "Apply".to_string(),
-                SurfaceLocalAction::ApplySelectedEditorDefinition,
+                SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected),
             ),
             (
                 "Rollback".to_string(),
-                SurfaceLocalAction::RollbackSelectedEditorDefinition,
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::RollbackSelected,
+                ),
             ),
         ],
         ToolSurfaceKind::DockLayoutPreview => vec![
             (
                 "Select Layout".to_string(),
-                SurfaceLocalAction::SelectEditorDefinitionDocument {
-                    document_id: "runenwerk.editor.layout.editor_design".to_string(),
-                },
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::SelectDocument {
+                        document_id: "runenwerk.editor.layout.editor_design".to_string(),
+                    },
+                ),
             ),
             (
                 "Add Tab".to_string(),
-                SurfaceLocalAction::AddSelectedEditorWorkspaceLayoutTab {
-                    label: "Authored Tab".to_string(),
-                    tool_surface: "definition_validation".to_string(),
-                },
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab {
+                        label: "Authored Tab".to_string(),
+                        tool_surface: "definition_validation".to_string(),
+                    },
+                ),
             ),
             (
                 "Split Root".to_string(),
-                SurfaceLocalAction::SplitSelectedEditorWorkspaceLayoutRoot {
-                    axis: "horizontal".to_string(),
-                },
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::SplitWorkspaceLayoutRoot {
+                        axis: "horizontal".to_string(),
+                    },
+                ),
             ),
             (
                 "Close Last Tab".to_string(),
-                SurfaceLocalAction::CloseSelectedEditorWorkspaceLayoutLastTab,
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::CloseWorkspaceLayoutLastTab,
+                ),
             ),
             (
                 "Apply".to_string(),
-                SurfaceLocalAction::ApplySelectedEditorDefinition,
+                SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected),
             ),
             (
                 "Rollback".to_string(),
-                SurfaceLocalAction::RollbackSelectedEditorDefinition,
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::RollbackSelected,
+                ),
             ),
         ],
         ToolSurfaceKind::Bindings
@@ -1003,15 +1107,19 @@ fn self_authoring_actions(
         | ToolSurfaceKind::MenuEditor => vec![
             (
                 "Duplicate".to_string(),
-                SurfaceLocalAction::DuplicateSelectedEditorDefinition,
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::DuplicateSelected,
+                ),
             ),
             (
                 "Apply".to_string(),
-                SurfaceLocalAction::ApplySelectedEditorDefinition,
+                SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected),
             ),
             (
                 "Rollback".to_string(),
-                SurfaceLocalAction::RollbackSelectedEditorDefinition,
+                SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::RollbackSelected,
+                ),
             ),
         ],
         _ => Vec::new(),
@@ -1033,10 +1141,10 @@ fn selected_ui_node_actions(
     if let Some(node_id) = state.selected_ui_node_id() {
         actions.push((
             "Set Text".to_string(),
-            SurfaceLocalAction::SetSelectedEditorDefinitionUiNodeText {
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SetUiNodeText {
                 node_id: node_id.to_string(),
                 text: "Edited in self-authoring".to_string(),
-            },
+            }),
         ));
     }
     actions
@@ -1047,9 +1155,9 @@ fn ui_node_selection_actions(
 ) -> Vec<(String, SurfaceLocalAction)> {
     let mut actions = vec![(
         format!("Select {}", node.id()),
-        SurfaceLocalAction::SelectEditorDefinitionUiNode {
+        SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SelectUiNode {
             node_id: node.id().as_str().to_string(),
-        },
+        }),
     )];
     for child in node.children() {
         actions.extend(ui_node_selection_actions(child));
@@ -1391,6 +1499,7 @@ mod tests {
             theme,
             viewport_observations: None,
             tool_surface_bindings: None,
+            viewport_instances: None,
         }
     }
 

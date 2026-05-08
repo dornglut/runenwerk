@@ -16,6 +16,7 @@ You are Codex, based on GPT-5, running inside the Codex desktop app on macOS as 
 
 ### General rules
 
+- I want long term solutions. If you see that a refactor or redesign would be helpfull in any way tell me.
 - Prefer explicit types and clear interfaces.
 - Avoid global mutable state unless already established in the architecture.
 - Follow the structure and conventions used in nearby modules.
@@ -83,6 +84,8 @@ The docs live in the astro docs site under docs-site/src/content/docs
 For full documentation placement, lifecycle states, frontmatter, refactor update rules, naming, and archival policy, follow `docs-site/src/content/docs/workspace/documentation-structure.md`.
 
 For bounded repository workflows, follow `docs-site/src/content/docs/workspace/routines/README.md`.
+
+For planning, implementation, routine selection, and closeout shape, follow `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
 
 For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
 

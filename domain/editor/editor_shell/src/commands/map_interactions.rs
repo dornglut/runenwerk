@@ -2,8 +2,9 @@
 //! Purpose: Map semantic UI interactions to shell commands.
 
 use crate::{
-    RoutedShellAction, ShellCommand, ShellProjectionArtifacts, StructuralCommandTarget,
-    StructuralWidgetRoutingContext, SurfaceLocalAction, UiInteraction, UiInteractionResults,
+    EntityTableSurfaceAction, InspectorSurfaceAction, RoutedShellAction, ShellCommand,
+    ShellProjectionArtifacts, StructuralCommandTarget, StructuralWidgetRoutingContext,
+    SurfaceLocalAction, UiInteraction, UiInteractionResults,
 };
 use ui_input::{Key, KeyState};
 
@@ -24,6 +25,9 @@ pub fn map_interactions_to_shell_commands(
             UiInteraction::Toggled { target, checked } => {
                 commands.push(command_for_toggle(*target, *checked, routing));
             }
+            UiInteraction::NumericStepped { target, value } => {
+                commands.push(command_for_numeric_step(*target, *value, routing));
+            }
             UiInteraction::TabSelected { target, index } => {
                 commands.push(command_for_tab_selection(*target, *index, routing));
             }
@@ -42,8 +46,11 @@ pub fn map_interactions_to_shell_commands(
                 }) = routing.widget_actions_by_id.get(target)
                     && matches!(
                         action,
-                        SurfaceLocalAction::AppendEntityTableSearchText { .. }
-                            | SurfaceLocalAction::EditInspectorFieldText { .. }
+                        SurfaceLocalAction::EntityTable(
+                            EntityTableSurfaceAction::AppendSearchText { .. },
+                        ) | SurfaceLocalAction::Inspector(
+                            InspectorSurfaceAction::EditFieldText { .. },
+                        )
                     )
                 {
                     commands.push(ShellCommand::DispatchSurfaceLocalAction {
@@ -69,48 +76,63 @@ pub fn map_interactions_to_shell_commands(
                     match (&event.key, action) {
                         (
                             Key::Backspace | Key::Delete,
-                            SurfaceLocalAction::AppendEntityTableSearchText { .. },
+                            SurfaceLocalAction::EntityTable(
+                                EntityTableSurfaceAction::AppendSearchText { .. },
+                            ),
                         ) => commands.push(ShellCommand::DispatchSurfaceLocalAction {
                             provider_id: *provider_id,
                             tool_surface_instance_id: *tool_surface_instance_id,
                             target: command_target(*context),
-                            action: SurfaceLocalAction::BackspaceEntityTableSearch,
+                            action: SurfaceLocalAction::EntityTable(
+                                EntityTableSurfaceAction::BackspaceSearch,
+                            ),
                             projection_epoch: routing.projection_epoch,
                         }),
                         (
                             Key::Backspace | Key::Delete,
-                            SurfaceLocalAction::EditInspectorFieldText { index, .. },
+                            SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText {
+                                index,
+                                ..
+                            }),
                         ) => commands.push(ShellCommand::DispatchSurfaceLocalAction {
                             provider_id: *provider_id,
                             tool_surface_instance_id: *tool_surface_instance_id,
                             target: command_target(*context),
-                            action: SurfaceLocalAction::BackspaceInspectorFieldText {
-                                index: *index,
-                            },
+                            action: SurfaceLocalAction::Inspector(
+                                InspectorSurfaceAction::BackspaceFieldText { index: *index },
+                            ),
                             projection_epoch: routing.projection_epoch,
                         }),
-                        (Key::Enter, SurfaceLocalAction::EditInspectorFieldText { index, .. }) => {
-                            commands.push(ShellCommand::DispatchSurfaceLocalAction {
-                                provider_id: *provider_id,
-                                tool_surface_instance_id: *tool_surface_instance_id,
-                                target: command_target(*context),
-                                action: SurfaceLocalAction::CommitInspectorFieldText {
-                                    index: *index,
-                                },
-                                projection_epoch: routing.projection_epoch,
-                            })
-                        }
-                        (Key::Escape, SurfaceLocalAction::EditInspectorFieldText { index, .. }) => {
-                            commands.push(ShellCommand::DispatchSurfaceLocalAction {
-                                provider_id: *provider_id,
-                                tool_surface_instance_id: *tool_surface_instance_id,
-                                target: command_target(*context),
-                                action: SurfaceLocalAction::CancelInspectorFieldText {
-                                    index: *index,
-                                },
-                                projection_epoch: routing.projection_epoch,
-                            })
-                        }
+                        (
+                            Key::Enter,
+                            SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText {
+                                index,
+                                ..
+                            }),
+                        ) => commands.push(ShellCommand::DispatchSurfaceLocalAction {
+                            provider_id: *provider_id,
+                            tool_surface_instance_id: *tool_surface_instance_id,
+                            target: command_target(*context),
+                            action: SurfaceLocalAction::Inspector(
+                                InspectorSurfaceAction::CommitFieldText { index: *index },
+                            ),
+                            projection_epoch: routing.projection_epoch,
+                        }),
+                        (
+                            Key::Escape,
+                            SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText {
+                                index,
+                                ..
+                            }),
+                        ) => commands.push(ShellCommand::DispatchSurfaceLocalAction {
+                            provider_id: *provider_id,
+                            tool_surface_instance_id: *tool_surface_instance_id,
+                            target: command_target(*context),
+                            action: SurfaceLocalAction::Inspector(
+                                InspectorSurfaceAction::CancelFieldText { index: *index },
+                            ),
+                            projection_epoch: routing.projection_epoch,
+                        }),
                         _ => {}
                     }
                 }
@@ -118,7 +140,6 @@ pub fn map_interactions_to_shell_commands(
             UiInteraction::HoveredChanged { .. }
             | UiInteraction::PressedChanged { .. }
             | UiInteraction::FocusChanged(_)
-            | UiInteraction::NumericStepped { .. }
             | UiInteraction::TreeRowToggled { .. } => {}
         }
     }
@@ -324,6 +345,36 @@ fn command_for_select_change(
                 projection_epoch: routing.projection_epoch,
             }
         }
+        Some(RoutedShellAction::DispatchSurfaceLocalAction {
+            provider_id,
+            tool_surface_instance_id,
+            action:
+                SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectComponentFilter {
+                    filters,
+                }),
+            context,
+        }) => {
+            if routing
+                .widget_structural_context_by_id
+                .get(&widget_id)
+                .copied()
+                != Some(*context)
+            {
+                return ShellCommand::NoOp;
+            }
+            let Some(filter) = filters.get(index).copied() else {
+                return ShellCommand::NoOp;
+            };
+            ShellCommand::DispatchSurfaceLocalAction {
+                provider_id: *provider_id,
+                tool_surface_instance_id: *tool_surface_instance_id,
+                target: command_target(*context),
+                action: SurfaceLocalAction::EntityTable(
+                    EntityTableSurfaceAction::SetComponentFilter { filter },
+                ),
+                projection_epoch: routing.projection_epoch,
+            }
+        }
         _ => ShellCommand::NoOp,
     }
 }
@@ -342,6 +393,67 @@ fn command_for_toggle(
             locked_tool_surface_kind: checked.then_some(*locked_tool_surface_kind).flatten(),
             projection_epoch: routing.projection_epoch,
         },
+        Some(RoutedShellAction::DispatchSurfaceLocalAction {
+            provider_id,
+            tool_surface_instance_id,
+            action,
+            context,
+        }) => {
+            if routing
+                .widget_structural_context_by_id
+                .get(&widget_id)
+                .copied()
+                != Some(*context)
+            {
+                return ShellCommand::NoOp;
+            }
+            let Some(action) = surface_toggle_action(action, checked) else {
+                return ShellCommand::NoOp;
+            };
+            ShellCommand::DispatchSurfaceLocalAction {
+                provider_id: *provider_id,
+                tool_surface_instance_id: *tool_surface_instance_id,
+                target: command_target(*context),
+                action,
+                projection_epoch: routing.projection_epoch,
+            }
+        }
+        _ => ShellCommand::NoOp,
+    }
+}
+
+fn command_for_numeric_step(
+    widget_id: crate::WidgetId,
+    value: f64,
+    routing: &ShellProjectionArtifacts,
+) -> ShellCommand {
+    match routing.widget_actions_by_id.get(&widget_id) {
+        Some(RoutedShellAction::DispatchSurfaceLocalAction {
+            provider_id,
+            tool_surface_instance_id,
+            action:
+                SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldNumber { index, .. }),
+            context,
+        }) => {
+            if routing
+                .widget_structural_context_by_id
+                .get(&widget_id)
+                .copied()
+                != Some(*context)
+            {
+                return ShellCommand::NoOp;
+            }
+            ShellCommand::DispatchSurfaceLocalAction {
+                provider_id: *provider_id,
+                tool_surface_instance_id: *tool_surface_instance_id,
+                target: command_target(*context),
+                action: SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldNumber {
+                    index: *index,
+                    value,
+                }),
+                projection_epoch: routing.projection_epoch,
+            }
+        }
         _ => ShellCommand::NoOp,
     }
 }
@@ -374,16 +486,44 @@ fn command_for_tab_selection(
 
 fn surface_text_action(action: &SurfaceLocalAction, text: String) -> SurfaceLocalAction {
     match action {
-        SurfaceLocalAction::AppendEntityTableSearchText { .. } => {
-            SurfaceLocalAction::AppendEntityTableSearchText { text }
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::AppendSearchText { .. }) => {
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::AppendSearchText { text })
         }
-        SurfaceLocalAction::EditInspectorFieldText { index, .. } => {
-            SurfaceLocalAction::EditInspectorFieldText {
+        SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText { index, .. }) => {
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::EditFieldText {
                 index: *index,
                 text,
-            }
+            })
         }
         _ => action.clone(),
+    }
+}
+
+fn surface_toggle_action(action: &SurfaceLocalAction, checked: bool) -> Option<SurfaceLocalAction> {
+    match action {
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetSelectedOnly { .. }) => Some(
+            SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetSelectedOnly {
+                selected_only: checked,
+            }),
+        ),
+        SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SetHierarchyFilter {
+            ..
+        }) => Some(SurfaceLocalAction::EntityTable(
+            EntityTableSurfaceAction::SetHierarchyFilter {
+                filter: if checked {
+                    crate::EntityTableHierarchyFilter::RootsOnly
+                } else {
+                    crate::EntityTableHierarchyFilter::All
+                },
+            },
+        )),
+        SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldBool { index, .. }) => Some(
+            SurfaceLocalAction::Inspector(InspectorSurfaceAction::SetFieldBool {
+                index: *index,
+                value: checked,
+            }),
+        ),
+        _ => None,
     }
 }
 
@@ -396,7 +536,8 @@ fn command_for_table_row(
         Some(RoutedShellAction::DispatchSurfaceLocalAction {
             provider_id,
             tool_surface_instance_id,
-            action: SurfaceLocalAction::SelectEntityTableRow { entities },
+            action:
+                SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectRow { entities }),
             context,
         }) => {
             if routing
@@ -416,7 +557,9 @@ fn command_for_table_row(
                 provider_id: *provider_id,
                 tool_surface_instance_id: *tool_surface_instance_id,
                 target: command_target(*context),
-                action: SurfaceLocalAction::SelectEntityTableEntity { entity },
+                action: SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::SelectEntity {
+                    entity,
+                }),
                 projection_epoch: routing.projection_epoch,
             }
         }

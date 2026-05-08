@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-30
+last_reviewed: 2026-05-08
 ---
 
 # Runenwerk Workspace
@@ -26,6 +26,7 @@ This page is a lightweight orientation map for the active Runenwerk repository.
 ## Start Here
 
 - Workspace agent rules: [`agents.md`](agents.md)
+- Planning and implementation workflow: [`planning-and-implementation-workflow.md`](planning-and-implementation-workflow.md)
 - Workspace routines: [`routines/README.md`](routines/README.md)
 - Workspace roadmap index: [`roadmap-index.md`](roadmap-index.md)
 - Repository execution checklist: [`repo-execution-priority-checklist.md`](repo-execution-priority-checklist.md)

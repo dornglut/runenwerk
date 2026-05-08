@@ -1,12 +1,12 @@
 //! File: domain/editor/editor_shell/src/commands/shell_command.rs
 //! Purpose: Shell-level commands emitted from UI interactions.
 
-use editor_core::{DocumentId, EntityId};
-use editor_viewport::{ExpressionProductId, ViewportId};
+use editor_core::DocumentId;
 
 use crate::{
-    EntityTableSortKey, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
-    ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
+    EditorDomainMutation, PanelInstanceId, SurfaceSessionMutation, TabStackId,
+    ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, WidgetId,
+    WorkspaceProfileId, WorkspaceSplitAxis,
 };
 use crate::{SurfaceLocalAction, SurfaceProviderId};
 
@@ -26,7 +26,7 @@ pub enum TabDropDestination {
     NewFloatingHost,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ShellCommand {
     ActivateSelectTool,
     ActivateTranslateTool,
@@ -151,77 +151,14 @@ pub enum ShellCommand {
         axis: String,
     },
     CloseSelectedEditorWorkspaceLayoutLastTab,
-    SelectEntityTableEntity {
-        entity: EntityId,
+    ApplySurfaceSessionMutation {
         target: StructuralCommandTarget,
+        mutation: SurfaceSessionMutation,
         projection_epoch: u64,
     },
-    AppendEntityTableSearchText {
-        text: String,
+    ApplyEditorDomainMutation {
         target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    BackspaceEntityTableSearch {
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    ToggleEntityTableSort {
-        sort_key: EntityTableSortKey,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    SelectOutlinerEntity {
-        entity: EntityId,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    SelectViewportProduct {
-        viewport_id: ViewportId,
-        product_id: ExpressionProductId,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    ToggleViewportDetails {
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    ToggleViewportStatistics {
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    ToggleViewportOptionsMenu {
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    ActivateInspectorField {
-        index: usize,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    FocusInspectorField {
-        index: usize,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    AppendInspectorFieldText {
-        index: usize,
-        text: String,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    BackspaceInspectorFieldText {
-        index: usize,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    CommitInspectorFieldText {
-        index: usize,
-        target: StructuralCommandTarget,
-        projection_epoch: u64,
-    },
-    CancelInspectorFieldText {
-        index: usize,
-        target: StructuralCommandTarget,
+        mutation: EditorDomainMutation,
         projection_epoch: u64,
     },
     DispatchSurfaceLocalAction {
@@ -237,10 +174,7 @@ pub enum ShellCommand {
 impl ShellCommand {
     pub fn projection_epoch(&self) -> Option<u64> {
         match self {
-            Self::SelectOutlinerEntity {
-                projection_epoch, ..
-            }
-            | Self::SetTabStackActivePanel {
+            Self::SetTabStackActivePanel {
                 projection_epoch, ..
             }
             | Self::CommitTabDrop {
@@ -273,46 +207,10 @@ impl ShellCommand {
             | Self::LockTabStackAreaType {
                 projection_epoch, ..
             }
-            | Self::SelectEntityTableEntity {
+            | Self::ApplySurfaceSessionMutation {
                 projection_epoch, ..
             }
-            | Self::AppendEntityTableSearchText {
-                projection_epoch, ..
-            }
-            | Self::BackspaceEntityTableSearch {
-                projection_epoch, ..
-            }
-            | Self::ToggleEntityTableSort {
-                projection_epoch, ..
-            }
-            | Self::SelectViewportProduct {
-                projection_epoch, ..
-            }
-            | Self::ToggleViewportDetails {
-                projection_epoch, ..
-            }
-            | Self::ToggleViewportStatistics {
-                projection_epoch, ..
-            }
-            | Self::ToggleViewportOptionsMenu {
-                projection_epoch, ..
-            }
-            | Self::ActivateInspectorField {
-                projection_epoch, ..
-            }
-            | Self::FocusInspectorField {
-                projection_epoch, ..
-            }
-            | Self::AppendInspectorFieldText {
-                projection_epoch, ..
-            }
-            | Self::BackspaceInspectorFieldText {
-                projection_epoch, ..
-            }
-            | Self::CommitInspectorFieldText {
-                projection_epoch, ..
-            }
-            | Self::CancelInspectorFieldText {
+            | Self::ApplyEditorDomainMutation {
                 projection_epoch, ..
             }
             | Self::DispatchSurfaceLocalAction {

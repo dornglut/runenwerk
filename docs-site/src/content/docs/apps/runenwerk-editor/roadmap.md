@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-08
 related_designs:
   - ../../design/active/workspace-field-world-and-simulation-platform-design.md
   - ../../design/active/ui-definition-formation-foundation-design.md
@@ -85,7 +85,7 @@ Current post-M3 gaps:
 - M1 structural seams are closed: `DocumentKind` has the explicit M1 taxonomy, `EditorSession` owns ordered document tabs, active switching, dirty/save/close transitions, document compatibility validation, and mode ids/descriptors/registry compatibility rules; app-local generic document-tab runtime state is split from scene-specific document state.
 - M2 shell seams are closed: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage.
 - M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
-- The M3.5 UI definition/formation closeout candidate is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar fixture formation, normal shell chrome formation, console surface formation, and app-owned fixture validation exist. Remaining provider surface fixture migrations should proceed only where retained behavior parity can be preserved without moving provider semantics into templates.
+- The M3.5 UI definition/formation closeout is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar/menu fixture formation, normal shell chrome formation, common provider surface fixture formation, and app-owned fixture validation exist. Provider data, viewport overlays, editor mutations, and route execution remain outside `ui_definition`.
 - There is no asset catalog, asset id model, dependency graph, import plan, artifact cache, asset browser, import diagnostics surface, project-wide asset hot reload workflow, field-product formation pipeline, SDF/world asset taxonomy, or `world_sdf` artifact/cache bridge.
 - There is no `domain/material_graph`, `domain/texture`, `domain/procgen`, `domain/particles`, `domain/physics`, or `domain/animation`.
 - There are no editor providers for material graph editing, procedural texturing, Texture3D/volume inspection, procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview.
@@ -94,9 +94,9 @@ Current post-M3 gaps:
 ## Implementation Readiness
 
 - M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
-- M3.5 is closed as the UI/editor infrastructure slice: the closeout candidate landed and passed validation/drift closeout as of 2026-05-06.
+- M3.5 is closed as the UI/editor infrastructure slice: the closeout candidate landed on 2026-05-06, and the follow-up toolbar/provider fixture migration seams were closed afterward.
 - M3.6 is complete as of 2026-05-06 for authored definition editing, retained preview, and explicit apply/rollback snapshots. A follow-up correction now wires applied theme definitions into the live editor host theme; other definition families still need explicit live activation seams.
-- M3.7 is the no-compromise viewport expression architecture closeout. It is implementation-ready through `docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md` and `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`, and must land before treating multi-viewport previews, field-product previews, asset previews, material previews, or runtime debug viewports as stable surfaces.
+- M3.7 is complete as a no-compromise viewport expression architecture closeout as of 2026-05-08. Multi-viewport previews now have explicit viewport instances, viewport-scoped products, per-viewport render jobs, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-keyed camera/debug/root commands, camera orbit/pan/zoom routing, and duplicate/close lifecycle cleanup. The follow-on provider surface workflow redesign is also complete as of 2026-05-08 for typed surface wrappers, entity-table query workflows, and richer inspector controls. The next primary product track is M4 SDF/field-first asset pipeline foundation; broader reusable-control adoption remains an ongoing UI surface maintenance track.
 - Native multi-window editing is designed in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`. It follows the render product-surface foundation and should land before second-monitor workflows are treated as product-ready.
 - M4 and M5 are the next content-pipeline track, once the new `domain/asset` crate is introduced and wired into `CRATES.md`, `DOMAIN_MAP.md`, and workspace metadata.
 - M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
@@ -187,7 +187,7 @@ Validation:
 
 Purpose: finish the core 3D editor before expanding into every other workspace.
 
-Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M3.5 UI definition formation framework has a validated closeout candidate as of 2026-05-06; M3.6 UI self-authoring is complete and M4 asset pipeline foundation follows it.
+Status: complete as of 2026-05-05. The M3 scope is implemented and covered by focused scene authoring smoke, app runtime, shell, inspector, `editor_scene`, formatting, docs validation, and full gate checks. M3.5 UI definition formation framework is implemented and validated as of 2026-05-06; M3.6 UI self-authoring is complete and M4 asset pipeline foundation follows it.
 
 Implementation targets:
 
@@ -266,9 +266,9 @@ Implementation targets:
 
 Completeness status:
 
-- Implemented: crate skeletons and metadata, generic source model modules, editor definition modules, checked-in fixtures, fixture parse/validation tests, retained formation, inert route/embed/path products, app-owned fixture loading, toolbar route-slot integration, normal shell chrome formation, and console surface formation.
-- Partially implemented: toolbar structure is formed from the fixture, but legacy observation still supplies runtime labels/active state and some older toolbar buttons remain compatibility-routed until they are represented in definition data.
-- Deferred from the closeout candidate: inspector, outliner, entity-table, and viewport fixtures are authored and validated, but their retained builders still own behavior-rich structure until richer row/form/embed parity can be preserved without moving provider behavior into `ui_definition`.
+- Implemented: crate skeletons and metadata, generic source model modules, editor definition modules, checked-in fixtures, fixture parse/validation tests, retained formation, inert route/embed/path products, app-owned fixture loading, toolbar route-slot integration, toolbar popup item routing through editor binding data, normal shell chrome formation, and common provider surface fixture formation for console, inspector, outliner, entity-table, and viewport stable structure.
+- Preserved outside `ui_definition`: provider DTO construction, surface-local routes, editor/app mutations, inspector edit commits, entity/outliner selection semantics, viewport options/status overlays, and render-product/embed payload ownership.
+- M3.7 truth after this follow-up: explicit viewport instance identity is a runtime resource used by normal frame/input/provider binding paths, workspace persistence restores viewport instance ids and viewport runtime settings, viewport lifecycle sync runs before shell frame projection and persists viewport-owned settings, frame submit no longer owns live viewport singleton state, per-viewport render jobs and viewport-scoped product targets are published from viewport runtime systems, the viewport shader no longer carries multi-rectangle containment, camera/debug/root state has viewport-keyed command paths, and camera orbit/pan/zoom routes through viewport-local state. The surface workflow follow-up is complete: active provider-backed surfaces route through typed surface action/session/domain wrappers, entity-table query workflows and richer inspector controls are implemented, and provider behavior remains outside `ui_definition`. Remaining work is broader product expansion outside M3.7: M4 asset pipeline foundations, broader reusable-control adoption, more viewport producer types, and history/workflow breadth.
 
 Non-goals:
 
@@ -353,6 +353,8 @@ Owning design:
 
 - `docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md`
 - `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`
+
+Status: complete as of 2026-05-08. Explicit viewport instance identity, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-scoped product targets, per-viewport render jobs, shader containment cleanup, viewport-keyed camera/debug/root commands, viewport-local camera input, duplicate settings copy, and closed-surface cleanup are implemented. Further viewport producer breadth or polish belongs to later product milestones, not M3.7 migration work.
 
 Implementation targets:
 

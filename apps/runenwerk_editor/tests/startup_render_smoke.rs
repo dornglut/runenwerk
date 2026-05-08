@@ -7,9 +7,7 @@ use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
     UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
-use runenwerk_editor::runtime::resources::{
-    EditorHostResource, EditorViewportDebugStage, EditorViewportRenderState,
-};
+use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportDebugStage};
 use runenwerk_editor::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, SCENE_COLOR_PRODUCT_ID,
     VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportProductTargetRegistryResource,
@@ -51,10 +49,6 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .world()
         .resource::<ViewportSurfaceBindingRegistryResource>()
         .expect("viewport surface binding registry should exist");
-    let viewport_state = app
-        .world()
-        .resource::<EditorViewportRenderState>()
-        .expect("viewport render state should exist");
     let viewport_render_states = app
         .world()
         .resource::<ViewportRenderStateResource>()
@@ -215,12 +209,10 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
             .is_some(),
         "embedded viewport should have a prepared render job",
     );
-    assert!(
-        viewport_render_states
-            .state_for(editor_viewport::ViewportId(viewport_embed.viewport_id))
-            .is_some(),
-        "embedded viewport should have viewport-owned render state",
-    );
+    let viewport_state = &viewport_render_states
+        .state_for(editor_viewport::ViewportId(viewport_embed.viewport_id))
+        .expect("embedded viewport should have viewport-owned render state")
+        .render_state;
 
     assert!(
         (viewport_state.viewport_bounds_px.0 - viewport_embed.rect.x).abs()
@@ -411,11 +403,6 @@ fn assert_split_viewport_products_match_embeds(app: &engine::App) {
         })
         .copied()
         .expect("editor flow should expose the scene product uniform id");
-    let viewport_render = app
-        .world()
-        .resource::<EditorViewportRenderState>()
-        .expect("viewport render state should exist");
-
     for embed in embeds {
         let viewport_id = ViewportId(embed.viewport_id);
         let state = viewport_render_states
@@ -459,7 +446,11 @@ fn assert_split_viewport_products_match_embeds(app: &engine::App) {
             job.prepared_flow_invocation
                 .uniform_overrides
                 .get(&scene_uniform_id),
-            Some(&viewport_render.compose_scene_product_uniform_bytes(expected_size)),
+            Some(
+                &state
+                    .render_state
+                    .compose_scene_product_uniform_bytes(expected_size)
+            ),
             "prepared viewport invocation must carry target-local scene uniforms for viewport={}",
             viewport_id.0,
         );

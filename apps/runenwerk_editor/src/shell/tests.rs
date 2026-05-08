@@ -1,18 +1,23 @@
-use editor_core::{ChangeOrigin, EntityId, SelectionTarget, SessionChangeKind, WorkflowEventKind};
+use editor_core::{
+    ChangeOrigin, ComponentTypeId, EntityId, SelectionTarget, SessionChangeKind, WorkflowEventKind,
+};
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_shell::{
     CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-    ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, PanelKind,
-    SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget, SurfaceLocalAction,
-    SurfaceProviderAvailability, SurfaceProviderId, ToolSurfaceKind, ToolbarCommandKind,
+    ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID, EditorDomainMutation,
+    EntityTableComponentFilter, EntityTableHierarchyFilter, EntityTableSessionMutation,
+    FLOATING_DROP_ZONE_WIDGET_ID, InspectorSessionMutation, LEFT_RIGHT_SPLIT_WIDGET_ID,
+    MODELLING_WORKSPACE_PROFILE_ID, OutlinerDomainMutation, PanelKind, SCENE_WORKSPACE_PROFILE_ID,
+    ShellCommand, StructuralCommandTarget, SurfaceLocalAction, SurfaceProviderAvailability,
+    SurfaceProviderId, SurfaceSessionMutation, ToolSurfaceKind, ToolbarCommandKind,
     ToolbarMenuKind, UiInteraction, UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-    VIEWPORT_PANEL_WIDGET_ID, WorkspaceMutation, WorkspaceSplitAxis,
+    VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation, ViewportSessionMutation,
+    ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis,
     map_interactions_to_shell_commands, outliner_row_widget_id, workspace_split_host_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionProductId, ProducerHealth, ProductAvailabilityState,
-    ViewportHitResult, ViewportId, ViewportPresentationState,
+    ViewportDebugStage, ViewportHitResult, ViewportId, ViewportPresentationState,
 };
 use engine::plugins::render::UiFontAtlasResource;
 use ui_input::{Modifiers, PointerButton, PointerEvent, PointerEventKind, UiInputEvent};
@@ -20,21 +25,30 @@ use ui_math::{UiPoint, UiRect, UiVector};
 use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
-use crate::editor_panels::ViewportPanelCommand;
+use crate::editor_panels::{
+    EntityTablePanelPresenter, EntityTablePanelUiState, ViewportPanelCommand,
+};
+use crate::editor_runtime::select_single_entity;
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRecord, ToolSurfaceRuntimeBindingRegistryResource,
-    ViewportArtifactObservationResource, ViewportPresentationStateResource,
-    viewport_id_for_tool_surface,
+    ViewportArtifactObservationResource, ViewportInstanceRegistryResource,
+    ViewportPresentationStateResource, ViewportRenderStateCommand,
+    ViewportRenderStateCommandQueueResource,
 };
 use crate::shell::{
     EditorSurfaceProviderRegistry, RunenwerkEditorShellController, RunenwerkEditorShellState,
     SELECT_TOOL_ID, TRANSLATE_TOOL_ID, active_document_context, build_editor_shell_frame_model,
-    dispatch_shell_command,
+    dispatch_shell_command, dispatch_shell_command_with_viewport_commands,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
 struct TestMarker;
+
+#[derive(Debug, Clone, Default, ecs::Component, ecs::ReflectComponent)]
+struct QueryMarker {
+    value: i32,
+}
 
 fn test_tool_surface_binding_registry(
     tool_surface: editor_shell::ToolSurfaceInstanceId,
@@ -53,6 +67,30 @@ fn test_tool_surface_binding_registry(
         generation: 1,
     });
     registry
+}
+
+fn surface_session_command(
+    target: StructuralCommandTarget,
+    mutation: SurfaceSessionMutation,
+    projection_epoch: u64,
+) -> ShellCommand {
+    ShellCommand::ApplySurfaceSessionMutation {
+        target,
+        mutation,
+        projection_epoch,
+    }
+}
+
+fn editor_domain_command(
+    target: StructuralCommandTarget,
+    mutation: EditorDomainMutation,
+    projection_epoch: u64,
+) -> ShellCommand {
+    ShellCommand::ApplyEditorDomainMutation {
+        target,
+        mutation,
+        projection_epoch,
+    }
 }
 
 #[test]
@@ -511,6 +549,7 @@ fn default_startup_resolves_scene_surface_providers() {
         &ThemeTokens::default(),
         None,
         None,
+        None,
     );
 
     for kind in [
@@ -554,6 +593,7 @@ fn scene_load_reset_keeps_active_scene_document_for_provider_frames() {
         &ThemeTokens::default(),
         None,
         None,
+        None,
     );
     let viewport_surface = surface_id_by_kind(shell_state.workspace_state(), PanelKind::Viewport);
     assert_eq!(
@@ -575,17 +615,19 @@ fn dispatch_shell_command_selects_outliner_entity() {
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::SelectOutlinerEntity {
-            entity: EntityId(1),
-            target: StructuralCommandTarget {
+        editor_domain_command(
+            StructuralCommandTarget {
                 panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
                 active_tool_surface: Some(
                     editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
                 ),
                 tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
             },
-            projection_epoch: 0,
-        },
+            EditorDomainMutation::Outliner(OutlinerDomainMutation::SelectEntity {
+                entity: EntityId(1),
+            }),
+            0,
+        ),
         None,
         None,
         None,
@@ -698,6 +740,70 @@ fn entity_table_row_interaction_selects_entity_with_structural_target() {
             }
         ))
     ));
+}
+
+#[test]
+fn entity_table_query_filters_and_sorts_rows() {
+    let mut app = RunenwerkEditorApp::new();
+    let marker_type = ComponentTypeId(7001);
+    app.runtime_mut()
+        .register_component_type::<QueryMarker>(marker_type);
+
+    let zeta = app.runtime_mut().spawn_world_entity(QueryMarker::default());
+    app.runtime_mut()
+        .register_entity(EntityId(1), zeta, "ZetaRoot", None);
+    let child = app.runtime_mut().spawn_world_entity(TestMarker);
+    app.runtime_mut()
+        .register_entity(EntityId(2), child, "ChildAlpha", Some(EntityId(1)));
+    let alpha = app.runtime_mut().spawn_world_entity(TestMarker);
+    app.runtime_mut()
+        .register_entity(EntityId(3), alpha, "AlphaRoot", None);
+    select_single_entity(app.runtime_mut(), EntityId(1)).expect("selection should succeed");
+
+    let mut query = EntityTablePanelUiState::new();
+    query.set_search_query("alpha");
+    let state = EntityTablePanelPresenter::build_state(app.runtime(), &query);
+    assert_eq!(
+        state.rows.iter().map(|row| row.entity).collect::<Vec<_>>(),
+        vec![EntityId(3), EntityId(2)]
+    );
+
+    query.set_search_query("");
+    query.set_selected_only(true);
+    let state = EntityTablePanelPresenter::build_state(app.runtime(), &query);
+    assert_eq!(
+        state.rows.iter().map(|row| row.entity).collect::<Vec<_>>(),
+        vec![EntityId(1)]
+    );
+
+    query.set_selected_only(false);
+    query.set_hierarchy_filter(EntityTableHierarchyFilter::RootsOnly);
+    let state = EntityTablePanelPresenter::build_state(app.runtime(), &query);
+    assert_eq!(
+        state.rows.iter().map(|row| row.entity).collect::<Vec<_>>(),
+        vec![EntityId(3), EntityId(1)]
+    );
+
+    query.set_hierarchy_filter(EntityTableHierarchyFilter::All);
+    query.set_component_filter(EntityTableComponentFilter::Has(marker_type));
+    let state = EntityTablePanelPresenter::build_state(app.runtime(), &query);
+    assert_eq!(
+        state.rows.iter().map(|row| row.entity).collect::<Vec<_>>(),
+        vec![EntityId(1)]
+    );
+
+    query.set_component_filter(EntityTableComponentFilter::All);
+    query.set_hierarchy_filter(EntityTableHierarchyFilter::RootsOnly);
+    query.toggle_sort(editor_shell::EntityTableSortKey::DisplayName);
+    let state = EntityTablePanelPresenter::build_state(app.runtime(), &query);
+    assert_eq!(
+        state
+            .rows
+            .iter()
+            .map(|row| row.display_name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["ZetaRoot", "AlphaRoot"]
+    );
 }
 
 #[test]
@@ -844,12 +950,14 @@ fn dispatch_shell_command_selects_viewport_product_when_available() {
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::SelectViewportProduct {
-            viewport_id,
-            product_id,
+        editor_domain_command(
             target,
-            projection_epoch: 0,
-        },
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SelectProduct {
+                viewport_id,
+                product_id,
+            }),
+            0,
+        ),
         Some(&mut viewport_presentations),
         Some(&viewport_observations),
         Some(&tool_surface_bindings),
@@ -905,12 +1013,14 @@ fn dispatch_shell_command_updates_only_target_viewport_product_selection() {
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::SelectViewportProduct {
-            viewport_id: viewport_b,
-            product_id: product_picking,
+        editor_domain_command(
             target,
-            projection_epoch: 0,
-        },
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SelectProduct {
+                viewport_id: viewport_b,
+                product_id: product_picking,
+            }),
+            0,
+        ),
         Some(&mut viewport_presentations),
         Some(&viewport_observations),
         Some(&tool_surface_bindings),
@@ -951,18 +1061,20 @@ fn dispatch_shell_command_viewport_product_fails_closed_without_runtime_binding(
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::SelectViewportProduct {
-            viewport_id,
-            product_id,
-            target: StructuralCommandTarget {
+        editor_domain_command(
+            StructuralCommandTarget {
                 panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
                 active_tool_surface: Some(
                     editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
                 ),
                 tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
             },
-            projection_epoch: 0,
-        },
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SelectProduct {
+                viewport_id,
+                product_id,
+            }),
+            0,
+        ),
         Some(&mut viewport_presentations),
         Some(&viewport_observations),
         None,
@@ -1010,12 +1122,14 @@ fn dispatch_shell_command_viewport_product_rejects_stale_binding_viewport_mismat
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::SelectViewportProduct {
-            viewport_id: requested_viewport,
-            product_id,
+        editor_domain_command(
             target,
-            projection_epoch: 0,
-        },
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SelectProduct {
+                viewport_id: requested_viewport,
+                product_id,
+            }),
+            0,
+        ),
         Some(&mut viewport_presentations),
         Some(&viewport_observations),
         Some(&tool_surface_bindings),
@@ -1059,16 +1173,18 @@ fn dispatch_shell_command_viewport_product_requires_structural_tool_surface_targ
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::SelectViewportProduct {
-            viewport_id,
-            product_id,
-            target: StructuralCommandTarget {
+        editor_domain_command(
+            StructuralCommandTarget {
                 panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
                 active_tool_surface: None,
                 tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
             },
-            projection_epoch: 0,
-        },
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SelectProduct {
+                viewport_id,
+                product_id,
+            }),
+            0,
+        ),
         Some(&mut viewport_presentations),
         Some(&viewport_observations),
         Some(&tool_surface_bindings),
@@ -1111,12 +1227,14 @@ fn dispatch_shell_command_viewport_product_rejects_structural_binding_mismatch()
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::SelectViewportProduct {
-            viewport_id,
-            product_id,
+        editor_domain_command(
             target,
-            projection_epoch: 0,
-        },
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SelectProduct {
+                viewport_id,
+                product_id,
+            }),
+            0,
+        ),
         Some(&mut viewport_presentations),
         Some(&viewport_observations),
         Some(&tool_surface_bindings),
@@ -1127,6 +1245,121 @@ fn dispatch_shell_command_viewport_product_rejects_structural_binding_mismatch()
     assert!(
         viewport_presentations.state_for(viewport_id).is_none(),
         "viewport selection must not mutate when structural binding mismatches runtime mapping",
+    );
+}
+
+#[test]
+fn dispatch_shell_command_enqueues_viewport_state_commands_for_bound_viewport() {
+    let mut app = RunenwerkEditorApp::new();
+    let requested_viewport = ViewportId(1);
+    let rebound_viewport = ViewportId(2);
+    let target = StructuralCommandTarget {
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
+    };
+    let tool_surface_bindings = test_tool_surface_binding_registry(
+        target.active_tool_surface.unwrap(),
+        target.panel_instance_id,
+        target.tab_stack_id,
+        rebound_viewport,
+    );
+    let mut viewport_render_commands = ViewportRenderStateCommandQueueResource::default();
+
+    dispatch_shell_command_with_viewport_commands(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::ResetCamera {
+                viewport_id: rebound_viewport,
+            }),
+            0,
+        ),
+        None,
+        None,
+        Some(&tool_surface_bindings),
+        Some(&mut viewport_render_commands),
+        None,
+    )
+    .expect("bound viewport camera reset command should dispatch");
+    dispatch_shell_command_with_viewport_commands(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SetDebugStage {
+                viewport_id: rebound_viewport,
+                debug_stage: ViewportDebugStage::PickingHitMiss,
+            }),
+            0,
+        ),
+        None,
+        None,
+        Some(&tool_surface_bindings),
+        Some(&mut viewport_render_commands),
+        None,
+    )
+    .expect("bound viewport debug command should dispatch");
+    dispatch_shell_command_with_viewport_commands(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SetRootBackgroundOpaque {
+                viewport_id: rebound_viewport,
+                enabled: true,
+            }),
+            0,
+        ),
+        None,
+        None,
+        Some(&tool_surface_bindings),
+        Some(&mut viewport_render_commands),
+        None,
+    )
+    .expect("bound viewport root opacity command should dispatch");
+
+    assert_eq!(
+        viewport_render_commands.drain().collect::<Vec<_>>(),
+        vec![
+            ViewportRenderStateCommand::ResetCamera {
+                viewport_id: rebound_viewport,
+            },
+            ViewportRenderStateCommand::SetDebugStage {
+                viewport_id: rebound_viewport,
+                debug_stage: ViewportDebugStage::PickingHitMiss,
+            },
+            ViewportRenderStateCommand::SetRootBackgroundOpaque {
+                viewport_id: rebound_viewport,
+                enabled: true,
+            },
+        ],
+        "viewport state commands should be routed through the active runtime binding",
+    );
+
+    dispatch_shell_command_with_viewport_commands(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::SetDebugStage {
+                viewport_id: requested_viewport,
+                debug_stage: ViewportDebugStage::PrimitiveAvailability,
+            }),
+            0,
+        ),
+        None,
+        None,
+        Some(&tool_surface_bindings),
+        Some(&mut viewport_render_commands),
+        None,
+    )
+    .expect("stale viewport command should fail closed without raising a mutation error");
+
+    assert!(
+        viewport_render_commands.is_empty(),
+        "stale viewport command must not enqueue state changes for the rebound viewport",
     );
 }
 
@@ -1152,10 +1385,11 @@ fn dispatch_shell_command_toggles_viewport_details_visibility() {
     dispatch_shell_command(
         &mut app,
         Some(&mut shell_state),
-        ShellCommand::ToggleViewportDetails {
+        surface_session_command(
             target,
-            projection_epoch: 0,
-        },
+            SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleDetails),
+            0,
+        ),
         None,
         None,
         None,
@@ -1172,10 +1406,11 @@ fn dispatch_shell_command_toggles_viewport_details_visibility() {
     dispatch_shell_command(
         &mut app,
         Some(&mut shell_state),
-        ShellCommand::ToggleViewportDetails {
+        surface_session_command(
             target,
-            projection_epoch: 0,
-        },
+            SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleDetails),
+            0,
+        ),
         None,
         None,
         None,
@@ -1214,7 +1449,7 @@ fn provider_local_viewport_details_toggle_uses_routed_surface_instance() {
     assert!(matches!(
         commands.as_slice(),
         [ShellCommand::DispatchSurfaceLocalAction {
-            action: SurfaceLocalAction::ToggleViewportDetails,
+            action: SurfaceLocalAction::Viewport(ViewportSurfaceAction::ToggleDetails),
             tool_surface_instance_id,
             ..
         }] if *tool_surface_instance_id == viewport_surface
@@ -1350,6 +1585,7 @@ fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessi
         &ThemeTokens::default(),
         None,
         None,
+        None,
     );
     let viewport_frame = frame_model
         .surface(after_surface)
@@ -1366,6 +1602,8 @@ fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessi
         observed_viewport_id,
         app.runtime().current_scene_reality_version(),
     ));
+    let mut viewport_instances = ViewportInstanceRegistryResource::default();
+    viewport_instances.sync_from_workspace_state(shell_state.workspace_state());
     let frame_model = build_editor_shell_frame_model(
         &app,
         &shell_state,
@@ -1373,11 +1611,14 @@ fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessi
         &ThemeTokens::default(),
         Some(&viewport_observations),
         None,
+        Some(&viewport_instances),
     );
     let viewport_frame = frame_model
         .surface(after_surface)
         .expect("unbound replacement viewport surface should still resolve");
-    let expected_viewport_id = viewport_id_for_tool_surface(after_surface);
+    let expected_viewport_id = viewport_instances
+        .viewport_for_tool_surface(after_surface)
+        .expect("replacement viewport surface should have explicit runtime viewport identity");
     assert!(
         ui_tree_contains_viewport_embed(&viewport_frame.artifact.root, expected_viewport_id),
         "unbound replacement viewport surface should use its own deterministic viewport id"
@@ -1412,6 +1653,7 @@ fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessi
         &shell_state,
         app.surface_provider_registry(),
         &ThemeTokens::default(),
+        None,
         None,
         None,
     );
@@ -1531,10 +1773,11 @@ fn two_viewport_surfaces_keep_independent_details_state() {
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::ToggleViewportDetails {
-            target: target_a,
-            projection_epoch: 7,
-        },
+        surface_session_command(
+            target_a,
+            SurfaceSessionMutation::Viewport(ViewportSessionMutation::ToggleDetails),
+            7,
+        ),
         None,
         None,
         None,
@@ -1575,11 +1818,13 @@ fn two_entity_table_surfaces_keep_independent_search_and_sort_state() {
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::AppendEntityTableSearchText {
-            text: "alpha".to_string(),
-            target: target_a,
-            projection_epoch: 1,
-        },
+        surface_session_command(
+            target_a,
+            SurfaceSessionMutation::EntityTable(EntityTableSessionMutation::AppendSearchText {
+                text: "alpha".to_string(),
+            }),
+            1,
+        ),
         None,
         None,
         None,
@@ -1589,11 +1834,13 @@ fn two_entity_table_surfaces_keep_independent_search_and_sort_state() {
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::ToggleEntityTableSort {
-            sort_key: editor_shell::EntityTableSortKey::DisplayName,
-            target: target_b,
-            projection_epoch: 1,
-        },
+        surface_session_command(
+            target_b,
+            SurfaceSessionMutation::EntityTable(EntityTableSessionMutation::ToggleSort {
+                sort_key: editor_shell::EntityTableSortKey::DisplayName,
+            }),
+            1,
+        ),
         None,
         None,
         None,
@@ -1654,11 +1901,13 @@ fn two_inspector_surfaces_keep_independent_draft_state() {
     dispatch_shell_command(
         &mut app,
         None,
-        ShellCommand::CancelInspectorFieldText {
-            index: 0,
-            target: target_a,
-            projection_epoch: 1,
-        },
+        surface_session_command(
+            target_a,
+            SurfaceSessionMutation::Inspector(InspectorSessionMutation::CancelFieldText {
+                index: 0,
+            }),
+            1,
+        ),
         None,
         None,
         None,

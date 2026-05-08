@@ -1,4 +1,6 @@
-use editor_shell::{ComputedLayoutMap, UiNode, UiNodeKind, viewport_embed_slot_for};
+use editor_shell::{
+    ComputedLayoutMap, UiNode, UiNodeKind, WorkspaceState, viewport_embed_slot_for,
+};
 use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::WindowState;
 use engine::plugins::render::{
@@ -20,9 +22,9 @@ use crate::runtime::resources::{
 };
 use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRegistryResource,
-    ViewportArtifactObservationResource, ViewportLayoutEntry, ViewportLayoutMapResource,
-    ViewportPickingResultsResource, ViewportRenderStateEntry, ViewportRenderStateResource,
-    resolve_structural_viewport_products,
+    ViewportArtifactObservationResource, ViewportInstanceRegistryResource, ViewportLayoutEntry,
+    ViewportLayoutMapResource, ViewportPickingResultsResource, ViewportRenderStateEntry,
+    ViewportRenderStateResource, resolve_structural_viewport_products,
 };
 use crate::shell::RunenwerkEditorShellState;
 
@@ -43,9 +45,9 @@ const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
 pub fn submit_editor_frame_system(
     window: Res<WindowState>,
     mut host: ResMut<EditorHostResource>,
-    mut viewport_render: ResMut<EditorViewportRenderState>,
     mut viewport_render_states: ResMut<ViewportRenderStateResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
+    viewport_instances: Res<ViewportInstanceRegistryResource>,
     mut viewport_layout_map: ResMut<ViewportLayoutMapResource>,
     mut tool_surface_bindings: ResMut<ToolSurfaceRuntimeBindingRegistryResource>,
     mut mounted_surfaces: ResMut<MountedSurfaceRegistryResource>,
@@ -85,6 +87,7 @@ pub fn submit_editor_frame_system(
             &*atlas,
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
         );
         (
             expression.metadata.source_version,
@@ -102,21 +105,24 @@ pub fn submit_editor_frame_system(
                 shell_state.runtime(),
             )
         })
-        .or_else(|| viewport_bounds_from_render_state(&viewport_render))
+        .or_else(|| viewport_bounds_from_render_states(&viewport_render_states))
         .unwrap_or(bounds);
-    let viewport_bounds_changed =
-        populate_viewport_render_state(app, &mut viewport_render, viewport_bounds);
     viewport_layout_map.clear();
     populate_viewport_layout_map_from_shell_tree(
         shell_state,
         &mut viewport_layout_map,
         viewport_bounds,
     );
-    tool_surface_bindings.rebuild_from_layout_map(&viewport_layout_map);
+    tool_surface_bindings
+        .rebuild_from_layout_map_with_instances(&viewport_layout_map, &viewport_instances);
     sync_viewport_render_states_from_bindings(
+        app,
+        shell_state.workspace_state(),
         &mut viewport_render_states,
         &tool_surface_bindings,
-        &viewport_render,
+        shell_scale,
+        viewport_debug_stage(),
+        root_background_opaque_enabled(),
     );
     mounted_surfaces.sync_from_workspace_state(shell_state.workspace_state());
     if app.debug_logs_enabled() {
@@ -129,81 +135,83 @@ pub fn submit_editor_frame_system(
             ));
         }
     }
-    let viewport_valid = viewport_is_valid(viewport_bounds);
-    let shader_loaded = true;
-    let debug_stage = viewport_debug_stage();
-    let root_background_opaque = root_background_opaque_enabled();
-    viewport_render.update_visibility_diagnostics(viewport_valid, shader_loaded);
-    let debug_stage_changed = viewport_render.set_debug_stage(debug_stage);
-    let root_probe_changed = viewport_render.set_root_background_opaque(root_background_opaque);
-    let shell_scale_changed = viewport_render.set_effective_shell_scale(shell_scale);
-    let contradiction_active =
-        picking_hits_entity_or_component(&viewport_picking_results, active_viewport_id)
-            && viewport_render.scene_should_be_invisible();
-    let should_report_contradiction =
-        viewport_render.should_report_visibility_contradiction(contradiction_active);
-    let branch_trace_enabled = viewport_branch_trace_enabled();
-    let branch_trace_snapshot = if branch_trace_enabled || should_report_contradiction {
-        Some(
-            viewport_render
-                .branch_trace_snapshot((window.size_px.0.max(1), window.size_px.1.max(1))),
-        )
-    } else {
-        None
-    };
 
-    if app.debug_logs_enabled() {
-        if shell_scale_changed && viewport_render.should_report_scale_change() {
-            app.append_console_line(format!(
-                "[ui] shell scale={:.3} window_scale={:.3} expression_version={}",
-                shell_scale, window.scale_factor, expression_source_version.0
-            ));
-        }
+    let diagnostic_viewport_id =
+        active_viewport_id.or_else(|| viewport_render_states.viewport_ids().next());
+    if let Some(viewport_id) = diagnostic_viewport_id
+        && let Some(entry) = viewport_render_states.state_for_mut(viewport_id)
+    {
+        let viewport_render = &mut entry.render_state;
+        let contradiction_active =
+            picking_hits_entity_or_component(&viewport_picking_results, Some(viewport_id))
+                && viewport_render.scene_should_be_invisible();
+        let should_report_contradiction =
+            viewport_render.should_report_visibility_contradiction(contradiction_active);
+        let branch_trace_enabled = viewport_branch_trace_enabled();
+        let branch_trace_snapshot = if branch_trace_enabled || should_report_contradiction {
+            Some(
+                viewport_render
+                    .branch_trace_snapshot((window.size_px.0.max(1), window.size_px.1.max(1))),
+            )
+        } else {
+            None
+        };
 
-        if viewport_bounds_changed && viewport_render.should_report_bounds_change() {
-            app.append_console_line(format!(
-                "[viewport] bounds=({:.1},{:.1},{:.1},{:.1})",
-                viewport_bounds.x, viewport_bounds.y, viewport_bounds.width, viewport_bounds.height
-            ));
-            if viewport_bounds.width <= f32::EPSILON || viewport_bounds.height <= f32::EPSILON {
-                app.append_console_line(
-                    "[viewport] warning: viewport canvas bounds are zero-sized".to_string(),
-                );
+        if app.debug_logs_enabled() {
+            if viewport_render.should_report_scale_change() {
+                app.append_console_line(format!(
+                    "[ui] shell scale={:.3} window_scale={:.3} expression_version={}",
+                    shell_scale, window.scale_factor, expression_source_version.0
+                ));
             }
-        }
 
-        if root_probe_changed
-            || debug_stage_changed
-            || viewport_render.should_report_debug_state_change()
-        {
-            app.append_console_line(format!(
-                "[viewport] root-occlusion={} debug-stage={} viewport_valid={} shader_loaded={} primitive_visible={}",
+            if viewport_render.should_report_bounds_change() {
+                app.append_console_line(format!(
+                    "[viewport] viewport={} bounds=({:.1},{:.1},{:.1},{:.1})",
+                    viewport_id.0,
+                    entry.bounds.x,
+                    entry.bounds.y,
+                    entry.bounds.width,
+                    entry.bounds.height
+                ));
+                if entry.bounds.width <= f32::EPSILON || entry.bounds.height <= f32::EPSILON {
+                    app.append_console_line(
+                        "[viewport] warning: viewport canvas bounds are zero-sized".to_string(),
+                    );
+                }
+            }
+
+            if viewport_render.should_report_debug_state_change() {
+                app.append_console_line(format!(
+                "[viewport] viewport={} root-occlusion={} debug-stage={} viewport_valid={} shader_loaded={} primitive_visible={}",
+                viewport_id.0,
                 if viewport_render.root_background_opaque { "opaque" } else { "transparent" },
                 viewport_render.debug_stage.label(),
                 viewport_render.viewport_valid,
                 viewport_render.shader_loaded,
                 viewport_render.has_primitive,
             ));
+            }
         }
-    }
 
-    if branch_trace_enabled
-        && let Some(snapshot) = branch_trace_snapshot
-        && viewport_render.should_report_branch_trace_change(snapshot)
-    {
-        app.append_console_line(format!("[viewport.branch] {}", snapshot.summary_line()));
-    }
-
-    if should_report_contradiction {
-        let mut line = format!(
-            "[viewport] contradiction: analytic picking hit while render-state indicates invisible ({})",
-            contradiction_reasons(&viewport_render)
-        );
-        if let Some(snapshot) = branch_trace_snapshot {
-            line.push_str(" | ");
-            line.push_str(&snapshot.summary_line());
+        if branch_trace_enabled
+            && let Some(snapshot) = branch_trace_snapshot
+            && viewport_render.should_report_branch_trace_change(snapshot)
+        {
+            app.append_console_line(format!("[viewport.branch] {}", snapshot.summary_line()));
         }
-        app.append_console_line(line);
+
+        if should_report_contradiction {
+            let mut line = format!(
+                "[viewport] contradiction: analytic picking hit while render-state indicates invisible ({})",
+                contradiction_reasons(viewport_render)
+            );
+            if let Some(snapshot) = branch_trace_snapshot {
+                line.push_str(" | ");
+                line.push_str(&snapshot.summary_line());
+            }
+            app.append_console_line(line);
+        }
     }
 
     submissions.replace(
@@ -215,19 +223,40 @@ pub fn submit_editor_frame_system(
 }
 
 fn sync_viewport_render_states_from_bindings(
+    app: &crate::editor_app::RunenwerkEditorApp,
+    workspace_state: &WorkspaceState,
     viewport_render_states: &mut ViewportRenderStateResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-    base_render_state: &EditorViewportRenderState,
+    shell_scale: f32,
+    default_debug_stage: EditorViewportDebugStage,
+    default_root_background_opaque: bool,
 ) {
     let mut viewport_ids = std::collections::BTreeSet::new();
     for binding in tool_surface_bindings.bindings() {
-        let mut render_state = *base_render_state;
+        let mut render_state = viewport_render_states
+            .state_for(binding.viewport_id)
+            .map(|previous| previous.render_state)
+            .or_else(|| {
+                workspace_state
+                    .tool_surface(binding.tool_surface_id)
+                    .and_then(|surface| surface.viewport_settings)
+                    .map(EditorViewportRenderState::from_viewport_settings)
+            })
+            .unwrap_or_else(|| {
+                let mut state = EditorViewportRenderState::default();
+                state.set_debug_stage(default_debug_stage);
+                state.set_root_background_opaque(default_root_background_opaque);
+                state
+            });
         render_state.set_viewport_bounds((
             binding.bounds.x,
             binding.bounds.y,
             binding.bounds.width,
             binding.bounds.height,
         ));
+        render_state.set_effective_shell_scale(shell_scale);
+        populate_viewport_render_state(app, &mut render_state, binding.bounds);
+        render_state.update_visibility_diagnostics(viewport_is_valid(binding.bounds), true);
         viewport_ids.insert(binding.viewport_id);
         viewport_render_states.upsert_state(ViewportRenderStateEntry {
             viewport_id: binding.viewport_id,
@@ -400,13 +429,11 @@ fn collect_viewport_layout_entries(
     }
 }
 
-fn viewport_bounds_from_render_state(state: &EditorViewportRenderState) -> Option<UiRect> {
-    let (x, y, width, height) = state.viewport_bounds_px;
-    if width > f32::EPSILON && height > f32::EPSILON {
-        Some(UiRect::new(x, y, width, height))
-    } else {
-        None
-    }
+fn viewport_bounds_from_render_states(states: &ViewportRenderStateResource) -> Option<UiRect> {
+    states
+        .entries()
+        .find(|entry| entry.bounds.width > f32::EPSILON && entry.bounds.height > f32::EPSILON)
+        .map(|entry| entry.bounds)
 }
 
 fn viewport_is_valid(bounds: UiRect) -> bool {
@@ -514,7 +541,7 @@ fn entity_primitive(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::viewport::{ToolSurfaceRuntimeBindingRecord, viewport_id_for_tool_surface};
+    use crate::runtime::viewport::{ToolSurfaceRuntimeBindingRecord, ViewportRenderStateCommand};
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
     use editor_viewport::ViewportId;
     use ui_render_data::ViewportSurfaceEmbedPrimitive;
@@ -580,8 +607,8 @@ mod tests {
     #[test]
     fn viewport_render_states_follow_tool_surface_bindings() {
         let mut bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
-        let first = viewport_id_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(1).unwrap());
-        let second = viewport_id_for_tool_surface(ToolSurfaceInstanceId::try_from_raw(2).unwrap());
+        let first = ViewportId(2);
+        let second = ViewportId(3);
         bindings.upsert_binding(binding(1, 1, 1, first, UiRect::new(0.0, 0.0, 320.0, 240.0)));
         bindings.upsert_binding(binding(
             2,
@@ -591,12 +618,21 @@ mod tests {
             UiRect::new(320.0, 0.0, 480.0, 240.0),
         ));
         let mut render_states = ViewportRenderStateResource::default();
-        let base_render_state = EditorViewportRenderState::default();
+        let app = crate::editor_app::RunenwerkEditorApp::new();
+        let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
+        let workspace = editor_shell::WorkspaceState::bootstrap_current_layout(
+            editor_shell::WorkspaceId::try_from_raw(1).unwrap(),
+            &mut allocator,
+        );
 
         sync_viewport_render_states_from_bindings(
+            &app,
+            &workspace,
             &mut render_states,
             &bindings,
-            &base_render_state,
+            1.0,
+            EditorViewportDebugStage::Scene,
+            false,
         );
 
         assert_eq!(
@@ -606,6 +642,27 @@ mod tests {
         assert_eq!(
             render_states.state_for(second).map(|state| state.bounds),
             Some(UiRect::new(320.0, 0.0, 480.0, 240.0)),
+        );
+
+        render_states.apply_command(ViewportRenderStateCommand::SetDebugStage {
+            viewport_id: second,
+            debug_stage: EditorViewportDebugStage::PrimitiveAvailability,
+        });
+        sync_viewport_render_states_from_bindings(
+            &app,
+            &workspace,
+            &mut render_states,
+            &bindings,
+            1.0,
+            EditorViewportDebugStage::Scene,
+            false,
+        );
+
+        assert_eq!(
+            render_states
+                .state_for(second)
+                .map(|state| state.render_state.debug_stage),
+            Some(EditorViewportDebugStage::PrimitiveAvailability),
         );
     }
 }

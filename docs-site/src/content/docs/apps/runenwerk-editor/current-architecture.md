@@ -182,24 +182,32 @@ instructional "drop here" copy. Retained popups carry explicit layer order:
 viewport-local overlays use the lower overlay layer, while menu/dropdown popups
 use the higher menu layer so viewport overlays cannot cover open menus.
 
-Viewport runtime binding is app-owned. `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::populate_viewport_layout_map_from_shell_tree`
+Viewport runtime binding is app-owned. `apps/runenwerk_editor/src/runtime/systems/viewport_lifecycle.rs::sync_viewport_instances_system`
+syncs explicit viewport instances from workspace state before frame submission,
+persists viewport-owned camera/debug/root/product settings back to workspace
+state, and prunes closed viewport runtime records,
+and `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::populate_viewport_layout_map_from_shell_tree`
 scans the projected shell tree for retained `ViewportSurfaceEmbed` nodes and
 binds each embedded viewport through its structural widget context. Replacement
-viewport surfaces created by the surface-type menu receive a deterministic
-viewport id through
-`apps/runenwerk_editor/src/shell/providers/scene/viewport.rs::SceneViewportProvider::build_frame`
+viewport surfaces created by the surface-type menu receive their viewport id from
+`apps/runenwerk_editor/src/runtime/viewport/instance_registry.rs::ViewportInstanceRegistryResource`
 rather than inheriting an unrelated lone observed viewport. `apps/runenwerk_editor/src/runtime/viewport/layout_map.rs::ViewportLayoutMapResource`
 stores entries by `StructuralWidgetRoutingContext`, not only by `ViewportId`,
 so split/replacement viewport surfaces do not overwrite each other's
 shell/runtime binding. `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateResource`
-records per-viewport bounds as a migration step toward viewport-owned render
-jobs.
+records per-viewport bounds and viewport-local camera/debug/root snapshots used
+by viewport render jobs and picking. Frame submit derives per-viewport render
+state from runtime bindings and retained workspace settings; the retained
+`EditorViewportRenderState` resource remains only as render-flow default/helper
+state, not the live viewport authority.
 
-This viewport path is still a migration checkpoint. The current shader/runtime
-bridge can carry multiple viewport rectangles in one scene-product uniform, and
-`apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs` still exposes
-static scene-color, picking-id, and overlay resource ids. The no-compromise
-target is documented in
+The viewport migration path is closed. Per-viewport product targets are allocated
+by `apps/runenwerk_editor/src/runtime/viewport/product_targets.rs::ViewportProductTargetRegistryResource`,
+one render job is published per visible viewport by
+`apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs::ViewportRenderJobResource`,
+and `assets/shaders/editor_viewport_scene_product.wgsl` renders one
+viewport-local target per job without multi-rectangle containment. The
+no-compromise target and follow-up product maturity work are documented in
 `docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md`;
 the end-to-end implementation sequence is
 `docs-site/src/content/docs/apps/runenwerk-editor/viewport-expression-implementation-roadmap.md`.

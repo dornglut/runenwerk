@@ -2,7 +2,7 @@
 //! Purpose: Viewport shell view model.
 
 use editor_core::EntityId;
-use editor_viewport::{ExpressionProductId, ViewportId};
+use editor_viewport::{ExpressionProductId, ViewportDebugStage, ViewportId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewportProductChoiceViewModel {
@@ -13,7 +13,7 @@ pub struct ViewportProductChoiceViewModel {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewportViewModel {
     pub viewport_id: Option<ViewportId>,
     pub selected_primary_product_id: Option<ExpressionProductId>,
@@ -21,8 +21,29 @@ pub struct ViewportViewModel {
     pub details_visible: bool,
     pub statistics_visible: bool,
     pub options_menu_open: bool,
+    pub debug_stage: ViewportDebugStage,
+    pub root_background_opaque: bool,
     pub selected_entity: Option<EntityId>,
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,
     pub preview_active: bool,
+}
+
+impl Default for ViewportViewModel {
+    fn default() -> Self {
+        Self {
+            viewport_id: None,
+            selected_primary_product_id: None,
+            product_choices: Vec::new(),
+            details_visible: false,
+            statistics_visible: false,
+            options_menu_open: false,
+            debug_stage: ViewportDebugStage::Scene,
+            root_background_opaque: false,
+            selected_entity: None,
+            hovered_entity: None,
+            drag_in_progress: false,
+            preview_active: false,
+        }
+    }
 }

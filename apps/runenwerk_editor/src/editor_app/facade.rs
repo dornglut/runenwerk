@@ -9,7 +9,8 @@ use crate::editor_panels::{
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportPresentationStateResource,
+    ViewportInstanceRegistryResource, ViewportPresentationStateResource,
+    ViewportRenderStateCommandQueueResource,
 };
 use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState};
 use editor_core::EditorMutationError;
@@ -148,6 +149,7 @@ impl RunenwerkEditorApp {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn build_shell_expression_frame_with_surface_resources(
         &self,
         shell_state: &mut RunenwerkEditorShellState,
@@ -156,6 +158,7 @@ impl RunenwerkEditorApp {
         atlas_source: &dyn FontAtlasSource,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
     ) -> editor_shell::ShellUiExpressionFrame {
         RunenwerkEditorShellController::build_expression_frame_with_surface_resources(
             self,
@@ -165,6 +168,7 @@ impl RunenwerkEditorApp {
             atlas_source,
             viewport_observations,
             tool_surface_bindings,
+            viewport_instances,
         )
     }
 
@@ -179,6 +183,8 @@ impl RunenwerkEditorApp {
         viewport_presentations: Option<&mut ViewportPresentationStateResource>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        viewport_render_commands: Option<&mut ViewportRenderStateCommandQueueResource>,
     ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
         RunenwerkEditorShellController::dispatch_input_with_viewport_products(
             self,
@@ -190,6 +196,8 @@ impl RunenwerkEditorApp {
             viewport_presentations,
             viewport_observations,
             tool_surface_bindings,
+            viewport_instances,
+            viewport_render_commands,
         )
     }
 }

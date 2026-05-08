@@ -14,8 +14,9 @@ use crate::runtime::app::{
 use crate::runtime::resources::{EditorHostResource, EditorInputBridgeState, scaled_shell_theme};
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportPickingResultsResource, ViewportPresentationStateResource,
-    resolve_structural_viewport_products,
+    ViewportInstanceRegistryResource, ViewportPickingResultsResource,
+    ViewportPresentationStateResource, ViewportRenderStateCommand,
+    ViewportRenderStateCommandQueueResource, resolve_structural_viewport_products,
 };
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
 use crate::shell::dispatch_shell_command;
@@ -39,7 +40,9 @@ pub fn dispatch_editor_input_system(
     picking_results: Res<ViewportPickingResultsResource>,
     mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
+    viewport_instances: Res<ViewportInstanceRegistryResource>,
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
+    mut viewport_render_commands: ResMut<ViewportRenderStateCommandQueueResource>,
 ) {
     dispatch_shortcuts(
         &input,
@@ -83,6 +86,8 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
     }
 
@@ -100,7 +105,15 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
+        if let Some(binding) = fallback_viewport_binding(&tool_surface_bindings, position) {
+            viewport_render_commands.push(ViewportRenderStateCommand::ZoomCamera {
+                viewport_id: binding.viewport_id,
+                scroll_delta: input.scroll_delta,
+            });
+        }
     }
 
     if input.left_mouse_pressed() {
@@ -117,6 +130,8 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
 
         let pointer_route = outcome.as_ref().and_then(|value| {
@@ -151,6 +166,8 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
     }
 
@@ -168,6 +185,8 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
     }
 
@@ -191,6 +210,26 @@ pub fn dispatch_editor_input_system(
         }
     }
 
+    if input.middle_mouse_down()
+        && position != previous
+        && let Some(binding) = fallback_viewport_binding(&tool_surface_bindings, position)
+    {
+        viewport_render_commands.push(ViewportRenderStateCommand::PanCamera {
+            viewport_id: binding.viewport_id,
+            delta: position - previous,
+        });
+    }
+
+    if input.right_mouse_down()
+        && position != previous
+        && let Some(binding) = fallback_viewport_binding(&tool_surface_bindings, position)
+    {
+        viewport_render_commands.push(ViewportRenderStateCommand::OrbitCamera {
+            viewport_id: binding.viewport_id,
+            delta: position - previous,
+        });
+    }
+
     if input.left_mouse_released() {
         let outcome = dispatch_pointer_event(
             &mut host,
@@ -205,6 +244,8 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
         let captured_surface = host.app.surface_sessions().active_viewport_drag_surface();
         let routed_release_surface = outcome
@@ -250,6 +291,8 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
     }
 
@@ -267,6 +310,8 @@ pub fn dispatch_editor_input_system(
             Some(&mut *viewport_presentations),
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
+            Some(&viewport_instances),
+            Some(&mut *viewport_render_commands),
         );
     }
 
@@ -280,6 +325,8 @@ pub fn dispatch_editor_input_system(
         Some(&mut *viewport_presentations),
         Some(&viewport_observations),
         Some(&tool_surface_bindings),
+        Some(&viewport_instances),
+        Some(&mut *viewport_render_commands),
     );
 
     let cursor_intent =
@@ -380,6 +427,8 @@ fn dispatch_pointer_event(
     viewport_presentations: Option<&mut ViewportPresentationStateResource>,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
     tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    viewport_instances: Option<&ViewportInstanceRegistryResource>,
+    viewport_render_commands: Option<&mut ViewportRenderStateCommandQueueResource>,
 ) -> Option<editor_shell::UiInputOutcome> {
     let event = UiInputEvent::Pointer(PointerEvent {
         kind,
@@ -399,6 +448,8 @@ fn dispatch_pointer_event(
         viewport_presentations,
         viewport_observations,
         tool_surface_bindings,
+        viewport_instances,
+        viewport_render_commands,
     ) {
         Ok(outcome) => Some(outcome),
         Err(error) => {
@@ -419,9 +470,12 @@ fn dispatch_shell_keyboard_and_text(
     viewport_presentations: Option<&mut ViewportPresentationStateResource>,
     viewport_observations: Option<&ViewportArtifactObservationResource>,
     tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    viewport_instances: Option<&ViewportInstanceRegistryResource>,
+    viewport_render_commands: Option<&mut ViewportRenderStateCommandQueueResource>,
 ) {
     let mut viewport_presentations = viewport_presentations;
-    let send_key =
+    let mut viewport_render_commands = viewport_render_commands;
+    let mut send_key =
         |key: ui_input::Key,
          host: &mut EditorHostResource,
          viewport_presentations: Option<&mut ViewportPresentationStateResource>| {
@@ -439,6 +493,8 @@ fn dispatch_shell_keyboard_and_text(
                 viewport_presentations,
                 viewport_observations,
                 tool_surface_bindings,
+                viewport_instances,
+                viewport_render_commands.as_deref_mut(),
             );
         };
 
@@ -484,6 +540,8 @@ fn dispatch_shell_keyboard_and_text(
             viewport_presentations,
             viewport_observations,
             tool_surface_bindings,
+            viewport_instances,
+            viewport_render_commands,
         );
     }
 }

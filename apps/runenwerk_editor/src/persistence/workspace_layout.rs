@@ -6,7 +6,8 @@ use serde::Deserialize;
 
 use editor_shell::{
     PERSISTED_WORKSPACE_STATE_VERSION_V1, PERSISTED_WORKSPACE_STATE_VERSION_V2,
-    PersistedWorkspaceStateV1, PersistedWorkspaceStateV2, WorkspaceProfileId, WorkspaceState,
+    PERSISTED_WORKSPACE_STATE_VERSION_V3, PersistedWorkspaceStateV1, PersistedWorkspaceStateV2,
+    PersistedWorkspaceStateV3, WorkspaceProfileId, WorkspaceState,
 };
 
 #[derive(Debug, Deserialize)]
@@ -38,7 +39,7 @@ pub fn legacy_workspace_layout_path_for_scene(scene_path: &Path) -> PathBuf {
 }
 
 pub fn write_workspace_layout(path: &Path, workspace_state: &WorkspaceState) -> Result<()> {
-    let persisted = workspace_state.to_persisted_v2();
+    let persisted = workspace_state.to_persisted_v3();
     let ron =
         encode_ron_pretty(&persisted).context("failed to encode persisted workspace layout")?;
     std::fs::write(path, ron)
@@ -60,6 +61,11 @@ pub fn read_workspace_layout(path: &Path) -> Result<WorkspaceState> {
             let persisted: PersistedWorkspaceStateV2 =
                 decode_ron(&source).context("failed to decode v2 persisted workspace layout")?;
             WorkspaceState::from_persisted_v2(persisted)
+        }
+        PERSISTED_WORKSPACE_STATE_VERSION_V3 => {
+            let persisted: PersistedWorkspaceStateV3 =
+                decode_ron(&source).context("failed to decode v3 persisted workspace layout")?;
+            WorkspaceState::from_persisted_v3(persisted)
         }
         version => Err(editor_shell::WorkspaceStateError::PersistedVersionUnsupported(version)),
     };
