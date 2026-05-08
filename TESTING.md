@@ -49,9 +49,16 @@ cargo test --workspace
 Add project-specific commands as they stabilize:
 
 ```text
+./quiet_editor_gate.sh
 cargo check -p runenwerk_editor
 cargo test -p runenwerk_editor --test startup_render_smoke -- --nocapture
 ```
+
+Use `./quiet_editor_gate.sh` for active editor/ECS implementation loops. It
+runs docs validation, focused clippy, and focused tests for the ECS, inspector,
+scene editor, shell, and editor app crates. Use `./quiet_full_gate.sh` for broad
+closeout and milestone validation; it prefers `cargo-nextest` when available and
+falls back to `cargo test`.
 
 Documentation validation:
 

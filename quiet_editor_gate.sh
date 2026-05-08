@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# File: tools/validation/quiet_full_gate.sh
+# File: quiet_editor_gate.sh
 # Purpose:
-#   Run the long-term workspace gate without successful-test spam.
+#   Run the fast editor/ECS validation slice used during active editor work.
 #
-# Output policy:
-#   - clippy: show warnings/errors in short form
-#   - tests: hide successful test binaries and successful test names
-#   - failures: print the full failing command output
-#
-# Run from the Runenwerk repository root.
+# This gate is additive. Milestone and broad closeout validation still uses
+# ./quiet_full_gate.sh.
 
 if [[ ! -f "Cargo.toml" ]]; then
   echo "error: run this script from the Runenwerk repository root" >&2
@@ -30,7 +26,6 @@ run_quiet() {
   echo "==> $name"
 
   if "$@" >"$stdout_file" 2>"$stderr_file"; then
-    # Show warnings/errors if any command emitted them despite success.
     if grep -E "^(warning|error)(\\[|:)" "$stderr_file" >/dev/null 2>&1; then
       grep -E "^(warning|error)(\\[|:)" "$stderr_file"
     else
@@ -55,30 +50,40 @@ run_quiet() {
   return 1
 }
 
-# Fast format check; normally silent.
-run_quiet "fmt" cargo fmt --all -- --check
+packages=(
+  ecs
+  ecs_macros
+  editor_inspector
+  editor_scene
+  editor_shell
+  runenwerk_editor
+)
 
-# Short compiler diagnostics, no long cargo chatter.
+package_args=()
+for package in "${packages[@]}"; do
+  package_args+=("-p" "$package")
+done
+
+run_quiet "fmt" cargo fmt --all -- --check
+run_quiet "docs" python3 tools/docs/validate_docs.py
 run_quiet "clippy" cargo clippy \
-  --workspace \
+  "${package_args[@]}" \
   --all-targets \
   --all-features \
   --message-format=short \
   -- \
   -D warnings
 
-# Quiet test harness. Prefer nextest when available, but keep cargo test as
-# the zero-install fallback for local and CI environments.
 if cargo nextest --version >/dev/null 2>&1; then
   run_quiet "test" cargo nextest run \
-    --workspace \
+    "${package_args[@]}" \
     --all-features
 else
   run_quiet "test" cargo test \
-    --workspace \
+    "${package_args[@]}" \
     --all-features \
     --quiet
 fi
 
 echo
-echo "quiet full gate passed"
+echo "quiet editor gate passed"

@@ -19,8 +19,9 @@ steps:
       RUST_LOG: info
     commands:
       - apt-get update
-      - apt-get install -y pkg-config libssl-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+      - apt-get install -y pkg-config python3 libssl-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
       - cargo --version
-      - cargo test --workspace
+      - python3 tools/docs/validate_docs.py
+      - ./quiet_full_gate.sh
       - cargo test -p ecs --test docs_examples
       - cargo test -p ecs --doc
