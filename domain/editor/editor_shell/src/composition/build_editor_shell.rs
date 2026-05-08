@@ -32,14 +32,15 @@ use crate::{
     SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction, SurfaceProviderId, TabStackId,
     TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind,
     ToolbarMenuKind, VIEWPORT_PANEL_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
-    WorkspaceState, build_defined_toolbar, build_defined_toolbar_menu_popup,
-    tab_close_button_widget_id, tab_close_overlay_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
-    tab_stack_duplicate_button_widget_id, tab_stack_lock_type_toggle_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_reset_area_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_split_vertical_button_widget_id,
-    tab_stack_surface_menu_item_widget_id, tab_stack_surface_menu_popup_widget_id,
-    tab_stack_switch_surface_button_widget_id, tab_strip_scroll_widget_id,
+    WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
+    build_defined_toolbar_with_template, tab_close_button_widget_id, tab_close_overlay_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_close_area_button_widget_id,
+    tab_stack_container_widget_id, tab_stack_duplicate_button_widget_id,
+    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_split_vertical_button_widget_id, tab_stack_surface_menu_item_widget_id,
+    tab_stack_surface_menu_popup_widget_id, tab_stack_switch_surface_button_widget_id,
+    tab_strip_scroll_widget_id,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -187,8 +188,16 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
     let fixed_projection = workspace_projection.fixed_layout.clone();
     let root_host = workspace_projection.root_host.clone();
     let floating_hosts = workspace_projection.floating_hosts.clone();
-    let toolbar = build_defined_toolbar(&frame_model.toolbar, theme);
-    let toolbar_menu_popup = build_defined_toolbar_menu_popup(&frame_model.toolbar, theme);
+    let toolbar = build_defined_toolbar_with_template(
+        &frame_model.toolbar,
+        theme,
+        frame_model.active_toolbar_template.as_ref(),
+    );
+    let toolbar_menu_popup = build_defined_toolbar_menu_popup_with_binding(
+        &frame_model.toolbar,
+        theme,
+        frame_model.active_toolbar_binding.as_ref(),
+    );
     let tab_stack_popup_menus =
         build_tab_stack_popup_menus(frame_model, &workspace_projection, theme);
     let mut toolbar_routes_by_widget_id = toolbar.routes_by_widget_id.clone();
@@ -568,9 +577,12 @@ fn build_tab_stack_popup_menus(
             TabStackPopupMenuKind::AreaActions => {
                 build_tab_stack_action_menu_popup(stack, active_menu.anchor_widget_id, theme)
             }
-            TabStackPopupMenuKind::SurfaceKinds => {
-                build_tab_stack_surface_menu_popup(stack, active_menu.anchor_widget_id, theme)
-            }
+            TabStackPopupMenuKind::SurfaceKinds => build_tab_stack_surface_menu_popup(
+                stack,
+                active_menu.anchor_widget_id,
+                theme,
+                &available_tool_surface_kinds(frame_model),
+            ),
         })
         .collect()
 }
@@ -655,10 +667,12 @@ fn build_tab_stack_surface_menu_popup(
     tab_stack: &ProjectedTabStackSlot,
     anchor_widget_id: WidgetId,
     theme: &ThemeTokens,
+    tool_surface_kinds: &[ToolSurfaceKind],
 ) -> UiNode {
     let text_style = theme.body_small_text_style(FontId(1));
-    let mut children = shell_tool_surface_kinds()
-        .into_iter()
+    let mut children = tool_surface_kinds
+        .iter()
+        .copied()
         .enumerate()
         .map(|(index, kind)| {
             tab_stack_action_menu_item(
@@ -872,6 +886,14 @@ pub(super) fn shell_tool_surface_kinds() -> Vec<ToolSurfaceKind> {
     ]
 }
 
+fn available_tool_surface_kinds(frame_model: &EditorShellFrameModel) -> Vec<ToolSurfaceKind> {
+    if frame_model.available_tool_surface_kinds.is_empty() {
+        shell_tool_surface_kinds()
+    } else {
+        frame_model.available_tool_surface_kinds.clone()
+    }
+}
+
 pub(super) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
     match kind {
         ToolSurfaceKind::Outliner => "Outliner",
@@ -950,8 +972,9 @@ fn build_frame_widget_routes(
         );
     }
 
+    let tool_surface_kinds = available_tool_surface_kinds(frame_model);
     for stack in projected_tab_stacks_for_routes(workspace_projection) {
-        register_tab_stack_chrome_routes(&mut actions, stack);
+        register_tab_stack_chrome_routes(&mut actions, stack, &tool_surface_kinds);
     }
 
     for surface in frame_model.surfaces.values() {
@@ -1088,8 +1111,8 @@ fn projected_tab_stacks_for_routes(
 fn register_tab_stack_chrome_routes(
     actions: &mut BTreeMap<WidgetId, RoutedShellAction>,
     stack: &ProjectedTabStackSlot,
+    tool_surface_kinds: &[ToolSurfaceKind],
 ) {
-    let tool_surface_kinds = shell_tool_surface_kinds();
     let default_kind = stack
         .active_panel
         .and_then(|panel| panel.active_tool_surface)

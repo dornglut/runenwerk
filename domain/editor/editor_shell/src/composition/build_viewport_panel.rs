@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_shell/src/composition/build_viewport_panel.rs
 //! Purpose: Compose viewport panel widgets.
 
-use crate::{UiNode, button_selected, hstack_with_policies, label};
+use crate::{UiNode, button_selected, hstack_with_policies, label, toggle};
 use editor_viewport::{ViewportDebugStage, ViewportSurfacePresentationSlot};
 use ui_definition::{
     AuthoredUiNodePath, AuthoredUiTemplate, UiDefinitionContext, form_retained_ui,
@@ -22,7 +22,10 @@ use crate::{
     VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
     VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID, ViewportViewModel,
     viewport_debug_stage_button_widget_id, viewport_embed_slot_for,
+    viewport_product_button_widget_id,
 };
+
+use super::surface_control_polish::apply_compact_surface_control_polish;
 
 const VIEWPORT_TEMPLATE_RON: &str =
     include_str!("../../../../../assets/editor/ui/surfaces/viewport.ron");
@@ -174,57 +177,51 @@ fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -
             0.96,
         );
         let mut items = vec![
-            button_selected(
+            viewport_toggle(
                 VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-                if view_model.details_visible {
-                    "Details [x]"
-                } else {
-                    "Details [ ]"
-                },
-                theme.body_small_text_style(FontId(1)),
-                theme.clone(),
+                "Details",
                 view_model.details_visible,
+                theme,
             ),
-            button_selected(
+            viewport_toggle(
                 VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
-                if view_model.statistics_visible {
-                    "Statistics [x]"
-                } else {
-                    "Statistics [ ]"
-                },
-                theme.body_small_text_style(FontId(1)),
-                theme.clone(),
+                "Statistics",
                 view_model.statistics_visible,
+                theme,
             ),
         ];
         if view_model.viewport_id.is_some() {
-            items.push(button_selected(
+            items.push(viewport_button(
                 VIEWPORT_RESET_CAMERA_WIDGET_ID,
                 "Reset Camera",
-                theme.body_small_text_style(FontId(1)),
-                theme.clone(),
                 false,
+                true,
+                theme,
             ));
-            items.push(button_selected(
+            items.push(viewport_toggle(
                 VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
-                if view_model.root_background_opaque {
-                    "Opaque Root [x]"
-                } else {
-                    "Opaque Root [ ]"
-                },
-                theme.body_small_text_style(FontId(1)),
-                theme.clone(),
+                "Opaque Root",
                 view_model.root_background_opaque,
+                theme,
             ));
             for (index, stage) in ViewportDebugStage::ALL.into_iter().enumerate() {
-                items.push(button_selected(
+                items.push(viewport_button(
                     viewport_debug_stage_button_widget_id(index),
                     format!("Debug {}", stage.display_label()),
-                    theme.body_small_text_style(FontId(1)),
-                    theme.clone(),
                     view_model.debug_stage == stage,
+                    true,
+                    theme,
                 ));
             }
+        }
+        for (index, choice) in view_model.product_choices.iter().enumerate() {
+            items.push(viewport_button(
+                viewport_product_button_widget_id(index),
+                format!("Product {}", choice.label),
+                choice.selected,
+                choice.enabled,
+                theme,
+            ));
         }
         UiNode::with_children(
             VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
@@ -235,6 +232,44 @@ fn viewport_options_popup(view_model: &ViewportViewModel, theme: &ThemeTokens) -
             items,
         )
     })
+}
+
+fn viewport_toggle(
+    id: crate::WidgetId,
+    label: impl Into<String>,
+    checked: bool,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let mut node = toggle(
+        id,
+        label,
+        checked,
+        theme.body_small_text_style(FontId(1)),
+        theme.clone(),
+    );
+    apply_compact_surface_control_polish(&mut node, theme);
+    node
+}
+
+fn viewport_button(
+    id: crate::WidgetId,
+    label: impl Into<String>,
+    selected: bool,
+    enabled: bool,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let mut node = button_selected(
+        id,
+        label,
+        theme.body_small_text_style(FontId(1)),
+        theme.clone(),
+        selected,
+    );
+    if let UiNodeKind::Button(button) = &mut node.kind {
+        button.enabled = enabled;
+    }
+    apply_compact_surface_control_polish(&mut node, theme);
+    node
 }
 
 fn viewport_status_overlay(view_model: &ViewportViewModel, theme: &ThemeTokens) -> Option<UiNode> {
@@ -358,13 +393,61 @@ mod tests {
             .expect("details button should exist");
         assert!(matches!(
             &visible_button.kind,
-            UiNodeKind::Button(button) if button.label == "Details [x]" && button.selected
+            UiNodeKind::Toggle(toggle) if toggle.label == "Details" && toggle.checked
         ));
         let statistics_button = find_node(&visible, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID)
             .expect("statistics button should exist");
         assert!(matches!(
             &statistics_button.kind,
-            UiNodeKind::Button(button) if button.label == "Statistics [x]" && button.selected
+            UiNodeKind::Toggle(toggle) if toggle.label == "Statistics" && toggle.checked
+        ));
+    }
+
+    #[test]
+    fn viewport_options_menu_projects_product_choices() {
+        let theme = ThemeTokens::default();
+        let visible_model = ViewportViewModel {
+            options_menu_open: true,
+            viewport_id: Some(editor_viewport::ViewportId(4)),
+            product_choices: vec![
+                crate::ViewportProductChoiceViewModel {
+                    viewport_id: editor_viewport::ViewportId(4),
+                    product_id: editor_viewport::ExpressionProductId(1),
+                    label: "Scene Color".to_string(),
+                    selected: true,
+                    enabled: true,
+                },
+                crate::ViewportProductChoiceViewModel {
+                    viewport_id: editor_viewport::ViewportId(4),
+                    product_id: editor_viewport::ExpressionProductId(9),
+                    label: "Volume Slice".to_string(),
+                    selected: false,
+                    enabled: false,
+                },
+            ],
+            ..Default::default()
+        };
+        let visible = build_viewport_panel(
+            &visible_model,
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+
+        let selected_product = find_node(&visible, viewport_product_button_widget_id(0))
+            .expect("selected product button should exist");
+        assert!(matches!(
+            &selected_product.kind,
+            UiNodeKind::Button(button)
+                if button.label == "Product Scene Color" && button.selected && button.enabled
+        ));
+
+        let unavailable_product = find_node(&visible, viewport_product_button_widget_id(1))
+            .expect("unavailable product button should exist");
+        assert!(matches!(
+            &unavailable_product.kind,
+            UiNodeKind::Button(button)
+                if button.label == "Product Volume Slice" && !button.selected && !button.enabled
         ));
     }
 

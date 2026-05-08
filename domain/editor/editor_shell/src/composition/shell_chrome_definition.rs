@@ -7,8 +7,8 @@ use crate::{
     tab_stack_new_tab_button_widget_id, tab_strip_scroll_widget_id,
 };
 use ui_definition::{
-    AuthoredUiNodePath, AuthoredUiTemplate, UiCollectionItem, UiDefinitionContext, UiValue,
-    form_retained_ui, normalize_authored_template,
+    AuthoredUiNodePath, AuthoredUiTemplate, NormalizedUiTemplate, UiCollectionItem,
+    UiDefinitionContext, UiValue, form_retained_ui, normalize_authored_template,
 };
 use ui_math::{UiInsets, UiSize};
 use ui_theme::{ThemeTokens, UiColor};
@@ -22,13 +22,33 @@ pub fn build_defined_tab_strip_from_frame(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
 ) -> UiNode {
-    let template: AuthoredUiTemplate = ron::from_str(SHELL_CHROME_TEMPLATE_RON)
+    build_defined_tab_strip_from_frame_with_template(
+        tab_stack,
+        frame_model,
+        theme,
+        frame_model.active_shell_chrome_template.as_ref(),
+    )
+}
+
+fn build_defined_tab_strip_from_frame_with_template(
+    tab_stack: &ProjectedTabStackSlot,
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    template: Option<&NormalizedUiTemplate>,
+) -> UiNode {
+    let checked_in_template: AuthoredUiTemplate = ron::from_str(SHELL_CHROME_TEMPLATE_RON)
         .expect("checked-in shell chrome fixture must parse");
-    let normalized = normalize_authored_template(template);
+    let fallback;
+    let normalized = if let Some(template) = template {
+        template
+    } else {
+        fallback = normalize_authored_template(checked_in_template);
+        &fallback
+    };
     let mut context = UiDefinitionContext::new(theme.clone());
     register_shell_chrome_widget_ids(&mut context, tab_stack);
     populate_shell_chrome_values(&mut context, tab_stack, frame_model);
-    let mut root = form_retained_ui(&normalized, &mut context).root;
+    let mut root = form_retained_ui(normalized, &mut context).root;
     project_close_buttons_as_tab_overlays(&mut root, tab_stack, theme);
     root
 }

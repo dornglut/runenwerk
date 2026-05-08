@@ -68,7 +68,13 @@ Implemented foundation state:
 - `domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs::ViewportSurfaceBindingSource` is dynamic-texture-only; the old flow-resource embed bridge has been removed.
 - `assets/shaders/editor_viewport_scene_product.wgsl` renders a viewport-local product and no longer contains multi-rectangle containment.
 
-Remaining work is no longer migration cleanup. The planned non-viewport surface workflow follow-up has landed; product maturity now moves to broader reusable-control adoption, more viewport producer types, the M4 SDF/field asset pipeline, and broader history workflows.
+Remaining work is no longer migration cleanup. The planned non-viewport surface
+workflow follow-up has landed, reusable viewport options now use retained toggle
+controls, and the viewport product catalog exposes descriptor rows for field,
+atlas, volume slice, brickmap debug, and history color products. Products whose
+runtime producers are not implemented are visible but marked unavailable. Product
+maturity now moves to real M4 SDF/field asset producers, field-product formation,
+and concrete history/temporal buffers rather than descriptor plumbing.
 
 ## Final Architecture
 
@@ -102,7 +108,9 @@ Final responsibilities:
 - `ViewportId`, `ExpressionProductId`, `ExpressionProductKind`, and `ExpressionProductDescriptor`;
 - viewport presentation state and product-selection semantics;
 - product source reality, freshness, presentation hints, and product dimensions;
-- engine-agnostic contracts for scene color, picking ids, overlay, depth, scalar field, vector field, atlas, volume, brickmap, and diagnostics products.
+- engine-agnostic contracts for scene color, picking ids, overlay, depth,
+  diagnostics, scalar field, vector field, atlas, volume slice, brickmap debug,
+  and history color products.
 
 These contracts must stay engine-agnostic. GPU texture handles, render pass labels, and backend resource ids remain runtime/engine concerns.
 

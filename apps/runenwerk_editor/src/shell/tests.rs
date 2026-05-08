@@ -50,6 +50,23 @@ struct QueryMarker {
     value: i32,
 }
 
+fn simple_test_template(id: &str) -> ui_definition::AuthoredUiTemplate {
+    ui_definition::AuthoredUiTemplate {
+        id: id.into(),
+        root: ui_definition::UiNodeDefinition::Panel {
+            id: "root".into(),
+            children: vec![ui_definition::UiNodeDefinition::Label {
+                id: "label".into(),
+                label: ui_definition::UiValueBinding::static_text("Test"),
+                availability: None,
+            }],
+            availability: None,
+        },
+        templates: Vec::new(),
+        menus: Vec::new(),
+    }
+}
+
 fn test_tool_surface_binding_registry(
     tool_surface: editor_shell::ToolSurfaceInstanceId,
     panel: editor_shell::PanelInstanceId,
@@ -274,6 +291,342 @@ fn applying_selected_theme_definition_produces_live_theme_activation() {
         host.theme.accent,
         ui_theme::UiColor::new(0.2, 0.4, 1.0, 1.0)
     );
+}
+
+#[test]
+fn applying_selected_workspace_layout_definition_replaces_live_workspace() {
+    let mut host = EditorHostResource::default();
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SelectEditorDefinitionDocument {
+            document_id: "runenwerk.editor.layout.editor_design".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("workspace layout definition selection should succeed");
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
+            label: "Validation".to_string(),
+            tool_surface: "definition_validation".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("workspace layout tab edit should succeed");
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ApplySelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("workspace layout definition apply should succeed");
+
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 1);
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 1);
+    host.shell_state
+        .workspace_state()
+        .validate_integrity()
+        .expect("activated authored workspace layout should remain structurally valid");
+    assert!(
+        host.shell_state
+            .workspace_state()
+            .panels()
+            .any(|panel| { panel.panel_kind == editor_shell::PanelKind::DefinitionValidation })
+    );
+    assert!(
+        !host
+            .shell_state
+            .workspace_state()
+            .panels()
+            .any(|panel| panel.panel_kind == editor_shell::PanelKind::Viewport),
+        "live workspace layout activation should replace the previous scene layout"
+    );
+}
+
+#[test]
+fn applying_ui_template_definition_updates_live_template_catalog() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let document = editor_definition::EditorDefinitionDocument::current(
+        editor_definition::EditorDefinitionId::from("runenwerk.editor.test.template"),
+        "test_template.ron",
+        editor_definition::EditorDefinitionDocumentKind::UiLayout,
+        editor_definition::EditorDefinitionDocumentContent::UiTemplate(simple_test_template(
+            "runenwerk.editor.test.template",
+        )),
+    );
+
+    shell_state
+        .self_authoring_mut()
+        .create_document(document)
+        .expect("test UI template document should be accepted");
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::ApplySelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("UI template definition apply should succeed");
+
+    let mut host = EditorHostResource {
+        app,
+        shell_state,
+        theme: ThemeTokens::default(),
+    };
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 1);
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 1);
+    assert!(
+        host.shell_state
+            .active_editor_definitions()
+            .templates()
+            .contains_key(&"runenwerk.editor.test.template".into())
+    );
+}
+
+#[test]
+fn applying_menu_shortcut_and_command_binding_definitions_updates_live_catalogs() {
+    let mut host = EditorHostResource::default();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.menu"),
+            "test_menu.ron",
+            editor_definition::EditorDefinitionDocumentKind::Menu,
+            editor_definition::EditorDefinitionDocumentContent::Menu(
+                editor_definition::EditorMenuDefinition {
+                    id: "runenwerk.editor.test.menu".to_string(),
+                    label: "Test Menu".to_string(),
+                    items: Vec::new(),
+                },
+            ),
+        ),
+    );
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.shortcuts"),
+            "test_shortcuts.ron",
+            editor_definition::EditorDefinitionDocumentKind::Shortcut,
+            editor_definition::EditorDefinitionDocumentContent::Shortcuts(
+                editor_definition::EditorShortcutSetDefinition {
+                    id: "runenwerk.editor.test.shortcuts".to_string(),
+                    label: "Test Shortcuts".to_string(),
+                    shortcuts: vec![editor_definition::EditorShortcutDefinition {
+                        id: "test_apply".to_string(),
+                        command: "editor.definition.apply_selected".to_string(),
+                        chord: "Cmd+Shift+T".to_string(),
+                        context: Some("editor-design".to_string()),
+                    }],
+                },
+            ),
+        ),
+    );
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.commands"),
+            "test_commands.ron",
+            editor_definition::EditorDefinitionDocumentKind::CommandBinding,
+            editor_definition::EditorDefinitionDocumentContent::CommandBindings(
+                editor_definition::EditorCommandBindingSetDefinition {
+                    id: "runenwerk.editor.test.commands".to_string(),
+                    label: "Test Commands".to_string(),
+                    bindings: vec![editor_definition::EditorCommandBindingDefinition {
+                        id: "test_apply".to_string(),
+                        command: "editor.definition.apply_selected".to_string(),
+                        route_target: "self-authoring.apply-selected".to_string(),
+                        capability_requirements: Vec::new(),
+                        undoable: true,
+                    }],
+                },
+            ),
+        ),
+    );
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 3);
+    assert!(
+        host.shell_state
+            .active_editor_definitions()
+            .menus()
+            .contains_key("runenwerk.editor.test.menu")
+    );
+    assert!(
+        host.shell_state
+            .active_editor_definitions()
+            .shortcuts()
+            .contains_key("runenwerk.editor.test.shortcuts")
+    );
+    assert!(
+        host.shell_state
+            .active_editor_definitions()
+            .command_bindings()
+            .contains_key("runenwerk.editor.test.commands")
+    );
+    assert_eq!(
+        host.shell_state
+            .active_editor_definitions()
+            .command_for_route_target("self-authoring.apply-selected"),
+        Some("editor.definition.apply_selected"),
+        "active command-binding catalogs should map authored route targets to app/domain command ids",
+    );
+    assert_eq!(
+        host.shell_state
+            .active_editor_definitions()
+            .route_target_for_command("editor.definition.apply_selected"),
+        Some("self-authoring.apply-selected")
+    );
+}
+
+#[test]
+fn panel_and_tool_surface_registry_activation_blocks_active_workspace_removals() {
+    let mut host = EditorHostResource::default();
+    let original_panel_registry = host
+        .shell_state
+        .active_editor_definitions()
+        .panel_registry()
+        .cloned();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.panels.empty"),
+            "empty_panels.ron",
+            editor_definition::EditorDefinitionDocumentKind::PanelRegistry,
+            editor_definition::EditorDefinitionDocumentContent::PanelRegistry(
+                editor_definition::EditorPanelRegistryDefinition {
+                    id: "runenwerk.editor.test.panels.empty".to_string(),
+                    label: "Empty Panels".to_string(),
+                    panels: Vec::new(),
+                },
+            ),
+        ),
+    );
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 0);
+    assert_eq!(
+        host.shell_state
+            .active_editor_definitions()
+            .panel_registry()
+            .cloned(),
+        original_panel_registry
+    );
+
+    let original_tool_surface_registry = host
+        .shell_state
+        .active_editor_definitions()
+        .tool_surface_registry()
+        .cloned();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.surfaces.empty"),
+            "empty_surfaces.ron",
+            editor_definition::EditorDefinitionDocumentKind::ToolSurfaceDefinition,
+            editor_definition::EditorDefinitionDocumentContent::ToolSurfaceRegistry(
+                editor_definition::EditorToolSurfaceRegistryDefinition {
+                    id: "runenwerk.editor.test.surfaces.empty".to_string(),
+                    label: "Empty Tool Surfaces".to_string(),
+                    tool_surfaces: Vec::new(),
+                },
+            ),
+        ),
+    );
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 0);
+    assert_eq!(
+        host.shell_state
+            .active_editor_definitions()
+            .tool_surface_registry()
+            .cloned(),
+        original_tool_surface_registry
+    );
+}
+
+#[test]
+fn tool_surface_registry_activation_updates_future_creation_surface_kinds() {
+    let mut host = EditorHostResource::default();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.surfaces.extended"),
+            "extended_surfaces.ron",
+            editor_definition::EditorDefinitionDocumentKind::ToolSurfaceDefinition,
+            editor_definition::EditorDefinitionDocumentContent::ToolSurfaceRegistry(
+                editor_definition::EditorToolSurfaceRegistryDefinition {
+                    id: "runenwerk.editor.test.surfaces.extended".to_string(),
+                    label: "Extended Tool Surfaces".to_string(),
+                    tool_surfaces: vec![
+                        test_tool_surface_definition("outliner", "Outliner"),
+                        test_tool_surface_definition("entity_table", "Entity Table"),
+                        test_tool_surface_definition("viewport", "Viewport"),
+                        test_tool_surface_definition("inspector", "Inspector"),
+                        test_tool_surface_definition("console", "Console"),
+                        test_tool_surface_definition("definition_validation", "Validation"),
+                    ],
+                },
+            ),
+        ),
+    );
+
+    let activated = host.apply_pending_editor_definition_activations();
+    let frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.surface_provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+
+    assert_eq!(activated, 1);
+    assert_eq!(
+        frame_model.available_tool_surface_kinds,
+        vec![
+            ToolSurfaceKind::Outliner,
+            ToolSurfaceKind::EntityTable,
+            ToolSurfaceKind::Viewport,
+            ToolSurfaceKind::Inspector,
+            ToolSurfaceKind::Console,
+            ToolSurfaceKind::DefinitionValidation,
+        ],
+        "activated tool-surface registry should feed future switch/create choices",
+    );
+}
+
+fn test_tool_surface_definition(
+    id: &str,
+    label: &str,
+) -> editor_definition::EditorToolSurfaceDefinition {
+    editor_definition::EditorToolSurfaceDefinition {
+        id: id.to_string(),
+        label: label.to_string(),
+        provider_family: "runenwerk.editor".to_string(),
+        required_capabilities: Vec::new(),
+        allowed_document_kinds: Vec::new(),
+        allowed_workspace_profiles: Vec::new(),
+    }
 }
 
 #[test]
@@ -1442,7 +1795,10 @@ fn provider_local_viewport_details_toggle_uses_routed_surface_instance() {
         .clone();
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
-            items: vec![UiInteraction::Activated(VIEWPORT_DETAILS_TOGGLE_WIDGET_ID)],
+            items: vec![UiInteraction::Toggled {
+                target: VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+                checked: true,
+            }],
         },
         &artifacts,
     );
@@ -1685,7 +2041,10 @@ fn stale_provider_local_viewport_details_toggle_fails_closed() {
         .clone();
     let stale_commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
-            items: vec![UiInteraction::Activated(VIEWPORT_DETAILS_TOGGLE_WIDGET_ID)],
+            items: vec![UiInteraction::Toggled {
+                target: VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+                checked: true,
+            }],
         },
         &stale_artifacts,
     );
@@ -1729,7 +2088,10 @@ fn provider_id_mismatch_on_viewport_details_toggle_is_rejected_without_mutation(
         .clone();
     let mut commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
-            items: vec![UiInteraction::Activated(VIEWPORT_DETAILS_TOGGLE_WIDGET_ID)],
+            items: vec![UiInteraction::Toggled {
+                target: VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+                checked: true,
+            }],
         },
         &artifacts,
     );

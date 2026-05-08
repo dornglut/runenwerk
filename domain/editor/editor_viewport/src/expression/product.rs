@@ -13,6 +13,12 @@ pub enum ExpressionProductKind {
     Overlay2D,
     Depth2D,
     Diagnostics2D,
+    ScalarField2D,
+    VectorField2D,
+    Atlas2D,
+    VolumeSlice2D,
+    BrickmapDebug2D,
+    HistoryColor2D,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,6 +27,10 @@ pub enum ExpressionSourceRealityClass {
     DerivedPicking,
     DerivedOverlay,
     Diagnostics,
+    DerivedField,
+    DerivedAsset,
+    DerivedVolume,
+    DerivedHistory,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -119,6 +129,20 @@ mod tests {
         ];
 
         assert_eq!(required.len(), 3);
+    }
+
+    #[test]
+    fn product_kind_catalog_includes_field_asset_volume_and_history_products() {
+        let future_products = [
+            ExpressionProductKind::ScalarField2D,
+            ExpressionProductKind::VectorField2D,
+            ExpressionProductKind::Atlas2D,
+            ExpressionProductKind::VolumeSlice2D,
+            ExpressionProductKind::BrickmapDebug2D,
+            ExpressionProductKind::HistoryColor2D,
+        ];
+
+        assert_eq!(future_products.len(), 6);
     }
 
     #[test]

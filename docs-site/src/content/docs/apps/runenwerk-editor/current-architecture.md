@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-08
 related_designs:
   - ../../design/active/workspace-viewport-expression-upgrade-design.md
 related_roadmaps:
@@ -82,6 +82,16 @@ diagnostics, runtime/session state, and toolbar state remain app/global; console
 view state, entity table filters, inspector draft/focus state, and viewport
 interaction/details state are surface-session concerns.
 
+Inspector enum editing is typed end to end. Reflected unit/no-payload ECS enums
+are described by `domain/ecs/src/reflect/enum_info.rs::EnumInfo` through
+`domain/ecs/src/reflect/type_info.rs::ReflectShape::Enum`; the derive macro
+rejects payload variants for now. `domain/editor/editor_inspector` projects
+those fields as enum inspector controls and applies
+`InspectorEditValue::EnumSymbol` by calling the reflected unit-variant setter.
+`apps/runenwerk_editor/src/shell/dispatch/inspector.rs` still owns the
+app/runtime dispatch path. Reflected payload enum variants remain deferred until
+the reflection/adapter layer has a concrete payload field design.
+
 ## Shell Layout
 
 The app toolbar is produced by
@@ -147,7 +157,9 @@ shell.
 Viewport details are projected by
 `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::build_viewport_panel`
 through an Options popup, not by a direct Show Details button. The Options popup
-contains checkbox-style Details and Statistics items. Enabled viewport metadata
+contains reusable toggle controls for Details, Statistics, and viewport root
+opacity; product choices are rendered as selectable product buttons and
+descriptor-only products remain disabled. Enabled viewport metadata
 is rendered as a retained bottom overlay anchored inside the viewport canvas,
 uses a 50% alpha panel background, and does not push the viewport surface down.
 Dock split resizing is owned by
@@ -207,6 +219,12 @@ one render job is published per visible viewport by
 `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs::ViewportRenderJobResource`,
 and `assets/shaders/editor_viewport_scene_product.wgsl` renders one
 viewport-local target per job without multi-rectangle containment. The
+product catalog now exposes scene color, picking ids, overlay, depth,
+diagnostics, scalar field, vector field, atlas, volume slice, brickmap debug,
+and history color descriptors. Only descriptors with a concrete app-owned target
+record are marked available; future field/asset/volume/history descriptors are
+visible as unavailable products rather than being routed to fallback surfaces.
+The
 no-compromise target and follow-up product maturity work are documented in
 `docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md`;
 the end-to-end implementation sequence is
@@ -253,19 +271,40 @@ live editor products. Theme documents now form `ui_theme::ThemeTokens` through
 app queues the applied document, and
 `apps/runenwerk_editor/src/runtime/resources.rs::EditorHostResource::apply_pending_editor_definition_activations`
 updates the live host theme before the next submitted shell frame is built.
+Workspace layout documents now also use this activation seam: applied workspace
+layout definitions are formed through
+`domain/editor/editor_shell/src/workspace/definition_form.rs::form_workspace_state_from_definition`
+and installed with
+`apps/runenwerk_editor/src/shell/state.rs::RunenwerkEditorShellState::replace_workspace_state`.
 The checked-in self-authoring default theme seeded by
 `apps/runenwerk_editor/src/shell/self_authoring.rs::SelfAuthoringWorkspaceState::from_checked_in_fixtures`
 is intentionally black/dark, keeps control radius at zero, and uses compact
 panel spacing so applying that authored theme does not reintroduce the older
 lighter rounded shell look.
 
-This live activation path is currently implemented for theme definitions only.
-UI template, workspace layout, menu, shortcut, command binding, panel registry,
-and tool-surface definition documents can still be drafted, validated, previewed,
-applied as snapshots, and rolled back, but applying them does not yet replace the
-live toolbar, shell chrome, provider templates, workspace profile registry, or
-runtime command bindings. Those remain explicit follow-up activation targets
-rather than implicit side effects of snapshot apply.
+Definition export is versioned through
+`apps/runenwerk_editor/src/shell/self_authoring.rs::EditorDefinitionExportPackage`
+instead of serializing a bare definition document.
+
+This live activation path is implemented for theme, workspace layout, UI
+template, editor binding, menu, shortcut, command-binding, panel-registry, and
+tool-surface-registry documents. Active definition catalogs live in
+`apps/runenwerk_editor/src/shell/applied_editor_definition.rs::ActiveEditorDefinitionCatalogs`
+and are installed by
+`apps/runenwerk_editor/src/runtime/resources.rs::EditorHostResource::apply_pending_editor_definition_activations`
+before the next shell frame is submitted.
+
+Activated UI templates and editor bindings feed the next shell frame through
+`domain/editor/editor_shell/src/surface_provider.rs::EditorShellFrameModel::with_active_ui_definitions`.
+The retained toolbar and shell chrome consume the active templates while keeping
+fallback checked-in fixtures. Menu, shortcut, and command-binding definitions
+activate into app-owned catalogs; command bindings map authored route targets to
+existing command ids and never execute commands from definition data. Activated
+tool-surface registries also feed future switch/create surface choices through
+`EditorShellFrameModel::with_available_tool_surface_kinds`. Existing workspace
+state is left in place unless a workspace layout definition is applied, and
+panel/tool-surface registry activation is blocked when the current workspace
+still references removed or incompatible definitions.
 
 ## Related Docs
 

@@ -305,12 +305,27 @@ fn build_artifact_observation_frame(
     frame.selected_overlay_product_ids = presentation_state.selected_overlay_product_ids.clone();
 
     for descriptor in descriptors {
-        frame
-            .availability_by_product
-            .insert(descriptor.id, ProductAvailabilityState::Available);
-        frame
-            .producer_health_by_product
-            .insert(descriptor.id, ProducerHealth::Healthy);
+        let target_record =
+            product_target_record_for_descriptor(presentation_state.viewport_id, descriptor);
+        let available = target_record
+            .as_ref()
+            .is_some_and(|record| record.status == ViewportProductTargetStatus::Requested);
+        frame.availability_by_product.insert(
+            descriptor.id,
+            if available {
+                ProductAvailabilityState::Available
+            } else {
+                ProductAvailabilityState::Unavailable
+            },
+        );
+        frame.producer_health_by_product.insert(
+            descriptor.id,
+            if available {
+                ProducerHealth::Healthy
+            } else {
+                ProducerHealth::Unavailable
+            },
+        );
     }
 
     if let std::collections::btree_map::Entry::Vacant(e) = frame
@@ -401,7 +416,14 @@ fn product_target_slots(
             ViewportSurfacePresentationSlot::Overlay,
             ViewportSurfaceSlot::Overlay,
         )),
-        ExpressionProductKind::Depth2D | ExpressionProductKind::Diagnostics2D => None,
+        ExpressionProductKind::Depth2D
+        | ExpressionProductKind::Diagnostics2D
+        | ExpressionProductKind::ScalarField2D
+        | ExpressionProductKind::VectorField2D
+        | ExpressionProductKind::Atlas2D
+        | ExpressionProductKind::VolumeSlice2D
+        | ExpressionProductKind::BrickmapDebug2D
+        | ExpressionProductKind::HistoryColor2D => None,
     }
 }
 
@@ -472,6 +494,19 @@ fn usage_for_descriptor(descriptor: &ExpressionProductDescriptor) -> RenderTextu
             copy_src: true,
             copy_dst: false,
         },
+        ExpressionProductKind::ScalarField2D
+        | ExpressionProductKind::VectorField2D
+        | ExpressionProductKind::Atlas2D
+        | ExpressionProductKind::VolumeSlice2D
+        | ExpressionProductKind::BrickmapDebug2D
+        | ExpressionProductKind::HistoryColor2D => RenderTextureTargetUsage {
+            color_attachment: false,
+            depth_attachment: false,
+            sampled: true,
+            storage: false,
+            copy_src: true,
+            copy_dst: false,
+        },
     }
 }
 
@@ -501,8 +536,8 @@ fn target_signature_matches(
 mod tests {
     use super::*;
     use crate::runtime::viewport::{
-        OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID,
-        ToolSurfaceRuntimeBindingRecord,
+        HISTORY_COLOR_PRODUCT_ID, OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID,
+        SCALAR_FIELD_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID, ToolSurfaceRuntimeBindingRecord,
     };
     use editor_core::RealityVersion;
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
@@ -602,6 +637,38 @@ mod tests {
             ViewportSurfacePresentationSlot::Overlay
         );
         assert_eq!(overlay.surface_slot, ViewportSurfaceSlot::Overlay);
+    }
+
+    #[test]
+    fn descriptor_only_future_products_are_observed_as_unavailable() {
+        let descriptors =
+            initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
+        let presentation_state = initial_presentation_state(ViewportId(1));
+
+        let frame =
+            build_artifact_observation_frame(&descriptors, &presentation_state, RealityVersion(1));
+
+        assert_eq!(
+            frame
+                .availability_by_product
+                .get(&SCENE_COLOR_PRODUCT_ID)
+                .copied(),
+            Some(ProductAvailabilityState::Available)
+        );
+        assert_eq!(
+            frame
+                .availability_by_product
+                .get(&SCALAR_FIELD_PRODUCT_ID)
+                .copied(),
+            Some(ProductAvailabilityState::Unavailable)
+        );
+        assert_eq!(
+            frame
+                .producer_health_by_product
+                .get(&HISTORY_COLOR_PRODUCT_ID)
+                .copied(),
+            Some(ProducerHealth::Unavailable)
+        );
     }
 
     #[test]

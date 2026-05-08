@@ -123,25 +123,7 @@ pub(crate) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
 }
 
 pub(crate) fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {
-    match kind {
-        ToolSurfaceKind::Outliner => PanelKind::Outliner,
-        ToolSurfaceKind::EntityTable => PanelKind::EntityTable,
-        ToolSurfaceKind::Viewport => PanelKind::Viewport,
-        ToolSurfaceKind::Inspector => PanelKind::Inspector,
-        ToolSurfaceKind::Console => PanelKind::Console,
-        ToolSurfaceKind::EditorDesignOutliner => PanelKind::EditorDesignOutliner,
-        ToolSurfaceKind::UiHierarchy => PanelKind::UiHierarchy,
-        ToolSurfaceKind::UiCanvas => PanelKind::UiCanvas,
-        ToolSurfaceKind::StyleInspector => PanelKind::StyleInspector,
-        ToolSurfaceKind::Bindings => PanelKind::Bindings,
-        ToolSurfaceKind::DockLayoutPreview => PanelKind::DockLayoutPreview,
-        ToolSurfaceKind::ThemeEditor => PanelKind::ThemeEditor,
-        ToolSurfaceKind::ShortcutEditor => PanelKind::ShortcutEditor,
-        ToolSurfaceKind::MenuEditor => PanelKind::MenuEditor,
-        ToolSurfaceKind::DefinitionValidation => PanelKind::DefinitionValidation,
-        ToolSurfaceKind::CommandDiff => PanelKind::CommandDiff,
-        ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
-    }
+    editor_shell::panel_kind_for_tool_surface_kind(kind)
 }
 
 pub(crate) fn surface_capability_label(capability: SurfaceCapability) -> &'static str {

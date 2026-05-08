@@ -13,9 +13,10 @@ use ui_definition::{
     UiValue, form_retained_ui, normalize_authored_template,
 };
 use ui_layout::SizePolicy;
-use ui_math::{UiInsets, UiSize};
 use ui_text::{FontId, TextOverflow};
 use ui_theme::{ThemeTokens, UiColor};
+
+use super::surface_control_polish::apply_compact_surface_control_polish;
 
 const INSPECTOR_TEMPLATE_RON: &str =
     include_str!("../../../../../assets/editor/ui/surfaces/inspector.ron");
@@ -158,39 +159,25 @@ fn polish_inspector(root: &mut UiNode, _view_model: &InspectorViewModel, theme: 
 
 fn polish_inspector_fields(node: &mut UiNode, theme: &ThemeTokens) {
     match &mut node.kind {
-        UiNodeKind::Button(button) => {
-            button.text_style = theme.body_small_text_style(FontId(1));
-            button.text_style.overflow = TextOverflow::Ellipsis;
-            button.padding = compact_padding(theme);
-            button.min_size =
-                UiSize::new(0.0, compact_min_height(&button.text_style, button.padding));
-            button.theme.border_width = 0.0;
-            button.theme.background_panel = UiColor::new(0.0, 0.0, 0.0, 0.0);
-            button.theme.border = UiColor::new(0.0, 0.0, 0.0, 0.0);
+        UiNodeKind::Button(_) => {
+            apply_compact_surface_control_polish(node, theme);
+            if let UiNodeKind::Button(button) = &mut node.kind {
+                button.theme.border_width = 0.0;
+                button.theme.background_panel = UiColor::new(0.0, 0.0, 0.0, 0.0);
+                button.theme.border = UiColor::new(0.0, 0.0, 0.0, 0.0);
+            }
         }
-        UiNodeKind::TextInput(input) => {
-            input.text_style = theme.body_small_text_style(FontId(1));
-            input.text_style.overflow = TextOverflow::Ellipsis;
-            input.padding = compact_padding(theme);
-            input.min_size = UiSize::new(0.0, compact_min_height(&input.text_style, input.padding));
+        UiNodeKind::TextInput(_) => {
+            apply_compact_surface_control_polish(node, theme);
         }
-        UiNodeKind::Toggle(toggle) => {
-            toggle.text_style = theme.body_small_text_style(FontId(1));
-            toggle.text_style.overflow = TextOverflow::Ellipsis;
-            toggle.padding = compact_padding(theme);
-            toggle.min_size =
-                UiSize::new(0.0, compact_min_height(&toggle.text_style, toggle.padding));
+        UiNodeKind::Toggle(_) => {
+            apply_compact_surface_control_polish(node, theme);
         }
-        UiNodeKind::NumericInput(input) => {
-            input.text_style = theme.body_small_text_style(FontId(1));
-            input.padding = compact_padding(theme);
-            input.min_size = UiSize::new(0.0, compact_min_height(&input.text_style, input.padding));
+        UiNodeKind::NumericInput(_) => {
+            apply_compact_surface_control_polish(node, theme);
         }
-        UiNodeKind::Select(select) => {
-            select.text_style = theme.body_small_text_style(FontId(1));
-            select.padding = compact_padding(theme);
-            select.min_size =
-                UiSize::new(0.0, compact_min_height(&select.text_style, select.padding));
+        UiNodeKind::Select(_) => {
+            apply_compact_surface_control_polish(node, theme);
         }
         UiNodeKind::Label(label) => {
             label.text_style = theme.body_small_text_style(FontId(1));
@@ -267,11 +254,16 @@ fn install_inspector_control_values(
             options,
             selected_index,
         } => {
+            let enum_availability = if options.is_empty() {
+                UiAvailability::Disabled {
+                    reason: "enum field has no selectable options".to_string(),
+                }
+            } else {
+                UiAvailability::Available
+            };
             item.values.insert(
                 "field.control.enum".into(),
-                UiValue::Availability(UiAvailability::Disabled {
-                    reason: "enum inspector edits are not supported yet".to_string(),
-                }),
+                UiValue::Availability(enum_availability),
             );
             let enum_items = if options.is_empty() {
                 vec![UiCollectionItem::new("current", current.clone())]
@@ -299,17 +291,6 @@ fn install_inspector_control_values(
             );
         }
     }
-}
-
-fn compact_padding(theme: &ThemeTokens) -> UiInsets {
-    let vertical = (theme.spacing.xs * 0.60).max(1.0);
-    let horizontal = (theme.spacing.sm * 0.90).max(2.0);
-    UiInsets::new(horizontal, vertical, horizontal, vertical)
-}
-
-fn compact_min_height(text_style: &ui_text::TextStyle, padding: UiInsets) -> f32 {
-    let line_height = text_style.line_height_or_default(text_style.font_size * 1.2);
-    (line_height + padding.vertical()).max(13.0)
 }
 
 fn find_node_mut(node: &mut UiNode, widget_id: crate::WidgetId) -> Option<&mut UiNode> {

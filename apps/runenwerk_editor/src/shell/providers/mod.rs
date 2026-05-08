@@ -264,7 +264,26 @@ pub fn build_editor_shell_frame_model(
         surfaces.insert(request.tool_surface_instance_id, frame);
     }
 
+    let active_definitions = shell_state.active_editor_definitions();
+    let active_bindings = active_definitions.editor_bindings();
+    let toolbar_template = active_bindings.and_then(|bindings| {
+        active_definitions
+            .templates()
+            .get(&bindings.toolbar.template)
+            .cloned()
+    });
+    let toolbar_binding = active_bindings.map(|bindings| bindings.toolbar.clone());
+    let shell_chrome_template = active_bindings.and_then(|bindings| {
+        active_definitions
+            .templates()
+            .get(&bindings.shell_chrome_template)
+            .cloned()
+    });
+    let available_tool_surface_kinds = active_definitions.available_tool_surface_kinds();
+
     EditorShellFrameModel::new(build_toolbar_view_model(&toolbar_frame), surfaces)
+        .with_available_tool_surface_kinds(available_tool_surface_kinds)
+        .with_active_ui_definitions(toolbar_template, toolbar_binding, shell_chrome_template)
         .with_active_tab_stack_popup_menu(shell_state.active_tab_stack_popup_menu())
 }
 
@@ -638,6 +657,7 @@ fn build_inspector_observed_field(field: &InspectorWidgetField) -> InspectorObse
             | InspectorFieldControlKind::IntegerInput { .. }
             | InspectorFieldControlKind::FloatInput { .. }
             | InspectorFieldControlKind::TextInput
+            | InspectorFieldControlKind::EnumSelect { .. }
     );
 
     InspectorObservedField {
@@ -683,11 +703,21 @@ fn inspector_field_control_kind(field: &InspectorWidgetField) -> InspectorFieldC
                 .unwrap_or(*value),
         },
         InspectorValue::Text(_) => InspectorFieldControlKind::TextInput,
-        InspectorValue::Enum { current, options } => InspectorFieldControlKind::EnumSelect {
-            current: current.clone(),
-            options: options.clone(),
-            selected_index: options.iter().position(|option| option == current),
-        },
+        InspectorValue::Enum { current, options } => {
+            let current = field
+                .draft_value
+                .as_ref()
+                .and_then(|draft| match draft {
+                    editor_inspector::InspectorEditValue::EnumSymbol(value) => Some(value.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| current.clone());
+            InspectorFieldControlKind::EnumSelect {
+                selected_index: options.iter().position(|option| option == &current),
+                current,
+                options: options.clone(),
+            }
+        }
         InspectorValue::ReadOnlyText(_) => InspectorFieldControlKind::ReadOnly,
         InspectorValue::Group => InspectorFieldControlKind::Group,
         InspectorValue::Unsupported { .. } => InspectorFieldControlKind::Unsupported,

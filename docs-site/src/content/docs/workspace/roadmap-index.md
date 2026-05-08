@@ -54,7 +54,7 @@ Operational execution checklist:
 - UI substrate crates and `ui_surface` contracts are implemented and integrated in production editor flows;
 - editor MVP acceptance is complete and the active editor/UI work has moved to the repository Now list;
 - current active editor/UI work has completed M3.6 self-authoring: durable schemas, Editor Design workspace/profile, provider surfaces, fixture document loading, validation, retained previews, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and apply/rollback exist before SDF/field asset and procedural workspace expansion.
-- the follow-on provider surface workflow redesign is complete: outliner, entity-table, inspector, viewport, and editor-definition provider actions route through typed surface wrappers, with entity-table query workflows and richer inspector controls implemented while provider behavior stays outside `ui_definition`.
+- the follow-on provider surface workflow redesign and self-authoring maturity pass are complete: outliner, entity-table, inspector, viewport, and editor-definition provider actions route through typed surface wrappers; entity-table query workflows, typed no-payload ECS enum inspector mutation, active UI/editor definition catalogs, and richer inspector controls are implemented while provider behavior stays outside `ui_definition`.
 
 ## Recommended Near-Term Order
 

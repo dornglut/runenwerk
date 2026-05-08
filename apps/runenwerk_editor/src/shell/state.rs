@@ -10,7 +10,10 @@ use editor_shell::{
 };
 use ui_math::{UiPoint, UiRect};
 
-use crate::shell::SelfAuthoringWorkspaceState;
+use crate::shell::{
+    ActiveEditorDefinitionCatalogs, SelfAuthoringWorkspaceState,
+    load_checked_in_editor_ui_definitions,
+};
 
 const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
 
@@ -67,6 +70,7 @@ pub struct RunenwerkEditorShellState {
     active_tab_stack_popup_menu: Option<ActiveTabStackPopupMenu>,
     workspace_state: WorkspaceState,
     self_authoring: SelfAuthoringWorkspaceState,
+    active_editor_definitions: ActiveEditorDefinitionCatalogs,
     tab_drag_session: Option<TabDragSession>,
     split_resize_session: Option<SplitResizeSession>,
     corner_split_resize_session: Option<CornerSplitResizeSession>,
@@ -85,6 +89,16 @@ impl Default for RunenwerkEditorShellState {
             .expect("default workspace profile should exist")
             .build_default_workspace_state(workspace_id, &mut identity_allocator);
         debug_assert!(workspace_state.validate_integrity().is_ok());
+        let mut active_editor_definitions = ActiveEditorDefinitionCatalogs::default();
+        let checked_in_definitions = load_checked_in_editor_ui_definitions()
+            .expect("checked-in editor UI definitions should load");
+        for template in checked_in_definitions.templates.into_values() {
+            active_editor_definitions.install_template(template);
+        }
+        active_editor_definitions
+            .install_editor_bindings(checked_in_definitions.bindings)
+            .expect("checked-in editor bindings should activate");
+
         Self {
             runtime: UiRuntime::new(),
             last_tree: None,
@@ -102,6 +116,7 @@ impl Default for RunenwerkEditorShellState {
             workspace_state,
             self_authoring: SelfAuthoringWorkspaceState::from_checked_in_fixtures()
                 .expect("checked-in self-authoring fixtures should load"),
+            active_editor_definitions,
             tab_drag_session: None,
             split_resize_session: None,
             corner_split_resize_session: None,
@@ -302,6 +317,14 @@ impl RunenwerkEditorShellState {
 
     pub fn self_authoring_mut(&mut self) -> &mut SelfAuthoringWorkspaceState {
         &mut self.self_authoring
+    }
+
+    pub fn active_editor_definitions(&self) -> &ActiveEditorDefinitionCatalogs {
+        &self.active_editor_definitions
+    }
+
+    pub fn active_editor_definitions_mut(&mut self) -> &mut ActiveEditorDefinitionCatalogs {
+        &mut self.active_editor_definitions
     }
 
     pub fn replace_workspace_state(&mut self, workspace_state: WorkspaceState) {

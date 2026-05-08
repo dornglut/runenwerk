@@ -62,6 +62,30 @@ fn phase_one_product_kind_subset_is_locked() {
 }
 
 #[test]
+fn viewport_product_catalog_includes_field_asset_volume_brickmap_and_history_descriptors() {
+    let descriptors =
+        initial_product_descriptors(ExpressionDimensions::new(1280, 720), RealityVersion(1));
+    let kinds = descriptors
+        .iter()
+        .map(|descriptor| descriptor.kind)
+        .collect::<Vec<_>>();
+
+    for expected in [
+        ExpressionProductKind::ScalarField2D,
+        ExpressionProductKind::VectorField2D,
+        ExpressionProductKind::Atlas2D,
+        ExpressionProductKind::VolumeSlice2D,
+        ExpressionProductKind::BrickmapDebug2D,
+        ExpressionProductKind::HistoryColor2D,
+    ] {
+        assert!(
+            kinds.contains(&expected),
+            "viewport product catalog should expose future producer descriptor {expected:?}",
+        );
+    }
+}
+
+#[test]
 fn viewport_product_descriptor_requires_explicit_product_identity() {
     let descriptor = ExpressionProductDescriptor::new(
         ExpressionProductId(77),
@@ -929,6 +953,187 @@ fn inspector_activation_routes_through_surface_presentation_and_ratification() {
     assert!(
         dispatch_shell_command.contains("InspectorFieldActivationRatificationAdapter"),
         "inspector activation should ratify through adapter boundary, not direct mutation shortcut",
+    );
+}
+
+#[test]
+fn inspector_enum_mutation_routes_through_domain_contract_and_provider_dispatch() {
+    let inspector_contract = read_workspace_source("domain/editor/editor_inspector/src/editing.rs");
+    let shell_contract =
+        read_workspace_source("domain/editor/editor_shell/src/surfaces/inspector.rs");
+    let interaction_mapper =
+        read_workspace_source("domain/editor/editor_shell/src/commands/map_interactions.rs");
+    let provider =
+        read_workspace_source("apps/runenwerk_editor/src/shell/providers/scene/inspector.rs");
+    let dispatch = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/inspector.rs");
+
+    assert!(
+        inspector_contract.contains("EnumSymbol")
+            && inspector_contract.contains("enum_symbol_edit_value_for_field"),
+        "enum inspector mutation must be a reusable editor_inspector contract",
+    );
+    assert!(
+        shell_contract.contains("SelectFieldEnum") && shell_contract.contains("SetFieldEnum"),
+        "editor_shell must expose typed enum select and mutation actions",
+    );
+    assert!(
+        interaction_mapper.contains("UiInteraction::SelectChanged")
+            && interaction_mapper.contains("InspectorSurfaceAction::SelectFieldEnum")
+            && interaction_mapper.contains("InspectorSurfaceAction::SetFieldEnum"),
+        "enum select widgets must map selected indexes through shell routing, not provider-side UI parsing",
+    );
+    assert!(
+        provider.contains("InspectorSessionMutation::SetFieldEnum")
+            && dispatch.contains("commit_inspector_enum_field"),
+        "runenwerk_editor providers and dispatch must carry enum mutation through session proposals",
+    );
+}
+
+#[test]
+fn reflected_ecs_enums_remain_unit_variant_typed_and_inspector_backed() {
+    let type_info = read_workspace_source("domain/ecs/src/reflect/type_info.rs");
+    let enum_info = read_workspace_source("domain/ecs/src/reflect/enum_info.rs");
+    let value = read_workspace_source("domain/ecs/src/reflect/value.rs");
+    let macros = read_workspace_source("domain/ecs_macros/src/lib.rs");
+    let inspector_adapter =
+        read_workspace_source("domain/editor/editor_inspector/src/bridge/ecs_adapter.rs");
+    let inspector_editing = read_workspace_source("domain/editor/editor_inspector/src/editing.rs");
+
+    assert!(
+        type_info.contains("ReflectShape::Enum") && enum_info.contains("EnumVariantInfo"),
+        "ECS reflection should expose enum shape metadata instead of stringly special cases",
+    );
+    assert!(
+        enum_info.contains("EnumCurrentVariant") && enum_info.contains("EnumSetUnitVariant"),
+        "reflected enums must expose typed current-variant and mutation function pointers",
+    );
+    assert!(
+        value.contains("enum_ref(") && value.contains("enum_mut("),
+        "dynamic reflected values should expose enum accessors beside struct accessors",
+    );
+    assert!(
+        macros.contains("Data::Enum")
+            && macros.contains("unit/no-payload variants")
+            && macros.contains("ReflectShape::Enum"),
+        "derive support must be intentionally limited to no-payload enum variants",
+    );
+    assert!(
+        inspector_adapter.contains("InspectorValue::Enum")
+            && inspector_editing.contains("set_unit_variant"),
+        "editor_inspector should render and mutate reflected ECS enums through the typed enum contract",
+    );
+}
+
+#[test]
+fn viewport_surface_binary_options_use_reusable_toggles_with_typed_routing() {
+    let builder =
+        read_workspace_source("domain/editor/editor_shell/src/composition/build_viewport_panel.rs");
+    let mapper =
+        read_workspace_source("domain/editor/editor_shell/src/commands/map_interactions.rs");
+
+    assert!(
+        builder.contains("viewport_toggle(")
+            && builder.contains("VIEWPORT_DETAILS_TOGGLE_WIDGET_ID")
+            && builder.contains("VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID"),
+        "viewport binary options should be projected as reusable toggle controls",
+    );
+    assert!(
+        mapper.contains("ViewportSurfaceAction::SetRootBackgroundOpaque")
+            && mapper.contains("enabled: checked"),
+        "viewport toggle interactions must preserve typed provider-local routing",
+    );
+}
+
+#[test]
+fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_exports() {
+    let activation =
+        read_workspace_source("apps/runenwerk_editor/src/shell/applied_editor_definition.rs");
+    let resources = read_workspace_source("apps/runenwerk_editor/src/runtime/resources.rs");
+    let shell_workspace =
+        read_workspace_source("domain/editor/editor_shell/src/workspace/definition_form.rs");
+    let self_authoring = read_workspace_source("apps/runenwerk_editor/src/shell/self_authoring.rs");
+
+    assert!(
+        activation.contains("WorkspaceLayoutChanged")
+            && activation.contains("EditorDefinitionDocumentContent::WorkspaceLayout"),
+        "workspace layout definitions should produce a non-theme live activation contract",
+    );
+    assert!(
+        resources.contains("form_workspace_state_from_definition")
+            && resources.contains("replace_workspace_state"),
+        "app runtime should apply authored workspace layouts through editor_shell formation",
+    );
+    assert!(
+        shell_workspace.contains("WorkspaceDefinitionFormationError")
+            && shell_workspace.contains("tool_surface_kind_from_definition_key"),
+        "workspace definition formation must live in editor_shell with explicit authored surface key mapping",
+    );
+    assert!(
+        self_authoring.contains("EditorDefinitionExportPackage")
+            && self_authoring.contains("EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION"),
+        "definition export should be a versioned package, not a bare document dump",
+    );
+}
+
+#[test]
+fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_behavior() {
+    let activation =
+        read_workspace_source("apps/runenwerk_editor/src/shell/applied_editor_definition.rs");
+    let resources = read_workspace_source("apps/runenwerk_editor/src/runtime/resources.rs");
+    let shell_state = read_workspace_source("apps/runenwerk_editor/src/shell/state.rs");
+    let frame_model = read_workspace_source("domain/editor/editor_shell/src/surface_provider.rs");
+    let shell_composition =
+        read_workspace_source("domain/editor/editor_shell/src/composition/build_editor_shell.rs");
+
+    assert!(
+        activation.contains("ActiveEditorDefinitionCatalogs")
+            && activation.contains("UiTemplateCatalogChanged")
+            && activation.contains("CommandBindingCatalogChanged")
+            && activation.contains("PanelRegistryCatalogChanged")
+            && activation.contains("ToolSurfaceRegistryCatalogChanged"),
+        "applied definitions should produce explicit catalog activation contracts",
+    );
+    assert!(
+        resources.contains("install_editor_bindings")
+            && resources.contains("install_panel_registry")
+            && resources.contains("install_tool_surface_registry"),
+        "runtime activation must install formed catalogs and block invalid registry replacement",
+    );
+    assert!(
+        shell_state.contains("active_editor_definitions")
+            && frame_model.contains("with_active_ui_definitions")
+            && frame_model.contains("with_available_tool_surface_kinds")
+            && shell_composition.contains("active_toolbar_template"),
+        "live catalog activation should feed the next shell frame instead of remaining a snapshot only",
+    );
+    assert!(
+        activation.contains("command_for_route_target")
+            && activation.contains("available_tool_surface_kinds"),
+        "active command and tool-surface catalogs should expose app-owned routing/future-creation seams",
+    );
+}
+
+#[test]
+fn validation_gates_have_quick_and_full_paths_with_nextest_fallback() {
+    let quick_gate = read_workspace_source("quiet_editor_gate.sh");
+    let full_gate = read_workspace_source("quiet_full_gate.sh");
+    let ci = read_workspace_source(".woodpecker.yml");
+
+    assert!(
+        quick_gate.contains("editor_inspector")
+            && quick_gate.contains("runenwerk_editor")
+            && quick_gate.contains("tools/docs/validate_docs.py"),
+        "quick editor gate should cover active editor/ECS crates and docs validation",
+    );
+    assert!(
+        full_gate.contains("cargo nextest --version")
+            && full_gate.contains("cargo nextest run")
+            && full_gate.contains("cargo test"),
+        "full gate should prefer nextest but keep cargo test as a zero-install fallback",
+    );
+    assert!(
+        ci.contains("./quiet_full_gate.sh") && ci.contains("tools/docs/validate_docs.py"),
+        "CI should use the repo gate path and include docs validation",
     );
 }
 

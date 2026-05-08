@@ -9,6 +9,7 @@ pub mod build_outliner_panel;
 pub mod build_toolbar;
 pub mod build_viewport_panel;
 pub mod shell_chrome_definition;
+pub mod surface_control_polish;
 pub mod toolbar_definition;
 
 pub use build_console_panel::build_console_panel;
@@ -23,4 +24,7 @@ pub use build_outliner_panel::build_outliner_panel;
 pub use build_toolbar::build_toolbar;
 pub use build_viewport_panel::build_viewport_panel;
 pub use shell_chrome_definition::build_defined_tab_strip_from_frame;
-pub use toolbar_definition::{build_defined_toolbar, build_defined_toolbar_menu_popup};
+pub use toolbar_definition::{
+    build_defined_toolbar, build_defined_toolbar_menu_popup,
+    build_defined_toolbar_menu_popup_with_binding, build_defined_toolbar_with_template,
+};

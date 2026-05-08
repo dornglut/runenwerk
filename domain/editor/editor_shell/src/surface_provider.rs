@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 
 use editor_core::{DocumentId, DocumentKind};
+use editor_definition::EditorToolbarBinding;
 use id_macros::id;
+use ui_definition::NormalizedUiTemplate;
 use ui_surface::{SurfaceCapability, SurfaceCapabilitySet, SurfaceDefinitionId};
 
 use crate::{
@@ -261,6 +263,10 @@ pub struct EditorShellFrameModel {
     pub toolbar: ToolbarViewModel,
     pub surfaces: BTreeMap<ToolSurfaceInstanceId, ResolvedSurfaceFrame>,
     pub active_tab_stack_popup_menu: Option<ActiveTabStackPopupMenu>,
+    pub available_tool_surface_kinds: Vec<ToolSurfaceKind>,
+    pub active_toolbar_template: Option<NormalizedUiTemplate>,
+    pub active_toolbar_binding: Option<EditorToolbarBinding>,
+    pub active_shell_chrome_template: Option<NormalizedUiTemplate>,
 }
 
 impl EditorShellFrameModel {
@@ -272,6 +278,10 @@ impl EditorShellFrameModel {
             toolbar,
             surfaces,
             active_tab_stack_popup_menu: None,
+            available_tool_surface_kinds: Vec::new(),
+            active_toolbar_template: None,
+            active_toolbar_binding: None,
+            active_shell_chrome_template: None,
         }
     }
 
@@ -280,6 +290,23 @@ impl EditorShellFrameModel {
         popup_menu: Option<ActiveTabStackPopupMenu>,
     ) -> Self {
         self.active_tab_stack_popup_menu = popup_menu;
+        self
+    }
+
+    pub fn with_available_tool_surface_kinds(mut self, kinds: Vec<ToolSurfaceKind>) -> Self {
+        self.available_tool_surface_kinds = kinds;
+        self
+    }
+
+    pub fn with_active_ui_definitions(
+        mut self,
+        toolbar_template: Option<NormalizedUiTemplate>,
+        toolbar_binding: Option<EditorToolbarBinding>,
+        shell_chrome_template: Option<NormalizedUiTemplate>,
+    ) -> Self {
+        self.active_toolbar_template = toolbar_template;
+        self.active_toolbar_binding = toolbar_binding;
+        self.active_shell_chrome_template = shell_chrome_template;
         self
     }
 

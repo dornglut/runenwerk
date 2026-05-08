@@ -129,6 +129,10 @@ pub fn validate_editor_definition_document(
         EditorDefinitionDocumentContent::Menu(menu) => {
             guard_required(&menu.id, "editor.definition.menu.id", &mut diagnostics);
             guard_durable_id(&menu.id, "editor.definition.menu.id", &mut diagnostics);
+            let mut item_ids = BTreeSet::new();
+            for item in &menu.items {
+                validate_menu_item(item, &mut item_ids, &mut diagnostics);
+            }
         }
         EditorDefinitionDocumentContent::Theme(theme) => {
             guard_required(&theme.id, "editor.definition.theme.id", &mut diagnostics);
@@ -149,7 +153,34 @@ pub fn validate_editor_definition_document(
                 &mut diagnostics,
             );
             let mut chords = BTreeSet::new();
+            let mut shortcut_ids = BTreeSet::new();
             for shortcut in &shortcuts.shortcuts {
+                guard_required(
+                    &shortcut.id,
+                    "editor.definition.shortcut.id",
+                    &mut diagnostics,
+                );
+                guard_required(
+                    &shortcut.command,
+                    "editor.definition.shortcut.command",
+                    &mut diagnostics,
+                );
+                guard_required(
+                    &shortcut.chord,
+                    "editor.definition.shortcut.chord",
+                    &mut diagnostics,
+                );
+                guard_durable_id(
+                    &shortcut.id,
+                    "editor.definition.shortcut.id",
+                    &mut diagnostics,
+                );
+                if !shortcut_ids.insert(shortcut.id.clone()) {
+                    diagnostics.push(UiDefinitionDiagnostic::error(
+                        "editor.definition.shortcut.duplicate",
+                        format!("duplicate shortcut id '{}'", shortcut.id),
+                    ));
+                }
                 let key = (
                     shortcut.context.clone().unwrap_or_default(),
                     shortcut.chord.clone(),
@@ -173,6 +204,35 @@ pub fn validate_editor_definition_document(
                 "editor.definition.command_binding_set.id",
                 &mut diagnostics,
             );
+            let mut binding_ids = BTreeSet::new();
+            for binding in &bindings.bindings {
+                guard_required(
+                    &binding.id,
+                    "editor.definition.command_binding.id",
+                    &mut diagnostics,
+                );
+                guard_required(
+                    &binding.command,
+                    "editor.definition.command_binding.command",
+                    &mut diagnostics,
+                );
+                guard_required(
+                    &binding.route_target,
+                    "editor.definition.command_binding.route_target",
+                    &mut diagnostics,
+                );
+                guard_durable_id(
+                    &binding.id,
+                    "editor.definition.command_binding.id",
+                    &mut diagnostics,
+                );
+                if !binding_ids.insert(binding.id.clone()) {
+                    diagnostics.push(UiDefinitionDiagnostic::error(
+                        "editor.definition.command_binding.duplicate",
+                        format!("duplicate command binding id '{}'", binding.id),
+                    ));
+                }
+            }
         }
         EditorDefinitionDocumentContent::PanelRegistry(registry) => {
             guard_required(
@@ -185,6 +245,32 @@ pub fn validate_editor_definition_document(
                 "editor.definition.panel_registry.id",
                 &mut diagnostics,
             );
+            let mut panel_ids = BTreeSet::new();
+            for panel in &registry.panels {
+                guard_required(&panel.id, "editor.definition.panel.id", &mut diagnostics);
+                guard_required(
+                    &panel.label,
+                    "editor.definition.panel.label",
+                    &mut diagnostics,
+                );
+                guard_required(
+                    &panel.default_tool_surface,
+                    "editor.definition.panel.default_tool_surface",
+                    &mut diagnostics,
+                );
+                guard_durable_id(&panel.id, "editor.definition.panel.id", &mut diagnostics);
+                guard_durable_id(
+                    &panel.default_tool_surface,
+                    "editor.definition.panel.default_tool_surface",
+                    &mut diagnostics,
+                );
+                if !panel_ids.insert(panel.id.clone()) {
+                    diagnostics.push(UiDefinitionDiagnostic::error(
+                        "editor.definition.panel.duplicate",
+                        format!("duplicate panel id '{}'", panel.id),
+                    ));
+                }
+            }
         }
         EditorDefinitionDocumentContent::ToolSurfaceRegistry(registry) => {
             guard_required(
@@ -197,6 +283,35 @@ pub fn validate_editor_definition_document(
                 "editor.definition.tool_surface_registry.id",
                 &mut diagnostics,
             );
+            let mut surface_ids = BTreeSet::new();
+            for surface in &registry.tool_surfaces {
+                guard_required(
+                    &surface.id,
+                    "editor.definition.tool_surface.id",
+                    &mut diagnostics,
+                );
+                guard_required(
+                    &surface.label,
+                    "editor.definition.tool_surface.label",
+                    &mut diagnostics,
+                );
+                guard_required(
+                    &surface.provider_family,
+                    "editor.definition.tool_surface.provider_family",
+                    &mut diagnostics,
+                );
+                guard_durable_id(
+                    &surface.id,
+                    "editor.definition.tool_surface.id",
+                    &mut diagnostics,
+                );
+                if !surface_ids.insert(surface.id.clone()) {
+                    diagnostics.push(UiDefinitionDiagnostic::error(
+                        "editor.definition.tool_surface.duplicate",
+                        format!("duplicate tool-surface id '{}'", surface.id),
+                    ));
+                }
+            }
         }
         EditorDefinitionDocumentContent::EditorBindings(bindings) => {
             guard_required(
@@ -219,6 +334,32 @@ pub fn editor_definition_has_blocking_diagnostics(diagnostics: &[UiDefinitionDia
     diagnostics
         .iter()
         .any(|diagnostic| diagnostic.severity == UiDefinitionDiagnosticSeverity::Error)
+}
+
+fn validate_menu_item(
+    item: &crate::EditorMenuItemDefinition,
+    seen_ids: &mut BTreeSet<String>,
+    diagnostics: &mut Vec<UiDefinitionDiagnostic>,
+) {
+    guard_required(&item.id, "editor.definition.menu_item.id", diagnostics);
+    guard_required(
+        &item.label,
+        "editor.definition.menu_item.label",
+        diagnostics,
+    );
+    guard_durable_id(&item.id, "editor.definition.menu_item.id", diagnostics);
+    if let Some(command) = &item.command {
+        guard_required(command, "editor.definition.menu_item.command", diagnostics);
+    }
+    if !seen_ids.insert(item.id.clone()) {
+        diagnostics.push(UiDefinitionDiagnostic::error(
+            "editor.definition.menu_item.duplicate",
+            format!("duplicate menu item id '{}'", item.id),
+        ));
+    }
+    for child in &item.children {
+        validate_menu_item(child, seen_ids, diagnostics);
+    }
 }
 
 fn validate_workspace_host(
@@ -266,6 +407,16 @@ fn validate_workspace_host(
                 guard_durable_id(
                     &tab.id,
                     "editor.definition.workspace_layout.tab.id",
+                    diagnostics,
+                );
+                guard_required(
+                    &tab.tool_surface,
+                    "editor.definition.workspace_layout.tab.tool_surface",
+                    diagnostics,
+                );
+                guard_durable_id(
+                    &tab.tool_surface,
+                    "editor.definition.workspace_layout.tab.tool_surface",
                     diagnostics,
                 );
                 if !tab_ids.insert(tab.id.clone()) {
@@ -345,10 +496,13 @@ fn guard_durable_id(value: &str, field: &str, diagnostics: &mut Vec<UiDefinition
 mod tests {
     use super::*;
     use crate::{
+        EditorCommandBindingDefinition, EditorCommandBindingSetDefinition,
         EditorDefinitionDocumentContent, EditorDefinitionDocumentKind, EditorDefinitionId,
-        EditorShortcutDefinition, EditorShortcutSetDefinition, EditorWorkspaceHostDefinition,
-        EditorWorkspaceLayoutDefinition, EditorWorkspacePanelTabDefinition,
-        EditorWorkspaceSplitAxisDefinition,
+        EditorMenuDefinition, EditorMenuItemDefinition, EditorPanelDefinition,
+        EditorPanelRegistryDefinition, EditorShortcutDefinition, EditorShortcutSetDefinition,
+        EditorToolSurfaceDefinition, EditorToolSurfaceRegistryDefinition,
+        EditorWorkspaceHostDefinition, EditorWorkspaceLayoutDefinition,
+        EditorWorkspacePanelTabDefinition, EditorWorkspaceSplitAxisDefinition,
     };
 
     #[test]
@@ -428,5 +582,118 @@ mod tests {
         assert!(diagnostics.iter().any(|diagnostic| {
             diagnostic.code == "editor.definition.authored_id.runtime_identity"
         }));
+    }
+
+    #[test]
+    fn workspace_layout_requires_durable_tab_tool_surface_keys() {
+        let document = EditorDefinitionDocument::current(
+            EditorDefinitionId::from("workspace.layout"),
+            "Layout",
+            EditorDefinitionDocumentKind::WorkspaceDefinition,
+            EditorDefinitionDocumentContent::WorkspaceLayout(EditorWorkspaceLayoutDefinition {
+                id: "workspace.layout".to_string(),
+                label: "Layout".to_string(),
+                root: EditorWorkspaceHostDefinition::TabStack {
+                    id: "root".to_string(),
+                    tabs: vec![EditorWorkspacePanelTabDefinition {
+                        id: "root.bad".to_string(),
+                        label: "Bad".to_string(),
+                        tool_surface: "tool_surface_instance:7".to_string(),
+                    }],
+                    active_tab: Some("root.bad".to_string()),
+                },
+                floating_hosts: Vec::new(),
+            }),
+        );
+
+        let diagnostics = validate_editor_definition_document(&document);
+
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "editor.definition.authored_id.runtime_identity"
+        }));
+    }
+
+    #[test]
+    fn catalog_definition_validation_rejects_malformed_activation_inputs() {
+        let documents = [
+            EditorDefinitionDocument::current(
+                EditorDefinitionId::from("editor.menu"),
+                "Menu",
+                EditorDefinitionDocumentKind::Menu,
+                EditorDefinitionDocumentContent::Menu(EditorMenuDefinition {
+                    id: "editor.menu".to_string(),
+                    label: "Menu".to_string(),
+                    items: vec![EditorMenuItemDefinition {
+                        id: String::new(),
+                        label: String::new(),
+                        command: Some(String::new()),
+                        children: Vec::new(),
+                        availability: None,
+                    }],
+                }),
+            ),
+            EditorDefinitionDocument::current(
+                EditorDefinitionId::from("editor.commands"),
+                "Commands",
+                EditorDefinitionDocumentKind::CommandBinding,
+                EditorDefinitionDocumentContent::CommandBindings(
+                    EditorCommandBindingSetDefinition {
+                        id: "editor.commands".to_string(),
+                        label: "Commands".to_string(),
+                        bindings: vec![EditorCommandBindingDefinition {
+                            id: String::new(),
+                            command: String::new(),
+                            route_target: String::new(),
+                            capability_requirements: Vec::new(),
+                            undoable: false,
+                        }],
+                    },
+                ),
+            ),
+            EditorDefinitionDocument::current(
+                EditorDefinitionId::from("editor.panels"),
+                "Panels",
+                EditorDefinitionDocumentKind::PanelRegistry,
+                EditorDefinitionDocumentContent::PanelRegistry(EditorPanelRegistryDefinition {
+                    id: "editor.panels".to_string(),
+                    label: "Panels".to_string(),
+                    panels: vec![EditorPanelDefinition {
+                        id: String::new(),
+                        label: String::new(),
+                        default_tool_surface: String::new(),
+                        allowed_document_kinds: Vec::new(),
+                        allowed_workspace_profiles: Vec::new(),
+                    }],
+                }),
+            ),
+            EditorDefinitionDocument::current(
+                EditorDefinitionId::from("editor.surfaces"),
+                "Surfaces",
+                EditorDefinitionDocumentKind::ToolSurfaceDefinition,
+                EditorDefinitionDocumentContent::ToolSurfaceRegistry(
+                    EditorToolSurfaceRegistryDefinition {
+                        id: "editor.surfaces".to_string(),
+                        label: "Surfaces".to_string(),
+                        tool_surfaces: vec![EditorToolSurfaceDefinition {
+                            id: String::new(),
+                            label: String::new(),
+                            provider_family: String::new(),
+                            required_capabilities: Vec::new(),
+                            allowed_document_kinds: Vec::new(),
+                            allowed_workspace_profiles: Vec::new(),
+                        }],
+                    },
+                ),
+            ),
+        ];
+
+        for document in documents {
+            let diagnostics = validate_editor_definition_document(&document);
+            assert!(
+                editor_definition_has_blocking_diagnostics(&diagnostics),
+                "malformed {:?} should be rejected",
+                document.kind
+            );
+        }
     }
 }

@@ -1,3 +1,4 @@
+use editor_shell::{WorkspaceIdentityAllocator, form_workspace_state_from_definition};
 use editor_viewport::{ViewportCameraSettings, ViewportRuntimeSettings};
 use engine::plugins::render::{GpuParams, GpuUniform};
 use glam::{Vec3, vec3};
@@ -66,14 +67,147 @@ impl EditorHostResource {
                         document.display_name
                     ));
                 }
-                Ok(
-                    EditorDefinitionActivation::UiTemplateChanged { .. }
-                    | EditorDefinitionActivation::WorkspaceLayoutChanged { .. },
-                ) => {
+                Ok(EditorDefinitionActivation::UiTemplateCatalogChanged {
+                    template_id,
+                    template,
+                }) => {
+                    self.shell_state
+                        .active_editor_definitions_mut()
+                        .install_template(template);
                     self.app.append_console_line(format!(
-                        "[editor-definition] live activation deferred for {}",
-                        document.display_name
+                        "[editor-definition] activated UI template {template_id}"
                     ));
+                    activated += 1;
+                }
+                Ok(EditorDefinitionActivation::EditorBindingsCatalogChanged(bindings)) => {
+                    match self
+                        .shell_state
+                        .active_editor_definitions_mut()
+                        .install_editor_bindings(bindings)
+                    {
+                        Ok(()) => {
+                            self.app.append_console_line(
+                                "[editor-definition] activated editor bindings".to_string(),
+                            );
+                            activated += 1;
+                        }
+                        Err(diagnostics) => {
+                            for diagnostic in diagnostics {
+                                self.app.append_console_line(format!(
+                                    "[editor-definition] editor bindings activation blocked: {}",
+                                    diagnostic.message
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(EditorDefinitionActivation::MenuCatalogChanged { menu_id, menu }) => {
+                    self.shell_state
+                        .active_editor_definitions_mut()
+                        .install_menu(menu);
+                    self.app.append_console_line(format!(
+                        "[editor-definition] activated menu {menu_id}"
+                    ));
+                    activated += 1;
+                }
+                Ok(EditorDefinitionActivation::ShortcutCatalogChanged {
+                    shortcut_set_id,
+                    shortcuts,
+                }) => {
+                    self.shell_state
+                        .active_editor_definitions_mut()
+                        .install_shortcuts(shortcuts);
+                    self.app.append_console_line(format!(
+                        "[editor-definition] activated shortcut set {shortcut_set_id}"
+                    ));
+                    activated += 1;
+                }
+                Ok(EditorDefinitionActivation::CommandBindingCatalogChanged {
+                    command_binding_set_id,
+                    command_bindings,
+                }) => {
+                    self.shell_state
+                        .active_editor_definitions_mut()
+                        .install_command_bindings(command_bindings);
+                    self.app.append_console_line(format!(
+                        "[editor-definition] activated command binding set {command_binding_set_id}"
+                    ));
+                    activated += 1;
+                }
+                Ok(EditorDefinitionActivation::PanelRegistryCatalogChanged {
+                    registry_id,
+                    registry,
+                }) => {
+                    let workspace = self.shell_state.workspace_state().clone();
+                    match self
+                        .shell_state
+                        .active_editor_definitions_mut()
+                        .install_panel_registry(registry, &workspace)
+                    {
+                        Ok(()) => {
+                            self.app.append_console_line(format!(
+                                "[editor-definition] activated panel registry {registry_id}"
+                            ));
+                            activated += 1;
+                        }
+                        Err(diagnostic) => {
+                            self.app.append_console_line(format!(
+                                "[editor-definition] panel registry activation blocked: {}",
+                                diagnostic.message
+                            ));
+                        }
+                    }
+                }
+                Ok(EditorDefinitionActivation::ToolSurfaceRegistryCatalogChanged {
+                    registry_id,
+                    registry,
+                }) => {
+                    let workspace = self.shell_state.workspace_state().clone();
+                    match self
+                        .shell_state
+                        .active_editor_definitions_mut()
+                        .install_tool_surface_registry(registry, &workspace)
+                    {
+                        Ok(()) => {
+                            self.app.append_console_line(format!(
+                                "[editor-definition] activated tool-surface registry {registry_id}"
+                            ));
+                            activated += 1;
+                        }
+                        Err(diagnostic) => {
+                            self.app.append_console_line(format!(
+                                "[editor-definition] tool-surface registry activation blocked: {}",
+                                diagnostic.message
+                            ));
+                        }
+                    }
+                }
+                Ok(EditorDefinitionActivation::WorkspaceLayoutChanged {
+                    workspace_id,
+                    layout,
+                }) => {
+                    let mut allocator = WorkspaceIdentityAllocator::from_seed(
+                        self.shell_state.workspace_state().next_identity_seed(),
+                    );
+                    let next_workspace_id = allocator.allocate_workspace_id();
+                    match form_workspace_state_from_definition(
+                        &layout,
+                        next_workspace_id,
+                        &mut allocator,
+                    ) {
+                        Ok(workspace_state) => {
+                            self.shell_state.replace_workspace_state(workspace_state);
+                            self.app.append_console_line(format!(
+                                "[editor-definition] activated live workspace layout {workspace_id}"
+                            ));
+                            activated += 1;
+                        }
+                        Err(error) => {
+                            self.app.append_console_line(format!(
+                                "[editor-definition] workspace layout activation blocked: {error:?}"
+                            ));
+                        }
+                    }
                 }
                 Err(diagnostics) => {
                     for diagnostic in diagnostics {

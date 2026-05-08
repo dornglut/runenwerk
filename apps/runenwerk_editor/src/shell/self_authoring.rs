@@ -12,6 +12,8 @@ use editor_definition::{
     EditorWorkspaceProfileDefinition, EditorWorkspaceSplitAxisDefinition,
     editor_definition_has_blocking_diagnostics, validate_editor_definition_document,
 };
+use ron::ser::PrettyConfig;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ui_definition::{
     AuthoredUiTemplate, FormedRetainedUiProduct, UiDefinitionContext, UiDefinitionDiagnostic,
@@ -21,6 +23,26 @@ use ui_definition::{
 use ui_theme::ThemeTokens;
 
 use crate::shell::ui_definition_assets::{EDITOR_BINDINGS_SOURCE, EDITOR_UI_ASSET_SOURCES};
+
+pub const EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION: u32 = 1;
+pub const EDITOR_DEFINITION_EXPORT_PACKAGE_KIND: &str = "runenwerk.editor.definition.export";
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EditorDefinitionExportPackage {
+    pub package_version: u32,
+    pub package_kind: String,
+    pub document: EditorDefinitionDocument,
+}
+
+impl EditorDefinitionExportPackage {
+    pub fn current(document: EditorDefinitionDocument) -> Self {
+        Self {
+            package_version: EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION,
+            package_kind: EDITOR_DEFINITION_EXPORT_PACKAGE_KIND.to_string(),
+            document,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct DefinitionApplyPreview {
@@ -457,18 +479,32 @@ impl SelfAuthoringWorkspaceState {
     }
 
     pub fn export_selected_to_ron(&self) -> Result<String, UiDefinitionDiagnostic> {
+        let package = self.export_selected_package()?;
+        ron::ser::to_string_pretty(&package, PrettyConfig::new()).map_err(|error| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.export.serialize_failed",
+                format!("failed to export definition package: {error}"),
+            )
+        })
+    }
+
+    pub fn export_selected_package(
+        &self,
+    ) -> Result<EditorDefinitionExportPackage, UiDefinitionDiagnostic> {
         let document = self.selected_document().ok_or_else(|| {
             UiDefinitionDiagnostic::error(
                 "editor.self_authoring.export.no_selection",
                 "no definition document is selected",
             )
         })?;
-        ron::to_string(document).map_err(|error| {
-            UiDefinitionDiagnostic::error(
-                "editor.self_authoring.export.serialize_failed",
-                format!("failed to export definition document: {error}"),
-            )
-        })
+        let diagnostics = validate_editor_definition_document(document);
+        if editor_definition_has_blocking_diagnostics(&diagnostics) {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.self_authoring.export.blocked",
+                "definition has blocking validation diagnostics",
+            ));
+        }
+        Ok(EditorDefinitionExportPackage::current(document.clone()))
     }
 
     pub fn diagnostics_for_document(
@@ -904,6 +940,17 @@ mod tests {
             .export_selected_to_ron()
             .expect("selected duplicate should export");
         assert!(exported.contains("Renamed Copy"));
+        let exported_package: EditorDefinitionExportPackage =
+            ron::from_str(&exported).expect("export should be a versioned package");
+        assert_eq!(
+            exported_package.package_version,
+            EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION
+        );
+        assert_eq!(
+            exported_package.package_kind,
+            EDITOR_DEFINITION_EXPORT_PACKAGE_KIND
+        );
+        assert_eq!(exported_package.document.display_name, "Renamed Copy");
         let removed = state
             .delete_selected()
             .expect("unapplied duplicate should delete");

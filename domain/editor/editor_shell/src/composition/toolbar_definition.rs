@@ -16,9 +16,9 @@ use crate::{
 };
 use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
-    AuthoredUiNodePath, AuthoredUiTemplate, FormedRetainedUiProduct, FormedUiRoute, UiAvailability,
-    UiAvailabilityBinding, UiDefinitionContext, UiRouteSlotId, UiValue, form_retained_ui,
-    normalize_authored_template,
+    AuthoredUiNodePath, AuthoredUiTemplate, FormedRetainedUiProduct, FormedUiRoute,
+    NormalizedUiTemplate, UiAvailability, UiAvailabilityBinding, UiDefinitionContext,
+    UiRouteSlotId, UiValue, form_retained_ui, normalize_authored_template,
 };
 use ui_math::{UiInsets, UiSize};
 use ui_text::FontId;
@@ -34,13 +34,27 @@ pub fn build_defined_toolbar(
     view_model: &ToolbarViewModel,
     theme: &ThemeTokens,
 ) -> FormedRetainedUiProduct {
-    let template: AuthoredUiTemplate =
+    build_defined_toolbar_with_template(view_model, theme, None)
+}
+
+pub fn build_defined_toolbar_with_template(
+    view_model: &ToolbarViewModel,
+    theme: &ThemeTokens,
+    template: Option<&NormalizedUiTemplate>,
+) -> FormedRetainedUiProduct {
+    let checked_in_template: AuthoredUiTemplate =
         ron::from_str(TOOLBAR_TEMPLATE_RON).expect("checked-in toolbar UI fixture must parse");
-    let normalized = normalize_authored_template(template);
+    let fallback;
+    let normalized = if let Some(template) = template {
+        template
+    } else {
+        fallback = normalize_authored_template(checked_in_template);
+        &fallback
+    };
     let mut context = UiDefinitionContext::new(theme.clone());
     register_toolbar_widget_ids(&mut context);
     populate_toolbar_values(&mut context, view_model);
-    let mut product = form_retained_ui(&normalized, &mut context);
+    let mut product = form_retained_ui(normalized, &mut context);
     insert_dynamic_workspace_buttons(&mut product, view_model, theme);
     project_workspace_close_buttons(&mut product, view_model, theme);
     compact_toolbar_root(&mut product.root, theme);
@@ -51,8 +65,22 @@ pub fn build_defined_toolbar_menu_popup(
     view_model: &ToolbarViewModel,
     theme: &ThemeTokens,
 ) -> Option<FormedRetainedUiProduct> {
+    build_defined_toolbar_menu_popup_with_binding(view_model, theme, None)
+}
+
+pub fn build_defined_toolbar_menu_popup_with_binding(
+    view_model: &ToolbarViewModel,
+    theme: &ThemeTokens,
+    binding: Option<&EditorToolbarBinding>,
+) -> Option<FormedRetainedUiProduct> {
     let (active_menu_id, anchor) = active_toolbar_menu_anchor(view_model)?;
-    let toolbar = checked_in_toolbar_binding();
+    let fallback;
+    let toolbar = if let Some(binding) = binding {
+        binding
+    } else {
+        fallback = checked_in_toolbar_binding();
+        &fallback
+    };
     let text_style = theme.body_small_text_style(FontId(1));
     let mut routes_by_widget_id = BTreeMap::new();
     let mut paths_by_widget_id = BTreeMap::new();

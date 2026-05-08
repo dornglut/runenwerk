@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 
 use editor_core::RealityVersion;
 use editor_viewport::{
-    ArtifactObservationFrame, ExpressionDimensions, ExpressionFormat, ExpressionFreshness,
-    ExpressionPresentationHints, ExpressionProductDescriptor, ExpressionProductId,
-    ExpressionProductKind, ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
+    ArtifactObservationFrame, ExpressionChannelLayerSliceMetadata, ExpressionDimensions,
+    ExpressionFormat, ExpressionFreshness, ExpressionPresentationHints,
+    ExpressionProductDescriptor, ExpressionProductId, ExpressionProductKind,
+    ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
 };
 
 pub const MAIN_VIEWPORT_ID: ViewportId = ViewportId(1);
@@ -15,6 +16,14 @@ pub const MAIN_VIEWPORT_ID: ViewportId = ViewportId(1);
 pub const SCENE_COLOR_PRODUCT_ID: ExpressionProductId = ExpressionProductId(1);
 pub const PICKING_IDS_PRODUCT_ID: ExpressionProductId = ExpressionProductId(2);
 pub const OVERLAY_PRODUCT_ID: ExpressionProductId = ExpressionProductId(3);
+pub const DEPTH_PRODUCT_ID: ExpressionProductId = ExpressionProductId(4);
+pub const DIAGNOSTICS_PRODUCT_ID: ExpressionProductId = ExpressionProductId(5);
+pub const SCALAR_FIELD_PRODUCT_ID: ExpressionProductId = ExpressionProductId(6);
+pub const VECTOR_FIELD_PRODUCT_ID: ExpressionProductId = ExpressionProductId(7);
+pub const ATLAS_PRODUCT_ID: ExpressionProductId = ExpressionProductId(8);
+pub const VOLUME_SLICE_PRODUCT_ID: ExpressionProductId = ExpressionProductId(9);
+pub const BRICKMAP_DEBUG_PRODUCT_ID: ExpressionProductId = ExpressionProductId(10);
+pub const HISTORY_COLOR_PRODUCT_ID: ExpressionProductId = ExpressionProductId(11);
 
 pub fn initial_presentation_state(viewport_id: ViewportId) -> ViewportPresentationState {
     ViewportPresentationState::new(viewport_id, SCENE_COLOR_PRODUCT_ID)
@@ -72,6 +81,150 @@ pub fn initial_product_descriptors(
                 y_flipped: false,
             },
             None,
+        ),
+        ExpressionProductDescriptor::new(
+            DEPTH_PRODUCT_ID,
+            ExpressionProductKind::Depth2D,
+            dimensions,
+            ExpressionFormat::Depth32Float,
+            "editor.viewport.depth_producer",
+            ExpressionSourceRealityClass::ObservedScene,
+            source_version,
+            ExpressionFreshness::Current,
+            ExpressionPresentationHints::default(),
+            Some(ExpressionChannelLayerSliceMetadata {
+                channel_label: Some("depth".to_string()),
+                layer_label: None,
+                slice_label: None,
+            }),
+        ),
+        ExpressionProductDescriptor::new(
+            DIAGNOSTICS_PRODUCT_ID,
+            ExpressionProductKind::Diagnostics2D,
+            dimensions,
+            ExpressionFormat::Rgba8Unorm,
+            "editor.viewport.diagnostics_producer",
+            ExpressionSourceRealityClass::Diagnostics,
+            source_version,
+            ExpressionFreshness::PotentiallyStale,
+            ExpressionPresentationHints {
+                srgb: true,
+                premultiplied_alpha: false,
+                y_flipped: false,
+            },
+            None,
+        ),
+        ExpressionProductDescriptor::new(
+            SCALAR_FIELD_PRODUCT_ID,
+            ExpressionProductKind::ScalarField2D,
+            dimensions,
+            ExpressionFormat::Other("r32_float".to_string()),
+            "editor.viewport.scalar_field_producer",
+            ExpressionSourceRealityClass::DerivedField,
+            source_version,
+            ExpressionFreshness::PotentiallyStale,
+            ExpressionPresentationHints::default(),
+            Some(ExpressionChannelLayerSliceMetadata {
+                channel_label: Some("scalar".to_string()),
+                layer_label: Some("field".to_string()),
+                slice_label: None,
+            }),
+        ),
+        ExpressionProductDescriptor::new(
+            VECTOR_FIELD_PRODUCT_ID,
+            ExpressionProductKind::VectorField2D,
+            dimensions,
+            ExpressionFormat::Other("rg32_float".to_string()),
+            "editor.viewport.vector_field_producer",
+            ExpressionSourceRealityClass::DerivedField,
+            source_version,
+            ExpressionFreshness::PotentiallyStale,
+            ExpressionPresentationHints::default(),
+            Some(ExpressionChannelLayerSliceMetadata {
+                channel_label: Some("vector".to_string()),
+                layer_label: Some("field".to_string()),
+                slice_label: None,
+            }),
+        ),
+        ExpressionProductDescriptor::new(
+            ATLAS_PRODUCT_ID,
+            ExpressionProductKind::Atlas2D,
+            dimensions,
+            ExpressionFormat::Rgba8Unorm,
+            "editor.viewport.atlas_producer",
+            ExpressionSourceRealityClass::DerivedAsset,
+            source_version,
+            ExpressionFreshness::PotentiallyStale,
+            ExpressionPresentationHints {
+                srgb: true,
+                premultiplied_alpha: false,
+                y_flipped: false,
+            },
+            Some(ExpressionChannelLayerSliceMetadata {
+                channel_label: None,
+                layer_label: Some("atlas".to_string()),
+                slice_label: None,
+            }),
+        ),
+        ExpressionProductDescriptor::new(
+            VOLUME_SLICE_PRODUCT_ID,
+            ExpressionProductKind::VolumeSlice2D,
+            dimensions,
+            ExpressionFormat::Rgba8Unorm,
+            "editor.viewport.volume_slice_producer",
+            ExpressionSourceRealityClass::DerivedVolume,
+            source_version,
+            ExpressionFreshness::PotentiallyStale,
+            ExpressionPresentationHints {
+                srgb: true,
+                premultiplied_alpha: false,
+                y_flipped: false,
+            },
+            Some(ExpressionChannelLayerSliceMetadata {
+                channel_label: None,
+                layer_label: Some("volume".to_string()),
+                slice_label: Some("z=0".to_string()),
+            }),
+        ),
+        ExpressionProductDescriptor::new(
+            BRICKMAP_DEBUG_PRODUCT_ID,
+            ExpressionProductKind::BrickmapDebug2D,
+            dimensions,
+            ExpressionFormat::Rgba8Unorm,
+            "editor.viewport.brickmap_debug_producer",
+            ExpressionSourceRealityClass::Diagnostics,
+            source_version,
+            ExpressionFreshness::PotentiallyStale,
+            ExpressionPresentationHints {
+                srgb: true,
+                premultiplied_alpha: false,
+                y_flipped: false,
+            },
+            Some(ExpressionChannelLayerSliceMetadata {
+                channel_label: Some("occupancy".to_string()),
+                layer_label: Some("brickmap".to_string()),
+                slice_label: None,
+            }),
+        ),
+        ExpressionProductDescriptor::new(
+            HISTORY_COLOR_PRODUCT_ID,
+            ExpressionProductKind::HistoryColor2D,
+            dimensions,
+            ExpressionFormat::Rgba8Unorm,
+            "editor.viewport.history_color_producer",
+            ExpressionSourceRealityClass::DerivedHistory,
+            source_version,
+            ExpressionFreshness::PotentiallyStale,
+            ExpressionPresentationHints {
+                srgb: true,
+                premultiplied_alpha: false,
+                y_flipped: false,
+            },
+            Some(ExpressionChannelLayerSliceMetadata {
+                channel_label: Some("color".to_string()),
+                layer_label: Some("history".to_string()),
+                slice_label: Some("previous".to_string()),
+            }),
         ),
     ]
 }
@@ -195,13 +348,18 @@ mod tests {
         let products =
             initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
         let kinds = products
-            .into_iter()
+            .iter()
             .map(|descriptor| descriptor.kind)
             .collect::<Vec<_>>();
 
         assert!(kinds.contains(&ExpressionProductKind::SceneColor2D));
         assert!(kinds.contains(&ExpressionProductKind::PickingIds2D));
         assert!(kinds.contains(&ExpressionProductKind::Overlay2D));
+        assert!(kinds.contains(&ExpressionProductKind::ScalarField2D));
+        assert!(kinds.contains(&ExpressionProductKind::Atlas2D));
+        assert!(kinds.contains(&ExpressionProductKind::VolumeSlice2D));
+        assert!(kinds.contains(&ExpressionProductKind::BrickmapDebug2D));
+        assert!(kinds.contains(&ExpressionProductKind::HistoryColor2D));
     }
 
     #[test]
@@ -230,14 +388,16 @@ mod tests {
                 .descriptors_for(viewport_a)
                 .expect("viewport A descriptors should exist")
                 .len(),
-            3
+            initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1))
+                .len()
         );
         assert_eq!(
             registry
                 .descriptors_for(viewport_b)
                 .expect("viewport B descriptors should exist")
                 .len(),
-            3
+            initial_product_descriptors(ExpressionDimensions::new(640, 360), RealityVersion(2))
+                .len()
         );
     }
 }

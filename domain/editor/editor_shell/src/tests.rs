@@ -11,12 +11,12 @@ use crate::{
     SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
     SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
     ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
-    WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
-    build_editor_shell_frame, label, map_interactions_to_shell_commands, reduce_workspace,
-    tab_close_button_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_switch_surface_button_widget_id, tool_surface_definition_id,
-    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
+    ViewportSurfaceAction, WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation,
+    WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame, label,
+    map_interactions_to_shell_commands, reduce_workspace, tab_close_button_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_switch_surface_button_widget_id,
+    tool_surface_definition_id, toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
 
 #[test]
@@ -630,6 +630,50 @@ fn surface_text_keyboard_toggle_and_numeric_input_map_to_typed_inspector_actions
             InspectorSurfaceAction::SetFieldNumber {
                 index: 5,
                 value: 12.5,
+            }
+        )]
+    );
+
+    let enum_actions = mapped_surface_actions_for_route(
+        PanelKind::Inspector,
+        WidgetId(50_123),
+        SurfaceLocalAction::Inspector(InspectorSurfaceAction::SelectFieldEnum {
+            index: 6,
+            options: vec!["Nearest".to_string(), "Linear".to_string()],
+        }),
+        vec![UiInteraction::SelectChanged {
+            target: WidgetId(50_123),
+            index: 1,
+        }],
+    );
+    assert_eq!(
+        enum_actions,
+        vec![SurfaceLocalAction::Inspector(
+            InspectorSurfaceAction::SetFieldEnum {
+                index: 6,
+                value: "Linear".to_string(),
+            }
+        )]
+    );
+
+    let root_opaque_actions = mapped_surface_actions_for_route(
+        PanelKind::Viewport,
+        WidgetId(50_124),
+        SurfaceLocalAction::Viewport(ViewportSurfaceAction::SetRootBackgroundOpaque {
+            viewport_id: editor_viewport::ViewportId(4),
+            enabled: false,
+        }),
+        vec![UiInteraction::Toggled {
+            target: WidgetId(50_124),
+            checked: true,
+        }],
+    );
+    assert_eq!(
+        root_opaque_actions,
+        vec![SurfaceLocalAction::Viewport(
+            ViewportSurfaceAction::SetRootBackgroundOpaque {
+                viewport_id: editor_viewport::ViewportId(4),
+                enabled: true,
             }
         )]
     );

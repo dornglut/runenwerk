@@ -20,6 +20,8 @@ use ui_layout::SizePolicy;
 use ui_text::{FontId, TextOverflow};
 use ui_theme::{ThemeTokens, UiColor};
 
+use super::surface_control_polish::apply_compact_surface_control_polish;
+
 const ENTITY_TABLE_TEMPLATE_RON: &str =
     include_str!("../../../../../assets/editor/ui/surfaces/entity_table.ron");
 
@@ -221,33 +223,25 @@ fn polish_entity_table(root: &mut UiNode, theme: &ThemeTokens) {
         label.text_style = theme.heading_text_style(FontId(1));
     }
     if let Some(search) = find_node_mut(root, ENTITY_TABLE_SEARCH_WIDGET_ID)
-        && let UiNodeKind::TextInput(search) = &mut search.kind
+        && matches!(&search.kind, UiNodeKind::TextInput(_))
     {
-        search.text_style = theme.body_small_text_style(FontId(1));
-        search.text_style.overflow = TextOverflow::Ellipsis;
+        apply_compact_surface_control_polish(search, theme);
     }
     for widget_id in [
         ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
         ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID,
         ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID,
+        ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID,
     ] {
         if let Some(node) = find_node_mut(root, widget_id) {
-            match &mut node.kind {
-                UiNodeKind::Button(button) => {
-                    button.text_style = theme.body_small_text_style(FontId(1));
-                }
-                UiNodeKind::Toggle(toggle) => {
-                    toggle.text_style = theme.body_small_text_style(FontId(1));
-                }
-                _ => {}
-            }
+            apply_compact_surface_control_polish(node, theme);
         }
     }
     for index in 0..4 {
         if let Some(sort_button) = find_node_mut(root, entity_table_sort_button_widget_id(index))
-            && let UiNodeKind::Button(button) = &mut sort_button.kind
+            && matches!(&sort_button.kind, UiNodeKind::Button(_))
         {
-            button.text_style = theme.body_small_text_style(FontId(1));
+            apply_compact_surface_control_polish(sort_button, theme);
         }
     }
     if let Some(table) = find_node_mut(root, ENTITY_TABLE_LIST_WIDGET_ID)

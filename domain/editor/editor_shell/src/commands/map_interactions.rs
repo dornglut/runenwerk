@@ -555,6 +555,21 @@ fn surface_toggle_action(action: &SurfaceLocalAction, checked: bool) -> Option<S
                 value: checked,
             }),
         ),
+        SurfaceLocalAction::Viewport(crate::ViewportSurfaceAction::ToggleDetails) => Some(
+            SurfaceLocalAction::Viewport(crate::ViewportSurfaceAction::ToggleDetails),
+        ),
+        SurfaceLocalAction::Viewport(crate::ViewportSurfaceAction::ToggleStatistics) => Some(
+            SurfaceLocalAction::Viewport(crate::ViewportSurfaceAction::ToggleStatistics),
+        ),
+        SurfaceLocalAction::Viewport(crate::ViewportSurfaceAction::SetRootBackgroundOpaque {
+            viewport_id,
+            ..
+        }) => Some(SurfaceLocalAction::Viewport(
+            crate::ViewportSurfaceAction::SetRootBackgroundOpaque {
+                viewport_id: *viewport_id,
+                enabled: checked,
+            },
+        )),
         _ => None,
     }
 }

@@ -6,7 +6,7 @@ use ui_surface::{
     SurfaceDefinitionId, SurfaceHostInstanceId, SurfaceInstanceId,
 };
 
-use crate::{ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceState};
+use crate::{PanelKind, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceState};
 
 pub const OUTLINER_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(1);
 pub const VIEWPORT_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(2);
@@ -138,6 +138,73 @@ pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId 
         ToolSurfaceKind::DefinitionValidation => DEFINITION_VALIDATION_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::CommandDiff => COMMAND_DIFF_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Placeholder => PLACEHOLDER_SURFACE_DEFINITION_ID,
+    }
+}
+
+pub fn tool_surface_kind_definition_key(kind: ToolSurfaceKind) -> &'static str {
+    match kind {
+        ToolSurfaceKind::Outliner => "outliner",
+        ToolSurfaceKind::EntityTable => "entity_table",
+        ToolSurfaceKind::Viewport => "viewport",
+        ToolSurfaceKind::Inspector => "inspector",
+        ToolSurfaceKind::Console => "console",
+        ToolSurfaceKind::EditorDesignOutliner => "editor_design_outliner",
+        ToolSurfaceKind::UiHierarchy => "ui_hierarchy",
+        ToolSurfaceKind::UiCanvas => "ui_canvas",
+        ToolSurfaceKind::StyleInspector => "style_inspector",
+        ToolSurfaceKind::Bindings => "bindings",
+        ToolSurfaceKind::DockLayoutPreview => "dock_layout_preview",
+        ToolSurfaceKind::ThemeEditor => "theme_editor",
+        ToolSurfaceKind::ShortcutEditor => "shortcut_editor",
+        ToolSurfaceKind::MenuEditor => "menu_editor",
+        ToolSurfaceKind::DefinitionValidation => "definition_validation",
+        ToolSurfaceKind::CommandDiff => "command_diff",
+        ToolSurfaceKind::Placeholder => "placeholder",
+    }
+}
+
+pub fn tool_surface_kind_from_definition_key(value: &str) -> Option<ToolSurfaceKind> {
+    match value {
+        "outliner" => Some(ToolSurfaceKind::Outliner),
+        "entity_table" => Some(ToolSurfaceKind::EntityTable),
+        "viewport" => Some(ToolSurfaceKind::Viewport),
+        "inspector" => Some(ToolSurfaceKind::Inspector),
+        "console" => Some(ToolSurfaceKind::Console),
+        "editor_design_outliner" => Some(ToolSurfaceKind::EditorDesignOutliner),
+        "ui_hierarchy" => Some(ToolSurfaceKind::UiHierarchy),
+        "ui_canvas" => Some(ToolSurfaceKind::UiCanvas),
+        "style_inspector" => Some(ToolSurfaceKind::StyleInspector),
+        "bindings" => Some(ToolSurfaceKind::Bindings),
+        "dock_layout_preview" => Some(ToolSurfaceKind::DockLayoutPreview),
+        "theme_editor" => Some(ToolSurfaceKind::ThemeEditor),
+        "shortcut_editor" => Some(ToolSurfaceKind::ShortcutEditor),
+        "menu_editor" => Some(ToolSurfaceKind::MenuEditor),
+        "definition_validation" => Some(ToolSurfaceKind::DefinitionValidation),
+        "command_diff" => Some(ToolSurfaceKind::CommandDiff),
+        "placeholder" => Some(ToolSurfaceKind::Placeholder),
+        _ => None,
+    }
+}
+
+pub fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {
+    match kind {
+        ToolSurfaceKind::Outliner => PanelKind::Outliner,
+        ToolSurfaceKind::EntityTable => PanelKind::EntityTable,
+        ToolSurfaceKind::Viewport => PanelKind::Viewport,
+        ToolSurfaceKind::Inspector => PanelKind::Inspector,
+        ToolSurfaceKind::Console => PanelKind::Console,
+        ToolSurfaceKind::EditorDesignOutliner => PanelKind::EditorDesignOutliner,
+        ToolSurfaceKind::UiHierarchy => PanelKind::UiHierarchy,
+        ToolSurfaceKind::UiCanvas => PanelKind::UiCanvas,
+        ToolSurfaceKind::StyleInspector => PanelKind::StyleInspector,
+        ToolSurfaceKind::Bindings => PanelKind::Bindings,
+        ToolSurfaceKind::DockLayoutPreview => PanelKind::DockLayoutPreview,
+        ToolSurfaceKind::ThemeEditor => PanelKind::ThemeEditor,
+        ToolSurfaceKind::ShortcutEditor => PanelKind::ShortcutEditor,
+        ToolSurfaceKind::MenuEditor => PanelKind::MenuEditor,
+        ToolSurfaceKind::DefinitionValidation => PanelKind::DefinitionValidation,
+        ToolSurfaceKind::CommandDiff => PanelKind::CommandDiff,
+        ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
     }
 }
 
