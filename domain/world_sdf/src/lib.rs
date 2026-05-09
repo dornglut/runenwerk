@@ -1,6 +1,7 @@
 mod caves;
 mod collision;
 mod hierarchy;
+mod preview;
 mod product;
 mod ratification;
 mod storage;
@@ -14,6 +15,7 @@ pub use collision::{
     CollisionSweepOutcome, SphereSweep,
 };
 pub use hierarchy::{ChunkHierarchyNode, ChunkHierarchySummary};
+pub use preview::*;
 pub use product::*;
 pub use ratification::*;
 pub use storage::{

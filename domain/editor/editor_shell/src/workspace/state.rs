@@ -109,7 +109,7 @@ pub struct PanelHostNode {
     pub kind: PanelHostKind,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PanelKind {
     Outliner,
     EntityTable,
@@ -131,10 +131,33 @@ pub enum PanelKind {
     ImportInspector,
     FieldProductViewer,
     SdfBrushBrowser,
+    GraphCanvas,
+    Diagnostics,
+    RuntimeDebug,
+    FieldLayerStack,
+    SdfGraphCanvas,
+    MaterialGraphCanvas,
+    MaterialInspector,
+    MaterialPreview,
+    TextureViewer,
+    VolumeTextureViewer,
+    ProcgenGraphCanvas,
+    ProcgenPreview,
+    GameplayGraphCanvas,
+    GameplayCompilerDiagnostics,
+    ParticleGraphCanvas,
+    ParticlePreview,
+    PhysicsAuthoring,
+    PhysicsDebug,
+    Timeline,
+    CurveEditor,
+    AnimationGraphCanvas,
+    SimulationPreview,
+    SimulationDiagnostics,
     Placeholder,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToolSurfaceKind {
     Outliner,
     EntityTable,
@@ -156,7 +179,81 @@ pub enum ToolSurfaceKind {
     ImportInspector,
     FieldProductViewer,
     SdfBrushBrowser,
+    GraphCanvas,
+    Diagnostics,
+    RuntimeDebug,
+    FieldLayerStack,
+    SdfGraphCanvas,
+    MaterialGraphCanvas,
+    MaterialInspector,
+    MaterialPreview,
+    TextureViewer,
+    VolumeTextureViewer,
+    ProcgenGraphCanvas,
+    ProcgenPreview,
+    GameplayGraphCanvas,
+    GameplayCompilerDiagnostics,
+    ParticleGraphCanvas,
+    ParticlePreview,
+    PhysicsAuthoring,
+    PhysicsDebug,
+    Timeline,
+    CurveEditor,
+    AnimationGraphCanvas,
+    SimulationPreview,
+    SimulationDiagnostics,
     Placeholder,
+}
+
+impl ToolSurfaceKind {
+    pub const fn panel_kind(self) -> PanelKind {
+        match self {
+            Self::Outliner => PanelKind::Outliner,
+            Self::EntityTable => PanelKind::EntityTable,
+            Self::Viewport => PanelKind::Viewport,
+            Self::Inspector => PanelKind::Inspector,
+            Self::Console => PanelKind::Console,
+            Self::EditorDesignOutliner => PanelKind::EditorDesignOutliner,
+            Self::UiHierarchy => PanelKind::UiHierarchy,
+            Self::UiCanvas => PanelKind::UiCanvas,
+            Self::StyleInspector => PanelKind::StyleInspector,
+            Self::Bindings => PanelKind::Bindings,
+            Self::DockLayoutPreview => PanelKind::DockLayoutPreview,
+            Self::ThemeEditor => PanelKind::ThemeEditor,
+            Self::ShortcutEditor => PanelKind::ShortcutEditor,
+            Self::MenuEditor => PanelKind::MenuEditor,
+            Self::DefinitionValidation => PanelKind::DefinitionValidation,
+            Self::CommandDiff => PanelKind::CommandDiff,
+            Self::AssetBrowser => PanelKind::AssetBrowser,
+            Self::ImportInspector => PanelKind::ImportInspector,
+            Self::FieldProductViewer => PanelKind::FieldProductViewer,
+            Self::SdfBrushBrowser => PanelKind::SdfBrushBrowser,
+            Self::GraphCanvas => PanelKind::GraphCanvas,
+            Self::Diagnostics => PanelKind::Diagnostics,
+            Self::RuntimeDebug => PanelKind::RuntimeDebug,
+            Self::FieldLayerStack => PanelKind::FieldLayerStack,
+            Self::SdfGraphCanvas => PanelKind::SdfGraphCanvas,
+            Self::MaterialGraphCanvas => PanelKind::MaterialGraphCanvas,
+            Self::MaterialInspector => PanelKind::MaterialInspector,
+            Self::MaterialPreview => PanelKind::MaterialPreview,
+            Self::TextureViewer => PanelKind::TextureViewer,
+            Self::VolumeTextureViewer => PanelKind::VolumeTextureViewer,
+            Self::ProcgenGraphCanvas => PanelKind::ProcgenGraphCanvas,
+            Self::ProcgenPreview => PanelKind::ProcgenPreview,
+            Self::GameplayGraphCanvas => PanelKind::GameplayGraphCanvas,
+            Self::GameplayCompilerDiagnostics => PanelKind::GameplayCompilerDiagnostics,
+            Self::ParticleGraphCanvas => PanelKind::ParticleGraphCanvas,
+            Self::ParticlePreview => PanelKind::ParticlePreview,
+            Self::PhysicsAuthoring => PanelKind::PhysicsAuthoring,
+            Self::PhysicsDebug => PanelKind::PhysicsDebug,
+            Self::Timeline => PanelKind::Timeline,
+            Self::CurveEditor => PanelKind::CurveEditor,
+            Self::AnimationGraphCanvas => PanelKind::AnimationGraphCanvas,
+            Self::SimulationPreview => PanelKind::SimulationPreview,
+            Self::SimulationDiagnostics => PanelKind::SimulationDiagnostics,
+            Self::Placeholder => PanelKind::Placeholder,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -889,6 +986,138 @@ impl WorkspaceState {
         }
     }
 
+    pub fn bootstrap_tool_workspace_layout(
+        workspace_id: WorkspaceId,
+        allocator: &mut WorkspaceIdentityAllocator,
+        default_surfaces: &[ToolSurfaceKind],
+    ) -> Self {
+        let body_bottom_split_host = allocator.allocate_panel_host_id();
+        let left_center_right_split_host = allocator.allocate_panel_host_id();
+        let center_right_split_host = allocator.allocate_panel_host_id();
+        let left_tab_host = allocator.allocate_panel_host_id();
+        let primary_tab_host = allocator.allocate_panel_host_id();
+        let right_tab_host = allocator.allocate_panel_host_id();
+        let bottom_tab_host = allocator.allocate_panel_host_id();
+
+        let groups = tool_workspace_surface_groups(default_surfaces);
+
+        let mut tab_stacks_by_id = BTreeMap::new();
+        let mut panels_by_id = BTreeMap::new();
+        let mut tool_surfaces_by_id = BTreeMap::new();
+
+        let left_tab_stack = insert_tool_workspace_stack(
+            &mut tab_stacks_by_id,
+            &mut panels_by_id,
+            &mut tool_surfaces_by_id,
+            allocator,
+            &groups.left,
+        );
+        let primary_tab_stack = insert_tool_workspace_stack(
+            &mut tab_stacks_by_id,
+            &mut panels_by_id,
+            &mut tool_surfaces_by_id,
+            allocator,
+            &groups.primary,
+        );
+        let right_tab_stack = insert_tool_workspace_stack(
+            &mut tab_stacks_by_id,
+            &mut panels_by_id,
+            &mut tool_surfaces_by_id,
+            allocator,
+            &groups.right,
+        );
+        let bottom_tab_stack = insert_tool_workspace_stack(
+            &mut tab_stacks_by_id,
+            &mut panels_by_id,
+            &mut tool_surfaces_by_id,
+            allocator,
+            &groups.bottom,
+        );
+
+        let mut hosts_by_id = BTreeMap::new();
+        hosts_by_id.insert(
+            body_bottom_split_host,
+            PanelHostNode {
+                id: body_bottom_split_host,
+                kind: PanelHostKind::SplitHost(SplitHostState {
+                    axis: WorkspaceSplitAxis::Vertical,
+                    fraction: 0.76,
+                    first_child: left_center_right_split_host,
+                    second_child: bottom_tab_host,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            left_center_right_split_host,
+            PanelHostNode {
+                id: left_center_right_split_host,
+                kind: PanelHostKind::SplitHost(SplitHostState {
+                    axis: WorkspaceSplitAxis::Horizontal,
+                    fraction: 0.22,
+                    first_child: left_tab_host,
+                    second_child: center_right_split_host,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            center_right_split_host,
+            PanelHostNode {
+                id: center_right_split_host,
+                kind: PanelHostKind::SplitHost(SplitHostState {
+                    axis: WorkspaceSplitAxis::Horizontal,
+                    fraction: 0.70,
+                    first_child: primary_tab_host,
+                    second_child: right_tab_host,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            left_tab_host,
+            PanelHostNode {
+                id: left_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: left_tab_stack,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            primary_tab_host,
+            PanelHostNode {
+                id: primary_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: primary_tab_stack,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            right_tab_host,
+            PanelHostNode {
+                id: right_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: right_tab_stack,
+                }),
+            },
+        );
+        hosts_by_id.insert(
+            bottom_tab_host,
+            PanelHostNode {
+                id: bottom_tab_host,
+                kind: PanelHostKind::TabStackHost(TabStackHostState {
+                    tab_stack_id: bottom_tab_stack,
+                }),
+            },
+        );
+
+        Self {
+            workspace_id,
+            root_host_id: body_bottom_split_host,
+            hosts_by_id,
+            tab_stacks_by_id,
+            panels_by_id,
+            tool_surfaces_by_id,
+        }
+    }
+
     pub fn workspace_id(&self) -> WorkspaceId {
         self.workspace_id
     }
@@ -1118,4 +1347,119 @@ impl WorkspaceState {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Default)]
+struct ToolWorkspaceSurfaceGroups {
+    left: Vec<ToolSurfaceKind>,
+    primary: Vec<ToolSurfaceKind>,
+    right: Vec<ToolSurfaceKind>,
+    bottom: Vec<ToolSurfaceKind>,
+}
+
+fn tool_workspace_surface_groups(
+    default_surfaces: &[ToolSurfaceKind],
+) -> ToolWorkspaceSurfaceGroups {
+    let mut groups = ToolWorkspaceSurfaceGroups::default();
+    for kind in unique_tool_surface_kinds(default_surfaces) {
+        match kind {
+            ToolSurfaceKind::Console
+            | ToolSurfaceKind::Diagnostics
+            | ToolSurfaceKind::RuntimeDebug
+            | ToolSurfaceKind::GameplayCompilerDiagnostics
+            | ToolSurfaceKind::SimulationDiagnostics
+            | ToolSurfaceKind::DefinitionValidation
+            | ToolSurfaceKind::CommandDiff
+            | ToolSurfaceKind::PhysicsDebug => groups.bottom.push(kind),
+            ToolSurfaceKind::Inspector
+            | ToolSurfaceKind::ImportInspector
+            | ToolSurfaceKind::MaterialInspector
+            | ToolSurfaceKind::PhysicsAuthoring
+            | ToolSurfaceKind::StyleInspector
+            | ToolSurfaceKind::Bindings => groups.right.push(kind),
+            ToolSurfaceKind::Outliner
+            | ToolSurfaceKind::EntityTable
+            | ToolSurfaceKind::EditorDesignOutliner
+            | ToolSurfaceKind::UiHierarchy
+            | ToolSurfaceKind::AssetBrowser
+            | ToolSurfaceKind::SdfBrushBrowser
+            | ToolSurfaceKind::FieldLayerStack => groups.left.push(kind),
+            _ => groups.primary.push(kind),
+        }
+    }
+
+    if groups.primary.is_empty() {
+        groups.primary.push(ToolSurfaceKind::Placeholder);
+    }
+    if groups.right.is_empty() {
+        groups.right.push(ToolSurfaceKind::Placeholder);
+    }
+    if groups.left.is_empty() {
+        groups.left.push(ToolSurfaceKind::Placeholder);
+    }
+    if groups.bottom.is_empty() {
+        groups.bottom.push(ToolSurfaceKind::Console);
+    }
+
+    groups
+}
+
+fn unique_tool_surface_kinds(default_surfaces: &[ToolSurfaceKind]) -> Vec<ToolSurfaceKind> {
+    let mut surfaces = Vec::new();
+    for kind in default_surfaces.iter().copied() {
+        if !surfaces.contains(&kind) {
+            surfaces.push(kind);
+        }
+    }
+    if surfaces.is_empty() {
+        surfaces.push(ToolSurfaceKind::Placeholder);
+    }
+    surfaces
+}
+
+fn insert_tool_workspace_stack(
+    tab_stacks_by_id: &mut BTreeMap<TabStackId, TabStackState>,
+    panels_by_id: &mut BTreeMap<PanelInstanceId, PanelInstanceState>,
+    tool_surfaces_by_id: &mut BTreeMap<ToolSurfaceInstanceId, ToolSurfaceState>,
+    allocator: &mut WorkspaceIdentityAllocator,
+    surface_kinds: &[ToolSurfaceKind],
+) -> TabStackId {
+    let tab_stack_id = allocator.allocate_tab_stack_id();
+    let mut ordered_panels = Vec::new();
+
+    for kind in surface_kinds.iter().copied() {
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+        ordered_panels.push(panel_id);
+        panels_by_id.insert(
+            panel_id,
+            PanelInstanceState {
+                id: panel_id,
+                panel_kind: kind.panel_kind(),
+                active_tool_surface: Some(surface_id),
+            },
+        );
+        tool_surfaces_by_id.insert(
+            surface_id,
+            ToolSurfaceState {
+                id: surface_id,
+                tool_surface_kind: kind,
+                mount: ToolSurfaceMount::Mounted { panel_id },
+                viewport_instance_id: None,
+                viewport_settings: None,
+            },
+        );
+    }
+
+    tab_stacks_by_id.insert(
+        tab_stack_id,
+        TabStackState {
+            id: tab_stack_id,
+            active_panel: ordered_panels.first().copied(),
+            ordered_panels,
+            locked_tool_surface_kind: None,
+        },
+    );
+
+    tab_stack_id
 }

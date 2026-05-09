@@ -15,6 +15,9 @@ pub enum EditorPrimitiveKind {
     Box,
     Sphere,
     Capsule,
+    Cylinder,
+    Torus,
+    Plane,
 }
 
 impl EditorPrimitiveKind {
@@ -23,6 +26,9 @@ impl EditorPrimitiveKind {
             Self::Box => 0,
             Self::Sphere => 1,
             Self::Capsule => 2,
+            Self::Cylinder => 3,
+            Self::Torus => 4,
+            Self::Plane => 5,
         }
     }
 
@@ -30,6 +36,9 @@ impl EditorPrimitiveKind {
         match value {
             1 => Self::Sphere,
             2 => Self::Capsule,
+            3 => Self::Cylinder,
+            4 => Self::Torus,
+            5 => Self::Plane,
             _ => Self::Box,
         }
     }
@@ -66,6 +75,17 @@ impl EditorPrimitive {
                 self.capsule_radius.max(0.05) + self.capsule_half_height.max(0.05),
                 self.capsule_radius.max(0.05),
             ),
+            EditorPrimitiveKind::Cylinder => Vec3Value::new(
+                self.capsule_radius.max(0.05),
+                self.capsule_half_height.max(0.05),
+                self.capsule_radius.max(0.05),
+            ),
+            EditorPrimitiveKind::Torus => Vec3Value::new(
+                self.sphere_radius.max(0.05) * 2.0,
+                self.sphere_radius.max(0.05) * 0.5,
+                self.sphere_radius.max(0.05) * 2.0,
+            ),
+            EditorPrimitiveKind::Plane => self.box_half_extents,
         }
     }
 }

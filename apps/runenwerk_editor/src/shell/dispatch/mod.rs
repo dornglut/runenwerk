@@ -4,6 +4,7 @@
 pub(crate) mod entity_table;
 pub(crate) mod inspector;
 pub(crate) mod outliner;
+pub(crate) mod sdf_operations;
 pub(crate) mod viewport;
 
 use editor_core::EditorMutationError;
@@ -38,6 +39,9 @@ pub(crate) fn dispatch_surface_session_mutation(
         SurfaceSessionMutation::Viewport(mutation) => {
             viewport::dispatch_session_mutation(app, shell_state.as_deref(), target, mutation)
         }
+        SurfaceSessionMutation::SdfOperation(mutation) => {
+            sdf_operations::dispatch_session_mutation(app, shell_state.as_deref(), target, mutation)
+        }
     }
 }
 
@@ -69,6 +73,9 @@ pub(crate) fn dispatch_editor_domain_mutation(
             tool_surface_bindings,
             viewport_render_commands,
         ),
+        EditorDomainMutation::SdfOperation(mutation) => {
+            sdf_operations::dispatch_domain_mutation(app, shell_state, target, mutation)
+        }
     }
 }
 
@@ -101,29 +108,7 @@ pub(crate) fn resolve_surface_command_contract(
 }
 
 pub(crate) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
-    match kind {
-        ToolSurfaceKind::Outliner => "outliner",
-        ToolSurfaceKind::EntityTable => "entity_table",
-        ToolSurfaceKind::Viewport => "viewport",
-        ToolSurfaceKind::Inspector => "inspector",
-        ToolSurfaceKind::Console => "console",
-        ToolSurfaceKind::EditorDesignOutliner => "editor_design_outliner",
-        ToolSurfaceKind::UiHierarchy => "ui_hierarchy",
-        ToolSurfaceKind::UiCanvas => "ui_canvas",
-        ToolSurfaceKind::StyleInspector => "style_inspector",
-        ToolSurfaceKind::Bindings => "bindings",
-        ToolSurfaceKind::DockLayoutPreview => "dock_layout_preview",
-        ToolSurfaceKind::ThemeEditor => "theme_editor",
-        ToolSurfaceKind::ShortcutEditor => "shortcut_editor",
-        ToolSurfaceKind::MenuEditor => "menu_editor",
-        ToolSurfaceKind::DefinitionValidation => "definition_validation",
-        ToolSurfaceKind::CommandDiff => "command_diff",
-        ToolSurfaceKind::AssetBrowser => "asset_browser",
-        ToolSurfaceKind::ImportInspector => "import_inspector",
-        ToolSurfaceKind::FieldProductViewer => "field_product_viewer",
-        ToolSurfaceKind::SdfBrushBrowser => "sdf_brush_browser",
-        ToolSurfaceKind::Placeholder => "placeholder",
-    }
+    editor_shell::tool_surface_kind_definition_key(kind)
 }
 
 pub(crate) fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {

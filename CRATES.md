@@ -37,6 +37,8 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `world_sdf` | `domain/world_sdf` | domain | SDF chunk payloads, collision query contracts, formed field-product descriptors, ratification, and cave/sector storage summaries. | evolving |
 | `scheduler` | `domain/scheduler` | domain | Deterministic schedule planning, graph validation, labels, access, and system execution plans. | evolving |
 | `graph` | `domain/graph` | domain | Domain-neutral graph definitions, typed ports, validation, traversal, and cycle policy. | evolving |
+| `texture` | `domain/texture` | domain | Texture2D, Texture3D/volume, generated texture product, preview descriptor, sampler, color-space, compression, ratification, and lineage contracts. | evolving |
+| `material_graph` | `domain/material_graph` | domain | Authored material graph documents, node catalog boundaries, ratification, lowering, source maps, cache keys, and formed material product descriptors. | evolving |
 | `scene` | `domain/scene` | domain | Scene transform value contracts and domain-owned transform schema descriptors. | evolving |
 | `ui_math` | `domain/ui/ui_math` | domain | UI geometry primitives. | evolving |
 | `ui_input` | `domain/ui/ui_input` | domain | UI input, focus, routing, keyboard, pointer, and shortcut contracts. | evolving |

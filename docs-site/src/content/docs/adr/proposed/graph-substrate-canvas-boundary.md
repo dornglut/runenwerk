@@ -5,7 +5,7 @@ status: draft
 owner: workspace
 layer: domain
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-09
 ---
 
 # ADR: Graph Substrate Canvas Boundary
@@ -47,7 +47,7 @@ Graph canvas or editor surface code owns view and interaction behavior:
 
 Domain-specific graph crates own semantic meaning:
 
-- material graph semantics belong in a future `domain/material_graph`
+- material graph semantics belong in `domain/material_graph`
 - ability and skill graph semantics belong in a future `domain/ability_graph`
 - editor-specific graph projections may use a future editor-owned module if needed
 

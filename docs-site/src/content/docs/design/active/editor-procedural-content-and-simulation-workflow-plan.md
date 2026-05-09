@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-09
 related_designs:
   - ./workspace-field-world-and-simulation-platform-design.md
   - ./editor-asset-pipeline-and-content-workflow-design.md
@@ -50,7 +50,7 @@ Implemented today:
 
 - `domain/sdf/src/field.rs::SdfField3` owns analytic SDF sampling.
 - `domain/sdf/src/primitives/`, `domain/sdf/src/ops/`, and `domain/sdf/src/queries/` own primitives, composition, transforms, raymarch, projection, classification, and sweep foundations.
-- `domain/world_ops/src/operations.rs::Operation` already has SDF/world operation vocabulary for `CsgAdd`, `CsgSubtract`, `Smooth`, `Stamp`, `StructurePlace`, `MaterialFieldEdit`, and `DensityFieldDeform`.
+- `domain/world_ops/src/operations.rs::Operation` has SDF/world operation vocabulary for legacy `CsgAdd`/`CsgSubtract`, normalized `CsgBrushOperation` modes for P1 Add/Subtract/Intersect/SmoothAdd/SmoothSubtract/SmoothIntersect, `Smooth`, `Stamp`, `StructurePlace`, `MaterialFieldEdit`, and `DensityFieldDeform`.
 - `domain/world_ops/src/build_graph.rs::BuildGraphPhase` already includes `SdfFieldBuild`, `SummaryBuild`, `DerivedRenderBuild`, and `Publish`.
 - `engine/src/plugins/world/build/jobs.rs::dispatch_world_build_jobs_system` builds deterministic chunk payloads from operation windows and tracks material channel masks.
 - `domain/world_sdf/src/storage.rs::SdfChunkStore` owns chunk/page/brick SDF payload records.
@@ -60,20 +60,31 @@ Implemented today:
 - `docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md` defines the policy for future semantic graph domains.
 - `engine/src/plugins/render` has `RenderFlow`, compute/fullscreen/graphics/copy/present passes, shader registry/hot reload, sampled/storage texture descriptors, prepared render-frame contributions, and a `MATERIAL_RENDER_FEATURE_ID` slot.
 - `engine/src/plugins/render/frame/contributions.rs::PreparedMaterialFeatureContribution` exists as render prepared-frame plumbing for material instances, specialization fragments, and parameter blobs.
+- `domain/editor/editor_core/src/document.rs::DocumentKind` has explicit M6 document kinds for SDF graphs, materials, textures, procgen, gameplay graph, particles, physics, animation, timelines, and runtime debug documents.
+- `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry` has M6 workspace profiles for field worlds, materials, textures, procgen, gameplay graph, particles, physics, animation, simulation processes, runtime debug, and neutral graphs.
+- `domain/editor/editor_shell/src/workspace/state.rs::ToolSurfaceKind` and persisted workspace contracts include M6 tool surfaces for graph, diagnostics, runtime debug, SDF graph, field layers, materials, textures, procgen, gameplay graph, particles, physics, animation, and simulation.
+- `apps/runenwerk_editor/src/shell/providers/m6_workspace.rs::M6WorkspaceProvider` provides fail-closed placeholder routing and diagnostics for M6 surfaces until each owning provider exists.
+- `domain/material_graph` owns the first material graph contract slice: authored material graph documents, first-slice node catalog, semantic ratification, deterministic lowering, source maps, cache keys, and formed material product descriptors.
+- `domain/texture` owns the first texture contract slice: Texture2D and Texture3D/volume descriptors, sampler/color-space/compression metadata, generated texture product lineage, preview descriptors, and ratification.
+- `domain/asset/src/kind.rs::AssetKind`, `domain/asset/src/import_settings.rs::ImportSettings`, `domain/asset/src/artifact.rs::ArtifactPayloadKind`, `domain/editor/editor_preview/src/product.rs::RuntimeProductKind`, and `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs::reload_decision_for_kind` can represent material and texture product families while keeping authored material graphs unsupported for runtime reload.
+- `apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs::MaterialGraphCanvasProvider`, `material_inspector.rs::MaterialInspectorProvider`, `material_preview.rs::MaterialPreviewProvider`, `texture_viewer.rs::TextureViewerProvider`, and `volume_texture_viewer.rs::VolumeTextureViewerProvider` provide descriptor-first M6.1 surfaces over material/texture domain contracts, asset artifacts, reload diagnostics, and typed texture preview descriptors.
+- `domain/editor/editor_scene/src/sdf_authoring/` owns P1 authored SDF operation documents, SDF graph documents over `domain/graph`, command intents, ratification, projection DTOs, deterministic lowering to `world_ops::OperationRecord` windows, and CPU field-preview formation for scalar distance, vector gradient, occupancy, and material-channel products.
+- `domain/world_sdf/src/preview.rs` owns CPU field-preview product payload DTOs and descriptor/payload ratification.
+- `apps/runenwerk_editor/src/shell/providers/field_layer_stack.rs::FieldLayerStackProvider`, `sdf_graph_canvas.rs::SdfGraphCanvasProvider`, and `field_product_viewer.rs::FieldProductViewerProvider` provide concrete P1 SDF operation, graph, commit, invalidation, and field-preview surfaces through typed shell/domain proposals.
 
 Missing today:
 
-- no `domain/material_graph`;
-- no `domain/texture`;
 - no `domain/procgen`;
 - no `domain/particles`;
 - no `domain/physics`;
 - no `domain/animation`;
-- no editor providers for material graph, procedural texture graph, SDF brush library, particle graph, physics authoring, animation timeline, curve editor, or simulation debugger;
-- no material graph ratifier, lowering pipeline, or formed material product;
-- no PBR material model;
-- no triplanar/procedural texture node catalog;
-- no Texture3D/volume texture asset contract;
+- no `domain/simulation_process`;
+- no `domain/gameplay_graph` and no accepted gameplay event/action/state/quest contract set for gameplay graph lowering;
+- no concrete editor providers for procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview;
+- no source-backed material graph document persistence/import workflow beyond descriptor-first material/texture provider surfaces;
+- no rendered/GPU SDF overlay adapter for formed field previews;
+- no rendered material preview adapter or Texture3D GPU upload/runtime adapter;
+- no full PBR preview capability matrix for height/displacement, ambient occlusion, opacity/mask, or normal handling;
 - no particle simulation contract;
 - no general rigid/character physics domain;
 - no animation clip/graph/timeline domain.
@@ -172,8 +183,8 @@ Implementation targets:
 
 Owning domains:
 
-- future `domain/material_graph` for material graph semantics, ratification, lowering, and formed material products;
-- future `domain/texture` for texture asset descriptors, color spaces, dimensions, volume texture metadata, sampler policy, compression policy, and generated texture products;
+- `domain/material_graph` for material graph semantics, ratification, lowering, and formed material products;
+- `domain/texture` for texture asset descriptors, color spaces, dimensions, volume texture metadata, sampler policy, compression policy, and generated texture products;
 - `domain/world_ops` for material field edits and material-channel invalidation;
 - `domain/world_sdf` for material channel masks and formed field payload metadata;
 - `engine/src/plugins/render` for render execution, shader specialization, resource binding, and GPU texture upload/runtime caches.
@@ -225,19 +236,17 @@ Out of first material slice but still required:
 
 Implementation targets:
 
-- future `domain/material_graph/src/authored/document.rs::MaterialGraphDocument`
+- `domain/material_graph/src/authored.rs::MaterialGraphDocument`
   - authored semantic document using `domain/graph::GraphDefinition` for structure.
-- future `domain/material_graph/src/catalog/node_catalog.rs`
+- `domain/material_graph/src/catalog.rs::MaterialNodeCatalog`
   - node descriptors for SDF, field, procedural texture, PBR, and render-expression nodes.
-- future `domain/material_graph/src/ratification/ratifier.rs`
+- `domain/material_graph/src/ratification.rs::ratify_material_graph`
   - semantic graph ratification with material issue codes.
-- future `domain/material_graph/src/lowering/render.rs`
-  - lowering to render/material expression products.
-- future `domain/material_graph/src/lowering/field.rs`
-  - lowering to field material channel products and `world_ops::Operation::MaterialFieldEdit` plans.
-- future `domain/material_graph/src/formed/product.rs`
+- `domain/material_graph/src/lowering.rs::lower_material_graph`
+  - current first-slice lowering to formed material descriptors; render-expression and field-material-channel lowering remain later M6.1/M6.3 work.
+- `domain/material_graph/src/formed.rs::FormedMaterialProduct`
   - formed material product, parameter schema, source map, and specialization key fragment.
-- future `domain/texture/src/`
+- `domain/texture/src/`
   - texture source descriptors, generated texture products, Texture3D/volume descriptors, sampler policy, color space, compression, and cache metadata.
 - `engine/src/plugins/render/frame/contributions.rs::PreparedMaterialFeatureContribution`
   - become the render handoff for formed material products and material instance parameters.
@@ -496,9 +505,13 @@ Exit criteria:
 - viewport/tool surfaces consume typed expression products, not renderer-private textures;
 - `python3 tools/docs/validate_docs.py` passes.
 
+Status after the 2026-05-09 drift check: the shared workspace/profile/surface vocabulary, persisted tool-workspace layout support, asset taxonomy, material/texture artifact payload kinds, material/texture import settings, runtime product kinds, and fail-closed M6 provider routing exist in the current worktree. Concrete document save/load behavior remains per implemented document family and must not be claimed for future M6 domains.
+
 ### P1 - SDF Modeling Core
 
 Deliver SDF primitives, brush editing, operation layers, SDF graph authoring, and formed field previews.
+
+Status after the 2026-05-09 P1 closeout: complete for the CPU/editor-surface boundary. Authored operation layers and source-backed SDF graph documents lower through the same normalized operation-window path; all P1 boolean intents lower to governed `world_ops` records; commits append to an app-held operation log, mark dirty chunks, and form deterministic CPU field-preview products for scalar distance, vector gradient, occupancy, and material channels. Renderer/GPU overlays remain deferred to P3.
 
 Exit criteria:
 
@@ -516,6 +529,8 @@ Exit criteria:
 - PBR parameters, triplanar mapping, procedural nodes, Texture2D, Texture3D, and generated texture cache metadata are representable;
 - first-slice material graphs can be authored, ratified, lowered, previewed, and rejected with source-mapped diagnostics;
 - material graph lowering produces source maps and diagnostics.
+
+Status after the 2026-05-09 descriptor-first closeout: the material/texture domain contract foundation and provider surfaces exist. Authored material documents are still not persisted/imported through a full document UX, material previews are descriptor-first rather than rendered, Texture3D viewers expose typed slice/mip/channel preview descriptors without GPU upload, and source-mapped diagnostics are projected through editor surfaces without making canvas state authoritative.
 
 ### P3 - SDF/Field Texturing and PBR Preview
 

@@ -17,6 +17,17 @@ pub struct WorkspaceProfileId;
 pub const SCENE_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(1);
 pub const MODELLING_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(2);
 pub const EDITOR_DESIGN_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(3);
+pub const FIELD_WORLD_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(4);
+pub const MATERIAL_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(5);
+pub const TEXTURE_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(6);
+pub const PROCGEN_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(7);
+pub const GAMEPLAY_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(8);
+pub const PARTICLE_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(9);
+pub const PHYSICS_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(10);
+pub const ANIMATION_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(11);
+pub const SIMULATION_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(12);
+pub const RUNTIME_DEBUG_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(13);
+pub const GRAPH_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(14);
 pub const LAYOUT_WORKSPACE_PROFILE_ID: WorkspaceProfileId = SCENE_WORKSPACE_PROFILE_ID;
 
 const fn workspace_profile_id(raw: u64) -> WorkspaceProfileId {
@@ -31,6 +42,7 @@ pub enum WorkspaceLayoutTemplate {
     Scene,
     Modelling,
     EditorDesign,
+    ToolWorkspace,
     CurrentFixedEditor,
 }
 
@@ -40,13 +52,14 @@ impl WorkspaceLayoutTemplate {
             Self::Scene => "scene",
             Self::Modelling => "modelling",
             Self::EditorDesign => "editor-design",
+            Self::ToolWorkspace => "tool-workspace",
             Self::CurrentFixedEditor => "current-fixed-editor",
         }
     }
 
     pub const fn contract_version(self) -> u32 {
         match self {
-            Self::Scene | Self::Modelling | Self::CurrentFixedEditor => 1,
+            Self::Scene | Self::Modelling | Self::ToolWorkspace | Self::CurrentFixedEditor => 1,
             Self::EditorDesign => 1,
         }
     }
@@ -64,6 +77,9 @@ impl WorkspaceLayoutTemplate {
             Self::EditorDesign => {
                 WorkspaceState::bootstrap_editor_design_layout(workspace_id, allocator)
             }
+            Self::ToolWorkspace => {
+                WorkspaceState::bootstrap_tool_workspace_layout(workspace_id, allocator, &[])
+            }
         }
     }
 
@@ -74,6 +90,7 @@ impl WorkspaceLayoutTemplate {
             }
             Self::Modelling => modelling_default_graph_matches(workspace_state),
             Self::EditorDesign => workspace_state.validate_integrity().is_ok(),
+            Self::ToolWorkspace => workspace_state.validate_integrity().is_ok(),
         }
     }
 }
@@ -112,6 +129,13 @@ impl WorkspaceProfile {
         workspace_id: WorkspaceId,
         allocator: &mut WorkspaceIdentityAllocator,
     ) -> WorkspaceState {
+        if self.default_layout_template == WorkspaceLayoutTemplate::ToolWorkspace {
+            return WorkspaceState::bootstrap_tool_workspace_layout(
+                workspace_id,
+                allocator,
+                &self.default_tool_surfaces,
+            );
+        }
         self.default_layout_template
             .build_workspace_state(workspace_id, allocator)
     }
@@ -338,7 +362,177 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::ToolSurfaceDefinition,
                 ],
             ),
+            m6_workspace_profile(
+                FIELD_WORLD_WORKSPACE_PROFILE_ID,
+                "Field World",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::FieldLayerStack,
+                    ToolSurfaceKind::SdfGraphCanvas,
+                    ToolSurfaceKind::FieldProductViewer,
+                    ToolSurfaceKind::SdfBrushBrowser,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![
+                    DocumentKind::Scene,
+                    DocumentKind::SdfGraph,
+                    DocumentKind::SdfBrushLayer,
+                    DocumentKind::FieldWorldDefinition,
+                    DocumentKind::FieldProductPreview,
+                ],
+            ),
+            m6_workspace_profile(
+                MATERIAL_WORKSPACE_PROFILE_ID,
+                "Materials",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::MaterialGraphCanvas,
+                    ToolSurfaceKind::MaterialInspector,
+                    ToolSurfaceKind::MaterialPreview,
+                    ToolSurfaceKind::TextureViewer,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![DocumentKind::MaterialGraph, DocumentKind::Material],
+            ),
+            m6_workspace_profile(
+                TEXTURE_WORKSPACE_PROFILE_ID,
+                "Textures",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::TextureViewer,
+                    ToolSurfaceKind::VolumeTextureViewer,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![DocumentKind::ProceduralTexture, DocumentKind::VolumeTexture],
+            ),
+            m6_workspace_profile(
+                PROCGEN_WORKSPACE_PROFILE_ID,
+                "Procedural Generation",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::ProcgenGraphCanvas,
+                    ToolSurfaceKind::ProcgenPreview,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![DocumentKind::ProceduralGenerationGraph],
+            ),
+            m6_workspace_profile(
+                GAMEPLAY_WORKSPACE_PROFILE_ID,
+                "Gameplay Graph",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::GameplayGraphCanvas,
+                    ToolSurfaceKind::GameplayCompilerDiagnostics,
+                    ToolSurfaceKind::RuntimeDebug,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![
+                    DocumentKind::GameplayGraph,
+                    DocumentKind::GameplayRuleTrigger,
+                    DocumentKind::Ability,
+                    DocumentKind::Quest,
+                ],
+            ),
+            m6_workspace_profile(
+                PARTICLE_WORKSPACE_PROFILE_ID,
+                "Particles",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::ParticleGraphCanvas,
+                    ToolSurfaceKind::ParticlePreview,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![DocumentKind::ParticleGraph, DocumentKind::ParticleEmitter],
+            ),
+            m6_workspace_profile(
+                PHYSICS_WORKSPACE_PROFILE_ID,
+                "Physics",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::PhysicsAuthoring,
+                    ToolSurfaceKind::PhysicsDebug,
+                    ToolSurfaceKind::RuntimeDebug,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![DocumentKind::PhysicsScene, DocumentKind::PhysicsConfig],
+            ),
+            m6_workspace_profile(
+                ANIMATION_WORKSPACE_PROFILE_ID,
+                "Animation",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::Timeline,
+                    ToolSurfaceKind::CurveEditor,
+                    ToolSurfaceKind::AnimationGraphCanvas,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![
+                    DocumentKind::AnimationClip,
+                    DocumentKind::AnimationGraph,
+                    DocumentKind::Timeline,
+                ],
+            ),
+            m6_workspace_profile(
+                SIMULATION_WORKSPACE_PROFILE_ID,
+                "Simulation Processes",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::SimulationPreview,
+                    ToolSurfaceKind::SimulationDiagnostics,
+                    ToolSurfaceKind::RuntimeDebug,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![
+                    DocumentKind::FieldWorldDefinition,
+                    DocumentKind::FieldProductPreview,
+                    DocumentKind::RuntimeDebug,
+                ],
+            ),
+            m6_workspace_profile(
+                RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
+                "Runtime Debug",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::RuntimeDebug,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![DocumentKind::RuntimeDebug, DocumentKind::Scene],
+            ),
+            m6_workspace_profile(
+                GRAPH_WORKSPACE_PROFILE_ID,
+                "Graph",
+                vec![
+                    ToolSurfaceKind::AssetBrowser,
+                    ToolSurfaceKind::GraphCanvas,
+                    ToolSurfaceKind::Diagnostics,
+                    ToolSurfaceKind::Console,
+                ],
+                vec![DocumentKind::Graph],
+            ),
         ],
+    )
+}
+
+fn m6_workspace_profile(
+    id: WorkspaceProfileId,
+    label: impl Into<String>,
+    default_tool_surfaces: Vec<ToolSurfaceKind>,
+    document_kind_filters: Vec<DocumentKind>,
+) -> WorkspaceProfile {
+    WorkspaceProfile::new(
+        id,
+        label,
+        WorkspaceLayoutTemplate::ToolWorkspace,
+        default_tool_surfaces,
+        vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
+        document_kind_filters,
     )
 }
 
@@ -477,5 +671,29 @@ mod tests {
                 .contains(&SIMULATE_MODE_ID)
         );
         assert!(!editor_design_profile.default_modes.contains(&PLAY_MODE_ID));
+    }
+
+    #[test]
+    fn m6_profiles_build_persistable_tool_workspace_layouts() {
+        let registry = default_workspace_profile_registry();
+        let mut allocator = WorkspaceIdentityAllocator::new();
+
+        for profile in registry.profiles().filter(|profile| {
+            profile.default_layout_template == WorkspaceLayoutTemplate::ToolWorkspace
+        }) {
+            let workspace_id = allocator.allocate_workspace_id();
+            let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+
+            assert!(
+                workspace.validate_integrity().is_ok(),
+                "{} profile should build a valid workspace",
+                profile.label
+            );
+            assert!(
+                profile.required_tool_surfaces_are_present(&workspace),
+                "{} profile should mount its default M6 surfaces",
+                profile.label
+            );
+        }
     }
 }

@@ -35,6 +35,44 @@ pub enum BrushShape {
         radius_q: i32,
         half_height_q: i32,
     },
+    Torus {
+        center_q: QuantizedVec3,
+        major_radius_q: i32,
+        minor_radius_q: i32,
+    },
+    Plane {
+        center_q: QuantizedVec3,
+        normal_q: QuantizedVec3,
+        half_extents_q: QuantizedVec3,
+    },
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CsgBooleanMode {
+    Add,
+    Subtract,
+    Intersect,
+    SmoothAdd { radius_q: i32 },
+    SmoothSubtract { radius_q: i32 },
+    SmoothIntersect { radius_q: i32 },
+}
+
+impl CsgBooleanMode {
+    pub const fn smooth_radius_q(self) -> Option<i32> {
+        match self {
+            Self::SmoothAdd { radius_q }
+            | Self::SmoothSubtract { radius_q }
+            | Self::SmoothIntersect { radius_q } => Some(radius_q),
+            Self::Add | Self::Subtract | Self::Intersect => None,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CsgBrushOperation {
+    pub brush: BrushShape,
+    pub mode: CsgBooleanMode,
+    pub material_channel: Option<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +84,7 @@ pub enum Operation {
     CsgSubtract {
         brush: BrushShape,
     },
+    CsgBrush(CsgBrushOperation),
     Smooth {
         bounds_q: QuantizedAabb,
         kernel_radius_q: i32,
@@ -109,7 +148,9 @@ pub fn quantize_aabb(
 
 #[cfg(test)]
 mod tests {
-    use super::{QuantizedVec3, quantize_position};
+    use super::{
+        BrushShape, CsgBooleanMode, CsgBrushOperation, Operation, QuantizedVec3, quantize_position,
+    };
 
     #[test]
     fn quantization_rounds_to_fixed_scale() {
@@ -117,5 +158,24 @@ mod tests {
             quantize_position([1.25, -2.25, 0.0], 4),
             QuantizedVec3 { x: 5, y: -9, z: 0 }
         );
+    }
+
+    #[test]
+    fn csg_brush_operation_carries_p1_boolean_semantics() {
+        let operation = Operation::CsgBrush(CsgBrushOperation {
+            brush: BrushShape::Torus {
+                center_q: QuantizedVec3::default(),
+                major_radius_q: 8,
+                minor_radius_q: 2,
+            },
+            mode: CsgBooleanMode::SmoothIntersect { radius_q: 4 },
+            material_channel: Some(3),
+        });
+
+        let Operation::CsgBrush(brush) = operation else {
+            panic!("expected normalized CSG brush operation");
+        };
+        assert_eq!(brush.mode.smooth_radius_q(), Some(4));
+        assert_eq!(brush.material_channel, Some(3));
     }
 }

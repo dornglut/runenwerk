@@ -1,0 +1,9 @@
+[package]
+name = "material_graph"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+graph = { path = "../graph" }
+ratification = { path = "../../foundation/ratification" }
+texture = { path = "../texture" }

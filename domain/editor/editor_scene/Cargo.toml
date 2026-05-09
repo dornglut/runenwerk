@@ -7,4 +7,10 @@ edition = "2024"
 commands.workspace = true
 editor_core.workspace = true
 editor_inspector.workspace = true
+glam.workspace = true
+graph.workspace = true
 schema.workspace = true
+sdf = { path = "../../sdf" }
+spatial.workspace = true
+world_ops.workspace = true
+world_sdf.workspace = true

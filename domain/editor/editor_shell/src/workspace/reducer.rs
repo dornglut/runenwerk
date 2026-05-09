@@ -1080,29 +1080,7 @@ fn replace_host_reference(
 }
 
 fn panel_kind_for_tool_surface(kind: ToolSurfaceKind) -> PanelKind {
-    match kind {
-        ToolSurfaceKind::Outliner => PanelKind::Outliner,
-        ToolSurfaceKind::EntityTable => PanelKind::EntityTable,
-        ToolSurfaceKind::Viewport => PanelKind::Viewport,
-        ToolSurfaceKind::Inspector => PanelKind::Inspector,
-        ToolSurfaceKind::Console => PanelKind::Console,
-        ToolSurfaceKind::EditorDesignOutliner => PanelKind::EditorDesignOutliner,
-        ToolSurfaceKind::UiHierarchy => PanelKind::UiHierarchy,
-        ToolSurfaceKind::UiCanvas => PanelKind::UiCanvas,
-        ToolSurfaceKind::StyleInspector => PanelKind::StyleInspector,
-        ToolSurfaceKind::Bindings => PanelKind::Bindings,
-        ToolSurfaceKind::DockLayoutPreview => PanelKind::DockLayoutPreview,
-        ToolSurfaceKind::ThemeEditor => PanelKind::ThemeEditor,
-        ToolSurfaceKind::ShortcutEditor => PanelKind::ShortcutEditor,
-        ToolSurfaceKind::MenuEditor => PanelKind::MenuEditor,
-        ToolSurfaceKind::DefinitionValidation => PanelKind::DefinitionValidation,
-        ToolSurfaceKind::CommandDiff => PanelKind::CommandDiff,
-        ToolSurfaceKind::AssetBrowser => PanelKind::AssetBrowser,
-        ToolSurfaceKind::ImportInspector => PanelKind::ImportInspector,
-        ToolSurfaceKind::FieldProductViewer => PanelKind::FieldProductViewer,
-        ToolSurfaceKind::SdfBrushBrowser => PanelKind::SdfBrushBrowser,
-        ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
-    }
+    kind.panel_kind()
 }
 
 fn reorder_panel_in_stack(

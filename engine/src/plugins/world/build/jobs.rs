@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use world_ops::{
     BuildGeneration, BuildGraphNode, BuildGraphPhase, BuildQueueClass, BuildQueueItem,
-    ChunkGeneration, ChunkRevision, DirtyReasonSet, Operation, OperationId, OperationLog,
-    OperationRecord, touched_chunks_from_quantized_bounds,
+    ChunkGeneration, ChunkRevision, CsgBooleanMode, DirtyReasonSet, Operation, OperationId,
+    OperationLog, OperationRecord, touched_chunks_from_quantized_bounds,
 };
 use world_sdf::{
     RegionSdfSummary, SdfBrickMetadata, SdfBrickRecord, SdfBrickSamples, SdfChunkPayload,
@@ -283,6 +283,22 @@ fn chunk_solid_state_from_operations(records: &[&OperationRecord]) -> (bool, Ope
                 solid_payload = true;
                 material_channel_mask |= material_channel_bit(*material_channel);
             }
+            Operation::CsgBrush(brush) => match brush.mode {
+                CsgBooleanMode::Add | CsgBooleanMode::SmoothAdd { .. } => {
+                    solid_payload = true;
+                    if let Some(material_channel) = brush.material_channel {
+                        material_channel_mask |= material_channel_bit(material_channel);
+                    }
+                }
+                CsgBooleanMode::Subtract | CsgBooleanMode::SmoothSubtract { .. } => {
+                    solid_payload = false;
+                }
+                CsgBooleanMode::Intersect | CsgBooleanMode::SmoothIntersect { .. } => {
+                    if solid_payload && let Some(material_channel) = brush.material_channel {
+                        material_channel_mask |= material_channel_bit(material_channel);
+                    }
+                }
+            },
             Operation::Stamp { .. } => {
                 solid_payload = true;
                 material_channel_mask |= 1;

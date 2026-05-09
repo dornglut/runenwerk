@@ -30,14 +30,32 @@ pub enum ArtifactValidity {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ArtifactPayloadKind {
-    FormedFieldProduct { product_id: String },
-    WorldSdfPayload { chunk_count: u32 },
-    ForeignReference { format: String },
+    FormedFieldProduct {
+        product_id: String,
+    },
+    WorldSdfPayload {
+        chunk_count: u32,
+    },
+    FormedMaterialProduct {
+        product_id: String,
+    },
+    TextureProduct {
+        product_id: String,
+        dimension: String,
+    },
+    GeneratedTextureProduct {
+        product_id: String,
+    },
+    ForeignReference {
+        format: String,
+    },
     SceneManifest,
     ShaderMetadata,
     UiDefinition,
     DiagnosticCapture,
-    RuntimePackage { package_id: String },
+    RuntimePackage {
+        package_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

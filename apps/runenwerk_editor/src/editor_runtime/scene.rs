@@ -431,6 +431,9 @@ fn editor_primitive_kind_from_sdf(kind: SdfPrimitiveKind) -> EditorPrimitiveKind
         SdfPrimitiveKind::Box => EditorPrimitiveKind::Box,
         SdfPrimitiveKind::Sphere => EditorPrimitiveKind::Sphere,
         SdfPrimitiveKind::Capsule => EditorPrimitiveKind::Capsule,
+        SdfPrimitiveKind::Cylinder => EditorPrimitiveKind::Cylinder,
+        SdfPrimitiveKind::Torus => EditorPrimitiveKind::Torus,
+        SdfPrimitiveKind::Plane => EditorPrimitiveKind::Plane,
     }
 }
 

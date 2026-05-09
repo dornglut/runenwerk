@@ -207,6 +207,9 @@ fn primitive_kind_to_scene(kind: EditorPrimitiveKind) -> ScenePrimitiveKind {
         EditorPrimitiveKind::Box => ScenePrimitiveKind::Box,
         EditorPrimitiveKind::Sphere => ScenePrimitiveKind::Sphere,
         EditorPrimitiveKind::Capsule => ScenePrimitiveKind::Capsule,
+        EditorPrimitiveKind::Cylinder => ScenePrimitiveKind::Cylinder,
+        EditorPrimitiveKind::Torus => ScenePrimitiveKind::Torus,
+        EditorPrimitiveKind::Plane => ScenePrimitiveKind::Plane,
     }
 }
 
@@ -215,6 +218,9 @@ fn scene_kind_to_editor(kind: ScenePrimitiveKind) -> EditorPrimitiveKind {
         ScenePrimitiveKind::Box => EditorPrimitiveKind::Box,
         ScenePrimitiveKind::Sphere => EditorPrimitiveKind::Sphere,
         ScenePrimitiveKind::Capsule => EditorPrimitiveKind::Capsule,
+        ScenePrimitiveKind::Cylinder => EditorPrimitiveKind::Cylinder,
+        ScenePrimitiveKind::Torus => EditorPrimitiveKind::Torus,
+        ScenePrimitiveKind::Plane => EditorPrimitiveKind::Plane,
     }
 }
 

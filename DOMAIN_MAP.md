@@ -33,6 +33,8 @@ Geometry primitives/queries         -> domain/geometry
 Asset identity/catalog/import contracts -> domain/asset
 SDF fields/queries                  -> domain/sdf
 Graph substrate                     -> domain/graph
+Texture product descriptors         -> domain/texture
+Material graph semantics            -> domain/material_graph
 Spatial coordinates/indexing        -> domain/spatial, domain/spatial_index
 Chunk streaming policy              -> domain/chunking
 Chunk/world op logs and deltas       -> domain/world_ops

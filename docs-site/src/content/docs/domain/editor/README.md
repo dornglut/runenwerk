@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-09
 ---
 
 # Editor Domain
@@ -26,7 +26,10 @@ Runenwerk editor app and by future editor-facing integrations.
   surface-set contracts.
 - `editor_inspector`: inspector target resolution, editable value models,
   validation, sessions, and ECS bridge adapters.
-- `editor_scene`: editor-facing scene contracts.
+- `editor_scene`: editor-facing scene contracts, including P1 SDF operation
+  documents, source-backed SDF graph documents, operation/graph ratification,
+  deterministic lowering to `world_ops` records, and CPU field-preview
+  formation requests.
 - `editor_persistence`: project/scene files, RON codec, migrations,
   normalization, and change-log persistence.
 

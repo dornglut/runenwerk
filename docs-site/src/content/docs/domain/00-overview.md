@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-09
 ---
 
 # Domain Layer Overview
@@ -37,6 +37,7 @@ Domain crates must not depend on:
 | Scene | `domain/scene` | [`scene/README.md`](./scene/README.md) |
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
 | SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
+| Materials and textures | `domain/material_graph`, `domain/texture` | [`material-graph/README.md`](./material-graph/README.md), [`texture/README.md`](./texture/README.md) |
 | Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
 | UI substrate and definitions | `domain/ui/*`, including `domain/ui/ui_definition` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
 | Editor domains and definitions | `domain/editor/*`, including `domain/editor/editor_definition` | [`editor/README.md`](./editor/README.md) |
@@ -46,7 +47,12 @@ Domain crates must not depend on:
 These areas are roadmap-level intent, not implemented workspace members.
 Do not add crate metadata for them until their implementation milestone lands.
 
-There are no planned domain areas listed here at this time.
+- procedural generation;
+- particles and VFX;
+- physics and collision authoring;
+- animation and procedural motion;
+- simulation/world processes;
+- gameplay graph orchestration after narrower gameplay event/action/state/quest contracts exist.
 
 ## What Belongs in Domain
 
@@ -84,6 +90,8 @@ Start here when working in the domain layer:
 - Scheduler: [`scheduler/README.md`](./scheduler/README.md)
 - Geometry: [`geometry/README.md`](./geometry/README.md)
 - SDF: [`sdf/index.md`](./sdf/index.md)
+- Material graph: [`material-graph/README.md`](./material-graph/README.md)
+- Texture: [`texture/README.md`](./texture/README.md)
 - UI substrate: [`ui/README.md`](./ui/README.md)
 
 For workspace-wide ownership, see:

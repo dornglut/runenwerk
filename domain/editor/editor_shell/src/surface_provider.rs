@@ -13,6 +13,7 @@ use crate::{
     EditorDefinitionSurfaceAction, EntityTableDomainMutation, EntityTableSessionMutation,
     EntityTableSurfaceAction, InspectorSessionMutation, InspectorSurfaceAction,
     OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId, PanelKind, RoutedShellAction,
+    SdfOperationDomainMutation, SdfOperationSessionMutation, SdfOperationSurfaceAction,
     StructuralCommandTarget, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarViewModel,
     UiNode, ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction, WidgetId,
 };
@@ -163,6 +164,7 @@ pub enum SurfaceLocalAction {
     Inspector(InspectorSurfaceAction),
     Viewport(ViewportSurfaceAction),
     EditorDefinition(EditorDefinitionSurfaceAction),
+    SdfOperation(SdfOperationSurfaceAction),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -349,6 +351,7 @@ pub enum SurfaceSessionMutation {
     EntityTable(EntityTableSessionMutation),
     Inspector(InspectorSessionMutation),
     Viewport(ViewportSessionMutation),
+    SdfOperation(SdfOperationSessionMutation),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -363,6 +366,7 @@ pub enum EditorDomainMutation {
     Outliner(OutlinerDomainMutation),
     EntityTable(EntityTableDomainMutation),
     Viewport(ViewportDomainMutation),
+    SdfOperation(SdfOperationDomainMutation),
 }
 
 pub fn surface_session_proposal(

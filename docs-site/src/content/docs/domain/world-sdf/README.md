@@ -5,13 +5,14 @@ status: active
 owner: world-sdf
 layer: domain
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-09
 ---
 
 # World SDF
 
-`world_sdf` owns chunk/page SDF payload records, cave summary data, hierarchy
-summaries, and collision query contracts for world-scale SDF data.
+`world_sdf` owns chunk/page SDF payload records, CPU field-preview product
+payload DTOs, cave summary data, hierarchy summaries, and collision query
+contracts for world-scale SDF data.
 
 ## Purpose
 
@@ -26,12 +27,16 @@ summaries for chunked world data.
 - `ChunkHierarchyNode` and `ChunkHierarchySummary`.
 - `CollisionQueryService`, `SphereSweep`, `CollisionHit`, and readiness/result
   types.
+- `FieldPreviewGrid`, `FieldPreviewPayload`, `FieldPreviewProduct`, and
+  `ratify_field_preview_product` for CPU-formed scalar distance, vector
+  gradient, occupancy, and material-channel preview products.
 
 ## Ownership Boundary
 
-`world_sdf` owns SDF payload structure and domain collision query contracts. It
-does not own edit operation logs, streaming decisions, renderer resource upload,
-or app/editor commands.
+`world_sdf` owns SDF payload structure, field-preview payload structure, and
+domain collision query contracts. It does not own edit operation logs, streaming
+decisions, renderer resource upload, GPU texture handles, or app/editor
+commands.
 
 ## Related Crates
 

@@ -90,8 +90,10 @@ Current post-M3 gaps:
 - M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
 - The M3.5 UI definition/formation closeout is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar/menu fixture formation, normal shell chrome formation, common provider surface fixture formation, and app-owned fixture validation exist. Provider data, viewport overlays, editor mutations, and route execution remain outside `ui_definition`.
 - The M4 asset foundation exists: `domain/asset` owns asset ids, taxonomy, source/artifact descriptors, dependency graph, deterministic import plans, diagnostics, and ratification; `ProjectFileV2` migration exists in `domain/editor/editor_persistence/src/project_file.rs`; `world_sdf` owns field-product descriptors and ratification; `world_ops` owns generic product invalidation/build helpers; and the editor app owns initial catalog runtime, import jobs, field-product jobs, and first Asset Browser/Import Inspector/Field Product Viewer/SDF Brush Browser providers. M5 now adds external runtime preview, project-owned reload status classification, world_sdf runtime intake, and restart boundaries for the existing product families.
-- There is no `domain/material_graph`, `domain/texture`, `domain/procgen`, `domain/particles`, `domain/physics`, or `domain/animation`.
-- There are no editor providers for material graph editing, procedural texturing, Texture3D/volume inspection, procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview.
+- `domain/material_graph` and `domain/texture` now exist as first-slice M6 domain-contract crates with ratifiers, descriptor/product contracts, source/lineage metadata, and focused tests.
+- Descriptor-first material and texture providers exist for material graph canvas, material inspector, material preview, Texture2D/generated texture inspection, and Texture3D/volume inspection. They expose domain descriptors, source/cache/reload diagnostics, and fail-closed adapter boundaries without making editor canvas state authoritative.
+- There is no `domain/procgen`, `domain/particles`, `domain/physics`, `domain/animation`, or `domain/simulation_process`.
+- Concrete editor providers for procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, and simulation preview do not exist yet; their M6 workspace surfaces still route through fail-closed placeholder diagnostics.
 - There is no `domain/gameplay_graph`, Action/Trigger/Rule IR, gameplay graph compiler, gameplay graph to ECS query/event/schedule lowering, or gameplay graph editor/debug provider.
 
 ## Implementation Readiness
@@ -102,7 +104,7 @@ Current post-M3 gaps:
 - M3.7 is complete as a no-compromise viewport expression architecture closeout as of 2026-05-08. Multi-viewport previews now have explicit viewport instances, viewport-scoped products, per-viewport render jobs, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-keyed camera/debug/root commands, camera orbit/pan/zoom routing, and duplicate/close lifecycle cleanup. The follow-on provider surface workflow redesign and surface/product maturity pass are also complete as of 2026-05-08 for typed surface wrappers, entity-table query workflows, inspector enum mutation routing, reusable-control polish, visible descriptor-only field/atlas/volume/brickmap/history viewport products, and guard coverage. The M4A-M4I integrated UI/editor/asset foundation and M5 external runtime preview/reload boundary are complete as of 2026-05-09; the next primary product track is M6 procedural authoring domains.
 - Native multi-window editing is designed in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`. It follows the render product-surface foundation and should land before second-monitor workflows are treated as product-ready.
 - M4 is the integrated UI/editor/asset foundation and now ends at M4I. M4A-M4E finished active UI/editor consumption and reusable-control cleanup; M4F-M4I add the first SDF/field-first asset contracts, `ProjectFileV2`, field-product descriptors, generic product invalidation, app-owned import/field-product jobs, first asset surfaces, scene-manifest catalog adapter, and displayable `Rgba8Unorm` viewport debug products. M5 is complete for external runtime preview, project-owned data reload classification, and restart boundaries over the existing product families.
-- M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
+- M6 is not one implementation ticket. M6.0 shared workspace substrate has landed in the current worktree, and M6.1 material/texture now has descriptor-first domain contracts plus provider surfaces. Each remaining M6 sub-milestone is implementation-ready only after its owning first-slice design and domain contract docs exist.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
 - Later self-authoring packaging/extensibility is implementation-ready for the retained UI path only. Compiled-reactive or ECS-driven UI execution remains blocked; neither strategy was promoted before M2, and any future promotion requires a separate active design or accepted ADR plus a roadmap update.
 - M9 is release-readiness verification, not a feature construction phase.
@@ -443,7 +445,7 @@ Validation:
 - unsafe structural changes require restart or session rebuild;
 - play/simulate cannot mutate authored documents without explicit commands.
 - external runtime preview process spawn/connect/heartbeat/shutdown works in headless tests.
-- future material, texture, procgen, particle, physics, animation, gameplay graph, graph execution, and scripting families emit explicit unsupported or restart-required statuses until their owning domains exist.
+- authored material graph, procgen, particle, physics, animation, gameplay graph, graph execution, and scripting families fail closed until their owning runtime/product contracts exist; formed material and texture product families may require preview-session restart until live-reload adapters exist.
 - validation passed with `cargo metadata --no-deps --format-version 1`, `cargo test -p editor_preview -p engine_net -p engine_net_quic`, `cargo test -p runenwerk_editor -p runenwerk_runtime_preview -p engine -p asset -p world_sdf`, `python3 tools/docs/validate_docs.py`, `./quiet_editor_gate.sh`, and `./quiet_full_gate.sh`.
 
 Exit criteria:
@@ -966,7 +968,7 @@ Validation:
 - external runtime preview process spawn/connect/heartbeat/shutdown works in headless mode, including actual child-process bootstrap and exit;
 - failed reloads preserve the prior valid runtime product;
 - ratified field and `world_sdf` products can be previewed or loaded through app/engine integration without treating mesh/glTF as world truth;
-- future material, texture, procgen, particle, physics, animation, gameplay graph, graph execution, and scripting families emit explicit unsupported or restart-required statuses until their owning domains exist;
+- authored material graph, procgen, particle, physics, animation, gameplay graph, graph execution, and scripting families fail closed until their owning runtime/product contracts exist; formed material and texture product families may require preview-session restart until live-reload adapters exist;
 - `cargo metadata --no-deps --format-version 1`;
 - `cargo test -p editor_preview -p engine_net -p engine_net_quic`;
 - `cargo test -p runenwerk_editor -p runenwerk_runtime_preview -p engine -p asset -p world_sdf`;
@@ -981,10 +983,19 @@ Detailed feature slices, milestone gates, and remaining decisions for material g
 
 M6 closes by sub-milestone, not as one broad bucket. Each sub-milestone must satisfy its owning design's first-slice exit criteria, source lineage requirements, diagnostics, failed-product preservation, and provider boundary tests before it can be marked complete.
 
+Status after the 2026-05-09 drift check:
+
+- M6.0 shared workspace substrate is complete in the current worktree for workspace profiles, tool-surface/panel vocabulary, persisted layout support, runtime/debug/diagnostic surface routing, and fail-closed provider diagnostics.
+- M6.1 material/texture descriptor-first closeout is complete: `domain/material_graph` and `domain/texture` exist with accepted domain docs, first-slice ratifiers, descriptors, source/lineage metadata, deterministic lowering, material/texture artifact payload kinds, import settings, runtime product kinds, reload classification for formed material/texture products, and concrete descriptor-first material/texture provider surfaces. Closeout evidence is recorded in `docs-site/src/content/docs/reports/closeouts/m6-material-texture-descriptor-preview/closeout.md`.
+- M6.1 intentionally leaves rendered material preview adapters, Texture3D GPU upload/runtime adapters, broad document persistence/import UX, and full PBR preview capability matrices for later P3/P9 work.
+- P1/SDF modeling core is complete for the CPU/editor-surface boundary: command-backed operation documents, source-backed SDF graph documents, Add/Subtract/Intersect/SmoothAdd/SmoothSubtract/SmoothIntersect lowering to `world_ops` records, invalidation dirty-reason classification, app-held commit logs, deterministic CPU field-preview products, and concrete field-layer/SDF graph/field-product surfaces. Closeout evidence is recorded in `docs-site/src/content/docs/reports/closeouts/p1-sdf-modeling-core/closeout.md`.
+- Next phase is M6.2 procgen only after `docs-site/src/content/docs/domain/procgen/README.md` is accepted. Do not start M6.3 gameplay graph or later particles/physics/animation/simulation phases from this closeout pass.
+
 Sub-milestones:
 
-- M6.0 Shared workspace substrate: workspace profiles, scoped mode compatibility, graph canvas hosting, diagnostics, provider routing, runtime debug surfaces, and document tab coverage.
-- M6.1 Material and texture first slice: `domain/material_graph`, `domain/texture`, PBR parameters, procedural nodes, triplanar mapping, Texture2D, Texture3D, material previews, and formed material products.
+- M6.0 Shared workspace substrate: complete as of 2026-05-09 for workspace profiles, scoped mode compatibility, graph canvas hosting, diagnostics, provider routing, runtime debug surfaces, persisted layout support, and fail-closed provider diagnostics. Full save/load/dirty behavior remains tied to each implemented document family.
+- M6.1 Material and texture first slice: complete as of 2026-05-09 for descriptor-first `domain/material_graph`, `domain/texture`, PBR parameter descriptors, procedural/triplanar/texture node catalog entries, Texture2D/Texture3D descriptors, generated texture cache metadata, ratifiers, deterministic material lowering, source maps, formed material products, material graph canvas, material inspector, material preview, Texture Viewer, and Volume Texture Viewer surfaces. Adapter-backed rendered previews and GPU upload are deferred to P3.
+- P1 SDF modeling core: complete as of 2026-05-09 for authored operation documents, source-backed SDF graph documents, layer/operation/graph command intents, ratification, all P1 boolean lowering to `world_ops::OperationRecord`, operation-kind dirty reasons, app-held commit logs, touched-chunk diagnostics, deterministic CPU field-preview products, `FieldLayerStackProvider`, command-backed `SdfGraphCanvasProvider`, and `FieldProductViewerProvider` preview payload diagnostics. Renderer/GPU overlays remain P3.
 - M6.2 Procgen first slice: deterministic generator documents, seed/scope contracts, bounded preview, world-operation lowering, bake/rollback, and changed-region diagnostics.
 - M6.3 Gameplay graph first slice: prerequisite gameplay event/action/state/quest contracts, Action/Trigger/Rule IR, compiler passes, ECS query/event/schedule lowering, SDF physics `HIT` relation readiness, authority diagnostics, and source maps.
 - M6.4 Particles first slice: deterministic emitter documents, SDF/field spawn and collision coupling, preview products, count/bounds diagnostics, and backend-neutral formed products.
@@ -998,9 +1009,9 @@ Implementation targets:
   - add `Field World`, `SDF Modeling`, `Materials`, `Textures`, `Procedural Generation`, `Gameplay`, `Particles`, `Physics`, `Animation`, `Layout`, `UI`, `Graphs`, `Scripting`, `Simulation`, `Debug`, and `Editor Design` workspace profiles.
 - `domain/editor/editor_core/src/session.rs`
   - validate mode activation against `(workspace_profile, document_kind)`.
-- future `domain/material_graph/src/lib.rs`
+- `domain/material_graph/src/lib.rs`
   - own material graph semantics, PBR parameter contracts, procedural texturing nodes, triplanar mapping semantics, ratification, lowering, and formed material products.
-- future `domain/texture/src/lib.rs`
+- `domain/texture/src/lib.rs`
   - own Texture2D, Texture3D/volume texture descriptors, color space, sampler, compression, generated texture cache metadata, and texture diagnostics.
 - future `domain/procgen/src/lib.rs`
   - own procedural generation documents, seed contracts, generator graphs, and lowering to bounded world operation windows.

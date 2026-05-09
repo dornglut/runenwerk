@@ -61,6 +61,14 @@ const ASSET_BROWSER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(7);
 const IMPORT_INSPECTOR_PROVIDER_ID: SurfaceProviderId = surface_provider_id(8);
 const FIELD_PRODUCT_VIEWER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(9);
 const SDF_BRUSH_BROWSER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(10);
+const M6_WORKSPACE_PROVIDER_ID: SurfaceProviderId = surface_provider_id(11);
+const MATERIAL_GRAPH_CANVAS_PROVIDER_ID: SurfaceProviderId = surface_provider_id(12);
+const MATERIAL_INSPECTOR_PROVIDER_ID: SurfaceProviderId = surface_provider_id(13);
+const MATERIAL_PREVIEW_PROVIDER_ID: SurfaceProviderId = surface_provider_id(14);
+const TEXTURE_VIEWER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(15);
+const VOLUME_TEXTURE_VIEWER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(16);
+const FIELD_LAYER_STACK_PROVIDER_ID: SurfaceProviderId = surface_provider_id(17);
+const SDF_GRAPH_CANVAS_PROVIDER_ID: SurfaceProviderId = surface_provider_id(18);
 
 const fn surface_provider_id(raw: u64) -> SurfaceProviderId {
     match SurfaceProviderId::try_from_raw(raw) {
@@ -141,6 +149,14 @@ impl EditorSurfaceProviderRegistry {
             Box::new(ImportInspectorProvider),
             Box::new(FieldProductViewerProvider),
             Box::new(SdfBrushBrowserProvider),
+            Box::new(FieldLayerStackProvider),
+            Box::new(SdfGraphCanvasProvider),
+            Box::new(MaterialGraphCanvasProvider),
+            Box::new(MaterialInspectorProvider),
+            Box::new(MaterialPreviewProvider),
+            Box::new(TextureViewerProvider),
+            Box::new(VolumeTextureViewerProvider),
+            Box::new(M6WorkspaceProvider),
         ])
         .expect("default surface providers must have unique ids")
     }
@@ -787,6 +803,7 @@ fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
     if request.tool_surface_kind == ToolSurfaceKind::Console
         || is_self_authoring_surface(request.tool_surface_kind)
         || is_asset_surface(request.tool_surface_kind)
+        || is_m6_global_diagnostic_surface(request.tool_surface_kind)
     {
         return true;
     }
@@ -797,6 +814,23 @@ fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
         .profile(request.workspace_profile_id)
         .map(|profile| profile.document_kind_filters.contains(document_kind))
         .unwrap_or(false)
+}
+
+fn surface_document_context_line(document_context: &SurfaceDocumentContext) -> String {
+    match document_context {
+        SurfaceDocumentContext::Resolved {
+            document_id,
+            document_kind,
+        } => format!(
+            "active document: {} #{}",
+            document_kind.stable_name(),
+            document_id.0
+        ),
+        SurfaceDocumentContext::Unresolved { document_id } => {
+            format!("active document: unresolved #{}", document_id.0)
+        }
+        SurfaceDocumentContext::NoActiveDocument => "active document: none".to_string(),
+    }
 }
 
 fn is_self_authoring_surface(kind: ToolSurfaceKind) -> bool {
@@ -1364,23 +1398,43 @@ fn diagnostic_surface_node(
 
 pub mod asset_browser;
 pub mod console;
+pub mod field_layer_stack;
 pub mod field_product_viewer;
 pub mod import_inspector;
+pub mod m6_workspace;
+pub mod material_graph_canvas;
+pub mod material_inspector;
+pub mod material_preview;
 pub mod scene;
 pub mod sdf_brush_browser;
+pub mod sdf_graph_canvas;
+pub mod texture_viewer;
+pub mod volume_texture_viewer;
 
 use asset_browser::AssetBrowserProvider;
 use console::ConsoleProvider;
+use field_layer_stack::FieldLayerStackProvider;
 use field_product_viewer::FieldProductViewerProvider;
 use import_inspector::ImportInspectorProvider;
+use m6_workspace::{M6WorkspaceProvider, is_m6_global_diagnostic_surface};
+use material_graph_canvas::MaterialGraphCanvasProvider;
+use material_inspector::MaterialInspectorProvider;
+use material_preview::MaterialPreviewProvider;
 use scene::{
     SceneEntityTableProvider, SceneInspectorProvider, SceneOutlinerProvider, SceneViewportProvider,
 };
 use sdf_brush_browser::SdfBrushBrowserProvider;
+use sdf_graph_canvas::SdfGraphCanvasProvider;
+use texture_viewer::TextureViewerProvider;
+use volume_texture_viewer::VolumeTextureViewerProvider;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use asset::{
+        ArtifactCacheKey, ArtifactPayloadKind, AssetArtifactDescriptor, AssetKind, AssetRecord,
+        asset_artifact_id, asset_id,
+    };
     use editor_shell::{
         LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, TabStackId, ToolSurfaceInstanceId,
         VIEWPORT_SURFACE_DEFINITION_ID, WidgetId,
@@ -1499,6 +1553,61 @@ mod tests {
         }
     }
 
+    fn m6_material_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::Resolved {
+                document_id: editor_core::DocumentId(6),
+                document_kind: DocumentKind::MaterialGraph,
+            },
+            panel_instance_id: PanelInstanceId::try_from_raw(20).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(20).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(20).unwrap(),
+            tool_surface_kind,
+            surface_definition_id: tool_surface_definition_id(tool_surface_kind),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
+        }
+    }
+
+    fn m6_texture_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
+        let document_kind = match tool_surface_kind {
+            ToolSurfaceKind::VolumeTextureViewer => DocumentKind::VolumeTexture,
+            _ => DocumentKind::ProceduralTexture,
+        };
+        SurfaceProviderRequest {
+            workspace_profile_id: editor_shell::TEXTURE_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::Resolved {
+                document_id: editor_core::DocumentId(7),
+                document_kind,
+            },
+            panel_instance_id: PanelInstanceId::try_from_raw(21).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(21).unwrap(),
+            tool_surface_kind,
+            surface_definition_id: tool_surface_definition_id(tool_surface_kind),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
+        }
+    }
+
+    fn m6_sdf_request(
+        tool_surface_kind: ToolSurfaceKind,
+        document_kind: DocumentKind,
+    ) -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            workspace_profile_id: editor_shell::FIELD_WORLD_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::Resolved {
+                document_id: editor_core::DocumentId(8),
+                document_kind,
+            },
+            panel_instance_id: PanelInstanceId::try_from_raw(22).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(22).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(22).unwrap(),
+            tool_surface_kind,
+            surface_definition_id: tool_surface_definition_id(tool_surface_kind),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
+        }
+    }
+
     fn context<'a>(
         app: &'a RunenwerkEditorApp,
         shell_state: &'a RunenwerkEditorShellState,
@@ -1512,6 +1621,10 @@ mod tests {
             tool_surface_bindings: None,
             viewport_instances: None,
         }
+    }
+
+    fn provider_frame_text(frame: &ResolvedSurfaceFrame) -> String {
+        format!("{:?}", frame.artifact.root)
     }
 
     #[test]
@@ -1688,5 +1801,234 @@ mod tests {
         );
 
         assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+    }
+
+    #[test]
+    fn material_graph_canvas_provider_resolves_descriptor_surface_without_routes() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(MATERIAL_GRAPH_CANVAS_PROVIDER_ID));
+        assert_eq!(frame.title, "Material Graph Canvas");
+        assert!(provider_frame_text(&frame).contains("canvas state is not material truth"));
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn texture_viewer_projects_typed_preview_descriptor_without_routes() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(60);
+        let artifact_id = asset_artifact_id(61);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "albedo",
+                "Albedo",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(AssetArtifactDescriptor::new(
+                artifact_id,
+                asset_id,
+                AssetKind::Texture2D,
+                ArtifactPayloadKind::TextureProduct {
+                    product_id: "42".to_string(),
+                    dimension: "Texture2D".to_string(),
+                },
+                ArtifactCacheKey::new("texture-42"),
+            ));
+        let request = m6_texture_request(ToolSurfaceKind::TextureViewer);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(TEXTURE_VIEWER_PROVIDER_ID));
+        assert!(provider_frame_text(&frame).contains("preview descriptor: product=42"));
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn volume_texture_viewer_keeps_gpu_upload_fail_closed() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(70);
+        let artifact_id = asset_artifact_id(71);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "density_volume",
+                "Density Volume",
+                AssetKind::Texture3DVolume,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(AssetArtifactDescriptor::new(
+                artifact_id,
+                asset_id,
+                AssetKind::Texture3DVolume,
+                ArtifactPayloadKind::TextureProduct {
+                    product_id: "77".to_string(),
+                    dimension: "Texture3DVolume".to_string(),
+                },
+                ArtifactCacheKey::new("volume-77"),
+            ));
+        let request = m6_texture_request(ToolSurfaceKind::VolumeTextureViewer);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(VOLUME_TEXTURE_VIEWER_PROVIDER_ID));
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("preview descriptor: product=77"));
+        assert!(text.contains("GPU upload remains adapter-owned"));
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn sdf_field_layer_stack_provider_resolves_before_m6_fallback_with_routes() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let layer_id = app.sdf_operation_workspace().document().layers()[0].id;
+        app.sdf_operation_workspace_mut()
+            .apply_command(
+                editor_scene::SdfOperationCommandIntent::AddPrimitiveOperation {
+                    layer_id,
+                    display_name: "Sphere Add".to_string(),
+                    primitive: editor_scene::SdfPrimitiveSpec::new(
+                        editor_scene::SdfPrimitiveKind::Sphere,
+                        editor_scene::SdfBooleanIntent::Add,
+                    ),
+                    material_channel: 2,
+                },
+            )
+            .expect("SDF command should apply");
+        let request = m6_sdf_request(ToolSurfaceKind::FieldLayerStack, DocumentKind::SdfGraph);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(FIELD_LAYER_STACK_PROVIDER_ID));
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("lowered world_ops records: 1"));
+        assert!(text.contains("commit eligible: true"));
+        assert!(!frame.routes.is_empty());
+    }
+
+    #[test]
+    fn field_layer_stack_actions_map_to_sdf_domain_proposals() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let layer_id = app.sdf_operation_workspace().document().layers()[0].id;
+        let request = m6_sdf_request(ToolSurfaceKind::FieldLayerStack, DocumentKind::SdfGraph);
+        let dispatch_context = SurfaceProviderDispatchContext {
+            projection_epoch: 44,
+            _marker: std::marker::PhantomData,
+        };
+
+        let proposal = registry
+            .map_action(
+                &dispatch_context,
+                &request,
+                FIELD_LAYER_STACK_PROVIDER_ID,
+                SurfaceLocalAction::SdfOperation(
+                    editor_shell::SdfOperationSurfaceAction::ApplyCommand {
+                        intent: editor_scene::SdfOperationCommandIntent::SetLayerEnabled {
+                            layer_id,
+                            enabled: false,
+                        },
+                    },
+                ),
+            )
+            .expect("provider should map action")
+            .expect("action should produce proposal");
+
+        match proposal {
+            SurfaceCommandProposal::EditorDomain(proposal) => {
+                assert_eq!(proposal.projection_epoch, 44);
+                assert!(matches!(
+                    proposal.mutation,
+                    EditorDomainMutation::SdfOperation(
+                        editor_shell::SdfOperationDomainMutation::ApplyCommand { .. }
+                    )
+                ));
+            }
+            _ => panic!("SDF field action should map to an editor domain proposal"),
+        }
+    }
+
+    #[test]
+    fn sdf_graph_canvas_provider_is_descriptor_first_and_command_backed() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = m6_sdf_request(ToolSurfaceKind::SdfGraphCanvas, DocumentKind::SdfGraph);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(SDF_GRAPH_CANVAS_PROVIDER_ID));
+        assert!(
+            provider_frame_text(&frame).contains("canvas/session state is not SDF graph truth")
+        );
+        assert!(provider_frame_text(&frame).contains("graph can lower: false"));
+        assert!(!frame.routes.is_empty());
+    }
+
+    #[test]
+    fn sdf_surfaces_fail_closed_for_incompatible_document_kind() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = m6_sdf_request(
+            ToolSurfaceKind::FieldLayerStack,
+            DocumentKind::MaterialGraph,
+        );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Unsupported);
+        assert!(frame.routes.is_empty());
     }
 }

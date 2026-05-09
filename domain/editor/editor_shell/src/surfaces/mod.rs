@@ -5,10 +5,12 @@ pub mod editor_definition;
 pub mod entity_table;
 pub mod inspector;
 pub mod outliner;
+pub mod sdf_operation;
 pub mod viewport;
 
 pub use editor_definition::*;
 pub use entity_table::*;
 pub use inspector::*;
 pub use outliner::*;
+pub use sdf_operation::*;
 pub use viewport::*;

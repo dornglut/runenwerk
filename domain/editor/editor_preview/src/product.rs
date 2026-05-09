@@ -8,6 +8,8 @@ pub enum RuntimeProductKind {
     Scene,
     FieldProduct,
     WorldSdfPayload,
+    Material,
+    Texture,
     Shader,
     UiDefinition,
     UnsupportedFutureKind,

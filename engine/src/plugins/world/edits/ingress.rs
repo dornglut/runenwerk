@@ -8,7 +8,8 @@ use super::super::{WorldAuthorityState, WorldRuntimeConfig, WorldRuntimeMode};
 use ecs::World;
 use spatial::WorldId;
 use world_ops::{
-    Operation, OperationId, OperationRecord, QuantizedAabb, mark_dirty_chunks_from_quantized_bounds,
+    Operation, OperationId, OperationRecord, QuantizedAabb, dirty_reason_for_operation,
+    mark_dirty_chunks_from_quantized_bounds,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -40,6 +41,7 @@ pub fn submit_world_operation(
         .resource::<WorldAuthorityState>()
         .map(|value| value.world_revision)
         .unwrap_or_default();
+    let dirty_reason = dirty_reason_for_operation(&operation);
 
     let op_id = {
         let op_log = world.resource_mut::<OperationLogResource>().ok()?;
@@ -63,6 +65,7 @@ pub fn submit_world_operation(
             affected_bounds_q,
             meta.planet_id,
             fixed_point_scale,
+            dirty_reason,
         )
     };
     let invalidated_chunk_count = touched_chunks.len() as u64;

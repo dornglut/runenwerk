@@ -5,7 +5,7 @@ status: active
 owner: world-ops
 layer: domain
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-09
 ---
 
 # World Ops
@@ -20,10 +20,14 @@ replicated without depending on engine runtime glue.
 
 ## Public Surface
 
-- `Operation`, `OperationRecord`, `OperationId`: authored world edit records.
+- `Operation`, `CsgBrushOperation`, `CsgBooleanMode`, `OperationRecord`, and
+  `OperationId`: authored world edit records, including accepted P1 CSG brush
+  semantics for add, subtract, intersect, and smooth boolean modes.
 - `QuantizedVec3`, `QuantizedAabb`, `quantize_position`, `quantize_aabb`.
 - `OperationLog` and `ReplayWindow`: append/read windows for edit history.
-- `DirtyChunkMap`, `DirtyReason`, `DirtyReasonSet`: invalidation state.
+- `DirtyChunkMap`, `DirtyReason`, `DirtyReasonSet`, and
+  `dirty_reason_for_operation`: invalidation state and operation-kind dirty
+  classification.
 - `RegionInvalidationJournal` and related records.
 - `BuildGraph`, `BuildQueue`, and build generation/revision types.
 - Replication deltas such as `OpWindowDelta`, `ChunkContentDelta`, and

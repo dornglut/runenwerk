@@ -10,6 +10,8 @@ use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::asset_pipeline::AssetCatalogRuntime;
 use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
+use super::sdf_operations::SdfOperationWorkspaceState;
+
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
     pub(crate) runtime_mode_sessions: RuntimeModeSessions,
@@ -21,6 +23,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) surface_provider_registry: Arc<EditorSurfaceProviderRegistry>,
     pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
+    pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -42,6 +45,7 @@ impl RunenwerkEditorApp {
             surface_provider_registry: Arc::new(EditorSurfaceProviderRegistry::runenwerk_default()),
             pending_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
+            sdf_operation_workspace: SdfOperationWorkspaceState::default(),
         }
     }
 
@@ -165,6 +169,14 @@ impl RunenwerkEditorApp {
 
     pub fn asset_catalog_runtime_mut(&mut self) -> &mut AssetCatalogRuntime {
         &mut self.asset_catalog_runtime
+    }
+
+    pub fn sdf_operation_workspace(&self) -> &SdfOperationWorkspaceState {
+        &self.sdf_operation_workspace
+    }
+
+    pub fn sdf_operation_workspace_mut(&mut self) -> &mut SdfOperationWorkspaceState {
+        &mut self.sdf_operation_workspace
     }
 }
 

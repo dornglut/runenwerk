@@ -127,6 +127,18 @@ fn payload_kind_for_import(kind: AssetKind) -> ArtifactPayloadKind {
         AssetKind::WorldSdfChunkPageArtifact => {
             ArtifactPayloadKind::WorldSdfPayload { chunk_count: 0 }
         }
+        AssetKind::Material | AssetKind::ProceduralMaterial => {
+            ArtifactPayloadKind::FormedMaterialProduct {
+                product_id: "pending_material_product".to_string(),
+            }
+        }
+        AssetKind::Texture2D | AssetKind::Texture3DVolume => ArtifactPayloadKind::TextureProduct {
+            product_id: "pending_texture_product".to_string(),
+            dimension: format!("{kind:?}"),
+        },
+        AssetKind::ProceduralTexture => ArtifactPayloadKind::GeneratedTextureProduct {
+            product_id: "pending_generated_texture".to_string(),
+        },
         AssetKind::Scene => ArtifactPayloadKind::SceneManifest,
         AssetKind::Shader => ArtifactPayloadKind::ShaderMetadata,
         AssetKind::UiDefinition => ArtifactPayloadKind::UiDefinition,

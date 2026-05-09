@@ -5,7 +5,7 @@ status: active
 owner: graph
 layer: domain
 canonical: true
-last_reviewed: 2026-04-30
+last_reviewed: 2026-05-09
 related_docs:
   - ../../adr/proposed/graph-substrate-canvas-boundary.md
 ---
@@ -49,4 +49,4 @@ Graph model truth belongs here.
 
 Graph presentation belongs in editor/UI surface code.
 
-Domain-specific graph meaning belongs in future semantic crates such as `domain/material_graph` or `domain/ability_graph` if those domains become real workspace members.
+Domain-specific graph meaning belongs in semantic crates such as `domain/material_graph` or future crates such as `domain/ability_graph` if those domains become real workspace members.

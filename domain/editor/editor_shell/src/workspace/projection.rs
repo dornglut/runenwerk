@@ -351,7 +351,30 @@ fn panel_widget_ids(panel_kind: PanelKind) -> &'static [WidgetId] {
         | PanelKind::AssetBrowser
         | PanelKind::ImportInspector
         | PanelKind::FieldProductViewer
-        | PanelKind::SdfBrushBrowser => &[],
+        | PanelKind::SdfBrushBrowser
+        | PanelKind::GraphCanvas
+        | PanelKind::Diagnostics
+        | PanelKind::RuntimeDebug
+        | PanelKind::FieldLayerStack
+        | PanelKind::SdfGraphCanvas
+        | PanelKind::MaterialGraphCanvas
+        | PanelKind::MaterialInspector
+        | PanelKind::MaterialPreview
+        | PanelKind::TextureViewer
+        | PanelKind::VolumeTextureViewer
+        | PanelKind::ProcgenGraphCanvas
+        | PanelKind::ProcgenPreview
+        | PanelKind::GameplayGraphCanvas
+        | PanelKind::GameplayCompilerDiagnostics
+        | PanelKind::ParticleGraphCanvas
+        | PanelKind::ParticlePreview
+        | PanelKind::PhysicsAuthoring
+        | PanelKind::PhysicsDebug
+        | PanelKind::Timeline
+        | PanelKind::CurveEditor
+        | PanelKind::AnimationGraphCanvas
+        | PanelKind::SimulationPreview
+        | PanelKind::SimulationDiagnostics => &[],
         PanelKind::Placeholder => &[],
     }
 }

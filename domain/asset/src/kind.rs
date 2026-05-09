@@ -74,6 +74,10 @@ impl AssetKind {
             Self::FormedFieldProduct
                 | Self::WorldSdfChunkPageArtifact
                 | Self::ClipmapBrickmapProduct
+                | Self::ProceduralMaterial
+                | Self::ProceduralTexture
+                | Self::Texture2D
+                | Self::Texture3DVolume
                 | Self::GameplayAtrIrProduct
                 | Self::GameplayEcsLoweringProduct
                 | Self::ForeignMeshReferenceArtifact

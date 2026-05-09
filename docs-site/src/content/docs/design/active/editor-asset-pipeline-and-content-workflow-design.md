@@ -64,7 +64,7 @@ Remaining gaps after M4:
 - no persisted asset catalog file load/save loop or project-owned cache garbage collection workflow;
 - no complete `world_sdf` artifact/cache bridge into runtime chunk/page stores;
 - no dependency graph visualizer, full reimport controls, artifact preview, dirty asset summary, or brick/clipmap diagnostic surface;
-- no material graph, procedural material asset, PBR, triplanar, Texture3D, gameplay graph, particle, physics, animation, or procgen domain crates;
+- no concrete material graph authoring provider, rendered material preview, Texture3D runtime preview/upload adapter, gameplay graph, particle, physics, animation, simulation-process, or procgen domain/runtime implementation;
 - no unified runtime loader mapping from asset artifact ids to all future field, scene, render, UI, graph, script, gameplay, material, procgen, particle, physics, and animation consumers;
 - no raw scalar/vector renderer texture-format expansion beyond the first displayable debug preview products;
 - no marketplace/package workflow.

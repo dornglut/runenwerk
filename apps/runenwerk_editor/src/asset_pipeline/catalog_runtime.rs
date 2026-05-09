@@ -1,12 +1,13 @@
 use std::collections::BTreeSet;
 
 use asset::{
-    ArtifactValidity, AssetArtifactDescriptor, AssetCatalog, AssetDiagnosticRecord, AssetId,
-    AssetKind,
+    ArtifactPayloadKind, ArtifactValidity, AssetArtifactDescriptor, AssetCatalog,
+    AssetDiagnosticRecord, AssetId, AssetKind,
 };
 use editor_preview::{
     ReloadDecision, ReloadStatus, ReloadSubject, RuntimeProductKind, RuntimeProductRef,
 };
+use texture::{TexturePreviewDescriptor, TextureProductId};
 use world_sdf::{FieldProductDescriptor, FieldProductFreshness};
 
 #[derive(Debug, Clone, Default)]
@@ -237,6 +238,88 @@ impl AssetCatalogRuntime {
         ]
     }
 
+    pub fn material_graph_asset_lines(&self) -> Vec<String> {
+        let mut lines = self
+            .catalog
+            .assets()
+            .filter(|record| record.kind == AssetKind::MaterialGraph)
+            .map(|record| {
+                let state = if self.dirty_assets.contains(&record.asset_id) {
+                    "dirty"
+                } else {
+                    "current"
+                };
+                format!(
+                    "material graph asset: {} [{}] artifacts={} {state}",
+                    record.display_name,
+                    record.stable_name,
+                    record.artifact_ids.len()
+                )
+            })
+            .collect::<Vec<_>>();
+        if lines.is_empty() {
+            lines.push("No source-backed material graph assets".to_string());
+        }
+        lines
+    }
+
+    pub fn material_product_lines(&self) -> Vec<String> {
+        let mut lines = self
+            .catalog
+            .artifacts
+            .values()
+            .filter_map(|artifact| match &artifact.payload_kind {
+                ArtifactPayloadKind::FormedMaterialProduct { product_id } => Some(format!(
+                    "formed material product: {product_id} [{:?}] validity={:?} cache={}",
+                    artifact.kind,
+                    artifact.validity,
+                    artifact.cache_key.as_str()
+                )),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if lines.is_empty() {
+            lines.push("No formed material products".to_string());
+        }
+        lines
+    }
+
+    pub fn texture_product_lines(&self) -> Vec<String> {
+        let mut lines = self
+            .catalog
+            .artifacts
+            .values()
+            .filter(|artifact| !artifact_is_volume_texture(artifact))
+            .filter_map(texture_artifact_line)
+            .collect::<Vec<_>>();
+        if lines.is_empty() {
+            lines.push("No Texture2D or generated texture products".to_string());
+        }
+        lines
+    }
+
+    pub fn volume_texture_product_lines(&self) -> Vec<String> {
+        let mut lines = self
+            .catalog
+            .artifacts
+            .values()
+            .filter(|artifact| artifact_is_volume_texture(artifact))
+            .filter_map(texture_artifact_line)
+            .collect::<Vec<_>>();
+        if lines.is_empty() {
+            lines.push("No Texture3D or volume texture products".to_string());
+        }
+        lines
+    }
+
+    pub fn texture_preview_descriptor(&self) -> Option<TexturePreviewDescriptor> {
+        first_texture_product_id(self, false).map(TexturePreviewDescriptor::new)
+    }
+
+    pub fn volume_texture_preview_descriptor(&self) -> Option<TexturePreviewDescriptor> {
+        first_texture_product_id(self, true).map(TexturePreviewDescriptor::new)
+    }
+
     pub fn sdf_brush_lines(&self) -> Vec<String> {
         let mut lines = self
             .catalog
@@ -258,6 +341,55 @@ impl AssetCatalogRuntime {
     }
 }
 
+fn texture_artifact_line(artifact: &AssetArtifactDescriptor) -> Option<String> {
+    match &artifact.payload_kind {
+        ArtifactPayloadKind::TextureProduct {
+            product_id,
+            dimension,
+        } => Some(format!(
+            "texture product: {product_id} dimension={dimension} [{:?}] validity={:?} cache={}",
+            artifact.kind,
+            artifact.validity,
+            artifact.cache_key.as_str()
+        )),
+        ArtifactPayloadKind::GeneratedTextureProduct { product_id } => Some(format!(
+            "generated texture product: {product_id} [{:?}] validity={:?} cache={}",
+            artifact.kind,
+            artifact.validity,
+            artifact.cache_key.as_str()
+        )),
+        _ => None,
+    }
+}
+
+fn artifact_is_volume_texture(artifact: &AssetArtifactDescriptor) -> bool {
+    artifact.kind == AssetKind::Texture3DVolume
+        || matches!(
+            &artifact.payload_kind,
+            ArtifactPayloadKind::TextureProduct { dimension, .. }
+                if dimension.contains("3D") || dimension.contains("Volume")
+        )
+}
+
+fn first_texture_product_id(
+    runtime: &AssetCatalogRuntime,
+    volume_only: bool,
+) -> Option<TextureProductId> {
+    runtime
+        .catalog
+        .artifacts
+        .values()
+        .filter(|artifact| artifact_is_volume_texture(artifact) == volume_only)
+        .filter_map(|artifact| match &artifact.payload_kind {
+            ArtifactPayloadKind::TextureProduct { product_id, .. }
+            | ArtifactPayloadKind::GeneratedTextureProduct { product_id } => {
+                product_id.parse::<u64>().ok().map(TextureProductId::new)
+            }
+            _ => None,
+        })
+        .next()
+}
+
 fn reload_decision_for_kind(kind: AssetKind) -> ReloadDecision {
     match kind {
         AssetKind::Scene
@@ -277,16 +409,15 @@ fn reload_decision_for_kind(kind: AssetKind) -> ReloadDecision {
         | AssetKind::Shortcut
         | AssetKind::WorkspaceDefinition
         | AssetKind::EditorDefinition => ReloadDecision::LiveReload,
-        AssetKind::Prefab | AssetKind::ForeignMeshReferenceArtifact => {
-            ReloadDecision::PreviewSessionRestartRequired
-        }
-        AssetKind::ForeignMeshReferenceSource => ReloadDecision::RuntimeProcessRestartRequired,
-        AssetKind::MaterialGraph
+        AssetKind::Prefab
         | AssetKind::Material
         | AssetKind::ProceduralMaterial
         | AssetKind::ProceduralTexture
         | AssetKind::Texture2D
         | AssetKind::Texture3DVolume
+        | AssetKind::ForeignMeshReferenceArtifact => ReloadDecision::PreviewSessionRestartRequired,
+        AssetKind::ForeignMeshReferenceSource => ReloadDecision::RuntimeProcessRestartRequired,
+        AssetKind::MaterialGraph
         | AssetKind::GameplayGraph
         | AssetKind::GameplayRuleTrigger
         | AssetKind::GameplayAbility
@@ -335,6 +466,10 @@ fn runtime_product_kind_for_asset(kind: AssetKind) -> RuntimeProductKind {
         AssetKind::FormedFieldProduct => RuntimeProductKind::FieldProduct,
         AssetKind::WorldSdfChunkPageArtifact | AssetKind::ClipmapBrickmapProduct => {
             RuntimeProductKind::WorldSdfPayload
+        }
+        AssetKind::Material | AssetKind::ProceduralMaterial => RuntimeProductKind::Material,
+        AssetKind::ProceduralTexture | AssetKind::Texture2D | AssetKind::Texture3DVolume => {
+            RuntimeProductKind::Texture
         }
         AssetKind::Shader => RuntimeProductKind::Shader,
         AssetKind::UiDefinition | AssetKind::UiLayout => RuntimeProductKind::UiDefinition,

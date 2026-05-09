@@ -14,6 +14,8 @@ members = [
     "domain/scheduler",
     "domain/scene",
     "domain/graph",
+    "domain/texture",
+    "domain/material_graph",
 
     "domain/ui/ui_math",
     "domain/ui/ui_input",
@@ -90,5 +92,7 @@ editor_persistence = { path = "domain/editor/editor_persistence" }
 
 ecs = { path = "domain/ecs" }
 graph = { path = "domain/graph" }
+texture = { path = "domain/texture" }
+material_graph = { path = "domain/material_graph" }
 schema = { path = "foundation/schema" }
 commands = { path = "foundation/commands" }

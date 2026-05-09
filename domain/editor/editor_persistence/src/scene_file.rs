@@ -24,6 +24,9 @@ pub enum ScenePrimitiveKind {
     Box,
     Sphere,
     Capsule,
+    Cylinder,
+    Torus,
+    Plane,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

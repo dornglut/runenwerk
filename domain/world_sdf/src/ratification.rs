@@ -11,6 +11,10 @@ pub enum FieldProductIssueCode {
     EmptyProducer,
     RejectedFreshness,
     MissingPayloadRefs,
+    PreviewKindMismatch,
+    PreviewInvalidGridDimensions,
+    PreviewSampleCountMismatch,
+    PreviewChunkOutsideScope,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

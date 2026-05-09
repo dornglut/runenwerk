@@ -170,6 +170,29 @@ pub enum PersistedPanelKindV2 {
     ImportInspector,
     FieldProductViewer,
     SdfBrushBrowser,
+    GraphCanvas,
+    Diagnostics,
+    RuntimeDebug,
+    FieldLayerStack,
+    SdfGraphCanvas,
+    MaterialGraphCanvas,
+    MaterialInspector,
+    MaterialPreview,
+    TextureViewer,
+    VolumeTextureViewer,
+    ProcgenGraphCanvas,
+    ProcgenPreview,
+    GameplayGraphCanvas,
+    GameplayCompilerDiagnostics,
+    ParticleGraphCanvas,
+    ParticlePreview,
+    PhysicsAuthoring,
+    PhysicsDebug,
+    Timeline,
+    CurveEditor,
+    AnimationGraphCanvas,
+    SimulationPreview,
+    SimulationDiagnostics,
     Placeholder,
 }
 
@@ -220,6 +243,29 @@ pub enum PersistedToolSurfaceKindV2 {
     ImportInspector,
     FieldProductViewer,
     SdfBrushBrowser,
+    GraphCanvas,
+    Diagnostics,
+    RuntimeDebug,
+    FieldLayerStack,
+    SdfGraphCanvas,
+    MaterialGraphCanvas,
+    MaterialInspector,
+    MaterialPreview,
+    TextureViewer,
+    VolumeTextureViewer,
+    ProcgenGraphCanvas,
+    ProcgenPreview,
+    GameplayGraphCanvas,
+    GameplayCompilerDiagnostics,
+    ParticleGraphCanvas,
+    ParticlePreview,
+    PhysicsAuthoring,
+    PhysicsDebug,
+    Timeline,
+    CurveEditor,
+    AnimationGraphCanvas,
+    SimulationPreview,
+    SimulationDiagnostics,
     Placeholder,
 }
 
@@ -1065,7 +1111,30 @@ fn persisted_panel_kind(kind: PanelKind) -> PersistedPanelKindV1 {
         | PanelKind::AssetBrowser
         | PanelKind::ImportInspector
         | PanelKind::FieldProductViewer
-        | PanelKind::SdfBrushBrowser => PersistedPanelKindV1::Placeholder,
+        | PanelKind::SdfBrushBrowser
+        | PanelKind::GraphCanvas
+        | PanelKind::Diagnostics
+        | PanelKind::RuntimeDebug
+        | PanelKind::FieldLayerStack
+        | PanelKind::SdfGraphCanvas
+        | PanelKind::MaterialGraphCanvas
+        | PanelKind::MaterialInspector
+        | PanelKind::MaterialPreview
+        | PanelKind::TextureViewer
+        | PanelKind::VolumeTextureViewer
+        | PanelKind::ProcgenGraphCanvas
+        | PanelKind::ProcgenPreview
+        | PanelKind::GameplayGraphCanvas
+        | PanelKind::GameplayCompilerDiagnostics
+        | PanelKind::ParticleGraphCanvas
+        | PanelKind::ParticlePreview
+        | PanelKind::PhysicsAuthoring
+        | PanelKind::PhysicsDebug
+        | PanelKind::Timeline
+        | PanelKind::CurveEditor
+        | PanelKind::AnimationGraphCanvas
+        | PanelKind::SimulationPreview
+        | PanelKind::SimulationDiagnostics => PersistedPanelKindV1::Placeholder,
         PanelKind::Placeholder => PersistedPanelKindV1::Placeholder,
     }
 }
@@ -1092,6 +1161,29 @@ fn persisted_panel_kind_v2(kind: PanelKind) -> PersistedPanelKindV2 {
         PanelKind::ImportInspector => PersistedPanelKindV2::ImportInspector,
         PanelKind::FieldProductViewer => PersistedPanelKindV2::FieldProductViewer,
         PanelKind::SdfBrushBrowser => PersistedPanelKindV2::SdfBrushBrowser,
+        PanelKind::GraphCanvas => PersistedPanelKindV2::GraphCanvas,
+        PanelKind::Diagnostics => PersistedPanelKindV2::Diagnostics,
+        PanelKind::RuntimeDebug => PersistedPanelKindV2::RuntimeDebug,
+        PanelKind::FieldLayerStack => PersistedPanelKindV2::FieldLayerStack,
+        PanelKind::SdfGraphCanvas => PersistedPanelKindV2::SdfGraphCanvas,
+        PanelKind::MaterialGraphCanvas => PersistedPanelKindV2::MaterialGraphCanvas,
+        PanelKind::MaterialInspector => PersistedPanelKindV2::MaterialInspector,
+        PanelKind::MaterialPreview => PersistedPanelKindV2::MaterialPreview,
+        PanelKind::TextureViewer => PersistedPanelKindV2::TextureViewer,
+        PanelKind::VolumeTextureViewer => PersistedPanelKindV2::VolumeTextureViewer,
+        PanelKind::ProcgenGraphCanvas => PersistedPanelKindV2::ProcgenGraphCanvas,
+        PanelKind::ProcgenPreview => PersistedPanelKindV2::ProcgenPreview,
+        PanelKind::GameplayGraphCanvas => PersistedPanelKindV2::GameplayGraphCanvas,
+        PanelKind::GameplayCompilerDiagnostics => PersistedPanelKindV2::GameplayCompilerDiagnostics,
+        PanelKind::ParticleGraphCanvas => PersistedPanelKindV2::ParticleGraphCanvas,
+        PanelKind::ParticlePreview => PersistedPanelKindV2::ParticlePreview,
+        PanelKind::PhysicsAuthoring => PersistedPanelKindV2::PhysicsAuthoring,
+        PanelKind::PhysicsDebug => PersistedPanelKindV2::PhysicsDebug,
+        PanelKind::Timeline => PersistedPanelKindV2::Timeline,
+        PanelKind::CurveEditor => PersistedPanelKindV2::CurveEditor,
+        PanelKind::AnimationGraphCanvas => PersistedPanelKindV2::AnimationGraphCanvas,
+        PanelKind::SimulationPreview => PersistedPanelKindV2::SimulationPreview,
+        PanelKind::SimulationDiagnostics => PersistedPanelKindV2::SimulationDiagnostics,
         PanelKind::Placeholder => PersistedPanelKindV2::Placeholder,
     }
 }
@@ -1128,6 +1220,29 @@ fn workspace_panel_kind_v2(kind: PersistedPanelKindV2) -> PanelKind {
         PersistedPanelKindV2::ImportInspector => PanelKind::ImportInspector,
         PersistedPanelKindV2::FieldProductViewer => PanelKind::FieldProductViewer,
         PersistedPanelKindV2::SdfBrushBrowser => PanelKind::SdfBrushBrowser,
+        PersistedPanelKindV2::GraphCanvas => PanelKind::GraphCanvas,
+        PersistedPanelKindV2::Diagnostics => PanelKind::Diagnostics,
+        PersistedPanelKindV2::RuntimeDebug => PanelKind::RuntimeDebug,
+        PersistedPanelKindV2::FieldLayerStack => PanelKind::FieldLayerStack,
+        PersistedPanelKindV2::SdfGraphCanvas => PanelKind::SdfGraphCanvas,
+        PersistedPanelKindV2::MaterialGraphCanvas => PanelKind::MaterialGraphCanvas,
+        PersistedPanelKindV2::MaterialInspector => PanelKind::MaterialInspector,
+        PersistedPanelKindV2::MaterialPreview => PanelKind::MaterialPreview,
+        PersistedPanelKindV2::TextureViewer => PanelKind::TextureViewer,
+        PersistedPanelKindV2::VolumeTextureViewer => PanelKind::VolumeTextureViewer,
+        PersistedPanelKindV2::ProcgenGraphCanvas => PanelKind::ProcgenGraphCanvas,
+        PersistedPanelKindV2::ProcgenPreview => PanelKind::ProcgenPreview,
+        PersistedPanelKindV2::GameplayGraphCanvas => PanelKind::GameplayGraphCanvas,
+        PersistedPanelKindV2::GameplayCompilerDiagnostics => PanelKind::GameplayCompilerDiagnostics,
+        PersistedPanelKindV2::ParticleGraphCanvas => PanelKind::ParticleGraphCanvas,
+        PersistedPanelKindV2::ParticlePreview => PanelKind::ParticlePreview,
+        PersistedPanelKindV2::PhysicsAuthoring => PanelKind::PhysicsAuthoring,
+        PersistedPanelKindV2::PhysicsDebug => PanelKind::PhysicsDebug,
+        PersistedPanelKindV2::Timeline => PanelKind::Timeline,
+        PersistedPanelKindV2::CurveEditor => PanelKind::CurveEditor,
+        PersistedPanelKindV2::AnimationGraphCanvas => PanelKind::AnimationGraphCanvas,
+        PersistedPanelKindV2::SimulationPreview => PanelKind::SimulationPreview,
+        PersistedPanelKindV2::SimulationDiagnostics => PanelKind::SimulationDiagnostics,
         PersistedPanelKindV2::Placeholder => PanelKind::Placeholder,
     }
 }
@@ -1182,6 +1297,31 @@ impl From<PersistedPanelKindV2> for String {
             PersistedPanelKindV2::ImportInspector => "import_inspector".to_string(),
             PersistedPanelKindV2::FieldProductViewer => "field_product_viewer".to_string(),
             PersistedPanelKindV2::SdfBrushBrowser => "sdf_brush_browser".to_string(),
+            PersistedPanelKindV2::GraphCanvas => "graph_canvas".to_string(),
+            PersistedPanelKindV2::Diagnostics => "diagnostics".to_string(),
+            PersistedPanelKindV2::RuntimeDebug => "runtime_debug".to_string(),
+            PersistedPanelKindV2::FieldLayerStack => "field_layer_stack".to_string(),
+            PersistedPanelKindV2::SdfGraphCanvas => "sdf_graph_canvas".to_string(),
+            PersistedPanelKindV2::MaterialGraphCanvas => "material_graph_canvas".to_string(),
+            PersistedPanelKindV2::MaterialInspector => "material_inspector".to_string(),
+            PersistedPanelKindV2::MaterialPreview => "material_preview".to_string(),
+            PersistedPanelKindV2::TextureViewer => "texture_viewer".to_string(),
+            PersistedPanelKindV2::VolumeTextureViewer => "volume_texture_viewer".to_string(),
+            PersistedPanelKindV2::ProcgenGraphCanvas => "procgen_graph_canvas".to_string(),
+            PersistedPanelKindV2::ProcgenPreview => "procgen_preview".to_string(),
+            PersistedPanelKindV2::GameplayGraphCanvas => "gameplay_graph_canvas".to_string(),
+            PersistedPanelKindV2::GameplayCompilerDiagnostics => {
+                "gameplay_compiler_diagnostics".to_string()
+            }
+            PersistedPanelKindV2::ParticleGraphCanvas => "particle_graph_canvas".to_string(),
+            PersistedPanelKindV2::ParticlePreview => "particle_preview".to_string(),
+            PersistedPanelKindV2::PhysicsAuthoring => "physics_authoring".to_string(),
+            PersistedPanelKindV2::PhysicsDebug => "physics_debug".to_string(),
+            PersistedPanelKindV2::Timeline => "timeline".to_string(),
+            PersistedPanelKindV2::CurveEditor => "curve_editor".to_string(),
+            PersistedPanelKindV2::AnimationGraphCanvas => "animation_graph_canvas".to_string(),
+            PersistedPanelKindV2::SimulationPreview => "simulation_preview".to_string(),
+            PersistedPanelKindV2::SimulationDiagnostics => "simulation_diagnostics".to_string(),
             PersistedPanelKindV2::Placeholder => "placeholder".to_string(),
         }
     }
@@ -1212,6 +1352,29 @@ impl TryFrom<String> for PersistedPanelKindV2 {
             "import_inspector" => Ok(Self::ImportInspector),
             "field_product_viewer" => Ok(Self::FieldProductViewer),
             "sdf_brush_browser" => Ok(Self::SdfBrushBrowser),
+            "graph_canvas" => Ok(Self::GraphCanvas),
+            "diagnostics" => Ok(Self::Diagnostics),
+            "runtime_debug" => Ok(Self::RuntimeDebug),
+            "field_layer_stack" => Ok(Self::FieldLayerStack),
+            "sdf_graph_canvas" => Ok(Self::SdfGraphCanvas),
+            "material_graph_canvas" => Ok(Self::MaterialGraphCanvas),
+            "material_inspector" => Ok(Self::MaterialInspector),
+            "material_preview" => Ok(Self::MaterialPreview),
+            "texture_viewer" => Ok(Self::TextureViewer),
+            "volume_texture_viewer" => Ok(Self::VolumeTextureViewer),
+            "procgen_graph_canvas" => Ok(Self::ProcgenGraphCanvas),
+            "procgen_preview" => Ok(Self::ProcgenPreview),
+            "gameplay_graph_canvas" => Ok(Self::GameplayGraphCanvas),
+            "gameplay_compiler_diagnostics" => Ok(Self::GameplayCompilerDiagnostics),
+            "particle_graph_canvas" => Ok(Self::ParticleGraphCanvas),
+            "particle_preview" => Ok(Self::ParticlePreview),
+            "physics_authoring" => Ok(Self::PhysicsAuthoring),
+            "physics_debug" => Ok(Self::PhysicsDebug),
+            "timeline" => Ok(Self::Timeline),
+            "curve_editor" => Ok(Self::CurveEditor),
+            "animation_graph_canvas" => Ok(Self::AnimationGraphCanvas),
+            "simulation_preview" => Ok(Self::SimulationPreview),
+            "simulation_diagnostics" => Ok(Self::SimulationDiagnostics),
             "placeholder" => Ok(Self::Placeholder),
             other => Err(format!("unsupported panel kind: {other}")),
         }
@@ -1239,7 +1402,30 @@ fn persisted_tool_surface_kind(kind: ToolSurfaceKind) -> PersistedToolSurfaceKin
         | ToolSurfaceKind::AssetBrowser
         | ToolSurfaceKind::ImportInspector
         | ToolSurfaceKind::FieldProductViewer
-        | ToolSurfaceKind::SdfBrushBrowser => PersistedToolSurfaceKindV1::Placeholder,
+        | ToolSurfaceKind::SdfBrushBrowser
+        | ToolSurfaceKind::GraphCanvas
+        | ToolSurfaceKind::Diagnostics
+        | ToolSurfaceKind::RuntimeDebug
+        | ToolSurfaceKind::FieldLayerStack
+        | ToolSurfaceKind::SdfGraphCanvas
+        | ToolSurfaceKind::MaterialGraphCanvas
+        | ToolSurfaceKind::MaterialInspector
+        | ToolSurfaceKind::MaterialPreview
+        | ToolSurfaceKind::TextureViewer
+        | ToolSurfaceKind::VolumeTextureViewer
+        | ToolSurfaceKind::ProcgenGraphCanvas
+        | ToolSurfaceKind::ProcgenPreview
+        | ToolSurfaceKind::GameplayGraphCanvas
+        | ToolSurfaceKind::GameplayCompilerDiagnostics
+        | ToolSurfaceKind::ParticleGraphCanvas
+        | ToolSurfaceKind::ParticlePreview
+        | ToolSurfaceKind::PhysicsAuthoring
+        | ToolSurfaceKind::PhysicsDebug
+        | ToolSurfaceKind::Timeline
+        | ToolSurfaceKind::CurveEditor
+        | ToolSurfaceKind::AnimationGraphCanvas
+        | ToolSurfaceKind::SimulationPreview
+        | ToolSurfaceKind::SimulationDiagnostics => PersistedToolSurfaceKindV1::Placeholder,
         ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV1::Placeholder,
     }
 }
@@ -1266,6 +1452,31 @@ fn persisted_tool_surface_kind_v2(kind: ToolSurfaceKind) -> PersistedToolSurface
         ToolSurfaceKind::ImportInspector => PersistedToolSurfaceKindV2::ImportInspector,
         ToolSurfaceKind::FieldProductViewer => PersistedToolSurfaceKindV2::FieldProductViewer,
         ToolSurfaceKind::SdfBrushBrowser => PersistedToolSurfaceKindV2::SdfBrushBrowser,
+        ToolSurfaceKind::GraphCanvas => PersistedToolSurfaceKindV2::GraphCanvas,
+        ToolSurfaceKind::Diagnostics => PersistedToolSurfaceKindV2::Diagnostics,
+        ToolSurfaceKind::RuntimeDebug => PersistedToolSurfaceKindV2::RuntimeDebug,
+        ToolSurfaceKind::FieldLayerStack => PersistedToolSurfaceKindV2::FieldLayerStack,
+        ToolSurfaceKind::SdfGraphCanvas => PersistedToolSurfaceKindV2::SdfGraphCanvas,
+        ToolSurfaceKind::MaterialGraphCanvas => PersistedToolSurfaceKindV2::MaterialGraphCanvas,
+        ToolSurfaceKind::MaterialInspector => PersistedToolSurfaceKindV2::MaterialInspector,
+        ToolSurfaceKind::MaterialPreview => PersistedToolSurfaceKindV2::MaterialPreview,
+        ToolSurfaceKind::TextureViewer => PersistedToolSurfaceKindV2::TextureViewer,
+        ToolSurfaceKind::VolumeTextureViewer => PersistedToolSurfaceKindV2::VolumeTextureViewer,
+        ToolSurfaceKind::ProcgenGraphCanvas => PersistedToolSurfaceKindV2::ProcgenGraphCanvas,
+        ToolSurfaceKind::ProcgenPreview => PersistedToolSurfaceKindV2::ProcgenPreview,
+        ToolSurfaceKind::GameplayGraphCanvas => PersistedToolSurfaceKindV2::GameplayGraphCanvas,
+        ToolSurfaceKind::GameplayCompilerDiagnostics => {
+            PersistedToolSurfaceKindV2::GameplayCompilerDiagnostics
+        }
+        ToolSurfaceKind::ParticleGraphCanvas => PersistedToolSurfaceKindV2::ParticleGraphCanvas,
+        ToolSurfaceKind::ParticlePreview => PersistedToolSurfaceKindV2::ParticlePreview,
+        ToolSurfaceKind::PhysicsAuthoring => PersistedToolSurfaceKindV2::PhysicsAuthoring,
+        ToolSurfaceKind::PhysicsDebug => PersistedToolSurfaceKindV2::PhysicsDebug,
+        ToolSurfaceKind::Timeline => PersistedToolSurfaceKindV2::Timeline,
+        ToolSurfaceKind::CurveEditor => PersistedToolSurfaceKindV2::CurveEditor,
+        ToolSurfaceKind::AnimationGraphCanvas => PersistedToolSurfaceKindV2::AnimationGraphCanvas,
+        ToolSurfaceKind::SimulationPreview => PersistedToolSurfaceKindV2::SimulationPreview,
+        ToolSurfaceKind::SimulationDiagnostics => PersistedToolSurfaceKindV2::SimulationDiagnostics,
         ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV2::Placeholder,
     }
 }
@@ -1302,6 +1513,31 @@ fn workspace_tool_surface_kind_v2(kind: PersistedToolSurfaceKindV2) -> ToolSurfa
         PersistedToolSurfaceKindV2::ImportInspector => ToolSurfaceKind::ImportInspector,
         PersistedToolSurfaceKindV2::FieldProductViewer => ToolSurfaceKind::FieldProductViewer,
         PersistedToolSurfaceKindV2::SdfBrushBrowser => ToolSurfaceKind::SdfBrushBrowser,
+        PersistedToolSurfaceKindV2::GraphCanvas => ToolSurfaceKind::GraphCanvas,
+        PersistedToolSurfaceKindV2::Diagnostics => ToolSurfaceKind::Diagnostics,
+        PersistedToolSurfaceKindV2::RuntimeDebug => ToolSurfaceKind::RuntimeDebug,
+        PersistedToolSurfaceKindV2::FieldLayerStack => ToolSurfaceKind::FieldLayerStack,
+        PersistedToolSurfaceKindV2::SdfGraphCanvas => ToolSurfaceKind::SdfGraphCanvas,
+        PersistedToolSurfaceKindV2::MaterialGraphCanvas => ToolSurfaceKind::MaterialGraphCanvas,
+        PersistedToolSurfaceKindV2::MaterialInspector => ToolSurfaceKind::MaterialInspector,
+        PersistedToolSurfaceKindV2::MaterialPreview => ToolSurfaceKind::MaterialPreview,
+        PersistedToolSurfaceKindV2::TextureViewer => ToolSurfaceKind::TextureViewer,
+        PersistedToolSurfaceKindV2::VolumeTextureViewer => ToolSurfaceKind::VolumeTextureViewer,
+        PersistedToolSurfaceKindV2::ProcgenGraphCanvas => ToolSurfaceKind::ProcgenGraphCanvas,
+        PersistedToolSurfaceKindV2::ProcgenPreview => ToolSurfaceKind::ProcgenPreview,
+        PersistedToolSurfaceKindV2::GameplayGraphCanvas => ToolSurfaceKind::GameplayGraphCanvas,
+        PersistedToolSurfaceKindV2::GameplayCompilerDiagnostics => {
+            ToolSurfaceKind::GameplayCompilerDiagnostics
+        }
+        PersistedToolSurfaceKindV2::ParticleGraphCanvas => ToolSurfaceKind::ParticleGraphCanvas,
+        PersistedToolSurfaceKindV2::ParticlePreview => ToolSurfaceKind::ParticlePreview,
+        PersistedToolSurfaceKindV2::PhysicsAuthoring => ToolSurfaceKind::PhysicsAuthoring,
+        PersistedToolSurfaceKindV2::PhysicsDebug => ToolSurfaceKind::PhysicsDebug,
+        PersistedToolSurfaceKindV2::Timeline => ToolSurfaceKind::Timeline,
+        PersistedToolSurfaceKindV2::CurveEditor => ToolSurfaceKind::CurveEditor,
+        PersistedToolSurfaceKindV2::AnimationGraphCanvas => ToolSurfaceKind::AnimationGraphCanvas,
+        PersistedToolSurfaceKindV2::SimulationPreview => ToolSurfaceKind::SimulationPreview,
+        PersistedToolSurfaceKindV2::SimulationDiagnostics => ToolSurfaceKind::SimulationDiagnostics,
         PersistedToolSurfaceKindV2::Placeholder => ToolSurfaceKind::Placeholder,
     }
 }
@@ -1358,6 +1594,35 @@ impl From<PersistedToolSurfaceKindV2> for String {
             PersistedToolSurfaceKindV2::ImportInspector => "import_inspector".to_string(),
             PersistedToolSurfaceKindV2::FieldProductViewer => "field_product_viewer".to_string(),
             PersistedToolSurfaceKindV2::SdfBrushBrowser => "sdf_brush_browser".to_string(),
+            PersistedToolSurfaceKindV2::GraphCanvas => "graph_canvas".to_string(),
+            PersistedToolSurfaceKindV2::Diagnostics => "diagnostics".to_string(),
+            PersistedToolSurfaceKindV2::RuntimeDebug => "runtime_debug".to_string(),
+            PersistedToolSurfaceKindV2::FieldLayerStack => "field_layer_stack".to_string(),
+            PersistedToolSurfaceKindV2::SdfGraphCanvas => "sdf_graph_canvas".to_string(),
+            PersistedToolSurfaceKindV2::MaterialGraphCanvas => "material_graph_canvas".to_string(),
+            PersistedToolSurfaceKindV2::MaterialInspector => "material_inspector".to_string(),
+            PersistedToolSurfaceKindV2::MaterialPreview => "material_preview".to_string(),
+            PersistedToolSurfaceKindV2::TextureViewer => "texture_viewer".to_string(),
+            PersistedToolSurfaceKindV2::VolumeTextureViewer => "volume_texture_viewer".to_string(),
+            PersistedToolSurfaceKindV2::ProcgenGraphCanvas => "procgen_graph_canvas".to_string(),
+            PersistedToolSurfaceKindV2::ProcgenPreview => "procgen_preview".to_string(),
+            PersistedToolSurfaceKindV2::GameplayGraphCanvas => "gameplay_graph_canvas".to_string(),
+            PersistedToolSurfaceKindV2::GameplayCompilerDiagnostics => {
+                "gameplay_compiler_diagnostics".to_string()
+            }
+            PersistedToolSurfaceKindV2::ParticleGraphCanvas => "particle_graph_canvas".to_string(),
+            PersistedToolSurfaceKindV2::ParticlePreview => "particle_preview".to_string(),
+            PersistedToolSurfaceKindV2::PhysicsAuthoring => "physics_authoring".to_string(),
+            PersistedToolSurfaceKindV2::PhysicsDebug => "physics_debug".to_string(),
+            PersistedToolSurfaceKindV2::Timeline => "timeline".to_string(),
+            PersistedToolSurfaceKindV2::CurveEditor => "curve_editor".to_string(),
+            PersistedToolSurfaceKindV2::AnimationGraphCanvas => {
+                "animation_graph_canvas".to_string()
+            }
+            PersistedToolSurfaceKindV2::SimulationPreview => "simulation_preview".to_string(),
+            PersistedToolSurfaceKindV2::SimulationDiagnostics => {
+                "simulation_diagnostics".to_string()
+            }
             PersistedToolSurfaceKindV2::Placeholder => "placeholder".to_string(),
         }
     }
@@ -1388,6 +1653,29 @@ impl TryFrom<String> for PersistedToolSurfaceKindV2 {
             "import_inspector" => Ok(Self::ImportInspector),
             "field_product_viewer" => Ok(Self::FieldProductViewer),
             "sdf_brush_browser" => Ok(Self::SdfBrushBrowser),
+            "graph_canvas" => Ok(Self::GraphCanvas),
+            "diagnostics" => Ok(Self::Diagnostics),
+            "runtime_debug" => Ok(Self::RuntimeDebug),
+            "field_layer_stack" => Ok(Self::FieldLayerStack),
+            "sdf_graph_canvas" => Ok(Self::SdfGraphCanvas),
+            "material_graph_canvas" => Ok(Self::MaterialGraphCanvas),
+            "material_inspector" => Ok(Self::MaterialInspector),
+            "material_preview" => Ok(Self::MaterialPreview),
+            "texture_viewer" => Ok(Self::TextureViewer),
+            "volume_texture_viewer" => Ok(Self::VolumeTextureViewer),
+            "procgen_graph_canvas" => Ok(Self::ProcgenGraphCanvas),
+            "procgen_preview" => Ok(Self::ProcgenPreview),
+            "gameplay_graph_canvas" => Ok(Self::GameplayGraphCanvas),
+            "gameplay_compiler_diagnostics" => Ok(Self::GameplayCompilerDiagnostics),
+            "particle_graph_canvas" => Ok(Self::ParticleGraphCanvas),
+            "particle_preview" => Ok(Self::ParticlePreview),
+            "physics_authoring" => Ok(Self::PhysicsAuthoring),
+            "physics_debug" => Ok(Self::PhysicsDebug),
+            "timeline" => Ok(Self::Timeline),
+            "curve_editor" => Ok(Self::CurveEditor),
+            "animation_graph_canvas" => Ok(Self::AnimationGraphCanvas),
+            "simulation_preview" => Ok(Self::SimulationPreview),
+            "simulation_diagnostics" => Ok(Self::SimulationDiagnostics),
             "placeholder" => Ok(Self::Placeholder),
             other => Err(format!("unsupported tool-surface kind: {other}")),
         }

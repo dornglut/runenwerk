@@ -22,6 +22,7 @@ impl EditorSurfaceProvider for FieldProductViewerProvider {
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
         let mut lines = context.app.asset_catalog_runtime().field_product_lines();
+        lines.extend(context.app.sdf_operation_workspace().field_preview_lines());
         if context
             .app
             .asset_catalog_runtime()
