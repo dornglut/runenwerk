@@ -37,7 +37,7 @@ As of the audited repository state:
 - Viewport slot semantic ownership is in `editor_viewport`; renderer-facing embed payload slots are opaque IDs in `ui_render_data`, mapped through integration adapters.
 - Core shell control flows (outliner entity selection, viewport product selection, inspector field activation) now route through prepared `SurfacePresentationModel` + typed `SurfaceIntent` + host-side ratification adapters.
 - Engine overlay/debug UI paths now route through substrate frame generation (`ui_runtime::build_ui_frame`) instead of ad hoc primitive assembly.
-- `domain/ui/ui_definition` now provides the first authored UI definition and retained formation layer. Toolbar/menu structure, normal shell chrome, and console surface structure form through checked-in definitions, while broader workspace/profile defaults and richer unavailable editor feature representation still need follow-up hardening.
+- `domain/ui/ui_definition` now provides the first authored UI definition and retained formation layer. Toolbar/menu structure, normal shell chrome, and console surface structure form through checked-in definitions. Authored scroll nodes support explicit horizontal, vertical, or two-axis behavior with per-axis input policy, while broader workspace/profile defaults and richer unavailable editor feature representation still need follow-up hardening.
 - Prior fallback seams removed:
   - no `first_frame()`-based routing in editor runtime systems
   - no `ViewportId(0)` fallback in shell viewport adapter
@@ -64,7 +64,7 @@ As of the audited repository state:
 - `domain/ui/ui_tree`
   - retained tree contracts (`WidgetId`, node kinds/payloads, anchored popup nodes with explicit layer order, tree traversal, computed layout records).
 - `domain/ui/ui_runtime`
-  - retained runtime orchestration (layout engine, anchored popup layout/hit-testing, input routing, popup overlay layer ordering, runtime state, frame output generation). Button hit testing uses the full button bounds, including padding, while text and other content layout still uses content bounds. Scrollbars are overlay primitives: scroll layout no longer reserves a permanent gutter, and scrollbar primitives are emitted only for active scroll interaction state.
+  - retained runtime orchestration (layout engine, anchored popup layout/hit-testing, input routing, popup overlay layer ordering, runtime state, frame output generation). Button hit testing uses the full button bounds, including padding, while text and other content layout still uses content bounds. Scrollbars are overlay primitives: scroll layout no longer reserves a permanent gutter, two-axis scroll containers keep horizontal and vertical offsets independent, and scrollbar primitives are emitted only for active scroll interaction state. In two-axis containers, scrollbar visibility is tracked per axis: vertical wheel activity reveals only the vertical bar, horizontal middle-drag activity reveals only the horizontal bar, and viewport hover does not reveal every scrollbar.
 - `domain/ui/ui_widgets`
   - ergonomic widget/control constructors over `ui_tree` node contracts.
 

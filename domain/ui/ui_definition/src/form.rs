@@ -4,6 +4,7 @@ use crate::{
     AuthoredUiNodePath, FormedUiEmbed, NormalizedUiTemplate, UiAvailability, UiAvailabilityBinding,
     UiAvailabilityId, UiAxisDefinition, UiCollectionItem, UiCollectionSlotId,
     UiDefinitionDiagnostic, UiEmbedSlotId, UiMenuSlotId, UiNodeDefinition, UiNodeId, UiRouteSlotId,
+    UiScrollAxisDefinition, UiScrollInputDefinition, UiScrollInputPolicyDefinition,
     UiSelectionSlotId, UiValue, UiValueBinding, UiValueSlotId,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,9 +15,9 @@ use ui_text::FontId;
 use ui_theme::ThemeTokens;
 use ui_tree::{TableColumn, TableRow, TreeRow, UiNode, UiNodeKind, WidgetId};
 use ui_widgets::{
-    NumericInputConfig, button_selected, hdivider, hscroll, hstack_with_policies, label,
-    numeric_input, panel, select, split, table, tabs, text_input, toggle, tree, vdivider,
-    viewport_surface_embed, vscroll, vstack_with_policies,
+    NumericInputConfig, ScrollInputPolicies, ScrollInputPolicy, button_selected, hdivider, hscroll,
+    hstack_with_policies, label, numeric_input, panel, select, split, table, tabs, text_input,
+    toggle, tree, vdivider, viewport_surface_embed, vscroll, vstack_with_policies, xy_scroll,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,12 +164,26 @@ fn form_node(
             vec![SizePolicy::Auto; children.len()],
             form_children(children, path, template, context, state),
         ),
-        UiNodeDefinition::Scroll { axis, children, .. } => {
+        UiNodeDefinition::Scroll {
+            axis,
+            input,
+            children,
+            ..
+        } => {
             let formed = form_children(children, path, template, context, state);
-            match axis {
-                UiAxisDefinition::Horizontal => hscroll(widget_id, context.theme.clone(), formed),
-                UiAxisDefinition::Vertical => vscroll(widget_id, context.theme.clone(), formed),
+            let mut node = match axis {
+                UiScrollAxisDefinition::Horizontal => {
+                    hscroll(widget_id, context.theme.clone(), formed)
+                }
+                UiScrollAxisDefinition::Vertical => {
+                    vscroll(widget_id, context.theme.clone(), formed)
+                }
+                UiScrollAxisDefinition::Both => xy_scroll(widget_id, context.theme.clone(), formed),
+            };
+            if let UiNodeKind::Scroll(scroll) = &mut node.kind {
+                scroll.input_policies = scroll_input_policies(*input);
             }
+            node
         }
         UiNodeDefinition::Split {
             axis,
@@ -849,6 +864,21 @@ fn axis_to_runtime(axis: UiAxisDefinition) -> Axis {
     }
 }
 
+fn scroll_input_policies(input: UiScrollInputDefinition) -> ScrollInputPolicies {
+    ScrollInputPolicies::new(
+        scroll_input_policy(input.horizontal),
+        scroll_input_policy(input.vertical),
+    )
+}
+
+fn scroll_input_policy(input: UiScrollInputPolicyDefinition) -> ScrollInputPolicy {
+    match input {
+        UiScrollInputPolicyDefinition::WheelOnly => ScrollInputPolicy::WheelOnly,
+        UiScrollInputPolicyDefinition::MiddleDragOnly => ScrollInputPolicy::MiddleDragOnly,
+        UiScrollInputPolicyDefinition::WheelAndMiddleDrag => ScrollInputPolicy::WheelAndMiddleDrag,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -877,6 +907,44 @@ mod tests {
         let product = form_retained_ui(&normalized, &mut context);
         assert!(product.routes_by_widget_id.is_empty());
         assert!(matches!(product.root.kind, UiNodeKind::Button(_)));
+    }
+
+    #[test]
+    fn two_axis_scroll_forms_with_explicit_input_policy() {
+        let template = AuthoredUiTemplate {
+            id: "test.scroll".into(),
+            root: UiNodeDefinition::Scroll {
+                id: UiNodeId::from("root"),
+                axis: UiScrollAxisDefinition::Both,
+                input: UiScrollInputDefinition {
+                    horizontal: UiScrollInputPolicyDefinition::MiddleDragOnly,
+                    vertical: UiScrollInputPolicyDefinition::WheelOnly,
+                },
+                children: vec![UiNodeDefinition::Label {
+                    id: "entry".into(),
+                    label: UiValueBinding::static_text("line"),
+                    availability: None,
+                }],
+            },
+            templates: Vec::new(),
+            menus: Vec::new(),
+        };
+        let normalized = crate::normalize_authored_template(template);
+        let mut context = UiDefinitionContext::new(ThemeTokens::default());
+
+        let product = form_retained_ui(&normalized, &mut context);
+
+        let UiNodeKind::Scroll(scroll) = product.root.kind else {
+            panic!("scroll definition should form a retained scroll node");
+        };
+        assert_eq!(scroll.axes, ui_widgets::ScrollAxes::Both);
+        assert_eq!(
+            scroll.input_policies,
+            ScrollInputPolicies::new(
+                ScrollInputPolicy::MiddleDragOnly,
+                ScrollInputPolicy::WheelOnly,
+            )
+        );
     }
 
     #[test]

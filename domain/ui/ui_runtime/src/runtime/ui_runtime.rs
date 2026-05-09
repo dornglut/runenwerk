@@ -5,7 +5,7 @@ use ui_input::{
     EventPropagation, FocusChange, FocusTargetId, InputResponse, Key, KeyState, PointerCapture,
     UiInputEvent,
 };
-use ui_math::{UiRect, UiSize};
+use ui_math::{Axis, UiRect, UiSize};
 use ui_render_data::UiFrame;
 use ui_text::FontAtlasSource;
 
@@ -52,6 +52,15 @@ impl UiRuntime {
         self.state.set_scroll_offset(widget_id, offset);
     }
 
+    pub fn scroll_offset_for_axis(&self, widget_id: WidgetId, axis: Axis) -> f32 {
+        self.state.scroll_offset_for_axis(widget_id, axis)
+    }
+
+    pub fn set_scroll_offset_for_axis(&mut self, widget_id: WidgetId, axis: Axis, offset: f32) {
+        self.state
+            .set_scroll_offset_for_axis(widget_id, axis, offset);
+    }
+
     pub fn begin_frame(&mut self) {
         self.state.hovered_widget = None;
     }
@@ -86,10 +95,11 @@ impl UiRuntime {
             hovered_widget: self.state.hovered_widget,
             pressed_widget: self.state.pressed_widget,
             focused_widget: self.state.focused_target.map(|value| WidgetId(value.0)),
-            active_scrollbar_widget: self
+            hovered_scrollbar: self.state.hovered_scrollbar,
+            active_scrollbar: self
                 .state
                 .scrollbar_thumb_drag
-                .map(|drag| drag.scroll_widget),
+                .map(|drag| crate::ScrollbarAxisTarget::new(drag.scroll_widget, drag.axis)),
             scrollbar_opacity_by_widget_id: self.state.scrollbar_opacity_entries(),
         };
         build_ui_frame(
@@ -107,8 +117,18 @@ impl UiRuntime {
         bounds: UiRect,
         scroll_widget: WidgetId,
     ) -> Option<f32> {
+        self.max_scroll_offset_for_axis(tree, bounds, scroll_widget, Axis::Vertical)
+    }
+
+    pub fn max_scroll_offset_for_axis(
+        &self,
+        tree: &UiTree,
+        bounds: UiRect,
+        scroll_widget: WidgetId,
+        axis: Axis,
+    ) -> Option<f32> {
         let layouts = self.compute_layout(tree, bounds);
-        self.max_scroll_offset_for_layout(tree, &layouts, scroll_widget)
+        self.max_scroll_offset_for_layout_axis(tree, &layouts, scroll_widget, axis)
     }
 
     pub fn max_scroll_offset_for_layout(
@@ -117,20 +137,33 @@ impl UiRuntime {
         layouts: &ComputedLayoutMap,
         scroll_widget: WidgetId,
     ) -> Option<f32> {
+        self.max_scroll_offset_for_layout_axis(tree, layouts, scroll_widget, Axis::Vertical)
+    }
+
+    pub fn max_scroll_offset_for_layout_axis(
+        &self,
+        tree: &UiTree,
+        layouts: &ComputedLayoutMap,
+        scroll_widget: WidgetId,
+        axis: Axis,
+    ) -> Option<f32> {
         let scroll_layout = layouts.get(&scroll_widget)?;
         let scroll_node = tree.walk().find(|node| node.id == scroll_widget)?;
         let UiNodeKind::Scroll(scroll) = &scroll_node.kind else {
             return None;
         };
+        if !scroll.axes.contains(axis) {
+            return None;
+        }
         let child_id = scroll_node.children.first()?.id;
         let child_layout = layouts.get(&child_id)?;
-        match scroll.axis {
-            ui_math::Axis::Vertical => {
+        match axis {
+            Axis::Vertical => {
                 let viewport_height = scroll_layout.content_bounds.height.max(0.0);
                 let content_height = child_layout.bounds.height.max(viewport_height);
                 Some((content_height - viewport_height).max(0.0))
             }
-            ui_math::Axis::Horizontal => {
+            Axis::Horizontal => {
                 let viewport_width = scroll_layout.content_bounds.width.max(0.0);
                 let content_width = child_layout.bounds.width.max(viewport_width);
                 Some((content_width - viewport_width).max(0.0))
@@ -356,16 +389,17 @@ fn outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::output::build_ui_frame::scrollbar_geometry;
+    use crate::output::build_ui_frame::{scrollbar_geometry, scrollbar_geometry_for_axis};
     use crate::{
-        ButtonNode, ImageNode, NumericInputNode, PanelNode, ScrollNode, SpacerNode, StackNode,
-        TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind, ViewportSurfaceEmbedNode,
+        ButtonNode, ImageNode, NumericInputNode, PanelNode, ScrollInputPolicies, ScrollInputPolicy,
+        ScrollNode, SpacerNode, StackNode, TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind,
+        ViewportSurfaceEmbedNode,
     };
     use ui_input::{
         FocusChange, FocusTargetId, Key, KeyState, KeyboardEvent, Modifiers, PointerButton,
         PointerEvent, PointerEventKind, TextInputEvent,
     };
-    use ui_math::{UiPoint, UiRect, UiVector};
+    use ui_math::{Axis, UiPoint, UiRect, UiVector};
     use ui_render_data::ViewportSurfaceEmbedSlotId;
     use ui_text::TextStyle;
     use ui_theme::ThemeTokens;
@@ -465,11 +499,59 @@ mod tests {
             UiNodeKind::Panel(PanelNode::new(theme.clone())),
             vec![UiNode::with_children(
                 scroll_id,
-                UiNodeKind::Scroll(ScrollNode::horizontal(theme.clone())),
+                UiNodeKind::Scroll(
+                    ScrollNode::horizontal(theme.clone())
+                        .with_input_policies(ScrollInputPolicies::default()),
+                ),
                 vec![UiNode::with_children(
                     child_id,
                     UiNodeKind::Stack(StackNode::horizontal(4.0)),
                     columns,
+                )],
+            )],
+        ))
+    }
+
+    fn two_axis_overflow_scroll_tree(
+        scroll_id: WidgetId,
+        child_id: WidgetId,
+        input_policies: ScrollInputPolicies,
+    ) -> UiTree {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let rows = (0..20)
+            .map(|row| {
+                let columns = (0..10)
+                    .map(|column| {
+                        UiNode::new(
+                            WidgetId(20_000 + row * 100 + column),
+                            UiNodeKind::Button(ButtonNode::new(
+                                format!("Cell {row}-{column}"),
+                                text_style.clone(),
+                                theme.clone(),
+                            )),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                UiNode::with_children(
+                    WidgetId(21_000 + row),
+                    UiNodeKind::Stack(StackNode::horizontal(4.0)),
+                    columns,
+                )
+            })
+            .collect::<Vec<_>>();
+        UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                scroll_id,
+                UiNodeKind::Scroll(
+                    ScrollNode::both(theme.clone()).with_input_policies(input_policies),
+                ),
+                vec![UiNode::with_children(
+                    child_id,
+                    UiNodeKind::Stack(StackNode::vertical(2.0)),
+                    rows,
                 )],
             )],
         ))
@@ -1016,7 +1098,7 @@ mod tests {
         );
 
         let max_offset = runtime
-            .max_scroll_offset_for_layout(&tree, &layouts, scroll_id)
+            .max_scroll_offset_for_layout_axis(&tree, &layouts, scroll_id, Axis::Horizontal)
             .expect("horizontal max offset should be computed");
         assert!(max_offset > 0.0, "row should overflow narrow bounds");
 
@@ -1068,11 +1150,136 @@ mod tests {
             }),
         );
 
-        let offset = runtime.state().scroll_offset(scroll_id);
+        let offset = runtime
+            .state()
+            .scroll_offset_for_axis(scroll_id, Axis::Horizontal);
         assert!(offset > 0.0, "horizontal scroll should advance offset");
         assert!(
             offset <= max_offset + 0.001,
             "horizontal scroll offset should clamp to measured content range",
+        );
+    }
+
+    #[test]
+    fn two_axis_scroll_applies_independent_offsets() {
+        let scroll_id = WidgetId(701);
+        let child_id = WidgetId(702);
+        let tree = two_axis_overflow_scroll_tree(
+            scroll_id,
+            child_id,
+            ScrollInputPolicies::new(
+                ScrollInputPolicy::MiddleDragOnly,
+                ScrollInputPolicy::WheelOnly,
+            ),
+        );
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        let initial_layouts = runtime.compute_layout(&tree, bounds);
+        let max_x = runtime
+            .max_scroll_offset_for_layout_axis(&tree, &initial_layouts, scroll_id, Axis::Horizontal)
+            .expect("horizontal max offset should exist");
+        let max_y = runtime
+            .max_scroll_offset_for_layout_axis(&tree, &initial_layouts, scroll_id, Axis::Vertical)
+            .expect("vertical max offset should exist");
+        assert!(
+            max_x > 80.0,
+            "two-axis fixture should overflow horizontally"
+        );
+        assert!(max_y > 60.0, "two-axis fixture should overflow vertically");
+
+        runtime.set_scroll_offset_for_axis(scroll_id, Axis::Horizontal, 80.0);
+        runtime.set_scroll_offset_for_axis(scroll_id, Axis::Vertical, 60.0);
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let scroll_layout = layouts.get(&scroll_id).expect("scroll layout should exist");
+        let child_layout = layouts.get(&child_id).expect("child layout should exist");
+
+        assert!(
+            (child_layout.bounds.x - (scroll_layout.content_bounds.x - 80.0)).abs() <= 0.001,
+            "horizontal offset should translate content independently",
+        );
+        assert!(
+            (child_layout.bounds.y - (scroll_layout.content_bounds.y - 60.0)).abs() <= 0.001,
+            "vertical offset should translate content independently",
+        );
+    }
+
+    #[test]
+    fn two_axis_vertical_scrollbar_stays_pinned_after_horizontal_scroll() {
+        let scroll_id = WidgetId(711);
+        let child_id = WidgetId(712);
+        let tree = two_axis_overflow_scroll_tree(
+            scroll_id,
+            child_id,
+            ScrollInputPolicies::new(
+                ScrollInputPolicy::MiddleDragOnly,
+                ScrollInputPolicy::WheelOnly,
+            ),
+        );
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        runtime.set_scroll_offset_for_axis(scroll_id, Axis::Horizontal, 96.0);
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let scroll_layout = layouts.get(&scroll_id).expect("scroll layout should exist");
+        let geometry = scrollbar_geometry_for_axis(
+            &tree,
+            scroll_id,
+            &layouts,
+            scroll_layout.bounds,
+            scroll_layout.content_bounds,
+            Axis::Vertical,
+        )
+        .expect("two-axis vertical scrollbar should have geometry");
+
+        let expected_x =
+            scroll_layout.bounds.x + scroll_layout.bounds.width - geometry.track_rect.width;
+        assert!(
+            (geometry.track_rect.x - expected_x).abs() <= 0.001,
+            "vertical scrollbar should be pinned to the visible scroll viewport",
+        );
+    }
+
+    #[test]
+    fn two_axis_scrollbar_tracks_do_not_overlap() {
+        let scroll_id = WidgetId(721);
+        let child_id = WidgetId(722);
+        let tree = two_axis_overflow_scroll_tree(
+            scroll_id,
+            child_id,
+            ScrollInputPolicies::new(
+                ScrollInputPolicy::MiddleDragOnly,
+                ScrollInputPolicy::WheelOnly,
+            ),
+        );
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let scroll_layout = layouts.get(&scroll_id).expect("scroll layout should exist");
+        let vertical = scrollbar_geometry_for_axis(
+            &tree,
+            scroll_id,
+            &layouts,
+            scroll_layout.bounds,
+            scroll_layout.content_bounds,
+            Axis::Vertical,
+        )
+        .expect("vertical scrollbar should exist");
+        let horizontal = scrollbar_geometry_for_axis(
+            &tree,
+            scroll_id,
+            &layouts,
+            scroll_layout.bounds,
+            scroll_layout.content_bounds,
+            Axis::Horizontal,
+        )
+        .expect("horizontal scrollbar should exist");
+
+        assert!(
+            vertical.track_rect.y + vertical.track_rect.height <= horizontal.track_rect.y + 0.001,
+            "vertical track should stop above the horizontal track corner",
+        );
+        assert!(
+            horizontal.track_rect.x + horizontal.track_rect.width <= vertical.track_rect.x + 0.001,
+            "horizontal track should stop before the vertical track corner",
         );
     }
 
@@ -1158,7 +1365,10 @@ mod tests {
             UiNodeKind::Panel(PanelNode::new(theme.clone())),
             vec![UiNode::with_children(
                 scroll_id,
-                UiNodeKind::Scroll(ScrollNode::horizontal(theme.clone())),
+                UiNodeKind::Scroll(
+                    ScrollNode::horizontal(theme.clone())
+                        .with_input_policies(ScrollInputPolicies::default()),
+                ),
                 vec![UiNode::with_children(
                     row_id,
                     UiNodeKind::Stack(StackNode::horizontal(4.0)),
@@ -1183,7 +1393,10 @@ mod tests {
             }),
         );
         assert!(
-            runtime.state().scroll_offset(scroll_id) > 0.001,
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Horizontal)
+                > 0.001,
             "vertical wheel should scroll a horizontal-only overflow region",
         );
     }
@@ -1238,7 +1451,10 @@ mod tests {
             }),
         );
         assert!(
-            runtime.state().scroll_offset(scroll_id) > 0.001,
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Horizontal)
+                > 0.001,
             "shift-wheel should scroll horizontally",
         );
     }
@@ -1322,7 +1538,10 @@ mod tests {
         );
 
         assert!(
-            runtime.state().scroll_offset(scroll_id) > 0.0,
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Horizontal)
+                > 0.0,
             "horizontal thumb drag should advance scroll offset",
         );
     }
@@ -1540,6 +1759,322 @@ mod tests {
     }
 
     #[test]
+    fn two_axis_console_policy_uses_wheel_vertical_and_middle_drag_horizontal() {
+        let scroll_id = WidgetId(731);
+        let child_id = WidgetId(732);
+        let tree = two_axis_overflow_scroll_tree(
+            scroll_id,
+            child_id,
+            ScrollInputPolicies::new(
+                ScrollInputPolicy::MiddleDragOnly,
+                ScrollInputPolicy::WheelOnly,
+            ),
+        );
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let start = center_of(&layouts, scroll_id);
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: start,
+                delta: UiVector::new(0.0, -8.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        assert!(
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Vertical)
+                > 0.0,
+            "wheel should scroll the vertical axis",
+        );
+        assert_eq!(
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Horizontal),
+            0.0,
+            "vertical wheel should not move the horizontal axis",
+        );
+        assert_eq!(
+            runtime.state().scrollbar_opacity(scroll_id, Axis::Vertical),
+            1.0,
+            "vertical wheel should reveal the vertical scrollbar",
+        );
+        assert_eq!(
+            runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Horizontal),
+            0.0,
+            "vertical wheel should not reveal the horizontal scrollbar",
+        );
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: start,
+                delta: UiVector::new(-8.0, 0.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        assert_eq!(
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Horizontal),
+            0.0,
+            "horizontal wheel should be blocked by console policy",
+        );
+
+        runtime.set_scroll_offset_for_axis(scroll_id, Axis::Vertical, 0.0);
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let vertical_end = UiPoint::new(start.x, start.y - 40.0);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Middle),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: vertical_end,
+                delta: vertical_end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Up,
+                position: vertical_end,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Middle),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        assert_eq!(
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Vertical),
+            0.0,
+            "middle-drag should not move the vertical axis under console policy",
+        );
+
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let horizontal_end = UiPoint::new(start.x - 40.0, start.y);
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Middle),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: horizontal_end,
+                delta: horizontal_end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        assert!(
+            runtime
+                .state()
+                .scroll_offset_for_axis(scroll_id, Axis::Horizontal)
+                > 0.0,
+            "middle-drag should pan the horizontal axis under console policy",
+        );
+    }
+
+    #[test]
+    fn two_axis_console_policy_reveals_only_changed_scrollbar_axis() {
+        let scroll_id = WidgetId(741);
+        let child_id = WidgetId(742);
+        let tree = two_axis_overflow_scroll_tree(
+            scroll_id,
+            child_id,
+            ScrollInputPolicies::new(
+                ScrollInputPolicy::MiddleDragOnly,
+                ScrollInputPolicy::WheelOnly,
+            ),
+        );
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+
+        let mut vertical_wheel_runtime = UiRuntime::new();
+        let layouts = vertical_wheel_runtime.compute_layout(&tree, bounds);
+        let start = center_of(&layouts, scroll_id);
+        let _ = vertical_wheel_runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: start,
+                delta: UiVector::new(0.0, -8.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        assert_eq!(
+            vertical_wheel_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Vertical),
+            1.0,
+            "vertical wheel should reveal the vertical scrollbar",
+        );
+        assert_eq!(
+            vertical_wheel_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Horizontal),
+            0.0,
+            "vertical wheel should leave the horizontal scrollbar hidden",
+        );
+
+        let mut horizontal_wheel_runtime = UiRuntime::new();
+        let layouts = horizontal_wheel_runtime.compute_layout(&tree, bounds);
+        let _ = horizontal_wheel_runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: start,
+                delta: UiVector::new(-8.0, 0.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        assert_eq!(
+            horizontal_wheel_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Horizontal),
+            0.0,
+            "blocked horizontal wheel should not reveal the horizontal scrollbar",
+        );
+        assert_eq!(
+            horizontal_wheel_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Vertical),
+            0.0,
+            "blocked horizontal wheel should not reveal the vertical scrollbar",
+        );
+
+        let mut vertical_middle_drag_runtime = UiRuntime::new();
+        let layouts = vertical_middle_drag_runtime.compute_layout(&tree, bounds);
+        let vertical_end = UiPoint::new(start.x, start.y - 40.0);
+        let _ = vertical_middle_drag_runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Middle),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let _ = vertical_middle_drag_runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: vertical_end,
+                delta: vertical_end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        assert_eq!(
+            vertical_middle_drag_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Vertical),
+            0.0,
+            "ignored vertical middle-drag should not reveal the vertical scrollbar",
+        );
+        assert_eq!(
+            vertical_middle_drag_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Horizontal),
+            0.0,
+            "ignored vertical middle-drag should not reveal the horizontal scrollbar",
+        );
+
+        let mut horizontal_middle_drag_runtime = UiRuntime::new();
+        let layouts = horizontal_middle_drag_runtime.compute_layout(&tree, bounds);
+        let horizontal_end = UiPoint::new(start.x - 40.0, start.y);
+        let _ = horizontal_middle_drag_runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: start,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Middle),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        );
+        let _ = horizontal_middle_drag_runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: horizontal_end,
+                delta: horizontal_end - start,
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+            }),
+        );
+        assert_eq!(
+            horizontal_middle_drag_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Horizontal),
+            1.0,
+            "horizontal middle-drag should reveal the horizontal scrollbar",
+        );
+        assert_eq!(
+            horizontal_middle_drag_runtime
+                .state()
+                .scrollbar_opacity(scroll_id, Axis::Vertical),
+            0.0,
+            "horizontal middle-drag should leave the vertical scrollbar hidden",
+        );
+    }
+
+    #[test]
     fn wheel_scroll_routes_to_vertical_owner_when_nested_horizontal_cannot_scroll() {
         let theme = ThemeTokens::default();
         let text_style = TextStyle::default();
@@ -1607,7 +2142,9 @@ mod tests {
         );
 
         let vertical_offset = runtime.state().scroll_offset(vertical_scroll_id);
-        let horizontal_offset = runtime.state().scroll_offset(horizontal_scroll_id);
+        let horizontal_offset = runtime
+            .state()
+            .scroll_offset_for_axis(horizontal_scroll_id, Axis::Horizontal);
         assert!(
             vertical_offset > 0.0,
             "vertical ancestor should consume wheel when nested horizontal scroll has no horizontal delta (vertical={vertical_offset}, horizontal={horizontal_offset})",
@@ -1690,7 +2227,10 @@ mod tests {
         );
 
         assert!(
-            runtime.state().scroll_offset(horizontal_scroll_id) > 0.0,
+            runtime
+                .state()
+                .scroll_offset_for_axis(horizontal_scroll_id, Axis::Horizontal)
+                > 0.0,
             "middle-button drag should pan horizontal scroll offset",
         );
     }
@@ -1774,7 +2314,9 @@ mod tests {
         );
 
         assert_eq!(
-            runtime.state().scroll_offset(horizontal_scroll_id),
+            runtime
+                .state()
+                .scroll_offset_for_axis(horizontal_scroll_id, Axis::Horizontal),
             0.0,
             "middle-drag that starts outside a scroll owner must not adopt another scroll area mid-drag",
         );

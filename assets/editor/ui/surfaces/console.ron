@@ -8,16 +8,11 @@
         id: AuthoredId("body"),
         children: [
           Scroll(
-            id: AuthoredId("hscroll"),
-            axis: Horizontal,
+            id: AuthoredId("scroll"),
+            axis: Both,
+            input: (horizontal: MiddleDragOnly, vertical: WheelOnly),
             children: [
-              Scroll(
-                id: AuthoredId("scroll"),
-                axis: Vertical,
-                children: [
-                  Repeat(id: AuthoredId("entries"), items: (id: AuthoredId("console.entries")), template: AuthoredId("runenwerk.editor.surface.console.entry"), axis: Some(Vertical)),
-                ],
-              ),
+              Repeat(id: AuthoredId("entries"), items: (id: AuthoredId("console.entries")), template: AuthoredId("runenwerk.editor.surface.console.entry"), axis: Some(Vertical)),
             ],
           ),
         ],

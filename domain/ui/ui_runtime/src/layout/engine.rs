@@ -485,32 +485,39 @@ fn layout_scroll(
     let content_bounds = base_content_bounds;
 
     if let Some(child) = node.children.first() {
-        match scroll.axis {
-            Axis::Vertical => {
-                let content_height = measured_content.height.max(content_bounds.height);
-                let max_offset = (content_height - content_bounds.height).max(0.0);
-                let offset = state.scroll_offset(node.id).clamp(0.0, max_offset);
-                let child_bounds = UiRect::new(
-                    content_bounds.x,
-                    content_bounds.y - offset,
-                    content_bounds.width,
-                    content_height,
-                );
-                layout_node(child, child_bounds, state, out);
-            }
-            Axis::Horizontal => {
-                let content_width = measured_content.width.max(content_bounds.width);
-                let max_offset = (content_width - content_bounds.width).max(0.0);
-                let offset = state.scroll_offset(node.id).clamp(0.0, max_offset);
-                let child_bounds = UiRect::new(
-                    content_bounds.x - offset,
-                    content_bounds.y,
-                    content_width,
-                    content_bounds.height,
-                );
-                layout_node(child, child_bounds, state, out);
-            }
-        }
+        let content_width = if scroll.axes.contains(Axis::Horizontal) {
+            measured_content.width.max(content_bounds.width)
+        } else {
+            content_bounds.width
+        };
+        let content_height = if scroll.axes.contains(Axis::Vertical) {
+            measured_content.height.max(content_bounds.height)
+        } else {
+            content_bounds.height
+        };
+        let max_x = (content_width - content_bounds.width).max(0.0);
+        let max_y = (content_height - content_bounds.height).max(0.0);
+        let offset_x = if scroll.axes.contains(Axis::Horizontal) {
+            state
+                .scroll_offset_for_axis(node.id, Axis::Horizontal)
+                .clamp(0.0, max_x)
+        } else {
+            0.0
+        };
+        let offset_y = if scroll.axes.contains(Axis::Vertical) {
+            state
+                .scroll_offset_for_axis(node.id, Axis::Vertical)
+                .clamp(0.0, max_y)
+        } else {
+            0.0
+        };
+        let child_bounds = UiRect::new(
+            content_bounds.x - offset_x,
+            content_bounds.y - offset_y,
+            content_width,
+            content_height,
+        );
+        layout_node(child, child_bounds, state, out);
     }
 
     // Preserve the child's unconstrained content extent in measured_size so ancestor
@@ -1209,17 +1216,11 @@ fn measure_node(node: &UiNode) -> UiSize {
         UiNodeKind::Divider(divider) => divider_intrinsic_size(divider),
         UiNodeKind::Image(image) => image.min_size,
         UiNodeKind::ViewportSurfaceEmbed(embed) => embed.min_size,
-        UiNodeKind::Scroll(scroll) => {
-            let child = node
-                .children
-                .first()
-                .map(measure_node)
-                .unwrap_or(UiSize::ZERO);
-            match scroll.axis {
-                Axis::Vertical => UiSize::new(child.width, child.height),
-                Axis::Horizontal => UiSize::new(child.width, child.height),
-            }
-        }
+        UiNodeKind::Scroll(_) => node
+            .children
+            .first()
+            .map(measure_node)
+            .unwrap_or(UiSize::ZERO),
         UiNodeKind::Stack(stack) => {
             let mut items = Vec::with_capacity(node.children.len());
             for (index, child) in node

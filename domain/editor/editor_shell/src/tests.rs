@@ -5,7 +5,7 @@ use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerEvent, PointerEventKind, TextInputEvent,
     UiInputEvent,
 };
-use ui_math::UiRect;
+use ui_math::{Axis, UiRect};
 use ui_theme::ThemeTokens;
 
 use crate::{
@@ -288,7 +288,12 @@ fn entity_table_control_rail_overflows_and_scrolls_from_child_controls() {
     let mut runtime = ui_runtime::UiRuntime::new();
     let layouts = runtime.compute_layout(&tree, bounds);
     let max_offset = runtime
-        .max_scroll_offset_for_layout(&tree, &layouts, ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID)
+        .max_scroll_offset_for_layout_axis(
+            &tree,
+            &layouts,
+            ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
+            Axis::Horizontal,
+        )
         .expect("entity controls rail should be a scroll node");
 
     assert!(
@@ -323,7 +328,8 @@ fn entity_table_control_rail_overflows_and_scrolls_from_child_controls() {
     );
 
     assert!(
-        runtime.scroll_offset(ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID) > 0.0,
+        runtime.scroll_offset_for_axis(ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID, Axis::Horizontal)
+            > 0.0,
         "wheel input over the search child should scroll the controls rail owner"
     );
 }

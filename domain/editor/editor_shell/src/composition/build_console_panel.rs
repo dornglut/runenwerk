@@ -10,9 +10,9 @@ use ui_layout::SizePolicy;
 use ui_theme::{ThemeTokens, UiColor};
 
 use crate::{
-    CONSOLE_BODY_WIDGET_ID, CONSOLE_HSCROLL_WIDGET_ID, CONSOLE_LIST_WIDGET_ID,
-    CONSOLE_PANEL_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ConsoleLineKind, ConsoleViewModel,
-    PanelInstanceId, SurfaceWidgetScope, ToolSurfaceInstanceId, console_line_widget_id,
+    CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
+    CONSOLE_SCROLL_WIDGET_ID, ConsoleLineKind, ConsoleViewModel, PanelInstanceId,
+    SurfaceWidgetScope, ToolSurfaceInstanceId, console_line_widget_id,
 };
 
 const CONSOLE_TEMPLATE_RON: &str =
@@ -68,9 +68,8 @@ fn register_console_widget_ids(
     let mappings = [
         ("root", CONSOLE_PANEL_WIDGET_ID),
         ("root/body", CONSOLE_BODY_WIDGET_ID),
-        ("root/body/hscroll", CONSOLE_HSCROLL_WIDGET_ID),
-        ("root/body/hscroll/scroll", CONSOLE_SCROLL_WIDGET_ID),
-        ("root/body/hscroll/scroll/entries", CONSOLE_LIST_WIDGET_ID),
+        ("root/body/scroll", CONSOLE_SCROLL_WIDGET_ID),
+        ("root/body/scroll/entries", CONSOLE_LIST_WIDGET_ID),
     ];
     for (path, widget_id) in mappings {
         context.widget_ids_by_path.insert(
@@ -81,7 +80,7 @@ fn register_console_widget_ids(
 
     for index in 0..view_model.lines.len() {
         context.widget_ids_by_path.insert(
-            AuthoredUiNodePath(format!("root/body/hscroll/scroll/entries[{index}]/entry")),
+            AuthoredUiNodePath(format!("root/body/scroll/entries[{index}]/entry")),
             scope.widget_id(console_line_widget_id(index)),
         );
     }
@@ -193,6 +192,37 @@ mod tests {
         assert_eq!(
             console_line_label_color(&root, 4),
             color_array(theme.status_debug)
+        );
+    }
+
+    #[test]
+    fn console_forms_single_two_axis_scroll_owner() {
+        let theme = ThemeTokens::default();
+        let root = build_console_panel(
+            &ConsoleViewModel {
+                lines: vec![ConsoleLineViewModel::new(ConsoleLineKind::Info, "line")],
+            },
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+
+        let scroll_node =
+            find_node(&root, CONSOLE_SCROLL_WIDGET_ID).expect("console scroll should exist");
+        let UiNodeKind::Scroll(scroll) = &scroll_node.kind else {
+            panic!("console scroll should form a scroll node");
+        };
+        assert_eq!(scroll.axes, crate::ScrollAxes::Both);
+        assert_eq!(
+            scroll.input_policies,
+            crate::ScrollInputPolicies::new(
+                crate::ScrollInputPolicy::MiddleDragOnly,
+                crate::ScrollInputPolicy::WheelOnly,
+            )
+        );
+        assert!(
+            find_node(&root, crate::CONSOLE_HSCROLL_WIDGET_ID).is_none(),
+            "console should not form the old nested horizontal scroll owner",
         );
     }
 

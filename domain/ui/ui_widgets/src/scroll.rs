@@ -20,3 +20,7 @@ pub fn vscroll(id: WidgetId, theme: ThemeTokens, children: Vec<UiNode>) -> UiNod
 pub fn hscroll(id: WidgetId, theme: ThemeTokens, children: Vec<UiNode>) -> UiNode {
     scroll(id, Axis::Horizontal, theme, children)
 }
+
+pub fn xy_scroll(id: WidgetId, theme: ThemeTokens, children: Vec<UiNode>) -> UiNode {
+    UiNode::with_children(id, UiNodeKind::Scroll(ScrollNode::both(theme)), children)
+}

@@ -10,8 +10,10 @@ use crate::{
     ComputedLayoutMap, ScrollInputPolicy, UiInputDispatchResult, UiInputOutcome, UiInteraction,
     UiInteractionResults, UiInvalidation, UiNodeKind, UiRuntimeState, UiTree, WidgetId,
     hit_test_widget,
-    output::build_ui_frame::{ScrollbarGeometry, scrollbar_geometry},
-    state::ScrollbarThumbDragState,
+    output::build_ui_frame::{
+        ScrollbarGeometry, scrollbar_geometries, scrollbar_geometry_for_axis,
+    },
+    state::{ScrollbarAxisTarget, ScrollbarThumbDragState},
 };
 
 const SCROLL_DELTA_CLAMP: f32 = 8.0;
@@ -32,6 +34,8 @@ pub fn dispatch_pointer_event(
     match event.kind {
         PointerEventKind::Move | PointerEventKind::Enter => {
             if let Some(drag) = state.scrollbar_thumb_drag {
+                state.hovered_scrollbar =
+                    Some(ScrollbarAxisTarget::new(drag.scroll_widget, drag.axis));
                 let changed =
                     apply_scrollbar_thumb_drag(tree, layouts, state, drag, event.position);
                 return outcome(
@@ -49,10 +53,13 @@ pub fn dispatch_pointer_event(
 
             if state.middle_pan_anchor.is_some() {
                 let previous_hovered = state.hovered_widget;
+                let previous_hovered_scrollbar = state.hovered_scrollbar;
                 let raw_hover_target = hit_test_widget(tree, layouts, event.position);
                 let hover_target =
                     raw_hover_target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
                 state.hovered_widget = hover_target;
+                state.hovered_scrollbar =
+                    scrollbar_axis_target_at_position(tree, layouts, event.position);
 
                 let mut interactions = UiInteractionResults::new();
                 push_hover_change_if_needed(&mut interactions, previous_hovered, hover_target);
@@ -68,7 +75,7 @@ pub fn dispatch_pointer_event(
                         propagation: EventPropagation::Stop,
                         capture: PointerCapture::None,
                         focus_change: FocusChange::None,
-                        repaint: changed,
+                        repaint: changed || previous_hovered_scrollbar != state.hovered_scrollbar,
                         relayout: false,
                     },
                     interactions,
@@ -76,13 +83,23 @@ pub fn dispatch_pointer_event(
             }
 
             let previous_hovered = state.hovered_widget;
+            let previous_hovered_scrollbar = state.hovered_scrollbar;
             let target = target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
             state.hovered_widget = target;
+            state.hovered_scrollbar =
+                scrollbar_axis_target_at_position(tree, layouts, event.position);
 
             let mut interactions = UiInteractionResults::new();
             push_hover_change_if_needed(&mut interactions, previous_hovered, target);
 
-            outcome(target, InputResponse::ignored(), interactions)
+            outcome(
+                target,
+                InputResponse {
+                    repaint: previous_hovered_scrollbar != state.hovered_scrollbar,
+                    ..InputResponse::ignored()
+                },
+                interactions,
+            )
         }
         PointerEventKind::Leave => {
             if let Some(drag) = state.scrollbar_thumb_drag {
@@ -100,14 +117,25 @@ pub fn dispatch_pointer_event(
             }
 
             let previous_hovered = state.hovered_widget;
+            let previous_hovered_scrollbar = state.hovered_scrollbar;
             state.hovered_widget = None;
+            state.hovered_scrollbar = None;
 
             let mut interactions = UiInteractionResults::new();
             push_hover_change_if_needed(&mut interactions, previous_hovered, None);
 
-            outcome(None, InputResponse::ignored(), interactions)
+            outcome(
+                None,
+                InputResponse {
+                    repaint: previous_hovered_scrollbar.is_some(),
+                    ..InputResponse::ignored()
+                },
+                interactions,
+            )
         }
         PointerEventKind::Down => {
+            state.hovered_scrollbar =
+                scrollbar_axis_target_at_position(tree, layouts, event.position);
             if event.button == Some(PointerButton::Primary)
                 && let Some(geometry) =
                     scrollbar_thumb_geometry_at_position(tree, layouts, event.position)
@@ -127,7 +155,7 @@ pub fn dispatch_pointer_event(
                     axis: geometry.axis,
                     pointer_grab_offset,
                 });
-                state.mark_scrollbar_active(geometry.scroll_widget_id);
+                state.mark_scrollbar_active(geometry.scroll_widget_id, geometry.axis);
                 let focus_change = FocusChange::Set(FocusTargetId(geometry.scroll_widget_id.0));
                 state.focused_target = Some(FocusTargetId(geometry.scroll_widget_id.0));
 
@@ -234,11 +262,13 @@ pub fn dispatch_pointer_event(
                 let release_target = hit_test_widget(tree, layouts, event.position)
                     .filter(|widget_id| is_pointer_responsive(tree, *widget_id));
                 state.hovered_widget = release_target;
+                state.hovered_scrollbar =
+                    scrollbar_axis_target_at_position(tree, layouts, event.position);
                 state.pressed_widget = None;
                 state.captured_widget = None;
                 state.middle_pan_anchor = None;
                 state.middle_pan_last_position = None;
-                state.mark_scrollbar_active(drag.scroll_widget);
+                state.mark_scrollbar_active(drag.scroll_widget, drag.axis);
 
                 let mut interactions = UiInteractionResults::new();
                 push_pressed_change_if_needed(&mut interactions, previous_pressed, None);
@@ -258,9 +288,12 @@ pub fn dispatch_pointer_event(
 
             if event.button == Some(PointerButton::Middle) && state.middle_pan_anchor.is_some() {
                 let previous_hovered = state.hovered_widget;
+                let previous_hovered_scrollbar = state.hovered_scrollbar;
                 let release_target = hit_test_widget(tree, layouts, event.position)
                     .filter(|widget_id| is_pointer_responsive(tree, *widget_id));
                 state.hovered_widget = release_target;
+                state.hovered_scrollbar =
+                    scrollbar_axis_target_at_position(tree, layouts, event.position);
                 state.middle_pan_anchor = None;
                 state.middle_pan_last_position = None;
                 state.captured_widget = None;
@@ -274,7 +307,7 @@ pub fn dispatch_pointer_event(
                         propagation: EventPropagation::Stop,
                         capture: PointerCapture::Release,
                         focus_change: FocusChange::None,
-                        repaint: false,
+                        repaint: previous_hovered_scrollbar != state.hovered_scrollbar,
                         relayout: false,
                     },
                     interactions,
@@ -282,6 +315,7 @@ pub fn dispatch_pointer_event(
             }
 
             let previous_hovered = state.hovered_widget;
+            let previous_hovered_scrollbar = state.hovered_scrollbar;
             let previous_pressed = state.pressed_widget;
             let pressed_target = state.pressed_widget;
             let target = target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
@@ -289,6 +323,8 @@ pub fn dispatch_pointer_event(
                 .filter(|widget_id| is_pointer_responsive(tree, *widget_id));
 
             state.hovered_widget = release_target;
+            state.hovered_scrollbar =
+                scrollbar_axis_target_at_position(tree, layouts, event.position);
             state.pressed_widget = None;
             state.captured_widget = None;
             state.middle_pan_anchor = None;
@@ -325,7 +361,8 @@ pub fn dispatch_pointer_event(
                         PointerCapture::None
                     },
                     focus_change: FocusChange::None,
-                    repaint: previous_pressed.is_some(),
+                    repaint: previous_pressed.is_some()
+                        || previous_hovered_scrollbar != state.hovered_scrollbar,
                     relayout: false,
                 },
                 interactions,
@@ -333,10 +370,13 @@ pub fn dispatch_pointer_event(
         }
         PointerEventKind::Scroll => {
             let previous_hovered = state.hovered_widget;
+            let previous_hovered_scrollbar = state.hovered_scrollbar;
             let raw_hover_target = hit_test_widget(tree, layouts, event.position);
             let hover_target =
                 raw_hover_target.filter(|widget_id| is_pointer_responsive(tree, *widget_id));
             state.hovered_widget = hover_target;
+            state.hovered_scrollbar =
+                scrollbar_axis_target_at_position(tree, layouts, event.position);
 
             let mut interactions = UiInteractionResults::new();
             push_hover_change_if_needed(&mut interactions, previous_hovered, hover_target);
@@ -367,7 +407,14 @@ pub fn dispatch_pointer_event(
             let Some((scroll_owner, changed)) =
                 apply_scroll_wheel_delta(tree, layouts, state, &owners, event)
             else {
-                return outcome(target, InputResponse::ignored(), interactions);
+                return outcome(
+                    target,
+                    InputResponse {
+                        repaint: previous_hovered_scrollbar != state.hovered_scrollbar,
+                        ..InputResponse::ignored()
+                    },
+                    interactions,
+                );
             };
 
             outcome(
@@ -395,11 +442,36 @@ fn scrollbar_thumb_geometry_at_position(
         let Some(layout) = layouts.get(&node.id) else {
             continue;
         };
-        if let Some(geometry) =
-            scrollbar_geometry(tree, node.id, layouts, layout.bounds, layout.content_bounds)
-            && geometry.thumb_rect.contains(position)
+        for geometry in
+            scrollbar_geometries(tree, node.id, layouts, layout.bounds, layout.content_bounds)
         {
-            hit = Some(geometry);
+            if geometry.thumb_rect.contains(position) {
+                hit = Some(geometry);
+            }
+        }
+    }
+    hit
+}
+
+fn scrollbar_axis_target_at_position(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    position: ui_math::UiPoint,
+) -> Option<ScrollbarAxisTarget> {
+    let mut hit = None;
+    for node in tree.walk() {
+        let Some(layout) = layouts.get(&node.id) else {
+            continue;
+        };
+        for geometry in
+            scrollbar_geometries(tree, node.id, layouts, layout.bounds, layout.content_bounds)
+        {
+            if geometry.track_rect.contains(position) || geometry.thumb_rect.contains(position) {
+                hit = Some(ScrollbarAxisTarget::new(
+                    geometry.scroll_widget_id,
+                    geometry.axis,
+                ));
+            }
         }
     }
     hit
@@ -418,12 +490,13 @@ fn apply_scrollbar_thumb_drag(
         state.pressed_widget = None;
         return false;
     };
-    let Some(geometry) = scrollbar_geometry(
+    let Some(geometry) = scrollbar_geometry_for_axis(
         tree,
         drag.scroll_widget,
         layouts,
         layout.bounds,
         layout.content_bounds,
+        drag.axis,
     ) else {
         state.scrollbar_thumb_drag = None;
         state.captured_widget = None;
@@ -444,13 +517,13 @@ fn apply_scrollbar_thumb_drag(
     let next_offset =
         ((thumb_start / thumb_range) * geometry.max_offset).clamp(0.0, geometry.max_offset);
     let current_offset = state
-        .scroll_offset(drag.scroll_widget)
+        .scroll_offset_for_axis(drag.scroll_widget, drag.axis)
         .clamp(0.0, geometry.max_offset);
     if (next_offset - current_offset).abs() <= f32::EPSILON {
         return false;
     }
-    state.set_scroll_offset(drag.scroll_widget, next_offset);
-    state.mark_scrollbar_active(drag.scroll_widget);
+    state.set_scroll_offset_for_axis(drag.scroll_widget, drag.axis, next_offset);
+    state.mark_scrollbar_active(drag.scroll_widget, drag.axis);
     true
 }
 
@@ -678,15 +751,19 @@ fn scroll_max_offset(
     tree: &UiTree,
     layouts: &ComputedLayoutMap,
     scroll_widget: WidgetId,
+    axis: ui_math::Axis,
 ) -> Option<f32> {
     let scroll_layout = layouts.get(&scroll_widget)?;
     let scroll_node = find_node(tree, scroll_widget)?;
     let UiNodeKind::Scroll(scroll) = &scroll_node.kind else {
         return None;
     };
+    if !scroll.axes.contains(axis) {
+        return None;
+    }
     let child_id = scroll_node.children.first()?.id;
     let child_layout = layouts.get(&child_id)?;
-    match scroll.axis {
+    match axis {
         ui_math::Axis::Vertical => {
             let viewport_height = scroll_layout.content_bounds.height.max(0.0);
             let content_height = child_layout.bounds.height.max(viewport_height);
@@ -703,18 +780,24 @@ fn scroll_max_offset(
 fn scroll_primary_delta(
     tree: &UiTree,
     scroll_widget: WidgetId,
+    axis: ui_math::Axis,
     event: &PointerEvent,
 ) -> Option<f32> {
     let scroll_node = find_node(tree, scroll_widget)?;
     let UiNodeKind::Scroll(scroll) = &scroll_node.kind else {
         return None;
     };
+    if !scroll.axes.contains(axis) {
+        return None;
+    }
 
-    match scroll.axis {
+    match axis {
         ui_math::Axis::Vertical => {
             if event.delta.y.abs() > f32::EPSILON {
                 Some(event.delta.y)
-            } else if event.delta.x.abs() > f32::EPSILON {
+            } else if event.delta.x.abs() > f32::EPSILON
+                && !scroll.axes.contains(ui_math::Axis::Horizontal)
+            {
                 Some(-event.delta.x)
             } else {
                 None
@@ -723,7 +806,9 @@ fn scroll_primary_delta(
         ui_math::Axis::Horizontal => {
             if event.delta.x.abs() > f32::EPSILON {
                 Some(-event.delta.x)
-            } else if event.delta.y.abs() > f32::EPSILON {
+            } else if event.delta.y.abs() > f32::EPSILON
+                && !scroll.axes.contains(ui_math::Axis::Vertical)
+            {
                 Some(event.delta.y)
             } else {
                 None
@@ -740,34 +825,38 @@ fn apply_scroll_wheel_delta(
     event: &PointerEvent,
 ) -> Option<(WidgetId, bool)> {
     for &owner in owners {
-        let Some(raw_delta) = scroll_primary_delta(tree, owner, event) else {
-            continue;
-        };
         let Some(node) = find_node(tree, owner) else {
             continue;
         };
         let UiNodeKind::Scroll(scroll) = &node.kind else {
             continue;
         };
-        if !matches!(
-            scroll.input_policy,
-            ScrollInputPolicy::WheelOnly | ScrollInputPolicy::WheelAndMiddleDrag
-        ) {
-            continue;
+        for axis in [ui_math::Axis::Vertical, ui_math::Axis::Horizontal] {
+            let Some(raw_delta) = scroll_primary_delta(tree, owner, axis, event) else {
+                continue;
+            };
+            if !matches!(
+                scroll.input_policies.for_axis(axis),
+                ScrollInputPolicy::WheelOnly | ScrollInputPolicy::WheelAndMiddleDrag
+            ) {
+                continue;
+            }
+            let max_offset = scroll_max_offset(tree, layouts, owner, axis).unwrap_or(0.0);
+            if max_offset <= f32::EPSILON {
+                continue;
+            }
+            let current_offset = state
+                .scroll_offset_for_axis(owner, axis)
+                .clamp(0.0, max_offset);
+            let next_offset = (current_offset - scroll_pixels(raw_delta)).clamp(0.0, max_offset);
+            let changed = (next_offset - current_offset).abs() > f32::EPSILON;
+            if !changed {
+                continue;
+            }
+            state.set_scroll_offset_for_axis(owner, axis, next_offset);
+            state.mark_scrollbar_active(owner, axis);
+            return Some((owner, true));
         }
-        let max_offset = scroll_max_offset(tree, layouts, owner).unwrap_or(0.0);
-        if max_offset <= f32::EPSILON {
-            continue;
-        }
-        let current_offset = state.scroll_offset(owner).clamp(0.0, max_offset);
-        let next_offset = (current_offset - scroll_pixels(raw_delta)).clamp(0.0, max_offset);
-        let changed = (next_offset - current_offset).abs() > f32::EPSILON;
-        if !changed {
-            continue;
-        }
-        state.set_scroll_offset(owner, next_offset);
-        state.mark_scrollbar_active(owner);
-        return Some((owner, true));
     }
 
     None
@@ -848,26 +937,28 @@ fn apply_scroll_delta_for_axis(
         let UiNodeKind::Scroll(scroll) = &node.kind else {
             continue;
         };
-        if scroll.axis != axis {
+        if !scroll.axes.contains(axis) {
             continue;
         }
         if !matches!(
-            scroll.input_policy,
+            scroll.input_policies.for_axis(axis),
             ScrollInputPolicy::MiddleDragOnly | ScrollInputPolicy::WheelAndMiddleDrag
         ) {
             continue;
         }
-        let max_offset = scroll_max_offset(tree, layouts, owner).unwrap_or(0.0);
+        let max_offset = scroll_max_offset(tree, layouts, owner, axis).unwrap_or(0.0);
         if max_offset <= f32::EPSILON {
             continue;
         }
-        let current_offset = state.scroll_offset(owner).clamp(0.0, max_offset);
+        let current_offset = state
+            .scroll_offset_for_axis(owner, axis)
+            .clamp(0.0, max_offset);
         let next_offset = (current_offset - raw_delta).clamp(0.0, max_offset);
         if (next_offset - current_offset).abs() <= f32::EPSILON {
             continue;
         }
-        state.set_scroll_offset(owner, next_offset);
-        state.mark_scrollbar_active(owner);
+        state.set_scroll_offset_for_axis(owner, axis, next_offset);
+        state.mark_scrollbar_active(owner, axis);
         return true;
     }
     false

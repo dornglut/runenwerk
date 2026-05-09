@@ -3,11 +3,12 @@
 
 use crate::{
     ButtonNode, ComputedLayoutMap, DividerNode, ImageNode, LabelNode, NumericInputNode, PanelNode,
-    PopupNode, RadialMenuNode, ScrollNode, SelectNode, TableNode, TabsNode, TextInputNode,
-    ToggleNode, TreeNode, UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
+    PopupNode, RadialMenuNode, ScrollNode, ScrollbarAxisOpacities, ScrollbarAxisTarget, SelectNode,
+    TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode, UiNode, UiNodeKind, UiTree,
+    ViewportSurfaceEmbedNode, WidgetId,
 };
 use std::collections::BTreeMap;
-use ui_math::{UiRect, UiSize};
+use ui_math::{Axis, UiRect, UiSize};
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, RectPrimitive, UiDrawKey,
     UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
@@ -23,8 +24,9 @@ pub struct InteractionVisualState {
     pub hovered_widget: Option<WidgetId>,
     pub pressed_widget: Option<WidgetId>,
     pub focused_widget: Option<WidgetId>,
-    pub active_scrollbar_widget: Option<WidgetId>,
-    pub scrollbar_opacity_by_widget_id: BTreeMap<WidgetId, f32>,
+    pub hovered_scrollbar: Option<ScrollbarAxisTarget>,
+    pub active_scrollbar: Option<ScrollbarAxisTarget>,
+    pub scrollbar_opacity_by_widget_id: BTreeMap<WidgetId, ScrollbarAxisOpacities>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -455,80 +457,61 @@ fn emit_scrollbar(
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let Some(geometry) = scrollbar_geometry(tree, node.id, layouts, bounds, content_bounds) else {
-        return;
-    };
-    let hover_inside_scroll = interaction_state
-        .hovered_widget
-        .is_some_and(|widget_id| widget_id == node.id || node_contains_widget(node, widget_id));
-    let press_inside_scroll = interaction_state
-        .pressed_widget
-        .is_some_and(|widget_id| widget_id == node.id || node_contains_widget(node, widget_id));
-    let scrollbar_opacity = if interaction_state.active_scrollbar_widget == Some(node.id)
-        || hover_inside_scroll
-        || press_inside_scroll
-    {
-        1.0
-    } else {
-        interaction_state
-            .scrollbar_opacity_by_widget_id
-            .get(&node.id)
-            .copied()
-            .unwrap_or(0.0)
-            .clamp(0.0, 1.0)
-    };
-    if scrollbar_opacity <= 0.0 {
+    let geometries = scrollbar_geometries(tree, node.id, layouts, bounds, content_bounds);
+    if geometries.is_empty() {
         return;
     }
-    let radius = match geometry.axis {
-        ui_math::Axis::Vertical => {
-            if let UiNodeKind::Scroll(scroll) = &node.kind {
-                scroll.theme.radius.sm.min(geometry.track_rect.width * 0.5)
-            } else {
-                0.0
-            }
-        }
-        ui_math::Axis::Horizontal => {
-            if let UiNodeKind::Scroll(scroll) = &node.kind {
-                scroll.theme.radius.sm.min(geometry.track_rect.height * 0.5)
-            } else {
-                0.0
-            }
-        }
-    };
     let UiNodeKind::Scroll(scroll) = &node.kind else {
         return;
     };
 
-    let mut track_color = scroll.theme.border;
-    track_color.a = (track_color.a * 0.35 * scrollbar_opacity).clamp(0.0, 1.0);
-    layer.push(UiPrimitive::Rect(RectPrimitive::new(
-        geometry.track_rect,
-        radius,
-        paint_from_color(track_color),
-        default_draw_key(),
-        sort_key(depth, *primitive_order),
-    )));
-    *primitive_order += 1;
+    for geometry in geometries {
+        let target = ScrollbarAxisTarget::new(node.id, geometry.axis);
+        let scrollbar_opacity = if interaction_state.active_scrollbar == Some(target)
+            || interaction_state.hovered_scrollbar == Some(target)
+        {
+            1.0
+        } else {
+            interaction_state
+                .scrollbar_opacity_by_widget_id
+                .get(&node.id)
+                .map(|opacities| opacities.for_axis(geometry.axis))
+                .unwrap_or(0.0)
+                .clamp(0.0, 1.0)
+        };
+        if scrollbar_opacity <= 0.0 {
+            continue;
+        }
+        let radius = match geometry.axis {
+            Axis::Vertical => scroll.theme.radius.sm.min(geometry.track_rect.width * 0.5),
+            Axis::Horizontal => scroll.theme.radius.sm.min(geometry.track_rect.height * 0.5),
+        };
 
-    let mut thumb_color = scroll.theme.accent;
-    thumb_color.a = (thumb_color.a * 0.80 * scrollbar_opacity).clamp(0.0, 1.0);
-    layer.push(UiPrimitive::Rect(RectPrimitive::new(
-        geometry.thumb_rect,
-        radius,
-        paint_from_color(thumb_color),
-        default_draw_key(),
-        sort_key(depth, *primitive_order),
-    )));
-    *primitive_order += 1;
+        let mut track_color = scroll.theme.border;
+        track_color.a = (track_color.a * 0.35 * scrollbar_opacity).clamp(0.0, 1.0);
+        layer.push(UiPrimitive::Rect(RectPrimitive::new(
+            geometry.track_rect,
+            radius,
+            paint_from_color(track_color),
+            default_draw_key(),
+            sort_key(depth, *primitive_order),
+        )));
+        *primitive_order += 1;
+
+        let mut thumb_color = scroll.theme.accent;
+        thumb_color.a = (thumb_color.a * 0.80 * scrollbar_opacity).clamp(0.0, 1.0);
+        layer.push(UiPrimitive::Rect(RectPrimitive::new(
+            geometry.thumb_rect,
+            radius,
+            paint_from_color(thumb_color),
+            default_draw_key(),
+            sort_key(depth, *primitive_order),
+        )));
+        *primitive_order += 1;
+    }
 }
 
-fn node_contains_widget(node: &UiNode, widget_id: WidgetId) -> bool {
-    node.children
-        .iter()
-        .any(|child| child.id == widget_id || node_contains_widget(child, widget_id))
-}
-
+#[cfg(test)]
 pub(crate) fn scrollbar_geometry(
     tree: &UiTree,
     scroll_widget_id: WidgetId,
@@ -536,28 +519,93 @@ pub(crate) fn scrollbar_geometry(
     bounds: UiRect,
     content_bounds: UiRect,
 ) -> Option<ScrollbarGeometry> {
+    scrollbar_geometry_for_axis(
+        tree,
+        scroll_widget_id,
+        layouts,
+        bounds,
+        content_bounds,
+        Axis::Vertical,
+    )
+    .or_else(|| {
+        scrollbar_geometry_for_axis(
+            tree,
+            scroll_widget_id,
+            layouts,
+            bounds,
+            content_bounds,
+            Axis::Horizontal,
+        )
+    })
+}
+
+pub(crate) fn scrollbar_geometries(
+    tree: &UiTree,
+    scroll_widget_id: WidgetId,
+    layouts: &ComputedLayoutMap,
+    bounds: UiRect,
+    content_bounds: UiRect,
+) -> Vec<ScrollbarGeometry> {
+    [Axis::Vertical, Axis::Horizontal]
+        .into_iter()
+        .filter_map(|axis| {
+            scrollbar_geometry_for_axis(
+                tree,
+                scroll_widget_id,
+                layouts,
+                bounds,
+                content_bounds,
+                axis,
+            )
+        })
+        .collect()
+}
+
+pub(crate) fn scrollbar_geometry_for_axis(
+    tree: &UiTree,
+    scroll_widget_id: WidgetId,
+    layouts: &ComputedLayoutMap,
+    bounds: UiRect,
+    content_bounds: UiRect,
+    axis: Axis,
+) -> Option<ScrollbarGeometry> {
     let node = tree.walk().find(|node| node.id == scroll_widget_id)?;
     let UiNodeKind::Scroll(scroll) = &node.kind else {
         return None;
     };
+    if !scroll.axes.contains(axis) {
+        return None;
+    }
     let child = node.children.first()?;
     let child_layout = layouts.get(&child.id)?;
-    match scroll.axis {
-        ui_math::Axis::Vertical => {
+    let vertical_max_offset =
+        scroll_max_offset_for_axis(scroll, child_layout.bounds, content_bounds, Axis::Vertical);
+    let horizontal_max_offset = scroll_max_offset_for_axis(
+        scroll,
+        child_layout.bounds,
+        content_bounds,
+        Axis::Horizontal,
+    );
+    match axis {
+        Axis::Vertical => {
             let track_width = scroll.bar_thickness.min(bounds.width.max(0.0));
             if track_width <= f32::EPSILON || content_bounds.height <= f32::EPSILON {
                 return None;
             }
+            let horizontal_track_height = if horizontal_max_offset > f32::EPSILON {
+                scroll.bar_thickness.min(bounds.height.max(0.0))
+            } else {
+                0.0
+            };
             let track_x = bounds.x + bounds.width - track_width;
-            let track_rect = UiRect::new(
-                track_x,
-                content_bounds.y,
-                track_width,
-                content_bounds.height,
-            );
+            let track_height = (content_bounds.height - horizontal_track_height).max(0.0);
+            if track_height <= f32::EPSILON {
+                return None;
+            }
+            let track_rect = UiRect::new(track_x, content_bounds.y, track_width, track_height);
             let viewport_extent = content_bounds.height.max(0.0);
             let content_extent = child_layout.bounds.height.max(viewport_extent);
-            let max_offset = (content_extent - viewport_extent).max(0.0);
+            let max_offset = vertical_max_offset;
             if max_offset <= f32::EPSILON {
                 return None;
             }
@@ -569,26 +617,35 @@ pub(crate) fn scrollbar_geometry(
             let thumb_y = track_rect.y + thumb_range * (scroll_offset / max_offset);
             Some(ScrollbarGeometry {
                 scroll_widget_id,
-                axis: scroll.axis,
+                axis,
                 track_rect,
                 thumb_rect: UiRect::new(track_rect.x, thumb_y, track_rect.width, thumb_extent),
                 max_offset,
             })
         }
-        ui_math::Axis::Horizontal => {
+        Axis::Horizontal => {
             let track_height = scroll.bar_thickness.min(bounds.height.max(0.0));
             if track_height <= f32::EPSILON || content_bounds.width <= f32::EPSILON {
+                return None;
+            }
+            let vertical_track_width = if vertical_max_offset > f32::EPSILON {
+                scroll.bar_thickness.min(bounds.width.max(0.0))
+            } else {
+                0.0
+            };
+            let track_width = (content_bounds.width - vertical_track_width).max(0.0);
+            if track_width <= f32::EPSILON {
                 return None;
             }
             let track_rect = UiRect::new(
                 content_bounds.x,
                 bounds.y + bounds.height - track_height,
-                content_bounds.width,
+                track_width,
                 track_height,
             );
             let viewport_extent = content_bounds.width.max(0.0);
             let content_extent = child_layout.bounds.width.max(viewport_extent);
-            let max_offset = (content_extent - viewport_extent).max(0.0);
+            let max_offset = horizontal_max_offset;
             if max_offset <= f32::EPSILON {
                 return None;
             }
@@ -600,11 +657,34 @@ pub(crate) fn scrollbar_geometry(
             let thumb_x = track_rect.x + thumb_range * (scroll_offset / max_offset);
             Some(ScrollbarGeometry {
                 scroll_widget_id,
-                axis: scroll.axis,
+                axis,
                 track_rect,
                 thumb_rect: UiRect::new(thumb_x, track_rect.y, thumb_extent, track_rect.height),
                 max_offset,
             })
+        }
+    }
+}
+
+fn scroll_max_offset_for_axis(
+    scroll: &ScrollNode,
+    child_bounds: UiRect,
+    content_bounds: UiRect,
+    axis: Axis,
+) -> f32 {
+    if !scroll.axes.contains(axis) {
+        return 0.0;
+    }
+    match axis {
+        Axis::Vertical => {
+            let viewport_height = content_bounds.height.max(0.0);
+            let content_height = child_bounds.height.max(viewport_height);
+            (content_height - viewport_height).max(0.0)
+        }
+        Axis::Horizontal => {
+            let viewport_width = content_bounds.width.max(0.0);
+            let content_width = child_bounds.width.max(viewport_width);
+            (content_width - viewport_width).max(0.0)
         }
     }
 }
@@ -1936,6 +2016,7 @@ mod tests {
             bounds.size(),
             InteractionVisualState {
                 hovered_widget: Some(anchor_id),
+                active_scrollbar: Some(ScrollbarAxisTarget::new(scroll_id, Axis::Horizontal)),
                 ..Default::default()
             },
             &atlas_source,
@@ -2145,7 +2226,7 @@ mod tests {
             &overflow_layouts,
             overflow_bounds.size(),
             InteractionVisualState {
-                active_scrollbar_widget: Some(scroll_id),
+                active_scrollbar: Some(ScrollbarAxisTarget::new(scroll_id, Axis::Vertical)),
                 ..Default::default()
             },
             &atlas_source,
@@ -2210,6 +2291,127 @@ mod tests {
     }
 
     #[test]
+    fn build_ui_frame_reveals_two_axis_scrollbars_per_axis() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let scroll_id = WidgetId(31);
+        let child_id = WidgetId(32);
+        let rows = (0..8)
+            .map(|row| {
+                let columns = (0..5)
+                    .map(|column| {
+                        let mut button = ButtonNode::new(
+                            format!("Cell {row}-{column}"),
+                            text_style.clone(),
+                            theme.clone(),
+                        );
+                        button.min_size = UiSize::new(96.0, 28.0);
+                        UiNode::new(
+                            WidgetId(1_000 + row * 10 + column),
+                            UiNodeKind::Button(button),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                UiNode::with_children(
+                    WidgetId(2_000 + row),
+                    UiNodeKind::Stack(crate::StackNode::horizontal(theme.spacing.xs)),
+                    columns,
+                )
+            })
+            .collect::<Vec<_>>();
+        let tree = UiTree::new(UiNode::with_children(
+            scroll_id,
+            UiNodeKind::Scroll(crate::ScrollNode::both(theme.clone())),
+            vec![UiNode::with_children(
+                child_id,
+                UiNodeKind::Stack(crate::StackNode::vertical(theme.spacing.xs)),
+                rows,
+            )],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 180.0, 96.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let scroll_layout = layouts.get(&scroll_id).expect("scroll layout should exist");
+        let vertical_track = scrollbar_geometry_for_axis(
+            &tree,
+            scroll_id,
+            &layouts,
+            scroll_layout.bounds,
+            scroll_layout.content_bounds,
+            Axis::Vertical,
+        )
+        .expect("vertical scrollbar should exist")
+        .track_rect;
+        let horizontal_track = scrollbar_geometry_for_axis(
+            &tree,
+            scroll_id,
+            &layouts,
+            scroll_layout.bounds,
+            scroll_layout.content_bounds,
+            Axis::Horizontal,
+        )
+        .expect("horizontal scrollbar should exist")
+        .track_rect;
+
+        let inactive_frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState::default(),
+            &atlas_source,
+        );
+        assert!(!has_rect_primitive(&inactive_frame, vertical_track));
+        assert!(!has_rect_primitive(&inactive_frame, horizontal_track));
+
+        let vertical_frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState {
+                active_scrollbar: Some(ScrollbarAxisTarget::new(scroll_id, Axis::Vertical)),
+                ..Default::default()
+            },
+            &atlas_source,
+        );
+        assert!(has_rect_primitive(&vertical_frame, vertical_track));
+        assert!(!has_rect_primitive(&vertical_frame, horizontal_track));
+
+        let horizontal_frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState {
+                active_scrollbar: Some(ScrollbarAxisTarget::new(scroll_id, Axis::Horizontal)),
+                ..Default::default()
+            },
+            &atlas_source,
+        );
+        assert!(!has_rect_primitive(&horizontal_frame, vertical_track));
+        assert!(has_rect_primitive(&horizontal_frame, horizontal_track));
+
+        let hovered_horizontal_frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState {
+                hovered_scrollbar: Some(ScrollbarAxisTarget::new(scroll_id, Axis::Horizontal)),
+                ..Default::default()
+            },
+            &atlas_source,
+        );
+        assert!(!has_rect_primitive(
+            &hovered_horizontal_frame,
+            vertical_track
+        ));
+        assert!(has_rect_primitive(
+            &hovered_horizontal_frame,
+            horizontal_track
+        ));
+    }
+
+    #[test]
     fn build_ui_frame_applies_hover_and_focus_visual_states_to_button() {
         let atlas_source = TestAtlasSource {
             atlas: atlas_with_ascii(FontId(1)),
@@ -2240,10 +2442,7 @@ mod tests {
             bounds.size(),
             InteractionVisualState {
                 hovered_widget: Some(button_id),
-                pressed_widget: None,
-                focused_widget: None,
-                active_scrollbar_widget: None,
-                scrollbar_opacity_by_widget_id: BTreeMap::new(),
+                ..Default::default()
             },
             &atlas_source,
         );
@@ -2252,11 +2451,8 @@ mod tests {
             &layouts,
             bounds.size(),
             InteractionVisualState {
-                hovered_widget: None,
-                pressed_widget: None,
                 focused_widget: Some(button_id),
-                active_scrollbar_widget: None,
-                scrollbar_opacity_by_widget_id: BTreeMap::new(),
+                ..Default::default()
             },
             &atlas_source,
         );

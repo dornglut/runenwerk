@@ -3,6 +3,7 @@
   root: Scroll(
     id: AuthoredId("root"),
     axis: Horizontal,
+    input: (horizontal: WheelAndMiddleDrag, vertical: WheelOnly),
     children: [
       Row(
         id: AuthoredId("tab_stack_chrome"),

@@ -61,8 +61,11 @@ pub(crate) fn compact_min_height(text_style: &TextStyle, padding: UiInsets) -> f
 
 pub(crate) fn apply_horizontal_control_rail_polish(node: &mut UiNode, theme: &ThemeTokens) {
     if let UiNodeKind::Scroll(scroll) = &mut node.kind {
-        scroll.axis = Axis::Horizontal;
-        scroll.input_policy = crate::ScrollInputPolicy::WheelAndMiddleDrag;
+        scroll.axes = crate::ScrollAxes::Horizontal;
+        scroll.input_policies = crate::ScrollInputPolicies::new(
+            crate::ScrollInputPolicy::WheelAndMiddleDrag,
+            crate::ScrollInputPolicy::WheelOnly,
+        );
         scroll.bar_thickness = (theme.spacing.xs * 1.5).clamp(6.0, 18.0);
         scroll.min_thumb_main_size = (theme.spacing.lg + theme.spacing.xs).max(18.0);
     }

@@ -797,11 +797,36 @@ impl ViewportSurfaceEmbedNode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrollNode {
-    pub axis: Axis,
+    pub axes: ScrollAxes,
     pub bar_thickness: f32,
     pub min_thumb_main_size: f32,
-    pub input_policy: ScrollInputPolicy,
+    pub input_policies: ScrollInputPolicies,
     pub theme: ThemeTokens,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollAxes {
+    Horizontal,
+    Vertical,
+    Both,
+}
+
+impl ScrollAxes {
+    pub const fn from_axis(axis: Axis) -> Self {
+        match axis {
+            Axis::Horizontal => Self::Horizontal,
+            Axis::Vertical => Self::Vertical,
+        }
+    }
+
+    pub const fn contains(self, axis: Axis) -> bool {
+        matches!(
+            (self, axis),
+            (Self::Both, _)
+                | (Self::Horizontal, Axis::Horizontal)
+                | (Self::Vertical, Axis::Vertical)
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -811,6 +836,37 @@ pub enum ScrollInputPolicy {
     WheelAndMiddleDrag,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScrollInputPolicies {
+    pub horizontal: ScrollInputPolicy,
+    pub vertical: ScrollInputPolicy,
+}
+
+impl ScrollInputPolicies {
+    pub const fn new(horizontal: ScrollInputPolicy, vertical: ScrollInputPolicy) -> Self {
+        Self {
+            horizontal,
+            vertical,
+        }
+    }
+
+    pub const fn for_axis(self, axis: Axis) -> ScrollInputPolicy {
+        match axis {
+            Axis::Horizontal => self.horizontal,
+            Axis::Vertical => self.vertical,
+        }
+    }
+}
+
+impl Default for ScrollInputPolicies {
+    fn default() -> Self {
+        Self {
+            horizontal: ScrollInputPolicy::WheelAndMiddleDrag,
+            vertical: ScrollInputPolicy::WheelOnly,
+        }
+    }
+}
+
 impl ScrollNode {
     pub fn new(theme: ThemeTokens) -> Self {
         Self::vertical(theme)
@@ -818,22 +874,37 @@ impl ScrollNode {
 
     pub fn vertical(theme: ThemeTokens) -> Self {
         Self {
-            axis: Axis::Vertical,
+            axes: ScrollAxes::Vertical,
             bar_thickness: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
             min_thumb_main_size: (theme.spacing.lg + theme.spacing.xs).max(18.0),
-            input_policy: ScrollInputPolicy::WheelOnly,
+            input_policies: ScrollInputPolicies::default(),
             theme,
         }
     }
 
     pub fn horizontal(theme: ThemeTokens) -> Self {
         Self {
-            axis: Axis::Horizontal,
+            axes: ScrollAxes::Horizontal,
             bar_thickness: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
             min_thumb_main_size: (theme.spacing.lg + theme.spacing.xs).max(18.0),
-            input_policy: ScrollInputPolicy::WheelAndMiddleDrag,
+            input_policies: ScrollInputPolicies::default(),
             theme,
         }
+    }
+
+    pub fn both(theme: ThemeTokens) -> Self {
+        Self {
+            axes: ScrollAxes::Both,
+            bar_thickness: (theme.spacing.xs * 1.5).clamp(6.0, 18.0),
+            min_thumb_main_size: (theme.spacing.lg + theme.spacing.xs).max(18.0),
+            input_policies: ScrollInputPolicies::default(),
+            theme,
+        }
+    }
+
+    pub fn with_input_policies(mut self, input_policies: ScrollInputPolicies) -> Self {
+        self.input_policies = input_policies;
+        self
     }
 }
 

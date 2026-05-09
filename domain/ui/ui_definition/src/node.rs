@@ -15,6 +15,36 @@ pub enum UiAxisDefinition {
     Vertical,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiScrollAxisDefinition {
+    Horizontal,
+    #[default]
+    Vertical,
+    Both,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiScrollInputPolicyDefinition {
+    WheelOnly,
+    MiddleDragOnly,
+    WheelAndMiddleDrag,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UiScrollInputDefinition {
+    pub horizontal: UiScrollInputPolicyDefinition,
+    pub vertical: UiScrollInputPolicyDefinition,
+}
+
+impl Default for UiScrollInputDefinition {
+    fn default() -> Self {
+        Self {
+            horizontal: UiScrollInputPolicyDefinition::WheelAndMiddleDrag,
+            vertical: UiScrollInputPolicyDefinition::WheelOnly,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UiTableColumnDefinition {
     pub label: String,
@@ -44,7 +74,9 @@ pub enum UiNodeDefinition {
     },
     Scroll {
         id: UiNodeId,
-        axis: UiAxisDefinition,
+        axis: UiScrollAxisDefinition,
+        #[serde(default)]
+        input: UiScrollInputDefinition,
         children: Vec<UiNodeDefinition>,
     },
     Split {

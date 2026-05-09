@@ -3,4 +3,7 @@
 
 pub mod runtime_state;
 
-pub use runtime_state::{ScrollbarThumbDragState, UiRuntimeState};
+pub use runtime_state::{
+    ScrollOffset, ScrollbarAxisActivityFrames, ScrollbarAxisOpacities, ScrollbarAxisTarget,
+    ScrollbarThumbDragState, UiRuntimeState,
+};

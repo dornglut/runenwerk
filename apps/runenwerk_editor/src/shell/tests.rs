@@ -26,7 +26,7 @@ use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerButton, PointerEvent, PointerEventKind,
     UiInputEvent,
 };
-use ui_math::{UiPoint, UiRect, UiVector};
+use ui_math::{Axis, UiPoint, UiRect, UiVector};
 use ui_theme::ThemeTokens;
 
 use crate::editor_app::{ConsoleMessageKind, RunenwerkEditorApp};
@@ -2823,9 +2823,11 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
         .clone();
     let initial_max = shell_state
         .runtime()
-        .max_scroll_offset(&tree, bounds, console_scroll_widget)
+        .max_scroll_offset_for_axis(&tree, bounds, console_scroll_widget, Axis::Vertical)
         .unwrap_or(0.0);
-    let initial_offset = shell_state.runtime().scroll_offset(console_scroll_widget);
+    let initial_offset = shell_state
+        .runtime()
+        .scroll_offset_for_axis(console_scroll_widget, Axis::Vertical);
     assert!(
         (initial_offset - initial_max).abs() <= 1.0,
         "follow-enabled frame should pin console to bottom",
@@ -2840,9 +2842,16 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
         .clone();
     let max_after_append = shell_state
         .runtime()
-        .max_scroll_offset(&tree_after_append, bounds, console_scroll_widget)
+        .max_scroll_offset_for_axis(
+            &tree_after_append,
+            bounds,
+            console_scroll_widget,
+            Axis::Vertical,
+        )
         .unwrap_or(0.0);
-    let offset_after_append = shell_state.runtime().scroll_offset(console_scroll_widget);
+    let offset_after_append = shell_state
+        .runtime()
+        .scroll_offset_for_axis(console_scroll_widget, Axis::Vertical);
     assert!(
         (offset_after_append - max_after_append).abs() <= 1.0,
         "auto-follow should stay at bottom while enabled",
@@ -2851,15 +2860,21 @@ fn console_follow_auto_scrolls_only_while_follow_enabled() {
     app.surface_sessions_mut()
         .session_mut(console_surface)
         .console_follow_enabled = false;
-    shell_state
-        .runtime_mut()
-        .set_scroll_offset(console_scroll_widget, (max_after_append * 0.5).max(0.0));
-    let previous_offset = shell_state.runtime().scroll_offset(console_scroll_widget);
+    shell_state.runtime_mut().set_scroll_offset_for_axis(
+        console_scroll_widget,
+        Axis::Vertical,
+        (max_after_append * 0.5).max(0.0),
+    );
+    let previous_offset = shell_state
+        .runtime()
+        .scroll_offset_for_axis(console_scroll_widget, Axis::Vertical);
 
     app.append_console_line("[test] new follow-off line");
     let _ =
         RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
-    let offset_follow_disabled = shell_state.runtime().scroll_offset(console_scroll_widget);
+    let offset_follow_disabled = shell_state
+        .runtime()
+        .scroll_offset_for_axis(console_scroll_widget, Axis::Vertical);
     assert!(
         (offset_follow_disabled - previous_offset).abs() <= 1.0,
         "disabled follow should preserve user scroll position",

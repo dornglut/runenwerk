@@ -7,6 +7,7 @@
       Scroll(
         id: AuthoredId("scroll"),
         axis: Horizontal,
+        input: (horizontal: WheelAndMiddleDrag, vertical: WheelOnly),
         children: [
           Column(
             id: AuthoredId("rows"),

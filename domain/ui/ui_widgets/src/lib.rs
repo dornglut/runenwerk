@@ -30,7 +30,7 @@ pub use image::image;
 pub use label::label;
 pub use numeric_input::{NumericInputConfig, numeric_input};
 pub use panel::panel;
-pub use scroll::{hscroll, scroll, vscroll};
+pub use scroll::{hscroll, scroll, vscroll, xy_scroll};
 pub use search_field::search_field;
 pub use select::select;
 pub use spacer::spacer;

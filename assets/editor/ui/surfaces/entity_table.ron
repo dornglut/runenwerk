@@ -11,6 +11,7 @@
           Scroll(
             id: AuthoredId("controls_scroll"),
             axis: Horizontal,
+            input: (horizontal: WheelAndMiddleDrag, vertical: WheelOnly),
             children: [
               Row(
                 id: AuthoredId("controls"),
@@ -27,6 +28,7 @@
           Scroll(
             id: AuthoredId("header_scroll"),
             axis: Horizontal,
+            input: (horizontal: WheelAndMiddleDrag, vertical: WheelOnly),
             children: [
               Row(
                 id: AuthoredId("header_row"),
@@ -46,6 +48,7 @@
               Scroll(
                 id: AuthoredId("table_scroll_x"),
                 axis: Horizontal,
+                input: (horizontal: WheelAndMiddleDrag, vertical: WheelOnly),
                 children: [
                   Table(
                     id: AuthoredId("table"),

@@ -17,7 +17,7 @@ use ui_input::{
     EventPropagation, FocusChange, InputResponse, Key, KeyState, PointerCapture, PointerEvent,
     PointerEventKind, UiInputEvent,
 };
-use ui_math::UiRect;
+use ui_math::{Axis, UiRect};
 use ui_render_data::UiFrame;
 use ui_text::FontAtlasSource;
 use ui_theme::ThemeTokens;
@@ -202,14 +202,18 @@ impl RunenwerkEditorShellController {
         shell_state.set_last_bounds(bounds);
         if console_follow_enabled_for_active_surface(app, shell_state)
             && let Some(console_scroll_widget_id) = active_console_scroll_widget(shell_state)
-            && let Some(max_offset) =
-                shell_state
-                    .runtime()
-                    .max_scroll_offset(&tree, bounds, console_scroll_widget_id)
+            && let Some(max_offset) = shell_state.runtime().max_scroll_offset_for_axis(
+                &tree,
+                bounds,
+                console_scroll_widget_id,
+                Axis::Vertical,
+            )
         {
-            shell_state
-                .runtime_mut()
-                .set_scroll_offset(console_scroll_widget_id, max_offset);
+            shell_state.runtime_mut().set_scroll_offset_for_axis(
+                console_scroll_widget_id,
+                Axis::Vertical,
+                max_offset,
+            );
         }
         shell_state.runtime_mut().state_mut().advance_frame();
         let frame = shell_state
@@ -303,10 +307,12 @@ impl RunenwerkEditorShellController {
         let console_scroll_widget_id = active_console_scroll_widget(shell_state);
         let pre_at_bottom = console_scroll_widget_id
             .map(|widget_id| {
-                let pre_offset = shell_state.runtime().scroll_offset(widget_id);
+                let pre_offset = shell_state
+                    .runtime()
+                    .scroll_offset_for_axis(widget_id, Axis::Vertical);
                 let pre_max = shell_state
                     .runtime()
-                    .max_scroll_offset_for_layout(&tree, &layouts, widget_id)
+                    .max_scroll_offset_for_layout_axis(&tree, &layouts, widget_id, Axis::Vertical)
                     .unwrap_or(0.0);
                 is_at_bottom(pre_offset, pre_max)
             })
@@ -371,10 +377,15 @@ impl RunenwerkEditorShellController {
             ) {
                 let post_offset = shell_state
                     .runtime()
-                    .scroll_offset(console_scroll_widget_id);
+                    .scroll_offset_for_axis(console_scroll_widget_id, Axis::Vertical);
                 let post_max = shell_state
                     .runtime()
-                    .max_scroll_offset_for_layout(&tree, &post_layouts, console_scroll_widget_id)
+                    .max_scroll_offset_for_layout_axis(
+                        &tree,
+                        &post_layouts,
+                        console_scroll_widget_id,
+                        Axis::Vertical,
+                    )
                     .unwrap_or(0.0);
                 let post_at_bottom = is_at_bottom(post_offset, post_max);
                 if post_at_bottom {
