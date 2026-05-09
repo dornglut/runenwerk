@@ -12,6 +12,7 @@ winit = "0.30.9"
 
 editor_core.workspace = true
 editor_definition.workspace = true
+editor_preview.workspace = true
 editor_scene.workspace = true
 editor_inspector.workspace = true
 editor_shell.workspace = true
@@ -35,3 +36,7 @@ ecs.workspace = true
 scene.workspace = true
 glam.workspace = true
 ron = "0.8.1"
+engine_net = { path = "../../net/engine_net" }
+engine_net_quic = { path = "../../net/engine_net_quic" }
+rustls = "0.23.37"
+tokio = { version = "1.48.0", features = ["macros", "rt", "sync", "time"] }

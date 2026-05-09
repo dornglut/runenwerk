@@ -26,3 +26,4 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0003: Ratification Is Domain-Specific](accepted/0003-ratification-is-domain-specific.md)
 - [0004: Separate Description From Execution](accepted/0004-separate-description-from-execution.md)
 - [0005: Projections Are Derived State](accepted/0005-projections-are-derived-state.md)
+- [0007: External Runtime Preview Process](accepted/0007-external-runtime-preview-process.md)

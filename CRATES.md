@@ -51,6 +51,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ui_widgets` | `domain/ui/ui_widgets` | domain | Widget constructors over `ui_tree` contracts. | evolving |
 | `editor_core` | `domain/editor/editor_core` | domain | Editor command, capability, transaction, ratification, migration, selection, session, sharing, and workflow contracts. | evolving |
 | `editor_definition` | `domain/editor/editor_definition` | domain | Editor-owned definition documents, lifecycle validation, workspace/profile/layout, menu, shortcut, theme, command binding, panel registry, tool-surface, toolbar, shell chrome, route, availability, and surface template schemas. | evolving |
+| `editor_preview` | `domain/editor/editor_preview` | domain | Engine-agnostic preview session, command, event, reload decision/status, runtime product, and bootstrap DTOs for external runtime preview. | evolving |
 | `editor_inspector` | `domain/editor/editor_inspector` | domain | Inspector model, editing, target, resolution, bridge, schema interop, session, and validation contracts. | evolving |
 | `editor_scene` | `domain/editor/editor_scene` | domain | Editor scene model, commands, command descriptors, proposal adapter, command bridge, and scene command contracts. | evolving |
 | `editor_viewport` | `domain/editor/editor_viewport` | domain | Editor viewport camera, expression, hit, overlay, snap, and viewport contracts. | evolving |
@@ -64,6 +65,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `engine_net_quic` | `net/engine_net_quic` | net | QUIC transport/runtime adapter for `engine_net`. | evolving |
 | `engine_replay` | `net/engine_history` | net | Replay archive, recorder, controller, policy, and validation substrate. | evolving |
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app, shell bridge, runtime viewport/render integration, persistence, and authoring workflows. | internal/evolving |
+| `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime preview child process, loopback QUIC bootstrap host, preview/play app shell, and headless preview test harness. | internal/evolving |
 | `godot_chunking_addon` | `adapters/godot_chunking_addon` | adapter/tool | Godot bridge for chunking/spatial integration. | internal |
 
 ## Documentation Status

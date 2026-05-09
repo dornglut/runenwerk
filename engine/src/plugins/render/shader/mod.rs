@@ -1,6 +1,5 @@
-use crate::plugins::shared::{
-    ReloadStatusPayload, file_modified, should_poll, should_reload, watch_status_line,
-};
+pub use crate::plugins::shared::ReloadStatusPayload;
+use crate::plugins::shared::{file_modified, should_poll, should_reload, watch_status_line};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};

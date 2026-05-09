@@ -12,6 +12,7 @@ use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_runtime::{EditorPrimitive, EditorPrimitiveKind};
+use crate::runtime::preview_process::PreviewProcessManager;
 use crate::shell::{
     EditorDefinitionActivation, RunenwerkEditorShellState, activate_editor_definition_document,
     is_known_editor_command_key, validate_editor_shortcuts,
@@ -36,6 +37,11 @@ pub struct EditorHostResource {
     pub app: RunenwerkEditorApp,
     pub shell_state: RunenwerkEditorShellState,
     pub theme: ThemeTokens,
+}
+
+#[derive(Default, ecs::Resource)]
+pub struct RuntimePreviewProcessResource {
+    pub manager: PreviewProcessManager,
 }
 
 impl Default for EditorHostResource {

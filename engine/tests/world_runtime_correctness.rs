@@ -10,7 +10,10 @@ use engine::plugins::world::plugin::{
     WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeState,
 };
 use engine::plugins::world::{
-    build::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource},
+    build::integration::{
+        WorldCompletedBuildOutput, WorldCompletedBuildQueueResource, WorldSdfRuntimePayloadPackage,
+        enqueue_ratified_world_sdf_payload_package,
+    },
     build::jobs::WorldBuildStaleness,
 };
 use engine::prelude::{App, AuthorityRole};
@@ -66,6 +69,57 @@ fn dirty_chunk_without_runtime_record_is_bootstrapped_and_built() {
         authority.world_revision.0 > 0,
         "world revision should advance when build outputs integrate"
     );
+}
+
+#[test]
+fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
+    let mut app = App::headless();
+    app.add_plugin(WorldPlugin);
+
+    let chunk_id = ChunkId::new(WorldId(0), ChunkCoord3 { x: 1, y: 2, z: 3 });
+    {
+        let mut completed = app
+            .world_mut()
+            .remove_resource::<WorldCompletedBuildQueueResource>()
+            .expect("completed build queue should exist");
+        let enqueued = {
+            let chunks = app
+                .world_mut()
+                .resource_mut::<WorldChunkRuntimeMapResource>()
+                .expect("chunk runtime should exist");
+            enqueue_ratified_world_sdf_payload_package(
+                &mut completed,
+                chunks,
+                WorldSdfRuntimePayloadPackage::new(
+                    vec![SdfChunkPayload {
+                        chunk_id,
+                        chunk_revision: ChunkRevision(11),
+                        chunk_generation: ChunkGeneration(12),
+                        checksum: 99,
+                        ..SdfChunkPayload::default()
+                    }],
+                    RegionSdfSummary::default(),
+                ),
+            )
+        };
+        assert_eq!(enqueued, 1);
+        app.world_mut().insert_resource(completed);
+    }
+
+    let app = app
+        .run_for_ticks(1)
+        .expect("runtime intake should integrate through world systems");
+    let sdf_store = app
+        .world()
+        .resource::<SdfChunkStoreResource>()
+        .expect("sdf store should be available");
+    let payload = sdf_store
+        .chunks
+        .get(&chunk_id)
+        .expect("payload should reach the runtime chunk store through integration");
+
+    assert_eq!(payload.checksum, 99);
+    assert_eq!(payload.chunk_revision, ChunkRevision(11));
 }
 
 #[test]

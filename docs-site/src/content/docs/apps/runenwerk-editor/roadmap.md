@@ -20,11 +20,14 @@ related_designs:
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ../../design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+related_adrs:
+  - ../../adr/accepted/0007-external-runtime-preview-process.md
 related_roadmaps:
   - ../../domain/ui/roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
 related_reports:
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
+  - ../../reports/closeouts/m5-runtime-preview/closeout.md
 related:
   - ./execution-priority-checklist.md
   - ./current-architecture.md
@@ -86,7 +89,7 @@ Current post-M3 gaps:
 - M2 shell seams are closed: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage.
 - M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
 - The M3.5 UI definition/formation closeout is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar/menu fixture formation, normal shell chrome formation, common provider surface fixture formation, and app-owned fixture validation exist. Provider data, viewport overlays, editor mutations, and route execution remain outside `ui_definition`.
-- The first M4 asset foundation exists: `domain/asset` owns asset ids, taxonomy, source/artifact descriptors, dependency graph, deterministic import plans, diagnostics, and ratification; `ProjectFileV2` migration exists in `domain/editor/editor_persistence/src/project_file.rs`; `world_sdf` owns field-product descriptors and ratification; `world_ops` owns generic product invalidation/build helpers; and the editor app owns initial catalog runtime, import jobs, field-product jobs, and first Asset Browser/Import Inspector/Field Product Viewer/SDF Brush Browser providers. M5 project-owned live reload streams and runtime preview remain open.
+- The M4 asset foundation exists: `domain/asset` owns asset ids, taxonomy, source/artifact descriptors, dependency graph, deterministic import plans, diagnostics, and ratification; `ProjectFileV2` migration exists in `domain/editor/editor_persistence/src/project_file.rs`; `world_sdf` owns field-product descriptors and ratification; `world_ops` owns generic product invalidation/build helpers; and the editor app owns initial catalog runtime, import jobs, field-product jobs, and first Asset Browser/Import Inspector/Field Product Viewer/SDF Brush Browser providers. M5 now adds external runtime preview, project-owned reload status classification, world_sdf runtime intake, and restart boundaries for the existing product families.
 - There is no `domain/material_graph`, `domain/texture`, `domain/procgen`, `domain/particles`, `domain/physics`, or `domain/animation`.
 - There are no editor providers for material graph editing, procedural texturing, Texture3D/volume inspection, procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, or simulation preview.
 - There is no `domain/gameplay_graph`, Action/Trigger/Rule IR, gameplay graph compiler, gameplay graph to ECS query/event/schedule lowering, or gameplay graph editor/debug provider.
@@ -96,9 +99,9 @@ Current post-M3 gaps:
 - M1 through M3 are complete against current editor, shell, UI, scene, SDF, and persistence docs.
 - M3.5 is closed as the UI/editor infrastructure slice: the closeout candidate landed on 2026-05-06, and the follow-up toolbar/provider fixture migration seams were closed afterward.
 - M3.6 is complete as of 2026-05-06 for authored definition editing, retained preview, and explicit apply/rollback snapshots. Follow-up self-authoring maturity now wires applied theme definitions into the live editor host theme, forms applied workspace layout definitions into live `WorkspaceState`, exports definitions as versioned packages, and activates UI template/editor-binding/menu/shortcut/command-binding/panel-registry/tool-surface-registry catalogs before the next shell frame.
-- M3.7 is complete as a no-compromise viewport expression architecture closeout as of 2026-05-08. Multi-viewport previews now have explicit viewport instances, viewport-scoped products, per-viewport render jobs, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-keyed camera/debug/root commands, camera orbit/pan/zoom routing, and duplicate/close lifecycle cleanup. The follow-on provider surface workflow redesign and surface/product maturity pass are also complete as of 2026-05-08 for typed surface wrappers, entity-table query workflows, inspector enum mutation routing, reusable-control polish, visible descriptor-only field/atlas/volume/brickmap/history viewport products, and guard coverage. The M4A-M4I integrated UI/editor/asset foundation is complete as of 2026-05-09; the next primary product track is M5 runtime preview, project-owned data hot reload, and restart boundaries.
+- M3.7 is complete as a no-compromise viewport expression architecture closeout as of 2026-05-08. Multi-viewport previews now have explicit viewport instances, viewport-scoped products, per-viewport render jobs, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-keyed camera/debug/root commands, camera orbit/pan/zoom routing, and duplicate/close lifecycle cleanup. The follow-on provider surface workflow redesign and surface/product maturity pass are also complete as of 2026-05-08 for typed surface wrappers, entity-table query workflows, inspector enum mutation routing, reusable-control polish, visible descriptor-only field/atlas/volume/brickmap/history viewport products, and guard coverage. The M4A-M4I integrated UI/editor/asset foundation and M5 external runtime preview/reload boundary are complete as of 2026-05-09; the next primary product track is M6 procedural authoring domains.
 - Native multi-window editing is designed in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`. It follows the render product-surface foundation and should land before second-monitor workflows are treated as product-ready.
-- M4 is the integrated UI/editor/asset foundation and now ends at M4I. M4A-M4E finished active UI/editor consumption and reusable-control cleanup; M4F-M4I add the first SDF/field-first asset contracts, `ProjectFileV2`, field-product descriptors, generic product invalidation, app-owned import/field-product jobs, first asset surfaces, scene-manifest catalog adapter, and displayable `Rgba8Unorm` viewport debug products. M5 starts at runtime preview, project-owned data hot reload, and restart boundaries.
+- M4 is the integrated UI/editor/asset foundation and now ends at M4I. M4A-M4E finished active UI/editor consumption and reusable-control cleanup; M4F-M4I add the first SDF/field-first asset contracts, `ProjectFileV2`, field-product descriptors, generic product invalidation, app-owned import/field-product jobs, first asset surfaces, scene-manifest catalog adapter, and displayable `Rgba8Unorm` viewport debug products. M5 is complete for external runtime preview, project-owned data reload classification, and restart boundaries over the existing product families.
 - M6 is not one implementation ticket. It is implementation-ready only per sub-milestone after the owning first-slice design and domain contract docs exist.
 - M7 is implementation-ready only for preview/play/session boundaries first. Gameplay graph, particles, physics, animation, procgen, and simulation hot reload depend on their formed-product contracts from M6.
 - Later self-authoring packaging/extensibility is implementation-ready for the retained UI path only. Compiled-reactive or ECS-driven UI execution remains blocked; neither strategy was promoted before M2, and any future promotion requires a separate active design or accepted ADR plus a roadmap update.
@@ -403,14 +406,32 @@ Exit criteria:
 
 ### M5 - Runtime Preview, Data Hot Reload, And Restart Boundaries
 
+Status: complete as of 2026-05-09 for the concrete external-runtime slice. Runtime preview, simulate, and play execution now target an external app-owned runtime child process over loopback QUIC, governed by `docs-site/src/content/docs/adr/accepted/0007-external-runtime-preview-process.md`; the hardened slice has a checked `editor_preview` protocol codec, serialized bootstrap line, headless command/event loop, heartbeat/shutdown round trip, bounded editor command queue, and project-owned reload status over the existing scene/asset/field-product/`world_sdf`/shader/UI-definition contracts while future M6 domains fail closed as unsupported or restart-required. Closeout evidence is recorded in `docs-site/src/content/docs/reports/closeouts/m5-runtime-preview/closeout.md`.
+
 Purpose: connect asset/product changes to runtime preview after catalog and import execution exist.
 
 Implementation order:
 
+- M5.0 design gate:
+  - `docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`
+    - record the external runtime preview process boundary, ownership rules, reload/restart boundary, and validation expectations.
+  - `docs-site/src/content/docs/adr/accepted/0007-external-runtime-preview-process.md`
+    - accept the long-term process, protocol, transport, and engine/app ownership decision.
 - `apps/runenwerk_editor/src/editor_app/state.rs`
   - separate edit, preview, simulate, and play session state.
+- `domain/editor/editor_preview/src/lib.rs`
+  - own engine-agnostic preview session, command, event, reload status, reload decision, runtime product DTOs, checked preview payload metadata, and serialized bootstrap format.
+- `net/engine_net/src/protocol/`
+  - add generic bidirectional typed payload messages without editor-specific enum variants.
+- `apps/runenwerk_runtime_preview/src/main.rs`
+  - run the external preview child process with a separate preview/play window, loopback QUIC endpoint, bootstrap connection output, and headless command/event mode that waits for explicit shutdown.
+- `apps/runenwerk_editor/src/runtime/preview_process/`
+  - own editor-side child spawn/connect/heartbeat/shutdown, bounded command queueing, mode requests, and status ingestion.
 - `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`
-  - produce safe reload streams for scenes, SDF fields, `world_sdf` payloads, material products, textures, shaders, UI, graphs, scripts, and gameplay products.
+  - classify existing catalog/import/field-product changes as live reload, preview-session restart, runtime-process restart, unsupported, failed-preserved, or rejected;
+  - project reload status lines into the existing Asset Browser, Import Inspector, and Field Product Viewer surfaces.
+- `engine/src/plugins/world/build/`
+  - provide a narrow runtime intake helper for ratified `world_sdf` payload packages, reusing build-output invariants instead of letting the editor write `SdfChunkStore` internals.
 - `engine/src/plugins/shared/reload.rs`
   - reuse reload status payloads for asset and runtime product streams.
 - `docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`
@@ -421,6 +442,9 @@ Validation:
 - data/assets reload live where safe;
 - unsafe structural changes require restart or session rebuild;
 - play/simulate cannot mutate authored documents without explicit commands.
+- external runtime preview process spawn/connect/heartbeat/shutdown works in headless tests.
+- future material, texture, procgen, particle, physics, animation, gameplay graph, graph execution, and scripting families emit explicit unsupported or restart-required statuses until their owning domains exist.
+- validation passed with `cargo metadata --no-deps --format-version 1`, `cargo test -p editor_preview -p engine_net -p engine_net_quic`, `cargo test -p runenwerk_editor -p runenwerk_runtime_preview -p engine -p asset -p world_sdf`, `python3 tools/docs/validate_docs.py`, `./quiet_editor_gate.sh`, and `./quiet_full_gate.sh`.
 
 Exit criteria:
 
@@ -552,7 +576,7 @@ Exit criteria:
 
 ### M1 - Editor Structural Core Closed
 
-Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M3.5 UI definition formation framework is validated, M3.6 UI self-authoring is complete as of 2026-05-06, and M4A-M4I active editor-definition/asset foundation work is complete as of 2026-05-09. M5 starts runtime preview and project-owned hot reload while procedural domains and gameplay graph remain deferred.
+Status: complete as of 2026-05-05. The M1 scope is implemented and covered by focused editor core, scene, shell, app, scene-authoring smoke, viewport architecture guard, formatting, and docs validation checks. M2 and M3 are also complete; M3.5 UI definition formation framework is validated, M3.6 UI self-authoring is complete as of 2026-05-06, M4A-M4I active editor-definition/asset foundation work is complete as of 2026-05-09, and M5 external runtime preview/reload boundary is complete as of 2026-05-09. Procedural domains and gameplay graph remain deferred to M6.
 
 Purpose: close the structural seams that every later feature depends on.
 
@@ -720,7 +744,7 @@ Validation:
 
 Purpose: move the former final self-authoring/UI design work into the Now track so Runenwerk can style, inspect, validate, preview, and author UI definitions before later asset, procedural, gameplay, runtime, overlay, and in-game UI surfaces are built.
 
-Status: complete as of 2026-05-06 for the self-authoring document lifecycle and retained preview path. Implemented: versioned UI definition migration wrapper, editor-owned workspace/profile/layout/theme/menu/shortcut/command-binding/panel/tool-surface schemas, editor-definition validation guards for runtime/session identity leakage, Editor Design workspace/profile, structural self-authoring tool-surface kinds, app-owned fixture document loading, retained UI preview, validation diagnostics, command diff/apply preview, retained provider control routes, draft UI hierarchy text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, explicit apply/rollback shell commands, live activation for applied theme definitions, and provider surfaces for definition outliner, UI hierarchy, UI canvas, style inspector, bindings, dock/layout preview, theme editor, shortcut editor, menu editor, definition validation, and command diff. Follow-up maturity completed on 2026-05-08: applied workspace layout definitions now form and replace live `WorkspaceState`, UI templates and editor bindings feed live toolbar/shell-chrome formation, menu/shortcut/command-binding definitions activate into app-owned catalogs, panel/tool-surface registries activate with active-workspace compatibility checks, tool-surface registries feed future switch/create choices, reusable field/control polish covers the active editor surfaces, and export writes a versioned package instead of a bare definition document. M4A-M4I completed on 2026-05-09: active menu consumption, active shortcut dispatch, active panel/tool-surface registry projection, shared reusable-control composition, first asset/import/field-product provider surfaces, and first field/volume debug products are now implemented. Still separate future tracks: richer asset import controls, persisted catalog/cache management, project-owned reload streams, payload ECS enum variants, native OS menu/shortcut integration, external marketplace workflows, compiled-reactive UI execution, and ECS-driven UI execution.
+Status: complete as of 2026-05-06 for the self-authoring document lifecycle and retained preview path. Implemented: versioned UI definition migration wrapper, editor-owned workspace/profile/layout/theme/menu/shortcut/command-binding/panel/tool-surface schemas, editor-definition validation guards for runtime/session identity leakage, Editor Design workspace/profile, structural self-authoring tool-surface kinds, app-owned fixture document loading, retained UI preview, validation diagnostics, command diff/apply preview, retained provider control routes, draft UI hierarchy text edits, draft theme color edits, draft workspace-layout add-tab/split-root/close-tab edits, explicit apply/rollback shell commands, live activation for applied theme definitions, and provider surfaces for definition outliner, UI hierarchy, UI canvas, style inspector, bindings, dock/layout preview, theme editor, shortcut editor, menu editor, definition validation, and command diff. Follow-up maturity completed on 2026-05-08: applied workspace layout definitions now form and replace live `WorkspaceState`, UI templates and editor bindings feed live toolbar/shell-chrome formation, menu/shortcut/command-binding definitions activate into app-owned catalogs, panel/tool-surface registries activate with active-workspace compatibility checks, tool-surface registries feed future switch/create choices, reusable field/control polish covers the active editor surfaces, and export writes a versioned package instead of a bare definition document. M4A-M4I completed on 2026-05-09: active menu consumption, active shortcut dispatch, active panel/tool-surface registry projection, shared reusable-control composition, first asset/import/field-product provider surfaces, and first field/volume debug products are now implemented. M5 completed on 2026-05-09: external runtime preview process contracts, reload status classification/projection, world_sdf runtime intake, and restart boundaries are implemented. Still separate future tracks: richer asset import controls, persisted catalog/cache management, payload ECS enum variants, native OS menu/shortcut integration, external marketplace workflows, compiled-reactive UI execution, and ECS-driven UI execution.
 
 Owning design:
 
@@ -892,24 +916,46 @@ Validation:
 
 ### M5 - Runtime Preview, Data Hot Reload, And Restart Boundaries
 
+Status: complete as of 2026-05-09 for the concrete external-runtime slice. External runtime preview process ownership is accepted in `docs-site/src/content/docs/adr/accepted/0007-external-runtime-preview-process.md`; implementation landed without pulling M6 domain work forward, and the hardening pass adds checked protocol/bootstrap handling plus real headless command/event lifecycle coverage. Closeout evidence is recorded in `docs-site/src/content/docs/reports/closeouts/m5-runtime-preview/closeout.md`.
+
 Purpose: make ratified project content executable inside clear runtime preview and reload boundaries without moving asset semantics into the engine or app shell.
 
 Implementation targets:
 
+- `docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`
+  - keep the external runtime process, reload/restart boundary, ownership rules, and validation expectations aligned with implementation.
+- `docs-site/src/content/docs/adr/accepted/0007-external-runtime-preview-process.md`
+  - remain the governing decision for M5 preview, simulate, and play isolation.
+- `domain/editor/editor_preview/src/lib.rs`
+  - define `PreviewSessionId`, `PreviewMode`, `PreviewCommand`, `PreviewEvent`, `ReloadDecision`, `ReloadStatus`, `RuntimeProductRef`, runtime payload DTOs, checked preview payload metadata, and serialized bootstrap stdout format without depending on engine, net, or app crates.
+- `net/engine_net/src/protocol/`
+  - carry generic bidirectional typed payload commands so preview DTOs can cross transport without making network protocol enums editor-specific.
+- `net/engine_net_quic/src/`
+  - carry those generic payload messages over loopback QUIC.
+- `apps/runenwerk_runtime_preview/src/main.rs`
+  - own the child process, separate preview/play window, bootstrap connection output, and headless command/event mode that waits for explicit shutdown.
 - `apps/runenwerk_editor/src/editor_app/state.rs`
   - separate edit, preview, simulate, and play session state.
+- `apps/runenwerk_editor/src/runtime/preview_process/`
+  - own editor-side child spawn/connect/heartbeat/shutdown, bounded pending command queueing, mode transition requests, event ingestion, and child lifecycle fallback.
 - `apps/runenwerk_editor/src/runtime/app.rs`
   - compose runtime preview/play resources without making the generic engine editor-shaped.
 - `domain/editor/editor_core/src/session.rs`
   - validate play/simulate mode transitions through scoped mode contracts.
+- `domain/editor/editor_shell/src/workspace/profile.rs::default_workspace_profile_registry`
+  - expose preview/simulate/play compatibility only through profiles and document kinds that support those modes.
 - `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`
-  - route safe data reload streams and status changes from the existing catalog, import jobs, and field-product jobs into editor/runtime consumers while preserving prior valid products on failure.
+  - route safe data reload streams and status changes from the existing catalog, import jobs, and field-product jobs into editor/runtime consumers while preserving prior valid products on failure;
+  - classify current scene, asset, field-product, `world_sdf`, shader, and UI-definition families as live reload, preview-session restart, runtime-process restart, unsupported, failed-preserved, or rejected;
+  - expose reload status lines through the existing Asset Browser, Import Inspector, and Field Product Viewer surfaces.
 - `domain/world_sdf/src/storage.rs::SdfChunkStore`
   - receive ratified chunk/page/brick payload artifacts through runtime/app integration; do not let the editor write private storage internals directly.
 - `engine/src/plugins/render/shader/hot_reload.rs::poll_shader_hot_reload`
   - integrate shader asset revisions and diagnostics with the asset reload stream.
 - `engine/src/plugins/shared/reload.rs`
   - reuse reload status payloads for asset, field product, `world_sdf` payload, shader, scene, prefab, UI, graph, and script hot reload status.
+- `apps/runenwerk_editor/src/runtime/preview_process/shader_status.rs::shader_reload_status_to_preview_status`
+  - map engine shader reload payloads into `editor_preview::ReloadStatus` at the app boundary.
 - `docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`
   - keep the data hot reload versus Rust rebuild/restart boundary aligned with implementation.
 
@@ -917,9 +963,14 @@ Validation:
 
 - changed asset/product revisions are classified as live-reloadable or restart-required through explicit status payloads;
 - edit, preview, simulate, and play transitions fail closed for incompatible workspace/document/mode combinations;
+- external runtime preview process spawn/connect/heartbeat/shutdown works in headless mode, including actual child-process bootstrap and exit;
 - failed reloads preserve the prior valid runtime product;
 - ratified field and `world_sdf` products can be previewed or loaded through app/engine integration without treating mesh/glTF as world truth;
-- `cargo test -p runenwerk_editor -p engine -p asset`;
+- future material, texture, procgen, particle, physics, animation, gameplay graph, graph execution, and scripting families emit explicit unsupported or restart-required statuses until their owning domains exist;
+- `cargo metadata --no-deps --format-version 1`;
+- `cargo test -p editor_preview -p engine_net -p engine_net_quic`;
+- `cargo test -p runenwerk_editor -p runenwerk_runtime_preview -p engine -p asset -p world_sdf`;
+- `python3 tools/docs/validate_docs.py`;
 - `./quiet_full_gate.sh`.
 
 ### M6 - Procedural Authoring Workspaces Beyond Scene Editing

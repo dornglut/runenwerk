@@ -29,6 +29,7 @@ impl EditorSurfaceProvider for FieldProductViewerProvider {
         {
             lines.push("selected field product is potentially stale".to_string());
         }
+        lines.extend(context.app.asset_catalog_runtime().reload_status_lines());
         let (root, routes) = build_self_authoring_control_panel(
             context.theme,
             request.tool_surface_instance_id,

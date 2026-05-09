@@ -1,0 +1,13 @@
+[package]
+name = "runenwerk_runtime_preview"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+editor_preview.workspace = true
+engine = { path = "../../engine" }
+engine_net = { path = "../../net/engine_net" }
+engine_net_quic = { path = "../../net/engine_net_quic" }
+rustls = "0.23.37"
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "sync", "time"] }

@@ -61,6 +61,8 @@ pub fn handle_client_message(
                 join_state,
             })]
         }
-        ClientMessage::InputFrame(_) | ClientMessage::Ack(_) => Vec::new(),
+        ClientMessage::InputFrame(_) | ClientMessage::Ack(_) | ClientMessage::TypedPayload(_) => {
+            Vec::new()
+        }
     }
 }

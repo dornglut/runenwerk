@@ -58,6 +58,7 @@ pub fn observe_server_message(state: &mut ClientSessionState, message: &ServerMe
         ServerMessage::Snapshot(_)
         | ServerMessage::DeltaSnapshot(_)
         | ServerMessage::RunEvent(_)
-        | ServerMessage::RunResult(_) => {}
+        | ServerMessage::RunResult(_)
+        | ServerMessage::TypedPayload(_) => {}
     }
 }

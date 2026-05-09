@@ -14,6 +14,7 @@ pub struct ModeId(pub u64);
 pub const EDIT_MODE_ID: ModeId = ModeId(1);
 pub const PLAY_MODE_ID: ModeId = ModeId(2);
 pub const SIMULATE_MODE_ID: ModeId = ModeId(3);
+pub const PREVIEW_MODE_ID: ModeId = ModeId(4);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModeDescriptor {
@@ -171,6 +172,17 @@ pub fn default_mode_descriptors() -> Vec<ModeDescriptor> {
                 DocumentKind::CommandBinding,
                 DocumentKind::PanelRegistry,
                 DocumentKind::ToolSurfaceDefinition,
+            ],
+        ),
+        ModeDescriptor::new(
+            PREVIEW_MODE_ID,
+            "preview",
+            "Preview",
+            vec![
+                DocumentKind::Scene,
+                DocumentKind::FieldProductPreview,
+                DocumentKind::RuntimeDebug,
+                DocumentKind::UiLayout,
             ],
         ),
         ModeDescriptor::new(
@@ -530,6 +542,28 @@ mod tests {
             .expect("edit mode should support material graphs in an edit workspace");
 
         let rejected = session.activate_mode(PLAY_MODE_ID, &registry, &context);
+        assert!(rejected.is_err());
+    }
+
+    #[test]
+    fn preview_mode_fails_closed_for_non_preview_document_kinds() {
+        let registry = ModeRegistry::default_registry();
+        let mut session = EditorSession::new();
+
+        session
+            .activate_mode(
+                PREVIEW_MODE_ID,
+                &registry,
+                &ModeActivationContext::new([PREVIEW_MODE_ID], Some(DocumentKind::Scene)),
+            )
+            .expect("scene preview should be compatible");
+
+        let rejected = session.activate_mode(
+            PREVIEW_MODE_ID,
+            &registry,
+            &ModeActivationContext::new([PREVIEW_MODE_ID], Some(DocumentKind::Theme)),
+        );
+
         assert!(rejected.is_err());
     }
 

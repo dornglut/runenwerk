@@ -3,6 +3,7 @@ use crate::editor_runtime::tool_state::EditorToolRuntimeState;
 use std::sync::Arc;
 
 use editor_definition::EditorDefinitionDocument;
+use editor_preview::{PreviewMode, PreviewSessionId};
 use editor_shell::WorkspaceState;
 
 use super::console::{ConsoleMessage, ConsoleMessageKind};
@@ -11,6 +12,7 @@ use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
+    pub(crate) runtime_mode_sessions: RuntimeModeSessions,
     pub(crate) tool_runtime_state: EditorToolRuntimeState,
     pub(crate) console_lines: Vec<ConsoleMessage>,
     pub(crate) console_max_lines: usize,
@@ -31,6 +33,7 @@ impl RunenwerkEditorApp {
     pub fn new() -> Self {
         Self {
             runtime: RunenwerkEditorRuntime::new(),
+            runtime_mode_sessions: RuntimeModeSessions::default(),
             tool_runtime_state: EditorToolRuntimeState::new(),
             console_lines: Vec::new(),
             console_max_lines: 256,
@@ -57,6 +60,14 @@ impl RunenwerkEditorApp {
 
     pub fn runtime_mut(&mut self) -> &mut RunenwerkEditorRuntime {
         &mut self.runtime
+    }
+
+    pub fn runtime_mode_sessions(&self) -> &RuntimeModeSessions {
+        &self.runtime_mode_sessions
+    }
+
+    pub fn runtime_mode_sessions_mut(&mut self) -> &mut RuntimeModeSessions {
+        &mut self.runtime_mode_sessions
     }
 
     pub fn reset_transient_editor_ui_state(&mut self) {
@@ -154,5 +165,96 @@ impl RunenwerkEditorApp {
 
     pub fn asset_catalog_runtime_mut(&mut self) -> &mut AssetCatalogRuntime {
         &mut self.asset_catalog_runtime
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeModeSessions {
+    pub edit: EditSessionState,
+    pub preview: ExternalRuntimeSessionState,
+    pub simulate: ExternalRuntimeSessionState,
+    pub play: ExternalRuntimeSessionState,
+}
+
+impl Default for RuntimeModeSessions {
+    fn default() -> Self {
+        Self {
+            edit: EditSessionState { active: true },
+            preview: ExternalRuntimeSessionState::new(PreviewMode::Preview),
+            simulate: ExternalRuntimeSessionState::new(PreviewMode::Simulate),
+            play: ExternalRuntimeSessionState::new(PreviewMode::Play),
+        }
+    }
+}
+
+impl RuntimeModeSessions {
+    pub fn begin_external_session(&mut self, mode: PreviewMode, session_id: PreviewSessionId) {
+        self.external_session_mut(mode).session_id = Some(session_id);
+    }
+
+    pub fn end_external_session(&mut self, mode: PreviewMode) {
+        self.external_session_mut(mode).session_id = None;
+    }
+
+    pub fn external_session(&self, mode: PreviewMode) -> &ExternalRuntimeSessionState {
+        match mode {
+            PreviewMode::Preview => &self.preview,
+            PreviewMode::Simulate => &self.simulate,
+            PreviewMode::Play => &self.play,
+        }
+    }
+
+    pub fn external_session_mut(&mut self, mode: PreviewMode) -> &mut ExternalRuntimeSessionState {
+        match mode {
+            PreviewMode::Preview => &mut self.preview,
+            PreviewMode::Simulate => &mut self.simulate,
+            PreviewMode::Play => &mut self.play,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditSessionState {
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalRuntimeSessionState {
+    pub mode: PreviewMode,
+    pub session_id: Option<PreviewSessionId>,
+}
+
+impl ExternalRuntimeSessionState {
+    pub const fn new(mode: PreviewMode) -> Self {
+        Self {
+            mode,
+            session_id: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use editor_preview::preview_session_id;
+
+    #[test]
+    fn runtime_mode_sessions_keep_preview_simulate_and_play_separate() {
+        let mut sessions = RuntimeModeSessions::default();
+        sessions.begin_external_session(PreviewMode::Preview, preview_session_id(1));
+        sessions.begin_external_session(PreviewMode::Play, preview_session_id(2));
+
+        assert_eq!(
+            sessions.external_session(PreviewMode::Preview).session_id,
+            Some(preview_session_id(1))
+        );
+        assert_eq!(
+            sessions.external_session(PreviewMode::Simulate).session_id,
+            None
+        );
+        assert_eq!(
+            sessions.external_session(PreviewMode::Play).session_id,
+            Some(preview_session_id(2))
+        );
     }
 }

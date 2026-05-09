@@ -41,6 +41,7 @@ UI substrate primitives             -> domain/ui/*
 UI surface semantics                -> domain/ui/ui_surface
 UI definition/formation framework   -> domain/ui/ui_definition
 Editor command/session contracts    -> domain/editor/editor_core
+Editor runtime preview protocol     -> domain/editor/editor_preview
 Editor inspector semantics          -> domain/editor/editor_inspector
 Editor scene authoring contracts    -> domain/editor/editor_scene
 Editor viewport semantics           -> domain/editor/editor_viewport
@@ -55,6 +56,7 @@ Network QUIC transport              -> net/engine_net_quic
 Simulation shared vocabulary        -> net/engine_sim
 Replay/history substrate            -> net/engine_history
 Runnable editor app wiring          -> apps/runenwerk_editor
+Runtime preview child app           -> apps/runenwerk_runtime_preview
 External host integration           -> adapters/*
 ```
 

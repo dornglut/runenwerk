@@ -815,6 +815,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "editor_preview"
+version = "0.1.0"
+dependencies = [
+ "asset",
+ "postcard",
+ "serde",
+ "world_sdf",
+]
+
+[[package]]
 name = "editor_scene"
 version = "0.1.0"
 dependencies = [
@@ -2715,15 +2725,20 @@ dependencies = [
  "editor_definition",
  "editor_inspector",
  "editor_persistence",
+ "editor_preview",
  "editor_scene",
  "editor_shell",
  "editor_viewport",
  "engine",
+ "engine_net",
+ "engine_net_quic",
  "glam 0.32.1",
  "ron",
+ "rustls",
  "scene",
  "serde",
  "spatial",
+ "tokio",
  "ui_definition",
  "ui_input",
  "ui_math",
@@ -2734,6 +2749,19 @@ dependencies = [
  "winit",
  "world_ops",
  "world_sdf",
+]
+
+[[package]]
+name = "runenwerk_runtime_preview"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "editor_preview",
+ "engine",
+ "engine_net",
+ "engine_net_quic",
+ "rustls",
+ "tokio",
 ]
 
 [[package]]

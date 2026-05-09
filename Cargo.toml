@@ -29,6 +29,7 @@ members = [
 
     "domain/editor/editor_core",
     "domain/editor/editor_definition",
+    "domain/editor/editor_preview",
     "domain/editor/editor_shell",
     "domain/editor/editor_viewport",
     "domain/editor/editor_scene",
@@ -52,6 +53,7 @@ members = [
     "net/engine_history",
 
     "apps/runenwerk_editor",
+    "apps/runenwerk_runtime_preview",
 
     "adapters/godot_chunking_addon",
 ]
@@ -79,6 +81,7 @@ ui_widgets = { path = "domain/ui/ui_widgets" }
 
 editor_core = { path = "domain/editor/editor_core" }
 editor_definition = { path = "domain/editor/editor_definition" }
+editor_preview = { path = "domain/editor/editor_preview" }
 editor_shell = { path = "domain/editor/editor_shell" }
 editor_viewport = { path = "domain/editor/editor_viewport" }
 editor_scene = { path = "domain/editor/editor_scene" }

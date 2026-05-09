@@ -1,7 +1,9 @@
 //! File: domain/editor/editor_shell/src/workspace/profile.rs
 //! Purpose: Workspace profile contracts for task-focused editor layout presets.
 
-use editor_core::{DocumentKind, EDIT_MODE_ID, ModeId};
+use editor_core::{
+    DocumentKind, EDIT_MODE_ID, ModeId, PLAY_MODE_ID, PREVIEW_MODE_ID, SIMULATE_MODE_ID,
+};
 use id_macros::id;
 
 use crate::{
@@ -286,7 +288,12 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     ToolSurfaceKind::Inspector,
                     ToolSurfaceKind::Console,
                 ],
-                vec![EDIT_MODE_ID],
+                vec![
+                    EDIT_MODE_ID,
+                    PREVIEW_MODE_ID,
+                    SIMULATE_MODE_ID,
+                    PLAY_MODE_ID,
+                ],
                 vec![DocumentKind::Scene],
             ),
             WorkspaceProfile::new(
@@ -299,7 +306,7 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     ToolSurfaceKind::Inspector,
                     ToolSurfaceKind::Console,
                 ],
-                vec![EDIT_MODE_ID],
+                vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
                 vec![DocumentKind::Scene, DocumentKind::SdfBrushLayer],
             ),
             WorkspaceProfile::new(
@@ -319,7 +326,7 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     ToolSurfaceKind::DefinitionValidation,
                     ToolSurfaceKind::CommandDiff,
                 ],
-                vec![EDIT_MODE_ID],
+                vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
                 vec![
                     DocumentKind::UiLayout,
                     DocumentKind::WorkspaceDefinition,
@@ -354,6 +361,9 @@ mod tests {
                 .contains(&ToolSurfaceKind::Viewport)
         );
         assert!(profile.default_modes.contains(&EDIT_MODE_ID));
+        assert!(profile.default_modes.contains(&PREVIEW_MODE_ID));
+        assert!(profile.default_modes.contains(&SIMULATE_MODE_ID));
+        assert!(profile.default_modes.contains(&PLAY_MODE_ID));
         assert!(profile.document_kind_filters.contains(&DocumentKind::Scene));
     }
 
@@ -442,5 +452,30 @@ mod tests {
                 .tool_surfaces()
                 .any(|surface| surface.tool_surface_kind == ToolSurfaceKind::DefinitionValidation)
         );
+    }
+
+    #[test]
+    fn preview_mode_is_profile_scoped_but_play_stays_scene_scoped() {
+        let registry = default_workspace_profile_registry();
+        let modelling_profile = registry
+            .profile(MODELLING_WORKSPACE_PROFILE_ID)
+            .expect("modelling profile should exist");
+        let editor_design_profile = registry
+            .profile(EDITOR_DESIGN_WORKSPACE_PROFILE_ID)
+            .expect("editor design profile should exist");
+
+        assert!(modelling_profile.default_modes.contains(&PREVIEW_MODE_ID));
+        assert!(!modelling_profile.default_modes.contains(&PLAY_MODE_ID));
+        assert!(
+            editor_design_profile
+                .default_modes
+                .contains(&PREVIEW_MODE_ID)
+        );
+        assert!(
+            !editor_design_profile
+                .default_modes
+                .contains(&SIMULATE_MODE_ID)
+        );
+        assert!(!editor_design_profile.default_modes.contains(&PLAY_MODE_ID));
     }
 }

@@ -7,6 +7,7 @@ use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt};
 
 use crate::runtime::resources::{
     EditorHostResource, EditorInputBridgeState, EditorViewportRenderState,
+    RuntimePreviewProcessResource,
 };
 use crate::runtime::systems::{
     bootstrap_editor_demo_system, dispatch_editor_input_system, produce_editor_picking_system,
@@ -71,6 +72,7 @@ impl IntoSystemSetKey for EditorRuntimeSet {
 impl Plugin for EditorAppPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EditorHostResource>();
+        app.init_resource::<RuntimePreviewProcessResource>();
         app.init_resource::<EditorInputBridgeState>();
         app.init_resource::<EditorViewportRenderState>();
         app.init_resource::<ViewportProductRegistryResource>();

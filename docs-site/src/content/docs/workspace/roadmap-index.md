@@ -46,6 +46,8 @@ Operational execution checklist:
   - [reports/closeouts/viewport-backend-cleanup/phase-1-plan.md](../reports/closeouts/viewport-backend-cleanup/phase-1-plan.md)
 - Surface workflow contract closeout evidence:
   - [reports/closeouts/surface-workflow-contract-redesign/closeout.md](../reports/closeouts/surface-workflow-contract-redesign/closeout.md)
+- M5 runtime preview closeout evidence:
+  - [reports/closeouts/m5-runtime-preview/closeout.md](../reports/closeouts/m5-runtime-preview/closeout.md)
 
 ## Current Cross-Track Status
 
@@ -56,17 +58,16 @@ Operational execution checklist:
 - current active editor/UI work has completed M3.6 self-authoring: durable schemas, Editor Design workspace/profile, provider surfaces, fixture document loading, validation, retained previews, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and apply/rollback exist before SDF/field asset and procedural workspace expansion.
 - the follow-on provider surface workflow redesign and self-authoring maturity pass are complete: outliner, entity-table, inspector, viewport, and editor-definition provider actions route through typed surface wrappers; entity-table query workflows, typed no-payload ECS enum inspector mutation, active UI/editor definition catalogs, and richer inspector controls are implemented while provider behavior stays outside `ui_definition`;
 - M4A-M4I integrated UI/editor/asset foundation is complete as of 2026-05-09: active menus, shortcuts, command bindings, panel registries, tool-surface registries, reusable-control cleanup, `domain/asset`, `ProjectFileV2`, field-product descriptors, generic product invalidation, first app-owned import/field-product jobs, asset provider surfaces, scene-manifest catalog adapter, and displayable field/volume viewport debug products exist.
-- remaining near-term work starts M5: runtime preview, project-owned data hot reload, reload diagnostics, and restart boundaries.
+- M5 external runtime preview, project-owned data hot reload classification, reload diagnostics projection, world_sdf runtime intake, and restart boundaries are complete as of 2026-05-09 for the existing scene/asset/field-product/world_sdf/shader/UI-definition slice.
+- remaining near-term work starts M6: procedural authoring domains beyond scene editing, sequenced by each owning domain design.
 
 ## Recommended Near-Term Order
 
-1. Start M5 runtime preview/data hot reload from the existing asset/catalog/import/product contracts.
-2. Add reload diagnostics and last-valid runtime product preservation before live preview mutates runtime state.
-3. Keep Rust/code rebuild and restart boundaries explicit in the editor app and engine reload contracts.
-4. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after asset/catalog/product foundations exist.
-5. Add gameplay graph ATR IR and ECS lowering only after narrower gameplay event/action/state/quest, authority, and source-map contracts are explicit.
-6. Treat compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game editors, native OS menu/shortcut mirroring, external marketplace packages, and payload ECS enum variants as design-first gates, not implementation tickets.
-7. Preserve architecture guards and keep domain/workspace docs synchronized as each phase lands.
+1. Start M6 procedural authoring domains from the completed M5 preview/reload boundary.
+2. Sequence procedural material/texturing, procgen, particles, physics, animation, and simulation domains after each owning first-slice design and formed-product contract exists.
+3. Add gameplay graph ATR IR and ECS lowering only after narrower gameplay event/action/state/quest, authority, and source-map contracts are explicit.
+4. Treat compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game editors, native OS menu/shortcut mirroring, external marketplace packages, and payload ECS enum variants as design-first gates, not implementation tickets.
+5. Preserve architecture guards and keep domain/workspace docs synchronized as each phase lands.
 
 ## Rule
 

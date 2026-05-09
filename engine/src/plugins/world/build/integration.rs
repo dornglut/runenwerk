@@ -27,6 +27,45 @@ pub struct WorldCompletedBuildQueueResource {
     pub outputs: VecDeque<WorldCompletedBuildOutput>,
 }
 
+#[derive(Debug, Clone)]
+pub struct WorldSdfRuntimePayloadPackage {
+    pub payloads: Vec<SdfChunkPayload>,
+    pub region_summary: RegionSdfSummary,
+}
+
+impl WorldSdfRuntimePayloadPackage {
+    pub fn new(payloads: Vec<SdfChunkPayload>, region_summary: RegionSdfSummary) -> Self {
+        Self {
+            payloads,
+            region_summary,
+        }
+    }
+}
+
+pub fn enqueue_ratified_world_sdf_payload_package(
+    completed: &mut WorldCompletedBuildQueueResource,
+    chunks: &mut WorldChunkRuntimeMapResource,
+    package: WorldSdfRuntimePayloadPackage,
+) -> usize {
+    let mut enqueued = 0usize;
+    for payload in package.payloads {
+        let chunk_id = payload.chunk_id;
+        let build_generation = BuildGeneration(payload.chunk_generation.0);
+        let record = chunks.ensure_chunk(chunk_id);
+        record.pending_build_generation = Some(build_generation);
+        completed.outputs.push_back(WorldCompletedBuildOutput {
+            chunk_id,
+            target_chunk_revision: payload.chunk_revision,
+            target_build_generation: build_generation,
+            staleness: WorldBuildStaleness::Current,
+            chunk_payload: payload,
+            region_summary: package.region_summary,
+        });
+        enqueued = enqueued.saturating_add(1);
+    }
+    enqueued
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn integrate_completed_build_outputs_system(
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
