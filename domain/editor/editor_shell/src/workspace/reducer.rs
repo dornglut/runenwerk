@@ -1097,6 +1097,10 @@ fn panel_kind_for_tool_surface(kind: ToolSurfaceKind) -> PanelKind {
         ToolSurfaceKind::MenuEditor => PanelKind::MenuEditor,
         ToolSurfaceKind::DefinitionValidation => PanelKind::DefinitionValidation,
         ToolSurfaceKind::CommandDiff => PanelKind::CommandDiff,
+        ToolSurfaceKind::AssetBrowser => PanelKind::AssetBrowser,
+        ToolSurfaceKind::ImportInspector => PanelKind::ImportInspector,
+        ToolSurfaceKind::FieldProductViewer => PanelKind::FieldProductViewer,
+        ToolSurfaceKind::SdfBrushBrowser => PanelKind::SdfBrushBrowser,
         ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
     }
 }

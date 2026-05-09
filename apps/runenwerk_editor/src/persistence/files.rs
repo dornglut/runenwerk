@@ -2,9 +2,9 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use editor_persistence::{
-    ProjectFileV1, SceneFileV2, SceneLoadResult, SceneMigrationPath, decode_ron,
-    decode_scene_file_with_migration, encode_ron_pretty, form_scene_for_runtime,
-    normalize_scene_file,
+    PROJECT_FILE_VERSION_V1, PROJECT_FILE_VERSION_V2, ProjectFileV1, ProjectFileV2, SceneFileV2,
+    SceneLoadResult, SceneMigrationPath, decode_ron, decode_scene_file_with_migration,
+    encode_ron_pretty, form_scene_for_runtime, migrate_project_file_v1_to_v2, normalize_scene_file,
 };
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
@@ -77,16 +77,33 @@ fn classification_message(class: editor_core::MigrationFailureClass) -> &'static
     }
 }
 
-pub fn write_project_file(path: &Path, project: &ProjectFileV1) -> Result<()> {
-    let ron = encode_ron_pretty(project).context("failed to encode ProjectFileV1 as RON")?;
+pub fn write_project_file(path: &Path, project: &ProjectFileV2) -> Result<()> {
+    let ron = encode_ron_pretty(project).context("failed to encode ProjectFileV2 as RON")?;
     std::fs::write(path, ron)
         .with_context(|| format!("failed to write project file: {}", path.display()))
 }
 
-pub fn read_project_file(path: &Path) -> Result<ProjectFileV1> {
+#[derive(serde::Deserialize)]
+struct ProjectFileVersionProbe {
+    version: u32,
+}
+
+pub fn read_project_file(path: &Path) -> Result<ProjectFileV2> {
     let source = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read project file: {}", path.display()))?;
-    decode_ron(&source).context("failed to decode ProjectFileV1 from RON")
+    let probe: ProjectFileVersionProbe =
+        decode_ron(&source).context("failed to decode project file version")?;
+    match probe.version {
+        PROJECT_FILE_VERSION_V1 => {
+            let project: ProjectFileV1 =
+                decode_ron(&source).context("failed to decode ProjectFileV1 from RON")?;
+            Ok(migrate_project_file_v1_to_v2(project))
+        }
+        PROJECT_FILE_VERSION_V2 => {
+            decode_ron(&source).context("failed to decode ProjectFileV2 from RON")
+        }
+        version => anyhow::bail!("unsupported project file version: {version}"),
+    }
 }
 
 #[cfg(test)]

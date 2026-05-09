@@ -128,6 +128,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "asset"
+version = "0.1.0"
+dependencies = [
+ "diagnostics",
+ "id",
+ "id_macros",
+ "ratification",
+ "serde",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -798,6 +809,7 @@ dependencies = [
 name = "editor_persistence"
 version = "0.1.0"
 dependencies = [
+ "asset",
  "ron",
  "serde",
 ]
@@ -872,6 +884,7 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "asset",
  "bytemuck",
  "criterion",
  "crossbeam-channel",
@@ -2695,6 +2708,7 @@ name = "runenwerk_editor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "asset",
  "bytemuck",
  "ecs",
  "editor_core",
@@ -2709,6 +2723,7 @@ dependencies = [
  "ron",
  "scene",
  "serde",
+ "spatial",
  "ui_definition",
  "ui_input",
  "ui_math",
@@ -2717,6 +2732,8 @@ dependencies = [
  "ui_text",
  "ui_theme",
  "winit",
+ "world_ops",
+ "world_sdf",
 ]
 
 [[package]]
@@ -4522,6 +4539,7 @@ name = "world_sdf"
 version = "0.1.0"
 dependencies = [
  "postcard",
+ "ratification",
  "serde",
  "spatial",
  "world_ops",

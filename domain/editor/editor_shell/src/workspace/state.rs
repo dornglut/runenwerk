@@ -127,6 +127,10 @@ pub enum PanelKind {
     MenuEditor,
     DefinitionValidation,
     CommandDiff,
+    AssetBrowser,
+    ImportInspector,
+    FieldProductViewer,
+    SdfBrushBrowser,
     Placeholder,
 }
 
@@ -148,6 +152,10 @@ pub enum ToolSurfaceKind {
     MenuEditor,
     DefinitionValidation,
     CommandDiff,
+    AssetBrowser,
+    ImportInspector,
+    FieldProductViewer,
+    SdfBrushBrowser,
     Placeholder,
 }
 

@@ -1009,6 +1009,10 @@ pub(super) fn panel_kind_label(panel_kind: PanelKind) -> &'static str {
         PanelKind::MenuEditor => "Menus",
         PanelKind::DefinitionValidation => "Validation",
         PanelKind::CommandDiff => "Command Diff",
+        PanelKind::AssetBrowser => "Asset Browser",
+        PanelKind::ImportInspector => "Import Inspector",
+        PanelKind::FieldProductViewer => "Field Products",
+        PanelKind::SdfBrushBrowser => "SDF Brushes",
         PanelKind::Placeholder => "Placeholder",
     }
 }
@@ -1020,6 +1024,10 @@ pub(super) fn shell_tool_surface_kinds() -> Vec<ToolSurfaceKind> {
         ToolSurfaceKind::Viewport,
         ToolSurfaceKind::Inspector,
         ToolSurfaceKind::Console,
+        ToolSurfaceKind::AssetBrowser,
+        ToolSurfaceKind::ImportInspector,
+        ToolSurfaceKind::FieldProductViewer,
+        ToolSurfaceKind::SdfBrushBrowser,
     ]
 }
 
@@ -1049,6 +1057,10 @@ pub(super) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
         ToolSurfaceKind::MenuEditor => "Menu Editor",
         ToolSurfaceKind::DefinitionValidation => "Validation",
         ToolSurfaceKind::CommandDiff => "Command Diff",
+        ToolSurfaceKind::AssetBrowser => "Asset Browser",
+        ToolSurfaceKind::ImportInspector => "Import Inspector",
+        ToolSurfaceKind::FieldProductViewer => "Field Product Viewer",
+        ToolSurfaceKind::SdfBrushBrowser => "SDF Brush Browser",
         ToolSurfaceKind::Placeholder => "Placeholder",
     }
 }

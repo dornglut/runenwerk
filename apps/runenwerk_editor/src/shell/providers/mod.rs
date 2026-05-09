@@ -57,6 +57,10 @@ const SCENE_VIEWPORT_PROVIDER_ID: SurfaceProviderId = surface_provider_id(3);
 const SCENE_INSPECTOR_PROVIDER_ID: SurfaceProviderId = surface_provider_id(4);
 const CONSOLE_PROVIDER_ID: SurfaceProviderId = surface_provider_id(5);
 const SELF_AUTHORING_PROVIDER_ID: SurfaceProviderId = surface_provider_id(6);
+const ASSET_BROWSER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(7);
+const IMPORT_INSPECTOR_PROVIDER_ID: SurfaceProviderId = surface_provider_id(8);
+const FIELD_PRODUCT_VIEWER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(9);
+const SDF_BRUSH_BROWSER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(10);
 
 const fn surface_provider_id(raw: u64) -> SurfaceProviderId {
     match SurfaceProviderId::try_from_raw(raw) {
@@ -133,6 +137,10 @@ impl EditorSurfaceProviderRegistry {
             Box::new(SceneInspectorProvider),
             Box::new(ConsoleProvider),
             Box::new(SelfAuthoringProvider),
+            Box::new(AssetBrowserProvider),
+            Box::new(ImportInspectorProvider),
+            Box::new(FieldProductViewerProvider),
+            Box::new(SdfBrushBrowserProvider),
         ])
         .expect("default surface providers must have unique ids")
     }
@@ -778,6 +786,7 @@ fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
     let registry = editor_shell::default_workspace_profile_registry();
     if request.tool_surface_kind == ToolSurfaceKind::Console
         || is_self_authoring_surface(request.tool_surface_kind)
+        || is_asset_surface(request.tool_surface_kind)
     {
         return true;
     }
@@ -804,6 +813,16 @@ fn is_self_authoring_surface(kind: ToolSurfaceKind) -> bool {
             | ToolSurfaceKind::MenuEditor
             | ToolSurfaceKind::DefinitionValidation
             | ToolSurfaceKind::CommandDiff
+    )
+}
+
+fn is_asset_surface(kind: ToolSurfaceKind) -> bool {
+    matches!(
+        kind,
+        ToolSurfaceKind::AssetBrowser
+            | ToolSurfaceKind::ImportInspector
+            | ToolSurfaceKind::FieldProductViewer
+            | ToolSurfaceKind::SdfBrushBrowser
     )
 }
 
@@ -1343,13 +1362,21 @@ fn diagnostic_surface_node(
     )
 }
 
+pub mod asset_browser;
 pub mod console;
+pub mod field_product_viewer;
+pub mod import_inspector;
 pub mod scene;
+pub mod sdf_brush_browser;
 
+use asset_browser::AssetBrowserProvider;
 use console::ConsoleProvider;
+use field_product_viewer::FieldProductViewerProvider;
+use import_inspector::ImportInspectorProvider;
 use scene::{
     SceneEntityTableProvider, SceneInspectorProvider, SceneOutlinerProvider, SceneViewportProvider,
 };
+use sdf_brush_browser::SdfBrushBrowserProvider;
 
 #[cfg(test)]
 mod tests {

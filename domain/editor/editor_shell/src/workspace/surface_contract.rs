@@ -28,6 +28,13 @@ pub const MENU_EDITOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefini
 pub const DEFINITION_VALIDATION_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
     SurfaceDefinitionId::new(16);
 pub const COMMAND_DIFF_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(17);
+pub const ASSET_BROWSER_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(18);
+pub const IMPORT_INSPECTOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
+    SurfaceDefinitionId::new(19);
+pub const FIELD_PRODUCT_VIEWER_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
+    SurfaceDefinitionId::new(20);
+pub const SDF_BRUSH_BROWSER_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
+    SurfaceDefinitionId::new(21);
 
 pub fn editor_surface_definitions() -> Vec<SurfaceDefinition> {
     vec![
@@ -116,6 +123,26 @@ pub fn editor_surface_definitions() -> Vec<SurfaceDefinition> {
             "editor.tool_surface.command_diff",
             "Command Diff",
         ),
+        SurfaceDefinition::new(
+            ASSET_BROWSER_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.asset_browser",
+            "Asset Browser",
+        ),
+        SurfaceDefinition::new(
+            IMPORT_INSPECTOR_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.import_inspector",
+            "Import Inspector",
+        ),
+        SurfaceDefinition::new(
+            FIELD_PRODUCT_VIEWER_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.field_product_viewer",
+            "Field Product Viewer",
+        ),
+        SurfaceDefinition::new(
+            SDF_BRUSH_BROWSER_SURFACE_DEFINITION_ID,
+            "editor.tool_surface.sdf_brush_browser",
+            "SDF Brush Browser",
+        ),
     ]
 }
 
@@ -137,6 +164,10 @@ pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId 
         ToolSurfaceKind::MenuEditor => MENU_EDITOR_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::DefinitionValidation => DEFINITION_VALIDATION_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::CommandDiff => COMMAND_DIFF_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::AssetBrowser => ASSET_BROWSER_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::ImportInspector => IMPORT_INSPECTOR_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::FieldProductViewer => FIELD_PRODUCT_VIEWER_SURFACE_DEFINITION_ID,
+        ToolSurfaceKind::SdfBrushBrowser => SDF_BRUSH_BROWSER_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Placeholder => PLACEHOLDER_SURFACE_DEFINITION_ID,
     }
 }
@@ -159,6 +190,10 @@ pub fn tool_surface_kind_definition_key(kind: ToolSurfaceKind) -> &'static str {
         ToolSurfaceKind::MenuEditor => "menu_editor",
         ToolSurfaceKind::DefinitionValidation => "definition_validation",
         ToolSurfaceKind::CommandDiff => "command_diff",
+        ToolSurfaceKind::AssetBrowser => "asset_browser",
+        ToolSurfaceKind::ImportInspector => "import_inspector",
+        ToolSurfaceKind::FieldProductViewer => "field_product_viewer",
+        ToolSurfaceKind::SdfBrushBrowser => "sdf_brush_browser",
         ToolSurfaceKind::Placeholder => "placeholder",
     }
 }
@@ -181,6 +216,10 @@ pub fn panel_kind_definition_key(kind: PanelKind) -> &'static str {
         PanelKind::MenuEditor => "menu_editor",
         PanelKind::DefinitionValidation => "definition_validation",
         PanelKind::CommandDiff => "command_diff",
+        PanelKind::AssetBrowser => "asset_browser",
+        PanelKind::ImportInspector => "import_inspector",
+        PanelKind::FieldProductViewer => "field_product_viewer",
+        PanelKind::SdfBrushBrowser => "sdf_brush_browser",
         PanelKind::Placeholder => "placeholder",
     }
 }
@@ -203,6 +242,10 @@ pub fn tool_surface_kind_from_definition_key(value: &str) -> Option<ToolSurfaceK
         "menu_editor" => Some(ToolSurfaceKind::MenuEditor),
         "definition_validation" => Some(ToolSurfaceKind::DefinitionValidation),
         "command_diff" => Some(ToolSurfaceKind::CommandDiff),
+        "asset_browser" => Some(ToolSurfaceKind::AssetBrowser),
+        "import_inspector" => Some(ToolSurfaceKind::ImportInspector),
+        "field_product_viewer" => Some(ToolSurfaceKind::FieldProductViewer),
+        "sdf_brush_browser" => Some(ToolSurfaceKind::SdfBrushBrowser),
         "placeholder" => Some(ToolSurfaceKind::Placeholder),
         _ => None,
     }
@@ -226,6 +269,10 @@ pub fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {
         ToolSurfaceKind::MenuEditor => PanelKind::MenuEditor,
         ToolSurfaceKind::DefinitionValidation => PanelKind::DefinitionValidation,
         ToolSurfaceKind::CommandDiff => PanelKind::CommandDiff,
+        ToolSurfaceKind::AssetBrowser => PanelKind::AssetBrowser,
+        ToolSurfaceKind::ImportInspector => PanelKind::ImportInspector,
+        ToolSurfaceKind::FieldProductViewer => PanelKind::FieldProductViewer,
+        ToolSurfaceKind::SdfBrushBrowser => PanelKind::SdfBrushBrowser,
         ToolSurfaceKind::Placeholder => PanelKind::Placeholder,
     }
 }
@@ -248,6 +295,10 @@ pub fn tool_surface_capability_set(kind: ToolSurfaceKind) -> SurfaceCapabilitySe
         | ToolSurfaceKind::MenuEditor
         | ToolSurfaceKind::DefinitionValidation
         | ToolSurfaceKind::CommandDiff => SurfaceCapabilitySet::new(true, true, true, true),
+        ToolSurfaceKind::AssetBrowser
+        | ToolSurfaceKind::ImportInspector
+        | ToolSurfaceKind::FieldProductViewer
+        | ToolSurfaceKind::SdfBrushBrowser => SurfaceCapabilitySet::new(true, true, true, false),
         ToolSurfaceKind::Placeholder => SurfaceCapabilitySet::new(true, false, false, false),
     }
 }
@@ -269,7 +320,11 @@ pub fn tool_surface_session_retention_class(kind: ToolSurfaceKind) -> SessionRet
         | ToolSurfaceKind::ShortcutEditor
         | ToolSurfaceKind::MenuEditor
         | ToolSurfaceKind::DefinitionValidation
-        | ToolSurfaceKind::CommandDiff => SessionRetentionClass::Restorable,
+        | ToolSurfaceKind::CommandDiff
+        | ToolSurfaceKind::AssetBrowser
+        | ToolSurfaceKind::ImportInspector
+        | ToolSurfaceKind::FieldProductViewer
+        | ToolSurfaceKind::SdfBrushBrowser => SessionRetentionClass::Restorable,
         ToolSurfaceKind::Placeholder => SessionRetentionClass::Ephemeral,
     }
 }

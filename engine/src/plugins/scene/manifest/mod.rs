@@ -2,7 +2,10 @@ mod catalog;
 
 use serde::Deserialize;
 
-pub use catalog::load_scene_manifest_descriptors;
+pub use catalog::{
+    load_scene_manifest_descriptors, load_scene_manifest_descriptors_with_asset_catalog,
+    scene_manifest_descriptors_from_asset_catalog,
+};
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

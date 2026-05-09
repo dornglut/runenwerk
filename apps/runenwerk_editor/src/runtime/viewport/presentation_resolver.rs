@@ -6,9 +6,10 @@ use editor_viewport::{ExpressionProductId, ViewportId, ViewportSurfacePresentati
 use ui_render_data::{ViewportSurfaceBinding, ViewportSurfaceBindingRegistry};
 
 use crate::runtime::viewport::{
-    OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID,
-    ViewportPresentationStateResource, ViewportSurfaceSet, ViewportSurfaceSetResource,
-    ViewportSurfaceSlot,
+    ATLAS_PRODUCT_ID, BRICKMAP_DEBUG_PRODUCT_ID, HISTORY_COLOR_PRODUCT_ID, OVERLAY_PRODUCT_ID,
+    PICKING_IDS_PRODUCT_ID, SCALAR_FIELD_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID,
+    VECTOR_FIELD_PRODUCT_ID, VOLUME_SLICE_PRODUCT_ID, ViewportPresentationStateResource,
+    ViewportSurfaceSet, ViewportSurfaceSetResource, ViewportSurfaceSlot,
 };
 
 pub fn resolve_product_to_surface_slot(
@@ -20,6 +21,18 @@ pub fn resolve_product_to_surface_slot(
         Some(ViewportSurfaceSlot::PickingIds)
     } else if product_id == OVERLAY_PRODUCT_ID {
         Some(ViewportSurfaceSlot::Overlay)
+    } else if product_id == SCALAR_FIELD_PRODUCT_ID {
+        Some(ViewportSurfaceSlot::ScalarField)
+    } else if product_id == VECTOR_FIELD_PRODUCT_ID {
+        Some(ViewportSurfaceSlot::VectorField)
+    } else if product_id == ATLAS_PRODUCT_ID {
+        Some(ViewportSurfaceSlot::Atlas)
+    } else if product_id == VOLUME_SLICE_PRODUCT_ID {
+        Some(ViewportSurfaceSlot::VolumeSlice)
+    } else if product_id == BRICKMAP_DEBUG_PRODUCT_ID {
+        Some(ViewportSurfaceSlot::BrickmapDebug)
+    } else if product_id == HISTORY_COLOR_PRODUCT_ID {
+        Some(ViewportSurfaceSlot::HistoryColor)
     } else {
         None
     }

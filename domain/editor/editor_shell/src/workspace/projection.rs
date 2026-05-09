@@ -347,7 +347,11 @@ fn panel_widget_ids(panel_kind: PanelKind) -> &'static [WidgetId] {
         | PanelKind::ShortcutEditor
         | PanelKind::MenuEditor
         | PanelKind::DefinitionValidation
-        | PanelKind::CommandDiff => &[],
+        | PanelKind::CommandDiff
+        | PanelKind::AssetBrowser
+        | PanelKind::ImportInspector
+        | PanelKind::FieldProductViewer
+        | PanelKind::SdfBrushBrowser => &[],
         PanelKind::Placeholder => &[],
     }
 }

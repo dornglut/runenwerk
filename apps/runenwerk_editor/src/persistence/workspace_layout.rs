@@ -6,8 +6,9 @@ use serde::Deserialize;
 
 use editor_shell::{
     PERSISTED_WORKSPACE_STATE_VERSION_V1, PERSISTED_WORKSPACE_STATE_VERSION_V2,
-    PERSISTED_WORKSPACE_STATE_VERSION_V3, PersistedWorkspaceStateV1, PersistedWorkspaceStateV2,
-    PersistedWorkspaceStateV3, WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
+    PERSISTED_WORKSPACE_STATE_VERSION_V3, PERSISTED_WORKSPACE_STATE_VERSION_V4,
+    PersistedWorkspaceStateV1, PersistedWorkspaceStateV2, PersistedWorkspaceStateV3,
+    PersistedWorkspaceStateV4, WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
     default_workspace_profile_registry,
 };
 
@@ -68,7 +69,7 @@ fn write_workspace_layout_with_profile(
     let workspace_state = compact_empty_tab_stack_areas(workspace_state)
         .map_err(|error| anyhow::Error::msg(error.to_string()))
         .context("failed to normalize workspace layout before saving")?;
-    let mut persisted = workspace_state.to_persisted_v3();
+    let mut persisted = workspace_state.to_persisted_v4();
     persisted.workspace_profile_id = profile_id.map(|id| id.raw());
     if let Some(profile_id) = profile_id
         && let Some(profile) = default_workspace_profile_registry().profile(profile_id)
@@ -136,6 +137,23 @@ pub fn read_workspace_layout_with_metadata(path: &Path) -> Result<WorkspaceLayou
             let last_saved_at_unix_seconds = persisted.last_saved_at_unix_seconds;
             (
                 WorkspaceState::from_persisted_v3(persisted),
+                workspace_profile_id,
+                layout_template,
+                layout_template_version,
+                last_saved_at_unix_seconds,
+            )
+        }
+        PERSISTED_WORKSPACE_STATE_VERSION_V4 => {
+            let persisted: PersistedWorkspaceStateV4 =
+                decode_ron(&source).context("failed to decode v4 persisted workspace layout")?;
+            let workspace_profile_id = persisted
+                .workspace_profile_id
+                .and_then(|raw| WorkspaceProfileId::try_from_raw(raw).ok());
+            let layout_template = persisted.layout_template.clone();
+            let layout_template_version = persisted.layout_template_version;
+            let last_saved_at_unix_seconds = persisted.last_saved_at_unix_seconds;
+            (
+                WorkspaceState::from_persisted_v4(persisted),
                 workspace_profile_id,
                 layout_template,
                 layout_template_version,

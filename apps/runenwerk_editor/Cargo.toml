@@ -18,6 +18,11 @@ editor_shell.workspace = true
 editor_viewport.workspace = true
 editor_persistence.workspace = true
 
+asset.workspace = true
+spatial.workspace = true
+world_ops.workspace = true
+world_sdf.workspace = true
+
 ui_input.workspace = true
 ui_definition.workspace = true
 ui_math.workspace = true

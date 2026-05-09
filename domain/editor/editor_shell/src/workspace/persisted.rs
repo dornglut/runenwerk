@@ -19,6 +19,7 @@ use crate::{
 pub const PERSISTED_WORKSPACE_STATE_VERSION_V1: u32 = 1;
 pub const PERSISTED_WORKSPACE_STATE_VERSION_V2: u32 = 2;
 pub const PERSISTED_WORKSPACE_STATE_VERSION_V3: u32 = 3;
+pub const PERSISTED_WORKSPACE_STATE_VERSION_V4: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PersistedWorkspaceStateV1 {
@@ -44,6 +45,25 @@ pub struct PersistedWorkspaceStateV2 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PersistedWorkspaceStateV3 {
+    pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_profile_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout_template: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout_template_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_saved_at_unix_seconds: Option<u64>,
+    pub workspace_id: u64,
+    pub root_host_id: u64,
+    pub hosts: Vec<PersistedPanelHostNodeV1>,
+    pub tab_stacks: Vec<PersistedTabStackStateV1>,
+    pub panels: Vec<PersistedPanelInstanceStateV2>,
+    pub tool_surfaces: Vec<PersistedToolSurfaceStateV3>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PersistedWorkspaceStateV4 {
     pub version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_profile_id: Option<u64>,
@@ -146,6 +166,10 @@ pub enum PersistedPanelKindV2 {
     MenuEditor,
     DefinitionValidation,
     CommandDiff,
+    AssetBrowser,
+    ImportInspector,
+    FieldProductViewer,
+    SdfBrushBrowser,
     Placeholder,
 }
 
@@ -192,6 +216,10 @@ pub enum PersistedToolSurfaceKindV2 {
     MenuEditor,
     DefinitionValidation,
     CommandDiff,
+    AssetBrowser,
+    ImportInspector,
+    FieldProductViewer,
+    SdfBrushBrowser,
     Placeholder,
 }
 
@@ -256,6 +284,23 @@ macro_rules! persisted_id {
 }
 
 impl WorkspaceState {
+    pub fn to_persisted_v4(&self) -> PersistedWorkspaceStateV4 {
+        let persisted = self.to_persisted_v3();
+        PersistedWorkspaceStateV4 {
+            version: PERSISTED_WORKSPACE_STATE_VERSION_V4,
+            workspace_profile_id: persisted.workspace_profile_id,
+            layout_template: persisted.layout_template,
+            layout_template_version: persisted.layout_template_version,
+            last_saved_at_unix_seconds: persisted.last_saved_at_unix_seconds,
+            workspace_id: persisted.workspace_id,
+            root_host_id: persisted.root_host_id,
+            hosts: persisted.hosts,
+            tab_stacks: persisted.tab_stacks,
+            panels: persisted.panels,
+            tool_surfaces: persisted.tool_surfaces,
+        }
+    }
+
     pub fn to_persisted_v3(&self) -> PersistedWorkspaceStateV3 {
         PersistedWorkspaceStateV3 {
             version: PERSISTED_WORKSPACE_STATE_VERSION_V3,
@@ -741,6 +786,29 @@ impl WorkspaceState {
         state.validate_integrity()?;
         Ok(state)
     }
+
+    pub fn from_persisted_v4(
+        persisted: PersistedWorkspaceStateV4,
+    ) -> Result<Self, WorkspaceStateError> {
+        if persisted.version != PERSISTED_WORKSPACE_STATE_VERSION_V4 {
+            return Err(WorkspaceStateError::PersistedVersionUnsupported(
+                persisted.version,
+            ));
+        }
+        Self::from_persisted_v3(PersistedWorkspaceStateV3 {
+            version: PERSISTED_WORKSPACE_STATE_VERSION_V3,
+            workspace_profile_id: persisted.workspace_profile_id,
+            layout_template: persisted.layout_template,
+            layout_template_version: persisted.layout_template_version,
+            last_saved_at_unix_seconds: persisted.last_saved_at_unix_seconds,
+            workspace_id: persisted.workspace_id,
+            root_host_id: persisted.root_host_id,
+            hosts: persisted.hosts,
+            tab_stacks: persisted.tab_stacks,
+            panels: persisted.panels,
+            tool_surfaces: persisted.tool_surfaces,
+        })
+    }
 }
 
 fn persisted_viewport_id(raw: u64) -> Result<ViewportId, WorkspaceStateError> {
@@ -993,7 +1061,11 @@ fn persisted_panel_kind(kind: PanelKind) -> PersistedPanelKindV1 {
         | PanelKind::ShortcutEditor
         | PanelKind::MenuEditor
         | PanelKind::DefinitionValidation
-        | PanelKind::CommandDiff => PersistedPanelKindV1::Placeholder,
+        | PanelKind::CommandDiff
+        | PanelKind::AssetBrowser
+        | PanelKind::ImportInspector
+        | PanelKind::FieldProductViewer
+        | PanelKind::SdfBrushBrowser => PersistedPanelKindV1::Placeholder,
         PanelKind::Placeholder => PersistedPanelKindV1::Placeholder,
     }
 }
@@ -1016,6 +1088,10 @@ fn persisted_panel_kind_v2(kind: PanelKind) -> PersistedPanelKindV2 {
         PanelKind::MenuEditor => PersistedPanelKindV2::MenuEditor,
         PanelKind::DefinitionValidation => PersistedPanelKindV2::DefinitionValidation,
         PanelKind::CommandDiff => PersistedPanelKindV2::CommandDiff,
+        PanelKind::AssetBrowser => PersistedPanelKindV2::AssetBrowser,
+        PanelKind::ImportInspector => PersistedPanelKindV2::ImportInspector,
+        PanelKind::FieldProductViewer => PersistedPanelKindV2::FieldProductViewer,
+        PanelKind::SdfBrushBrowser => PersistedPanelKindV2::SdfBrushBrowser,
         PanelKind::Placeholder => PersistedPanelKindV2::Placeholder,
     }
 }
@@ -1048,6 +1124,10 @@ fn workspace_panel_kind_v2(kind: PersistedPanelKindV2) -> PanelKind {
         PersistedPanelKindV2::MenuEditor => PanelKind::MenuEditor,
         PersistedPanelKindV2::DefinitionValidation => PanelKind::DefinitionValidation,
         PersistedPanelKindV2::CommandDiff => PanelKind::CommandDiff,
+        PersistedPanelKindV2::AssetBrowser => PanelKind::AssetBrowser,
+        PersistedPanelKindV2::ImportInspector => PanelKind::ImportInspector,
+        PersistedPanelKindV2::FieldProductViewer => PanelKind::FieldProductViewer,
+        PersistedPanelKindV2::SdfBrushBrowser => PanelKind::SdfBrushBrowser,
         PersistedPanelKindV2::Placeholder => PanelKind::Placeholder,
     }
 }
@@ -1098,6 +1178,10 @@ impl From<PersistedPanelKindV2> for String {
             PersistedPanelKindV2::MenuEditor => "menu_editor".to_string(),
             PersistedPanelKindV2::DefinitionValidation => "definition_validation".to_string(),
             PersistedPanelKindV2::CommandDiff => "command_diff".to_string(),
+            PersistedPanelKindV2::AssetBrowser => "asset_browser".to_string(),
+            PersistedPanelKindV2::ImportInspector => "import_inspector".to_string(),
+            PersistedPanelKindV2::FieldProductViewer => "field_product_viewer".to_string(),
+            PersistedPanelKindV2::SdfBrushBrowser => "sdf_brush_browser".to_string(),
             PersistedPanelKindV2::Placeholder => "placeholder".to_string(),
         }
     }
@@ -1124,6 +1208,10 @@ impl TryFrom<String> for PersistedPanelKindV2 {
             "menu_editor" => Ok(Self::MenuEditor),
             "definition_validation" => Ok(Self::DefinitionValidation),
             "command_diff" => Ok(Self::CommandDiff),
+            "asset_browser" => Ok(Self::AssetBrowser),
+            "import_inspector" => Ok(Self::ImportInspector),
+            "field_product_viewer" => Ok(Self::FieldProductViewer),
+            "sdf_brush_browser" => Ok(Self::SdfBrushBrowser),
             "placeholder" => Ok(Self::Placeholder),
             other => Err(format!("unsupported panel kind: {other}")),
         }
@@ -1147,7 +1235,11 @@ fn persisted_tool_surface_kind(kind: ToolSurfaceKind) -> PersistedToolSurfaceKin
         | ToolSurfaceKind::ShortcutEditor
         | ToolSurfaceKind::MenuEditor
         | ToolSurfaceKind::DefinitionValidation
-        | ToolSurfaceKind::CommandDiff => PersistedToolSurfaceKindV1::Placeholder,
+        | ToolSurfaceKind::CommandDiff
+        | ToolSurfaceKind::AssetBrowser
+        | ToolSurfaceKind::ImportInspector
+        | ToolSurfaceKind::FieldProductViewer
+        | ToolSurfaceKind::SdfBrushBrowser => PersistedToolSurfaceKindV1::Placeholder,
         ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV1::Placeholder,
     }
 }
@@ -1170,6 +1262,10 @@ fn persisted_tool_surface_kind_v2(kind: ToolSurfaceKind) -> PersistedToolSurface
         ToolSurfaceKind::MenuEditor => PersistedToolSurfaceKindV2::MenuEditor,
         ToolSurfaceKind::DefinitionValidation => PersistedToolSurfaceKindV2::DefinitionValidation,
         ToolSurfaceKind::CommandDiff => PersistedToolSurfaceKindV2::CommandDiff,
+        ToolSurfaceKind::AssetBrowser => PersistedToolSurfaceKindV2::AssetBrowser,
+        ToolSurfaceKind::ImportInspector => PersistedToolSurfaceKindV2::ImportInspector,
+        ToolSurfaceKind::FieldProductViewer => PersistedToolSurfaceKindV2::FieldProductViewer,
+        ToolSurfaceKind::SdfBrushBrowser => PersistedToolSurfaceKindV2::SdfBrushBrowser,
         ToolSurfaceKind::Placeholder => PersistedToolSurfaceKindV2::Placeholder,
     }
 }
@@ -1202,6 +1298,10 @@ fn workspace_tool_surface_kind_v2(kind: PersistedToolSurfaceKindV2) -> ToolSurfa
         PersistedToolSurfaceKindV2::MenuEditor => ToolSurfaceKind::MenuEditor,
         PersistedToolSurfaceKindV2::DefinitionValidation => ToolSurfaceKind::DefinitionValidation,
         PersistedToolSurfaceKindV2::CommandDiff => ToolSurfaceKind::CommandDiff,
+        PersistedToolSurfaceKindV2::AssetBrowser => ToolSurfaceKind::AssetBrowser,
+        PersistedToolSurfaceKindV2::ImportInspector => ToolSurfaceKind::ImportInspector,
+        PersistedToolSurfaceKindV2::FieldProductViewer => ToolSurfaceKind::FieldProductViewer,
+        PersistedToolSurfaceKindV2::SdfBrushBrowser => ToolSurfaceKind::SdfBrushBrowser,
         PersistedToolSurfaceKindV2::Placeholder => ToolSurfaceKind::Placeholder,
     }
 }
@@ -1254,6 +1354,10 @@ impl From<PersistedToolSurfaceKindV2> for String {
             PersistedToolSurfaceKindV2::MenuEditor => "menu_editor".to_string(),
             PersistedToolSurfaceKindV2::DefinitionValidation => "definition_validation".to_string(),
             PersistedToolSurfaceKindV2::CommandDiff => "command_diff".to_string(),
+            PersistedToolSurfaceKindV2::AssetBrowser => "asset_browser".to_string(),
+            PersistedToolSurfaceKindV2::ImportInspector => "import_inspector".to_string(),
+            PersistedToolSurfaceKindV2::FieldProductViewer => "field_product_viewer".to_string(),
+            PersistedToolSurfaceKindV2::SdfBrushBrowser => "sdf_brush_browser".to_string(),
             PersistedToolSurfaceKindV2::Placeholder => "placeholder".to_string(),
         }
     }
@@ -1280,6 +1384,10 @@ impl TryFrom<String> for PersistedToolSurfaceKindV2 {
             "menu_editor" => Ok(Self::MenuEditor),
             "definition_validation" => Ok(Self::DefinitionValidation),
             "command_diff" => Ok(Self::CommandDiff),
+            "asset_browser" => Ok(Self::AssetBrowser),
+            "import_inspector" => Ok(Self::ImportInspector),
+            "field_product_viewer" => Ok(Self::FieldProductViewer),
+            "sdf_brush_browser" => Ok(Self::SdfBrushBrowser),
             "placeholder" => Ok(Self::Placeholder),
             other => Err(format!("unsupported tool-surface kind: {other}")),
         }

@@ -10,6 +10,12 @@ pub enum ViewportSurfaceSlot {
     PrimaryColor,
     PickingIds,
     Overlay,
+    ScalarField,
+    VectorField,
+    Atlas,
+    VolumeSlice,
+    BrickmapDebug,
+    HistoryColor,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -1,0 +1,11 @@
+[package]
+name = "asset"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+id = { path = "../../foundation/id" }
+id_macros = { path = "../../foundation/id_macros" }
+diagnostics = { path = "../../foundation/diagnostics" }
+foundation_ratification = { package = "ratification", path = "../../foundation/ratification" }

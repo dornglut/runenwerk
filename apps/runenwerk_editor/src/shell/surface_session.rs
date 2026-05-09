@@ -185,6 +185,10 @@ fn retains_live_session(kind: ToolSurfaceKind) -> bool {
             | ToolSurfaceKind::Viewport
             | ToolSurfaceKind::Inspector
             | ToolSurfaceKind::Console
+            | ToolSurfaceKind::AssetBrowser
+            | ToolSurfaceKind::ImportInspector
+            | ToolSurfaceKind::FieldProductViewer
+            | ToolSurfaceKind::SdfBrushBrowser
     )
 }
 

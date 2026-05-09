@@ -118,6 +118,10 @@ pub(crate) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
         ToolSurfaceKind::MenuEditor => "menu_editor",
         ToolSurfaceKind::DefinitionValidation => "definition_validation",
         ToolSurfaceKind::CommandDiff => "command_diff",
+        ToolSurfaceKind::AssetBrowser => "asset_browser",
+        ToolSurfaceKind::ImportInspector => "import_inspector",
+        ToolSurfaceKind::FieldProductViewer => "field_product_viewer",
+        ToolSurfaceKind::SdfBrushBrowser => "sdf_brush_browser",
         ToolSurfaceKind::Placeholder => "placeholder",
     }
 }

@@ -30,6 +30,7 @@ ECS world/query/system runtime      -> domain/ecs
 Schedule planning/execution         -> domain/scheduler
 Scene transform contracts           -> domain/scene
 Geometry primitives/queries         -> domain/geometry
+Asset identity/catalog/import contracts -> domain/asset
 SDF fields/queries                  -> domain/sdf
 Graph substrate                     -> domain/graph
 Spatial coordinates/indexing        -> domain/spatial, domain/spatial_index

@@ -4,6 +4,7 @@ mod dirty;
 mod invalidation;
 mod operation_log;
 mod operations;
+mod product_invalidation;
 mod region_invalidation;
 mod replay_window;
 mod replication;
@@ -21,6 +22,7 @@ pub use operations::{
     BrushShape, Operation, OperationRecord, QuantizedAabb, QuantizedVec3, quantize_aabb,
     quantize_position,
 };
+pub use product_invalidation::{ProductInvalidationPlan, ProductInvalidationSource};
 pub use region_invalidation::{
     RegionInvalidationJournal, RegionInvalidationRecord, RegionInvalidationSource,
 };

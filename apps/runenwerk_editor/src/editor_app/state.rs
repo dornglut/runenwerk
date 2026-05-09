@@ -6,6 +6,7 @@ use editor_definition::EditorDefinitionDocument;
 use editor_shell::WorkspaceState;
 
 use super::console::{ConsoleMessage, ConsoleMessageKind};
+use crate::asset_pipeline::AssetCatalogRuntime;
 use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
 pub struct RunenwerkEditorApp {
@@ -17,6 +18,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) surface_sessions: SurfaceSessionStore,
     pub(crate) surface_provider_registry: Arc<EditorSurfaceProviderRegistry>,
     pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
+    pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -36,6 +38,7 @@ impl RunenwerkEditorApp {
             surface_sessions: SurfaceSessionStore::default(),
             surface_provider_registry: Arc::new(EditorSurfaceProviderRegistry::runenwerk_default()),
             pending_editor_definition_activations: Vec::new(),
+            asset_catalog_runtime: AssetCatalogRuntime::new(),
         }
     }
 
@@ -143,5 +146,13 @@ impl RunenwerkEditorApp {
 
     pub fn pending_editor_definition_activation_count(&self) -> usize {
         self.pending_editor_definition_activations.len()
+    }
+
+    pub fn asset_catalog_runtime(&self) -> &AssetCatalogRuntime {
+        &self.asset_catalog_runtime
+    }
+
+    pub fn asset_catalog_runtime_mut(&mut self) -> &mut AssetCatalogRuntime {
+        &mut self.asset_catalog_runtime
     }
 }

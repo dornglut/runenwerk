@@ -5,9 +5,10 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-09
 related_designs:
   - ../../design/active/workspace-viewport-expression-upgrade-design.md
+  - ../../design/active/editor-asset-pipeline-and-content-workflow-design.md
 related_roadmaps:
   - ./viewport-expression-implementation-roadmap.md
 ---
@@ -32,6 +33,8 @@ viewport expression routing into a concrete tool.
   tool state.
 - `editor_features`: editor feature actions and viewport tools.
 - `editor_panels`: concrete panel/widget composition.
+- `asset_pipeline`: open-project asset catalog runtime, app-owned import jobs,
+  and field-product jobs.
 - `runtime`: engine-facing systems, resources, viewport routing, expression
   product registration, picking, and frame submission.
 - `shell`: app-owned concrete editor surface providers, provider registry
@@ -75,6 +78,13 @@ global mutable registry. Provider resolution is deterministic and fail-closed:
 duplicate provider ids are rejected, equal-priority provider ambiguity produces
 an ambiguous diagnostic artifact, unsupported surfaces render an unsupported
 artifact, and diagnostic artifacts emit no provider-local routes.
+
+The first asset pipeline providers also live in this app-owned registry. Asset
+Browser, Import Inspector, Field Product Viewer, and SDF Brush Browser surfaces
+read from `apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs` and
+surface diagnostics or unavailable states through provider artifacts. Their
+identity and availability are projected through active panel/tool-surface
+catalogs; default workspace layouts are unchanged.
 
 Surface-local UI state is stored per `ToolSurfaceInstanceId` in
 `apps/runenwerk_editor/src/shell/surface_session.rs`. Console lines, app
@@ -237,8 +247,10 @@ viewport-local target per job without multi-rectangle containment. The
 product catalog now exposes scene color, picking ids, overlay, depth,
 diagnostics, scalar field, vector field, atlas, volume slice, brickmap debug,
 and history color descriptors. Only descriptors with a concrete app-owned target
-record are marked available; future field/asset/volume/history descriptors are
-visible as unavailable products rather than being routed to fallback surfaces.
+record are marked available. Field and volume debug preview producers now
+publish concrete displayable `Rgba8Unorm` targets; atlas, brickmap, history, and
+richer asset products remain visible as unavailable products until their
+producers land.
 The
 no-compromise target and follow-up product maturity work are documented in
 `docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md`;

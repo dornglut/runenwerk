@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-09
 related_designs:
   - ./workspace-field-world-and-simulation-platform-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
@@ -42,42 +42,38 @@ Implemented today:
 
 - Scene persistence uses `SceneFileV2` in `domain/editor/editor_persistence/src/scene_file.rs`.
 - Scene load follows migration, normalization, formation, and apply in `apps/runenwerk_editor/src/persistence/files.rs::load_scene_file_into_runtime_classified`.
-- Project persistence has `ProjectFileV1` with scene entries in `domain/editor/editor_persistence/src/project_file.rs`.
+- Project persistence has `ProjectFileV2` in `domain/editor/editor_persistence/src/project_file.rs`, with migration from V1 scene-list projects.
 - SDF primitives, composition, transforms, sampling, gradients/normals, and query helpers exist in `domain/sdf/src/field.rs::SdfField3`, `domain/sdf/src/primitives/`, `domain/sdf/src/ops/`, and `domain/sdf/src/queries/`.
 - World edit operation records, dirty-region tracking, build queues, and invalidation contracts exist in `domain/world_ops/src/operation_log.rs`, `domain/world_ops/src/dirty.rs`, `domain/world_ops/src/build_queue.rs`, and `domain/world_ops/src/region_invalidation.rs`.
+- Generic field-product invalidation and build helper contracts exist in `domain/world_ops/src/product_invalidation.rs`.
 - World-scale SDF chunk/page payload records and collision query contracts exist in `domain/world_sdf/src/storage.rs::SdfChunkStore` and `domain/world_sdf/src/collision.rs::CollisionQueryService`.
+- Field-product descriptors and ratification live in `domain/world_sdf/src/product.rs` and `domain/world_sdf/src/ratification.rs`.
+- `domain/asset` owns IO-free asset ids, source and artifact descriptors, asset taxonomy, deterministic import plans, dependency graph contracts, diagnostics, catalog validation, and asset ratification.
+- `apps/runenwerk_editor/src/asset_pipeline/` owns open-project catalog runtime state, app-owned import jobs, and field-product jobs.
+- Asset Browser, Import Inspector, Field Product Viewer, and SDF Brush Browser provider surfaces exist under `apps/runenwerk_editor/src/shell/providers/` and are reachable through active panel/tool-surface catalogs.
 - Spatial/chunking vocabulary exists in `domain/spatial/src/` and `domain/chunking/src/`.
-- Scene manifest discovery scans `assets/scenes` and `game/assets/scenes` in `engine/src/plugins/scene/manifest/catalog.rs::load_scene_manifest_descriptors`.
+- Scene manifest discovery in `engine/src/plugins/scene/manifest/catalog.rs::load_scene_manifest_descriptors` can read asset-catalog-backed scene descriptors while preserving loose RON manifest fallback during migration.
 - Render import descriptors in `engine/src/plugins/render/resource/import.rs` describe imported render resources only.
 - Shader reload helpers exist in `engine/src/plugins/render/shader/hot_reload.rs` and `engine/src/plugins/shared/reload.rs`.
-- `assets/editor/config.ron` contains a Blender executable path, and `assets/models` contains `.blend` and `.glb` files. These are current foreign-source/reference files, not the engine's canonical world substrate.
+- `assets/editor/config.ron` contains a Blender executable path, `assets/models` contains `.blend` and `.glb` files, and `tools/assets/blender_export.py::main` provides the configured `.blend -> .glb` foreign-reference export helper. These remain compatibility/reference paths, not the canonical world substrate.
+- `apps/runenwerk_editor/src/runtime/viewport/producer_field.rs` and `apps/runenwerk_editor/src/runtime/viewport/producer_volume.rs` publish displayable `Rgba8Unorm` debug preview products for the first field/volume producer breadth.
 
-Missing today:
+Remaining gaps after M4:
 
-- no asset domain crate;
-- no typed asset ids;
-- no project-wide asset catalog;
-- no dependency graph;
-- no import settings model;
-- no deterministic import plan;
-- no artifact cache model;
-- no SDF/field-world/procedural asset taxonomy;
-- no material graph, procedural material asset, PBR, triplanar, Texture3D, gameplay graph, particle, physics, animation, or procgen asset contracts;
-- no field-product descriptor model for scope, scale band, source lineage, freshness, consumer class, and retention/rebuild policy;
-- no `world_sdf` artifact/cache bridge;
-- no world-operation-to-product invalidation path in the editor asset pipeline;
-- no import diagnostics surface;
-- no asset browser/provider;
-- no field-product viewer, SDF brush browser, or brick/clipmap diagnostic surface;
-- no importer execution path for `.blend -> .glb` as a configured foreign-source/reference path with missing-tool diagnostics;
-- no project-owned asset hot reload stream;
-- no unified mapping from asset artifact ids to field products, scene, render, UI, graph, script, or runtime loaders.
+- no project-owned data hot reload stream or runtime preview application of changed asset/product revisions;
+- no persisted asset catalog file load/save loop or project-owned cache garbage collection workflow;
+- no complete `world_sdf` artifact/cache bridge into runtime chunk/page stores;
+- no dependency graph visualizer, full reimport controls, artifact preview, dirty asset summary, or brick/clipmap diagnostic surface;
+- no material graph, procedural material asset, PBR, triplanar, Texture3D, gameplay graph, particle, physics, animation, or procgen domain crates;
+- no unified runtime loader mapping from asset artifact ids to all future field, scene, render, UI, graph, script, gameplay, material, procgen, particle, physics, and animation consumers;
+- no raw scalar/vector renderer texture-format expansion beyond the first displayable debug preview products;
+- no marketplace/package workflow.
 
 ## Ownership Rules
 
 ### `domain/asset`
 
-The new asset domain crate should own engine-agnostic asset truth:
+The asset domain crate owns engine-agnostic asset truth:
 
 - asset identity;
 - asset kind taxonomy;
@@ -216,11 +212,11 @@ The plan should include:
 
 An import job is app/tool execution for source files and generated artifacts.
 
-`apps/runenwerk_editor/src/asset_pipeline/import_jobs.rs::run_import_job` should execute a domain `ImportPlan`, invoke configured external importer tools declared by that plan, collect outputs, and return an imported candidate plus diagnostics.
+`apps/runenwerk_editor/src/asset_pipeline/import_jobs.rs::run_import_job` executes a domain `ImportPlan`, invokes configured external importer tools declared by that plan, collects outputs, and returns an imported candidate plus diagnostics.
 
 A field product job is app/engine-owned execution for SDF/field-world formation.
 
-`apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs::run_field_product_job` should execute deterministic formation plans, use `domain/world_ops` invalidation/build contracts, and return candidates that must be ratified by the asset domain plus the owning field/world domain before catalog publication.
+`apps/runenwerk_editor/src/asset_pipeline/field_product_jobs.rs::run_field_product_job` executes deterministic formation plans, uses `domain/world_ops` invalidation/build contracts, and returns candidates that must be ratified by the asset domain plus the owning field/world domain before catalog publication.
 
 ### Artifact
 
@@ -315,7 +311,7 @@ The taxonomy belongs in `domain/asset/src/kind.rs`. Document kind compatibility 
 Theme, UI layout, workspace definition, menu, shortcut, command binding, panel
 registry, tool-surface definition, and editor definition assets should feed the
 existing `domain/editor/editor_definition` and `domain/ui/ui_definition`
-semantics. The future asset pipeline owns source identity, cataloging,
+semantics. The asset pipeline owns source identity, cataloging,
 dependencies, import/cache policy, and hot-reload delivery for those files; it
 does not replace the editor-definition or UI-definition crates as the semantic
 owners of validation, normalization, formation, or live activation contracts.
@@ -324,7 +320,7 @@ Mesh/glTF kinds exist for compatibility, preview, and reference workflows. SDF a
 
 ## Project File Evolution
 
-`ProjectFileV1` is scene-list oriented. The target `ProjectFileV2` should include:
+`ProjectFileV1` was scene-list oriented. `ProjectFileV2` now exists and includes:
 
 - project id and name;
 - asset source roots;
@@ -337,7 +333,7 @@ Mesh/glTF kinds exist for compatibility, preview, and reference workflows. SDF a
 - import profile defaults;
 - compatibility version.
 
-Migration from V1 should convert scene entries into scene assets and preserve startup scene selection.
+Migration from V1 converts scene entries into project document entries, source roots, and startup document selection while preserving compatibility with old project files.
 
 ## Runtime And Hot Reload Boundary
 
@@ -454,12 +450,12 @@ Add tests for:
 
 ## First Implementation Slice
 
-The first implementation slice should land as part of the integrated
-UI/editor/asset foundation. Asset/import/field-product tool surfaces should be
-registered and projected through active editor definition catalogs rather than
-adding another round of hard-coded shell UI.
+The first implementation slice landed as part of the integrated
+UI/editor/asset foundation in M4F-M4I. Asset/import/field-product tool surfaces
+are registered and projected through active editor definition catalogs rather
+than adding another round of hard-coded shell UI.
 
-The slice should land:
+The slice landed:
 
 1. Active menu, shortcut, command-binding, panel-registry, and tool-surface-registry consumption in the editor shell/app runtime so new asset surfaces can be definition-driven.
 2. `domain/asset` with ids, SDF/field-first kinds, source descriptors, artifacts, catalog, import settings, import plans, diagnostics, and ratification.
@@ -471,4 +467,4 @@ The slice should land:
 8. Scene manifest compatibility adapter backed by the asset catalog.
 9. Blender export job execution using `tools/assets/blender_export.py::main` for configured `.blend` foreign-reference assets, with a missing-tool diagnostic path that preserves the prior valid artifact.
 
-This makes the asset pipeline real without forcing every future asset kind to be complete in the first patch.
+This makes the asset pipeline real without forcing every future asset kind to be complete in the first patch. M5 starts from this point with runtime preview, project-owned data hot reload streams, and restart boundaries.

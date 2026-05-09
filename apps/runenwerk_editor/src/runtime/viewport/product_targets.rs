@@ -416,14 +416,31 @@ fn product_target_slots(
             ViewportSurfacePresentationSlot::Overlay,
             ViewportSurfaceSlot::Overlay,
         )),
-        ExpressionProductKind::Depth2D
-        | ExpressionProductKind::Diagnostics2D
-        | ExpressionProductKind::ScalarField2D
-        | ExpressionProductKind::VectorField2D
-        | ExpressionProductKind::Atlas2D
-        | ExpressionProductKind::VolumeSlice2D
-        | ExpressionProductKind::BrickmapDebug2D
-        | ExpressionProductKind::HistoryColor2D => None,
+        ExpressionProductKind::ScalarField2D => Some((
+            ViewportSurfacePresentationSlot::Primary,
+            ViewportSurfaceSlot::ScalarField,
+        )),
+        ExpressionProductKind::VectorField2D => Some((
+            ViewportSurfacePresentationSlot::Primary,
+            ViewportSurfaceSlot::VectorField,
+        )),
+        ExpressionProductKind::Atlas2D => Some((
+            ViewportSurfacePresentationSlot::Primary,
+            ViewportSurfaceSlot::Atlas,
+        )),
+        ExpressionProductKind::VolumeSlice2D => Some((
+            ViewportSurfacePresentationSlot::Primary,
+            ViewportSurfaceSlot::VolumeSlice,
+        )),
+        ExpressionProductKind::BrickmapDebug2D => Some((
+            ViewportSurfacePresentationSlot::Primary,
+            ViewportSurfaceSlot::BrickmapDebug,
+        )),
+        ExpressionProductKind::HistoryColor2D => Some((
+            ViewportSurfacePresentationSlot::Primary,
+            ViewportSurfaceSlot::HistoryColor,
+        )),
+        ExpressionProductKind::Depth2D | ExpressionProductKind::Diagnostics2D => None,
     }
 }
 
@@ -505,7 +522,7 @@ fn usage_for_descriptor(descriptor: &ExpressionProductDescriptor) -> RenderTextu
             sampled: true,
             storage: false,
             copy_src: true,
-            copy_dst: false,
+            copy_dst: true,
         },
     }
 }
@@ -640,7 +657,7 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_only_future_products_are_observed_as_unavailable() {
+    fn field_and_volume_debug_products_are_displayable_rgba_targets() {
         let descriptors =
             initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
         let presentation_state = initial_presentation_state(ViewportId(1));
@@ -660,14 +677,14 @@ mod tests {
                 .availability_by_product
                 .get(&SCALAR_FIELD_PRODUCT_ID)
                 .copied(),
-            Some(ProductAvailabilityState::Unavailable)
+            Some(ProductAvailabilityState::Available)
         );
         assert_eq!(
             frame
                 .producer_health_by_product
                 .get(&HISTORY_COLOR_PRODUCT_ID)
                 .copied(),
-            Some(ProducerHealth::Unavailable)
+            Some(ProducerHealth::Healthy)
         );
     }
 
