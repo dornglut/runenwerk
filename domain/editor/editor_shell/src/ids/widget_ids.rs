@@ -108,6 +108,12 @@ pub const CONSOLE_SCROLL_WIDGET_ID: WidgetId = WidgetId(64);
 pub const CONSOLE_HSCROLL_WIDGET_ID: WidgetId = WidgetId(69);
 pub const CONSOLE_LINE_WIDGET_ID_BASE: u64 = 20_000;
 
+pub const SELF_AUTHORING_PANEL_WIDGET_ID: WidgetId = WidgetId(29_999);
+pub const SELF_AUTHORING_BODY_WIDGET_ID: WidgetId = WidgetId(29_997);
+pub const SELF_AUTHORING_SCROLL_WIDGET_ID: WidgetId = WidgetId(29_998);
+pub const SELF_AUTHORING_LINE_WIDGET_ID_BASE: u64 = 30_000;
+pub const SELF_AUTHORING_ACTION_WIDGET_ID_BASE: u64 = 40_000;
+
 pub const OUTLINER_ROW_WIDGET_ID_BASE: u64 = 1_000;
 pub const INSPECTOR_FIELD_WIDGET_ID_BASE: u64 = 10_000;
 pub const INSPECTOR_FIELD_FOCUS_WIDGET_ID_BASE: u64 = 15_000;
@@ -165,6 +171,14 @@ pub fn inspector_field_focus_widget_id(index: usize) -> WidgetId {
 
 pub fn console_line_widget_id(index: usize) -> WidgetId {
     WidgetId(CONSOLE_LINE_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn self_authoring_line_widget_id(index: usize) -> WidgetId {
+    WidgetId(SELF_AUTHORING_LINE_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn self_authoring_action_widget_id(index: usize) -> WidgetId {
+    WidgetId(SELF_AUTHORING_ACTION_WIDGET_ID_BASE + index as u64)
 }
 
 pub fn viewport_product_button_widget_id(index: usize) -> WidgetId {

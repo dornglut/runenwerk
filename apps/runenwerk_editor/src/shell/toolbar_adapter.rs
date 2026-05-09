@@ -1,10 +1,17 @@
+use std::collections::BTreeMap;
+
 use editor_core::ToolId;
+use editor_definition::{
+    EditorMenuDefinition, EditorMenuItemDefinition, EditorToolbarBinding,
+    EditorToolbarMenuItemBinding,
+};
 use editor_shell::{
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, ObservationConsumerKind,
     ObservationFrameMetadata, ObservationSourceReality, SCENE_WORKSPACE_PROFILE_ID,
     ToolbarButtonViewModel, ToolbarMenuKind, ToolbarObservationFrame, ToolbarObservedButton,
     ToolbarViewModel, WorkspaceProfileId,
 };
+use ui_definition::{UiAvailabilityBinding, UiAvailabilityId, UiRouteSlotId};
 
 pub const SELECT_TOOL_ID: ToolId = ToolId(1);
 pub const TRANSLATE_TOOL_ID: ToolId = ToolId(2);
@@ -36,26 +43,27 @@ pub fn build_toolbar_observation_frame(
     active_workspace_profile_id: WorkspaceProfileId,
     open_workspace_profile_ids: &[WorkspaceProfileId],
     source_version: editor_core::RealityVersion,
+    active_menus: &BTreeMap<String, EditorMenuDefinition>,
 ) -> ToolbarObservationFrame {
     let mut buttons = vec![
         ToolbarObservedButton {
             id: MENU_FILE_ID,
             stable_name: "menu_file",
-            label: "File".to_string(),
+            label: active_menu_label(active_menus, "file", "File"),
             is_active: active_toolbar_menu == Some(ToolbarMenuKind::File),
             enabled: true,
         },
         ToolbarObservedButton {
             id: MENU_EDIT_ID,
             stable_name: "menu_edit",
-            label: "Edit".to_string(),
+            label: active_menu_label(active_menus, "edit", "Edit"),
             is_active: active_toolbar_menu == Some(ToolbarMenuKind::Edit),
             enabled: true,
         },
         ToolbarObservedButton {
             id: MENU_WINDOW_ID,
             stable_name: "menu_window",
-            label: "Window".to_string(),
+            label: active_menu_label(active_menus, "window", "Window"),
             is_active: active_toolbar_menu == Some(ToolbarMenuKind::Window),
             enabled: true,
         },
@@ -89,6 +97,63 @@ pub fn build_toolbar_observation_frame(
             source_version,
         ),
         buttons,
+    }
+}
+
+pub fn toolbar_binding_with_active_menus(
+    binding: Option<EditorToolbarBinding>,
+    active_menus: &BTreeMap<String, EditorMenuDefinition>,
+) -> Option<EditorToolbarBinding> {
+    let mut binding = binding?;
+    let active_toolbar_menus = ["file", "edit", "window", "workspace"];
+    if !active_toolbar_menus
+        .iter()
+        .any(|menu_id| active_menus.contains_key(*menu_id))
+    {
+        return Some(binding);
+    }
+    binding
+        .menu_items
+        .retain(|item| !active_toolbar_menus.contains(&item.menu_id.as_str()));
+    for menu_id in active_toolbar_menus {
+        let Some(menu) = active_menus.get(menu_id) else {
+            continue;
+        };
+        extend_toolbar_menu_items_from_active_menu(menu_id, &menu.items, &mut binding.menu_items);
+    }
+    Some(binding)
+}
+
+fn active_menu_label(
+    active_menus: &BTreeMap<String, EditorMenuDefinition>,
+    menu_id: &str,
+    fallback: &str,
+) -> String {
+    active_menus
+        .get(menu_id)
+        .map(|menu| menu.label.clone())
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn extend_toolbar_menu_items_from_active_menu(
+    menu_id: &str,
+    items: &[EditorMenuItemDefinition],
+    output: &mut Vec<EditorToolbarMenuItemBinding>,
+) {
+    for item in items {
+        if let Some(command) = item.command.as_deref() {
+            output.push(EditorToolbarMenuItemBinding {
+                menu_id: menu_id.to_string(),
+                item_id: item.id.clone(),
+                label: item.label.clone(),
+                route: UiRouteSlotId::new(command),
+                availability: item
+                    .availability
+                    .as_deref()
+                    .map(|id| UiAvailabilityBinding::Ref(UiAvailabilityId::new(id))),
+            });
+        }
+        extend_toolbar_menu_items_from_active_menu(menu_id, &item.children, output);
     }
 }
 

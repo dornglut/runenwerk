@@ -88,6 +88,7 @@ pub enum RoutedShellAction {
         enabled: bool,
     },
     ToggleDebugLogs,
+    ApplySelectedEditorDefinition,
     ActivateTab {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
@@ -1093,7 +1094,7 @@ fn build_frame_widget_routes(
     let mut structural_contexts = workspace_projection.widget_context_by_id.clone();
 
     for (widget_id, formed_route) in toolbar_routes_by_widget_id {
-        if let Some(action) = toolbar_action_for_formed_route(formed_route) {
+        if let Some(action) = frame_action_for_formed_route(frame_model, formed_route) {
             actions.insert(*widget_id, action);
         }
     }
@@ -1140,11 +1141,22 @@ fn build_frame_widget_routes(
     (actions, structural_contexts)
 }
 
-fn toolbar_action_for_formed_route(route: &FormedUiRoute) -> Option<RoutedShellAction> {
+fn frame_action_for_formed_route(
+    frame_model: &EditorShellFrameModel,
+    route: &FormedUiRoute,
+) -> Option<RoutedShellAction> {
     let FormedUiRoute::RouteSlot(route) = route else {
         return None;
     };
-    match route.as_str() {
+    frame_model
+        .route_actions_by_route_target
+        .get(route.as_str())
+        .cloned()
+        .or_else(|| toolbar_action_for_route_slot(route.as_str()))
+}
+
+fn toolbar_action_for_route_slot(route: &str) -> Option<RoutedShellAction> {
+    match route {
         "editor.toolbar.menu.file" => Some(RoutedShellAction::ToggleToolbarMenu {
             menu: ToolbarMenuKind::File,
         }),
@@ -1225,6 +1237,9 @@ fn toolbar_action_for_formed_route(route: &FormedUiRoute) -> Option<RoutedShellA
         "editor.toolbar.window.load_custom_workspace" => Some(toolbar_command_action(
             ToolbarCommandKind::LoadCustomWorkspace,
         )),
+        "editor.definition.apply_selected" => {
+            Some(RoutedShellAction::ApplySelectedEditorDefinition)
+        }
         _ => None,
     }
 }

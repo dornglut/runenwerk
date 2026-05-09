@@ -1,9 +1,11 @@
 pub mod applied_editor_definition;
+pub mod command_resolution;
 pub mod controller;
 pub mod dispatch;
 pub mod dispatch_shell_command;
 pub mod providers;
 pub mod self_authoring;
+pub mod shortcut_resolution;
 pub mod state;
 pub mod surface_session;
 pub mod ui_definition_assets;
@@ -11,10 +13,12 @@ pub mod ui_definition_assets;
 mod toolbar_adapter;
 
 pub use applied_editor_definition::*;
+pub use command_resolution::*;
 pub use controller::*;
 pub use dispatch_shell_command::*;
 pub use providers::*;
 pub use self_authoring::*;
+pub use shortcut_resolution::*;
 pub use state::*;
 pub use surface_session::*;
 pub use toolbar_adapter::{

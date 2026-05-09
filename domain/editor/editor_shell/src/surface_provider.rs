@@ -12,9 +12,9 @@ use ui_surface::{SurfaceCapability, SurfaceCapabilitySet, SurfaceDefinitionId};
 use crate::{
     EditorDefinitionSurfaceAction, EntityTableDomainMutation, EntityTableSessionMutation,
     EntityTableSurfaceAction, InspectorSessionMutation, InspectorSurfaceAction,
-    OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId, StructuralCommandTarget,
-    TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarViewModel, UiNode,
-    ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction, WidgetId,
+    OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId, PanelKind, RoutedShellAction,
+    StructuralCommandTarget, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarViewModel,
+    UiNode, ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction, WidgetId,
 };
 
 #[id]
@@ -264,6 +264,8 @@ pub struct EditorShellFrameModel {
     pub toolbar: ToolbarViewModel,
     pub surfaces: BTreeMap<ToolSurfaceInstanceId, ResolvedSurfaceFrame>,
     pub active_tab_stack_popup_menu: Option<ActiveTabStackPopupMenu>,
+    pub route_actions_by_route_target: BTreeMap<String, RoutedShellAction>,
+    pub available_panel_kinds: Vec<PanelKind>,
     pub available_tool_surface_kinds: Vec<ToolSurfaceKind>,
     pub active_toolbar_template: Option<NormalizedUiTemplate>,
     pub active_toolbar_binding: Option<EditorToolbarBinding>,
@@ -279,6 +281,8 @@ impl EditorShellFrameModel {
             toolbar,
             surfaces,
             active_tab_stack_popup_menu: None,
+            route_actions_by_route_target: BTreeMap::new(),
+            available_panel_kinds: Vec::new(),
             available_tool_surface_kinds: Vec::new(),
             active_toolbar_template: None,
             active_toolbar_binding: None,
@@ -296,6 +300,16 @@ impl EditorShellFrameModel {
 
     pub fn with_available_tool_surface_kinds(mut self, kinds: Vec<ToolSurfaceKind>) -> Self {
         self.available_tool_surface_kinds = kinds;
+        self
+    }
+
+    pub fn with_available_panel_kinds(mut self, kinds: Vec<PanelKind>) -> Self {
+        self.available_panel_kinds = kinds;
+        self
+    }
+
+    pub fn with_route_actions(mut self, actions: BTreeMap<String, RoutedShellAction>) -> Self {
+        self.route_actions_by_route_target = actions;
         self
     }
 

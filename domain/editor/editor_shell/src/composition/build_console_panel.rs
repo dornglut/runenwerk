@@ -7,12 +7,17 @@ use ui_definition::{
     form_retained_ui, normalize_authored_template,
 };
 use ui_layout::SizePolicy;
-use ui_theme::{ThemeTokens, UiColor};
+use ui_theme::ThemeTokens;
 
 use crate::{
     CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
     CONSOLE_SCROLL_WIDGET_ID, ConsoleLineKind, ConsoleViewModel, PanelInstanceId,
     SurfaceWidgetScope, ToolSurfaceInstanceId, console_line_widget_id,
+};
+
+use super::surface_definition_context::{
+    apply_panel_background, find_node_mut, register_widget_ids_by_path, scoped_definition_context,
+    set_stack_child_main_policies, toned_panel_background,
 };
 
 const CONSOLE_TEMPLATE_RON: &str =
@@ -33,31 +38,15 @@ pub fn build_console_panel(
     populate_console_values(&mut context, view_model);
     let mut root = form_retained_ui(&normalized, &mut context).root;
 
-    let mut panel_theme = theme.clone();
-    panel_theme.background_panel = UiColor::new(
-        (theme.background_panel.r - 0.012).clamp(0.0, 1.0),
-        (theme.background_panel.g - 0.012).clamp(0.0, 1.0),
-        (theme.background_panel.b - 0.012).clamp(0.0, 1.0),
-        0.94,
+    apply_panel_background(&mut root, toned_panel_background(theme, -0.012, 0.94));
+    set_stack_child_main_policies(
+        &mut root,
+        scope.widget_id(CONSOLE_BODY_WIDGET_ID),
+        vec![SizePolicy::flex(1.0)],
     );
-    if let UiNodeKind::Panel(panel) = &mut root.kind {
-        panel.theme = panel_theme;
-    }
-    preserve_console_layout_policies(&mut root, scope);
     apply_console_line_styles(&mut root, view_model, theme, scope);
 
     root
-}
-
-fn scoped_definition_context(
-    theme: &ThemeTokens,
-    scope: SurfaceWidgetScope,
-) -> UiDefinitionContext {
-    let mut context = UiDefinitionContext::new(theme.clone());
-    if let Some(base) = scope.base() {
-        context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
-    }
-    context
 }
 
 fn register_console_widget_ids(
@@ -65,18 +54,16 @@ fn register_console_widget_ids(
     view_model: &ConsoleViewModel,
     scope: SurfaceWidgetScope,
 ) {
-    let mappings = [
-        ("root", CONSOLE_PANEL_WIDGET_ID),
-        ("root/body", CONSOLE_BODY_WIDGET_ID),
-        ("root/body/scroll", CONSOLE_SCROLL_WIDGET_ID),
-        ("root/body/scroll/entries", CONSOLE_LIST_WIDGET_ID),
-    ];
-    for (path, widget_id) in mappings {
-        context.widget_ids_by_path.insert(
-            AuthoredUiNodePath(path.to_string()),
-            scope.widget_id(widget_id),
-        );
-    }
+    register_widget_ids_by_path(
+        context,
+        scope,
+        [
+            ("root", CONSOLE_PANEL_WIDGET_ID),
+            ("root/body", CONSOLE_BODY_WIDGET_ID),
+            ("root/body/scroll", CONSOLE_SCROLL_WIDGET_ID),
+            ("root/body/scroll/entries", CONSOLE_LIST_WIDGET_ID),
+        ],
+    );
 
     for index in 0..view_model.lines.len() {
         context.widget_ids_by_path.insert(
@@ -130,30 +117,11 @@ fn console_line_color(kind: ConsoleLineKind, theme: &ThemeTokens) -> [f32; 4] {
     [color.r, color.g, color.b, color.a]
 }
 
-fn preserve_console_layout_policies(root: &mut UiNode, scope: SurfaceWidgetScope) {
-    if let Some(body) = find_node_mut(root, scope.widget_id(CONSOLE_BODY_WIDGET_ID))
-        && let UiNodeKind::Stack(stack) = &mut body.kind
-    {
-        stack.child_main_policies = vec![SizePolicy::flex(1.0)];
-    }
-}
-
-fn find_node_mut(root: &mut UiNode, widget_id: crate::WidgetId) -> Option<&mut UiNode> {
-    if root.id == widget_id {
-        return Some(root);
-    }
-    for child in &mut root.children {
-        if let Some(found) = find_node_mut(child, widget_id) {
-            return Some(found);
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ConsoleLineViewModel;
+    use ui_theme::UiColor;
 
     #[test]
     fn console_line_kinds_project_distinct_status_colors() {

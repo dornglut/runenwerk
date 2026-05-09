@@ -19,13 +19,13 @@ use editor_shell::{
     SurfaceDocumentContext, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
     SurfacePresentationArtifactKind, SurfaceProviderAvailability, SurfaceProviderDescriptor,
     SurfaceProviderDiagnostic, SurfaceProviderId, SurfaceProviderPriority, SurfaceProviderRequest,
-    SurfaceRouteTable, SurfaceSessionMutation, ToolSurfaceInstanceId, ToolSurfaceKind,
-    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
-    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
-    ViewportDomainMutation, ViewportObservationFrame, ViewportProductChoiceViewModel,
-    ViewportProductObservation, ViewportSessionMutation, ViewportSurfaceAction, ViewportViewModel,
-    build_console_panel, build_entity_table_panel, build_inspector_panel, build_outliner_panel,
+    SurfaceRouteTable, SurfaceSessionMutation, ToolSurfaceKind, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
+    VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
+    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
+    ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
+    ViewportSurfaceAction, ViewportViewModel, build_console_panel, build_entity_table_panel,
+    build_inspector_panel, build_outliner_panel, build_self_authoring_control_panel,
     build_viewport_panel, editor_domain_proposal, entity_table_sort_button_widget_id,
     inspector_field_focus_widget_id, inspector_field_widget_id, surface_session_proposal,
     surface_widget_id, tool_surface_capability_set, tool_surface_definition_id,
@@ -45,7 +45,10 @@ use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportInstanceRegistryResource,
 };
-use crate::shell::toolbar_adapter::{build_toolbar_observation_frame, build_toolbar_view_model};
+use crate::shell::active_route_actions_by_target;
+use crate::shell::toolbar_adapter::{
+    build_toolbar_observation_frame, build_toolbar_view_model, toolbar_binding_with_active_menus,
+};
 use crate::shell::{RunenwerkEditorShellState, SurfaceSessionState};
 
 const SCENE_OUTLINER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(1);
@@ -236,6 +239,7 @@ pub fn build_editor_shell_frame_model(
     let scene_version = app.runtime().current_scene_reality_version();
     let session = app.runtime().session_reality();
     let history = session.history();
+    let active_definitions = shell_state.active_editor_definitions();
     let toolbar_frame = build_toolbar_observation_frame(
         session.active_tool(),
         history.can_undo(),
@@ -245,6 +249,7 @@ pub fn build_editor_shell_frame_model(
         shell_state.active_workspace_profile_id(),
         shell_state.open_workspace_profile_ids(),
         scene_version,
+        active_definitions.menus(),
     );
 
     let context = SurfaceProviderBuildContext {
@@ -265,7 +270,6 @@ pub fn build_editor_shell_frame_model(
         surfaces.insert(request.tool_surface_instance_id, frame);
     }
 
-    let active_definitions = shell_state.active_editor_definitions();
     let active_bindings = active_definitions.editor_bindings();
     let toolbar_template = active_bindings.and_then(|bindings| {
         active_definitions
@@ -273,16 +277,24 @@ pub fn build_editor_shell_frame_model(
             .get(&bindings.toolbar.template)
             .cloned()
     });
-    let toolbar_binding = active_bindings.map(|bindings| bindings.toolbar.clone());
+    let toolbar_binding = toolbar_binding_with_active_menus(
+        active_bindings.map(|bindings| bindings.toolbar.clone()),
+        active_definitions.menus(),
+    );
     let shell_chrome_template = active_bindings.and_then(|bindings| {
         active_definitions
             .templates()
             .get(&bindings.shell_chrome_template)
             .cloned()
     });
+    let route_actions =
+        active_route_actions_by_target(active_definitions, history.can_undo(), history.can_redo());
+    let available_panel_kinds = active_definitions.available_panel_kinds();
     let available_tool_surface_kinds = active_definitions.available_tool_surface_kinds();
 
     EditorShellFrameModel::new(build_toolbar_view_model(&toolbar_frame), surfaces)
+        .with_route_actions(route_actions)
+        .with_available_panel_kinds(available_panel_kinds)
         .with_available_tool_surface_kinds(available_tool_surface_kinds)
         .with_active_ui_definitions(toolbar_template, toolbar_binding, shell_chrome_template)
         .with_active_tab_stack_popup_menu(shell_state.active_tab_stack_popup_menu())
@@ -830,14 +842,14 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
                 .map(|product| (product.root, SurfaceRouteTable::empty()))
                 .unwrap_or_else(|| {
                     build_self_authoring_control_panel(
-                        context,
+                        context.theme,
                         request.tool_surface_instance_id,
                         vec!["No retained preview available".to_string()],
                         Vec::new(),
                     )
                 }),
             _ => build_self_authoring_control_panel(
-                context,
+                context.theme,
                 request.tool_surface_instance_id,
                 self_authoring_lines(context, request.tool_surface_kind),
                 self_authoring_actions(context, request.tool_surface_kind),
@@ -1261,41 +1273,6 @@ fn workspace_host_summary(host: &editor_definition::EditorWorkspaceHostDefinitio
             workspace_host_summary(second)
         ),
     }
-}
-
-fn build_self_authoring_control_panel(
-    context: &SurfaceProviderBuildContext<'_>,
-    surface_id: ToolSurfaceInstanceId,
-    lines: Vec<String>,
-    actions: Vec<(String, SurfaceLocalAction)>,
-) -> (editor_shell::UiNode, SurfaceRouteTable) {
-    let text_style = context.theme.body_small_text_style(FontId(1));
-    let mut children = Vec::new();
-    let mut routes = SurfaceRouteTable::empty();
-    for (index, line) in lines.into_iter().enumerate() {
-        let widget_id =
-            surface_widget_id(surface_id, editor_shell::WidgetId(30_000 + index as u64));
-        children.push(editor_shell::label(widget_id, line, text_style.clone()));
-    }
-    for (index, (label, action)) in actions.into_iter().enumerate() {
-        let widget_id =
-            surface_widget_id(surface_id, editor_shell::WidgetId(40_000 + index as u64));
-        children.push(editor_shell::button(
-            widget_id,
-            label,
-            text_style.clone(),
-            context.theme.clone(),
-        ));
-        routes.insert(widget_id, SurfaceLocalRoute::new(action));
-    }
-    (
-        editor_shell::panel(
-            surface_widget_id(surface_id, editor_shell::WidgetId(29_999)),
-            context.theme.clone(),
-            children,
-        ),
-        routes,
-    )
 }
 
 fn deterministic_provider(

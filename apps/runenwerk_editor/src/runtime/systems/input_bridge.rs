@@ -28,7 +28,10 @@ use crate::runtime::viewport::{
 };
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
 use crate::shell::dispatch_shell_command;
-use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState, ShellCursorIntent};
+use crate::shell::{
+    KnownEditorCommand, RunenwerkEditorShellController, RunenwerkEditorShellState,
+    ShellCursorIntent, resolve_active_editor_shortcuts,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct ViewportPointerRoute {
@@ -41,7 +44,7 @@ struct ViewportPointerRoute {
 
 #[allow(clippy::too_many_arguments)]
 pub fn dispatch_editor_input_system(
-    input: Res<engine::plugins::InputState>,
+    mut input: ResMut<engine::plugins::InputState>,
     mut window: ResMut<WindowState>,
     mut host: ResMut<EditorHostResource>,
     mut bridge: ResMut<EditorInputBridgeState>,
@@ -52,6 +55,7 @@ pub fn dispatch_editor_input_system(
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
     mut viewport_render_commands: ResMut<ViewportRenderStateCommandQueueResource>,
 ) {
+    sync_active_editor_shortcut_bindings(&mut input, &host, &mut bridge);
     let bounds = window_bounds(&window);
     let shell_theme = scaled_shell_theme(&host.theme, window.scale_factor);
     let viewport_products = resolve_structural_viewport_products(
@@ -75,6 +79,7 @@ pub fn dispatch_editor_input_system(
     dispatch_global_shortcuts(
         &input,
         &mut host,
+        &bridge,
         &mut viewport_presentations,
         &viewport_observations,
         &tool_surface_bindings,
@@ -446,6 +451,7 @@ pub fn dispatch_editor_input_system(
         dispatch_viewport_shortcuts(
             &input,
             &mut host,
+            &bridge,
             &mut viewport_presentations,
             &viewport_observations,
             &tool_surface_bindings,
@@ -472,6 +478,52 @@ pub fn dispatch_editor_input_system(
     bridge.last_mouse_position = (position.x, position.y);
 }
 
+fn sync_active_editor_shortcut_bindings(
+    input: &mut engine::plugins::InputState,
+    host: &EditorHostResource,
+    bridge: &mut EditorInputBridgeState,
+) {
+    let catalog_active = !host
+        .shell_state
+        .active_editor_definitions()
+        .shortcuts()
+        .is_empty();
+    let resolved =
+        match resolve_active_editor_shortcuts(host.shell_state.active_editor_definitions()) {
+            Ok(value) => value,
+            Err(_) => return,
+        };
+    let signature = resolved
+        .iter()
+        .map(|shortcut| {
+            (
+                shortcut.action_id.clone(),
+                shortcut.command_key.clone(),
+                shortcut.chord_text.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    if bridge.active_shortcut_catalog_active == catalog_active
+        && bridge.active_shortcut_signature == signature
+    {
+        return;
+    }
+
+    for action_id in bridge.active_shortcut_action_ids.drain(..) {
+        input.clear_action_bindings(&action_id);
+    }
+    bridge.active_shortcut_commands.clear();
+    for shortcut in resolved {
+        input.map_chord(shortcut.action_id.clone(), shortcut.chord);
+        bridge
+            .active_shortcut_commands
+            .insert(shortcut.action_id.clone(), shortcut.command);
+        bridge.active_shortcut_action_ids.push(shortcut.action_id);
+    }
+    bridge.active_shortcut_catalog_active = catalog_active;
+    bridge.active_shortcut_signature = signature;
+}
+
 fn window_cursor_icon(cursor_intent: ShellCursorIntent) -> WindowCursorIcon {
     match cursor_intent {
         ShellCursorIntent::Default => WindowCursorIcon::Default,
@@ -488,10 +540,23 @@ fn window_cursor_icon(cursor_intent: ShellCursorIntent) -> WindowCursorIcon {
 fn dispatch_global_shortcuts(
     input: &engine::plugins::InputState,
     host: &mut EditorHostResource,
+    bridge: &EditorInputBridgeState,
     viewport_presentations: &mut ViewportPresentationStateResource,
     viewport_observations: &ViewportArtifactObservationResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
 ) {
+    dispatch_active_editor_shortcuts(
+        input,
+        host,
+        bridge,
+        viewport_presentations,
+        viewport_observations,
+        tool_surface_bindings,
+    );
+    if bridge.active_shortcut_catalog_active {
+        return;
+    }
+
     if input.action_pressed(ACTION_EDITOR_UNDO)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
@@ -536,9 +601,55 @@ fn dispatch_global_shortcuts(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn dispatch_active_editor_shortcuts(
+    input: &engine::plugins::InputState,
+    host: &mut EditorHostResource,
+    bridge: &EditorInputBridgeState,
+    viewport_presentations: &mut ViewportPresentationStateResource,
+    viewport_observations: &ViewportArtifactObservationResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+) {
+    let pressed = bridge
+        .active_shortcut_commands
+        .iter()
+        .filter_map(|(action_id, command)| input.action_pressed(action_id).then_some(*command))
+        .collect::<Vec<_>>();
+    for command in pressed {
+        if let Err(error) = dispatch_known_editor_command(
+            command,
+            host,
+            viewport_presentations,
+            viewport_observations,
+            tool_surface_bindings,
+        ) {
+            eprintln!("active editor shortcut failed: {error}");
+        }
+    }
+}
+
+fn dispatch_known_editor_command(
+    command: KnownEditorCommand,
+    host: &mut EditorHostResource,
+    viewport_presentations: &mut ViewportPresentationStateResource,
+    viewport_observations: &ViewportArtifactObservationResource,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+) -> Result<(), editor_core::EditorMutationError> {
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        command.to_shell_command(),
+        Some(&mut *viewport_presentations),
+        Some(viewport_observations),
+        Some(tool_surface_bindings),
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 fn dispatch_viewport_shortcuts(
     input: &engine::plugins::InputState,
     host: &mut EditorHostResource,
+    bridge: &EditorInputBridgeState,
     viewport_presentations: &mut ViewportPresentationStateResource,
     viewport_observations: &ViewportArtifactObservationResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
@@ -546,8 +657,9 @@ fn dispatch_viewport_shortcuts(
     cursor: UiPoint,
     preferred_viewport_id: Option<ViewportId>,
 ) {
-    if (input.action_pressed(ACTION_EDITOR_TOOL_SELECT)
-        || input.action_pressed(action::UI_EDITOR_RESTORE_ALL))
+    if !bridge.active_shortcut_catalog_active
+        && (input.action_pressed(ACTION_EDITOR_TOOL_SELECT)
+            || input.action_pressed(action::UI_EDITOR_RESTORE_ALL))
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -561,8 +673,9 @@ fn dispatch_viewport_shortcuts(
         eprintln!("select-tool shortcut failed: {error}");
     }
 
-    if (input.action_pressed(ACTION_EDITOR_TOOL_TRANSLATE)
-        || input.action_pressed(action::UI_EDITOR_HIDE_SELECTED))
+    if !bridge.active_shortcut_catalog_active
+        && (input.action_pressed(ACTION_EDITOR_TOOL_TRANSLATE)
+            || input.action_pressed(action::UI_EDITOR_HIDE_SELECTED))
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -576,7 +689,8 @@ fn dispatch_viewport_shortcuts(
         eprintln!("translate-tool shortcut failed: {error}");
     }
 
-    if input.action_pressed(ACTION_EDITOR_TOOL_ROTATE)
+    if !bridge.active_shortcut_catalog_active
+        && input.action_pressed(ACTION_EDITOR_TOOL_ROTATE)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -590,7 +704,8 @@ fn dispatch_viewport_shortcuts(
         eprintln!("rotate-tool shortcut failed: {error}");
     }
 
-    if input.action_pressed(ACTION_EDITOR_TOOL_SCALE)
+    if !bridge.active_shortcut_catalog_active
+        && input.action_pressed(ACTION_EDITOR_TOOL_SCALE)
         && let Err(error) = dispatch_shell_command(
             &mut host.app,
             Some(&mut host.shell_state),
@@ -1115,11 +1230,83 @@ mod tests {
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
     use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
-    use crate::shell::RunenwerkEditorShellController;
+    use crate::shell::{RunenwerkEditorShellController, SELECT_TOOL_ID, validate_editor_shortcuts};
+    use editor_definition::{EditorShortcutDefinition, EditorShortcutSetDefinition};
     use editor_viewport::ViewportId;
+    use engine::plugins::InputState;
     use engine::plugins::render::UiFontAtlasResource;
     use ui_input::InputResponse;
     use ui_theme::ThemeTokens;
+    use winit::event::ElementState;
+    use winit::keyboard::KeyCode;
+
+    #[test]
+    fn active_shortcuts_dispatch_known_tool_and_definition_commands() {
+        let mut host = EditorHostResource::default();
+        host.shell_state
+            .active_editor_definitions_mut()
+            .install_shortcuts(
+                EditorShortcutSetDefinition {
+                    id: "runenwerk.editor.test.shortcuts.active".to_string(),
+                    label: "Active Shortcuts".to_string(),
+                    shortcuts: vec![
+                        EditorShortcutDefinition {
+                            id: "select".to_string(),
+                            command: "editor.tool.select".to_string(),
+                            chord: "Cmd+1".to_string(),
+                            context: None,
+                        },
+                        EditorShortcutDefinition {
+                            id: "apply_definition".to_string(),
+                            command: "editor.definition.apply_selected".to_string(),
+                            chord: "Cmd+Shift+A".to_string(),
+                            context: None,
+                        },
+                    ],
+                },
+                validate_editor_shortcuts,
+            )
+            .expect("active shortcut set should validate");
+        let mut input = InputState::default();
+        let mut bridge = EditorInputBridgeState::default();
+        let mut viewport_presentations = ViewportPresentationStateResource::default();
+        let viewport_observations = ViewportArtifactObservationResource::default();
+        let tool_surface_bindings = ToolSurfaceRuntimeBindingRegistryResource::default();
+
+        sync_active_editor_shortcut_bindings(&mut input, &host, &mut bridge);
+        input.handle_keyboard_input(KeyCode::SuperLeft, ElementState::Pressed, None);
+        input.handle_keyboard_input(KeyCode::Digit1, ElementState::Pressed, None);
+        dispatch_active_editor_shortcuts(
+            &input,
+            &mut host,
+            &bridge,
+            &mut viewport_presentations,
+            &viewport_observations,
+            &tool_surface_bindings,
+        );
+        assert_eq!(
+            host.app.runtime().session().active_tool(),
+            Some(SELECT_TOOL_ID)
+        );
+
+        input.clear_frame();
+        input.handle_keyboard_input(KeyCode::Digit1, ElementState::Released, None);
+        input.handle_keyboard_input(KeyCode::ShiftLeft, ElementState::Pressed, None);
+        input.handle_keyboard_input(KeyCode::KeyA, ElementState::Pressed, None);
+        dispatch_active_editor_shortcuts(
+            &input,
+            &mut host,
+            &bridge,
+            &mut viewport_presentations,
+            &viewport_observations,
+            &tool_surface_bindings,
+        );
+        assert_eq!(
+            host.app.pending_editor_definition_activation_count(),
+            1,
+            "apply-definition shortcut should dispatch through KnownEditorCommand",
+        );
+    }
 
     fn seeded_shell_state_with_projection() -> RunenwerkEditorShellState {
         let app = RunenwerkEditorApp::new();

@@ -1,11 +1,10 @@
 //! File: domain/editor/editor_shell/src/composition/build_viewport_panel.rs
 //! Purpose: Compose viewport panel widgets.
 
-use crate::{UiNode, button_selected, hstack_with_policies, label, toggle};
+use crate::{UiNode, button_selected, hstack_with_policies, label};
 use editor_viewport::{ViewportDebugStage, ViewportSurfacePresentationSlot};
 use ui_definition::{
-    AuthoredUiNodePath, AuthoredUiTemplate, UiDefinitionContext, form_retained_ui,
-    normalize_authored_template,
+    AuthoredUiTemplate, UiDefinitionContext, form_retained_ui, normalize_authored_template,
 };
 use ui_layout::SizePolicy;
 use ui_text::FontId;
@@ -27,7 +26,11 @@ use crate::{
     viewport_tool_radial_item_widget_id,
 };
 
-use super::surface_control_polish::apply_compact_surface_control_polish;
+use super::surface_control_polish::{compact_surface_action_button, compact_surface_toggle};
+use super::surface_definition_context::{
+    find_node_mut, register_widget_ids_by_path, scoped_definition_context,
+    set_stack_child_main_policies, transparent_panel_background,
+};
 
 const VIEWPORT_TEMPLATE_RON: &str =
     include_str!("../../../../../assets/editor/ui/surfaces/viewport.ron");
@@ -55,36 +58,24 @@ pub fn build_viewport_panel(
     root
 }
 
-fn scoped_definition_context(
-    theme: &ThemeTokens,
-    scope: SurfaceWidgetScope,
-) -> UiDefinitionContext {
-    let mut context = UiDefinitionContext::new(theme.clone());
-    if let Some(base) = scope.base() {
-        context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
-    }
-    context
-}
-
 fn register_viewport_widget_ids(context: &mut UiDefinitionContext, scope: SurfaceWidgetScope) {
-    for (path, widget_id) in [
-        ("root", VIEWPORT_PANEL_WIDGET_ID),
-        ("root/body", VIEWPORT_BODY_WIDGET_ID),
-        ("root/body/canvas", VIEWPORT_CANVAS_WIDGET_ID),
-        (
-            "root/body/canvas/canvas_content",
-            VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
-        ),
-        (
-            "root/body/canvas/canvas_content/viewport_canvas",
-            VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-        ),
-    ] {
-        context.widget_ids_by_path.insert(
-            AuthoredUiNodePath(path.to_string()),
-            scope.widget_id(widget_id),
-        );
-    }
+    register_widget_ids_by_path(
+        context,
+        scope,
+        [
+            ("root", VIEWPORT_PANEL_WIDGET_ID),
+            ("root/body", VIEWPORT_BODY_WIDGET_ID),
+            ("root/body/canvas", VIEWPORT_CANVAS_WIDGET_ID),
+            (
+                "root/body/canvas/canvas_content",
+                VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
+            ),
+            (
+                "root/body/canvas/canvas_content/viewport_canvas",
+                VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+            ),
+        ],
+    );
 }
 
 fn polish_viewport_base(
@@ -94,12 +85,7 @@ fn polish_viewport_base(
     scope: SurfaceWidgetScope,
 ) {
     if let UiNodeKind::Panel(panel) = &mut root.kind {
-        panel.theme.background_panel = UiColor::new(
-            theme.background_panel.r,
-            theme.background_panel.g,
-            theme.background_panel.b,
-            0.0,
-        );
+        panel.theme.background_panel = transparent_panel_background(theme, 0.0);
         panel.theme.border = UiColor::new(
             (theme.border.r + 0.05).clamp(0.0, 1.0),
             (theme.border.g + 0.06).clamp(0.0, 1.0),
@@ -107,21 +93,20 @@ fn polish_viewport_base(
             0.95,
         );
     }
+    set_stack_child_main_policies(
+        root,
+        scope.widget_id(VIEWPORT_BODY_WIDGET_ID),
+        vec![SizePolicy::flex(1.0)],
+    );
     if let Some(body) = find_node_mut(root, scope.widget_id(VIEWPORT_BODY_WIDGET_ID))
         && let UiNodeKind::Stack(stack) = &mut body.kind
     {
         stack.gap = 0.0;
-        stack.child_main_policies = vec![SizePolicy::flex(1.0)];
     }
     if let Some(canvas) = find_node_mut(root, scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID))
         && let UiNodeKind::Panel(panel) = &mut canvas.kind
     {
-        panel.theme.background_panel = UiColor::new(
-            theme.background_panel.r,
-            theme.background_panel.g,
-            theme.background_panel.b,
-            0.0,
-        );
+        panel.theme.background_panel = transparent_panel_background(theme, 0.0);
         panel.theme.border = UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.70);
     }
     if let Some(content) = find_node_mut(root, scope.widget_id(VIEWPORT_CANVAS_CONTENT_WIDGET_ID)) {
@@ -233,7 +218,7 @@ fn viewport_tool_radial_menu(
                     .into_iter()
                     .enumerate()
                     .map(|(index, label)| {
-                        viewport_button(
+                        compact_surface_action_button(
                             scope.widget_id(viewport_tool_radial_item_widget_id(index)),
                             label,
                             false,
@@ -272,7 +257,7 @@ fn viewport_tools_menu(
                 .into_iter()
                 .enumerate()
                 .map(|(index, label)| {
-                    viewport_button(
+                    compact_surface_action_button(
                         scope.widget_id(viewport_tool_radial_item_widget_id(index)),
                         label,
                         false,
@@ -299,13 +284,13 @@ fn viewport_options_popup(
             0.96,
         );
         let mut items = vec![
-            viewport_toggle(
+            compact_surface_toggle(
                 scope.widget_id(VIEWPORT_DETAILS_TOGGLE_WIDGET_ID),
                 "Details",
                 view_model.details_visible,
                 theme,
             ),
-            viewport_toggle(
+            compact_surface_toggle(
                 scope.widget_id(VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID),
                 "Statistics",
                 view_model.statistics_visible,
@@ -313,21 +298,21 @@ fn viewport_options_popup(
             ),
         ];
         if view_model.viewport_id.is_some() {
-            items.push(viewport_button(
+            items.push(compact_surface_action_button(
                 scope.widget_id(VIEWPORT_RESET_CAMERA_WIDGET_ID),
                 "Reset Camera",
                 false,
                 true,
                 theme,
             ));
-            items.push(viewport_toggle(
+            items.push(compact_surface_toggle(
                 scope.widget_id(VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID),
                 "Opaque Root",
                 view_model.root_background_opaque,
                 theme,
             ));
             for (index, stage) in ViewportDebugStage::ALL.into_iter().enumerate() {
-                items.push(viewport_button(
+                items.push(compact_surface_action_button(
                     scope.widget_id(viewport_debug_stage_button_widget_id(index)),
                     format!("Debug {}", stage.display_label()),
                     view_model.debug_stage == stage,
@@ -337,7 +322,7 @@ fn viewport_options_popup(
             }
         }
         for (index, choice) in view_model.product_choices.iter().enumerate() {
-            items.push(viewport_button(
+            items.push(compact_surface_action_button(
                 scope.widget_id(viewport_product_button_widget_id(index)),
                 format!("Product {}", choice.label),
                 choice.selected,
@@ -357,44 +342,6 @@ fn viewport_options_popup(
             items,
         )
     })
-}
-
-fn viewport_toggle(
-    id: crate::WidgetId,
-    label: impl Into<String>,
-    checked: bool,
-    theme: &ThemeTokens,
-) -> UiNode {
-    let mut node = toggle(
-        id,
-        label,
-        checked,
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-    );
-    apply_compact_surface_control_polish(&mut node, theme);
-    node
-}
-
-fn viewport_button(
-    id: crate::WidgetId,
-    label: impl Into<String>,
-    selected: bool,
-    enabled: bool,
-    theme: &ThemeTokens,
-) -> UiNode {
-    let mut node = button_selected(
-        id,
-        label,
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-        selected,
-    );
-    if let UiNodeKind::Button(button) = &mut node.kind {
-        button.enabled = enabled;
-    }
-    apply_compact_surface_control_polish(&mut node, theme);
-    node
 }
 
 fn viewport_status_overlay(
@@ -436,12 +383,7 @@ fn viewport_status_overlay(
 
 fn transparent_panel_theme(theme: &ThemeTokens, alpha: f32) -> ThemeTokens {
     let mut panel_theme = theme.clone();
-    panel_theme.background_panel = UiColor::new(
-        theme.background_panel.r,
-        theme.background_panel.g,
-        theme.background_panel.b,
-        alpha,
-    );
+    panel_theme.background_panel = transparent_panel_background(theme, alpha);
     panel_theme.border = UiColor::new(theme.border.r, theme.border.g, theme.border.b, 0.0);
     panel_theme
 }
@@ -463,18 +405,6 @@ fn viewport_statistics_text(view_model: &ViewportViewModel) -> String {
         "Statistics: drag={} preview={}",
         view_model.drag_in_progress, view_model.preview_active
     )
-}
-
-fn find_node_mut(node: &mut UiNode, widget_id: crate::WidgetId) -> Option<&mut UiNode> {
-    if node.id == widget_id {
-        return Some(node);
-    }
-    for child in &mut node.children {
-        if let Some(found) = find_node_mut(child, widget_id) {
-            return Some(found);
-        }
-    }
-    None
 }
 
 #[cfg(test)]

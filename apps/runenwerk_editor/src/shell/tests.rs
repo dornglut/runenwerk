@@ -13,9 +13,9 @@ use editor_shell::{
     SurfaceSessionMutation, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, UiInteraction,
     UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
     ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction, WorkspaceMutation,
-    WorkspaceSplitAxis, map_interactions_to_shell_commands, surface_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_popup_menu_widget_id, tab_strip_scroll_widget_id,
-    workspace_split_host_widget_id,
+    WorkspaceSplitAxis, build_editor_shell_frame, map_interactions_to_shell_commands,
+    surface_widget_id, tab_stack_new_tab_button_widget_id, tab_stack_popup_menu_widget_id,
+    tab_strip_scroll_widget_id, workspace_split_host_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionProductId, ProducerHealth, ProductAvailabilityState,
@@ -43,8 +43,9 @@ use crate::runtime::viewport::{
 };
 use crate::shell::{
     EditorSurfaceProviderRegistry, RunenwerkEditorShellController, RunenwerkEditorShellState,
-    SELECT_TOOL_ID, TRANSLATE_TOOL_ID, active_document_context, build_editor_shell_frame_model,
-    dispatch_shell_command, dispatch_shell_command_with_viewport_commands,
+    SELECT_TOOL_ID, TRANSLATE_TOOL_ID, active_document_context, active_route_actions_by_target,
+    build_editor_shell_frame_model, dispatch_shell_command,
+    dispatch_shell_command_with_viewport_commands,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, ecs::Component)]
@@ -504,6 +505,314 @@ fn applying_menu_shortcut_and_command_binding_definitions_updates_live_catalogs(
 }
 
 #[test]
+fn invalid_command_binding_activation_keeps_previous_active_catalog() {
+    let mut host = EditorHostResource::default();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.commands.valid"),
+            "valid_commands.ron",
+            editor_definition::EditorDefinitionDocumentKind::CommandBinding,
+            editor_definition::EditorDefinitionDocumentContent::CommandBindings(
+                editor_definition::EditorCommandBindingSetDefinition {
+                    id: "runenwerk.editor.test.commands.valid".to_string(),
+                    label: "Valid Commands".to_string(),
+                    bindings: vec![editor_definition::EditorCommandBindingDefinition {
+                        id: "save".to_string(),
+                        command: "editor.scene.save".to_string(),
+                        route_target: "test.save".to_string(),
+                        capability_requirements: Vec::new(),
+                        undoable: true,
+                    }],
+                },
+            ),
+        ),
+    );
+    assert_eq!(host.apply_pending_editor_definition_activations(), 1);
+    let previous = host
+        .shell_state
+        .active_editor_definitions()
+        .command_bindings()
+        .clone();
+
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.commands.invalid"),
+            "invalid_commands.ron",
+            editor_definition::EditorDefinitionDocumentKind::CommandBinding,
+            editor_definition::EditorDefinitionDocumentContent::CommandBindings(
+                editor_definition::EditorCommandBindingSetDefinition {
+                    id: "runenwerk.editor.test.commands.invalid".to_string(),
+                    label: "Invalid Commands".to_string(),
+                    bindings: vec![editor_definition::EditorCommandBindingDefinition {
+                        id: "unknown".to_string(),
+                        command: "editor.unknown.command".to_string(),
+                        route_target: "test.unknown".to_string(),
+                        capability_requirements: Vec::new(),
+                        undoable: true,
+                    }],
+                },
+            ),
+        ),
+    );
+
+    assert_eq!(host.apply_pending_editor_definition_activations(), 0);
+    assert_eq!(
+        host.shell_state
+            .active_editor_definitions()
+            .command_bindings(),
+        &previous,
+        "unknown command keys must not replace the active command-binding catalog",
+    );
+}
+
+#[test]
+fn duplicate_active_command_binding_route_targets_are_rejected() {
+    let mut host = EditorHostResource::default();
+    for (set_id, binding_id, command) in [
+        (
+            "runenwerk.editor.test.commands.first",
+            "first",
+            "editor.scene.save",
+        ),
+        (
+            "runenwerk.editor.test.commands.second",
+            "second",
+            "editor.scene.load",
+        ),
+    ] {
+        host.app.queue_editor_definition_activation(
+            editor_definition::EditorDefinitionDocument::current(
+                editor_definition::EditorDefinitionId::from(set_id),
+                format!("{set_id}.ron"),
+                editor_definition::EditorDefinitionDocumentKind::CommandBinding,
+                editor_definition::EditorDefinitionDocumentContent::CommandBindings(
+                    editor_definition::EditorCommandBindingSetDefinition {
+                        id: set_id.to_string(),
+                        label: set_id.to_string(),
+                        bindings: vec![editor_definition::EditorCommandBindingDefinition {
+                            id: binding_id.to_string(),
+                            command: command.to_string(),
+                            route_target: "test.duplicate".to_string(),
+                            capability_requirements: Vec::new(),
+                            undoable: true,
+                        }],
+                    },
+                ),
+            ),
+        );
+        let activated = host.apply_pending_editor_definition_activations();
+        if binding_id == "first" {
+            assert_eq!(activated, 1);
+        } else {
+            assert_eq!(
+                activated, 0,
+                "duplicate route targets across active binding sets must be rejected",
+            );
+        }
+    }
+
+    assert_eq!(
+        host.shell_state
+            .active_editor_definitions()
+            .command_for_route_target("test.duplicate"),
+        Some("editor.scene.save")
+    );
+}
+
+#[test]
+fn authored_command_binding_route_target_resolves_to_shell_command() {
+    let mut host = EditorHostResource::default();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.commands.route"),
+            "route_commands.ron",
+            editor_definition::EditorDefinitionDocumentKind::CommandBinding,
+            editor_definition::EditorDefinitionDocumentContent::CommandBindings(
+                editor_definition::EditorCommandBindingSetDefinition {
+                    id: "runenwerk.editor.test.commands.route".to_string(),
+                    label: "Route Commands".to_string(),
+                    bindings: vec![editor_definition::EditorCommandBindingDefinition {
+                        id: "save".to_string(),
+                        command: "editor.scene.save".to_string(),
+                        route_target: "authored.save-scene".to_string(),
+                        capability_requirements: Vec::new(),
+                        undoable: true,
+                    }],
+                },
+            ),
+        ),
+    );
+    assert_eq!(host.apply_pending_editor_definition_activations(), 1);
+    let route_actions =
+        active_route_actions_by_target(host.shell_state.active_editor_definitions(), false, false);
+    let frame_model = editor_shell::EditorShellFrameModel::new(
+        editor_shell::ToolbarViewModel {
+            buttons: vec![editor_shell::ToolbarButtonViewModel {
+                id: editor_core::ToolId(2_001),
+                stable_name: "menu_file",
+                label: "File".to_string(),
+                is_active: true,
+                enabled: true,
+            }],
+        },
+        std::collections::BTreeMap::new(),
+    )
+    .with_active_ui_definitions(
+        None,
+        Some(editor_definition::EditorToolbarBinding {
+            template: "unused.toolbar.template".into(),
+            workspace_catalog: None,
+            routes: Vec::new(),
+            availability: Vec::new(),
+            menus: Vec::new(),
+            menu_items: vec![editor_definition::EditorToolbarMenuItemBinding {
+                menu_id: "file".to_string(),
+                item_id: "save".to_string(),
+                label: "Save".to_string(),
+                route: ui_definition::UiRouteSlotId::new("authored.save-scene"),
+                availability: None,
+            }],
+        }),
+        None,
+    )
+    .with_route_actions(route_actions);
+    let build = build_editor_shell_frame(
+        &frame_model,
+        &ThemeTokens::default(),
+        host.shell_state.workspace_state(),
+    );
+
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::Activated(
+                editor_shell::toolbar_menu_item_widget_id(0),
+            )],
+        },
+        &build.projection_artifacts,
+    );
+
+    assert_eq!(
+        commands,
+        vec![ShellCommand::SaveScene],
+        "authored route targets should resolve to shell commands via the active command-binding catalog",
+    );
+}
+
+#[test]
+fn invalid_shortcut_activation_keeps_previous_active_shortcuts() {
+    let mut host = EditorHostResource::default();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.shortcuts.valid"),
+            "valid_shortcuts.ron",
+            editor_definition::EditorDefinitionDocumentKind::Shortcut,
+            editor_definition::EditorDefinitionDocumentContent::Shortcuts(
+                editor_definition::EditorShortcutSetDefinition {
+                    id: "runenwerk.editor.test.shortcuts.valid".to_string(),
+                    label: "Valid Shortcuts".to_string(),
+                    shortcuts: vec![editor_definition::EditorShortcutDefinition {
+                        id: "save".to_string(),
+                        command: "editor.scene.save".to_string(),
+                        chord: "Cmd+S".to_string(),
+                        context: None,
+                    }],
+                },
+            ),
+        ),
+    );
+    assert_eq!(host.apply_pending_editor_definition_activations(), 1);
+    let previous = host
+        .shell_state
+        .active_editor_definitions()
+        .shortcuts()
+        .clone();
+
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.shortcuts.invalid"),
+            "invalid_shortcuts.ron",
+            editor_definition::EditorDefinitionDocumentKind::Shortcut,
+            editor_definition::EditorDefinitionDocumentContent::Shortcuts(
+                editor_definition::EditorShortcutSetDefinition {
+                    id: "runenwerk.editor.test.shortcuts.invalid".to_string(),
+                    label: "Invalid Shortcuts".to_string(),
+                    shortcuts: vec![editor_definition::EditorShortcutDefinition {
+                        id: "bad_chord".to_string(),
+                        command: "editor.scene.save".to_string(),
+                        chord: "Cmd+DefinitelyNotAKey".to_string(),
+                        context: None,
+                    }],
+                },
+            ),
+        ),
+    );
+
+    assert_eq!(host.apply_pending_editor_definition_activations(), 0);
+    assert_eq!(
+        host.shell_state.active_editor_definitions().shortcuts(),
+        &previous,
+        "malformed shortcut chords must not replace the active shortcut catalog",
+    );
+}
+
+#[test]
+fn active_menu_item_activation_routes_through_known_command_resolver() {
+    let mut host = EditorHostResource::default();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.menu.file"),
+            "file_menu.ron",
+            editor_definition::EditorDefinitionDocumentKind::Menu,
+            editor_definition::EditorDefinitionDocumentContent::Menu(
+                editor_definition::EditorMenuDefinition {
+                    id: "file".to_string(),
+                    label: "File".to_string(),
+                    items: vec![editor_definition::EditorMenuItemDefinition {
+                        id: "apply_selected_definition".to_string(),
+                        label: "Apply Definition".to_string(),
+                        command: Some("editor.definition.apply_selected".to_string()),
+                        children: Vec::new(),
+                        availability: None,
+                    }],
+                },
+            ),
+        ),
+    );
+    assert_eq!(host.apply_pending_editor_definition_activations(), 1);
+    host.shell_state.toggle_toolbar_menu(ToolbarMenuKind::File);
+
+    let frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.surface_provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+    let build = build_editor_shell_frame(
+        &frame_model,
+        &ThemeTokens::default(),
+        host.shell_state.workspace_state(),
+    );
+
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::Activated(
+                editor_shell::toolbar_menu_item_widget_id(0),
+            )],
+        },
+        &build.projection_artifacts,
+    );
+
+    assert_eq!(
+        commands,
+        vec![ShellCommand::ApplySelectedEditorDefinition],
+        "active menu item command keys should resolve through the app-owned known command path",
+    );
+}
+
+#[test]
 fn invalid_editor_bindings_activation_keeps_previous_active_bindings() {
     let mut host = EditorHostResource::default();
     let original_bindings = host
@@ -605,6 +914,55 @@ fn panel_and_tool_surface_registry_activation_blocks_active_workspace_removals()
             .tool_surface_registry()
             .cloned(),
         original_tool_surface_registry
+    );
+}
+
+#[test]
+fn panel_registry_activation_rejects_unknown_default_tool_surface() {
+    let mut host = EditorHostResource::default();
+    let mut panels = host
+        .shell_state
+        .workspace_state()
+        .panels()
+        .map(|panel| {
+            let default_tool_surface = panel
+                .active_tool_surface
+                .and_then(|surface_id| host.shell_state.workspace_state().tool_surface(surface_id))
+                .map(|surface| {
+                    editor_shell::tool_surface_kind_definition_key(surface.tool_surface_kind)
+                        .to_string()
+                })
+                .unwrap_or_else(|| "placeholder".to_string());
+            editor_definition::EditorPanelDefinition {
+                id: editor_shell::panel_kind_definition_key(panel.panel_kind).to_string(),
+                label: format!("{:?}", panel.panel_kind),
+                default_tool_surface,
+                allowed_document_kinds: Vec::new(),
+                allowed_workspace_profiles: Vec::new(),
+            }
+        })
+        .collect::<Vec<_>>();
+    panels[0].default_tool_surface = "missing_future_surface".to_string();
+    host.app.queue_editor_definition_activation(
+        editor_definition::EditorDefinitionDocument::current(
+            editor_definition::EditorDefinitionId::from("runenwerk.editor.test.panels.bad_default"),
+            "bad_default_panels.ron",
+            editor_definition::EditorDefinitionDocumentKind::PanelRegistry,
+            editor_definition::EditorDefinitionDocumentContent::PanelRegistry(
+                editor_definition::EditorPanelRegistryDefinition {
+                    id: "runenwerk.editor.test.panels.bad_default".to_string(),
+                    label: "Bad Defaults".to_string(),
+                    panels,
+                },
+            ),
+        ),
+    );
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(
+        activated, 0,
+        "panel registry activation should reject defaults that cannot project to known tool surfaces",
     );
 }
 

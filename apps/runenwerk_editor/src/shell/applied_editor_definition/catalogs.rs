@@ -13,8 +13,9 @@ use editor_shell::{ToolSurfaceKind, WorkspaceState};
 use ui_definition::{NormalizedUiTemplate, UiDefinitionDiagnostic, UiTemplateId};
 
 use super::compatibility::{
-    known_tool_surface_kinds_in_authored_order, panel_registry_covers_workspace,
-    tool_surface_registry_covers_workspace,
+    known_panel_kinds_in_authored_order, known_tool_surface_kinds_in_authored_order,
+    panel_registry_compatible_with_tool_surfaces, panel_registry_covers_workspace,
+    tool_surface_registry_covers_panel_defaults, tool_surface_registry_covers_workspace,
 };
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -80,6 +81,13 @@ impl ActiveEditorDefinitionCatalogs {
             .unwrap_or_default()
     }
 
+    pub fn available_panel_kinds(&self) -> Vec<editor_shell::PanelKind> {
+        self.panel_registry
+            .as_ref()
+            .map(known_panel_kinds_in_authored_order)
+            .unwrap_or_default()
+    }
+
     pub fn install_template(&mut self, template: NormalizedUiTemplate) {
         self.templates.insert(template.id.clone(), template);
     }
@@ -100,12 +108,32 @@ impl ActiveEditorDefinitionCatalogs {
         self.menus.insert(menu.id.clone(), menu);
     }
 
-    pub fn install_shortcuts(&mut self, shortcuts: EditorShortcutSetDefinition) {
+    pub fn install_shortcuts(
+        &mut self,
+        shortcuts: EditorShortcutSetDefinition,
+        validate_shortcuts: impl FnOnce(&EditorShortcutSetDefinition) -> Vec<UiDefinitionDiagnostic>,
+    ) -> Result<(), Vec<UiDefinitionDiagnostic>> {
+        let diagnostics = validate_shortcuts(&shortcuts);
+        if editor_definition_has_blocking_diagnostics(&diagnostics) {
+            return Err(diagnostics);
+        }
         self.shortcuts.insert(shortcuts.id.clone(), shortcuts);
+        Ok(())
     }
 
-    pub fn install_command_bindings(&mut self, bindings: EditorCommandBindingSetDefinition) {
-        self.command_bindings.insert(bindings.id.clone(), bindings);
+    pub fn install_command_bindings(
+        &mut self,
+        bindings: EditorCommandBindingSetDefinition,
+        is_known_command_key: impl Fn(&str) -> bool,
+    ) -> Result<(), Vec<UiDefinitionDiagnostic>> {
+        let mut candidate = self.command_bindings.clone();
+        candidate.insert(bindings.id.clone(), bindings);
+        let diagnostics = validate_command_binding_catalog(&candidate, is_known_command_key);
+        if editor_definition_has_blocking_diagnostics(&diagnostics) {
+            return Err(diagnostics);
+        }
+        self.command_bindings = candidate;
+        Ok(())
     }
 
     pub fn install_panel_registry(
@@ -114,6 +142,10 @@ impl ActiveEditorDefinitionCatalogs {
         workspace: &WorkspaceState,
     ) -> Result<(), UiDefinitionDiagnostic> {
         panel_registry_covers_workspace(&registry, workspace)?;
+        panel_registry_compatible_with_tool_surfaces(
+            &registry,
+            self.tool_surface_registry.as_ref(),
+        )?;
         self.panel_registry = Some(registry);
         Ok(())
     }
@@ -124,7 +156,53 @@ impl ActiveEditorDefinitionCatalogs {
         workspace: &WorkspaceState,
     ) -> Result<(), UiDefinitionDiagnostic> {
         tool_surface_registry_covers_workspace(&registry, workspace)?;
+        if let Some(panel_registry) = self.panel_registry.as_ref() {
+            tool_surface_registry_covers_panel_defaults(&registry, panel_registry)?;
+        }
         self.tool_surface_registry = Some(registry);
         Ok(())
     }
+}
+
+fn validate_command_binding_catalog(
+    command_bindings: &BTreeMap<String, EditorCommandBindingSetDefinition>,
+    is_known_command_key: impl Fn(&str) -> bool,
+) -> Vec<UiDefinitionDiagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut binding_ids = BTreeMap::<String, String>::new();
+    let mut route_targets = BTreeMap::<String, String>::new();
+    for set in command_bindings.values() {
+        for binding in &set.bindings {
+            if !is_known_command_key(&binding.command) {
+                diagnostics.push(UiDefinitionDiagnostic::error(
+                    "editor.definition.command_binding.command.unknown",
+                    format!(
+                        "command binding '{}' references unknown editor command '{}'",
+                        binding.id, binding.command
+                    ),
+                ));
+            }
+            if let Some(previous_set) = binding_ids.insert(binding.id.clone(), set.id.clone()) {
+                diagnostics.push(UiDefinitionDiagnostic::error(
+                    "editor.definition.command_binding.duplicate_active_id",
+                    format!(
+                        "command binding id '{}' is already active in set '{}'",
+                        binding.id, previous_set
+                    ),
+                ));
+            }
+            if let Some(previous_set) =
+                route_targets.insert(binding.route_target.clone(), set.id.clone())
+            {
+                diagnostics.push(UiDefinitionDiagnostic::error(
+                    "editor.definition.command_binding.duplicate_route_target",
+                    format!(
+                        "route target '{}' is already active in set '{}'",
+                        binding.route_target, previous_set
+                    ),
+                ));
+            }
+        }
+    }
+    diagnostics
 }

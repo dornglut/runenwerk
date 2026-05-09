@@ -256,6 +256,9 @@ fn command_for_activation(
             }
         }
         RoutedShellAction::ToggleDebugLogs => ShellCommand::ToggleDebugLogs,
+        RoutedShellAction::ApplySelectedEditorDefinition => {
+            ShellCommand::ApplySelectedEditorDefinition
+        }
         RoutedShellAction::ActivateTab {
             tab_stack_id,
             panel_instance_id,

@@ -14,7 +14,7 @@ use crate::{
     ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel,
     EntityTableComponentFilter, EntityTableHierarchyFilter, EntityTableSurfaceAction,
     InspectorSurfaceAction, OutlinerSurfaceAction, PanelInstanceId, PanelKind,
-    ResolvedSurfaceFrame, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
+    ResolvedSurfaceFrame, RoutedShellAction, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
     SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
     TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
     UiInteraction, UiInteractionResults, ViewportSurfaceAction, WidgetId,
@@ -202,6 +202,57 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
             profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
         }]
     );
+}
+
+#[test]
+fn toolbar_route_slots_use_app_supplied_route_actions_before_fallback() {
+    let frame_model = EditorShellFrameModel::new(
+        ToolbarViewModel {
+            buttons: vec![ToolbarButtonViewModel {
+                id: editor_core::ToolId(2_001),
+                stable_name: "menu_file",
+                label: "File".to_string(),
+                is_active: true,
+                enabled: true,
+            }],
+        },
+        BTreeMap::new(),
+    )
+    .with_active_ui_definitions(
+        None,
+        Some(editor_definition::EditorToolbarBinding {
+            template: "unused.toolbar.template".into(),
+            workspace_catalog: None,
+            routes: Vec::new(),
+            availability: Vec::new(),
+            menus: Vec::new(),
+            menu_items: vec![editor_definition::EditorToolbarMenuItemBinding {
+                menu_id: "file".to_string(),
+                item_id: "apply".to_string(),
+                label: "Apply".to_string(),
+                route: ui_definition::UiRouteSlotId::new("authored.apply-selected"),
+                availability: None,
+            }],
+        }),
+        None,
+    )
+    .with_route_actions(BTreeMap::from([(
+        "authored.apply-selected".to_string(),
+        RoutedShellAction::ApplySelectedEditorDefinition,
+    )]));
+    let workspace = sample_workspace_state();
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::Activated(
+                crate::toolbar_menu_item_widget_id(0),
+            )],
+        },
+        &build.projection_artifacts,
+    );
+
+    assert_eq!(commands, vec![ShellCommand::ApplySelectedEditorDefinition]);
 }
 
 #[test]

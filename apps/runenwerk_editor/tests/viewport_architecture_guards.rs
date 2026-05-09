@@ -1032,7 +1032,7 @@ fn viewport_surface_binary_options_use_reusable_toggles_with_typed_routing() {
         read_workspace_source("domain/editor/editor_shell/src/commands/map_interactions.rs");
 
     assert!(
-        builder.contains("viewport_toggle(")
+        builder.contains("compact_surface_toggle(")
             && builder.contains("VIEWPORT_DETAILS_TOGGLE_WIDGET_ID")
             && builder.contains("VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID"),
         "viewport binary options should be projected as reusable toggle controls",
@@ -1217,6 +1217,37 @@ fn ui_definition_does_not_import_editor_provider_behavior() {
     assert!(
         offenders.is_empty(),
         "ui_definition must stay generic and provider-behavior free: {offenders:?}",
+    );
+}
+
+#[test]
+fn app_surface_providers_delegate_reusable_control_composition_to_editor_shell() {
+    let provider_sources = read_workspace_source_tree("apps/runenwerk_editor/src/shell/providers");
+    let forbidden_terms = [
+        "editor_shell::button(",
+        "editor_shell::button_selected(",
+        "editor_shell::toggle(",
+        "editor_shell::select(",
+        "editor_shell::table(",
+        "editor_shell::tree(",
+        "editor_shell::numeric_input(",
+        "editor_shell::text_input(",
+    ];
+    let offenders = forbidden_source_markers(&provider_sources, &forbidden_terms);
+    assert!(
+        offenders.is_empty(),
+        "app providers should pass DTOs and route proposals to editor_shell builders instead of constructing reusable controls directly: {offenders:?}",
+    );
+
+    let provider = read_workspace_source("apps/runenwerk_editor/src/shell/providers/mod.rs");
+    let shell_builder = read_workspace_source(
+        "domain/editor/editor_shell/src/composition/build_self_authoring_control_panel.rs",
+    );
+    assert!(
+        provider.contains("build_self_authoring_control_panel(")
+            && shell_builder.contains("compact_surface_action_button")
+            && shell_builder.contains("SurfaceRouteTable"),
+        "self-authoring control panel composition should live in editor_shell while provider code supplies actions and routes",
     );
 }
 

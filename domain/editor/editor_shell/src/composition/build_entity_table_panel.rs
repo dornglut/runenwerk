@@ -14,16 +14,20 @@ use crate::{
     UiNodeKind, entity_table_sort_button_widget_id,
 };
 use ui_definition::{
-    AuthoredId, AuthoredUiNodePath, AuthoredUiTemplate, UiCollectionItem, UiDefinitionContext,
-    UiValue, form_retained_ui, normalize_authored_template,
+    AuthoredId, AuthoredUiTemplate, UiCollectionItem, UiDefinitionContext, UiValue,
+    form_retained_ui, normalize_authored_template,
 };
 use ui_layout::SizePolicy;
-use ui_math::UiSize;
 use ui_text::{FontId, TextOverflow};
-use ui_theme::{ThemeTokens, UiColor};
+use ui_theme::ThemeTokens;
 
 use super::surface_control_polish::{
     apply_compact_surface_control_polish, apply_horizontal_control_rail_polish,
+    set_control_min_width,
+};
+use super::surface_definition_context::{
+    apply_panel_background, apply_surface_title_polish, find_node_mut, register_widget_ids_by_path,
+    scoped_definition_context, set_stack_child_main_policies, toned_panel_background,
 };
 
 const ENTITY_TABLE_TEMPLATE_RON: &str =
@@ -48,89 +52,77 @@ pub fn build_entity_table_panel(
     root
 }
 
-fn scoped_definition_context(
-    theme: &ThemeTokens,
-    scope: SurfaceWidgetScope,
-) -> UiDefinitionContext {
-    let mut context = UiDefinitionContext::new(theme.clone());
-    if let Some(base) = scope.base() {
-        context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
-    }
-    context
-}
-
 fn register_entity_table_widget_ids(context: &mut UiDefinitionContext, scope: SurfaceWidgetScope) {
-    for (path, widget_id) in [
-        ("root", ENTITY_TABLE_PANEL_WIDGET_ID),
-        ("root/body", ENTITY_TABLE_BODY_WIDGET_ID),
-        ("root/body/title", ENTITY_TABLE_TITLE_WIDGET_ID),
-        (
-            "root/body/controls_scroll",
-            ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
-        ),
-        (
-            "root/body/controls_scroll/controls",
-            ENTITY_TABLE_CONTROLS_ROW_WIDGET_ID,
-        ),
-        (
-            "root/body/controls_scroll/controls/search",
-            ENTITY_TABLE_SEARCH_WIDGET_ID,
-        ),
-        (
-            "root/body/controls_scroll/controls/clear_search",
-            ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
-        ),
-        (
-            "root/body/controls_scroll/controls/selected_only",
-            ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID,
-        ),
-        (
-            "root/body/controls_scroll/controls/roots_only",
-            ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID,
-        ),
-        (
-            "root/body/controls_scroll/controls/component_filter",
-            ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID,
-        ),
-        (
-            "root/body/header_scroll",
-            ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID,
-        ),
-        (
-            "root/body/header_scroll/header_row",
-            ENTITY_TABLE_HEADER_ROW_WIDGET_ID,
-        ),
-        (
-            "root/body/header_scroll/header_row/sort_id",
-            entity_table_sort_button_widget_id(0),
-        ),
-        (
-            "root/body/header_scroll/header_row/sort_name",
-            entity_table_sort_button_widget_id(1),
-        ),
-        (
-            "root/body/header_scroll/header_row/sort_parent",
-            entity_table_sort_button_widget_id(2),
-        ),
-        (
-            "root/body/header_scroll/header_row/sort_components",
-            entity_table_sort_button_widget_id(3),
-        ),
-        ("root/body/table_scroll", ENTITY_TABLE_SCROLL_WIDGET_ID),
-        (
-            "root/body/table_scroll/table_scroll_x",
-            ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID,
-        ),
-        (
-            "root/body/table_scroll/table_scroll_x/table",
-            ENTITY_TABLE_LIST_WIDGET_ID,
-        ),
-    ] {
-        context.widget_ids_by_path.insert(
-            AuthoredUiNodePath(path.to_string()),
-            scope.widget_id(widget_id),
-        );
-    }
+    register_widget_ids_by_path(
+        context,
+        scope,
+        [
+            ("root", ENTITY_TABLE_PANEL_WIDGET_ID),
+            ("root/body", ENTITY_TABLE_BODY_WIDGET_ID),
+            ("root/body/title", ENTITY_TABLE_TITLE_WIDGET_ID),
+            (
+                "root/body/controls_scroll",
+                ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
+            ),
+            (
+                "root/body/controls_scroll/controls",
+                ENTITY_TABLE_CONTROLS_ROW_WIDGET_ID,
+            ),
+            (
+                "root/body/controls_scroll/controls/search",
+                ENTITY_TABLE_SEARCH_WIDGET_ID,
+            ),
+            (
+                "root/body/controls_scroll/controls/clear_search",
+                ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
+            ),
+            (
+                "root/body/controls_scroll/controls/selected_only",
+                ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID,
+            ),
+            (
+                "root/body/controls_scroll/controls/roots_only",
+                ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID,
+            ),
+            (
+                "root/body/controls_scroll/controls/component_filter",
+                ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID,
+            ),
+            (
+                "root/body/header_scroll",
+                ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID,
+            ),
+            (
+                "root/body/header_scroll/header_row",
+                ENTITY_TABLE_HEADER_ROW_WIDGET_ID,
+            ),
+            (
+                "root/body/header_scroll/header_row/sort_id",
+                entity_table_sort_button_widget_id(0),
+            ),
+            (
+                "root/body/header_scroll/header_row/sort_name",
+                entity_table_sort_button_widget_id(1),
+            ),
+            (
+                "root/body/header_scroll/header_row/sort_parent",
+                entity_table_sort_button_widget_id(2),
+            ),
+            (
+                "root/body/header_scroll/header_row/sort_components",
+                entity_table_sort_button_widget_id(3),
+            ),
+            ("root/body/table_scroll", ENTITY_TABLE_SCROLL_WIDGET_ID),
+            (
+                "root/body/table_scroll/table_scroll_x",
+                ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID,
+            ),
+            (
+                "root/body/table_scroll/table_scroll_x/table",
+                ENTITY_TABLE_LIST_WIDGET_ID,
+            ),
+        ],
+    );
 }
 
 fn populate_entity_table_context(
@@ -227,29 +219,18 @@ fn populate_entity_table_context(
 }
 
 fn polish_entity_table(root: &mut UiNode, theme: &ThemeTokens, scope: SurfaceWidgetScope) {
-    if let UiNodeKind::Panel(panel) = &mut root.kind {
-        panel.theme.background_panel = UiColor::new(
-            (theme.background_panel.r + 0.012).clamp(0.0, 1.0),
-            (theme.background_panel.g + 0.012).clamp(0.0, 1.0),
-            (theme.background_panel.b + 0.012).clamp(0.0, 1.0),
-            0.94,
-        );
-    }
-    if let Some(body) = find_node_mut(root, scope.widget_id(ENTITY_TABLE_BODY_WIDGET_ID))
-        && let UiNodeKind::Stack(stack) = &mut body.kind
-    {
-        stack.child_main_policies = vec![
+    apply_panel_background(root, toned_panel_background(theme, 0.012, 0.94));
+    set_stack_child_main_policies(
+        root,
+        scope.widget_id(ENTITY_TABLE_BODY_WIDGET_ID),
+        vec![
             SizePolicy::Auto,
             SizePolicy::Auto,
             SizePolicy::Auto,
             SizePolicy::flex(1.0),
-        ];
-    }
-    if let Some(title) = find_node_mut(root, scope.widget_id(ENTITY_TABLE_TITLE_WIDGET_ID))
-        && let UiNodeKind::Label(label) = &mut title.kind
-    {
-        label.text_style = theme.heading_text_style(FontId(1));
-    }
+        ],
+    );
+    apply_surface_title_polish(root, scope.widget_id(ENTITY_TABLE_TITLE_WIDGET_ID), theme);
     if let Some(controls_scroll) = find_node_mut(
         root,
         scope.widget_id(ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID),
@@ -291,24 +272,6 @@ fn polish_entity_table(root: &mut UiNode, theme: &ThemeTokens, scope: SurfaceWid
     }
 }
 
-fn set_control_min_width(node: &mut UiNode, width: f32) {
-    match &mut node.kind {
-        UiNodeKind::Button(button) => {
-            button.min_size = UiSize::new(width, button.min_size.height);
-        }
-        UiNodeKind::TextInput(input) => {
-            input.min_size = UiSize::new(width, input.min_size.height);
-        }
-        UiNodeKind::Toggle(toggle) => {
-            toggle.min_size = UiSize::new(width, toggle.min_size.height);
-        }
-        UiNodeKind::Select(select) => {
-            select.min_size = UiSize::new(width, select.min_size.height);
-        }
-        _ => {}
-    }
-}
-
 fn component_filter_key(filter: EntityTableComponentFilter) -> String {
     match filter {
         EntityTableComponentFilter::All => "all".to_string(),
@@ -316,16 +279,4 @@ fn component_filter_key(filter: EntityTableComponentFilter) -> String {
             format!("component:{}", component_type.0)
         }
     }
-}
-
-fn find_node_mut(node: &mut UiNode, widget_id: crate::WidgetId) -> Option<&mut UiNode> {
-    if node.id == widget_id {
-        return Some(node);
-    }
-    for child in &mut node.children {
-        if let Some(found) = find_node_mut(child, widget_id) {
-            return Some(found);
-        }
-    }
-    None
 }

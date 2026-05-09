@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use editor_shell::{
     ToolSurfaceInstanceId, WorkspaceIdentityAllocator, form_workspace_state_from_definition,
 };
@@ -12,6 +14,7 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_runtime::{EditorPrimitive, EditorPrimitiveKind};
 use crate::shell::{
     EditorDefinitionActivation, RunenwerkEditorShellState, activate_editor_definition_document,
+    is_known_editor_command_key, validate_editor_shortcuts,
 };
 
 const SHELL_READABILITY_BUMP: f32 = 1.15;
@@ -116,25 +119,51 @@ impl EditorHostResource {
                     shortcut_set_id,
                     shortcuts,
                 }) => {
-                    self.shell_state
+                    match self
+                        .shell_state
                         .active_editor_definitions_mut()
-                        .install_shortcuts(shortcuts);
-                    self.app.append_console_line(format!(
-                        "[editor-definition] activated shortcut set {shortcut_set_id}"
-                    ));
-                    activated += 1;
+                        .install_shortcuts(shortcuts, validate_editor_shortcuts)
+                    {
+                        Ok(()) => {
+                            self.app.append_console_line(format!(
+                                "[editor-definition] activated shortcut set {shortcut_set_id}"
+                            ));
+                            activated += 1;
+                        }
+                        Err(diagnostics) => {
+                            for diagnostic in diagnostics {
+                                self.app.append_console_line(format!(
+                                    "[editor-definition] shortcut activation blocked: {}",
+                                    diagnostic.message
+                                ));
+                            }
+                        }
+                    }
                 }
                 Ok(EditorDefinitionActivation::CommandBindingCatalogChanged {
                     command_binding_set_id,
                     command_bindings,
                 }) => {
-                    self.shell_state
+                    match self
+                        .shell_state
                         .active_editor_definitions_mut()
-                        .install_command_bindings(command_bindings);
-                    self.app.append_console_line(format!(
-                        "[editor-definition] activated command binding set {command_binding_set_id}"
-                    ));
-                    activated += 1;
+                        .install_command_bindings(command_bindings, is_known_editor_command_key)
+                    {
+                        Ok(()) => {
+                            self.app.append_console_line(format!(
+                                "[editor-definition] activated command binding set {command_binding_set_id}"
+                            ));
+                            activated += 1;
+                        }
+                        Err(diagnostics) => {
+                            for diagnostic in diagnostics {
+                                self.app.append_console_line(format!(
+                                    "[editor-definition] command binding activation blocked: {}",
+                                    diagnostic.message
+                                ));
+                            }
+                        }
+                    }
                 }
                 Ok(EditorDefinitionActivation::PanelRegistryCatalogChanged {
                     registry_id,
@@ -233,13 +262,17 @@ pub fn scaled_shell_theme(theme: &ThemeTokens, scale_factor: f64) -> ThemeTokens
     theme.scaled_by(effective_shell_scale(scale_factor))
 }
 
-#[derive(Debug, Default, Clone, Copy, ecs::Component, ecs::Resource)]
+#[derive(Debug, Default, Clone, ecs::Component, ecs::Resource)]
 pub struct EditorInputBridgeState {
     pub last_mouse_position: (f32, f32),
     pub last_logged_picking_revision: u64,
     pub last_target_viewport: Option<ViewportId>,
     pub active_camera_viewport: Option<ViewportId>,
     pub pointer_owner: EditorPointerOwner,
+    pub active_shortcut_catalog_active: bool,
+    pub active_shortcut_signature: Vec<(String, String, String)>,
+    pub active_shortcut_action_ids: Vec<String>,
+    pub active_shortcut_commands: BTreeMap<String, crate::shell::KnownEditorCommand>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

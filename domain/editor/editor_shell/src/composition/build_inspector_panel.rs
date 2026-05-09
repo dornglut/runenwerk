@@ -14,9 +14,16 @@ use ui_definition::{
 };
 use ui_layout::SizePolicy;
 use ui_text::{FontId, TextOverflow};
-use ui_theme::{ThemeTokens, UiColor};
+use ui_theme::ThemeTokens;
 
-use super::surface_control_polish::apply_compact_surface_control_polish;
+use super::surface_control_polish::{
+    apply_compact_surface_control_polish, apply_flat_compact_surface_button_polish,
+};
+use super::surface_definition_context::{
+    apply_label_text_style, apply_panel_background, apply_surface_title_polish,
+    register_widget_ids_by_path, scoped_definition_context, set_stack_child_main_policies,
+    toned_panel_background,
+};
 
 const INSPECTOR_TEMPLATE_RON: &str =
     include_str!("../../../../../assets/editor/ui/surfaces/inspector.ron");
@@ -40,35 +47,23 @@ pub fn build_inspector_panel(
     root
 }
 
-fn scoped_definition_context(
-    theme: &ThemeTokens,
-    scope: SurfaceWidgetScope,
-) -> UiDefinitionContext {
-    let mut context = UiDefinitionContext::new(theme.clone());
-    if let Some(base) = scope.base() {
-        context = context.with_widget_id_scope(ui_definition::WidgetIdScope::new(base));
-    }
-    context
-}
-
 fn register_inspector_widget_ids(
     view_model: &InspectorViewModel,
     context: &mut UiDefinitionContext,
     scope: SurfaceWidgetScope,
 ) {
-    for (path, widget_id) in [
-        ("root", INSPECTOR_PANEL_WIDGET_ID),
-        ("root/body", INSPECTOR_BODY_WIDGET_ID),
-        ("root/body/title", INSPECTOR_TITLE_WIDGET_ID),
-        ("root/body/scroll", INSPECTOR_SCROLL_WIDGET_ID),
-        ("root/body/scroll/list", INSPECTOR_LIST_WIDGET_ID),
-        ("root/body/scroll/list/target", INSPECTOR_TARGET_WIDGET_ID),
-    ] {
-        context.widget_ids_by_path.insert(
-            AuthoredUiNodePath(path.to_string()),
-            scope.widget_id(widget_id),
-        );
-    }
+    register_widget_ids_by_path(
+        context,
+        scope,
+        [
+            ("root", INSPECTOR_PANEL_WIDGET_ID),
+            ("root/body", INSPECTOR_BODY_WIDGET_ID),
+            ("root/body/title", INSPECTOR_TITLE_WIDGET_ID),
+            ("root/body/scroll", INSPECTOR_SCROLL_WIDGET_ID),
+            ("root/body/scroll/list", INSPECTOR_LIST_WIDGET_ID),
+            ("root/body/scroll/list/target", INSPECTOR_TARGET_WIDGET_ID),
+        ],
+    );
     for (index, _) in view_model.fields.iter().enumerate() {
         let key = index.to_string();
         for control_id in [
@@ -149,42 +144,27 @@ fn polish_inspector(
     theme: &ThemeTokens,
     scope: SurfaceWidgetScope,
 ) {
-    if let UiNodeKind::Panel(panel) = &mut root.kind {
-        panel.theme.background_panel = UiColor::new(
-            (theme.background_panel.r + 0.02).clamp(0.0, 1.0),
-            (theme.background_panel.g + 0.02).clamp(0.0, 1.0),
-            (theme.background_panel.b + 0.02).clamp(0.0, 1.0),
-            0.94,
-        );
-    }
-    if let Some(body) = find_node_mut(root, scope.widget_id(INSPECTOR_BODY_WIDGET_ID))
-        && let UiNodeKind::Stack(stack) = &mut body.kind
-    {
-        stack.child_main_policies = vec![SizePolicy::Auto, SizePolicy::flex(1.0)];
-    }
-    if let Some(title) = find_node_mut(root, scope.widget_id(INSPECTOR_TITLE_WIDGET_ID))
-        && let UiNodeKind::Label(label) = &mut title.kind
-    {
-        label.text_style = theme.heading_text_style(FontId(1));
-    }
-    if let Some(target) = find_node_mut(root, scope.widget_id(INSPECTOR_TARGET_WIDGET_ID))
-        && let UiNodeKind::Label(label) = &mut target.kind
-    {
-        label.text_style = theme.body_text_style(FontId(1));
-        label.text_style.overflow = TextOverflow::Ellipsis;
-    }
+    apply_panel_background(root, toned_panel_background(theme, 0.02, 0.94));
+    set_stack_child_main_policies(
+        root,
+        scope.widget_id(INSPECTOR_BODY_WIDGET_ID),
+        vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
+    );
+    apply_surface_title_polish(root, scope.widget_id(INSPECTOR_TITLE_WIDGET_ID), theme);
+    let mut target_style = theme.body_text_style(FontId(1));
+    target_style.overflow = TextOverflow::Ellipsis;
+    apply_label_text_style(
+        root,
+        scope.widget_id(INSPECTOR_TARGET_WIDGET_ID),
+        target_style,
+    );
     polish_inspector_fields(root, theme);
 }
 
 fn polish_inspector_fields(node: &mut UiNode, theme: &ThemeTokens) {
     match &mut node.kind {
         UiNodeKind::Button(_) => {
-            apply_compact_surface_control_polish(node, theme);
-            if let UiNodeKind::Button(button) = &mut node.kind {
-                button.theme.border_width = 0.0;
-                button.theme.background_panel = UiColor::new(0.0, 0.0, 0.0, 0.0);
-                button.theme.border = UiColor::new(0.0, 0.0, 0.0, 0.0);
-            }
+            apply_flat_compact_surface_button_polish(node, theme);
         }
         UiNodeKind::TextInput(_) => {
             apply_compact_surface_control_polish(node, theme);
@@ -310,16 +290,4 @@ fn install_inspector_control_values(
             );
         }
     }
-}
-
-fn find_node_mut(node: &mut UiNode, widget_id: crate::WidgetId) -> Option<&mut UiNode> {
-    if node.id == widget_id {
-        return Some(node);
-    }
-    for child in &mut node.children {
-        if let Some(found) = find_node_mut(child, widget_id) {
-            return Some(found);
-        }
-    }
-    None
 }
