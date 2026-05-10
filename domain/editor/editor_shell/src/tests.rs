@@ -375,6 +375,7 @@ fn entity_table_control_rail_overflows_and_scrolls_from_child_controls() {
             button: None,
             modifiers: Modifiers::default(),
             click_count: 0,
+            ..Default::default()
         }),
     );
 

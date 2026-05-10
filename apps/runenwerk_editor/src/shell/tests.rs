@@ -3108,6 +3108,7 @@ fn console_follow_disengages_on_upward_scroll_and_reengages_at_bottom() {
         button: None,
         modifiers: Modifiers::default(),
         click_count: 0,
+        ..Default::default()
     });
     RunenwerkEditorShellController::dispatch_input(
         &mut app,
@@ -3132,6 +3133,7 @@ fn console_follow_disengages_on_upward_scroll_and_reengages_at_bottom() {
         button: None,
         modifiers: Modifiers::default(),
         click_count: 0,
+        ..Default::default()
     });
     for _ in 0..128 {
         RunenwerkEditorShellController::dispatch_input(
@@ -5423,6 +5425,7 @@ fn dispatch_pointer(
         button,
         modifiers: Modifiers::default(),
         click_count: 1,
+        ..Default::default()
     });
     RunenwerkEditorShellController::dispatch_input(app, shell_state, bounds, theme, &event)
         .expect("pointer dispatch should succeed");
@@ -5449,6 +5452,7 @@ fn dispatch_pointer_with_modifiers(
         button,
         modifiers,
         click_count: 1,
+        ..Default::default()
     });
     RunenwerkEditorShellController::dispatch_input(app, shell_state, bounds, theme, &event)
         .expect("pointer dispatch should succeed");

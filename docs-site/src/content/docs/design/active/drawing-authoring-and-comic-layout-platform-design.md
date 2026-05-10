@@ -76,8 +76,12 @@ Implemented anchors that this design must respect:
   lowering, and formed material products.
 - `domain/texture` owns texture product descriptors, not GPU upload or shader
   binding policy.
-- `domain/ui/*` owns reusable UI contracts, input vocabulary, layout, text,
-  render data, surface mounting, definitions, trees, runtime, and widgets.
+- `domain/drawing` owns pure drawing document, stroke, brush, paper,
+  layer/composition graph, command, ratification, diagnostic, and tile-lineage
+  contracts.
+- `domain/ui/*` owns reusable UI contracts, input vocabulary, stylus-capable
+  pointer packets, layout, text, render data, surface mounting, definitions,
+  trees, runtime, and widgets.
 - `domain/editor/*` owns editor-facing contracts, workspace projections,
   document metadata, viewport semantics, shell composition, preview contracts,
   inspector models, and persistence boundaries.
@@ -85,16 +89,14 @@ Implemented anchors that this design must respect:
   compute, fullscreen, graphics, copy, and present passes.
 - `apps/runenwerk_editor` wires the current editor runtime and should remain the
   existing editor app rather than becoming the semantic owner of drawing.
+- `adapters/native_tablet_input` owns the first macOS/Wacom-oriented tablet
+  packet normalization proof into platform-neutral `ui_input` events.
 - Existing SDF authoring and `world_ops` brush concepts are field/world editing
   operations, not natural-media drawing strokes.
 
 Remaining missing anchors today:
 
-- no drawing document kind;
 - no rendered ink tile formation or drawing product payloads;
-- no stylus pressure, tilt, twist, eraser, device id, or coalesced sample input
-  contract in `domain/ui/ui_input`;
-- no native tablet adapter;
 - no `runenwerk_draw` product app;
 - no comic/page layout domain.
 
@@ -666,18 +668,20 @@ reported as capabilities instead of silently normalized into fake values.
 
 ### `adapters/native_tablet_input`
 
-Add a future adapter for native tablet input.
+`adapters/native_tablet_input` owns the first native tablet input adapter proof.
 
-This adapter should own:
+This adapter owns:
 
-- macOS tablet packet integration;
-- Wacom-specific native details where used;
+- macOS/Wacom-oriented packet DTOs;
 - capability detection;
 - packet normalization;
 - mapping into `domain/ui/ui_input` events;
 - diagnostics for unsupported or missing capabilities.
 
 It should not own drawing semantics. It produces input facts.
+
+Real macOS event tap, Wacom SDK, installer permission, and device-management
+integration remain later adapter/app work.
 
 ### `apps/runenwerk_draw`
 
@@ -1218,6 +1222,11 @@ Completion criteria:
 ### Phase 3: Stylus Input Contracts
 
 Extend `domain/ui/ui_input` and add the native tablet adapter proof.
+
+Status: implemented as `domain/ui/ui_input` stylus-capable pointer packets and
+`adapters/native_tablet_input` packet normalization proof. Real native OS/Wacom
+event capture remains deferred to the drawing app/platform integration phases.
+The next phase is Phase 4, `runenwerk_draw` App Shell.
 
 Completion criteria:
 

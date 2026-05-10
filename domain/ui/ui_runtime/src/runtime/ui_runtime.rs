@@ -594,6 +594,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         assert_eq!(outcome.dispatch.target, Some(widget_id));
@@ -620,6 +621,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         runtime.dispatch_input(
@@ -632,6 +634,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         )
     }
@@ -973,6 +976,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert!(
@@ -1029,6 +1033,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let outcome = runtime.dispatch_input(
@@ -1041,6 +1046,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
 
@@ -1119,6 +1125,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         for _ in 0..32 {
@@ -1133,6 +1140,7 @@ mod tests {
                     button: None,
                     modifiers: Modifiers::default(),
                     click_count: 0,
+                    ..Default::default()
                 }),
             );
         }
@@ -1147,6 +1155,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
 
@@ -1390,6 +1399,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert!(
@@ -1448,6 +1458,7 @@ mod tests {
                     ..Modifiers::default()
                 },
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert!(
@@ -1479,6 +1490,7 @@ mod tests {
                 button: Some(PointerButton::Primary),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -1492,6 +1504,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
 
@@ -1521,6 +1534,7 @@ mod tests {
                 button: Some(PointerButton::Primary),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -1534,6 +1548,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
 
@@ -1569,6 +1584,7 @@ mod tests {
                 button: Some(PointerButton::Primary),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -1582,6 +1598,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
 
@@ -1610,6 +1627,7 @@ mod tests {
                 button: Some(PointerButton::Primary),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         assert!(runtime.state().scrollbar_thumb_drag.is_some());
@@ -1625,6 +1643,7 @@ mod tests {
                 button: Some(PointerButton::Primary),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
 
@@ -1669,6 +1688,7 @@ mod tests {
                 button: Some(PointerButton::Primary),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
 
@@ -1723,6 +1743,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -1736,6 +1757,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -1749,6 +1771,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
 
@@ -1785,6 +1808,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert!(
@@ -1824,6 +1848,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert_eq!(
@@ -1847,6 +1872,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let _ = runtime.dispatch_input(
@@ -1859,6 +1885,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         let _ = runtime.dispatch_input(
@@ -1871,6 +1898,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         assert_eq!(
@@ -1893,6 +1921,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let _ = runtime.dispatch_input(
@@ -1905,6 +1934,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert!(
@@ -1943,6 +1973,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert_eq!(
@@ -1972,6 +2003,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert_eq!(
@@ -2002,6 +2034,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let _ = vertical_middle_drag_runtime.dispatch_input(
@@ -2014,6 +2047,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert_eq!(
@@ -2044,6 +2078,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let _ = horizontal_middle_drag_runtime.dispatch_input(
@@ -2056,6 +2091,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         assert_eq!(
@@ -2138,6 +2174,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
 
@@ -2197,6 +2234,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -2210,6 +2248,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -2223,6 +2262,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
 
@@ -2297,6 +2337,7 @@ mod tests {
                 button: Some(PointerButton::Middle),
                 modifiers: Modifiers::default(),
                 click_count: 1,
+                ..Default::default()
             }),
         );
         let layouts = runtime.compute_layout(&tree, bounds);
@@ -2310,6 +2351,7 @@ mod tests {
                 button: None,
                 modifiers: Modifiers::default(),
                 click_count: 0,
+                ..Default::default()
             }),
         );
 

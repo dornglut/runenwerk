@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-10
 ---
 
 # UI Substrate Architecture
@@ -49,7 +49,7 @@ As of the audited repository state:
 - `domain/ui/ui_math`
   - UI math/geometry primitives (`UiRect`, `UiSize`, `UiPoint`, `UiVector`, `UiInsets`, axis types).
 - `domain/ui/ui_input`
-  - input and focus contracts (events, pointer/keyboard/text contract types, focus ids, shortcut contracts).
+  - input and focus contracts (events, pointer/keyboard/text contract types, stylus-capable pointer packets, focus ids, shortcut contracts).
 - `domain/ui/ui_layout`
   - stateless layout algorithms/contracts (`StackLayout`, `SplitLayout`, constraints, alignment, size policy).
 - `domain/ui/ui_text`
@@ -101,6 +101,10 @@ Related non-`domain/ui` owners currently in the runtime path:
 ## What `domain/ui/*` Currently Owns
 
 - reusable primitive contracts for UI math, input, layout, text, theme, and render-data payloads
+- stylus-capable pointer vocabulary for pressure, tilt, twist, tangential
+  pressure, eraser/tool kind, device id, timestamped raw/coalesced/predicted
+  samples, hover/contact state, barrel buttons, calibration, and low-latency
+  preview classification
 - text atlas and layouter contracts plus concrete atlas layouter implementation
 - renderer-facing UI frame/primitive data model consumed by engine render feature code
 - retained runtime ownership via:

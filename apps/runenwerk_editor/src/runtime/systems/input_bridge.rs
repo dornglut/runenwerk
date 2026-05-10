@@ -770,6 +770,7 @@ fn dispatch_pointer_event(
         button,
         modifiers,
         click_count: 1,
+        ..Default::default()
     });
 
     match host.app.dispatch_shell_input(

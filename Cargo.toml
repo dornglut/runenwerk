@@ -59,6 +59,7 @@ members = [
     "apps/runenwerk_runtime_preview",
 
     "adapters/godot_chunking_addon",
+    "adapters/native_tablet_input",
 ]
 
 [workspace.dependencies]
@@ -81,6 +82,7 @@ ui_definition = { path = "domain/ui/ui_definition" }
 ui_tree = { path = "domain/ui/ui_tree" }
 ui_runtime = { path = "domain/ui/ui_runtime" }
 ui_widgets = { path = "domain/ui/ui_widgets" }
+native_tablet_input = { path = "adapters/native_tablet_input" }
 
 editor_core = { path = "domain/editor/editor_core" }
 editor_definition = { path = "domain/editor/editor_definition" }

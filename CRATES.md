@@ -42,7 +42,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `drawing` | `domain/drawing` | domain | Drawing document, stroke, brush, paper, layer/composition graph, command, ratification, diagnostic, and tile-lineage contracts. | evolving |
 | `scene` | `domain/scene` | domain | Scene transform value contracts and domain-owned transform schema descriptors. | evolving |
 | `ui_math` | `domain/ui/ui_math` | domain | UI geometry primitives. | evolving |
-| `ui_input` | `domain/ui/ui_input` | domain | UI input, focus, routing, keyboard, pointer, and shortcut contracts. | evolving |
+| `ui_input` | `domain/ui/ui_input` | domain | UI input, focus, routing, keyboard, pointer, stylus-capable packet, and shortcut contracts. | evolving |
 | `ui_layout` | `domain/ui/ui_layout` | domain | Stateless UI layout algorithms and constraints. | evolving |
 | `ui_text` | `domain/ui/ui_text` | domain | Text styles, buffers, atlas metrics, layout, cursor, and selection contracts. | evolving |
 | `ui_theme` | `domain/ui/ui_theme` | domain | UI color, spacing, radius, typography, and theme tokens. | evolving |
@@ -70,6 +70,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app, shell bridge, runtime viewport/render integration, persistence, and authoring workflows. | internal/evolving |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime preview child process, loopback QUIC bootstrap host, preview/play app shell, and headless preview test harness. | internal/evolving |
 | `godot_chunking_addon` | `adapters/godot_chunking_addon` | adapter/tool | Godot bridge for chunking/spatial integration. | internal |
+| `native_tablet_input` | `adapters/native_tablet_input` | adapter/tool | Native tablet packet normalization proof for platform-neutral `ui_input` stylus events. | internal/evolving |
 
 ## Documentation Status
 

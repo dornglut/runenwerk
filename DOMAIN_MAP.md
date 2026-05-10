@@ -61,6 +61,7 @@ Replay/history substrate            -> net/engine_history
 Runnable editor app wiring          -> apps/runenwerk_editor
 Runtime preview child app           -> apps/runenwerk_runtime_preview
 External host integration           -> adapters/*
+Native tablet packet normalization  -> adapters/native_tablet_input
 ```
 
 ## Rule

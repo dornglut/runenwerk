@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-10
 ---
 
 # Crate Documentation Status
@@ -70,6 +70,7 @@ Status labels:
 | --- | --- | --- | --- |
 | `runenwerk_editor` | `apps/runenwerk_editor` | current | [`../apps/runenwerk-editor/current-architecture.md`](../apps/runenwerk-editor/current-architecture.md) |
 | `godot_chunking_addon` | `adapters/godot_chunking_addon` | current | [`../adapters/godot-chunking-addon/README.md`](../adapters/godot-chunking-addon/README.md) |
+| `native_tablet_input` | `adapters/native_tablet_input` | current | [`../adapters/native-tablet-input/README.md`](../adapters/native-tablet-input/README.md) |
 
 ## Long-Term Maintenance
 
