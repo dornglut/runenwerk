@@ -48,6 +48,8 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 
 ### Workspace / Cross-Domain
 
+- [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
+- [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Runenwerk Field World and Simulation Platform Design](workspace-field-world-and-simulation-platform-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
 - [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)

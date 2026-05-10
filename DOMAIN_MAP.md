@@ -35,6 +35,7 @@ SDF fields/queries                  -> domain/sdf
 Graph substrate                     -> domain/graph
 Texture product descriptors         -> domain/texture
 Material graph semantics            -> domain/material_graph
+Drawing documents/strokes/brushes/paper/composition/tile lineage -> domain/drawing
 Spatial coordinates/indexing        -> domain/spatial, domain/spatial_index
 Chunk streaming policy              -> domain/chunking
 Chunk/world op logs and deltas       -> domain/world_ops
