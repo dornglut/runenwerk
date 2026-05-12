@@ -2744,6 +2744,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "runenwerk_draw"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "drawing",
+ "ecs",
+ "engine",
+ "graph",
+ "ui_input",
+ "ui_math",
+ "ui_render_data",
+]
+
+[[package]]
 name = "runenwerk_editor"
 version = "0.1.0"
 dependencies = [

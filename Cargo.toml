@@ -56,6 +56,7 @@ members = [
     "net/engine_history",
 
     "apps/runenwerk_editor",
+    "apps/runenwerk_draw",
     "apps/runenwerk_runtime_preview",
 
     "adapters/godot_chunking_addon",

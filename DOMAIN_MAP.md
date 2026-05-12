@@ -63,6 +63,7 @@ Network QUIC transport              -> net/engine_net_quic
 Simulation shared vocabulary        -> net/engine_sim
 Replay/history substrate            -> net/engine_history
 Runnable editor app wiring          -> apps/runenwerk_editor
+Focused drawing app wiring          -> apps/runenwerk_draw
 Runtime preview child app           -> apps/runenwerk_runtime_preview
 External host integration           -> adapters/*
 Native tablet packet normalization  -> adapters/native_tablet_input

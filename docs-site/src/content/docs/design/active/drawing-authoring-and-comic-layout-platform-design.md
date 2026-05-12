@@ -26,9 +26,12 @@ related_designs:
 
 ## Status
 
-Active design. This document records the target architecture for a future
-Runenwerk drawing product surface. It does not describe an implemented drawing
-crate or app yet.
+Active design. This document records the target architecture for Runenwerk
+drawing product surfaces. The first pure `domain/drawing` crate, stylus input
+contracts, native tablet packet normalization proof, and focused
+`runenwerk_draw` app shell now exist; deterministic ink formation, package IO,
+export adapters, watercolor, decorative effects, and comic layout remain future
+phases.
 
 ## Purpose
 
@@ -97,7 +100,6 @@ Implemented anchors that this design must respect:
 Remaining missing anchors today:
 
 - no rendered ink tile formation or drawing product payloads;
-- no `runenwerk_draw` product app;
 - no comic/page layout domain.
 
 ## Core Doctrine
@@ -1226,7 +1228,8 @@ Extend `domain/ui/ui_input` and add the native tablet adapter proof.
 Status: implemented as `domain/ui/ui_input` stylus-capable pointer packets and
 `adapters/native_tablet_input` packet normalization proof. Real native OS/Wacom
 event capture remains deferred to the drawing app/platform integration phases.
-The next phase is Phase 4, `runenwerk_draw` App Shell.
+Phase 4, `runenwerk_draw` App Shell, is also complete. The next phase is Phase
+5, Deterministic Ink Tile Formation.
 
 Completion criteria:
 
@@ -1242,13 +1245,24 @@ Completion criteria:
 
 ### Phase 4: `runenwerk_draw` App Shell
 
-Add the sibling drawing app.
+Phase 4 created the sibling drawing app shell.
+
+Current status: implemented in `apps/runenwerk_draw` with focused app-shell
+tests. The app starts independently, opens a minimal ratified drawing document,
+projects a canvas-first workspace, submits a simple UI frame through the shared
+render UI path, and routes pointer/stylus-compatible input into preview stroke
+state.
+
+The phase product is the first visible drawing host. Preview strokes are app
+state only; committed stroke truth, deterministic ink tile products, package IO,
+and export behavior remain deferred to later phases. The next phase is Phase 5,
+Deterministic Ink Tile Formation.
 
 Completion criteria:
 
 - app starts independently;
 - app reuses shared UI/render/runtime substrate;
-- app owns drawing product composition and canvas-first workspace setup;
+- app owns drawing product host composition and canvas-first workspace setup;
 - app can open a minimal drawing document and route input to drawing tools.
 
 ### Phase 5: Deterministic Ink Tile Formation
@@ -1523,7 +1537,7 @@ cargo test -p native_tablet_input
 App/render phase:
 
 ```sh
-cargo check -p runenwerk_draw
+cargo test -p runenwerk_draw
 cargo test --workspace
 ./quiet_full_gate.sh
 ```

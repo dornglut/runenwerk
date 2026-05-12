@@ -1,0 +1,14 @@
+[package]
+name = "runenwerk_draw"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+drawing.workspace = true
+ecs.workspace = true
+engine = { path = "../../engine" }
+graph.workspace = true
+ui_input.workspace = true
+ui_math.workspace = true
+ui_render_data.workspace = true

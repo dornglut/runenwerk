@@ -68,6 +68,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `engine_net_quic` | `net/engine_net_quic` | net | QUIC transport/runtime adapter for `engine_net`. | evolving |
 | `engine_replay` | `net/engine_history` | net | Replay archive, recorder, controller, policy, and validation substrate. | evolving |
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app, shell bridge, runtime viewport/render integration, persistence, and authoring workflows. | internal/evolving |
+| `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell with canvas-first workspace projection, minimal drawing document bootstrap, input routing, and shared engine/UI/render runtime integration. | internal/evolving |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime preview child process, loopback QUIC bootstrap host, preview/play app shell, and headless preview test harness. | internal/evolving |
 | `godot_chunking_addon` | `adapters/godot_chunking_addon` | adapter/tool | Godot bridge for chunking/spatial integration. | internal |
 | `native_tablet_input` | `adapters/native_tablet_input` | adapter/tool | Native tablet packet normalization proof for platform-neutral `ui_input` stylus events. | internal/evolving |
