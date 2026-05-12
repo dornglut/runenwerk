@@ -1,6 +1,6 @@
 ---
-title: SDF-First Execution Roadmap
-description: Canonical cross-track sequencing roadmap for SDF-first product contracts, execution fabric, product jobs, query snapshots, renderer selection, and product-domain work.
+title: SDF-First Open-World Substrate Roadmap
+description: Canonical cross-track sequencing roadmap for the editable, streamable, deterministic SDF-first open-world substrate.
 status: active
 owner: workspace
 layer: workspace
@@ -22,12 +22,17 @@ related_roadmaps:
   - ../engine/plugins/render/docs/roadmap.md
 ---
 
-# SDF-First Execution Roadmap
+# SDF-First Open-World Substrate Roadmap
 
 ## Purpose
 
 This is the canonical cross-track sequencing roadmap for turning the accepted
-SDF-first field-product architecture into implementation order.
+SDF-first field-product architecture into an editable, streamable,
+deterministic open-world substrate.
+
+The target result is not finished open-world gameplay in one jump. The target
+is the substrate that makes open-world gameplay possible without private
+execution paths or renderer-owned world truth.
 
 The immediate priority is no longer M6.2 procgen. The immediate priority is the
 execution substrate that lets procgen, gameplay graph, particles, physics,
@@ -37,73 +42,215 @@ formed products without inventing private execution paths.
 Owning domain and app roadmaps still own detailed implementation steps. This
 page owns cross-track ordering when those roadmaps overlap.
 
-## Current Baseline
+## End State
 
-Completed or available foundations:
+The long-term open-world substrate is:
 
-- editor M4 asset and field-product foundations exist;
-- M5 runtime preview and reload boundaries exist for the current product
-  families;
-- M6.0 shared workspace substrate, M6.1 material/texture contracts, and P1 SDF
-  modeling core exist;
-- accepted SDF-first field-product, execution-fabric, and renderer-residency
-  designs now define the target architecture.
+```text
+authored edits
+  + deterministic procgen
+  + SDF field products
+  + query/render/physics consumers
+  -> editable, streamable, diagnosable open world
+```
 
-Remaining gap:
+Required end-state properties:
 
-- product formation, scheduler/ECS execution, query snapshots, renderer product
-  selection, and future product-domain work are not yet sequenced around one
-  execution fabric.
+- authored edits remain governed operations or authored layers;
+- deterministic procgen produces scoped products, not hidden runtime truth;
+- formed SDF and field products carry identity, lineage, freshness, authority,
+  residency, query policy, and diagnostics;
+- product jobs publish only through deterministic barriers;
+- strict consumers reject stale, fallback, ghost, missing, visual-only, and
+  diagnostic-only products;
+- render selections and GPU residency are derived from product truth;
+- renderer, UI, and debug surfaces remain product consumers, not world truth.
 
-## Execution Order
+## Current Focus
 
-Use this order for current implementation planning.
+The current work is the execution substrate between the completed Batch 1
+contract alignment and the first product-domain implementation.
 
-1. Product contract gate.
-   - Align current `world_sdf`, material, texture, asset, and editor product
-     descriptors with the target contract vocabulary from accepted designs.
-   - Treat `ProductJobDescriptor`, `ProductQueryPolicy`, query snapshot products,
-     deterministic publication barriers, and `RenderProductSelection` as target
-     contracts, not existing complete Rust APIs.
-2. Scheduler/ECS execution fabric.
-   - Extend scheduler planning toward phases, waves, explicit barriers, plan
-     diagnostics, and serial fallback.
-   - Keep ECS as live runtime state and scheduler as deterministic planning.
-   - Preserve serial equivalence before introducing parallel execution.
-3. Product jobs and publication barriers.
-   - Route product formation through described jobs with inputs, outputs, scope,
-     scale band, access, budget, determinism, authority, failure policy, and
-     diagnostics.
-   - Publish formed products only at deterministic barriers.
-4. Query snapshots and strict consumer policy.
-   - Add generation/freshness/consumer policy to deferred query products.
-   - Make strict/current-only consumers reject stale, fallback, ghost, and
-     visual-only products unless an owning domain certifies the fallback.
-5. Renderer product selection and GPU residency.
-   - Prepare `RenderProductSelection` from formed products and generations.
-   - Keep GPU resources, render targets, and UI samples derived from product
-     selections.
-6. Resume product-domain tracks.
-   - Procgen remains the first product-domain track after the execution gates.
-   - Gameplay graph, particles, physics, animation, and world processes follow
-     only after their owning contracts can consume product jobs, query snapshots,
-     publication barriers, and diagnostics.
+Current gaps:
 
-## Near-Term Gates
+- product jobs are described but not dispatched;
+- product publication barriers exist as plan vocabulary but do not publish
+  product outcomes yet;
+- query snapshot descriptors exist but runtime query snapshots are not produced;
+- strict consumer policy exists in ratifiers but is not enforced across runtime
+  consumers yet;
+- render prepare can carry selections but does not produce full selections from
+  products yet;
+- GPU residency is not implemented;
+- procgen remains design/doc preparation only until the execution gates close.
 
-Do not start M6.2 procgen implementation until these gates are satisfied:
+## Phased Roadmap
 
-- the product contract gate records the current specialization boundaries and
-  migration target;
-- scheduler/ECS roadmap updates identify the first concrete execution-fabric
-  work package;
-- product jobs have a documented publication/failure/diagnostics policy;
-- query snapshots have a documented freshness and strict-consumer policy;
-- renderer work is sequenced against product selection and derived GPU
-  residency, not renderer-owned world truth.
+Use this order for current implementation planning. Each phase must close its
+acceptance gate before product-domain implementation advances.
 
-Procgen design/domain docs may still be prepared while these gates are being
-closed, but procgen implementation should not bypass the execution substrate.
+### Phase 0 - Batch 1 Contract Alignment
+
+Status: complete.
+
+Acceptance gate:
+
+- shared product vocabulary exists in `domain/product`;
+- current SDF, material, texture, asset/import, editor, scheduler, ECS, engine,
+  and renderer-prep surfaces align with the vocabulary;
+- serial behavior remains equivalent to the pre-batch runtime;
+- full gate validation passes.
+
+Out of scope:
+
+- product-job dispatch;
+- runtime query snapshot production;
+- GPU residency;
+- procgen implementation.
+
+### Phase 1 - Serial Product Jobs And Publication Barriers
+
+Intent: route current product formation through job descriptors and publish
+formed outputs only at deterministic barriers while preserving serial runtime
+behavior.
+
+Acceptance gate:
+
+- product jobs have outcome/publication metadata with diagnostics;
+- the runtime stages product outcomes and publishes them only at
+  `ProductPublication` barriers;
+- publication order is deterministic and inspectable;
+- failed-preserved products require diagnostics and respect failure policy;
+- current editor field-product jobs still run serially and remain app-owned
+  until promoted deliberately.
+
+Out of scope:
+
+- worker pools or parallel execution;
+- global product registry authority;
+- procgen products;
+- GPU upload or residency.
+
+### Phase 2 - Query Snapshots And Strict Consumer Policy
+
+Intent: make deferred/runtime queries explicit products with generation,
+freshness, invalidation, consumer class, and diagnostics.
+
+Acceptance gate:
+
+- runtime query snapshots carry source generation, response generation, scope,
+  freshness, consumer class, invalidation policy, and diagnostics;
+- strict consumers reject stale, fallback, ghost, missing, visual-only, and
+  diagnostic-only products outside ratifiers, not only in unit tests;
+- query-snapshot invalidation is deterministic and visible to diagnostics;
+- editor and renderer consumers can inspect why a snapshot was accepted,
+  rejected, or preserved.
+
+Out of scope:
+
+- broad AI, physics, or procgen behavior using snapshots;
+- parallel query execution;
+- fallback promotion into authoritative truth.
+
+### Phase 3 - Render Product Selection Producers
+
+Intent: populate backend-neutral `RenderProductSelection` from formed products,
+generations, views, and diagnostics.
+
+Acceptance gate:
+
+- render prepare produces selections from product descriptors and generations;
+- selected products, stale/fallback/ghost markers, required targets, residency
+  requests, and diagnostics are inspectable;
+- render submit consumes prepared selections and does not perform live ECS
+  extraction to discover product truth;
+- renderer fallback behavior cannot bypass strict product policy.
+
+Out of scope:
+
+- SDF terrain renderer rebuild;
+- GPU SDF residency;
+- material or texture upload;
+- renderer-owned product authority.
+
+### Phase 4 - Derived GPU Residency
+
+Intent: add renderer-owned GPU cache and residency management derived from
+product selections.
+
+Acceptance gate:
+
+- GPU resources are tied to product identity and generation;
+- residency requests can allocate, preserve, evict, or invalidate derived caches
+  with diagnostics;
+- stale, fallback, ghost, missing, and failed-preserved states remain visible;
+- backend handles stay inside renderer/backend code and never enter domain,
+  editor, UI, or product descriptors.
+
+Out of scope:
+
+- renderer-owned world truth;
+- procgen algorithms;
+- full product-family render feature coverage beyond proving the residency
+  contract.
+
+### Phase 5 - Procgen Readiness Gate
+
+Intent: accept the procgen ownership and product-domain contract before any
+procgen code starts.
+
+Acceptance gate:
+
+- `docs-site/src/content/docs/domain/procgen/README.md` is accepted;
+- generator descriptor format, seed/scope/version policy, cache lineage,
+  authored edit layering, runtime/offline generation policy, and multiplayer
+  authority policy are decided;
+- procgen products are defined as product-job outputs with publication,
+  query-snapshot, strict-consumer, render-selection, and diagnostics paths;
+- procgen editor surfaces remain design/docs-only until the contract is
+  accepted.
+
+Out of scope:
+
+- `domain/procgen` code;
+- generator algorithms;
+- procgen preview or bake execution.
+
+### Phase 6 - First Procgen Product Track
+
+Intent: implement the first visible open-world producer on top of the completed
+execution substrate.
+
+Acceptance gate:
+
+- `domain/procgen` owns deterministic generator documents, seed/scope/version
+  contracts, ratification, and lowering;
+- bounded generator jobs form products through product jobs and publication
+  barriers;
+- same seed, scope, version, inputs, and upstream generations produce identical
+  operation windows and diagnostics;
+- bake-to-`world_ops` and bake-to-field-product flows preserve authored edits
+  and produce changed-region diagnostics.
+
+Out of scope:
+
+- full biome editor;
+- full caves;
+- gameplay spawn systems;
+- procedural quests;
+- particles, physics, animation, and world-process domains.
+
+## Procgen Code Gate
+
+Do not start M6.2 procgen code until Phases 1 through 5 are complete.
+
+Procgen design/domain docs may be prepared in parallel while these gates are
+being closed. Procgen code must not bypass product jobs, query snapshots,
+publication barriers, strict consumer policy, render product selection, or
+derived GPU residency.
+
+Gameplay graph, particles, physics, animation, and world-process domains follow
+only after their owning contracts can consume the same substrate.
 
 ## Roadmap Ownership
 
@@ -122,8 +269,28 @@ closed, but procgen implementation should not bypass the execution substrate.
 Roadmap updates should verify:
 
 - docs validation passes;
-- no priority list still says M6.2 procgen is the immediate next
-  implementation priority;
-- target contracts are described as future contracts until code exists;
+- no priority list says M6.2 procgen code starts before the execution phases
+  close;
+- completed contracts are marked as implemented and unfinished gates remain
+  explicit;
 - renderer, UI, and debug products remain derived state;
-- strict consumers cannot be satisfied by visual-only product paths.
+- strict consumers cannot be satisfied by visual-only product paths;
+- `domain/product` is not described as a global product registry or authority
+  owner.
+
+## Finished Baselines
+
+- editor M4 asset and field-product foundations exist;
+- M5 runtime preview and reload boundaries exist for the current product
+  families;
+- M6.0 shared workspace substrate, M6.1 material/texture contracts, and P1 SDF
+  modeling core exist;
+- accepted SDF-first field-product, execution-fabric, and renderer-residency
+  designs define the target architecture;
+- Batch 1 contract alignment is complete: `domain/product`, product-core
+  adapters, serial scheduler waves/barriers, ECS explicit deferred barriers,
+  and backend-neutral render product-selection metadata exist;
+- `world_sdf`, material, texture, asset/import, and editor product surfaces
+  align with product-core metadata while preserving their owning-domain APIs;
+- render prepare can carry backend-neutral `RenderProductSelection` metadata as
+  prepared frame state without GPU handles or renderer-owned world truth.

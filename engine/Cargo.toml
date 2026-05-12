@@ -29,6 +29,7 @@ tokio = { version = "1.48.0", features = ["sync"] }
 
 ecs = { path = "../domain/ecs" }
 asset.workspace = true
+product.workspace = true
 scheduler = { path = "../domain/scheduler" }
 spatial = { path = "../domain/spatial" }
 world_ops = { path = "../domain/world_ops" }

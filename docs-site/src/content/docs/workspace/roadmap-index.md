@@ -62,27 +62,58 @@ Operational execution checklist:
 - P1-A SDF operation-layer historical closeout evidence:
   - [reports/closeouts/p1-sdf-operation-layer/closeout.md](../reports/closeouts/p1-sdf-operation-layer/closeout.md)
 
-## Current Cross-Track Status
+## Current Focus
 
-- viewport backend cleanup is complete for its closeout scope;
-- workspace structural identity and routing contracts are implemented and guard-tested;
-- UI substrate crates and `ui_surface` contracts are implemented and integrated in production editor flows;
-- editor MVP acceptance is complete and the active editor/UI work has moved to the repository Now list;
-- current active editor/UI work has completed M3.6 self-authoring: durable schemas, Editor Design workspace/profile, provider surfaces, fixture document loading, validation, retained previews, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and apply/rollback exist before SDF/field asset and procedural workspace expansion.
-- the follow-on provider surface workflow redesign and self-authoring maturity pass are complete: outliner, entity-table, inspector, viewport, and editor-definition provider actions route through typed surface wrappers; entity-table query workflows, typed no-payload ECS enum inspector mutation, active UI/editor definition catalogs, and richer inspector controls are implemented while provider behavior stays outside `ui_definition`;
-- M4A-M4I integrated UI/editor/asset foundation is complete as of 2026-05-09: active menus, shortcuts, command bindings, panel registries, tool-surface registries, reusable-control cleanup, `domain/asset`, `ProjectFileV2`, field-product descriptors, generic product invalidation, first app-owned import/field-product jobs, asset provider surfaces, scene-manifest catalog adapter, and displayable field/volume viewport debug products exist.
-- M5 external runtime preview, project-owned data hot reload classification, reload diagnostics projection, world_sdf runtime intake, and restart boundaries are complete as of 2026-05-09 for the existing scene/asset/field-product/world_sdf/shader/UI-definition slice.
-- M6 has started: shared workspace/profile/surface substrate, first material/texture domain-contract crates, descriptor-first material/texture providers, and full P1 SDF modeling core exist. The next cross-track gate is now the SDF-first execution fabric: product contracts, scheduler/ECS barriers, product jobs, query snapshots, and renderer product selection before M6.2 procgen implementation resumes.
+- Execute the SDF-first open-world substrate roadmap phases in
+  `workspace/sdf-first-execution-roadmap.md`: serial product jobs/publication
+  barriers, query snapshots and strict consumers, render product selection
+  producers, derived GPU residency, and procgen readiness.
+- Keep M6.2 procgen design/domain-doc preparation allowed, but do not start
+  procgen code until those execution fabric and readiness phases are satisfied.
+- Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
+  execution substrate lands.
+- Keep render SDF/GPU work behind product-selection and derived GPU-residency
+  contracts.
 
-## Recommended Near-Term Order
+## Other Tracked Work
 
-1. Execute the SDF-first execution roadmap gate: product contract alignment, scheduler/ECS execution fabric, product jobs, query snapshots, and renderer product selection.
-2. Keep M6.2 procgen design/domain-doc preparation allowed, but do not start procgen implementation until the execution fabric gates in `workspace/sdf-first-execution-roadmap.md` are satisfied.
-3. Sequence gameplay graph, particles, physics, animation, and simulation domains after each owning design can consume product jobs, query snapshots, publication barriers, and diagnostics.
-4. Keep rendered SDF/GPU overlays and material/SDF rendered previews behind the renderer product-selection and derived GPU-residency contracts.
-5. Treat compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game editors, native OS menu/shortcut mirroring, external marketplace packages, and payload ECS enum variants as design-first gates, not implementation tickets.
-6. Preserve architecture guards and keep domain/workspace docs synchronized as each phase lands.
+- Sequence gameplay graph, particles, physics, animation, and simulation domains
+  after each owning design can consume product jobs, query snapshots,
+  publication barriers, and diagnostics.
+- Treat compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game
+  editors, native OS menu/shortcut mirroring, external marketplace packages,
+  and payload ECS enum variants as design-first gates, not implementation
+  tickets.
+- Preserve architecture guards and keep domain/workspace docs synchronized as
+  each phase lands.
 
 ## Rule
 
 When domain roadmaps and workspace index notes diverge, the owning domain roadmap is authoritative for implementation sequencing.
+
+## Finished Cross-Track Baselines
+
+- viewport backend cleanup is complete for its closeout scope;
+- workspace structural identity and routing contracts are implemented and
+  guard-tested;
+- UI substrate crates and `ui_surface` contracts are implemented and integrated
+  in production editor flows;
+- editor MVP acceptance is complete;
+- M3.6 self-authoring is complete: durable schemas, Editor Design
+  workspace/profile, provider surfaces, fixture document loading, validation,
+  retained previews, command diff summaries, retained authoring control routes,
+  UI node/theme/workspace-layout draft edits, and apply/rollback exist before
+  SDF/field asset and procedural workspace expansion;
+- the provider surface workflow redesign and self-authoring maturity pass are
+  complete: outliner, entity-table, inspector, viewport, and editor-definition
+  provider actions route through typed surface wrappers while provider behavior
+  stays outside `ui_definition`;
+- M4A-M4I integrated UI/editor/asset foundation is complete as of 2026-05-09;
+- M5 external runtime preview, project-owned data hot reload classification,
+  reload diagnostics projection, world_sdf runtime intake, and restart
+  boundaries are complete as of 2026-05-09 for the existing
+  scene/asset/field-product/world_sdf/shader/UI-definition slice;
+- M6 has started with shared workspace/profile/surface substrate, first
+  material/texture domain-contract crates, descriptor-first material/texture
+  providers, full P1 SDF modeling core, and Batch 1 SDF-first contract
+  alignment.

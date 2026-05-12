@@ -34,7 +34,10 @@ pub(crate) fn run_startup_if_needed(
     Ok(())
 }
 
-/// Runs one runtime frame using the canonical schedule order:
+/// Runs one runtime frame using the canonical execution-fabric phase order.
+///
+/// Each schedule below maps to a scheduler `ExecutionPhase`. Batch 1 keeps the
+/// execution serial and delegates wave/barrier semantics to the ECS runtime:
 ///
 /// 1. `PreUpdate`
 /// 2. fixed-step loop (`FixedUpdate` zero or more times)

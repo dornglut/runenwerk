@@ -34,6 +34,7 @@ Schedule planning/execution         -> domain/scheduler
 Scene transform contracts           -> domain/scene
 Geometry primitives/queries         -> domain/geometry
 Asset identity/catalog/import contracts -> domain/asset
+Shared field-product contracts          -> domain/product
 SDF fields/queries                  -> domain/sdf
 Graph substrate                     -> domain/graph
 Texture product descriptors         -> domain/texture

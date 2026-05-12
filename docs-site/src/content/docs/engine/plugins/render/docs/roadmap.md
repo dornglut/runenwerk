@@ -7,10 +7,13 @@ layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-07
 related_designs:
+  - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
   - ../../../../design/active/editor-native-multi-window-presentation-design.md
   - ../../../../design/active/render-fragment-data-driven-maturity-design.md
   - ../../../../design/active/render-product-surface-foundation-bundle-design.md
   - ../../../../design/active/viewport-dynamic-product-target-allocation-design.md
+related_roadmaps:
+  - ../../../../workspace/sdf-first-execution-roadmap.md
 ---
 
 # Render Remaining Features Roadmap
@@ -33,6 +36,17 @@ This roadmap is focused on the next major stage:
 - mature fragments and inspection tooling
 
 ---
+
+## SDF-First Roadmap Constraint
+
+SDF renderer and GPU residency work must follow the SDF-first open-world
+substrate roadmap. Renderer code consumes `RenderProductSelection` and derived
+GPU residency requests; it must not become world truth, product authority, or a
+fallback path around strict product policy.
+
+Procgen, SDF terrain rendering, and material/SDF preview GPU work should wait
+for product selection producers and derived residency contracts unless the work
+is explicitly documentation-only.
 
 ## Status Baseline
 

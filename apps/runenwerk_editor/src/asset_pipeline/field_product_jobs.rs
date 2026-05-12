@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use asset::{
     ArtifactPayloadKind, AssetArtifactDescriptor, AssetKind, AssetSourceDescriptor, ImportPlan,
-    ImportSettings, asset_artifact_id, ratify_asset_artifact,
+    ImportSettings, asset_artifact_id, product_job_descriptor_for_import, ratify_asset_artifact,
 };
+use product::{ProductJobDescriptor, ratify_product_job};
 use spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductId, FieldProductKind,
@@ -14,8 +15,10 @@ use world_sdf::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldProductJobOutcome {
     pub candidate: FieldProductCandidate,
+    pub product_job: ProductJobDescriptor,
     pub artifact: AssetArtifactDescriptor,
     pub field_product_ratified: bool,
+    pub product_job_ratified: bool,
     pub asset_artifact_ratified: bool,
 }
 
@@ -40,6 +43,18 @@ pub fn run_field_product_job(
     descriptor.scale_band = scale_band_for_import(&plan.settings);
 
     let candidate = FieldProductCandidate::new(descriptor);
+    let product_job = plan
+        .product_job
+        .clone()
+        .or_else(|| {
+            product_job_descriptor_for_import(
+                plan.job_id,
+                source,
+                &plan.settings,
+                AssetKind::FormedFieldProduct,
+            )
+        })
+        .expect("formed field imports should declare product job metadata");
     let artifact_path = field_product_artifact_path(project_root, cache_root, plan);
     let artifact = AssetArtifactDescriptor::new(
         asset_artifact_id(plan.job_id.raw()),
@@ -54,12 +69,15 @@ pub fn run_field_product_job(
     .with_artifact_path(project_relative_path(project_root, &artifact_path));
 
     let field_report = ratify_field_product_candidate(&candidate);
+    let product_job_report = ratify_product_job(&product_job);
     let artifact_report = ratify_asset_artifact(&artifact);
 
     Ok(FieldProductJobOutcome {
         candidate,
+        product_job,
         artifact,
         field_product_ratified: !field_report.has_blocking_issues(),
+        product_job_ratified: !product_job_report.has_blocking_issues(),
         asset_artifact_ratified: !artifact_report.has_blocking_issues(),
     })
 }
@@ -144,7 +162,12 @@ mod tests {
             .expect("field product job should form a preview candidate");
 
         assert!(outcome.field_product_ratified);
+        assert!(outcome.product_job_ratified);
         assert!(outcome.asset_artifact_ratified);
+        assert_eq!(
+            outcome.product_job.output_products,
+            vec![product::ProductIdentity::new(3)]
+        );
         assert_eq!(
             outcome.artifact.payload_kind,
             ArtifactPayloadKind::FormedFieldProduct {

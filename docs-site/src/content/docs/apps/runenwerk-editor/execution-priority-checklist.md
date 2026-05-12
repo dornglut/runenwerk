@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-12
 related:
   - ./mvp/implementation-sequence.md
   - ./mvp/acceptance-criteria.md
@@ -64,7 +64,19 @@ Representative evidence:
 - `domain/editor/editor_shell/src/tests.rs`
 - `domain/ui/ui_runtime/src/runtime/ui_runtime.rs`
 
-## Completed MVP Baseline
+## Now (Editor/UI Active Work)
+
+- [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: Active.
+- [ ] Plan and sequence procedural authoring features through explicit domains. Status: active for M6; M6.0 shared workspace substrate, the first `domain/material_graph`/`domain/texture` contract crates, descriptor-first material/texture providers, full P1 SDF modeling core, and Batch 1 SDF-first contract alignment now exist. M6.2 procgen remains the first product-domain track, but code is blocked on product publication barriers, query snapshots, strict consumer policy, render product selection producers, derived GPU residency, and an accepted procgen domain doc; particles, physics, animation, simulation processes, gameplay graph, rendered material/SDF previews, Texture3D GPU adapters, and scripting remain deferred to their owning M6/P3/M7 sub-milestones.
+
+## Other Tracked And Gated Work
+
+- [ ] Add language-neutral scripting boundary with Rhai as first adapter candidate. Status: Boundary-gated/open; no implementation started in the editor checklist.
+- [ ] Add world-space/screen-projected UI attachment binding only via explicit authored binding contracts and runtime formation seams. Status: Boundary-gated/open.
+- [ ] Add constrained in-game editors only through capability-gated surfaces and explicit command/ratification boundaries. Status: Boundary-gated/open.
+- Design gates: compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game editors, native OS menu/shortcut mirroring, external marketplace packages, gameplay ATR/ECS lowering, and payload ECS enum variants require their own active design or concrete reflected/runtime contract before implementation.
+
+## Finished Baselines (Do Not Reopen Without Reason)
 
 - [x] Readable editor shell and panel labels are usable. Status: Manual/UI verified on 2026-05-04. Automated shell frame and panel composition tests exist.
 - [x] Engine-owned editor window/runtime integration is stable. Status: Manual/UI verified on 2026-05-04. `startup_render_smoke_publishes_editor_shell_submission` covers editor shell submission.
@@ -78,9 +90,6 @@ Representative evidence:
 - [x] Undo/redo works for core edit flows. Status: Automated verified by scene authoring and retained transaction replay tests.
 - [x] Near-immediate scene persistence follow-up is complete. Status: Automated verified by scene file and retained change-log roundtrip tests.
 - [x] MVP acceptance criteria pass as written in `mvp/acceptance-criteria.md`. Status: Automated and manual/UI verified on 2026-05-04.
-
-## Now (Editor/UI Active Work)
-
 - [x] Phase A: Introduce workspace profile abstraction without breaking MVP. Status: Automated verified by shell state and workspace profile tests.
 - [x] Phase B: Decouple workspace layout persistence from scene path coupling. Status: Automated verified by workspace layout persistence tests.
 - [x] Phase C: Formalize document tabs and active document switching. Status: Implemented and test-covered; `EditorSession` owns ordered document tabs, active document switching, dirty/save/close transitions, and document compatibility validation, with app-local generic document-tab runtime state split from scene runtime document state.
@@ -92,18 +101,11 @@ Representative evidence:
 - [x] Add plus/new-tab affordance for creating a new tab in a tab stack. Status: Implemented and test-covered; tab chrome exposes a plus/new-tab control that allocates panel and tool-surface identities through `WorkspaceIdentityAllocator` after structural ratification.
 - [x] Expand non-viewport surface maturity using existing surface contracts. Status: implemented as of 2026-05-08; provider-backed surfaces now use typed surface action/session/domain wrappers, entity-table query workflows cover search, selected-only, roots-only, component filters, and sorting, and inspector controls render bool, numeric, text, enum select, and read-only alternatives without moving provider behavior into `ui_definition`.
 - [x] Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: updated on 2026-05-09; architecture guards cover provider seams, `ui_definition` behavior isolation, viewport presentation ratification, inspector enum routing, reusable viewport toggle routing, app-provider reusable-control construction boundaries, self-authoring live activation formation, and viewport product catalog expansion.
-- [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: Active.
 - [x] Complete the integrated UI/editor live replacement and asset foundation. Status: M4A-M4I complete as of 2026-05-09. The app now has an owned known-command resolver, transactional command-binding and shortcut activation, active shortcut dispatch, active in-editor menu/toolbar consumption, app-supplied route-action projection, panel default tool-surface compatibility validation, active tool-surface ordering for future switch/create choices, shared `editor_shell` reusable-control composition helpers, provider guards against direct app-side reusable-control construction, `domain/asset`, `ProjectFileV2`, field-product descriptors, generic product invalidation, app-owned import and field-product jobs, first asset provider surfaces, catalog-backed scene-manifest adapter, and displayable field/volume viewport debug products.
-  - Next order: M6.2 procgen only after `docs-site/src/content/docs/domain/procgen/README.md` is accepted. P1 SDF modeling core is closed for the CPU/editor-surface boundary; rendered SDF/GPU overlays and P3 material/SDF preview handoff remain deferred.
-  - Design gates: compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game editors, native OS menu/shortcut mirroring, external marketplace packages, gameplay ATR/ECS lowering, and payload ECS enum variants require their own active design or concrete reflected/runtime contract before implementation.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: Closeout candidate implemented and validated as of 2026-05-06; `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures, retained formation, app fixture validation, toolbar route-slot integration, normal shell chrome formation, and console surface formation exist.
 - [x] Implement the M3.6 UI self-authoring workspace and styling before M4. Status: complete as of 2026-05-06 for authored definition editing, retained previews, and apply/rollback snapshots; applied theme definitions activate the live editor host theme, applied workspace layout definitions now form and replace live workspace state, and exported definitions use a versioned package. The 2026-05-08 maturity pass also activates UI template, editor binding, menu, shortcut, command-binding, panel-registry, and tool-surface-registry catalogs without moving provider behavior into `ui_definition`.
 - [x] Add rotate and scale gizmos after translate workflow is stable. Status: Implemented and automated verified; rotate/scale tool activation, preview, snap-aware interaction, commit, undo/redo, and scene-authoring smoke coverage exist.
 - [x] Add create/delete/duplicate flows for common scene-authoring actions. Status: Implemented and automated verified; outliner/app scene commands cover create child, rename, reparent, duplicate subtree, delete single entity, batch delete, and SDF primitive creation through viewport SDF tool routing.
 - [x] Improve inspector/component authoring breadth for common 3D flows. Status: Implemented for M3 and automated verified; common reflected primitive fields are editable through typed inspector edit values, and component add/remove remains routed through scene command intents.
 - [x] Build the SDF/field-first asset pipeline foundation and import workflow as part of the integrated UI/editor track. Status: foundation complete as of 2026-05-09; current repo has `domain/asset`, asset ids, SDF/field asset taxonomy, import plans, field-product formation contracts, app-owned catalog runtime, Asset Browser, Import Inspector, Field Product Viewer, SDF Brush Browser, failed-artifact preservation, missing Blender diagnostics, and catalog-backed scene-manifest adapter. Project-owned reload streams remain M5. Mesh/GLB import remains a foreign-reference path, not the primary world substrate.
-- [ ] Plan and sequence procedural authoring features through explicit domains. Status: active for M6; M6.0 shared workspace substrate, the first `domain/material_graph`/`domain/texture` contract crates, descriptor-first material/texture providers, and full P1 SDF modeling core now exist. M6.2 procgen remains next but blocked on an accepted procgen domain doc; particles, physics, animation, simulation processes, gameplay graph, rendered material/SDF previews, Texture3D GPU adapters, and scripting remain deferred to their owning M6/P3/M7 sub-milestones.
-- [ ] Add language-neutral scripting boundary with Rhai as first adapter candidate. Status: Boundary-gated/open; no implementation started in the editor checklist.
-- [ ] Add world-space/screen-projected UI attachment binding only via explicit authored binding contracts and runtime formation seams. Status: Boundary-gated/open.
-- [ ] Add constrained in-game editors only through capability-gated surfaces and explicit command/ratification boundaries. Status: Boundary-gated/open.
 - [x] Continue Editor Design/self-authoring polish for UI/editor layout design, creation, and management. Status: 2026-05-08 follow-up complete for reusable field/control polish, no-payload ECS enum inspector mutation, non-theme live activation, versioned export packaging, active definition catalogs, guarded panel/tool-surface replacement, and guard coverage. Active menu/shortcut/command-binding/panel/tool-surface consumption plus reusable-control cleanup is complete as part of the M4 closeout as of 2026-05-09. Payload ECS enum variants, native OS menu/shortcut integration, external marketplace workflows, compiled-reactive UI execution, and ECS-driven UI execution remain separate future tracks.

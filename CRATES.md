@@ -32,6 +32,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `spatial_index` | `domain/spatial_index` | domain | Spatial index traits and spatial hash implementation. | evolving |
 | `chunking` | `domain/chunking` | domain | Chunk streaming focus, policy, set, diff, and streamer logic. | evolving |
 | `asset` | `domain/asset` | domain | Engine-agnostic asset identity, source/artifact descriptors, deterministic import planning, dependency graph, diagnostics, and ratification contracts. | evolving |
+| `product` | `domain/product` | domain | Shared formed-product descriptors, product jobs, query snapshots, render product selection, diagnostics, policies, and ratification contracts. | evolving |
 | `sdf` | `domain/sdf` | domain | Signed-distance-field primitives, transforms, composition, and queries. | evolving |
 | `world_ops` | `domain/world_ops` | domain | Chunk/world operation logs, dirty tracking, build queues, invalidation, and replication deltas. | evolving |
 | `world_sdf` | `domain/world_sdf` | domain | SDF chunk payloads, collision query contracts, formed field-product descriptors, ratification, and cave/sector storage summaries. | evolving |

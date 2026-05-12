@@ -1,3 +1,8 @@
+use product::{
+    ProductAuthorityClass, ProductDeterminismClass, ProductIdentity, ProductJobAffinity,
+    ProductJobBudgetClass, ProductJobDescriptor, ProductJobFailurePolicy, ProductJobId,
+    ProductKind, ProductScaleBand, ProductScope,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -39,6 +44,7 @@ pub struct ImportPlan {
     pub cache_key: ArtifactCacheKey,
     pub validation_requirements: Vec<ImportValidationRequirement>,
     pub expected_diagnostics: Vec<AssetDiagnosticRecord>,
+    pub product_job: Option<ProductJobDescriptor>,
 }
 
 impl ImportPlan {
@@ -49,6 +55,8 @@ impl ImportPlan {
         expected_artifact_kind: AssetKind,
     ) -> Self {
         let cache_key = deterministic_cache_key(source, &settings);
+        let product_job =
+            product_job_descriptor_for_import(job_id, source, &settings, expected_artifact_kind);
         Self {
             job_id,
             asset_id: source.asset_id,
@@ -67,6 +75,7 @@ impl ImportPlan {
                 "source hash must match the deterministic import plan",
             )],
             expected_diagnostics: Vec::new(),
+            product_job,
         }
     }
 
@@ -75,6 +84,126 @@ impl ImportPlan {
         self.dependencies.sort();
         self.dependencies.dedup();
         self
+    }
+}
+
+pub fn product_job_descriptor_for_import(
+    job_id: ImportJobId,
+    source: &AssetSourceDescriptor,
+    settings: &ImportSettings,
+    expected_artifact_kind: AssetKind,
+) -> Option<ProductJobDescriptor> {
+    if !expected_artifact_kind.is_formed_product() {
+        return None;
+    }
+
+    let output_product = ProductIdentity::new(job_id.raw());
+    let mut descriptor = ProductJobDescriptor::new(
+        ProductJobId::new(job_id.raw()),
+        ProductKind::new(product_job_kind(settings, expected_artifact_kind)),
+        "asset.import_plan",
+        output_product,
+        ProductScope::non_spatial(format!(
+            "asset:{}:source:{}",
+            source.asset_id.raw(),
+            source.source_id.raw()
+        )),
+        product_scale_band_for_import(settings),
+    );
+    descriptor.budget_class = ProductJobBudgetClass::Background;
+    descriptor.affinity = ProductJobAffinity::Worker;
+    descriptor.determinism = ProductDeterminismClass::DeterministicLocal;
+    descriptor.authority_class = ProductAuthorityClass::DeterministicDerived;
+    descriptor.failure_policy = ProductJobFailurePolicy::PreserveLastValidWithDiagnostic;
+    descriptor.priority = product_job_priority(settings);
+    Some(descriptor)
+}
+
+fn product_job_kind(settings: &ImportSettings, expected_artifact_kind: AssetKind) -> String {
+    format!(
+        "asset_import:{}:{}",
+        settings.stable_kind_label(),
+        asset_kind_label(expected_artifact_kind)
+    )
+}
+
+fn asset_kind_label(kind: AssetKind) -> &'static str {
+    match kind {
+        AssetKind::Scene => "scene",
+        AssetKind::Prefab => "prefab",
+        AssetKind::SdfGraph => "sdf_graph",
+        AssetKind::SdfBrushLayer => "sdf_brush_layer",
+        AssetKind::FieldWorldDefinition => "field_world_definition",
+        AssetKind::WorldEditLog => "world_edit_log",
+        AssetKind::FieldMaterialChannelSet => "field_material_channel_set",
+        AssetKind::FormedFieldProduct => "formed_field_product",
+        AssetKind::WorldSdfChunkPageArtifact => "world_sdf_chunk_page_artifact",
+        AssetKind::ClipmapBrickmapProduct => "clipmap_brickmap_product",
+        AssetKind::MaterialGraph => "material_graph",
+        AssetKind::Material => "material",
+        AssetKind::ProceduralMaterial => "procedural_material",
+        AssetKind::ProceduralTexture => "procedural_texture",
+        AssetKind::Texture2D => "texture_2d",
+        AssetKind::Texture3DVolume => "texture_3d_volume",
+        AssetKind::GameplayGraph => "gameplay_graph",
+        AssetKind::GameplayRuleTrigger => "gameplay_rule_trigger",
+        AssetKind::GameplayAbility => "gameplay_ability",
+        AssetKind::GameplayQuest => "gameplay_quest",
+        AssetKind::GameplayAtrIrProduct => "gameplay_atr_ir_product",
+        AssetKind::GameplayEcsLoweringProduct => "gameplay_ecs_lowering_product",
+        AssetKind::ParticleGraph => "particle_graph",
+        AssetKind::ParticleEmitter => "particle_emitter",
+        AssetKind::PhysicsConfig => "physics_config",
+        AssetKind::AnimationClip => "animation_clip",
+        AssetKind::AnimationGraph => "animation_graph",
+        AssetKind::ProcgenGraph => "procgen_graph",
+        AssetKind::UiLayout => "ui_layout",
+        AssetKind::UiDefinition => "ui_definition",
+        AssetKind::Graph => "graph",
+        AssetKind::Script => "script",
+        AssetKind::Shader => "shader",
+        AssetKind::Theme => "theme",
+        AssetKind::Menu => "menu",
+        AssetKind::Shortcut => "shortcut",
+        AssetKind::WorkspaceDefinition => "workspace_definition",
+        AssetKind::EditorDefinition => "editor_definition",
+        AssetKind::DiagnosticsCapture => "diagnostics_capture",
+        AssetKind::ForeignMeshReferenceSource => "foreign_mesh_reference_source",
+        AssetKind::ForeignMeshReferenceArtifact => "foreign_mesh_reference_artifact",
+    }
+}
+
+fn product_scale_band_for_import(settings: &ImportSettings) -> ProductScaleBand {
+    match settings {
+        ImportSettings::WorldSdfProduct { scale_band, .. } => match scale_band.as_str() {
+            "near" => ProductScaleBand::Near,
+            "mid" => ProductScaleBand::Mid,
+            "far" => ProductScaleBand::Far,
+            "summary" => ProductScaleBand::Summary,
+            "collision_strict_query" => ProductScaleBand::CollisionStrictQuery,
+            "offline" => ProductScaleBand::Offline,
+            "preview" => ProductScaleBand::Preview,
+            _ => ProductScaleBand::FamilySpecific,
+        },
+        ImportSettings::SdfGraph { .. }
+        | ImportSettings::SdfBrushLayer { .. }
+        | ImportSettings::FieldWorldDefinition { .. }
+        | ImportSettings::MaterialGraph { .. }
+        | ImportSettings::Material { .. }
+        | ImportSettings::ProceduralTexture { .. }
+        | ImportSettings::Texture2D { .. }
+        | ImportSettings::Texture3DVolume { .. } => ProductScaleBand::Preview,
+        _ => ProductScaleBand::FamilySpecific,
+    }
+}
+
+fn product_job_priority(settings: &ImportSettings) -> i32 {
+    match settings {
+        ImportSettings::WorldSdfProduct { .. } => 20,
+        ImportSettings::SdfGraph { .. }
+        | ImportSettings::SdfBrushLayer { .. }
+        | ImportSettings::FieldWorldDefinition { .. } => 10,
+        _ => 0,
     }
 }
 
@@ -132,5 +261,14 @@ mod tests {
 
         assert_eq!(first.cache_key, second.cache_key);
         assert_eq!(first.expected_artifacts, second.expected_artifacts);
+        assert_eq!(first.product_job, second.product_job);
+        assert_eq!(
+            first
+                .product_job
+                .as_ref()
+                .expect("formed product imports should declare a product job")
+                .output_products,
+            vec![product::ProductIdentity::new(3)]
+        );
     }
 }

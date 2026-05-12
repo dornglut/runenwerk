@@ -21,6 +21,7 @@ editor_persistence.workspace = true
 
 asset.workspace = true
 material_graph.workspace = true
+product.workspace = true
 spatial.workspace = true
 texture.workspace = true
 world_ops.workspace = true

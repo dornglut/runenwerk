@@ -8,6 +8,7 @@ members = [
     "domain/spatial_index",
     "domain/chunking",
     "domain/asset",
+    "domain/product",
     "domain/sdf",
     "domain/world_ops",
     "domain/world_sdf",
@@ -68,6 +69,7 @@ glam = "0.32.1"
 
 scene = { path = "domain/scene" }
 asset = { path = "domain/asset" }
+product = { path = "domain/product" }
 spatial = { path = "domain/spatial" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }

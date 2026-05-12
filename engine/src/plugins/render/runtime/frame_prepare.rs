@@ -110,6 +110,11 @@ pub(crate) fn frame_render_prepare_system(
         .ok()
         .map(|resource| resource.snapshot())
         .unwrap_or_default();
+    let product_selections = world
+        .resource::<PreparedRenderProductSelectionResource>()
+        .ok()
+        .map(|resource| resource.snapshot())
+        .unwrap_or_default();
     let viewport_surface_bindings = world
         .resource::<ViewportSurfaceBindingRegistryResource>()
         .ok()
@@ -130,6 +135,7 @@ pub(crate) fn frame_render_prepare_system(
         flows,
         flow_invocations,
         dynamic_texture_targets,
+        product_selections,
         viewport_surface_bindings,
         contributions,
         shader: PreparedShaderSnapshot {

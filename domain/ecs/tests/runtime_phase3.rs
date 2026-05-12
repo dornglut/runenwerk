@@ -6,6 +6,7 @@ use ecs::{
 use scheduler::ScheduleLabel;
 use scheduler::access::ConflictKind;
 use scheduler::label::SystemSet;
+use scheduler::plan::BarrierKind;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -391,6 +392,12 @@ fn command_flush_occurs_at_stage_boundary() {
 
     let plan = runtime.plan_for::<Update>().unwrap().clone();
     assert_eq!(plan.stages.len(), 2);
+    assert_eq!(plan.waves.len(), 2);
+    assert_eq!(plan.barriers.len(), 2);
+    assert_eq!(plan.barriers[0].kind, BarrierKind::ApplyDeferredCommands);
+    assert_eq!(plan.barriers[0].after_wave_index, Some(0));
+    assert_eq!(plan.barriers[1].kind, BarrierKind::ApplyDeferredCommands);
+    assert_eq!(plan.barriers[1].after_wave_index, Some(1));
 
     runtime.run_schedule::<Update>(&mut world).unwrap();
     assert_eq!(world.resource::<SeenCount>().unwrap().0, 1);

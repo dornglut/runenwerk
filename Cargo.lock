@@ -134,6 +134,7 @@ dependencies = [
  "diagnostics",
  "id",
  "id_macros",
+ "product",
  "ratification",
  "serde",
 ]
@@ -924,6 +925,7 @@ dependencies = [
  "image",
  "pollster",
  "postcard",
+ "product",
  "ron",
  "rusttype",
  "scheduler",
@@ -1780,6 +1782,7 @@ name = "material_graph"
 version = "0.1.0"
 dependencies = [
  "graph",
+ "product",
  "ratification",
  "texture",
 ]
@@ -2443,6 +2446,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "product"
+version = "0.1.0"
+dependencies = [
+ "ratification",
+ "serde",
+]
+
+[[package]]
 name = "profiling"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2778,6 +2789,7 @@ dependencies = [
  "engine_net_quic",
  "glam 0.32.1",
  "material_graph",
+ "product",
  "ron",
  "rustls",
  "scene",
@@ -3324,6 +3336,7 @@ dependencies = [
 name = "texture"
 version = "0.1.0"
 dependencies = [
+ "product",
  "ratification",
 ]
 
@@ -4620,6 +4633,7 @@ name = "world_sdf"
 version = "0.1.0"
 dependencies = [
  "postcard",
+ "product",
  "ratification",
  "serde",
  "spatial",

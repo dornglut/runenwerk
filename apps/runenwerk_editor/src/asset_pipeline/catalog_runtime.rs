@@ -7,6 +7,9 @@ use asset::{
 use editor_preview::{
     ReloadDecision, ReloadStatus, ReloadSubject, RuntimeProductKind, RuntimeProductRef,
 };
+use product::{
+    ProductAuthorityClass, ProductFamily, ProductQueryPolicy, ProductResidency, ProductScaleBand,
+};
 use texture::{TexturePreviewDescriptor, TextureProductId};
 use world_sdf::{FieldProductDescriptor, FieldProductFreshness};
 
@@ -216,6 +219,7 @@ impl AssetCatalogRuntime {
 
     pub fn field_product_lines(&self) -> Vec<String> {
         if let Some(product) = &self.selected_field_product {
+            let core = product.product_core();
             return vec![
                 format!("product: {}", product.product_id.0),
                 format!("kind: {:?}", product.kind),
@@ -224,6 +228,11 @@ impl AssetCatalogRuntime {
                 format!("chunks: {}", product.scope.chunk_ids.len()),
                 format!("regions: {}", product.scope.region_ids.len()),
                 format!("producer: {}", product.lineage.producer),
+                format!("product core family: {:?}", core.family),
+                format!("product core scale: {:?}", core.scale_band),
+                format!("product core authority: {:?}", core.authority_class),
+                format!("product core query: {:?}", core.query_policy),
+                format!("product core residency: {:?}", core.residency),
             ];
         }
         let formed = self
@@ -278,6 +287,15 @@ impl AssetCatalogRuntime {
                 _ => None,
             })
             .collect::<Vec<_>>();
+        if !lines.is_empty() {
+            lines.push(product_core_surface_line(
+                ProductFamily::Material,
+                ProductScaleBand::Preview,
+                ProductQueryPolicy::VisualFallbackAllowed,
+                ProductResidency::NotApplicable,
+                ProductAuthorityClass::DeterministicDerived,
+            ));
+        }
         if lines.is_empty() {
             lines.push("No formed material products".to_string());
         }
@@ -292,6 +310,15 @@ impl AssetCatalogRuntime {
             .filter(|artifact| !artifact_is_volume_texture(artifact))
             .filter_map(texture_artifact_line)
             .collect::<Vec<_>>();
+        if !lines.is_empty() {
+            lines.push(product_core_surface_line(
+                ProductFamily::Texture,
+                ProductScaleBand::Preview,
+                ProductQueryPolicy::VisualFallbackAllowed,
+                ProductResidency::NotApplicable,
+                ProductAuthorityClass::DeterministicDerived,
+            ));
+        }
         if lines.is_empty() {
             lines.push("No Texture2D or generated texture products".to_string());
         }
@@ -306,6 +333,15 @@ impl AssetCatalogRuntime {
             .filter(|artifact| artifact_is_volume_texture(artifact))
             .filter_map(texture_artifact_line)
             .collect::<Vec<_>>();
+        if !lines.is_empty() {
+            lines.push(product_core_surface_line(
+                ProductFamily::Texture,
+                ProductScaleBand::Preview,
+                ProductQueryPolicy::VisualFallbackAllowed,
+                ProductResidency::NotApplicable,
+                ProductAuthorityClass::DeterministicDerived,
+            ));
+        }
         if lines.is_empty() {
             lines.push("No Texture3D or volume texture products".to_string());
         }
@@ -339,6 +375,18 @@ impl AssetCatalogRuntime {
             .map(|product| product.freshness == FieldProductFreshness::PotentiallyStale)
             .unwrap_or(false)
     }
+}
+
+fn product_core_surface_line(
+    family: ProductFamily,
+    scale_band: ProductScaleBand,
+    query_policy: ProductQueryPolicy,
+    residency: ProductResidency,
+    authority_class: ProductAuthorityClass,
+) -> String {
+    format!(
+        "product core: family={family:?} scale={scale_band:?} query={query_policy:?} residency={residency:?} authority={authority_class:?}"
+    )
 }
 
 fn texture_artifact_line(artifact: &AssetArtifactDescriptor) -> Option<String> {

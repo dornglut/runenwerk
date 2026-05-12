@@ -26,8 +26,10 @@ Provides dependency-aware scheduling and node execution ordering.
 
 ## Ownership Boundaries
 
-- Owns graph validation, ordering, and execution orchestration.
-- Does not own domain-specific plugin/system logic.
+- Owns graph validation, deterministic planning, execution waves, barriers, and
+  plan diagnostics.
+- Does not own runtime worker implementation, product truth, domain-specific
+  plugin/system logic, or renderer/backend behavior.
 
 ## Extension Points
 
@@ -43,11 +45,16 @@ deterministic planning, not domain behavior or runtime worker implementation.
 Near-term scheduler work should evolve the current typed path toward:
 
 - phases and waves that remain serial-compatible;
-- explicit barriers for deferred apply, product publication, render prepare,
-  render submit, generation finalization, and replay/network capture;
+- explicit barriers for deferred apply, product publication, query snapshot
+  publication, render submit, generation finalization, and replay/network
+  capture;
 - diagnostics for access conflicts, cycles, blocked parallelism, missing
   barriers, and invalid authority classes;
 - product-job planning inputs without making the scheduler own product truth.
 
 Serial fallback is mandatory. Future parallel execution must preserve the same
 authoritative result as serial execution.
+
+The SDF-first open-world substrate roadmap sequences scheduler work before
+procgen code: product publication barriers and query snapshot publication must
+be deterministic plan concepts before product-domain work relies on them.

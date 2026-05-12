@@ -2,6 +2,11 @@
 //! Purpose: Formed material product descriptors and source maps.
 
 use graph::NodeId;
+use product::{
+    ProductAuthorityClass, ProductConsumerClass, ProductDescriptorCore, ProductFamily,
+    ProductFreshness, ProductIdentity, ProductKind, ProductLineage, ProductQueryPolicy,
+    ProductRebuildPolicy, ProductResidency, ProductRetentionPolicy, ProductScaleBand, ProductScope,
+};
 
 use crate::{MaterialGraphDocumentId, MaterialOutputTarget, MaterialProductId};
 
@@ -80,6 +85,7 @@ impl MaterialSourceMap {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FormedMaterialProduct {
     pub product_id: MaterialProductId,
+    pub product_core: ProductDescriptorCore,
     pub source_document_id: MaterialGraphDocumentId,
     pub output_target: MaterialOutputTarget,
     pub parameters: Vec<MaterialParameterDescriptor>,
@@ -95,8 +101,11 @@ impl FormedMaterialProduct {
         output_target: MaterialOutputTarget,
         cache_key: MaterialCacheKey,
     ) -> Self {
+        let product_core =
+            material_product_core(product_id, source_document_id, output_target, &cache_key);
         Self {
             product_id,
+            product_core,
             source_document_id,
             output_target,
             parameters: Vec::new(),
@@ -104,5 +113,66 @@ impl FormedMaterialProduct {
             specialization_fragment: MaterialSpecializationFragment::new("material.first_slice"),
             cache_key,
         }
+    }
+}
+
+fn material_product_core(
+    product_id: MaterialProductId,
+    source_document_id: MaterialGraphDocumentId,
+    output_target: MaterialOutputTarget,
+    cache_key: &MaterialCacheKey,
+) -> ProductDescriptorCore {
+    let mut descriptor = ProductDescriptorCore::new(
+        ProductIdentity::new(product_id.raw()),
+        ProductFamily::Material,
+        ProductKind::new(material_output_kind(output_target)),
+        ProductScope::non_spatial(format!(
+            "material_graph_document:{}",
+            source_document_id.raw()
+        )),
+        material_scale_band(output_target),
+        ProductLineage::new("material_graph.lowering", 1)
+            .with_source_key(format!(
+                "material_graph_document:{}",
+                source_document_id.raw()
+            ))
+            .with_source_revision(cache_key.as_str()),
+    );
+    descriptor.freshness = ProductFreshness::Current;
+    descriptor.residency = ProductResidency::NotApplicable;
+    descriptor.consumer_class = material_consumer_class(output_target);
+    descriptor.authority_class = ProductAuthorityClass::DeterministicDerived;
+    descriptor.retention_policy = ProductRetentionPolicy::Cacheable;
+    descriptor.rebuild_policy = ProductRebuildPolicy::Budgeted;
+    descriptor.query_policy = match output_target {
+        MaterialOutputTarget::FieldMaterialChannel => ProductQueryPolicy::CertifiedFallbackAllowed,
+        MaterialOutputTarget::PbrPreview | MaterialOutputTarget::RenderMaterial => {
+            ProductQueryPolicy::VisualFallbackAllowed
+        }
+    };
+    descriptor
+}
+
+fn material_output_kind(output_target: MaterialOutputTarget) -> &'static str {
+    match output_target {
+        MaterialOutputTarget::PbrPreview => "pbr_preview",
+        MaterialOutputTarget::FieldMaterialChannel => "field_material_channel",
+        MaterialOutputTarget::RenderMaterial => "render_material",
+    }
+}
+
+fn material_scale_band(output_target: MaterialOutputTarget) -> ProductScaleBand {
+    match output_target {
+        MaterialOutputTarget::PbrPreview => ProductScaleBand::Preview,
+        MaterialOutputTarget::FieldMaterialChannel => ProductScaleBand::FamilySpecific,
+        MaterialOutputTarget::RenderMaterial => ProductScaleBand::Near,
+    }
+}
+
+fn material_consumer_class(output_target: MaterialOutputTarget) -> ProductConsumerClass {
+    match output_target {
+        MaterialOutputTarget::PbrPreview => ProductConsumerClass::Editor,
+        MaterialOutputTarget::FieldMaterialChannel => ProductConsumerClass::Simulation,
+        MaterialOutputTarget::RenderMaterial => ProductConsumerClass::Renderer,
     }
 }

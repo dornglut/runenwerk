@@ -159,6 +159,7 @@ fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
             RenderTextureSampleMode::FilterableFloat,
             RenderDynamicTextureRetention::RetainForFrames(2),
         )],
+        product_selections: Vec::new(),
         viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
         contributions: PreparedFrameContributions::default(),
         shader: PreparedShaderSnapshot {
@@ -255,6 +256,7 @@ fn prepared_frame_rejects_conflicting_dynamic_target_history_signatures() {
             },
         ],
         dynamic_texture_targets: Vec::new(),
+        product_selections: Vec::new(),
         viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
         contributions: PreparedFrameContributions::default(),
         shader: PreparedShaderSnapshot {

@@ -23,10 +23,104 @@ pub struct ExecutionStage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionPhaseKind {
+    PreUpdate,
+    FixedUpdate,
+    Update,
+    RenderPrepare,
+    RenderSubmit,
+    FrameEnd,
+    Custom(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionPhase {
+    pub index: usize,
+    pub label: ScheduleKey,
+    pub kind: ExecutionPhaseKind,
+}
+
+impl ExecutionPhase {
+    pub fn from_schedule_label(index: usize, label: ScheduleKey) -> Self {
+        let short_name = label.name().rsplit("::").next().unwrap_or(label.name());
+        let kind = match short_name {
+            "PreUpdate" => ExecutionPhaseKind::PreUpdate,
+            "FixedUpdate" => ExecutionPhaseKind::FixedUpdate,
+            "Update" => ExecutionPhaseKind::Update,
+            "RenderPrepare" => ExecutionPhaseKind::RenderPrepare,
+            "RenderSubmit" => ExecutionPhaseKind::RenderSubmit,
+            "FrameEnd" => ExecutionPhaseKind::FrameEnd,
+            _ => ExecutionPhaseKind::Custom(short_name.to_string()),
+        };
+        Self { index, label, kind }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionWave {
+    pub index: usize,
+    pub phase_index: usize,
+    pub stage_index: usize,
+    pub system_indices: Vec<usize>,
+    pub system_ids: Vec<SystemId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BarrierKind {
+    ApplyDeferredCommands,
+    ProductPublication,
+    QuerySnapshotPublication,
+    RenderSubmit,
+    GenerationFinalization,
+    ReplayNetworkCapture,
+    Custom(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionBarrier {
+    pub index: usize,
+    pub phase_index: usize,
+    pub after_wave_index: Option<usize>,
+    pub kind: BarrierKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionPlanDiagnosticKind {
+    EmptyPhase,
+    SerialWaveMirrorsStage,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionPlanDiagnostic {
+    pub kind: ExecutionPlanDiagnosticKind,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionPlan {
     pub label: ScheduleKey,
+    pub phase: ExecutionPhase,
     pub stages: Vec<ExecutionStage>,
+    pub waves: Vec<ExecutionWave>,
+    pub barriers: Vec<ExecutionBarrier>,
     pub conflicts: Vec<ExecutionConflict>,
+    pub diagnostics: Vec<ExecutionPlanDiagnostic>,
+}
+
+impl ExecutionPlan {
+    pub fn barriers_after_wave(
+        &self,
+        wave_index: usize,
+    ) -> impl Iterator<Item = &ExecutionBarrier> {
+        self.barriers
+            .iter()
+            .filter(move |barrier| barrier.after_wave_index == Some(wave_index))
+    }
+
+    pub fn apply_deferred_barrier_after_wave(&self, wave_index: usize) -> bool {
+        self.barriers_after_wave(wave_index)
+            .any(|barrier| barrier.kind == BarrierKind::ApplyDeferredCommands)
+    }
 }
 
 pub struct ExecutionScheduler<C> {
@@ -92,8 +186,8 @@ impl<C> ExecutionScheduler<C> {
             return Ok(());
         };
 
-        for stage in plan.stages {
-            for system_index in stage.system_indices {
+        for wave in plan.waves {
+            for system_index in wave.system_indices {
                 let system = self
                     .systems
                     .get_mut(system_index)
@@ -259,10 +353,54 @@ impl<C> ExecutionScheduler<C> {
             }
         }
 
+        let phase = ExecutionPhase::from_schedule_label(0, label);
+        let waves = stages
+            .iter()
+            .enumerate()
+            .map(|(wave_index, stage)| ExecutionWave {
+                index: wave_index,
+                phase_index: phase.index,
+                stage_index: stage.index,
+                system_indices: stage.system_indices.clone(),
+                system_ids: stage.system_ids.clone(),
+            })
+            .collect::<Vec<_>>();
+        let barriers = waves
+            .iter()
+            .enumerate()
+            .map(|(barrier_index, wave)| ExecutionBarrier {
+                index: barrier_index,
+                phase_index: phase.index,
+                after_wave_index: Some(wave.index),
+                kind: BarrierKind::ApplyDeferredCommands,
+            })
+            .collect::<Vec<_>>();
+        let mut diagnostics = Vec::new();
+        if waves.is_empty() {
+            diagnostics.push(ExecutionPlanDiagnostic {
+                kind: ExecutionPlanDiagnosticKind::EmptyPhase,
+                message: format!(
+                    "schedule '{}' produced an empty execution phase",
+                    label.name()
+                ),
+            });
+        } else {
+            diagnostics.push(ExecutionPlanDiagnostic {
+                kind: ExecutionPlanDiagnosticKind::SerialWaveMirrorsStage,
+                message:
+                    "serial fabric compatibility: each execution wave mirrors one legacy stage"
+                        .to_string(),
+            });
+        }
+
         let plan = ExecutionPlan {
             label,
+            phase,
             stages,
+            waves,
+            barriers,
             conflicts,
+            diagnostics,
         };
         telemetry::record_plan_build(
             build_start.elapsed().as_nanos() as u64,
@@ -277,4 +415,77 @@ fn depends_on_set(required_sets: &[SystemSetKey], assigned_sets: &[SystemSetKey]
     required_sets
         .iter()
         .any(|required| assigned_sets.iter().any(|assigned| assigned == required))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::access::SystemAccess;
+    use crate::label::{ScheduleLabel, SystemSet};
+    use crate::system::RegisteredSystem;
+
+    #[derive(Debug, Copy, Clone)]
+    struct Update;
+    impl ScheduleLabel for Update {}
+
+    #[derive(Debug, Copy, Clone)]
+    struct GameplaySet;
+    impl SystemSet for GameplaySet {}
+
+    #[derive(Debug, Copy, Clone)]
+    struct PostGameplaySet;
+    impl SystemSet for PostGameplaySet {}
+
+    fn test_system(name: &'static str) -> RegisteredSystem<Vec<&'static str>> {
+        RegisteredSystem::new::<Update>(
+            name,
+            SystemAccess::new(),
+            move |ctx: &mut Vec<&'static str>| {
+                ctx.push(name);
+                Ok(())
+            },
+        )
+        .expect("test system should register")
+    }
+
+    #[test]
+    fn plan_exposes_serial_waves_and_apply_deferred_barriers() {
+        let mut before = test_system("before");
+        before.before_set_key(GameplaySet::key());
+        let mut gameplay = test_system("gameplay");
+        gameplay.with_set_key(GameplaySet::key());
+        let mut after = test_system("after");
+        after.with_set_key(PostGameplaySet::key());
+        after.after_set_key(GameplaySet::key());
+
+        let mut scheduler = ExecutionScheduler::new();
+        scheduler.add_system(gameplay);
+        scheduler.add_system(before);
+        scheduler.add_system(after);
+
+        let plan = scheduler
+            .plan_for::<Update>()
+            .expect("plan should exist")
+            .clone();
+
+        assert_eq!(plan.phase.kind, ExecutionPhaseKind::Update);
+        assert_eq!(plan.stages.len(), 3);
+        assert_eq!(plan.waves.len(), plan.stages.len());
+        assert_eq!(plan.barriers.len(), plan.waves.len());
+        for wave in &plan.waves {
+            assert_eq!(wave.stage_index, wave.index);
+            assert!(plan.apply_deferred_barrier_after_wave(wave.index));
+        }
+        assert!(
+            plan.barriers
+                .iter()
+                .all(|barrier| barrier.kind == BarrierKind::ApplyDeferredCommands)
+        );
+
+        let mut order = Vec::new();
+        scheduler
+            .run_schedule::<Update>(&mut order)
+            .expect("serial wave execution should succeed");
+        assert_eq!(order, vec!["before", "gameplay", "after"]);
+    }
 }

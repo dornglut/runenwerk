@@ -5,7 +5,11 @@ status: active
 owner: ecs
 layer: domain
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-12
+related_designs:
+  - ../../design/accepted/execution-fabric-and-product-jobs-design.md
+related_roadmaps:
+  - ../../workspace/sdf-first-execution-roadmap.md
 ---
 
 # ECS Crate
@@ -45,3 +49,15 @@ assert_eq!(world.require::<Position>(entity).unwrap().x, 2.0);
 - Advanced guide: [advanced-guide.md](./advanced-guide.md)
 - Architecture (internals): [architecture.md](./architecture.md)
 - Feature map: [features.md](./features.md)
+
+## SDF-First Execution Ownership
+
+For the SDF-first open-world substrate, ECS owns live runtime state, system
+interfaces, deferred command visibility, and the runtime query contracts that
+feed query snapshot products. The scheduler owns deterministic planning and
+barriers; engine runtime owns execution; product-family domains own product
+truth.
+
+Near-term ECS work should preserve serial equivalence while adding explicit
+product-publication and query-snapshot behavior at scheduler barriers. ECS must
+not become a global product registry or renderer truth source.

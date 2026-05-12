@@ -9,7 +9,10 @@ use super::features::{
     prepare_ui_feature_resource_system, sync_render_feature_registry_system,
     world::{WorldLodPolicyResource, WorldLodSelectionResource, WorldRuntimeCacheResource},
 };
-use super::frame::{PreparedRenderFrameRequestResource, PreparedRenderFrameResource};
+use super::frame::{
+    PreparedRenderFrameRequestResource, PreparedRenderFrameResource,
+    PreparedRenderProductSelectionResource,
+};
 use super::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
     RenderDebugFrameReportState, RenderDebugGraphDumpState, RenderDebugOverlayState,
@@ -54,6 +57,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<WorldLodSelectionResource>();
         app.init_resource::<PreparedRenderFrameResource>();
         app.init_resource::<PreparedRenderFrameRequestResource>();
+        app.init_resource::<PreparedRenderProductSelectionResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
         app.init_resource::<PipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();

@@ -2,7 +2,7 @@ use super::extract::{SystemParam, SystemParamError};
 use anyhow::{Result, anyhow};
 use scheduler::access::{AccessKey, SystemAccess};
 use scheduler::label::{ScheduleLabel, SystemSet, SystemSetKey};
-use scheduler::plan::{ExecutionPlan, ExecutionScheduler};
+use scheduler::plan::{BarrierKind, ExecutionBarrier, ExecutionPlan, ExecutionScheduler};
 use scheduler::system::{ParamSlotDescriptor, RegisteredSystem, SystemId};
 use std::cell::RefCell;
 use std::marker::PhantomData;
@@ -747,10 +747,10 @@ impl Runtime {
         };
         telemetry::record_runtime_plan(plan_start.elapsed().as_nanos() as u64);
 
-        for stage in plan.stages {
+        for wave in &plan.waves {
             let stage_start = Instant::now();
-            for system_index in stage.system_indices {
-                let Some(system) = self.scheduler.systems_mut().get_mut(system_index) else {
+            for system_index in &wave.system_indices {
+                let Some(system) = self.scheduler.systems_mut().get_mut(*system_index) else {
                     self.discard_deferred_commands();
                     return Err(anyhow!("execution plan referenced missing system"));
                 };
@@ -760,15 +760,27 @@ impl Runtime {
                 }
             }
             telemetry::record_runtime_stage(stage_start.elapsed().as_nanos() as u64);
-            // Deferred commands are a stage boundary contract: structural effects become visible
-            // only after all systems in the current stage have completed.
-            if let Err(err) = self.flush_stage_commands(world) {
-                self.discard_deferred_commands();
-                return Err(err);
+            for barrier in plan.barriers_after_wave(wave.index) {
+                if let Err(err) = self.execute_barrier(barrier, world) {
+                    self.discard_deferred_commands();
+                    return Err(err);
+                }
             }
         }
 
         Ok(())
+    }
+
+    fn execute_barrier(&self, barrier: &ExecutionBarrier, world: &mut World) -> Result<()> {
+        match barrier.kind {
+            BarrierKind::ApplyDeferredCommands => self.flush_stage_commands(world),
+            BarrierKind::ProductPublication
+            | BarrierKind::QuerySnapshotPublication
+            | BarrierKind::RenderSubmit
+            | BarrierKind::GenerationFinalization
+            | BarrierKind::ReplayNetworkCapture
+            | BarrierKind::Custom(_) => Ok(()),
+        }
     }
 
     fn ensure_build_ready(&self) -> Result<()> {
