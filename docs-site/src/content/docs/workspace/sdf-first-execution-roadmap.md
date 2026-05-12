@@ -68,16 +68,15 @@ Required end-state properties:
 
 ## Current Focus
 
-The current work is Phase 3 of the execution substrate between the completed
+The current work is Phase 4 of the execution substrate between the completed
 Batch 1 contract alignment and the first product-domain implementation. Phases
-1 and 2 are complete: serial product publication outcomes, deterministic
+1 through 3 are complete: serial product publication outcomes, deterministic
 publication barriers, runtime query snapshots, strict runtime consumption
-decisions, and app-owned editor proof surfaces now exist.
+decisions, app-owned editor proof surfaces, and render product selection
+producers now exist.
 
 Current gaps:
 
-- render prepare can carry selections but does not produce full selections from
-  products yet;
 - GPU residency is not implemented;
 - procgen remains design/doc preparation only until the execution gates close.
 
@@ -163,8 +162,14 @@ Out of scope:
 
 ### Phase 3 - Render Product Selection Producers
 
+Status: complete as of 2026-05-13.
+
 Intent: populate backend-neutral `RenderProductSelection` from formed products,
 generations, views, and diagnostics.
+
+Closeout evidence:
+
+- [reports/closeouts/sdf-first-execution-phase-3/closeout.md](../reports/closeouts/sdf-first-execution-phase-3/closeout.md)
 
 Acceptance gate:
 
@@ -313,7 +318,13 @@ Roadmap updates should verify:
   renderer inspection reads snapshot decisions without backend handles, and the
   editor viewport publishes observation snapshots through app-owned barrier
   handling;
+- Phase 3 render product selection producers are complete: `domain/product`
+  owns typed render-selection state and ratification, engine render preparation
+  stores producer-scoped `RenderProductSelection` contributions, prepared-frame
+  inspection exposes selected products, target descriptors, residency requests,
+  and diagnostics without backend handles, and the editor viewport produces
+  selections from accepted query snapshots during `RenderPrepare`;
 - `world_sdf`, material, texture, asset/import, and editor product surfaces
   align with product-core metadata while preserving their owning-domain APIs;
-- render prepare can carry backend-neutral `RenderProductSelection` metadata as
+- render prepare carries backend-neutral `RenderProductSelection` metadata as
   prepared frame state without GPU handles or renderer-owned world truth.

@@ -13,6 +13,11 @@ use engine::plugins::render::{
     RenderResourceDescriptor, RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat,
     RenderTextureTargetUsage,
 };
+use product::{
+    ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
+    ProductScaleBand, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
+    RenderTargetDescriptor,
+};
 use std::collections::BTreeMap;
 use ui_render_data::ViewportSurfaceBindingRegistry;
 use wgpu::TextureFormat;
@@ -108,7 +113,8 @@ fn resource_inspection_exposes_target_alias_metadata() {
 }
 
 #[test]
-fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
+fn prepared_frame_inspection_exposes_render_product_selection_targets_views_invocations_and_history()
+ {
     let target_key = RenderDynamicTextureTargetKey::new("editor.viewport.1", "scene_color");
     let flow_id = engine::plugins::render::RenderFlowId::try_from_raw(3).unwrap();
     let resource_id = RenderResourceId::try_from_raw(9).unwrap();
@@ -159,7 +165,30 @@ fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
             RenderTextureSampleMode::FilterableFloat,
             RenderDynamicTextureRetention::RetainForFrames(2),
         )],
-        product_selections: Vec::new(),
+        product_selections: vec![
+            RenderProductSelection::new("viewport.1")
+                .with_selected_product(RenderSelectedProduct {
+                    product_id: ProductIdentity::new(77),
+                    scale_band: ProductScaleBand::Preview,
+                    generation: 12,
+                    freshness: ProductFreshness::Current,
+                    residency: ProductResidency::Resident,
+                    authority_class: ProductAuthorityClass::DeterministicDerived,
+                    query_policy: ProductQueryPolicy::StrictCurrentOnly,
+                })
+                .with_required_target(RenderTargetDescriptor::new(
+                    "editor.viewport.1:scene_color",
+                    640,
+                    360,
+                    "rgba8_unorm",
+                ))
+                .with_residency_request(RenderResidencyRequest::new(
+                    ProductIdentity::new(77),
+                    ProductResidency::Resident,
+                    100,
+                    true,
+                )),
+        ],
         viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
         contributions: PreparedFrameContributions::default(),
         shader: PreparedShaderSnapshot {
@@ -209,6 +238,16 @@ fn prepared_frame_inspection_exposes_targets_views_invocations_and_history() {
                 binding.alias == "viewport.scene_color"
                     && binding.binding == "dynamic_texture(editor.viewport.1:scene_color)"
             })
+    );
+    assert_eq!(inspection.product_selections.len(), 1);
+    assert_eq!(inspection.product_selections[0].view_id, "viewport.1");
+    assert_eq!(
+        inspection.product_selections[0].selected_products[0].product_id,
+        77
+    );
+    assert_eq!(
+        inspection.product_selections[0].residency_requests[0].priority,
+        100
     );
 }
 

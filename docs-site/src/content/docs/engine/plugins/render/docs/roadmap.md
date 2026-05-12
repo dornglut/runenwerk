@@ -40,13 +40,13 @@ This roadmap is focused on the next major stage:
 ## SDF-First Roadmap Constraint
 
 SDF renderer and GPU residency work must follow the SDF-first open-world
-substrate roadmap. Renderer code consumes `RenderProductSelection` and derived
-GPU residency requests; it must not become world truth, product authority, or a
-fallback path around strict product policy.
+substrate roadmap. Renderer code consumes producer-built
+`RenderProductSelection` and derived GPU residency requests; it must not become
+world truth, product authority, or a fallback path around strict product policy.
 
-Procgen, SDF terrain rendering, and material/SDF preview GPU work should wait
-for product selection producers and derived residency contracts unless the work
-is explicitly documentation-only.
+Phase 3 product selection producers are complete. Procgen, SDF terrain
+rendering, and material/SDF preview GPU work should still wait for derived
+residency contracts unless the work is explicitly documentation-only.
 
 ## Status Baseline
 

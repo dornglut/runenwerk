@@ -1,6 +1,7 @@
 use ecs::World;
 use engine::plugins::render::{
-    RenderDynamicTextureTargetRequestRegistryResource, UiFrameSubmissionRegistryResource,
+    PreparedRenderProductSelectionResource, RenderDynamicTextureTargetRequestRegistryResource,
+    RenderRuntimeSet, UiFrameSubmissionRegistryResource,
 };
 use engine::prelude::*;
 use engine::runtime::ProductPublicationRuntimeResource;
@@ -25,8 +26,9 @@ use crate::runtime::viewport::{
     ViewportProductTargetRegistryResource, ViewportRenderJobResource,
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     ViewportSurfaceSetResource, apply_viewport_render_state_commands_system,
-    publish_viewport_query_snapshots_at_barrier, sync_viewport_presentation_products_system,
-    sync_viewport_product_targets_system, sync_viewport_render_jobs_system,
+    prepare_viewport_render_product_selections_system, publish_viewport_query_snapshots_at_barrier,
+    sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
+    sync_viewport_render_jobs_system,
 };
 
 pub struct EditorAppPlugin;
@@ -41,6 +43,7 @@ pub enum EditorRuntimeSet {
     ViewportPresentationSync,
     ViewportProductTargets,
     ViewportRenderJobs,
+    ViewportRenderProductSelection,
 }
 
 impl IntoSystemSetKey for EditorRuntimeSet {
@@ -68,6 +71,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::ViewportRenderJobs => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportRenderJobs")
             }
+            Self::ViewportRenderProductSelection => SystemSetKey::of::<EditorRuntimeSet>(
+                "EditorRuntimeSet::ViewportRenderProductSelection",
+            ),
         }
     }
 }
@@ -94,6 +100,7 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportPickingResultsResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
+        app.init_resource::<PreparedRenderProductSelectionResource>();
         app.add_barrier_handler(
             BarrierKind::ProductPublication,
             publish_editor_field_products_at_barrier,
@@ -167,6 +174,12 @@ impl Plugin for EditorAppPlugin {
                 .after(EditorRuntimeSet::ViewportProductTargets)
                 .after(CoreSet::Input)
                 .after(CoreSet::Time),
+        );
+        app.add_systems(
+            RenderPrepare,
+            prepare_viewport_render_product_selections_system
+                .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::FramePrepare),
         );
     }
 }

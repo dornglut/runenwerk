@@ -31,6 +31,8 @@ Operational execution checklist:
   - [reports/closeouts/sdf-first-execution-phase-1/closeout.md](../reports/closeouts/sdf-first-execution-phase-1/closeout.md)
 - SDF-first execution Phase 2 closeout evidence:
   - [reports/closeouts/sdf-first-execution-phase-2/closeout.md](../reports/closeouts/sdf-first-execution-phase-2/closeout.md)
+- SDF-first execution Phase 3 closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-3/closeout.md](../reports/closeouts/sdf-first-execution-phase-3/closeout.md)
 - Editor final end-to-end implementation roadmap:
   - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - UI substrate and surface execution roadmap:
@@ -69,10 +71,10 @@ Operational execution checklist:
 ## Current Focus
 
 - Execute the remaining SDF-first open-world substrate roadmap phases in
-  `workspace/sdf-first-execution-roadmap.md`: render product selection
-  producers, derived GPU residency, and procgen readiness. Phase 1 serial
-  product jobs/publication barriers and Phase 2 query snapshots/strict
-  consumers are complete.
+  `workspace/sdf-first-execution-roadmap.md`: derived GPU residency and
+  procgen readiness. Phase 1 serial product jobs/publication barriers, Phase 2
+  query snapshots/strict consumers, and Phase 3 render product selection
+  producers are complete.
 - Keep M6.2 procgen design/domain-doc preparation allowed, but do not start
   procgen code until those execution fabric and readiness phases are satisfied.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
@@ -108,6 +110,10 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   product-agnostic ECS source generation, engine snapshot staging/invalidation,
   render inspection DTOs, and app-owned editor viewport observation snapshot
   publication are implemented and validated;
+- SDF-first execution Phase 3 is complete: typed render product selections,
+  producer-scoped prepared render selection contributions, prepared-frame
+  inspection DTOs, and app-owned editor viewport render-selection production
+  from accepted query snapshots are implemented and validated;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

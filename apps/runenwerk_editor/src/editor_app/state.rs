@@ -10,7 +10,10 @@ use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::asset_pipeline::{
     AssetCatalogRuntime, EditorFieldProductPublication, EditorFieldProductPublicationJournalEntry,
 };
-use crate::runtime::viewport::EditorViewportQuerySnapshotJournalEntry;
+use crate::runtime::viewport::{
+    EditorViewportQuerySnapshotJournalEntry, EditorViewportRenderSelectionJournalEntry,
+    EditorViewportRenderSelectionSummary,
+};
 use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
 use super::sdf_operations::SdfOperationWorkspaceState;
@@ -30,6 +33,8 @@ pub struct RunenwerkEditorApp {
     pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
     pub(crate) field_product_publication_journal: Vec<EditorFieldProductPublicationJournalEntry>,
     pub(crate) viewport_query_snapshot_journal: Vec<EditorViewportQuerySnapshotJournalEntry>,
+    pub(crate) viewport_render_selection_journal: Vec<EditorViewportRenderSelectionJournalEntry>,
+    pub(crate) last_viewport_render_selection_summary: Option<EditorViewportRenderSelectionSummary>,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -55,6 +60,8 @@ impl RunenwerkEditorApp {
             pending_field_product_publications: Vec::new(),
             field_product_publication_journal: Vec::new(),
             viewport_query_snapshot_journal: Vec::new(),
+            viewport_render_selection_journal: Vec::new(),
+            last_viewport_render_selection_summary: None,
         }
     }
 
@@ -224,6 +231,30 @@ impl RunenwerkEditorApp {
         entry: EditorViewportQuerySnapshotJournalEntry,
     ) {
         self.viewport_query_snapshot_journal.push(entry);
+    }
+
+    pub fn viewport_render_selection_journal(
+        &self,
+    ) -> &[EditorViewportRenderSelectionJournalEntry] {
+        &self.viewport_render_selection_journal
+    }
+
+    pub fn record_viewport_render_selection(
+        &mut self,
+        entry: EditorViewportRenderSelectionJournalEntry,
+    ) {
+        self.viewport_render_selection_journal.push(entry);
+    }
+
+    pub fn update_viewport_render_selection_summary(
+        &mut self,
+        summary: EditorViewportRenderSelectionSummary,
+    ) -> bool {
+        if self.last_viewport_render_selection_summary == Some(summary) {
+            return false;
+        }
+        self.last_viewport_render_selection_summary = Some(summary);
+        true
     }
 }
 

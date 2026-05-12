@@ -187,6 +187,9 @@ pub fn read_workspace_layout_with_metadata(path: &Path) -> Result<WorkspaceLayou
 mod tests {
     use super::*;
     use editor_shell::{LAYOUT_WORKSPACE_PROFILE_ID, WorkspaceIdentityAllocator};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMP_WORKSPACE_LAYOUT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn temp_workspace_layout_path() -> PathBuf {
         let mut path = std::env::temp_dir();
@@ -194,7 +197,13 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system time should be after unix epoch")
             .as_nanos();
-        path.push(format!("runenwerk_workspace_layout_{nanos}.ron"));
+        let sequence = TEMP_WORKSPACE_LAYOUT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        path.push(format!(
+            "runenwerk_workspace_layout_{}_{}_{}.ron",
+            std::process::id(),
+            nanos,
+            sequence
+        ));
         path
     }
 

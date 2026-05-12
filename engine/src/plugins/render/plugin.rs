@@ -21,14 +21,15 @@ use super::inspect::{
 };
 use super::pipelines::PipelineCacheResource;
 use super::runtime::{
-    RenderDynamicTextureTargetRequestRegistryResource, collect_runtime_ui_frame_submissions_system,
-    frame_render_prepare_system, frame_render_submit_system,
+    RenderDynamicTextureTargetRequestRegistryResource, RenderRuntimeSet,
+    collect_runtime_ui_frame_submissions_system, frame_render_prepare_system,
+    frame_render_submit_system,
 };
 use super::shader::ShaderRegistryResource;
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::scene::SceneResource;
-use crate::runtime::{RenderPrepare, RenderSubmit};
+use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt};
 use crate::state::{DebugMetricsState, StartupState};
 
 pub struct RenderPlugin;
@@ -79,7 +80,10 @@ impl Plugin for RenderPlugin {
         app.add_systems(RenderPrepare, sync_render_feature_registry_system);
         app.add_systems(RenderPrepare, collect_runtime_ui_frame_submissions_system);
         app.add_systems(RenderPrepare, prepare_ui_feature_resource_system);
-        app.add_systems(RenderPrepare, frame_render_prepare_system);
+        app.add_systems(
+            RenderPrepare,
+            frame_render_prepare_system.in_set(RenderRuntimeSet::FramePrepare),
+        );
         app.add_systems(RenderSubmit, frame_render_submit_system);
     }
 }

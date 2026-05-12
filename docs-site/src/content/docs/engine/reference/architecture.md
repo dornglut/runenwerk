@@ -77,6 +77,24 @@ product-domain consumption decisions, preserves prior snapshots on rejected
 updates, invalidates snapshots deterministically on source-generation changes,
 and keeps accepted, rejected, preserved, and invalidated decisions inspectable.
 
+## Render Product Selection Runtime
+
+Render selection production is prepared-frame state, not renderer-owned product
+truth. The render plugin owns `PreparedRenderProductSelectionResource`, which
+stores producer-scoped `domain/product` `RenderProductSelection` contributions
+keyed by `RenderFrameProducerId`.
+
+Producers replace their own contribution before
+`engine/src/plugins/render/runtime/frame_prepare.rs::frame_render_prepare_system`
+publishes the prepared frame. The prepared frame snapshots selections together
+with views, flow invocations, dynamic targets, and surface bindings. Render
+submit consumes this prepared data and does not perform live ECS extraction to
+discover product truth.
+
+Prepared-frame inspection exposes selected product ids, generations, typed
+freshness/residency/authority/query-policy state, required target descriptors,
+residency requests, and diagnostics without backend handles.
+
 ## Fixed-Step Contract
 
 Canonical implementation:

@@ -4,6 +4,7 @@ use crate::plugins::render::{
     RenderDynamicTextureTargetKey, RenderTextureSampleMode, RenderTextureTargetFormat,
     RenderTextureTargetUsage,
 };
+use product::{RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedRenderFrameInspection {
@@ -13,6 +14,7 @@ pub struct PreparedRenderFrameInspection {
     pub views: Vec<PreparedViewInspectionEntry>,
     pub flow_invocations: Vec<PreparedFlowInvocationInspectionEntry>,
     pub dynamic_texture_targets: Vec<DynamicTextureTargetInspectionEntry>,
+    pub product_selections: Vec<RenderProductSelectionInspectionEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +58,44 @@ pub struct DynamicTextureTargetInspectionEntry {
     pub sampleable: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderProductSelectionInspectionEntry {
+    pub view_id: String,
+    pub selected_products: Vec<RenderSelectedProductInspectionEntry>,
+    pub required_targets: Vec<RenderSelectionTargetInspectionEntry>,
+    pub residency_requests: Vec<RenderResidencyRequestInspectionEntry>,
+    pub diagnostic_count: usize,
+    pub overlays_enabled: bool,
+    pub selected_overlay_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderSelectedProductInspectionEntry {
+    pub product_id: u64,
+    pub scale_band: String,
+    pub generation: u64,
+    pub freshness: String,
+    pub residency: String,
+    pub authority_class: String,
+    pub query_policy: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderSelectionTargetInspectionEntry {
+    pub target_id: String,
+    pub width: u32,
+    pub height: u32,
+    pub format: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderResidencyRequestInspectionEntry {
+    pub product_id: u64,
+    pub residency: String,
+    pub priority: i32,
+    pub hard_pin: bool,
+}
+
 pub fn inspect_prepared_render_frame(frame: &PreparedRenderFrame) -> PreparedRenderFrameInspection {
     PreparedRenderFrameInspection {
         frame_index: frame.context.frame_index,
@@ -71,6 +111,11 @@ pub fn inspect_prepared_render_frame(frame: &PreparedRenderFrame) -> PreparedRen
             .dynamic_texture_targets
             .iter()
             .map(inspect_dynamic_texture_target)
+            .collect(),
+        product_selections: frame
+            .product_selections
+            .iter()
+            .map(inspect_render_product_selection)
             .collect(),
     }
 }
@@ -121,6 +166,62 @@ fn inspect_dynamic_texture_target(
         retention: dynamic_texture_retention_label(target.retention),
         displayable: target.format.is_displayable(),
         sampleable: target.sample_mode.is_sampled(),
+    }
+}
+
+fn inspect_render_product_selection(
+    selection: &RenderProductSelection,
+) -> RenderProductSelectionInspectionEntry {
+    RenderProductSelectionInspectionEntry {
+        view_id: selection.view_id.clone(),
+        selected_products: selection
+            .selected_products
+            .iter()
+            .map(inspect_render_selected_product)
+            .collect(),
+        required_targets: selection
+            .required_targets
+            .iter()
+            .map(|target| RenderSelectionTargetInspectionEntry {
+                target_id: target.target_id.clone(),
+                width: target.width,
+                height: target.height,
+                format: target.format.clone(),
+            })
+            .collect(),
+        residency_requests: selection
+            .residency_requests
+            .iter()
+            .map(inspect_render_residency_request)
+            .collect(),
+        diagnostic_count: selection.diagnostics.len(),
+        overlays_enabled: selection.diagnostics_selection.overlays_enabled,
+        selected_overlay_ids: selection.diagnostics_selection.selected_overlay_ids.clone(),
+    }
+}
+
+fn inspect_render_selected_product(
+    selected: &RenderSelectedProduct,
+) -> RenderSelectedProductInspectionEntry {
+    RenderSelectedProductInspectionEntry {
+        product_id: selected.product_id.raw(),
+        scale_band: format!("{:?}", selected.scale_band),
+        generation: selected.generation,
+        freshness: format!("{:?}", selected.freshness),
+        residency: format!("{:?}", selected.residency),
+        authority_class: format!("{:?}", selected.authority_class),
+        query_policy: format!("{:?}", selected.query_policy),
+    }
+}
+
+fn inspect_render_residency_request(
+    request: &RenderResidencyRequest,
+) -> RenderResidencyRequestInspectionEntry {
+    RenderResidencyRequestInspectionEntry {
+        product_id: request.product_id.raw(),
+        residency: format!("{:?}", request.residency),
+        priority: request.priority,
+        hard_pin: request.hard_pin,
     }
 }
 

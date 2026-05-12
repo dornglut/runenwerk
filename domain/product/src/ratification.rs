@@ -1,5 +1,6 @@
 use ratification::{RatificationIssue, RatificationReport};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 use crate::{
     ProductAuthorityClass, ProductConsumptionRequest, ProductConsumptionStatus,
@@ -35,6 +36,11 @@ pub enum ProductIssueCode {
     QuerySnapshotStrictConsumptionRejected,
     RenderSelectionEmptyView,
     RenderSelectionMissingProductGeneration,
+    RenderSelectionDuplicateProduct,
+    RenderSelectionInvalidTarget,
+    RenderSelectionDuplicateTarget,
+    RenderSelectionInvalidResidencyRequest,
+    RenderSelectionStrictPolicyRejected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -309,12 +315,83 @@ pub fn ratify_render_product_selection(
             "render product selection view identity must not be empty",
         ));
     }
+    let mut selected_products = BTreeSet::new();
     for selected in &selection.selected_products {
         if selected.product_id.is_empty() {
             report.push(RatificationIssue::error(
                 ProductIssueCode::RenderSelectionMissingProductGeneration,
                 subject.clone(),
                 "render product selections must reference non-zero product identities",
+            ));
+        }
+        if !selected_products.insert(selected.product_id) {
+            report.push(RatificationIssue::error(
+                ProductIssueCode::RenderSelectionDuplicateProduct,
+                subject.clone(),
+                format!(
+                    "render product selection references product {} more than once",
+                    selected.product_id.raw()
+                ),
+            ));
+        }
+        if !selected.query_policy.allows(
+            selected.freshness,
+            selected.residency,
+            selected.authority_class,
+        ) {
+            report.push(RatificationIssue::error(
+                ProductIssueCode::RenderSelectionStrictPolicyRejected,
+                subject.clone(),
+                format!(
+                    "render product {} does not satisfy {:?} selection policy",
+                    selected.product_id.raw(),
+                    selected.query_policy
+                ),
+            ));
+        }
+    }
+
+    let mut required_targets = BTreeSet::new();
+    for target in &selection.required_targets {
+        if target.target_id.trim().is_empty()
+            || target.width == 0
+            || target.height == 0
+            || target.format.trim().is_empty()
+        {
+            report.push(RatificationIssue::error(
+                ProductIssueCode::RenderSelectionInvalidTarget,
+                subject.clone(),
+                "render product selection target descriptors require id, non-zero dimensions, and format",
+            ));
+        }
+        if !required_targets.insert(target.target_id.as_str()) {
+            report.push(RatificationIssue::error(
+                ProductIssueCode::RenderSelectionDuplicateTarget,
+                subject.clone(),
+                format!(
+                    "render product selection declares target '{}' more than once",
+                    target.target_id
+                ),
+            ));
+        }
+    }
+
+    for request in &selection.residency_requests {
+        if request.product_id.is_empty() {
+            report.push(RatificationIssue::error(
+                ProductIssueCode::RenderSelectionInvalidResidencyRequest,
+                subject.clone(),
+                "render product residency requests must reference non-zero product identities",
+            ));
+        }
+        if !selected_products.contains(&request.product_id) {
+            report.push(RatificationIssue::error(
+                ProductIssueCode::RenderSelectionInvalidResidencyRequest,
+                subject.clone(),
+                format!(
+                    "render product residency request references unselected product {}",
+                    request.product_id.raw()
+                ),
             ));
         }
     }
@@ -329,7 +406,8 @@ mod tests {
         ProductConsumerClass, ProductDescriptorCore, ProductFamily, ProductFreshness,
         ProductIdentity, ProductJobDescriptor, ProductJobFailurePolicy, ProductJobId, ProductKind,
         ProductLineage, ProductPublicationOutcome, ProductQueryPolicy, ProductResidency,
-        ProductScaleBand, ProductScope,
+        ProductScaleBand, ProductScope, RenderResidencyRequest, RenderSelectedProduct,
+        RenderTargetDescriptor,
     };
 
     fn strict_descriptor() -> ProductDescriptorCore {
@@ -586,5 +664,90 @@ mod tests {
                 .any(|issue| issue.code()
                     == &ProductIssueCode::QuerySnapshotStrictConsumptionRejected)
         );
+    }
+
+    fn selected_product(id: u64) -> RenderSelectedProduct {
+        RenderSelectedProduct {
+            product_id: ProductIdentity::new(id),
+            scale_band: ProductScaleBand::Preview,
+            generation: 7,
+            freshness: ProductFreshness::Current,
+            residency: ProductResidency::Resident,
+            authority_class: ProductAuthorityClass::DeterministicDerived,
+            query_policy: ProductQueryPolicy::StrictCurrentOnly,
+        }
+    }
+
+    #[test]
+    fn render_selection_ratifier_accepts_valid_typed_selection() {
+        let selection = RenderProductSelection::new("viewport")
+            .with_selected_product(selected_product(1))
+            .with_required_target(RenderTargetDescriptor::new(
+                "viewport:scene",
+                320,
+                200,
+                "rgba8_unorm",
+            ))
+            .with_residency_request(RenderResidencyRequest::new(
+                ProductIdentity::new(1),
+                ProductResidency::Resident,
+                100,
+                true,
+            ));
+
+        assert!(!ratify_render_product_selection(&selection).has_blocking_issues());
+    }
+
+    #[test]
+    fn render_selection_ratifier_rejects_invalid_targets_and_residency_requests() {
+        let selection = RenderProductSelection::new("viewport")
+            .with_selected_product(selected_product(1))
+            .with_required_target(RenderTargetDescriptor::new("", 0, 200, ""))
+            .with_required_target(RenderTargetDescriptor::new("dupe", 320, 200, "rgba8_unorm"))
+            .with_required_target(RenderTargetDescriptor::new("dupe", 320, 200, "rgba8_unorm"))
+            .with_residency_request(RenderResidencyRequest::new(
+                ProductIdentity::new(2),
+                ProductResidency::Resident,
+                1,
+                false,
+            ));
+
+        let report = ratify_render_product_selection(&selection);
+
+        assert!(
+            report
+                .iter()
+                .any(|issue| issue.code() == &ProductIssueCode::RenderSelectionInvalidTarget)
+        );
+        assert!(
+            report
+                .iter()
+                .any(|issue| issue.code() == &ProductIssueCode::RenderSelectionDuplicateTarget)
+        );
+        assert!(
+            report
+                .iter()
+                .any(|issue| issue.code()
+                    == &ProductIssueCode::RenderSelectionInvalidResidencyRequest)
+        );
+    }
+
+    #[test]
+    fn render_selection_ratifier_rejects_duplicate_and_strict_invalid_products() {
+        let mut stale = selected_product(1);
+        stale.freshness = ProductFreshness::Stale;
+        let selection = RenderProductSelection::new("viewport")
+            .with_selected_product(stale)
+            .with_selected_product(selected_product(1));
+
+        let report = ratify_render_product_selection(&selection);
+
+        assert!(
+            report
+                .iter()
+                .any(|issue| issue.code() == &ProductIssueCode::RenderSelectionDuplicateProduct)
+        );
+        assert!(report.iter().any(|issue| issue.code()
+            == &ProductIssueCode::RenderSelectionStrictPolicyRejected));
     }
 }

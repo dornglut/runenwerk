@@ -50,7 +50,8 @@ world truth owner.
   `ProductPublicationReport` for barrier-published product job outcomes.
 - `QuerySnapshotProductDescriptor`, `QuerySnapshotPublicationStatus`, and
   `QuerySnapshotPublicationReport`.
-- `RenderProductSelection`.
+- `RenderProductSelection`, typed `RenderSelectedProduct`,
+  `RenderTargetDescriptor`, and `RenderResidencyRequest`.
 - Ratifiers for descriptors, jobs, publication outcomes, snapshots, and render
   selections.
 
@@ -62,7 +63,12 @@ world truth owner.
 - Failed-preserved products require diagnostics.
 - Query snapshots mirror descriptor scope, freshness, consumer class, and query
   policy, and preserved or invalidated snapshots surface diagnostics.
-- Renderer selection is backend-neutral and cannot contain GPU handles.
+- Renderer selection is backend-neutral, cannot contain GPU handles, and
+  carries typed freshness, residency, authority, and query-policy state instead
+  of string markers.
+- Render selection ratification rejects duplicate selected products, invalid
+  targets, invalid residency requests, and strict selections that do not satisfy
+  their product query policy.
 - Product jobs describe work and publication targets; they do not execute work
   or mutate authoritative domain truth by themselves.
 - Publication outcomes must match declared product-job outputs and are ratified
