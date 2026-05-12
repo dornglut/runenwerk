@@ -5,7 +5,7 @@ status: active
 owner: product
 layer: domain
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-13
 related_designs:
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
@@ -43,16 +43,27 @@ world truth owner.
   `ProductAuthorityClass`, `ProductRetentionPolicy`, `ProductRebuildPolicy`,
   and `ProductQueryPolicy`.
 - `FieldProductDiagnostic` and stable diagnostic issue categories.
+- `ProductConsumptionRequest`, `ProductConsumptionDecision`, and
+  `evaluate_product_consumption` for strict runtime consumer enforcement.
 - `ProductJobDescriptor` and deterministic job metadata.
-- `QuerySnapshotProductDescriptor`.
+- `ProductPublicationOutcome`, `ProductPublicationStatus`, and
+  `ProductPublicationReport` for barrier-published product job outcomes.
+- `QuerySnapshotProductDescriptor`, `QuerySnapshotPublicationStatus`, and
+  `QuerySnapshotPublicationReport`.
 - `RenderProductSelection`.
-- Ratifiers for descriptors, jobs, snapshots, and render selections.
+- Ratifiers for descriptors, jobs, publication outcomes, snapshots, and render
+  selections.
 
 ## Invariants
 
 - Strict current-only consumers reject stale, fallback, ghost, missing,
-  visual-only, and diagnostic-only products.
+  visual-only, and diagnostic-only products through the product-domain
+  consumption API, not copied app-local policy.
 - Failed-preserved products require diagnostics.
+- Query snapshots mirror descriptor scope, freshness, consumer class, and query
+  policy, and preserved or invalidated snapshots surface diagnostics.
 - Renderer selection is backend-neutral and cannot contain GPU handles.
 - Product jobs describe work and publication targets; they do not execute work
   or mutate authoritative domain truth by themselves.
+- Publication outcomes must match declared product-job outputs and are ratified
+  before runtime publication.

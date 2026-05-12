@@ -5,7 +5,7 @@ status: active
 owner: ecs
 layer: domain
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-13
 related_designs:
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
 related_roadmaps:
@@ -59,5 +59,12 @@ barriers; engine runtime owns execution; product-family domains own product
 truth.
 
 Near-term ECS work should preserve serial equivalence while adding explicit
-product-publication and query-snapshot behavior at scheduler barriers. ECS must
-not become a global product registry or renderer truth source.
+product-publication and query-snapshot behavior at scheduler barriers. ECS now
+exposes generic barrier handlers keyed by scheduler `BarrierKind`; handlers are
+runtime hooks, not product-domain knowledge. ECS must not become a global
+product registry or renderer truth source.
+
+ECS also exposes `query_snapshot_source_generation` plus explicit `QueryAccess`
+builder methods for component/resource access sets. These helpers compute
+deterministic source generations from existing component and resource change
+tracking while keeping `domain/ecs` product-agnostic.

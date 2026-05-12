@@ -367,12 +367,21 @@ impl<C> ExecutionScheduler<C> {
             .collect::<Vec<_>>();
         let barriers = waves
             .iter()
+            .flat_map(|wave| {
+                [
+                    BarrierKind::ApplyDeferredCommands,
+                    BarrierKind::ProductPublication,
+                    BarrierKind::QuerySnapshotPublication,
+                ]
+                .into_iter()
+                .map(move |kind| (wave.index, kind))
+            })
             .enumerate()
-            .map(|(barrier_index, wave)| ExecutionBarrier {
+            .map(|(barrier_index, (wave_index, kind))| ExecutionBarrier {
                 index: barrier_index,
                 phase_index: phase.index,
-                after_wave_index: Some(wave.index),
-                kind: BarrierKind::ApplyDeferredCommands,
+                after_wave_index: Some(wave_index),
+                kind,
             })
             .collect::<Vec<_>>();
         let mut diagnostics = Vec::new();
@@ -449,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_exposes_serial_waves_and_apply_deferred_barriers() {
+    fn plan_exposes_serial_waves_apply_deferred_product_and_query_snapshot_barriers() {
         let mut before = test_system("before");
         before.before_set_key(GameplaySet::key());
         let mut gameplay = test_system("gameplay");
@@ -471,16 +480,16 @@ mod tests {
         assert_eq!(plan.phase.kind, ExecutionPhaseKind::Update);
         assert_eq!(plan.stages.len(), 3);
         assert_eq!(plan.waves.len(), plan.stages.len());
-        assert_eq!(plan.barriers.len(), plan.waves.len());
+        assert_eq!(plan.barriers.len(), plan.waves.len() * 3);
         for wave in &plan.waves {
             assert_eq!(wave.stage_index, wave.index);
             assert!(plan.apply_deferred_barrier_after_wave(wave.index));
+            let barriers = plan.barriers_after_wave(wave.index).collect::<Vec<_>>();
+            assert_eq!(barriers.len(), 3);
+            assert_eq!(barriers[0].kind, BarrierKind::ApplyDeferredCommands);
+            assert_eq!(barriers[1].kind, BarrierKind::ProductPublication);
+            assert_eq!(barriers[2].kind, BarrierKind::QuerySnapshotPublication);
         }
-        assert!(
-            plan.barriers
-                .iter()
-                .all(|barrier| barrier.kind == BarrierKind::ApplyDeferredCommands)
-        );
 
         let mut order = Vec::new();
         scheduler

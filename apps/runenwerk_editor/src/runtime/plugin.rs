@@ -1,10 +1,13 @@
-use engine::SystemSetKey;
+use ecs::World;
 use engine::plugins::render::{
     RenderDynamicTextureTargetRequestRegistryResource, UiFrameSubmissionRegistryResource,
 };
 use engine::prelude::*;
+use engine::runtime::ProductPublicationRuntimeResource;
 use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt};
+use engine::{BarrierKind, ExecutionBarrier, SystemSetKey};
 
+use crate::asset_pipeline::publish_pending_field_product_publications;
 use crate::runtime::resources::{
     EditorHostResource, EditorInputBridgeState, EditorViewportRenderState,
     RuntimePreviewProcessResource,
@@ -22,8 +25,8 @@ use crate::runtime::viewport::{
     ViewportProductTargetRegistryResource, ViewportRenderJobResource,
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     ViewportSurfaceSetResource, apply_viewport_render_state_commands_system,
-    sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
-    sync_viewport_render_jobs_system,
+    publish_viewport_query_snapshots_at_barrier, sync_viewport_presentation_products_system,
+    sync_viewport_product_targets_system, sync_viewport_render_jobs_system,
 };
 
 pub struct EditorAppPlugin;
@@ -91,6 +94,14 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportPickingResultsResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
+        app.add_barrier_handler(
+            BarrierKind::ProductPublication,
+            publish_editor_field_products_at_barrier,
+        );
+        app.add_barrier_handler(
+            BarrierKind::QuerySnapshotPublication,
+            publish_viewport_query_snapshots_at_barrier,
+        );
 
         app.add_systems(Startup, bootstrap_editor_demo_system);
         app.add_systems(Startup, seed_viewport_runtime_contracts_system);
@@ -158,4 +169,24 @@ impl Plugin for EditorAppPlugin {
                 .after(CoreSet::Time),
         );
     }
+}
+
+fn publish_editor_field_products_at_barrier(
+    barrier: &ExecutionBarrier,
+    world: &mut World,
+) -> anyhow::Result<()> {
+    let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
+        return Ok(());
+    };
+    let Some(mut publications) = world.remove_resource::<ProductPublicationRuntimeResource>()
+    else {
+        world.insert_resource(host);
+        return Ok(());
+    };
+
+    publish_pending_field_product_publications(&mut host.app, &mut publications, barrier);
+
+    world.insert_resource(publications);
+    world.insert_resource(host);
+    Ok(())
 }

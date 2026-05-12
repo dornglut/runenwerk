@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-13
 ---
 
 # Workspace Roadmap Index
@@ -27,6 +27,10 @@ Operational execution checklist:
 
 - SDF-first cross-track execution order:
   - [workspace/sdf-first-execution-roadmap.md](./sdf-first-execution-roadmap.md)
+- SDF-first execution Phase 1 closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-1/closeout.md](../reports/closeouts/sdf-first-execution-phase-1/closeout.md)
+- SDF-first execution Phase 2 closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-2/closeout.md](../reports/closeouts/sdf-first-execution-phase-2/closeout.md)
 - Editor final end-to-end implementation roadmap:
   - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - UI substrate and surface execution roadmap:
@@ -64,10 +68,11 @@ Operational execution checklist:
 
 ## Current Focus
 
-- Execute the SDF-first open-world substrate roadmap phases in
-  `workspace/sdf-first-execution-roadmap.md`: serial product jobs/publication
-  barriers, query snapshots and strict consumers, render product selection
-  producers, derived GPU residency, and procgen readiness.
+- Execute the remaining SDF-first open-world substrate roadmap phases in
+  `workspace/sdf-first-execution-roadmap.md`: render product selection
+  producers, derived GPU residency, and procgen readiness. Phase 1 serial
+  product jobs/publication barriers and Phase 2 query snapshots/strict
+  consumers are complete.
 - Keep M6.2 procgen design/domain-doc preparation allowed, but do not start
   procgen code until those execution fabric and readiness phases are satisfied.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
@@ -94,6 +99,15 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
 ## Finished Cross-Track Baselines
 
 - viewport backend cleanup is complete for its closeout scope;
+- SDF-first execution Phase 1 is complete: serial product publication outcomes,
+  deterministic publication barriers, ECS generic barrier hooks, engine runtime
+  publication staging, and app-owned editor field-product barrier publication
+  are implemented and validated;
+- SDF-first execution Phase 2 is complete: runtime query snapshots, strict
+  product consumption decisions, query-snapshot publication barriers,
+  product-agnostic ECS source generation, engine snapshot staging/invalidation,
+  render inspection DTOs, and app-owned editor viewport observation snapshot
+  publication are implemented and validated;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

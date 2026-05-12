@@ -76,6 +76,9 @@ struct EventHistory(Vec<usize>);
 #[derive(Debug, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct PresenceHistory(Vec<usize>);
 
+#[derive(Debug, PartialEq, Eq, ecs::Resource)]
+struct BarrierLog(Vec<(usize, BarrierKind)>);
+
 #[derive(ecs::Resource)]
 struct EscapedCommands(Option<Commands>);
 
@@ -393,14 +396,53 @@ fn command_flush_occurs_at_stage_boundary() {
     let plan = runtime.plan_for::<Update>().unwrap().clone();
     assert_eq!(plan.stages.len(), 2);
     assert_eq!(plan.waves.len(), 2);
-    assert_eq!(plan.barriers.len(), 2);
+    assert_eq!(plan.barriers.len(), 6);
     assert_eq!(plan.barriers[0].kind, BarrierKind::ApplyDeferredCommands);
     assert_eq!(plan.barriers[0].after_wave_index, Some(0));
-    assert_eq!(plan.barriers[1].kind, BarrierKind::ApplyDeferredCommands);
-    assert_eq!(plan.barriers[1].after_wave_index, Some(1));
+    assert_eq!(plan.barriers[1].kind, BarrierKind::ProductPublication);
+    assert_eq!(plan.barriers[1].after_wave_index, Some(0));
+    assert_eq!(plan.barriers[2].kind, BarrierKind::QuerySnapshotPublication);
+    assert_eq!(plan.barriers[2].after_wave_index, Some(0));
+    assert_eq!(plan.barriers[3].kind, BarrierKind::ApplyDeferredCommands);
+    assert_eq!(plan.barriers[3].after_wave_index, Some(1));
+    assert_eq!(plan.barriers[4].kind, BarrierKind::ProductPublication);
+    assert_eq!(plan.barriers[4].after_wave_index, Some(1));
+    assert_eq!(plan.barriers[5].kind, BarrierKind::QuerySnapshotPublication);
+    assert_eq!(plan.barriers[5].after_wave_index, Some(1));
 
     runtime.run_schedule::<Update>(&mut world).unwrap();
     assert_eq!(world.resource::<SeenCount>().unwrap().0, 1);
+}
+
+#[test]
+fn registered_product_publication_barrier_handler_runs_after_each_wave() {
+    fn before() {}
+    fn after() {}
+
+    let mut world = World::new();
+    world.insert_resource(BarrierLog(Vec::new()));
+
+    let mut runtime = Runtime::new();
+    runtime.add_barrier_handler(BarrierKind::ProductPublication, |barrier, world| {
+        world
+            .resource_mut::<BarrierLog>()?
+            .0
+            .push((barrier.index, barrier.kind.clone()));
+        Ok(())
+    });
+    runtime.add_systems::<Update, _, _>(&mut world, before.in_set(GameplaySet));
+    runtime
+        .add_systems::<Update, _, _>(&mut world, after.in_set(PostGameplaySet).after(GameplaySet));
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(
+        world.resource::<BarrierLog>().unwrap().0,
+        vec![
+            (1, BarrierKind::ProductPublication),
+            (4, BarrierKind::ProductPublication)
+        ]
+    );
 }
 
 #[test]

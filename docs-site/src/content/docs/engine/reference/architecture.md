@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-13
 ---
 
 # Engine Architecture
@@ -30,6 +30,8 @@ Builtin resource installation:
 - Includes core resources such as:
   - `Time`, `InputState`, `WindowState`
   - `FixedTimeConfig`, `CatchupBudget`, `FixedTimeState`, `SimulationTick`
+  - `ProductPublicationRuntimeResource`
+  - `QuerySnapshotRuntimeResource`
   - scene/runtime state resources used by built-in plugins
 
 Startup contract:
@@ -50,6 +52,30 @@ Per-frame schedule order:
 Shared implementation:
 
 - `run_frame` in `engine/src/runtime/frame_lifecycle.rs`
+
+## Product Publication Runtime
+
+The engine owns the runtime staging resource for product publication outcomes,
+not product-family truth. `ProductPublicationRuntimeResource` stages
+`domain/product` publication outcomes and publishes them only from
+`ProductPublication` barrier handlers.
+
+Plugins install product-agnostic barrier behavior through
+`engine::App::add_barrier_handler`. The default engine handler ratifies staged
+outcomes, publishes deterministic journal entries ordered by barrier and stage
+sequence, and keeps invalid publication diagnostics inspectable.
+
+## Query Snapshot Runtime
+
+The engine owns the runtime staging resource for query snapshots, not
+product-family truth. `QuerySnapshotRuntimeResource` stages
+`domain/product` query snapshot descriptors and publishes them only from
+`QuerySnapshotPublication` barrier handlers.
+
+The default engine handler ratifies staged snapshots, enforces strict
+product-domain consumption decisions, preserves prior snapshots on rejected
+updates, invalidates snapshots deterministically on source-generation changes,
+and keeps accepted, rejected, preserved, and invalidated decisions inspectable.
 
 ## Fixed-Step Contract
 

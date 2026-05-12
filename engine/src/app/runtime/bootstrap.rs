@@ -52,10 +52,29 @@ impl App {
         if !self.world.has_resource::<SimulationTick>() {
             self.world.insert_resource(SimulationTick::default());
         }
+        if !self
+            .world
+            .has_resource::<ProductPublicationRuntimeResource>()
+        {
+            self.world
+                .insert_resource(ProductPublicationRuntimeResource::default());
+        }
+        if !self.world.has_resource::<QuerySnapshotRuntimeResource>() {
+            self.world
+                .insert_resource(QuerySnapshotRuntimeResource::default());
+        }
         if !self.world.has_resource::<SimulationProfileConfig>() {
             self.world
                 .insert_resource(SimulationProfileConfig::default());
         }
+        self.scheduler.add_barrier_handler(
+            BarrierKind::ProductPublication,
+            publish_staged_product_outcomes,
+        );
+        self.scheduler.add_barrier_handler(
+            BarrierKind::QuerySnapshotPublication,
+            publish_staged_query_snapshots,
+        );
         if !self.world.has_resource::<SimulationSessionId>() {
             self.world.insert_resource(SimulationSessionId::default());
         }

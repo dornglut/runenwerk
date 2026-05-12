@@ -74,6 +74,31 @@ impl QueryAccess {
         &self.resource_writes
     }
 
+    pub fn with_component_read<T: Component>(mut self) -> Self {
+        self.add_component_read::<T>();
+        self
+    }
+
+    pub fn with_component_write<T: Component>(mut self) -> Self {
+        self.add_component_write::<T>();
+        self
+    }
+
+    pub fn with_orphaned_component_read<T: Component>(mut self) -> Self {
+        self.add_orphaned_component_read::<T>();
+        self
+    }
+
+    pub fn with_resource_read<T: Resource>(mut self) -> Self {
+        self.add_resource_read::<T>();
+        self
+    }
+
+    pub fn with_resource_write<T: Resource>(mut self) -> Self {
+        self.add_resource_write::<T>();
+        self
+    }
+
     pub fn deferred_structural_mutation(&self) -> bool {
         self.deferred_structural_mutation
     }

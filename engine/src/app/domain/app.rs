@@ -14,6 +14,7 @@ use anyhow::Result;
 use ecs::{Resource, Runtime, World};
 use engine_sim::*;
 use scheduler::ScheduleLabel;
+use scheduler::plan::{BarrierKind, ExecutionBarrier};
 use winit::event_loop::ControlFlow;
 use winit::keyboard::KeyCode;
 
@@ -87,6 +88,14 @@ impl App {
     {
         self.scheduler
             .add_systems::<L, S, Marker>(&mut self.world, systems);
+        self
+    }
+
+    pub fn add_barrier_handler<F>(&mut self, kind: BarrierKind, handler: F) -> &mut Self
+    where
+        F: Fn(&ExecutionBarrier, &mut World) -> Result<()> + 'static,
+    {
+        self.scheduler.add_barrier_handler(kind, handler);
         self
     }
 

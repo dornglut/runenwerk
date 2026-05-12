@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-13
 related:
   - ./sdf-first-execution-roadmap.md
   - ./roadmap-index.md
@@ -40,7 +40,7 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 ## Now (Current Cross-Repo Priorities)
 
-- [ ] Execute the SDF-first open-world substrate phases before new product-domain implementation. Status: active; Batch 1 product contract alignment and serial scheduler/ECS wave/barrier vocabulary exist, but product publication barriers, runtime query snapshots, strict consumer enforcement, render product selection producers, derived GPU residency, and procgen readiness still gate M6.2 procgen code (source: `workspace/sdf-first-execution-roadmap.md`).
+- [ ] Execute the SDF-first open-world substrate phases before new product-domain implementation. Status: active; Batch 1 product contract alignment plus Phases 1 and 2 are complete, but render product selection producers, derived GPU residency, procgen readiness, and the accepted procgen domain doc still gate M6.2 procgen code (source: `workspace/sdf-first-execution-roadmap.md`).
 - [ ] Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) as inputs to the SDF-first execution fabric. Status: remaining lifecycle/finalization, deterministic registration/plan reporting, and diagnostics work now feeds product jobs, query snapshots, and publication barriers (source: `workspace/sdf-first-execution-roadmap.md` and `net/ecs-runtime-prioritized-roadmap.md`).
 - [ ] Execute render immediate remaining phases only through product-selection and derived GPU-residency contracts. Status: `R4` binding model expansion, `R6` boids proof, and `R7` SDF renderer rebuild remain relevant, but SDF/GPU work is sequenced after `RenderProductSelection` and residency policy alignment (source: `workspace/sdf-first-execution-roadmap.md` and `engine/plugins/render/docs/roadmap.md`).
 - [ ] Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard suites pass (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
@@ -49,7 +49,7 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 ## Other Tracked And Gated Work
 
-- [ ] Sequence procedural authoring domains for material/texturing, procgen, particles, physics, animation, and simulation. Status: gated by the SDF-first open-world substrate roadmap; M6.2 procgen code waits on product publication barriers, query snapshots, strict consumer policy, render product selection producers, derived GPU residency, and the accepted procgen domain doc (source: `workspace/sdf-first-execution-roadmap.md` and `design/active/editor-procedural-content-and-simulation-workflow-plan.md`).
+- [ ] Sequence procedural authoring domains for material/texturing, procgen, particles, physics, animation, and simulation. Status: gated by the SDF-first open-world substrate roadmap; M6.2 procgen code waits on render product selection producers, derived GPU residency, and the accepted procgen domain doc now that Phase 1 publication barriers and Phase 2 query snapshots/strict consumer policy are complete (source: `workspace/sdf-first-execution-roadmap.md` and `design/active/editor-procedural-content-and-simulation-workflow-plan.md`).
 - [ ] Keep scripting boundary language-neutral with Rhai as first adapter candidate when scripting implementation starts. Status: promoted for editor/runtime tracking, but not implementation-started (source: `design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`).
 - [ ] Add world-space/screen-projected UI attachment binding through explicit authored binding contracts and runtime formation seams. Status: tracking only; still boundary-gated by the owning design doc before implementation (source: `design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`).
 - [ ] Keep constrained in-game editors capability-gated with explicit command/ratification boundaries. Status: tracking only; still boundary-gated by the owning design doc before implementation (source: `design/active/editor-workspace-document-mode-panel-architecture.md`).
@@ -68,6 +68,8 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 ## Completed Baselines (Do Not Reopen Without Reason)
 
 - [x] Complete the Runenwerk editor MVP critical path and acceptance gate. Status: automated and manual/UI verified; the source checklist is complete (source: `apps/runenwerk-editor/execution-priority-checklist.md`).
+- [x] Complete SDF-first execution Phase 2: query snapshots and strict consumer policy. Status: implemented and validated as of 2026-05-13; product strict-consumption decisions, query snapshot publication reports, deterministic `QuerySnapshotPublication` barriers, ECS source generation helpers, engine snapshot staging/publication/invalidation, render inspection DTOs, and app-owned editor viewport observation publication are in place while render selection producers, GPU residency, and procgen remain deferred (source: `workspace/sdf-first-execution-roadmap.md` and `reports/closeouts/sdf-first-execution-phase-2/closeout.md`).
+- [x] Complete SDF-first execution Phase 1: serial product jobs and publication barriers. Status: implemented and validated as of 2026-05-12; product publication contracts, deterministic scheduler barriers, ECS generic barrier hooks, engine publication runtime support, and app-owned editor field-product publication are in place while render selection producers, GPU residency, and procgen remain deferred (source: `workspace/sdf-first-execution-roadmap.md` and `reports/closeouts/sdf-first-execution-phase-1/closeout.md`).
 - [x] Editor Phase A: introduce workspace profile abstraction without breaking MVP. Status: implemented and test-covered (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `design/active/editor-workspace-document-mode-panel-architecture.md`).
 - [x] Editor Phase B: decouple workspace layout persistence from scene path coupling. Status: implemented and test-covered (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `design/active/editor-workspace-document-mode-panel-architecture.md`).
 - [x] Editor Phase C: formalize document tabs and active document switching. Status: implemented and test-covered; document taxonomy, ordered tabs, active switching, dirty/save/close transitions, compatibility validation, and generic app-local document-tab runtime state are in place (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `design/active/editor-workspace-document-mode-panel-architecture.md`).

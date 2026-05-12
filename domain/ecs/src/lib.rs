@@ -24,7 +24,7 @@ pub use errors::{CommandError, EntityError, QueryError, ResourceError, SpatialIn
 pub use indexing::{DEFAULT_SPATIAL_INDEX_NAME, SpatialHashConfig, SpatialHashIndex, SpatialIndex};
 pub use query::{
     Added, Changed, Orphaned, Query, QueryAccess, QueryOrphaned, QueryOrphanedState, QueryState,
-    QueryTypeAccess, With, Without,
+    QueryTypeAccess, With, Without, query_snapshot_source_generation,
 };
 pub use reflect::*;
 pub use system::{

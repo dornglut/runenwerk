@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-13
 related_adrs:
   - ../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
 related_designs:
@@ -68,17 +68,14 @@ Required end-state properties:
 
 ## Current Focus
 
-The current work is the execution substrate between the completed Batch 1
-contract alignment and the first product-domain implementation.
+The current work is Phase 3 of the execution substrate between the completed
+Batch 1 contract alignment and the first product-domain implementation. Phases
+1 and 2 are complete: serial product publication outcomes, deterministic
+publication barriers, runtime query snapshots, strict runtime consumption
+decisions, and app-owned editor proof surfaces now exist.
 
 Current gaps:
 
-- product jobs are described but not dispatched;
-- product publication barriers exist as plan vocabulary but do not publish
-  product outcomes yet;
-- query snapshot descriptors exist but runtime query snapshots are not produced;
-- strict consumer policy exists in ratifiers but is not enforced across runtime
-  consumers yet;
 - render prepare can carry selections but does not produce full selections from
   products yet;
 - GPU residency is not implemented;
@@ -110,9 +107,15 @@ Out of scope:
 
 ### Phase 1 - Serial Product Jobs And Publication Barriers
 
+Status: complete as of 2026-05-12.
+
 Intent: route current product formation through job descriptors and publish
 formed outputs only at deterministic barriers while preserving serial runtime
 behavior.
+
+Closeout evidence:
+
+- [reports/closeouts/sdf-first-execution-phase-1/closeout.md](../reports/closeouts/sdf-first-execution-phase-1/closeout.md)
 
 Acceptance gate:
 
@@ -133,8 +136,14 @@ Out of scope:
 
 ### Phase 2 - Query Snapshots And Strict Consumer Policy
 
+Status: complete as of 2026-05-13.
+
 Intent: make deferred/runtime queries explicit products with generation,
 freshness, invalidation, consumer class, and diagnostics.
+
+Closeout evidence:
+
+- [reports/closeouts/sdf-first-execution-phase-2/closeout.md](../reports/closeouts/sdf-first-execution-phase-2/closeout.md)
 
 Acceptance gate:
 
@@ -290,6 +299,20 @@ Roadmap updates should verify:
 - Batch 1 contract alignment is complete: `domain/product`, product-core
   adapters, serial scheduler waves/barriers, ECS explicit deferred barriers,
   and backend-neutral render product-selection metadata exist;
+- Phase 1 serial product jobs and publication barriers are complete:
+  publication outcomes are ratified in `domain/product`, every serial scheduler
+  wave emits `ApplyDeferredCommands` then `ProductPublication`, ECS exposes
+  product-agnostic barrier hooks, engine runtime owns publication staging, and
+  editor field-product artifacts publish through app-owned barrier handling;
+- Phase 2 query snapshots and strict consumer policy are complete:
+  `domain/product` owns strict consumption decisions and query-snapshot
+  publication reports, every serial scheduler wave emits
+  `ApplyDeferredCommands`, `ProductPublication`, then
+  `QuerySnapshotPublication`, ECS exposes product-agnostic source generation
+  helpers, engine runtime owns query snapshot staging/publication/invalidation,
+  renderer inspection reads snapshot decisions without backend handles, and the
+  editor viewport publishes observation snapshots through app-owned barrier
+  handling;
 - `world_sdf`, material, texture, asset/import, and editor product surfaces
   align with product-core metadata while preserving their owning-domain APIs;
 - render prepare can carry backend-neutral `RenderProductSelection` metadata as

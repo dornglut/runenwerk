@@ -5,7 +5,7 @@ status: active
 owner: scheduler
 layer: domain
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-13
 related_designs:
   - ../../design/accepted/execution-fabric-and-product-jobs-design.md
 related_roadmaps:
@@ -45,9 +45,9 @@ deterministic planning, not domain behavior or runtime worker implementation.
 Near-term scheduler work should evolve the current typed path toward:
 
 - phases and waves that remain serial-compatible;
-- explicit barriers for deferred apply, product publication, query snapshot
-  publication, render submit, generation finalization, and replay/network
-  capture;
+- explicit barriers for deferred apply, product publication, and query snapshot
+  publication after each serial wave, with render submit, generation
+  finalization, and replay/network capture deferred to later phases;
 - diagnostics for access conflicts, cycles, blocked parallelism, missing
   barriers, and invalid authority classes;
 - product-job planning inputs without making the scheduler own product truth.

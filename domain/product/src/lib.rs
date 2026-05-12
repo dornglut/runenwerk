@@ -5,20 +5,24 @@
 //! product registry and does not own runtime execution, renderer resources,
 //! app workflows, or concrete asset catalogs.
 
+pub mod consumption;
 pub mod descriptor;
 pub mod diagnostics;
 pub mod ids;
 pub mod job;
 pub mod policy;
+pub mod publication;
 pub mod query_snapshot;
 pub mod ratification;
 pub mod render_selection;
 
+pub use consumption::*;
 pub use descriptor::*;
 pub use diagnostics::*;
 pub use ids::*;
 pub use job::*;
 pub use policy::*;
+pub use publication::*;
 pub use query_snapshot::*;
 pub use ratification::*;
 pub use render_selection::*;

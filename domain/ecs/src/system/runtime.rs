@@ -14,6 +14,12 @@ use crate::telemetry;
 use crate::{Commands, World};
 
 type DeferredCommands = Rc<RefCell<Vec<Commands>>>;
+pub type BarrierHandler = Box<dyn Fn(&ExecutionBarrier, &mut World) -> Result<()>>;
+
+struct RegisteredBarrierHandler {
+    kind: BarrierKind,
+    handler: BarrierHandler,
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ParamSlotId {
@@ -671,6 +677,7 @@ pub struct Runtime {
     scheduler: ExecutionScheduler<World>,
     deferred_commands: DeferredCommands,
     build_errors: Vec<anyhow::Error>,
+    barrier_handlers: Vec<RegisteredBarrierHandler>,
 }
 
 impl Default for Runtime {
@@ -685,6 +692,7 @@ impl Runtime {
             scheduler: ExecutionScheduler::new(),
             deferred_commands: Rc::new(RefCell::new(Vec::new())),
             build_errors: Vec::new(),
+            barrier_handlers: Vec::new(),
         }
     }
 
@@ -708,6 +716,17 @@ impl Runtime {
 
     pub fn scheduler(&mut self) -> &mut ExecutionScheduler<World> {
         &mut self.scheduler
+    }
+
+    pub fn add_barrier_handler<F>(&mut self, kind: BarrierKind, handler: F) -> &mut Self
+    where
+        F: Fn(&ExecutionBarrier, &mut World) -> Result<()> + 'static,
+    {
+        self.barrier_handlers.push(RegisteredBarrierHandler {
+            kind,
+            handler: Box::new(handler),
+        });
+        self
     }
 
     pub fn param_slots_for_system(&self, system_id: SystemId) -> Option<Vec<ParamSlotMetadata>> {
@@ -772,14 +791,16 @@ impl Runtime {
     }
 
     fn execute_barrier(&self, barrier: &ExecutionBarrier, world: &mut World) -> Result<()> {
-        match barrier.kind {
+        match &barrier.kind {
             BarrierKind::ApplyDeferredCommands => self.flush_stage_commands(world),
-            BarrierKind::ProductPublication
-            | BarrierKind::QuerySnapshotPublication
-            | BarrierKind::RenderSubmit
-            | BarrierKind::GenerationFinalization
-            | BarrierKind::ReplayNetworkCapture
-            | BarrierKind::Custom(_) => Ok(()),
+            _ => {
+                for registered in &self.barrier_handlers {
+                    if registered.kind == barrier.kind {
+                        (registered.handler)(barrier, world)?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 

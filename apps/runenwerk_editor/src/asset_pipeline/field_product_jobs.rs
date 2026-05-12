@@ -5,18 +5,21 @@ use asset::{
     ArtifactPayloadKind, AssetArtifactDescriptor, AssetKind, AssetSourceDescriptor, ImportPlan,
     ImportSettings, asset_artifact_id, product_job_descriptor_for_import, ratify_asset_artifact,
 };
-use product::{ProductJobDescriptor, ratify_product_job};
+use product::{ProductJobDescriptor, ProductPublicationOutcome, ratify_product_job};
 use spatial::{ChunkCoord3, ChunkId, WorldId};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductId, FieldProductKind,
     FieldProductLineage, FieldProductScope, ratify_field_product_candidate,
 };
 
+use super::product_publication::publication_diagnostic;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldProductJobOutcome {
     pub candidate: FieldProductCandidate,
     pub product_job: ProductJobDescriptor,
     pub artifact: AssetArtifactDescriptor,
+    pub publication: ProductPublicationOutcome,
     pub field_product_ratified: bool,
     pub product_job_ratified: bool,
     pub asset_artifact_ratified: bool,
@@ -71,14 +74,43 @@ pub fn run_field_product_job(
     let field_report = ratify_field_product_candidate(&candidate);
     let product_job_report = ratify_product_job(&product_job);
     let artifact_report = ratify_asset_artifact(&artifact);
+    let field_product_ratified = !field_report.has_blocking_issues();
+    let product_job_ratified = !product_job_report.has_blocking_issues();
+    let asset_artifact_ratified = !artifact_report.has_blocking_issues();
+    let publication = if field_product_ratified && product_job_ratified && asset_artifact_ratified {
+        ProductPublicationOutcome::ready(
+            product_job.clone(),
+            [candidate.descriptor.product_core()],
+            plan.job_id.raw(),
+        )
+    } else {
+        let mut diagnostics = Vec::new();
+        if !field_product_ratified {
+            diagnostics.push(publication_diagnostic(
+                "field-product candidate failed ratification",
+            ));
+        }
+        if !product_job_ratified {
+            diagnostics.push(publication_diagnostic(
+                "field-product product job failed ratification",
+            ));
+        }
+        if !asset_artifact_ratified {
+            diagnostics.push(publication_diagnostic(
+                "field-product asset artifact failed ratification",
+            ));
+        }
+        ProductPublicationOutcome::rejected(product_job.clone(), diagnostics, plan.job_id.raw())
+    };
 
     Ok(FieldProductJobOutcome {
         candidate,
         product_job,
         artifact,
-        field_product_ratified: !field_report.has_blocking_issues(),
-        product_job_ratified: !product_job_report.has_blocking_issues(),
-        asset_artifact_ratified: !artifact_report.has_blocking_issues(),
+        publication,
+        field_product_ratified,
+        product_job_ratified,
+        asset_artifact_ratified,
     })
 }
 
@@ -173,6 +205,11 @@ mod tests {
             ArtifactPayloadKind::FormedFieldProduct {
                 product_id: "3".to_string()
             }
+        );
+        assert_eq!(outcome.publication.stage_sequence, 3);
+        assert_eq!(
+            outcome.publication.output_product_ids(),
+            vec![product::ProductIdentity::new(3)]
         );
         let _ = std::fs::remove_dir_all(root);
     }

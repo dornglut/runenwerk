@@ -7,7 +7,10 @@ use editor_preview::{PreviewMode, PreviewSessionId};
 use editor_shell::WorkspaceState;
 
 use super::console::{ConsoleMessage, ConsoleMessageKind};
-use crate::asset_pipeline::AssetCatalogRuntime;
+use crate::asset_pipeline::{
+    AssetCatalogRuntime, EditorFieldProductPublication, EditorFieldProductPublicationJournalEntry,
+};
+use crate::runtime::viewport::EditorViewportQuerySnapshotJournalEntry;
 use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
 use super::sdf_operations::SdfOperationWorkspaceState;
@@ -24,6 +27,9 @@ pub struct RunenwerkEditorApp {
     pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
+    pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
+    pub(crate) field_product_publication_journal: Vec<EditorFieldProductPublicationJournalEntry>,
+    pub(crate) viewport_query_snapshot_journal: Vec<EditorViewportQuerySnapshotJournalEntry>,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -46,6 +52,9 @@ impl RunenwerkEditorApp {
             pending_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             sdf_operation_workspace: SdfOperationWorkspaceState::default(),
+            pending_field_product_publications: Vec::new(),
+            field_product_publication_journal: Vec::new(),
+            viewport_query_snapshot_journal: Vec::new(),
         }
     }
 
@@ -177,6 +186,44 @@ impl RunenwerkEditorApp {
 
     pub fn sdf_operation_workspace_mut(&mut self) -> &mut SdfOperationWorkspaceState {
         &mut self.sdf_operation_workspace
+    }
+
+    pub fn queue_field_product_publication(&mut self, publication: EditorFieldProductPublication) {
+        self.pending_field_product_publications.push(publication);
+    }
+
+    pub fn take_pending_field_product_publications(
+        &mut self,
+    ) -> Vec<EditorFieldProductPublication> {
+        std::mem::take(&mut self.pending_field_product_publications)
+    }
+
+    pub fn pending_field_product_publication_count(&self) -> usize {
+        self.pending_field_product_publications.len()
+    }
+
+    pub fn field_product_publication_journal(
+        &self,
+    ) -> &[EditorFieldProductPublicationJournalEntry] {
+        &self.field_product_publication_journal
+    }
+
+    pub fn record_field_product_publication(
+        &mut self,
+        entry: EditorFieldProductPublicationJournalEntry,
+    ) {
+        self.field_product_publication_journal.push(entry);
+    }
+
+    pub fn viewport_query_snapshot_journal(&self) -> &[EditorViewportQuerySnapshotJournalEntry] {
+        &self.viewport_query_snapshot_journal
+    }
+
+    pub fn record_viewport_query_snapshot(
+        &mut self,
+        entry: EditorViewportQuerySnapshotJournalEntry,
+    ) {
+        self.viewport_query_snapshot_journal.push(entry);
     }
 }
 
