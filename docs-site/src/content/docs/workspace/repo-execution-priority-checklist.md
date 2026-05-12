@@ -5,8 +5,9 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-12
 related:
+  - ./sdf-first-execution-roadmap.md
   - ./roadmap-index.md
   - ../apps/runenwerk-editor/execution-priority-checklist.md
   - ../domain/ui/roadmap.md
@@ -34,6 +35,7 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 - Keep MVP scope unchanged unless owning MVP docs change first.
 - Update checkbox status only when code and validation evidence exist.
+- For SDF-first cross-track sequencing, `workspace/sdf-first-execution-roadmap.md` wins over local roadmap summaries.
 - If this checklist and an owning roadmap differ, the owning roadmap wins.
 
 ## Now (Current Cross-Repo Priorities)
@@ -51,24 +53,26 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 - [x] Expand non-viewport surface maturity using existing surface contracts. Status: implemented as of 2026-05-08; typed surface action/session/domain wrappers are in place, entity-table query workflows cover search/selected-only/hierarchy/component filters plus sorting, and richer inspector controls render through generic `ui_definition` availability without provider behavior leakage (source: `domain/ui/roadmap.md` and `reports/closeouts/surface-workflow-contract-redesign/closeout.md`).
 - [ ] Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard suites pass (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
 - [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: active; docs validation currently passes (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
+- [ ] Execute the SDF-first execution fabric gate before new product-domain implementation. Status: active; product contract alignment, scheduler/ECS phases/waves/barriers, product jobs, query snapshots, strict consumer policy, and renderer product selection are now the next cross-track priority (source: `workspace/sdf-first-execution-roadmap.md`).
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures, retained formation, app fixture validation, toolbar route-slot/menu-item integration, normal shell chrome formation, and common provider surface fixture formation exist (source: `apps/runenwerk-editor/roadmap.md` and `domain/ui/roadmap.md`).
 - [x] Implement the M3.6 UI self-authoring workspace and styling before M4. Status: complete as of 2026-05-06; durable schemas, Editor Design workspace/profile, self-authoring provider surfaces, fixture document loading, validation, retained previews, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and apply/rollback shell commands are implemented (source: `apps/runenwerk-editor/roadmap.md` and `design/active/editor-self-authoring-and-final-ui-design.md`).
 - [x] Add rotate and scale gizmos after translate workflow is stable. Status: implemented and test-covered for M3; translate, rotate, and scale tool activation, preview, snap-aware interaction, commit, undo/redo, and scene-authoring smoke coverage exist (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `apps/runenwerk-editor/roadmap.md`).
 - [x] Add create/delete/duplicate flows for common scene-authoring actions. Status: implemented and test-covered for M3; outliner/app scene commands cover create child, rename, reparent, duplicate subtree, delete single entity, batch delete, and SDF primitive creation through viewport SDF tool routing (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `apps/runenwerk-editor/roadmap.md`).
 - [x] Improve inspector/component authoring breadth for common 3D flows. Status: implemented and test-covered for M3; common reflected primitive fields are editable through typed inspector edit values, and component add/remove remains routed through scene command intents (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `apps/runenwerk-editor/roadmap.md`).
 - [x] Build the editor SDF/field-first asset pipeline foundation and import workflow. Status: M4A-M4I complete as of 2026-05-09; `domain/asset`, asset taxonomy, import plans, field-product formation contracts, generic product invalidation, app-owned catalog/import jobs, asset browser/import inspector/field-product viewer/SDF brush browser providers, and failed-artifact preservation exist. Mesh/GLB import remains a foreign-reference path, not the primary world substrate (source: `apps/runenwerk-editor/roadmap.md` and `design/active/editor-asset-pipeline-and-content-workflow-design.md`).
-- [ ] Sequence procedural authoring domains for material/texturing, procgen, particles, physics, animation, and simulation. Status: active for M6; M6.0 shared workspace substrate, the first `domain/material_graph`/`domain/texture` contract crates, descriptor-first material/texture providers, and full P1 SDF modeling core exist, but M6.2 procgen is blocked on an accepted procgen domain doc. Particles, physics, animation, simulation processes, rendered material/SDF previews, Texture3D adapters, gameplay graph, and scripting remain deferred to their owning M6/P3/M7 sub-milestones (source: `design/active/editor-procedural-content-and-simulation-workflow-plan.md`).
+- [ ] Sequence procedural authoring domains for material/texturing, procgen, particles, physics, animation, and simulation. Status: gated by the SDF-first execution roadmap; M6.0 shared workspace substrate, first `domain/material_graph`/`domain/texture` contract crates, descriptor-first material/texture providers, and full P1 SDF modeling core exist, but M6.2 procgen implementation now waits on product jobs, query snapshots, publication barriers, strict consumer policy, and renderer product selection in addition to the procgen domain doc (source: `workspace/sdf-first-execution-roadmap.md` and `design/active/editor-procedural-content-and-simulation-workflow-plan.md`).
 - [ ] Keep scripting boundary language-neutral with Rhai as first adapter candidate when scripting implementation starts. Status: promoted to Now for editor/runtime tracking, but not implementation-started (source: `design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`).
 - [ ] Add world-space/screen-projected UI attachment binding through explicit authored binding contracts and runtime formation seams. Status: promoted to Now for tracking, but still boundary-gated by the owning design doc before implementation (source: `design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`).
 - [ ] Keep constrained in-game editors capability-gated with explicit command/ratification boundaries. Status: promoted to Now for tracking, but still boundary-gated by the owning design doc before implementation (source: `design/active/editor-workspace-document-mode-panel-architecture.md`).
 - [x] Continue Editor Design/self-authoring polish for UI/editor layout design, creation, and management. Status: 2026-05-08 maturity pass complete; reusable field/control polish, no-payload ECS enum inspector mutation, versioned export packaging, non-theme live activation, active UI/editor catalogs, and panel/tool-surface replacement guards are implemented before M4 starts (source: `design/active/editor-self-authoring-and-final-ui-design.md`, `apps/runenwerk-editor/roadmap.md`, and `domain/ui/roadmap.md`).
-- [ ] Execute render immediate remaining phases: `R4` binding model expansion, `R6` boids feature proof, `R7` SDF renderer rebuild on new path (source: `engine/plugins/render/docs/roadmap.md`).
-- [ ] Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) in Priority 1 (source: `net/ecs-runtime-prioritized-roadmap.md`).
+- [ ] Execute render immediate remaining phases only through product-selection and derived GPU-residency contracts. Status: `R4` binding model expansion, `R6` boids proof, and `R7` SDF renderer rebuild remain relevant, but SDF/GPU work is sequenced after `RenderProductSelection` and residency policy alignment (source: `workspace/sdf-first-execution-roadmap.md` and `engine/plugins/render/docs/roadmap.md`).
+- [ ] Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) as inputs to the SDF-first execution fabric. Status: remaining lifecycle/finalization, deterministic registration/plan reporting, and diagnostics work now feeds product jobs, query snapshots, and publication barriers (source: `workspace/sdf-first-execution-roadmap.md` and `net/ecs-runtime-prioritized-roadmap.md`).
 - [ ] Keep architecture guards and docs synchronized while these tracks land (source: `workspace/roadmap-index.md`).
 
 ## Next (After Now Is Stable)
 
 - [ ] Execute render usability/data-maturity phases `R5`, `R8`, `R9`, `R10` (source: `engine/plugins/render/docs/roadmap.md`).
+- [ ] Resume M6.2 procgen as the first product-domain implementation after the SDF-first execution fabric gates are satisfied (source: `workspace/sdf-first-execution-roadmap.md` and `apps/runenwerk-editor/roadmap.md`).
 - [ ] Drive multiplayer replication through Milestone A (authoritative replication core) with the existing phase plan (source: `net/multiplayer-replication-implementation-roadmap.md`).
 - [ ] Continue ECS runtime multiplayer-enabling checklist items (`M1`-`M5`) in Priority 2 (source: `net/ecs-runtime-prioritized-roadmap.md`).
 

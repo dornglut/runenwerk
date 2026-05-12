@@ -18,12 +18,15 @@ This page is an index, not the source of truth for domain-specific execution ste
 
 Operational execution checklist:
 
+- [workspace/sdf-first-execution-roadmap.md](./sdf-first-execution-roadmap.md)
 - [workspace/repo-execution-priority-checklist.md](./repo-execution-priority-checklist.md)
 - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - [reports/audits/editor-ui-priority-code-audit-2026-05-05.md](../reports/audits/editor-ui-priority-code-audit-2026-05-05.md)
 
 ## Source-of-Truth Tracks
 
+- SDF-first cross-track execution order:
+  - [workspace/sdf-first-execution-roadmap.md](./sdf-first-execution-roadmap.md)
 - Editor final end-to-end implementation roadmap:
   - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - UI substrate and surface execution roadmap:
@@ -69,14 +72,14 @@ Operational execution checklist:
 - the follow-on provider surface workflow redesign and self-authoring maturity pass are complete: outliner, entity-table, inspector, viewport, and editor-definition provider actions route through typed surface wrappers; entity-table query workflows, typed no-payload ECS enum inspector mutation, active UI/editor definition catalogs, and richer inspector controls are implemented while provider behavior stays outside `ui_definition`;
 - M4A-M4I integrated UI/editor/asset foundation is complete as of 2026-05-09: active menus, shortcuts, command bindings, panel registries, tool-surface registries, reusable-control cleanup, `domain/asset`, `ProjectFileV2`, field-product descriptors, generic product invalidation, first app-owned import/field-product jobs, asset provider surfaces, scene-manifest catalog adapter, and displayable field/volume viewport debug products exist.
 - M5 external runtime preview, project-owned data hot reload classification, reload diagnostics projection, world_sdf runtime intake, and restart boundaries are complete as of 2026-05-09 for the existing scene/asset/field-product/world_sdf/shader/UI-definition slice.
-- M6 has started: shared workspace/profile/surface substrate, first material/texture domain-contract crates, descriptor-first material/texture providers, and full P1 SDF modeling core exist in the current worktree; M6.2 procgen is next only after the procgen domain doc is accepted, while gameplay and later procedural domains remain open.
+- M6 has started: shared workspace/profile/surface substrate, first material/texture domain-contract crates, descriptor-first material/texture providers, and full P1 SDF modeling core exist. The next cross-track gate is now the SDF-first execution fabric: product contracts, scheduler/ECS barriers, product jobs, query snapshots, and renderer product selection before M6.2 procgen implementation resumes.
 
 ## Recommended Near-Term Order
 
-1. Start M6.2 procgen design/domain-doc gate, then implement its first slice only after `docs-site/src/content/docs/domain/procgen/README.md` is accepted.
-2. Keep rendered SDF/GPU overlays and P3 material/SDF preview handoff deferred from the P1 closeout path.
-3. Sequence procgen, particles, physics, animation, and simulation domains after each owning first-slice design and formed-product contract exists.
-4. Add gameplay graph ATR IR and ECS lowering only after narrower gameplay event/action/state/quest, authority, and source-map contracts are explicit.
+1. Execute the SDF-first execution roadmap gate: product contract alignment, scheduler/ECS execution fabric, product jobs, query snapshots, and renderer product selection.
+2. Keep M6.2 procgen design/domain-doc preparation allowed, but do not start procgen implementation until the execution fabric gates in `workspace/sdf-first-execution-roadmap.md` are satisfied.
+3. Sequence gameplay graph, particles, physics, animation, and simulation domains after each owning design can consume product jobs, query snapshots, publication barriers, and diagnostics.
+4. Keep rendered SDF/GPU overlays and material/SDF rendered previews behind the renderer product-selection and derived GPU-residency contracts.
 5. Treat compiled-reactive UI, ECS-driven UI, world-space/runtime UI, in-game editors, native OS menu/shortcut mirroring, external marketplace packages, and payload ECS enum variants as design-first gates, not implementation tickets.
 6. Preserve architecture guards and keep domain/workspace docs synchronized as each phase lands.
 

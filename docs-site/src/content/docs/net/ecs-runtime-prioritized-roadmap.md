@@ -5,7 +5,9 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-12
+related_roadmaps:
+  - ../workspace/sdf-first-execution-roadmap.md
 ---
 
 # ECS Runtime Prioritized Roadmap (Post-Runtime Rewrite)
@@ -21,12 +23,18 @@ The major messaging redesign has already landed in core ECS runtime (`Broadcast*
 The canonical multiplayer replication implementation sequence now lives
 in [multiplayer-replication-implementation-roadmap.md](multiplayer-replication-implementation-roadmap.md).
 
+For current cross-track sequencing, the remaining ECS/runtime convergence work
+feeds the [SDF-first execution roadmap](../workspace/sdf-first-execution-roadmap.md).
+The old editor MVP sequencing notes below are historical; the active priority
+is product jobs, query snapshots, deterministic barriers, and diagnostics that
+support SDF-first formed products.
+
 Reason:
 
 - the remaining high-impact gaps are extensibility and richer diagnostics, not naming convergence,
 - some roadmap path references below still use pre-merge module paths and should be read as historical context.
 
-Use this roadmap primarily to track remaining convergence work, not as a statement that the old event substrate is still current.
+Use this roadmap primarily to track remaining convergence work, not as a statement that the old event substrate is still current or that editor MVP work is still the sequencing driver.
 Use the active design package for networking architecture:
 
 - [ECS/net replication boundary](../design/active/ecs-net-replication-boundary.md)
@@ -211,8 +219,12 @@ Checklist:
 
 ## Editor Sequencing Guidance
 
-The runtime/network rewrite is complete and editor MVP implementation can proceed now.
-This roadmap is no longer a precondition gate for editor MVP sequencing.
+The runtime/network rewrite is complete and editor MVP implementation is historical.
+Remaining ECS runtime convergence is now relevant because it feeds the
+SDF-first execution roadmap: lifecycle finalization, deterministic plan
+reporting, conflict diagnostics, consumer lag/backpressure counters, and
+runtime inspection surfaces support product jobs, query snapshots, replay, and
+network authority.
 
 ## MSDF Text Assessment
 
