@@ -2,8 +2,7 @@
 __pycache__/
 *.py[cod]
 .DS_Store
-.idea/workspace.xml
-.idea/*.iml
+.idea/
 logs/*.log
 logs/*.tracy
 assets/models/*.blend1
