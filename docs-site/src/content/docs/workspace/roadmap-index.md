@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-12
 ---
 
 # Workspace Roadmap Index
@@ -40,6 +40,10 @@ Operational execution checklist:
   - [design/active/editor-procedural-content-and-simulation-workflow-plan.md](../design/active/editor-procedural-content-and-simulation-workflow-plan.md)
 - Gameplay graph ATR IR and ECS lowering design:
   - [design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md](../design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md)
+- SDF-first field-world platform architecture:
+  - [design/accepted/sdf-first-field-world-platform-design.md](../design/accepted/sdf-first-field-world-platform-design.md)
+- SDF-first production capability map:
+  - [design/accepted/sdf-first-production-capability-map.md](../design/accepted/sdf-first-production-capability-map.md)
 - Workspace identity contract and migration map:
   - [design/active/workspace-identity-contract-and-migration-map.md](../design/active/workspace-identity-contract-and-migration-map.md)
 - Viewport backend closeout evidence:

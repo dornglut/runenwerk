@@ -7,7 +7,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-05-09
 related_designs:
-  - ./workspace-field-world-and-simulation-platform-design.md
+  - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ./editor-workspace-document-mode-panel-architecture.md

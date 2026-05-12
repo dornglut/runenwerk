@@ -8,7 +8,7 @@ canonical: true
 last_reviewed: 2026-05-09
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./workspace-field-world-and-simulation-platform-design.md
+  - ../accepted/sdf-first-field-world-platform-design.md
   - ../deferred/engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md
 related_adrs:
   - ../../adr/accepted/0007-external-runtime-preview-process.md

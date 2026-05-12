@@ -25,6 +25,23 @@ Commands mutate.
 
 Runenwerk should not be AI-shaped. It should be truth-shaped: clear boundaries, explicit contracts, precise errors, stable IDs, and testable behavior.
 
+## SDF-First Field Product Architecture
+
+Runenwerk is SDF-first and product-driven.
+
+SDF and field products are the primary production substrate for world geometry,
+editable spatial truth, material/world fields, product lineage, rendering
+inputs, collision/query formation, diagnostics, and long-term simulation
+handoffs.
+
+SDF-first does not mean SDF-only. Meshes remain valid as imported source
+assets, derived render/debug/export/preview/fallback products, and specialized
+representations when an owning design explicitly accepts that role.
+
+Renderer caches, GPU resources, UI projections, editor overlays, and debug
+products are derived state. They must not silently become authoritative world,
+simulation, or gameplay truth.
+
 ## Foundation
 
 Foundation crates provide reusable vocabulary and low-level contracts that are not specific to editor, runtime, renderer, or application behavior.
@@ -90,3 +107,9 @@ Design docs and ADRs live under:
 
 - `docs-site/src/content/docs/design/`
 - `docs-site/src/content/docs/adr/`
+
+The accepted SDF-first architecture starts at:
+
+- `docs-site/src/content/docs/adr/accepted/0008-adopt-sdf-first-field-product-architecture.md`
+- `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`
+- `docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md`

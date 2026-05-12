@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-12
 ---
 
 # Active Designs
@@ -50,6 +50,5 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 
 - [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
-- [Runenwerk Field World and Simulation Platform Design](workspace-field-world-and-simulation-platform-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
 - [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)

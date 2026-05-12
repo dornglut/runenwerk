@@ -9,7 +9,7 @@ last_reviewed: 2026-05-05
 related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
-  - ./workspace-field-world-and-simulation-platform-design.md
+  - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
   - ../deferred/domain-gameplay-actions-design.md
   - ../deferred/domain-gameplay-powers-design.md

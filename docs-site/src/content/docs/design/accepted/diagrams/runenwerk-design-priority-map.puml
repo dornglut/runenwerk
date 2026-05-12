@@ -1,0 +1,99 @@
+@startuml
+title Runenwerk Design Priority and Blocker Map
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+skinparam component {
+  BackgroundColor<<P0>> #FFDCDC
+  BorderColor<<P0>> #AA0000
+  BackgroundColor<<P1>> #FFF2CC
+  BorderColor<<P1>> #AA7700
+  BackgroundColor<<P2>> #DDEEFF
+  BorderColor<<P2>> #004488
+  BackgroundColor<<P3>> #EEEEEE
+  BorderColor<<P3>> #666666
+}
+
+legend right
+  <b>Priority</b>
+  <#FFDCDC> P0 = foundational blocker
+  <#FFF2CC> P1 = core production capabilities
+  <#DDEEFF> P2 = gameplay/simulation expansion
+  <#EEEEEE> P3 = later world processes
+endlegend
+
+package "P0 Foundation" {
+  [Adaptive Field Product System] <<P0>> as AFPS
+  [ECS Scheduler Execution Fabric] <<P0>> as EXEC
+  [SDF Product Renderer Architecture] <<P0>> as RENDER
+  [Open World Product Streaming] <<P0>> as STREAM
+  [Field Product Diagnostics] <<P0>> as DIAG
+}
+
+package "P1 Core Production Capabilities" {
+  [SDF World Platform Capabilities] <<P1>> as SLICE
+  [SDF Prefab Composition] <<P1>> as PREFAB
+  [SDF Character Animation] <<P1>> as CHAR
+  [Field Vegetation] <<P1>> as VEG
+  [Day/Night Atmosphere] <<P1>> as ATM
+  [Water/Wetness Fields] <<P1>> as WATER
+}
+
+package "P2 Gameplay / Generation / Runtime Expansion" {
+  [SDF Physics Collision] <<P2>> as PHYS
+  [Field Influence AI] <<P2>> as AI
+  [Procgen Field Products] <<P2>> as PROCGEN
+  [Field VFX Particles] <<P2>> as VFX
+}
+
+package "P3 Later World Simulation" {
+  [Fluid Snow Erosion World Processes] <<P3>> as WORLDPROC
+}
+
+AFPS --> RENDER : product model
+AFPS --> STREAM : scope/residency model
+AFPS --> DIAG : product diagnostics model
+AFPS --> PREFAB : product outputs
+AFPS --> VEG : field products
+AFPS --> WATER : water products
+AFPS --> PROCGEN : generated products
+
+EXEC --> RENDER : render jobs / prepare
+EXEC --> PHYS : strict job execution
+EXEC --> AI : influence jobs
+EXEC --> PROCGEN : background jobs
+EXEC --> VFX : runtime jobs
+
+RENDER --> SLICE : visible product path
+STREAM --> SLICE : infinite field residency
+DIAG --> SLICE : inspectability
+
+SLICE --> PREFAB : trees / rocks / ruins / enemies
+PREFAB --> CHAR : animated prefab specialization
+PREFAB --> VEG : vegetation emitters / placement context
+PREFAB --> PHYS : prefab collision products
+
+CHAR --> PHYS : character collision / movement
+CHAR --> AI : enemies / perception sources
+
+VEG --> PHYS : trample and surface interaction
+VEG --> VFX : spores / pollen / grass effects
+
+ATM --> VEG : glow / day-night response
+ATM --> WATER : fog / reflection / tint
+ATM --> VFX : mist / fireflies / haze
+ATM --> AI : activity schedule hooks
+
+WATER --> VEG : reeds / wet grass
+WATER --> PHYS : water query products
+WATER --> VFX : mist / foam / splash
+WATER --> WORLDPROC : future fluids
+
+PHYS --> AI : perception / movement / authority
+STREAM --> PROCGEN : generation demand
+PROCGEN --> WORLDPROC : terrain/material process inputs
+
+@enduml

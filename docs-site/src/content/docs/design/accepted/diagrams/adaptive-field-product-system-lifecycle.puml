@@ -1,0 +1,54 @@
+@startuml
+title Adaptive Field Product System - Product Lifecycle
+
+skinparam shadowing false
+skinparam defaultFontName Monospaced
+
+[*] --> Declared
+
+Declared --> Forming : producer scheduled
+Forming --> Current : ratified output published
+Forming --> FailedPreserved : rebuild failed; prior valid kept
+Forming --> Missing : formation failed; no fallback
+
+Current --> PotentiallyStale : upstream may have changed
+PotentiallyStale --> Current : validation proves still valid
+PotentiallyStale --> Stale : dependency confirmed changed
+
+Current --> Stale : invalidation record
+Stale --> Forming : rebuild scheduled
+Stale --> Fallback : fallback policy selected
+
+Fallback --> Forming : higher-quality rebuild
+Fallback --> Current : fallback promoted by policy
+Fallback --> Missing : fallback expired / unavailable
+
+FailedPreserved --> Forming : retry rebuild
+FailedPreserved --> Stale : prior valid is now stale
+FailedPreserved --> Missing : prior valid invalidated
+
+Current --> Retired : superseded
+Stale --> Retired : superseded
+Fallback --> Retired : superseded
+Missing --> Retired : product no longer expected
+
+Retired --> [*]
+
+note right of Fallback
+  Fallback is explicit and diagnosable.
+  Visual consumers may allow it.
+  Strict consumers may reject it.
+end note
+
+note right of FailedPreserved
+  Rebuild failed, but a previous
+  usable product remains available
+  if policy allows it.
+end note
+
+note bottom of Missing
+  Missing must produce diagnostics
+  when required by a consumer.
+end note
+
+@enduml

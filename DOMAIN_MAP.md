@@ -9,6 +9,9 @@ This document answers: where does this concept belong? The canonical docs tree i
 ```text
 Architecture doctrine              -> docs-site/src/content/docs/guidelines/runenwerk-architecture.md
 Workspace boundaries               -> docs-site/src/content/docs/guidelines/architecture.md
+SDF-first field-product decision   -> docs-site/src/content/docs/adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
+SDF-first platform architecture    -> docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md
+Field product target contracts     -> docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
 Dependency direction               -> DEPENDENCY_RULES.md
 AI-assisted contribution rules     -> AI_GUIDE.md
 Terminology                        -> GLOSSARY.md
@@ -35,11 +38,12 @@ SDF fields/queries                  -> domain/sdf
 Graph substrate                     -> domain/graph
 Texture product descriptors         -> domain/texture
 Material graph semantics            -> domain/material_graph
+Generic field-product target design -> docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
 Drawing documents/strokes/brushes/paper/composition/tile lineage -> domain/drawing
 Spatial coordinates/indexing        -> domain/spatial, domain/spatial_index
 Chunk streaming policy              -> domain/chunking
 Chunk/world op logs and deltas       -> domain/world_ops
-SDF world payload/collision data     -> domain/world_sdf
+SDF world payload/collision data and current SDF field-product specialization -> domain/world_sdf
 UI substrate primitives             -> domain/ui/*
 UI surface semantics                -> domain/ui/ui_surface
 UI definition/formation framework   -> domain/ui/ui_definition

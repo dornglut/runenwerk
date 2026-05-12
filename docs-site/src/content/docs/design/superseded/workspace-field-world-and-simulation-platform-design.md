@@ -1,17 +1,21 @@
 ---
 title: Runenwerk Field World and Simulation Platform Design
-description: Draft long-term architecture for Runenwerk as a field-world and modular simulation platform.
-status: draft
+description: Superseded draft long-term architecture for Runenwerk as a field-world and modular simulation platform.
+status: superseded
 owner: workspace
 layer: workspace
-canonical: true
-last_reviewed: 2026-04-27
+canonical: false
+last_reviewed: 2026-05-12
+superseded_by:
+  - ../accepted/sdf-first-field-world-platform-design.md
 ---
 
 # Runenwerk Field World and Simulation Platform Design
 
 ## Status
-Draft for implementation
+Superseded draft.
+
+Replaced by `../accepted/sdf-first-field-world-platform-design.md`.
 
 ## Purpose
 Define the long-term architecture for Runenwerk as:
@@ -978,4 +982,3 @@ The simulation platform is the domain family that acts through it.
 The contract layer is what keeps the whole system coherent, scalable, and extensible.
 
 This is the long-term architecture most consistent with the governing doctrine and the strongest foundation for rich, large-scale, editable, living worlds.
-

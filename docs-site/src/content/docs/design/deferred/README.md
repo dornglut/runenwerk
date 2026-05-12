@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-04
+last_reviewed: 2026-05-12
 ---
 
 # Deferred Designs
@@ -36,3 +36,17 @@ Use this folder for designs that remain valid but are intentionally postponed.
 ### Engine Runtime / Cross-Domain
 
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Preserved Target Draft](engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md)
+
+### SDF-First Capability Detail Drafts
+
+- [SDF World Production Slice Design](sdf-world-production-slice-design.md)
+- [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
+- [SDF Character Animation System Design](sdf-character-animation-system-design.md)
+- [Field Vegetation System Design](field-vegetation-system-design.md)
+- [Day Night Atmosphere System Design](day-night-atmosphere-system-design.md)
+- [Water Wetness Field System Design](water-wetness-field-system-design.md)
+- [SDF Physics Collision System Design](sdf-physics-collision-system-design.md)
+- [Field Influence AI System Design](field-influence-ai-system-design.md)
+- [Procgen Field Product System Design](procgen-field-product-system-design.md)
+- [Field VFX Particles System Design](field-vfx-particles-system-design.md)
+- [Fluid Snow Erosion World Processes System Design](fluid-snow-erosion-world-processes-system-design.md)

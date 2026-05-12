@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-12
 ---
 
 # ADR Index
@@ -26,4 +26,6 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0003: Ratification Is Domain-Specific](accepted/0003-ratification-is-domain-specific.md)
 - [0004: Separate Description From Execution](accepted/0004-separate-description-from-execution.md)
 - [0005: Projections Are Derived State](accepted/0005-projections-are-derived-state.md)
+- [0006: Editor Surface Provider Plugin Seam](accepted/0006-editor-surface-provider-plugin-seam.md)
 - [0007: External Runtime Preview Process](accepted/0007-external-runtime-preview-process.md)
+- [0008: Adopt SDF-First Field Product Architecture](accepted/0008-adopt-sdf-first-field-product-architecture.md)

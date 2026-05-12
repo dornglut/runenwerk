@@ -7,7 +7,7 @@ layer: app
 canonical: true
 last_reviewed: 2026-05-09
 related_designs:
-  - ../../design/active/workspace-field-world-and-simulation-platform-design.md
+  - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/active/ui-definition-formation-foundation-design.md
   - ../../design/active/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
@@ -571,7 +571,7 @@ Exit criteria:
 - Asset pipeline architecture is captured in `docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md`.
 - Procedural authoring, material/texturing, particles, physics, animation, and simulation workflows are captured in `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`.
 - Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
-- The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/active/workspace-field-world-and-simulation-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
+- The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
 - UI execution strategy is closed for M1 through M7 and M3.5/M3.6: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution remains deferred and may not enter self-authoring as a first-time decision.
 - Existing MVP, UI, editor, render, and runtime design docs link to this roadmap without restating stale phase order.
 - `python3 tools/docs/validate_docs.py` passes.

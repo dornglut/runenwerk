@@ -1,0 +1,109 @@
+@startuml
+title SDF Product Renderer - Product Pipeline
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+package "Field Product Inputs" {
+  [Terrain SDF Products] as TERRAIN
+  [Material Field Products] as MATERIALS
+  [SDF Prefab Products] as PREFABS
+  [SDF Character Products] as CHAR
+  [Vegetation Products] as VEG
+  [Water/Wetness Products] as WATER
+  [Atmosphere Products] as ATM
+  [Diagnostic Products] as DIAG
+}
+
+package "Render Preparation" {
+  [Render Product Resolver] as RESOLVE
+  [Prepared Render Product Set] as PREPSET
+  [SDF GPU Residency] as GPU
+  [Page Tables / Brick Atlases] as PAGE
+}
+
+package "Render Producers" {
+  [SDF World Producer] as WORLDPROD
+  [SDF Prefab Producer] as PREFABPROD
+  [SDF Character Producer] as CHARPROD
+  [Vegetation Producer] as VEGPROD
+  [Water Producer] as WATERPROD
+  [Atmosphere Producer] as ATMPROD
+  [Diagnostics Producer] as DIAGPROD
+}
+
+package "Render Flows" {
+  [sdf.world.primary] as FLOW_WORLD
+  [sdf.prefab.instances] as FLOW_PREFAB
+  [sdf.character.animated] as FLOW_CHAR
+  [field.vegetation.grass] as FLOW_VEG
+  [field.water.surface] as FLOW_WATER
+  [world.atmosphere.day-night] as FLOW_ATM
+  [debug.field-products] as FLOW_DIAG
+}
+
+package "Outputs" {
+  [Main Surface] as MAIN
+  [Editor Viewport Surface] as VIEWPORT
+  [Product Surfaces] as PRODUCTS
+  [History Targets] as HISTORY
+  [Diagnostics Overlays] as OVERLAYS
+}
+
+TERRAIN --> RESOLVE
+MATERIALS --> RESOLVE
+PREFABS --> RESOLVE
+CHAR --> RESOLVE
+VEG --> RESOLVE
+WATER --> RESOLVE
+ATM --> RESOLVE
+DIAG --> RESOLVE
+
+RESOLVE --> PREPSET
+PREPSET --> GPU
+GPU --> PAGE
+
+PREPSET --> WORLDPROD
+PREPSET --> PREFABPROD
+PREPSET --> CHARPROD
+PREPSET --> VEGPROD
+PREPSET --> WATERPROD
+PREPSET --> ATMPROD
+PREPSET --> DIAGPROD
+
+WORLDPROD --> FLOW_WORLD
+PREFABPROD --> FLOW_PREFAB
+CHARPROD --> FLOW_CHAR
+VEGPROD --> FLOW_VEG
+WATERPROD --> FLOW_WATER
+ATMPROD --> FLOW_ATM
+DIAGPROD --> FLOW_DIAG
+
+PAGE --> FLOW_WORLD
+PAGE --> FLOW_PREFAB
+PAGE --> FLOW_CHAR
+PAGE --> FLOW_VEG
+PAGE --> FLOW_WATER
+
+FLOW_WORLD --> MAIN
+FLOW_PREFAB --> MAIN
+FLOW_CHAR --> MAIN
+FLOW_VEG --> MAIN
+FLOW_WATER --> MAIN
+FLOW_ATM --> MAIN
+FLOW_DIAG --> OVERLAYS
+
+MAIN --> VIEWPORT
+MAIN --> PRODUCTS
+FLOW_ATM --> HISTORY
+FLOW_WORLD --> HISTORY
+
+note bottom of GPU
+  GPU residency is derived runtime cache.
+  It must track product generations and
+  never become world truth.
+end note
+
+@enduml

@@ -12,7 +12,7 @@ related_docs:
 related_designs:
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
-  - ./workspace-field-world-and-simulation-platform-design.md
+  - ../accepted/sdf-first-field-world-platform-design.md
   - ./workspace-viewport-expression-upgrade-design.md
 related_adrs:
   - ../../adr/proposed/graph-substrate-canvas-boundary.md

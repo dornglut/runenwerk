@@ -1,0 +1,90 @@
+@startuml
+title Adaptive Field Product System - Product Flow
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+package "Inputs" {
+  [Authored World State] as AUTH
+  [Generated Base World] as GEN
+  [World Operation Logs] as OPS
+  [Simulation State] as SIM
+  [Imported / Cached Artifacts] as IMPORT
+}
+
+package "Validation and Formation" {
+  [Owning Domain Validation] as VALID
+  [Ratification Reports] as RATIFY
+  [Product Formation Jobs] as FORM
+  [Product Lineage] as LINEAGE
+  [Invalidation Records] as INVALIDATE
+}
+
+package "Formed Field Products" {
+  [Surface Products] as SURFACE
+  [Material/Substance Products] as MAT
+  [Flow Products] as FLOW
+  [Water/Wetness Products] as WATER
+  [Influence Products] as INFL
+  [Radiance Products] as RAD
+  [Collision/Query Products] as COLL
+  [Diagnostic Products] as DPROD
+}
+
+package "Runtime / Consumers" {
+  [Product Registry] as REG
+  [Residency Table] as RES
+  [Renderer] as RENDER
+  [Physics] as PHYS
+  [AI / Gameplay] as AI
+  [Procgen / Simulation] as PROC
+  [Editor / Diagnostics] as EDITOR
+  [Network / Replay] as NET
+}
+
+AUTH --> VALID
+GEN --> VALID
+OPS --> VALID
+SIM --> VALID
+IMPORT --> VALID
+
+VALID --> RATIFY
+RATIFY --> FORM
+INVALIDATE --> FORM
+FORM --> LINEAGE
+
+FORM --> SURFACE
+FORM --> MAT
+FORM --> FLOW
+FORM --> WATER
+FORM --> INFL
+FORM --> RAD
+FORM --> COLL
+FORM --> DPROD
+
+SURFACE --> REG
+MAT --> REG
+FLOW --> REG
+WATER --> REG
+INFL --> REG
+RAD --> REG
+COLL --> REG
+DPROD --> REG
+
+REG --> RES
+RES --> RENDER
+RES --> PHYS
+RES --> AI
+RES --> PROC
+RES --> EDITOR
+RES --> NET
+
+RENDER --> DPROD : render diagnostics
+PHYS --> DPROD : strict query diagnostics
+AI --> DPROD : influence diagnostics
+PROC --> INVALIDATE : generated / rebuilt products
+NET --> INVALIDATE : authoritative updates
+
+@enduml
