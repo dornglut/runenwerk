@@ -68,17 +68,16 @@ Required end-state properties:
 
 ## Current Focus
 
-The current work is Phase 4 of the execution substrate between the completed
+The current work is Phase 5 of the execution substrate between the completed
 Batch 1 contract alignment and the first product-domain implementation. Phases
-1 through 3 are complete: serial product publication outcomes, deterministic
+1 through 4 are complete: serial product publication outcomes, deterministic
 publication barriers, runtime query snapshots, strict runtime consumption
 decisions, app-owned editor proof surfaces, and render product selection
-producers now exist.
+producers, and derived renderer GPU residency now exist.
 
 Current gaps:
 
-- GPU residency is not implemented;
-- procgen remains design/doc preparation only until the execution gates close.
+- procgen remains design/doc preparation only until the readiness gate closes.
 
 ## Phased Roadmap
 
@@ -189,8 +188,14 @@ Out of scope:
 
 ### Phase 4 - Derived GPU Residency
 
+Status: complete as of 2026-05-13.
+
 Intent: add renderer-owned GPU cache and residency management derived from
 product selections.
+
+Closeout evidence:
+
+- [reports/closeouts/sdf-first-execution-phase-4/closeout.md](../reports/closeouts/sdf-first-execution-phase-4/closeout.md)
 
 Acceptance gate:
 
@@ -324,6 +329,13 @@ Roadmap updates should verify:
   inspection exposes selected products, target descriptors, residency requests,
   and diagnostics without backend handles, and the editor viewport produces
   selections from accepted query snapshots during `RenderPrepare`;
+- Phase 4 derived GPU residency is complete: `engine/plugins/render` owns
+  logical renderer GPU cache handles, derives residency from prepared render
+  product selections, allocates, preserves, invalidates, evicts, rejects, and
+  journals cache state deterministically, exposes read-only residency
+  inspection without backend handles, and the editor viewport records concise
+  residency summaries while world render-cache invalidation removes stale typed
+  cache entries;
 - `world_sdf`, material, texture, asset/import, and editor product surfaces
   align with product-core metadata while preserving their owning-domain APIs;
 - render prepare carries backend-neutral `RenderProductSelection` metadata as

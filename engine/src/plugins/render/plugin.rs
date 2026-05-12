@@ -20,6 +20,10 @@ use super::inspect::{
     RenderTextureInspectorState, WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
+use super::residency::{
+    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
+    derive_render_gpu_residency_system,
+};
 use super::runtime::{
     RenderDynamicTextureTargetRequestRegistryResource, RenderRuntimeSet,
     collect_runtime_ui_frame_submissions_system, frame_render_prepare_system,
@@ -59,6 +63,8 @@ impl Plugin for RenderPlugin {
         app.init_resource::<PreparedRenderFrameResource>();
         app.init_resource::<PreparedRenderFrameRequestResource>();
         app.init_resource::<PreparedRenderProductSelectionResource>();
+        app.init_resource::<RenderGpuResidencyResource>();
+        app.init_resource::<RenderGpuResidencyBudgetResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
         app.init_resource::<PipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
@@ -80,6 +86,12 @@ impl Plugin for RenderPlugin {
         app.add_systems(RenderPrepare, sync_render_feature_registry_system);
         app.add_systems(RenderPrepare, collect_runtime_ui_frame_submissions_system);
         app.add_systems(RenderPrepare, prepare_ui_feature_resource_system);
+        app.add_systems(
+            RenderPrepare,
+            derive_render_gpu_residency_system
+                .in_set(RenderRuntimeSet::GpuResidency)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
         app.add_systems(
             RenderPrepare,
             frame_render_prepare_system.in_set(RenderRuntimeSet::FramePrepare),

@@ -95,6 +95,19 @@ Prepared-frame inspection exposes selected product ids, generations, typed
 freshness/residency/authority/query-policy state, required target descriptors,
 residency requests, and diagnostics without backend handles.
 
+## Render GPU Residency Runtime
+
+GPU residency is derived renderer cache state, not product truth. The render
+plugin owns `RenderGpuResidencyResource`, which reads prepared
+`RenderProductSelection` residency requests before frame preparation and
+allocates renderer-owned logical `RenderGpuCacheHandle` values for current
+resident products.
+
+Residency derivation allocates, preserves, invalidates, evicts, rejects, and
+journals cache state deterministically by prepared selection content, product
+identity, generation, priority, and hard-pin state. Inspection exposes logical
+cache ids and diagnostics, never mutable backend handles or `wgpu` objects.
+
 ## Fixed-Step Contract
 
 Canonical implementation:

@@ -1,7 +1,8 @@
 use ecs::World;
 use engine::plugins::render::{
     PreparedRenderProductSelectionResource, RenderDynamicTextureTargetRequestRegistryResource,
-    RenderRuntimeSet, UiFrameSubmissionRegistryResource,
+    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource, RenderRuntimeSet,
+    UiFrameSubmissionRegistryResource,
 };
 use engine::prelude::*;
 use engine::runtime::ProductPublicationRuntimeResource;
@@ -27,8 +28,8 @@ use crate::runtime::viewport::{
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
     ViewportSurfaceSetResource, apply_viewport_render_state_commands_system,
     prepare_viewport_render_product_selections_system, publish_viewport_query_snapshots_at_barrier,
-    sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
-    sync_viewport_render_jobs_system,
+    summarize_viewport_gpu_residency_system, sync_viewport_presentation_products_system,
+    sync_viewport_product_targets_system, sync_viewport_render_jobs_system,
 };
 
 pub struct EditorAppPlugin;
@@ -44,6 +45,7 @@ pub enum EditorRuntimeSet {
     ViewportProductTargets,
     ViewportRenderJobs,
     ViewportRenderProductSelection,
+    ViewportGpuResidencySummary,
 }
 
 impl IntoSystemSetKey for EditorRuntimeSet {
@@ -74,6 +76,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::ViewportRenderProductSelection => SystemSetKey::of::<EditorRuntimeSet>(
                 "EditorRuntimeSet::ViewportRenderProductSelection",
             ),
+            Self::ViewportGpuResidencySummary => SystemSetKey::of::<EditorRuntimeSet>(
+                "EditorRuntimeSet::ViewportGpuResidencySummary",
+            ),
         }
     }
 }
@@ -101,6 +106,8 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<UiFrameSubmissionRegistryResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
         app.init_resource::<PreparedRenderProductSelectionResource>();
+        app.init_resource::<RenderGpuResidencyResource>();
+        app.init_resource::<RenderGpuResidencyBudgetResource>();
         app.add_barrier_handler(
             BarrierKind::ProductPublication,
             publish_editor_field_products_at_barrier,
@@ -179,6 +186,13 @@ impl Plugin for EditorAppPlugin {
             RenderPrepare,
             prepare_viewport_render_product_selections_system
                 .in_set(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::GpuResidency),
+        );
+        app.add_systems(
+            RenderPrepare,
+            summarize_viewport_gpu_residency_system
+                .in_set(EditorRuntimeSet::ViewportGpuResidencySummary)
+                .after(RenderRuntimeSet::GpuResidency)
                 .before(RenderRuntimeSet::FramePrepare),
         );
     }

@@ -2,7 +2,8 @@ use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
     RenderCapturePointIdentity, RenderDebugTimingsState, RenderPassProvenanceRecord,
     RenderPassProvenanceState, deterministic_capture_filename, inspect_prepared_render_frame,
-    inspect_resources, inspect_texture_resources, resource_kind_name, summarize_pass_timings,
+    inspect_render_gpu_residency, inspect_resources, inspect_texture_resources, resource_kind_name,
+    summarize_pass_timings,
 };
 use engine::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
 use engine::plugins::render::{
@@ -10,8 +11,8 @@ use engine::plugins::render::{
     PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo,
     PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureRetention,
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlow,
-    RenderResourceDescriptor, RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat,
-    RenderTextureTargetUsage,
+    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource, RenderResourceDescriptor,
+    RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
 };
 use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
@@ -309,6 +310,40 @@ fn prepared_frame_rejects_conflicting_dynamic_target_history_signatures() {
     assert!(
         err.to_string().contains("incompatible history signatures"),
         "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn render_gpu_residency_inspection_exposes_logical_cache_without_backend_handles() {
+    let mut residency = RenderGpuResidencyResource::default();
+    let selection = RenderProductSelection::new("viewport.1")
+        .with_selected_product(RenderSelectedProduct {
+            product_id: ProductIdentity::new(77),
+            scale_band: ProductScaleBand::Preview,
+            generation: 12,
+            freshness: ProductFreshness::Current,
+            residency: ProductResidency::Resident,
+            authority_class: ProductAuthorityClass::DeterministicDerived,
+            query_policy: ProductQueryPolicy::StrictCurrentOnly,
+        })
+        .with_residency_request(RenderResidencyRequest::new(
+            ProductIdentity::new(77),
+            ProductResidency::Resident,
+            100,
+            true,
+        ));
+
+    residency.derive_from_selections(&[selection], &RenderGpuResidencyBudgetResource::default());
+
+    let inspection = inspect_render_gpu_residency(&residency);
+    assert_eq!(inspection.resident_count, 1);
+    assert_eq!(inspection.entries[0].product_id, 77);
+    assert_eq!(inspection.entries[0].cache_id, "render-gpu-cache:1");
+    assert_eq!(inspection.entries[0].diagnostic_count, 0);
+    assert_eq!(inspection.journal[0].action, "Allocated");
+    assert_eq!(
+        inspection.journal[0].cache_id.as_deref(),
+        Some("render-gpu-cache:1")
     );
 }
 

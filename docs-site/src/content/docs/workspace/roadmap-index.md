@@ -71,16 +71,16 @@ Operational execution checklist:
 ## Current Focus
 
 - Execute the remaining SDF-first open-world substrate roadmap phases in
-  `workspace/sdf-first-execution-roadmap.md`: derived GPU residency and
-  procgen readiness. Phase 1 serial product jobs/publication barriers, Phase 2
-  query snapshots/strict consumers, and Phase 3 render product selection
-  producers are complete.
+  `workspace/sdf-first-execution-roadmap.md`: procgen readiness. Phase 1
+  serial product jobs/publication barriers, Phase 2 query snapshots/strict
+  consumers, Phase 3 render product selection producers, and Phase 4 derived
+  GPU residency are complete.
 - Keep M6.2 procgen design/domain-doc preparation allowed, but do not start
   procgen code until those execution fabric and readiness phases are satisfied.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
   execution substrate lands.
-- Keep render SDF/GPU work behind product-selection and derived GPU-residency
-  contracts.
+- Keep render SDF/GPU work on the completed product-selection and derived
+  GPU-residency contracts.
 
 ## Other Tracked Work
 
@@ -114,6 +114,11 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   producer-scoped prepared render selection contributions, prepared-frame
   inspection DTOs, and app-owned editor viewport render-selection production
   from accepted query snapshots are implemented and validated;
+- SDF-first execution Phase 4 is complete: renderer-owned logical GPU cache
+  handles, deterministic derived residency allocation, preservation,
+  invalidation, eviction, and rejection, read-only inspection, editor viewport
+  residency summaries, and typed world render-cache invalidation are
+  implemented and validated;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

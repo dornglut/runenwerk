@@ -8,6 +8,7 @@ pub mod inspect;
 pub mod params;
 pub mod pipelines;
 pub mod renderer;
+pub mod residency;
 pub mod resource;
 pub mod shader;
 
@@ -24,6 +25,7 @@ pub use graph::*;
 pub use params::*;
 pub use plugin::RenderPlugin;
 pub use renderer::{Gfx, GfxFrameTimings, RenderFrameDataRegistry, Renderer, RendererFrameTimings};
+pub use residency::*;
 pub use resource::*;
 pub use runtime::*;
 pub use shader::{ShaderHandle, ShaderRegistryResource};

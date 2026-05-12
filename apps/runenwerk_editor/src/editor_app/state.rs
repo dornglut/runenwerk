@@ -11,6 +11,7 @@ use crate::asset_pipeline::{
     AssetCatalogRuntime, EditorFieldProductPublication, EditorFieldProductPublicationJournalEntry,
 };
 use crate::runtime::viewport::{
+    EditorViewportGpuResidencyJournalEntry, EditorViewportGpuResidencySummary,
     EditorViewportQuerySnapshotJournalEntry, EditorViewportRenderSelectionJournalEntry,
     EditorViewportRenderSelectionSummary,
 };
@@ -35,6 +36,8 @@ pub struct RunenwerkEditorApp {
     pub(crate) viewport_query_snapshot_journal: Vec<EditorViewportQuerySnapshotJournalEntry>,
     pub(crate) viewport_render_selection_journal: Vec<EditorViewportRenderSelectionJournalEntry>,
     pub(crate) last_viewport_render_selection_summary: Option<EditorViewportRenderSelectionSummary>,
+    pub(crate) viewport_gpu_residency_journal: Vec<EditorViewportGpuResidencyJournalEntry>,
+    pub(crate) last_viewport_gpu_residency_summary: Option<EditorViewportGpuResidencySummary>,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -62,6 +65,8 @@ impl RunenwerkEditorApp {
             viewport_query_snapshot_journal: Vec::new(),
             viewport_render_selection_journal: Vec::new(),
             last_viewport_render_selection_summary: None,
+            viewport_gpu_residency_journal: Vec::new(),
+            last_viewport_gpu_residency_summary: None,
         }
     }
 
@@ -254,6 +259,25 @@ impl RunenwerkEditorApp {
             return false;
         }
         self.last_viewport_render_selection_summary = Some(summary);
+        true
+    }
+
+    pub fn viewport_gpu_residency_journal(&self) -> &[EditorViewportGpuResidencyJournalEntry] {
+        &self.viewport_gpu_residency_journal
+    }
+
+    pub fn record_viewport_gpu_residency(&mut self, entry: EditorViewportGpuResidencyJournalEntry) {
+        self.viewport_gpu_residency_journal.push(entry);
+    }
+
+    pub fn update_viewport_gpu_residency_summary(
+        &mut self,
+        summary: EditorViewportGpuResidencySummary,
+    ) -> bool {
+        if self.last_viewport_gpu_residency_summary == Some(summary) {
+            return false;
+        }
+        self.last_viewport_gpu_residency_summary = Some(summary);
         true
     }
 }

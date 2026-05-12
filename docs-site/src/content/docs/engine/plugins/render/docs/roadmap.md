@@ -44,9 +44,10 @@ substrate roadmap. Renderer code consumes producer-built
 `RenderProductSelection` and derived GPU residency requests; it must not become
 world truth, product authority, or a fallback path around strict product policy.
 
-Phase 3 product selection producers are complete. Procgen, SDF terrain
-rendering, and material/SDF preview GPU work should still wait for derived
-residency contracts unless the work is explicitly documentation-only.
+Phase 3 product selection producers and Phase 4 logical derived GPU residency
+are complete. Procgen, SDF terrain rendering, and material/SDF preview GPU work
+must consume those contracts and should still wait for their owning product
+family upload/render designs unless the work is explicitly documentation-only.
 
 ## Status Baseline
 

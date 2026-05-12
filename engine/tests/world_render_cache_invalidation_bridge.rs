@@ -1,4 +1,7 @@
-use engine::plugins::render::features::world::runtime_cache::WorldRuntimeCacheResource;
+use engine::plugins::render::RenderGpuCacheHandle;
+use engine::plugins::render::features::world::runtime_cache::{
+    WorldGpuResidencyEntry, WorldRuntimeCacheResource,
+};
 use engine::plugins::world::adapters::resources::PartitionConfigResource;
 use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::render_cache_bridge::{
@@ -302,6 +305,54 @@ fn missing_render_cache_then_recreate_flushes_pending_invalidation() {
         queue.pending_records.is_empty(),
         "queue should clear after successful flush into render cache"
     );
+}
+
+#[test]
+fn world_render_cache_invalidates_matching_typed_gpu_cache_entry() {
+    let mut app = App::headless();
+    app.add_plugin(WorldPlugin);
+
+    let target = ChunkId::new(WorldId(0), ChunkCoord3 { x: 0, y: 0, z: 0 });
+    let mut runtime_cache = WorldRuntimeCacheResource::default();
+    runtime_cache.upsert_entry(WorldGpuResidencyEntry {
+        chunk_id: target,
+        chunk_revision: world_ops::ChunkRevision(1),
+        cache_generation: world_ops::ChunkGeneration(1),
+        cache_handle: RenderGpuCacheHandle::new(9),
+        pinned: false,
+        priority: 10,
+    });
+    app.world_mut().insert_resource(runtime_cache);
+
+    let fixed_point_scale = app
+        .world()
+        .resource::<PartitionConfigResource>()
+        .expect("world partition config should exist")
+        .quantization_scale();
+    let op_id = submit_world_operation(
+        app.world_mut(),
+        test_stamp_operation(fixed_point_scale),
+        default_bounds_q(fixed_point_scale),
+        WorldEditIngressMeta {
+            planet_id: WorldId(0),
+            deterministic_seed: 123,
+        },
+    );
+    assert!(op_id.is_some(), "ingress should append an operation");
+
+    let app = app
+        .run_for_ticks(1)
+        .expect("world systems should process one fixed tick");
+
+    let runtime_cache = app
+        .world()
+        .resource::<WorldRuntimeCacheResource>()
+        .expect("world runtime cache should exist");
+    assert!(
+        !runtime_cache.by_chunk.contains_key(&target),
+        "stale world chunks should invalidate matching typed renderer cache entries"
+    );
+    assert!(runtime_cache.stale_chunks.contains(&target));
 }
 
 #[test]

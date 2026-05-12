@@ -1,6 +1,7 @@
 //! File: apps/runenwerk_editor/src/runtime/viewport/mod.rs
 //! Purpose: Editor runtime viewport expression-product and presentation ownership.
 
+pub mod gpu_residency;
 pub mod instance_registry;
 pub mod layout_map;
 pub mod picking_results;
@@ -20,6 +21,7 @@ pub mod surface_mounts;
 pub mod surface_set;
 pub mod tool_surface_binding;
 
+pub use gpu_residency::*;
 pub use instance_registry::*;
 pub use layout_map::*;
 pub use picking_results::*;

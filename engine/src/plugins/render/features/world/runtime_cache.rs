@@ -1,3 +1,4 @@
+use crate::plugins::render::RenderGpuCacheHandle;
 use spatial::ChunkId;
 use std::collections::{BTreeMap, BTreeSet};
 use world_ops::{ChunkGeneration, ChunkRevision};
@@ -7,7 +8,7 @@ pub struct WorldGpuResidencyEntry {
     pub chunk_id: ChunkId,
     pub chunk_revision: ChunkRevision,
     pub cache_generation: ChunkGeneration,
-    pub gpu_handle: u64,
+    pub cache_handle: RenderGpuCacheHandle,
     pub pinned: bool,
     pub priority: i32,
 }
@@ -25,6 +26,7 @@ pub struct WorldRuntimeCacheResource {
 impl WorldRuntimeCacheResource {
     pub fn mark_stale(&mut self, chunk_id: ChunkId) {
         self.stale_chunks.insert(chunk_id);
+        self.by_chunk.remove(&chunk_id);
     }
 
     pub fn upsert_entry(&mut self, entry: WorldGpuResidencyEntry) {

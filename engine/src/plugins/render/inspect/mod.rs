@@ -1,6 +1,7 @@
 mod artifacts;
 mod capture;
 mod config;
+mod gpu_residency;
 mod graph_dump;
 mod pass_provenance;
 mod plan;
@@ -16,6 +17,7 @@ mod world_runtime;
 pub use artifacts::*;
 pub use capture::*;
 pub use config::*;
+pub use gpu_residency::*;
 pub use graph_dump::*;
 pub use pass_provenance::*;
 pub use plan::*;
