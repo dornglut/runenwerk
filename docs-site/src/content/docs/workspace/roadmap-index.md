@@ -33,6 +33,10 @@ Operational execution checklist:
   - [reports/closeouts/sdf-first-execution-phase-2/closeout.md](../reports/closeouts/sdf-first-execution-phase-2/closeout.md)
 - SDF-first execution Phase 3 closeout evidence:
   - [reports/closeouts/sdf-first-execution-phase-3/closeout.md](../reports/closeouts/sdf-first-execution-phase-3/closeout.md)
+- SDF-first execution Phase 4 closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-4/closeout.md](../reports/closeouts/sdf-first-execution-phase-4/closeout.md)
+- SDF-first execution Phase 5 closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-5/closeout.md](../reports/closeouts/sdf-first-execution-phase-5/closeout.md)
 - Editor final end-to-end implementation roadmap:
   - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - UI substrate and surface execution roadmap:
@@ -70,13 +74,15 @@ Operational execution checklist:
 
 ## Current Focus
 
-- Execute the remaining SDF-first open-world substrate roadmap phases in
-  `workspace/sdf-first-execution-roadmap.md`: procgen readiness. Phase 1
-  serial product jobs/publication barriers, Phase 2 query snapshots/strict
-  consumers, Phase 3 render product selection producers, and Phase 4 derived
-  GPU residency are complete.
-- Keep M6.2 procgen design/domain-doc preparation allowed, but do not start
-  procgen code until those execution fabric and readiness phases are satisfied.
+- Execute SDF-first Phase 6 / M6.2 from
+  `workspace/sdf-first-execution-roadmap.md`: the first procgen product track.
+  Phase 1 serial product jobs/publication barriers, Phase 2 query
+  snapshots/strict consumers, Phase 3 render product selection producers,
+  Phase 4 derived GPU residency, and Phase 5 procgen readiness are complete.
+- Keep M6.2 procgen code scoped to the accepted
+  `domain/procgen/README.md` contract and the first bounded region
+  terrain/material operation-window product track with procgen-owned planning
+  lifecycle metadata, reservations, and explanation data.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
   execution substrate lands.
 - Keep render SDF/GPU work on the completed product-selection and derived
@@ -119,6 +125,11 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   invalidation, eviction, and rejection, read-only inspection, editor viewport
   residency summaries, and typed world render-cache invalidation are
   implemented and validated;
+- SDF-first execution Phase 5 is complete: the accepted procgen domain contract
+  defines future `domain/procgen` ownership, graph-backed generator documents,
+  planning lifecycle metadata, reservation boundaries, seed/scope/version
+  policy, cache lineage, authored overlay preservation, runtime/offline policy,
+  server-validated multiplayer authority, and product output paths;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

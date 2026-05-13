@@ -39,6 +39,7 @@ SDF fields/queries                  -> domain/sdf
 Graph substrate                     -> domain/graph
 Texture product descriptors         -> domain/texture
 Material graph semantics            -> domain/material_graph
+Procgen planning lifecycle, generator documents, reservations, lowering contract -> docs-site/src/content/docs/domain/procgen/README.md until future domain/procgen crate exists
 Generic field-product target design -> docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
 Drawing documents/strokes/brushes/paper/composition/tile lineage -> domain/drawing
 Spatial coordinates/indexing        -> domain/spatial, domain/spatial_index

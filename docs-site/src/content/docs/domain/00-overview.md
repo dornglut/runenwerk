@@ -38,6 +38,7 @@ Domain crates must not depend on:
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
 | SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
 | Materials and textures | `domain/material_graph`, `domain/texture` | [`material-graph/README.md`](./material-graph/README.md), [`texture/README.md`](./texture/README.md) |
+| Procedural generation | future `domain/procgen` | [`procgen/README.md`](./procgen/README.md) for generator documents, planning lifecycle, reservations, deterministic lowering, and product-output boundaries |
 | Drawing | `domain/drawing` | [`drawing/README.md`](./drawing/README.md) |
 | Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
 | UI substrate and definitions | `domain/ui/*`, including `domain/ui/ui_definition` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
@@ -48,7 +49,7 @@ Domain crates must not depend on:
 These areas are roadmap-level intent, not implemented workspace members.
 Do not add crate metadata for them until their implementation milestone lands.
 
-- procedural generation;
+- procedural generation code;
 - particles and VFX;
 - physics and collision authoring;
 - animation and procedural motion;
@@ -93,6 +94,7 @@ Start here when working in the domain layer:
 - SDF: [`sdf/index.md`](./sdf/index.md)
 - Material graph: [`material-graph/README.md`](./material-graph/README.md)
 - Texture: [`texture/README.md`](./texture/README.md)
+- Procgen contract: [`procgen/README.md`](./procgen/README.md)
 - Drawing: [`drawing/README.md`](./drawing/README.md)
 - UI substrate: [`ui/README.md`](./ui/README.md)
 

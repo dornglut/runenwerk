@@ -23,6 +23,10 @@ The accepted long-term capability map is
 only after generator descriptor ownership, cache-key lineage, and authored
 overlay policy are accepted.
 
+The accepted procgen readiness contract now lives in
+`../../domain/procgen/README.md`. This document remains a noncanonical seed for
+future detail and must not override that domain boundary.
+
 This document defines procedural generation as a producer of field products.
 
 Procgen must not directly bypass authored world operations, field product lineage, or diagnostics.

@@ -34,10 +34,11 @@ The target result is not finished open-world gameplay in one jump. The target
 is the substrate that makes open-world gameplay possible without private
 execution paths or renderer-owned world truth.
 
-The immediate priority is no longer M6.2 procgen. The immediate priority is the
-execution substrate that lets procgen, gameplay graph, particles, physics,
-animation, world processes, renderer residency, and strict runtime consumers use
-formed products without inventing private execution paths.
+The immediate priority is now M6.2 procgen through the first accepted procgen
+product track. That work must build on the completed execution substrate so
+procgen, gameplay graph, particles, physics, animation, world processes,
+renderer residency, and strict runtime consumers use formed products without
+inventing private execution paths.
 
 Owning domain and app roadmaps still own detailed implementation steps. This
 page owns cross-track ordering when those roadmaps overlap.
@@ -68,16 +69,17 @@ Required end-state properties:
 
 ## Current Focus
 
-The current work is Phase 5 of the execution substrate between the completed
-Batch 1 contract alignment and the first product-domain implementation. Phases
-1 through 4 are complete: serial product publication outcomes, deterministic
-publication barriers, runtime query snapshots, strict runtime consumption
-decisions, app-owned editor proof surfaces, and render product selection
-producers, and derived renderer GPU residency now exist.
+The current work is Phase 6 of the execution substrate: the first procgen
+product track. Phases 1 through 5 are complete: serial product publication
+outcomes, deterministic publication barriers, runtime query snapshots, strict
+runtime consumption decisions, app-owned editor proof surfaces, render product
+selection producers, derived renderer GPU residency, and the accepted procgen
+domain readiness contract now exist.
 
 Current gaps:
 
-- procgen remains design/doc preparation only until the readiness gate closes.
+- `domain/procgen` code, ratification, lowering, product-job integration,
+  preview, bake, and editor providers remain unimplemented until Phase 6.
 
 ## Phased Roadmap
 
@@ -215,8 +217,14 @@ Out of scope:
 
 ### Phase 5 - Procgen Readiness Gate
 
+Status: complete as of 2026-05-13.
+
 Intent: accept the procgen ownership and product-domain contract before any
 procgen code starts.
+
+Closeout evidence:
+
+- [reports/closeouts/sdf-first-execution-phase-5/closeout.md](../reports/closeouts/sdf-first-execution-phase-5/closeout.md)
 
 Acceptance gate:
 
@@ -238,12 +246,16 @@ Out of scope:
 ### Phase 6 - First Procgen Product Track
 
 Intent: implement the first visible open-world producer on top of the completed
-execution substrate.
+execution substrate. This is a procgen-owned product track, not a generic
+content-platform launch.
 
 Acceptance gate:
 
 - `domain/procgen` owns deterministic generator documents, seed/scope/version
-  contracts, ratification, and lowering;
+  contracts, planning lifecycle metadata, ratification, and lowering;
+- first-slice prototypes, candidates, reservations, instance plans,
+  realizations, and explanations are scoped to bounded region terrain/material
+  generation;
 - bounded generator jobs form products through product jobs and publication
   barriers;
 - same seed, scope, version, inputs, and upstream generations produce identical
@@ -261,12 +273,13 @@ Out of scope:
 
 ## Procgen Code Gate
 
-Do not start M6.2 procgen code until Phases 1 through 5 are complete.
+M6.2 procgen code may start only from the accepted
+`docs-site/src/content/docs/domain/procgen/README.md` contract now that Phases
+1 through 5 are complete.
 
-Procgen design/domain docs may be prepared in parallel while these gates are
-being closed. Procgen code must not bypass product jobs, query snapshots,
-publication barriers, strict consumer policy, render product selection, or
-derived GPU residency.
+Procgen code must not bypass product jobs, query snapshots, publication
+barriers, strict consumer policy, render product selection, or derived GPU
+residency.
 
 Gameplay graph, particles, physics, animation, and world-process domains follow
 only after their owning contracts can consume the same substrate.
@@ -288,8 +301,8 @@ only after their owning contracts can consume the same substrate.
 Roadmap updates should verify:
 
 - docs validation passes;
-- no priority list says M6.2 procgen code starts before the execution phases
-  close;
+- no priority list says M6.2 procgen code starts outside the accepted procgen
+  contract or completed execution substrate;
 - completed contracts are marked as implemented and unfinished gates remain
   explicit;
 - renderer, UI, and debug products remain derived state;
@@ -336,6 +349,12 @@ Roadmap updates should verify:
   inspection without backend handles, and the editor viewport records concise
   residency summaries while world render-cache invalidation removes stale typed
   cache entries;
+- Phase 5 procgen readiness is complete: the accepted
+  `domain/procgen/README.md` contract defines future procgen ownership,
+  graph-backed generator documents, seed/scope/version policy, cache lineage,
+  authored overlay preservation, runtime/offline policy, server-validated
+  multiplayer authority, and product output paths through the completed
+  execution substrate;
 - `world_sdf`, material, texture, asset/import, and editor product surfaces
   align with product-core metadata while preserving their owning-domain APIs;
 - render prepare carries backend-neutral `RenderProductSelection` metadata as

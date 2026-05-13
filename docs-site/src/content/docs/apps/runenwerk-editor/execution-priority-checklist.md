@@ -67,7 +67,7 @@ Representative evidence:
 ## Now (Editor/UI Active Work)
 
 - [ ] Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: Active.
-- [ ] Plan and sequence procedural authoring features through explicit domains. Status: active for M6; M6.0 shared workspace substrate, the first `domain/material_graph`/`domain/texture` contract crates, descriptor-first material/texture providers, full P1 SDF modeling core, and Batch 1 SDF-first contract alignment now exist. M6.2 procgen remains the first product-domain track, but code is blocked on product publication barriers, query snapshots, strict consumer policy, render product selection producers, derived GPU residency, and an accepted procgen domain doc; particles, physics, animation, simulation processes, gameplay graph, rendered material/SDF previews, Texture3D GPU adapters, and scripting remain deferred to their owning M6/P3/M7 sub-milestones.
+- [ ] Plan and sequence procedural authoring features through explicit domains. Status: active for M6; M6.0 shared workspace substrate, the first `domain/material_graph`/`domain/texture` contract crates, descriptor-first material/texture providers, full P1 SDF modeling core, SDF-first execution Phases 1 through 5, and the accepted procgen domain contract now exist. M6.2 procgen remains the first product-domain track and must stay scoped to that contract, including its procgen-owned planning lifecycle, reservations, and explanation data; particles, physics, animation, simulation processes, gameplay graph, rendered material/SDF previews, Texture3D GPU adapters, and scripting remain deferred to their owning M6/P3/M7 sub-milestones.
 
 ## Other Tracked And Gated Work
 

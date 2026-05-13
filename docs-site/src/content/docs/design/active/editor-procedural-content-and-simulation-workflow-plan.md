@@ -74,7 +74,8 @@ Implemented today:
 
 Missing today:
 
-- no `domain/procgen`;
+- no `domain/procgen` crate/code; the accepted procgen domain contract exists
+  at `docs-site/src/content/docs/domain/procgen/README.md`;
 - no `domain/particles`;
 - no `domain/physics`;
 - no `domain/animation`;
@@ -116,6 +117,7 @@ These defaults close the first implementation direction. Change them only by upd
 - SDF modeling is the primary world-authoring path. Mesh, GLB, and imported material workflows are compatibility/reference paths.
 - Material graph starts with SDF/field preview, PBR parameter products, procedural texture nodes, triplanar coordinates, and field material-channel output. It does not start with mesh material import.
 - Procedural texture generation starts with deterministic domain formation and cached products. GPU generation is a runtime optimization behind the same formed product contract.
+- Procedural generation starts from the accepted `docs-site/src/content/docs/domain/procgen/README.md` contract: graph-backed generator documents, deterministic seed/scope/version lineage, authored overlay preservation, product-job outputs, and server-validated authority before concrete provider/runtime code.
 - Texture3D is a first-class volume/field texture product with dimension, color-space, sampler, compression, channel, and slice/mip inspection metadata.
 - Particles start with deterministic authored emitter and simulation contracts, SDF/field spawn/collision, and editor preview. GPU compute/render integration is an engine backend and must not change authored particle documents.
 - Physics starts with `world_sdf` collision readiness, rigid/kinematic/character body contracts, collider descriptors, layer/mask/material authoring, and debug surfaces. A concrete external solver adapter is engine-owned.
@@ -131,7 +133,7 @@ Before implementation starts on a feature track, create or update the owning des
 - `docs-site/src/content/docs/domain/texture/README.md`
   - define Texture2D, Texture3D/volume, generated texture products, sampler/color-space/compression policy, cache keys, and preview/inspection contracts.
 - `docs-site/src/content/docs/domain/procgen/README.md`
-  - define seed contracts, bounded generator documents, deterministic lowering, bake targets, and invalidation behavior.
+  - accepted as the procgen readiness-gate contract for seed contracts, bounded generator documents, deterministic lowering, bake targets, invalidation behavior, authored overlay preservation, and server-validated authority. Concrete `domain/procgen` code, provider runtime, preview, and bake execution remain deferred to the procgen product-track milestone.
 - `docs-site/src/content/docs/domain/particles/README.md`
   - define emitter documents, particle graph semantics, simulation step contracts, SDF/field coupling, formed particle products, and preview determinism.
 - `docs-site/src/content/docs/domain/physics/README.md`
@@ -265,7 +267,7 @@ Implementation targets:
 
 Owning domains:
 
-- future `domain/procgen` for procedural source descriptors, seed contracts, generator graphs, rule sets, and formation plans;
+- future `domain/procgen` for procedural source descriptors, seed contracts, generator graphs, rule sets, planning lifecycle, reservations, explanation data, and formation plans;
 - `domain/world_ops` for generated world edit windows and invalidation;
 - `domain/world_sdf` for formed field products;
 - `domain/asset` for procedural source identities and cache artifacts.
@@ -275,19 +277,25 @@ Required features:
 - seed-driven deterministic generation;
 - terrain/cave/structure/stamp generator documents;
 - generator graphs that lower into operation plans, not live editor graph traversal;
+- prototype, candidate, reservation, instance-plan, and realization lifecycle
+  vocabulary for bounded procgen output;
 - biome/material rule layers;
 - scatter/distribution rules;
 - erosion/weathering generation passes;
 - preview windows with bounded spatial scope;
+- candidate and reservation explanations for accepted, rejected, moved, or
+  blocked planned content;
 - regeneration with stable seeds and changed-region invalidation;
 - bake-to-operations and bake-to-field-product workflows.
 
 First procgen slice:
 
-- bounded region generator document with explicit seed, version, input products, and write targets;
+- bounded region generator document with explicit seed, version, input products,
+  write targets, and first-slice planning lifecycle metadata;
 - noise/height/cave/stamp generator nodes;
 - material rule layer that writes material-channel operations;
-- preview window with changed-region diagnostics;
+- reservation and conflict diagnostics for generated terrain/material claims;
+- preview window with explanation data and changed-region diagnostics;
 - bake-to-`world_ops::OperationRecord` and bake-to-field-product commands;
 - deterministic replay test proving identical inputs form identical operation windows.
 

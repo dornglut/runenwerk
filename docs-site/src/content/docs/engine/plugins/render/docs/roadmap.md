@@ -676,16 +676,41 @@ Suggested example tree:
 - UI composite optional but recommended
 - debug texture/resource views optional but useful
 
+Future SDF renderer work should treat the renderer as representation selection
+plus sparse-field streaming whose final consumer is raymarching. It should
+remain downstream of `RenderProductSelection` and derived GPU residency.
+
+Renderer-only mechanisms to carry into the R7/R8 implementation design:
+
+- choose per selected product or cluster between individual analytic SDF,
+  sampled/proxy SDF, cluster field, aggregate field, or culling;
+- prefer projected-error LOD over distance-only thresholds once the first proof
+  path is stable;
+- use conservative acceleration only. Empty-space hierarchies, distance mips,
+  and macro steps must never overestimate safe travel distance;
+- use screen-tile plus depth-slice candidate lists for deep scenes instead of
+  broad per-tile lists alone;
+- track product/source generations on cached fields and invalidate temporal or
+  residency state when revisions change;
+- budget dirty-region rebuild work by visibility, projected coverage, age,
+  motion, and product importance;
+- keep cluster fields and aggregate fields explicit: clusters approximate group
+  shape, aggregates represent coarse mass/density/boundary only.
+
 ## Verification
 
 ### Example behavior
 - visible SDF render output
 - no legacy render architecture usage
 - no custom executor path
+- diagnostics expose stale, missing, over-budget, or fallback field state
+- acceleration debug mode can reveal unsafe overstep risks
 
 ## Exit criteria
 
-A serious SDF example proves the architecture supports your preferred rendering style cleanly.
+A serious SDF example proves the architecture supports your preferred rendering
+style cleanly without scanning all SDF sources per ray step or promoting
+renderer caches into product truth.
 
 ---
 
@@ -707,6 +732,8 @@ Needed for:
 - persistent simulation buffers
 - cached large-world rendering resources
 - future open-world compatible workflows
+- sparse virtual SDF pages, clipmaps, and derived field-cache residency for
+  future SDF renderer products
 
 ## Domains
 
@@ -735,10 +762,18 @@ Support or document patterns for:
 - persistent buffers
 - temporal resource dependencies
 
-### 3. Validation
+### 3. SDF cache and residency workflows
+Document how future SDF pages, clipmap windows, cluster fields, aggregate
+fields, and temporal raymarch data attach to product identity and generation.
+Memory pressure handling should prefer deterministic eviction or representation
+downgrade before silent fallback. Diagnostics must report cache rebuild storms,
+candidate-list explosion, memory pressure, missed-surface risk, and temporal
+instability.
+
+### 4. Validation
 Validate correct usage of persistent/history resources.
 
-### 4. Example proof
+### 5. Example proof
 Use history resources in at least one compositor or debug workflow.
 
 ## Verification
