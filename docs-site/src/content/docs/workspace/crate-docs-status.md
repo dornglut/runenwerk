@@ -47,6 +47,7 @@ Status labels:
 | `graph` | `domain/graph` | current | [`../domain/graph/README.md`](../domain/graph/README.md) |
 | `texture` | `domain/texture` | thin | [`../domain/texture/README.md`](../domain/texture/README.md) |
 | `material_graph` | `domain/material_graph` | thin | [`../domain/material-graph/README.md`](../domain/material-graph/README.md) |
+| `procgen` | `domain/procgen` | thin | [`../domain/procgen/README.md`](../domain/procgen/README.md) |
 | `drawing` | `domain/drawing` | current | [`../domain/drawing/README.md`](../domain/drawing/README.md) |
 | `scene` | `domain/scene` | thin | [`../domain/scene/README.md`](../domain/scene/README.md) |
 | `domain/ui/*` | `domain/ui` | current | [`../domain/ui/architecture.md`](../domain/ui/architecture.md) |

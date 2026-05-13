@@ -17,6 +17,7 @@ members = [
     "domain/graph",
     "domain/texture",
     "domain/material_graph",
+    "domain/procgen",
     "domain/drawing",
 
     "domain/ui/ui_math",
@@ -100,6 +101,7 @@ ecs = { path = "domain/ecs" }
 graph = { path = "domain/graph" }
 texture = { path = "domain/texture" }
 material_graph = { path = "domain/material_graph" }
+procgen = { path = "domain/procgen" }
 drawing = { path = "domain/drawing" }
 schema = { path = "foundation/schema" }
 commands = { path = "foundation/commands" }

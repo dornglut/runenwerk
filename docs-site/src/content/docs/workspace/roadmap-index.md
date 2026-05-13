@@ -74,15 +74,14 @@ Operational execution checklist:
 
 ## Current Focus
 
-- Execute SDF-first Phase 6 / M6.2 from
-  `workspace/sdf-first-execution-roadmap.md`: the first procgen product track.
-  Phase 1 serial product jobs/publication barriers, Phase 2 query
-  snapshots/strict consumers, Phase 3 render product selection producers,
-  Phase 4 derived GPU residency, and Phase 5 procgen readiness are complete.
-- Keep M6.2 procgen code scoped to the accepted
-  `domain/procgen/README.md` contract and the first bounded region
-  terrain/material operation-window product track with procgen-owned planning
-  lifecycle metadata, reservations, and explanation data.
+- Plan and execute the remaining SDF-first Phase 6B / M6.2 editor-runtime
+  procgen proof from `workspace/sdf-first-execution-roadmap.md`. Phase 6A has
+  created `domain/procgen` for graph-backed deterministic documents,
+  terrain/material node semantics, ratification, lowering, and product
+  job/publication descriptors.
+- Keep remaining M6.2 procgen code scoped to bounded region terrain/material
+  generation through `domain/procgen`, product publication barriers, query
+  snapshots, render selection, and derived GPU residency.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
   execution substrate lands.
 - Keep render SDF/GPU work on the completed product-selection and derived
@@ -126,10 +125,14 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   residency summaries, and typed world render-cache invalidation are
   implemented and validated;
 - SDF-first execution Phase 5 is complete: the accepted procgen domain contract
-  defines future `domain/procgen` ownership, graph-backed generator documents,
+  defines `domain/procgen` ownership, graph-backed generator documents,
   planning lifecycle metadata, reservation boundaries, seed/scope/version
   policy, cache lineage, authored overlay preservation, runtime/offline policy,
   server-validated multiplayer authority, and product output paths;
+- SDF-first execution Phase 6A is complete: `domain/procgen` implements the
+  domain-first procgen product track for graph-backed deterministic documents,
+  terrain/material node semantics, ratification, lowering to world operation
+  windows, planning metadata, and product job/publication descriptors;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

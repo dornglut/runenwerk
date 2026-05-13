@@ -74,8 +74,10 @@ Implemented today:
 
 Missing today:
 
-- no `domain/procgen` crate/code; the accepted procgen domain contract exists
-  at `docs-site/src/content/docs/domain/procgen/README.md`;
+- no procgen editor providers, preview execution, bake commands, concrete
+  generator algorithms, or field-payload byte formation; Phase 6A has created
+  the `domain/procgen` crate for graph-backed documents, ratification,
+  deterministic lowering, and product descriptors;
 - no `domain/particles`;
 - no `domain/physics`;
 - no `domain/animation`;
@@ -133,7 +135,7 @@ Before implementation starts on a feature track, create or update the owning des
 - `docs-site/src/content/docs/domain/texture/README.md`
   - define Texture2D, Texture3D/volume, generated texture products, sampler/color-space/compression policy, cache keys, and preview/inspection contracts.
 - `docs-site/src/content/docs/domain/procgen/README.md`
-  - accepted as the procgen readiness-gate contract for seed contracts, bounded generator documents, deterministic lowering, bake targets, invalidation behavior, authored overlay preservation, and server-validated authority. Concrete `domain/procgen` code, provider runtime, preview, and bake execution remain deferred to the procgen product-track milestone.
+  - accepted as the procgen domain contract for seed contracts, bounded generator documents, deterministic lowering, bake targets, invalidation behavior, authored overlay preservation, and server-validated authority. Phase 6A implements the domain crate; provider runtime, preview, bake execution, and concrete generator algorithms remain deferred to Phase 6B.
 - `docs-site/src/content/docs/domain/particles/README.md`
   - define emitter documents, particle graph semantics, simulation step contracts, SDF/field coupling, formed particle products, and preview determinism.
 - `docs-site/src/content/docs/domain/physics/README.md`
@@ -267,7 +269,7 @@ Implementation targets:
 
 Owning domains:
 
-- future `domain/procgen` for procedural source descriptors, seed contracts, generator graphs, rule sets, planning lifecycle, reservations, explanation data, and formation plans;
+- `domain/procgen` for procedural source descriptors, seed contracts, generator graphs, rule sets, planning lifecycle, reservations, explanation data, and formation plans;
 - `domain/world_ops` for generated world edit windows and invalidation;
 - `domain/world_sdf` for formed field products;
 - `domain/asset` for procedural source identities and cache artifacts.
@@ -292,7 +294,8 @@ First procgen slice:
 
 - bounded region generator document with explicit seed, version, input products,
   write targets, and first-slice planning lifecycle metadata;
-- noise/height/cave/stamp generator nodes;
+- noise/height and material-rule generator nodes, with cave/stamp/scatter
+  deferred;
 - material rule layer that writes material-channel operations;
 - reservation and conflict diagnostics for generated terrain/material claims;
 - preview window with explanation data and changed-region diagnostics;
@@ -301,12 +304,12 @@ First procgen slice:
 
 Implementation targets:
 
-- future `domain/procgen/src/authored/document.rs::ProcgenDocument`
+- `domain/procgen/src/document.rs::ProcgenDocument`
   - authored procedural source documents.
-- future `domain/procgen/src/lowering/world_ops.rs`
-  - lower procedural intent to deterministic `world_ops::OperationRecord` windows.
-- future `domain/procgen/src/ratification/ratifier.rs`
-  - reject nondeterministic, unbounded, or illegal write-target generation.
+- `domain/procgen/src/lowering/world_ops.rs::lower_procgen_to_world_ops`
+  - lowers procedural intent to deterministic `world_ops::OperationRecord` windows.
+- `domain/procgen/src/ratification.rs::ratify_procgen_document`
+  - rejects nondeterministic, unbounded, unsupported, conflicting, or illegal write-target generation.
 - `apps/runenwerk_editor/src/shell/providers/procgen_graph_canvas.rs::ProcgenGraphCanvasProvider`
   - procedural graph editing.
 - `apps/runenwerk_editor/src/shell/providers/procgen_preview.rs::ProcgenPreviewProvider`

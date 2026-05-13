@@ -1,0 +1,11 @@
+[package]
+name = "procgen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+graph = { path = "../graph" }
+product.workspace = true
+ratification = { path = "../../foundation/ratification" }
+spatial.workspace = true
+world_ops.workspace = true

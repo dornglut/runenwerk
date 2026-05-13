@@ -1,0 +1,43 @@
+//! Crate: procgen
+//! Purpose: Domain contracts for deterministic procedural generator documents,
+//! ratification, lowering, planning metadata, and product descriptors.
+
+pub mod catalog;
+pub mod determinism;
+pub mod document;
+pub mod ids;
+pub mod lowering;
+pub mod planning;
+pub mod products;
+pub mod ratification;
+
+#[cfg(test)]
+mod test_fixtures;
+
+pub use catalog::{ProcgenNodeCatalog, ProcgenNodeDescriptor};
+pub use determinism::{
+    ProcgenDeterminismKey, determinism_key_for_document, parameter_hash_for_document,
+    stable_nonzero_hash64,
+};
+pub use document::{
+    ProcgenBudgetClass, ProcgenCacheLineage, ProcgenDiagnosticsPolicy, ProcgenDocument,
+    ProcgenExecutionPolicy, ProcgenInputProduct, ProcgenLoweringPolicy, ProcgenNodeKind,
+    ProcgenNodeParameters, ProcgenOutputKind, ProcgenOutputProduct, ProcgenRetentionClass,
+    ProcgenScope, ProcgenWriteTarget, ProcgenWriteTargetKind,
+};
+pub use ids::{
+    ProcgenCandidateId, ProcgenDocumentId, ProcgenGeneratorId, ProcgenRealizationId,
+    ProcgenReservationId,
+};
+pub use lowering::world_ops::{ProcgenWorldOpsLoweringResult, lower_procgen_to_world_ops};
+pub use planning::{
+    ProcgenChangedRegion, ProcgenExplanationEntry, ProcgenInstancePlan, ProcgenPrototype,
+    ProcgenRealization, ProcgenReservation,
+};
+pub use products::{
+    ProcgenProductContracts, build_procgen_product_contracts, build_procgen_publication_outcome,
+    procgen_output_product_descriptors,
+};
+pub use ratification::{
+    ProcgenIssueCode, ProcgenIssueSubject, ProcgenRatificationReport, ratify_procgen_document,
+};

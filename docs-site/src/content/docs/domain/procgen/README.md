@@ -19,9 +19,10 @@ related_docs:
 
 # Procgen Domain
 
-Future `domain/procgen` owns deterministic procedural generation contracts. The
-accepted boundary is documentation-only until the first procgen product
-milestone creates the crate.
+`domain/procgen` owns deterministic procedural generation contracts. Phase 6A
+creates the domain crate for graph-backed documents, terrain/material node
+semantics, ratification, deterministic lowering to `world_ops` operation
+windows, and product job/publication descriptors.
 
 ## Pipeline
 
@@ -77,7 +78,7 @@ inside procgen until repeated non-procgen use proves which parts are shared.
 
 ## Ownership
 
-Future `domain/procgen` owns:
+`domain/procgen` owns:
 
 - `ProcgenDocument` source descriptors for deterministic generation intent;
 - procgen-owned semantic node catalog rules over neutral `domain/graph`
@@ -122,11 +123,33 @@ Every accepted descriptor must carry:
 - diagnostics policy;
 - cache lineage inputs.
 
-The first implementation-ready product track is bounded region terrain and
-material generation that lowers to deterministic `world_ops::OperationRecord`
-windows plus changed-region diagnostics. Cave mask/stamp, scatter/distribution,
-and diagnostic node families may be described, but concrete algorithms and
-provider execution remain deferred.
+The first implemented product track is bounded region terrain/material
+generation that lowers to deterministic `world_ops::OperationRecord` windows
+plus changed-region diagnostics. Phase 6A exposes product job and publication
+descriptor builders for operation-window and field-product candidate outputs,
+but does not generate field payload bytes or execute runtime publication.
+Cave mask/stamp, scatter/distribution, concrete algorithms, editor providers,
+preview execution, and bake commands remain deferred.
+
+## Phase 6A Public Surface
+
+The initial crate surface is intentionally domain-only:
+
+- `ProcgenDocument` wraps `domain/graph::GraphDefinition` and stores
+  procgen-owned node parameters, seed/version/scope/input/write-target/output,
+  lowering, diagnostics, and cache-lineage fields.
+- `ProcgenNodeCatalog::first_slice()` admits only terrain/material nodes:
+  height/noise, material rule, world-operation output, field-product output,
+  and diagnostics.
+- `ratify_procgen_document` rejects unbounded scopes, unsupported nodes,
+  missing output nodes/products, invalid deterministic inputs, duplicate or
+  invalid write targets, stale cache lineage, and reservation conflicts.
+- `lower_procgen_to_world_ops` lowers ratified documents to deterministic
+  `world_ops::OperationRecord` windows using `DensityFieldDeform` and
+  `MaterialFieldEdit` metadata payloads.
+- `build_procgen_product_contracts` creates ratifiable `ProductJobDescriptor`
+  and `ProductDescriptorCore` values for operation-window and field-product
+  candidate outputs.
 
 ## Determinism And Lineage
 
@@ -198,14 +221,16 @@ local previews are never replicated as authority.
 
 ## Gates
 
-Do not implement `domain/procgen` code until:
+Phase 6A has implemented the domain crate. Future procgen work must still keep
+these gates:
 
 - this domain contract is the implementation source of truth;
 - product jobs, publication barriers, query snapshots, strict consumers, render
   product selection, and derived GPU residency remain the only runtime product
   path;
-- first-slice tests can prove deterministic operation-window lowering from the
-  same seed, scope, version, inputs, and overlay generation.
+- first-slice tests continue proving deterministic operation-window lowering
+  from the same seed, scope, version, inputs, and overlay generation.
 
 Do not implement editor procgen providers, preview execution, bake execution,
-worker pools, or concrete generator algorithms in the readiness-gate phase.
+worker pools, or concrete generator algorithms until the next accepted
+Phase 6B implementation plan.

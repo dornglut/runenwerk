@@ -34,11 +34,12 @@ The target result is not finished open-world gameplay in one jump. The target
 is the substrate that makes open-world gameplay possible without private
 execution paths or renderer-owned world truth.
 
-The immediate priority is now M6.2 procgen through the first accepted procgen
-product track. That work must build on the completed execution substrate so
-procgen, gameplay graph, particles, physics, animation, world processes,
-renderer residency, and strict runtime consumers use formed products without
-inventing private execution paths.
+The immediate priority remains M6.2 procgen, now after the Phase 6A
+domain-first product track. Remaining procgen work must build on the completed
+execution substrate and the new `domain/procgen` contracts so gameplay graph,
+particles, physics, animation, world processes, renderer residency, and strict
+runtime consumers use formed products without inventing private execution
+paths.
 
 Owning domain and app roadmaps still own detailed implementation steps. This
 page owns cross-track ordering when those roadmaps overlap.
@@ -69,17 +70,18 @@ Required end-state properties:
 
 ## Current Focus
 
-The current work is Phase 6 of the execution substrate: the first procgen
-product track. Phases 1 through 5 are complete: serial product publication
-outcomes, deterministic publication barriers, runtime query snapshots, strict
-runtime consumption decisions, app-owned editor proof surfaces, render product
-selection producers, derived renderer GPU residency, and the accepted procgen
-domain readiness contract now exist.
+The current work is the remaining M6.2 procgen proof after Phase 6A. Phases 1
+through 5 are complete, and Phase 6A has added the domain-first procgen crate
+for deterministic documents, ratification, lowering, and product contracts.
 
 Current gaps:
 
-- `domain/procgen` code, ratification, lowering, product-job integration,
-  preview, bake, and editor providers remain unimplemented until Phase 6.
+- procgen editor providers, preview execution, bake commands, runtime
+  publication, and concrete generator algorithms remain deferred after Phase
+  6A;
+- Phase 6B must consume `domain/procgen` product contracts through product
+  publication barriers, query snapshots, render selection, and derived GPU
+  residency instead of adding private execution paths.
 
 ## Phased Roadmap
 
@@ -245,6 +247,13 @@ Out of scope:
 
 ### Phase 6 - First Procgen Product Track
 
+Status: Phase 6A complete as of 2026-05-13. Remaining Phase 6B work covers the
+editor/runtime proof for preview and bake commands on top of `domain/procgen`.
+
+Closeout evidence:
+
+- [reports/closeouts/sdf-first-execution-phase-6a/closeout.md](../reports/closeouts/sdf-first-execution-phase-6a/closeout.md)
+
 Intent: implement the first visible open-world producer on top of the completed
 execution substrate. This is a procgen-owned product track, not a generic
 content-platform launch.
@@ -271,11 +280,18 @@ Out of scope:
 - procedural quests;
 - particles, physics, animation, and world-process domains.
 
+Phase 6A completed the domain-first portion of this gate: `domain/procgen`
+documents, first-slice node semantics, ratification, deterministic
+operation-window lowering, planning metadata, product job descriptors, product
+descriptor builders, and ready publication DTOs. Runtime publication, query
+snapshot staging, editor providers, preview execution, bake commands, field
+payload formation, and concrete generator algorithms remain deferred.
+
 ## Procgen Code Gate
 
-M6.2 procgen code may start only from the accepted
-`docs-site/src/content/docs/domain/procgen/README.md` contract now that Phases
-1 through 5 are complete.
+Further M6.2 procgen code must continue from the accepted
+`docs-site/src/content/docs/domain/procgen/README.md` contract and the Phase 6A
+`domain/procgen` implementation.
 
 Procgen code must not bypass product jobs, query snapshots, publication
 barriers, strict consumer policy, render product selection, or derived GPU
@@ -350,11 +366,18 @@ Roadmap updates should verify:
   residency summaries while world render-cache invalidation removes stale typed
   cache entries;
 - Phase 5 procgen readiness is complete: the accepted
-  `domain/procgen/README.md` contract defines future procgen ownership,
-  graph-backed generator documents, seed/scope/version policy, cache lineage,
-  authored overlay preservation, runtime/offline policy, server-validated
-  multiplayer authority, and product output paths through the completed
-  execution substrate;
+  `domain/procgen/README.md` contract defines procgen ownership, graph-backed
+  generator documents, seed/scope/version policy, cache lineage, authored
+  overlay preservation, runtime/offline policy, server-validated multiplayer
+  authority, and product output paths through the completed execution
+  substrate;
+- Phase 6A procgen domain product track is complete: `domain/procgen` owns
+  graph-backed deterministic documents, first-slice terrain/material node
+  semantics, planning metadata, reservation diagnostics, semantic ratification,
+  deterministic lowering to `world_ops::OperationRecord` windows, changed-region
+  explanations, and product job/publication descriptor builders while editor
+  providers, preview/bake execution, field payload bytes, and concrete generator
+  algorithms remain deferred;
 - `world_sdf`, material, texture, asset/import, and editor product surfaces
   align with product-core metadata while preserving their owning-domain APIs;
 - render prepare carries backend-neutral `RenderProductSelection` metadata as

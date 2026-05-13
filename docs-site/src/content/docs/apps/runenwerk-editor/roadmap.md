@@ -93,7 +93,7 @@ Current post-M3 gaps:
 - The M4 asset foundation exists: `domain/asset` owns asset ids, taxonomy, source/artifact descriptors, dependency graph, deterministic import plans, diagnostics, and ratification; `ProjectFileV2` migration exists in `domain/editor/editor_persistence/src/project_file.rs`; `world_sdf` owns field-product descriptors and ratification; `world_ops` owns generic product invalidation/build helpers; and the editor app owns initial catalog runtime, import jobs, field-product jobs, and first Asset Browser/Import Inspector/Field Product Viewer/SDF Brush Browser providers. M5 now adds external runtime preview, project-owned reload status classification, world_sdf runtime intake, and restart boundaries for the existing product families.
 - `domain/material_graph` and `domain/texture` now exist as initial M6 domain-contract crates with ratifiers, descriptor/product contracts, source/lineage metadata, and focused tests.
 - Descriptor-first material and texture providers exist for material graph canvas, material inspector, material preview, Texture2D/generated texture inspection, and Texture3D/volume inspection. They expose domain descriptors, source/cache/reload diagnostics, and fail-closed adapter boundaries without making editor canvas state authoritative.
-- The accepted `domain/procgen/README.md` contract exists, but there is no `domain/procgen` crate/code, `domain/particles`, `domain/physics`, `domain/animation`, or `domain/simulation_process`.
+- `domain/procgen` now exists for the Phase 6A domain-first procgen product track: graph-backed deterministic documents, first-slice terrain/material node semantics, ratification, lowering to `world_ops` operation windows, and product job/publication descriptors. There is still no `domain/particles`, `domain/physics`, `domain/animation`, or `domain/simulation_process`.
 - Concrete editor providers for procedural generation preview, particles, physics authoring/debug, animation timeline, curve editing, and simulation preview do not exist yet; their M6 workspace surfaces still route through fail-closed placeholder diagnostics.
 - There is no `domain/gameplay_graph`, Action/Trigger/Rule IR, gameplay graph compiler, gameplay graph to ECS query/event/schedule lowering, or gameplay graph editor/debug provider.
 
@@ -986,14 +986,13 @@ M6 closes by sub-milestone, not as one broad bucket. Remaining M6 implementation
 
 Current M6 focus:
 
-- Begin M6.2 procgen only from the accepted
-  `docs-site/src/content/docs/domain/procgen/README.md` contract and keep the
-  first implementation track focused on bounded region terrain/material
-  generation, planning lifecycle metadata, reservations, explanation data, and
-  lowering to `world_ops` operation windows.
+- Continue M6.2 procgen from the accepted
+  `docs-site/src/content/docs/domain/procgen/README.md` contract and the Phase
+  6A `domain/procgen` crate, which now supplies ratified descriptors, lowering,
+  product jobs, and diagnostics for bounded region terrain/material generation.
 - Keep procgen graph canvas and procgen preview providers code-deferred until
-  `domain/procgen` implementation can supply ratified descriptors, lowering,
-  product jobs, and diagnostics.
+  Phase 6B explicitly wires them through product publication barriers, query
+  snapshots, render selection, and derived GPU residency.
 - Keep rendered SDF/GPU overlays and material/SDF preview handoff deferred until
   the renderer product-selection and derived-residency contracts are ready.
 

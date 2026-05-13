@@ -40,6 +40,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `graph` | `domain/graph` | domain | Domain-neutral graph definitions, typed ports, validation, traversal, and cycle policy. | evolving |
 | `texture` | `domain/texture` | domain | Texture2D, Texture3D/volume, generated texture product, preview descriptor, sampler, color-space, compression, ratification, and lineage contracts. | evolving |
 | `material_graph` | `domain/material_graph` | domain | Authored material graph documents, node catalog boundaries, ratification, lowering, source maps, cache keys, and formed material product descriptors. | evolving |
+| `procgen` | `domain/procgen` | domain | Deterministic procgen documents, terrain/material node catalog semantics, planning metadata, ratification, lowering to world operation windows, and product job/publication descriptors. | evolving |
 | `drawing` | `domain/drawing` | domain | Drawing document, stroke, brush, paper, layer/composition graph, command, ratification, diagnostic, and tile-lineage contracts. | evolving |
 | `scene` | `domain/scene` | domain | Scene transform value contracts and domain-owned transform schema descriptors. | evolving |
 | `ui_math` | `domain/ui/ui_math` | domain | UI geometry primitives. | evolving |
