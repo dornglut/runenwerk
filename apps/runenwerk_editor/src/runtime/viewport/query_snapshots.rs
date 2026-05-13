@@ -1,8 +1,8 @@
 use anyhow::Result;
-use ecs::{QueryAccess, World, query_snapshot_source_generation};
+use ecs::World;
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionFreshness, ExpressionProductDescriptor,
-    ExpressionSourceRealityClass, ProductAvailabilityState,
+    ExpressionProductId, ExpressionSourceRealityClass, ProductAvailabilityState,
 };
 use engine::runtime::QuerySnapshotRuntimeResource;
 use engine::{BarrierKind, ExecutionBarrier};
@@ -18,6 +18,8 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::ViewportArtifactObservationResource;
 
+use std::collections::BTreeSet;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorViewportQuerySnapshotJournalEntry {
     pub barrier_index: usize,
@@ -28,6 +30,41 @@ pub struct EditorViewportQuerySnapshotJournalEntry {
     pub diagnostic_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorViewportQuerySnapshotSummary {
+    pub published_count: usize,
+    pub rejected_count: usize,
+    pub preserved_count: usize,
+    pub invalidated_count: usize,
+    pub diagnostic_signature: Vec<String>,
+}
+
+impl EditorViewportQuerySnapshotSummary {
+    fn from_report(report: &QuerySnapshotPublicationReport) -> Self {
+        let mut diagnostic_signature = report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                format!(
+                    "{:?}:{:?}:{}",
+                    diagnostic.code,
+                    diagnostic.product_id.map(|id| id.raw()),
+                    diagnostic.message
+                )
+            })
+            .collect::<Vec<_>>();
+        diagnostic_signature.sort();
+        diagnostic_signature.dedup();
+        Self {
+            published_count: report.published_count,
+            rejected_count: report.rejected_count,
+            preserved_count: report.preserved_count,
+            invalidated_count: report.invalidated_count,
+            diagnostic_signature,
+        }
+    }
+}
+
 pub fn publish_viewport_query_snapshots_at_barrier(
     barrier: &ExecutionBarrier,
     world: &mut World,
@@ -36,33 +73,24 @@ pub fn publish_viewport_query_snapshots_at_barrier(
         return Ok(());
     }
 
-    let source_generation = query_snapshot_source_generation(
-        world,
-        &QueryAccess::default().with_resource_read::<ViewportArtifactObservationResource>(),
-    );
+    let Some(observations) = world
+        .resource::<ViewportArtifactObservationResource>()
+        .ok()
+        .cloned()
+    else {
+        return Ok(());
+    };
     let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
         return Ok(());
     };
-    let Some(observations) = world.remove_resource::<ViewportArtifactObservationResource>() else {
-        world.insert_resource(host);
-        return Ok(());
-    };
     let Some(mut snapshots) = world.remove_resource::<QuerySnapshotRuntimeResource>() else {
-        world.insert_resource(observations);
         world.insert_resource(host);
         return Ok(());
     };
 
-    publish_viewport_query_snapshots(
-        &mut host.app,
-        &observations,
-        &mut snapshots,
-        source_generation,
-        barrier,
-    );
+    publish_viewport_query_snapshots(&mut host.app, &observations, &mut snapshots, barrier);
 
     world.insert_resource(snapshots);
-    world.insert_resource(observations);
     world.insert_resource(host);
     Ok(())
 }
@@ -71,24 +99,22 @@ pub fn publish_viewport_query_snapshots(
     app: &mut RunenwerkEditorApp,
     observations: &ViewportArtifactObservationResource,
     snapshots: &mut QuerySnapshotRuntimeResource,
-    source_generation: u64,
     barrier: &ExecutionBarrier,
 ) -> QuerySnapshotPublicationReport {
     if barrier.kind != BarrierKind::QuerySnapshotPublication {
         return QuerySnapshotPublicationReport::default();
     }
 
-    let staged = build_viewport_query_snapshot_descriptors(observations, source_generation);
+    let staged = build_viewport_query_snapshot_descriptors(observations);
     if staged.is_empty() {
         return QuerySnapshotPublicationReport::default();
     }
 
-    let journal_start = snapshots.journal().len();
     snapshots.stage_all(staged);
     let report = snapshots.publish_staged(barrier);
-    let published_entries = &snapshots.journal()[journal_start..];
+    let published_entries = snapshots.last_published_entries().to_vec();
 
-    for entry in published_entries {
+    for entry in &published_entries {
         app.record_viewport_query_snapshot(EditorViewportQuerySnapshotJournalEntry {
             barrier_index: entry.barrier_index,
             product_id: entry.product_id,
@@ -99,19 +125,22 @@ pub fn publish_viewport_query_snapshots(
         });
     }
 
-    app.append_console_line(format!(
-        "[query_snapshot] barrier {}: published={} rejected={} preserved={} invalidated={}",
-        barrier.index,
-        report.published_count,
-        report.rejected_count,
-        report.preserved_count,
-        report.invalidated_count
-    ));
-    for diagnostic in report.diagnostics.iter().take(5) {
-        app.append_console_warning(format!(
-            "[query_snapshot] {:?}: {}",
-            diagnostic.code, diagnostic.message
+    let summary = EditorViewportQuerySnapshotSummary::from_report(&report);
+    if app.update_viewport_query_snapshot_summary(summary) {
+        app.append_console_line(format!(
+            "[query_snapshot] barrier {}: published={} rejected={} preserved={} invalidated={}",
+            barrier.index,
+            report.published_count,
+            report.rejected_count,
+            report.preserved_count,
+            report.invalidated_count
         ));
+        for diagnostic in report.diagnostics.iter().take(5) {
+            app.append_console_warning(format!(
+                "[query_snapshot] {:?}: {}",
+                diagnostic.code, diagnostic.message
+            ));
+        }
     }
 
     report
@@ -119,8 +148,8 @@ pub fn publish_viewport_query_snapshots(
 
 pub fn build_viewport_query_snapshot_descriptors(
     observations: &ViewportArtifactObservationResource,
-    source_generation: u64,
 ) -> Vec<QuerySnapshotProductDescriptor> {
+    let source_generation = observations.generation();
     observations
         .viewport_ids()
         .filter_map(|viewport_id| observations.frame_for(viewport_id))
@@ -132,10 +161,13 @@ fn frame_query_snapshot_descriptors(
     frame: &ArtifactObservationFrame,
     source_generation: u64,
 ) -> Vec<QuerySnapshotProductDescriptor> {
-    frame
-        .available_products
-        .iter()
-        .map(|descriptor| {
+    selected_product_ids(frame)
+        .into_iter()
+        .filter_map(|product_id| {
+            let descriptor = frame
+                .available_products
+                .iter()
+                .find(|descriptor| descriptor.id == product_id)?;
             let availability = frame
                 .availability_by_product
                 .get(&descriptor.id)
@@ -159,9 +191,18 @@ fn frame_query_snapshot_descriptors(
                 snapshot.descriptor = core;
                 snapshot.diagnostics.push(diagnostic);
             }
-            snapshot
+            Some(snapshot)
         })
         .collect()
+}
+
+fn selected_product_ids(frame: &ArtifactObservationFrame) -> Vec<ExpressionProductId> {
+    let mut selected = BTreeSet::new();
+    if let Some(primary) = frame.selected_primary_product_id {
+        selected.insert(primary);
+    }
+    selected.extend(frame.selected_overlay_product_ids.iter().copied());
+    selected.into_iter().collect()
 }
 
 fn product_descriptor_for_viewport_product(
@@ -277,6 +318,7 @@ mod tests {
     ) -> ViewportArtifactObservationResource {
         let mut frame = ArtifactObservationFrame::new(ViewportId(1), RealityVersion(3));
         frame.available_products.push(descriptor.clone());
+        frame.selected_primary_product_id = Some(descriptor.id);
         frame
             .availability_by_product
             .insert(descriptor.id, availability);
@@ -299,7 +341,6 @@ mod tests {
             &mut app,
             &observations,
             &mut snapshots,
-            1,
             &barrier(BarrierKind::ProductPublication),
         );
         assert_eq!(skipped.published_count, 0);
@@ -309,7 +350,6 @@ mod tests {
             &mut app,
             &observations,
             &mut snapshots,
-            1,
             &barrier(BarrierKind::QuerySnapshotPublication),
         );
 
@@ -335,7 +375,6 @@ mod tests {
             &mut app,
             &observations,
             &mut snapshots,
-            1,
             &barrier(BarrierKind::QuerySnapshotPublication),
         );
 
@@ -375,14 +414,12 @@ mod tests {
             &mut app,
             &first,
             &mut snapshots,
-            1,
             &barrier(BarrierKind::QuerySnapshotPublication),
         );
         let report = publish_viewport_query_snapshots(
             &mut app,
             &second,
             &mut snapshots,
-            2,
             &barrier(BarrierKind::QuerySnapshotPublication),
         );
 
@@ -399,5 +436,82 @@ mod tests {
                 .iter()
                 .any(|entry| entry.status == QuerySnapshotPublicationStatus::Preserved)
         );
+    }
+
+    #[test]
+    fn viewport_query_snapshots_publish_only_selected_products() {
+        let selected = descriptor(4, ExpressionFreshness::Current);
+        let selected_overlay = descriptor(5, ExpressionFreshness::Current);
+        let unselected_stale = descriptor(6, ExpressionFreshness::PotentiallyStale);
+        let mut frame = ArtifactObservationFrame::new(ViewportId(1), RealityVersion(3));
+        frame.selected_primary_product_id = Some(selected.id);
+        frame.selected_overlay_product_ids = vec![selected_overlay.id];
+        frame.available_products = vec![
+            selected.clone(),
+            selected_overlay.clone(),
+            unselected_stale.clone(),
+        ];
+        frame
+            .availability_by_product
+            .insert(selected.id, ProductAvailabilityState::Available);
+        frame
+            .availability_by_product
+            .insert(selected_overlay.id, ProductAvailabilityState::Available);
+        frame
+            .availability_by_product
+            .insert(unselected_stale.id, ProductAvailabilityState::Available);
+        let mut observations = ViewportArtifactObservationResource::default();
+        observations.upsert_frame(frame);
+
+        let mut app = RunenwerkEditorApp::new();
+        let mut snapshots = QuerySnapshotRuntimeResource::default();
+        let report = publish_viewport_query_snapshots(
+            &mut app,
+            &observations,
+            &mut snapshots,
+            &barrier(BarrierKind::QuerySnapshotPublication),
+        );
+
+        assert_eq!(report.published_count, 2);
+        assert_eq!(report.rejected_count, 0);
+        assert!(
+            snapshots
+                .current_snapshot(ProductIdentity::new(selected.id.0))
+                .is_some()
+        );
+        assert!(
+            snapshots
+                .current_snapshot(ProductIdentity::new(selected_overlay.id.0))
+                .is_some()
+        );
+        assert!(
+            snapshots
+                .current_snapshot(ProductIdentity::new(unselected_stale.id.0))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn repeated_identical_viewport_query_snapshot_does_not_log_or_invalidate() {
+        let observations = observations(
+            descriptor(7, ExpressionFreshness::Current),
+            ProductAvailabilityState::Available,
+        );
+        let mut app = RunenwerkEditorApp::new();
+        let mut snapshots = QuerySnapshotRuntimeResource::default();
+        let barrier = barrier(BarrierKind::QuerySnapshotPublication);
+
+        let first =
+            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &barrier);
+        let console_count = app.console_lines().len();
+        let second =
+            publish_viewport_query_snapshots(&mut app, &observations, &mut snapshots, &barrier);
+
+        assert_eq!(first.invalidated_count, 0);
+        assert_eq!(second.invalidated_count, 0);
+        assert!(!second.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == FieldProductDiagnosticCode::GenerationMismatch
+        }));
+        assert_eq!(app.console_lines().len(), console_count);
     }
 }

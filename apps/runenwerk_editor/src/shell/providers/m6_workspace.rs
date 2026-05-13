@@ -84,8 +84,6 @@ pub(super) fn is_m6_workspace_surface(kind: ToolSurfaceKind) -> bool {
             | ToolSurfaceKind::MaterialPreview
             | ToolSurfaceKind::TextureViewer
             | ToolSurfaceKind::VolumeTextureViewer
-            | ToolSurfaceKind::ProcgenGraphCanvas
-            | ToolSurfaceKind::ProcgenPreview
             | ToolSurfaceKind::GameplayGraphCanvas
             | ToolSurfaceKind::GameplayCompilerDiagnostics
             | ToolSurfaceKind::ParticleGraphCanvas
@@ -123,8 +121,6 @@ fn m6_surface_title(kind: ToolSurfaceKind) -> &'static str {
         ToolSurfaceKind::MaterialPreview => "Material Preview",
         ToolSurfaceKind::TextureViewer => "Texture Viewer",
         ToolSurfaceKind::VolumeTextureViewer => "Volume Texture Viewer",
-        ToolSurfaceKind::ProcgenGraphCanvas => "Procgen Graph Canvas",
-        ToolSurfaceKind::ProcgenPreview => "Procgen Preview",
         ToolSurfaceKind::GameplayGraphCanvas => "Gameplay Graph Canvas",
         ToolSurfaceKind::GameplayCompilerDiagnostics => "Gameplay Compiler Diagnostics",
         ToolSurfaceKind::ParticleGraphCanvas => "Particle Graph Canvas",
@@ -153,9 +149,6 @@ fn m6_surface_gate_line(kind: ToolSurfaceKind) -> &'static str {
         }
         ToolSurfaceKind::TextureViewer | ToolSurfaceKind::VolumeTextureViewer => {
             "gate: texture descriptors exist; Texture3D preview/upload adapter and viewer provider are not implemented"
-        }
-        ToolSurfaceKind::ProcgenGraphCanvas | ToolSurfaceKind::ProcgenPreview => {
-            "gate: procgen Phase 6B provider was not selected; fallback remains diagnostic only"
         }
         ToolSurfaceKind::GameplayGraphCanvas | ToolSurfaceKind::GameplayCompilerDiagnostics => {
             "gate: gameplay event/action/state/quest contracts are not accepted"

@@ -1,5 +1,5 @@
 //! File: apps/runenwerk_editor/src/runtime/procgen/mod.rs
-//! Purpose: Editor-owned Phase 6B procgen preview proof wiring.
+//! Purpose: Editor-owned Phase 6C procgen CPU preview proof wiring.
 
 use std::collections::BTreeSet;
 
@@ -175,7 +175,7 @@ impl ProcgenRuntimeState {
             .collect::<Vec<_>>()
             .join(", ");
         let mut lines = vec![
-            "procgen graph canvas: domain-backed Phase 6B proof".to_string(),
+            "procgen graph canvas: domain-backed Phase 6C CPU preview".to_string(),
             format!(
                 "document: {} #{}",
                 self.document.label,
@@ -632,10 +632,9 @@ pub fn publish_procgen_query_snapshots(
         return QuerySnapshotPublicationReport::default();
     }
 
-    let journal_start = snapshots.journal().len();
     snapshots.stage_all(staged);
     let report = snapshots.publish_staged(barrier);
-    let published_entries = &snapshots.journal()[journal_start..];
+    let published_entries = snapshots.last_published_entries().to_vec();
 
     if report.published_count > 0 {
         app.procgen_runtime_mut().last_query_snapshot_key = Some(snapshot_key);
@@ -669,7 +668,7 @@ pub fn publish_procgen_query_snapshots(
         ));
     }
 
-    for entry in published_entries {
+    for entry in &published_entries {
         if entry.status != QuerySnapshotPublicationStatus::Published {
             app.procgen_runtime_mut().record_journal(
                 EditorProcgenJournalStage::QuerySnapshotPublication,

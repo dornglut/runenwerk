@@ -1852,11 +1852,17 @@ mod tests {
     }
 
     #[test]
-    fn procgen_providers_resolve_before_m6_fallback_with_visible_preview_lines() {
+    fn procgen_providers_resolve_directly_with_visible_preview_lines() {
         let registry = EditorSurfaceProviderRegistry::runenwerk_default();
         let app = RunenwerkEditorApp::new();
         let shell_state = RunenwerkEditorShellState::new();
         let theme = ThemeTokens::default();
+        assert!(!m6_workspace::is_m6_workspace_surface(
+            ToolSurfaceKind::ProcgenGraphCanvas
+        ));
+        assert!(!m6_workspace::is_m6_workspace_surface(
+            ToolSurfaceKind::ProcgenPreview
+        ));
 
         let graph_frame = registry.resolve_frame(
             &context(&app, &shell_state, &theme),
@@ -1871,7 +1877,7 @@ mod tests {
             graph_frame.provider_id,
             Some(PROCGEN_GRAPH_CANVAS_PROVIDER_ID)
         );
-        assert!(provider_frame_text(&graph_frame).contains("domain-backed Phase 6B proof"));
+        assert!(provider_frame_text(&graph_frame).contains("domain-backed Phase 6C CPU preview"));
 
         let preview_frame = registry.resolve_frame(
             &context(&app, &shell_state, &theme),

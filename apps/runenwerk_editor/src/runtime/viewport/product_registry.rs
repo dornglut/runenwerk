@@ -279,15 +279,29 @@ impl ViewportPresentationStateResource {
 #[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct ViewportArtifactObservationResource {
     frames_by_viewport: BTreeMap<ViewportId, ArtifactObservationFrame>,
+    generation: u64,
 }
 
 impl ViewportArtifactObservationResource {
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     pub fn frame_for(&self, viewport_id: ViewportId) -> Option<&ArtifactObservationFrame> {
         self.frames_by_viewport.get(&viewport_id)
     }
 
-    pub fn upsert_frame(&mut self, frame: ArtifactObservationFrame) {
+    pub fn upsert_frame(&mut self, frame: ArtifactObservationFrame) -> bool {
+        if self
+            .frames_by_viewport
+            .get(&frame.viewport_id)
+            .is_some_and(|existing| existing == &frame)
+        {
+            return false;
+        }
         self.frames_by_viewport.insert(frame.viewport_id, frame);
+        self.bump_generation();
+        true
     }
 
     pub fn viewport_ids(&self) -> impl Iterator<Item = ViewportId> + '_ {
@@ -295,12 +309,20 @@ impl ViewportArtifactObservationResource {
     }
 
     pub fn retain_viewports(&mut self, mut keep: impl FnMut(ViewportId) -> bool) {
+        let before_len = self.frames_by_viewport.len();
         self.frames_by_viewport
             .retain(|viewport_id, _| keep(*viewport_id));
+        if self.frames_by_viewport.len() != before_len {
+            self.bump_generation();
+        }
     }
 
     pub fn is_empty(&self) -> bool {
         self.frames_by_viewport.is_empty()
+    }
+
+    fn bump_generation(&mut self) {
+        self.generation = self.generation.saturating_add(1);
     }
 }
 
@@ -337,6 +359,21 @@ mod tests {
         assert!(ViewportProductRegistryResource::default().is_empty());
         assert!(ViewportPresentationStateResource::default().is_empty());
         assert!(ViewportArtifactObservationResource::default().is_empty());
+    }
+
+    #[test]
+    fn observation_generation_changes_only_when_frame_content_changes() {
+        let mut observations = ViewportArtifactObservationResource::default();
+        let frame = ArtifactObservationFrame::new(MAIN_VIEWPORT_ID, RealityVersion(1));
+
+        assert_eq!(observations.generation(), 0);
+        assert!(observations.upsert_frame(frame.clone()));
+        assert_eq!(observations.generation(), 1);
+        assert!(!observations.upsert_frame(frame));
+        assert_eq!(observations.generation(), 1);
+
+        observations.retain_viewports(|viewport_id| viewport_id != MAIN_VIEWPORT_ID);
+        assert_eq!(observations.generation(), 2);
     }
 
     #[test]

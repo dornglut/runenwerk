@@ -13,8 +13,8 @@ use crate::asset_pipeline::{
 use crate::runtime::procgen::ProcgenRuntimeState;
 use crate::runtime::viewport::{
     EditorViewportGpuResidencyJournalEntry, EditorViewportGpuResidencySummary,
-    EditorViewportQuerySnapshotJournalEntry, EditorViewportRenderSelectionJournalEntry,
-    EditorViewportRenderSelectionSummary,
+    EditorViewportQuerySnapshotJournalEntry, EditorViewportQuerySnapshotSummary,
+    EditorViewportRenderSelectionJournalEntry, EditorViewportRenderSelectionSummary,
 };
 use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
 
@@ -35,6 +35,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
     pub(crate) field_product_publication_journal: Vec<EditorFieldProductPublicationJournalEntry>,
     pub(crate) viewport_query_snapshot_journal: Vec<EditorViewportQuerySnapshotJournalEntry>,
+    pub(crate) last_viewport_query_snapshot_summary: Option<EditorViewportQuerySnapshotSummary>,
     pub(crate) viewport_render_selection_journal: Vec<EditorViewportRenderSelectionJournalEntry>,
     pub(crate) last_viewport_render_selection_summary: Option<EditorViewportRenderSelectionSummary>,
     pub(crate) viewport_gpu_residency_journal: Vec<EditorViewportGpuResidencyJournalEntry>,
@@ -65,6 +66,7 @@ impl RunenwerkEditorApp {
             pending_field_product_publications: Vec::new(),
             field_product_publication_journal: Vec::new(),
             viewport_query_snapshot_journal: Vec::new(),
+            last_viewport_query_snapshot_summary: None,
             viewport_render_selection_journal: Vec::new(),
             last_viewport_render_selection_summary: None,
             viewport_gpu_residency_journal: Vec::new(),
@@ -239,6 +241,23 @@ impl RunenwerkEditorApp {
         entry: EditorViewportQuerySnapshotJournalEntry,
     ) {
         self.viewport_query_snapshot_journal.push(entry);
+        const VIEWPORT_QUERY_SNAPSHOT_JOURNAL_LIMIT: usize = 128;
+        if self.viewport_query_snapshot_journal.len() > VIEWPORT_QUERY_SNAPSHOT_JOURNAL_LIMIT {
+            let drain =
+                self.viewport_query_snapshot_journal.len() - VIEWPORT_QUERY_SNAPSHOT_JOURNAL_LIMIT;
+            self.viewport_query_snapshot_journal.drain(0..drain);
+        }
+    }
+
+    pub fn update_viewport_query_snapshot_summary(
+        &mut self,
+        summary: EditorViewportQuerySnapshotSummary,
+    ) -> bool {
+        if self.last_viewport_query_snapshot_summary.as_ref() == Some(&summary) {
+            return false;
+        }
+        self.last_viewport_query_snapshot_summary = Some(summary);
+        true
     }
 
     pub fn viewport_render_selection_journal(

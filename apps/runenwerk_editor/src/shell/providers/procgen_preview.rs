@@ -22,7 +22,7 @@ impl EditorSurfaceProvider for ProcgenPreviewProvider {
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
         let mut lines = vec![
-            "procgen preview: concrete Phase 6B provider".to_string(),
+            "procgen preview: concrete Phase 6C CPU preview provider".to_string(),
             surface_document_context_line(&request.document_context),
         ];
         lines.extend(context.app.procgen_runtime().preview_lines());

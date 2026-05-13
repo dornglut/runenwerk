@@ -11,6 +11,8 @@ use product::{
 };
 use scheduler::plan::{BarrierKind, ExecutionBarrier};
 
+const QUERY_SNAPSHOT_JOURNAL_LIMIT: usize = 512;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuerySnapshotJournalEntry {
     pub barrier_index: usize,
@@ -28,6 +30,7 @@ pub struct QuerySnapshotRuntimeResource {
     staged: Vec<QuerySnapshotProductDescriptor>,
     current: BTreeMap<ProductIdentity, QuerySnapshotProductDescriptor>,
     journal: Vec<QuerySnapshotJournalEntry>,
+    last_published_entries: Vec<QuerySnapshotJournalEntry>,
     last_report: QuerySnapshotPublicationReport,
 }
 
@@ -62,11 +65,16 @@ impl QuerySnapshotRuntimeResource {
         &self.journal
     }
 
+    pub fn last_published_entries(&self) -> &[QuerySnapshotJournalEntry] {
+        &self.last_published_entries
+    }
+
     pub fn last_report(&self) -> &QuerySnapshotPublicationReport {
         &self.last_report
     }
 
     pub fn publish_staged(&mut self, barrier: &ExecutionBarrier) -> QuerySnapshotPublicationReport {
+        self.last_published_entries.clear();
         if barrier.kind != BarrierKind::QuerySnapshotPublication {
             return QuerySnapshotPublicationReport::default();
         }
@@ -151,7 +159,7 @@ impl QuerySnapshotRuntimeResource {
         status: QuerySnapshotPublicationStatus,
         diagnostics: Vec<FieldProductDiagnostic>,
     ) {
-        self.journal.push(QuerySnapshotJournalEntry {
+        let entry = QuerySnapshotJournalEntry {
             barrier_index: barrier.index,
             phase_index: barrier.phase_index,
             after_wave_index: barrier.after_wave_index,
@@ -160,7 +168,13 @@ impl QuerySnapshotRuntimeResource {
             response_generation: snapshot.response_generation,
             status,
             diagnostics,
-        });
+        };
+        self.journal.push(entry.clone());
+        self.last_published_entries.push(entry);
+        if self.journal.len() > QUERY_SNAPSHOT_JOURNAL_LIMIT {
+            let drain = self.journal.len() - QUERY_SNAPSHOT_JOURNAL_LIMIT;
+            self.journal.drain(0..drain);
+        }
     }
 }
 
@@ -274,6 +288,8 @@ mod tests {
         assert_eq!(resource.staged().len(), 0);
         assert!(resource.current_snapshot(ProductIdentity::new(1)).is_some());
         assert_eq!(resource.journal()[0].barrier_index, 2);
+        assert_eq!(resource.last_published_entries().len(), 1);
+        assert_eq!(resource.last_published_entries()[0].product_id.raw(), 1);
     }
 
     #[test]
@@ -346,5 +362,24 @@ mod tests {
         assert_eq!(report.rejected_count, 1);
         assert!(resource.current_snapshot(ProductIdentity::new(7)).is_none());
         assert!(!report.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn query_snapshot_journal_keeps_recent_entries_but_last_publish_remains_complete() {
+        let mut resource = QuerySnapshotRuntimeResource::default();
+        for index in 0..(QUERY_SNAPSHOT_JOURNAL_LIMIT as u64 + 4) {
+            resource.stage(snapshot(1000 + index, 10));
+            resource.publish_staged(&barrier(
+                index as usize,
+                BarrierKind::QuerySnapshotPublication,
+            ));
+        }
+
+        assert_eq!(resource.journal().len(), QUERY_SNAPSHOT_JOURNAL_LIMIT);
+        assert_eq!(resource.last_published_entries().len(), 1);
+        assert_eq!(
+            resource.last_published_entries()[0].product_id.raw(),
+            1000 + QUERY_SNAPSHOT_JOURNAL_LIMIT as u64 + 3
+        );
     }
 }
