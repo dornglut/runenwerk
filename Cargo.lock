@@ -753,6 +753,7 @@ name = "drawing"
 version = "0.1.0"
 dependencies = [
  "graph",
+ "product",
  "ratification",
 ]
 
@@ -2775,6 +2776,8 @@ dependencies = [
  "ecs",
  "engine",
  "graph",
+ "product",
+ "tracing",
  "ui_input",
  "ui_math",
  "ui_render_data",

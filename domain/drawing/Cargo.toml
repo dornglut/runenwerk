@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 graph = { path = "../graph" }
+product.workspace = true
 ratification = { path = "../../foundation/ratification" }

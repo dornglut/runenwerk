@@ -1,11 +1,11 @@
 ---
 title: Drawing Domain
-description: Current ownership boundary for pure drawing documents, strokes, brushes, paper descriptors, composition graph contracts, command DTOs, ratification, diagnostics, and tile-lineage metadata.
+description: Current ownership boundary for pure drawing documents, strokes, brushes, paper descriptors, composition graph contracts, command DTOs, ratification, diagnostics, deterministic ink tile products, and tile lineage.
 status: active
 owner: drawing
 layer: domain
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-13
 related_docs:
   - ../../design/active/drawing-domain-crate-design.md
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
@@ -14,13 +14,18 @@ related_docs:
 
 # Drawing Domain
 
-`domain/drawing` owns the engine-agnostic drawing contract slice for Phase 2 of
-the drawing platform roadmap. It defines authored drawing document DTOs,
-committed stroke truth, brush and paper descriptors, stack-first composition
-graph semantics, domain-owned commands, ratification reports, diagnostic code
-families, and derived tile-product lineage metadata.
+`domain/drawing` owns the engine-agnostic drawing contract slice for the
+drawing platform roadmap. It defines authored drawing document DTOs, committed
+stroke truth, brush and paper descriptors, stack-first composition graph
+semantics, domain-owned commands, ratification reports, diagnostic code
+families, deterministic CPU ink tile products, product-substrate helpers, and
+derived tile-product lineage metadata.
 
-The crate is not a drawing application and does not render pixels.
+The crate is not a drawing application. It can form deterministic CPU tile
+payloads from committed stroke truth and from non-authoritative preview stroke
+facts through the same rasterization path, but it does not own runtime
+presentation, GPU upload, native tablet APIs, package IO, or app workflow
+state.
 
 ## Current Scope
 
@@ -40,6 +45,17 @@ The current public API covers:
 - `DrawingTileProduct` and `DrawingTileProductSource` descriptors with source
   revision, output reference, quality class, formation version, invalidation
   bounds, lineage, and last-good fallback metadata;
+- `DrawingTileFormationPolicy`, `DrawingInkTilePayload`,
+  `DrawingInkTileProduct`, `DrawingInkTileFormation`,
+  `DrawingInkTileInvalidation`, `DrawingInkPreviewStroke`,
+  `form_drawing_ink_tiles`, `form_drawing_ink_tiles_for_ids`,
+  `form_drawing_ink_preview_tiles`,
+  `form_drawing_ink_preview_tiles_for_ids`, and
+  `drawing_ink_tile_invalidation_for_strokes` for deterministic committed and
+  live preview CPU ink tile formation;
+- drawing ink tile product helpers that build `domain/product`
+  `ProductJobDescriptor`, `ProductDescriptorCore`, `ProductPublicationOutcome`,
+  and `QuerySnapshotProductDescriptor` values for renderer strict consumption;
 - `DrawingCommand` and `DrawingTransaction` for normal mutations;
 - `ratify_drawing_document` and drawing-owned issue codes/diagnostic codes.
 
@@ -55,7 +71,6 @@ The crate intentionally does not own:
 - `apps/runenwerk_draw`;
 - tablet or Wacom input;
 - GPU or compute shader execution;
-- ink tile pixel formation;
 - native drawing package IO;
 - OpenRaster, PSD, Blender, or web reader export;
 - watercolor, decorative finish, or live effect formation;
@@ -64,11 +79,16 @@ The crate intentionally does not own:
 ## Ratification
 
 All externally supplied or command-produced drawing state should be ratified
-before acceptance. The Phase 2 ratifier rejects invalid stroke samples, empty
+before acceptance. The ratifier rejects invalid stroke samples, empty
 committed strokes, invalid brush and paper ranges, missing references, invalid
 layer stack state, graph structural errors, missing drawing semantics,
 pass-through groups, outputs without semantics, declared effects saved as
-authored state, and invalid tile lineage.
+authored state, and invalid tile lineage. Ink tile formation calls this ratifier
+before producing payloads and fails closed for invalid documents, invalid
+formation policy, unsupported eraser-only strokes, and oversized requested tile
+batches. Whole-stroke invalidation can report more tiles than one interactive
+batch; app/runtime callers should split those tile ids and call the bounded
+formation APIs.
 
 ## Serialization Status
 
@@ -80,6 +100,7 @@ serialized and migrated.
 
 ## Next Phase
 
-The next roadmap phase is stylus input contracts. That phase should consume
-`domain/drawing` stroke and command types, but it must not move native tablet or
-Wacom details into this crate.
+The next drawing phases should build on the existing command and product path:
+paper response, native package persistence, persistent tile cache policy, GPU
+product formation, eraser compositing, and richer layer/effect formation. Native
+tablet and Wacom details still belong outside this crate.

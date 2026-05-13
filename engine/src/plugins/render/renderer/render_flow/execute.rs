@@ -44,6 +44,17 @@ impl Renderer {
             &prepared_frame.dynamic_texture_targets,
             &dynamic_target_history_signatures,
         )?;
+        let upload_report = self
+            .dynamic_texture_targets
+            .apply_uploads(queue, &prepared_frame.dynamic_texture_uploads);
+        for diagnostic in &upload_report.diagnostics {
+            tracing::warn!(
+                target = "renderer.dynamic_texture_upload",
+                target_key = %diagnostic.target_key,
+                message = %diagnostic.message,
+                "dynamic texture upload rejected"
+            );
+        }
 
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
         let render_result = (|| -> Result<()> {

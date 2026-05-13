@@ -43,6 +43,17 @@ pub use ratification::{
 pub use simulation::FormationVersion;
 pub use stroke::{ColorRgba, PaintTarget, StrokeRecord, StrokeSample, StrokeToolKind, StylusTilt};
 pub use tile::{
-    CanvasCoordinate, CanvasRect, CanvasTileId, DrawingTileProduct, DrawingTileProductSource,
-    ProductQualityClass, TilePyramidLevel,
+    CanvasCoordinate, CanvasRect, CanvasTileId, DEFAULT_INK_TILE_PIXEL_HEIGHT,
+    DEFAULT_INK_TILE_PIXEL_WIDTH, DEFAULT_INK_TILE_SIZE_CANVAS_UNITS,
+    DEFAULT_MAX_AFFECTED_INK_TILES, DrawingInkPreviewStroke, DrawingInkTileFormation,
+    DrawingInkTileInvalidation, DrawingInkTilePayload, DrawingInkTileProduct,
+    DrawingInkTileProductContracts, DrawingTileFormationDiagnostic,
+    DrawingTileFormationDiagnosticCode, DrawingTileFormationPolicy, DrawingTileProduct,
+    DrawingTileProductSource, ProductQualityClass, TilePyramidLevel,
+    build_drawing_ink_tile_product_contracts, build_drawing_ink_tile_publication_outcome,
+    drawing_ink_tile_diagnostic_to_field_product, drawing_ink_tile_invalidation_for_preview_stroke,
+    drawing_ink_tile_invalidation_for_strokes, drawing_ink_tile_product_descriptor,
+    drawing_ink_tile_query_snapshot_for_descriptor, drawing_tile_determinism_key,
+    form_drawing_ink_preview_tiles, form_drawing_ink_preview_tiles_for_ids, form_drawing_ink_tiles,
+    form_drawing_ink_tiles_for_ids,
 };

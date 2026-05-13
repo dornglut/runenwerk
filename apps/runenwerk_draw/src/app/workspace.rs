@@ -1,7 +1,7 @@
 //! Canvas-first drawing workspace projection.
 
 use drawing::{CanvasCoordinate, CanvasRect};
-use ui_math::{UiRect, UiSize};
+use ui_math::{UiPoint, UiRect, UiSize};
 
 const MIN_CANVAS_MARGIN: f32 = 24.0;
 const LEFT_TOOLBAR_WIDTH: f32 = 56.0;
@@ -27,6 +27,27 @@ impl DrawingCanvasView {
         Some(CanvasCoordinate::new(
             self.pan.x + local_x / self.zoom,
             self.pan.y + local_y / self.zoom,
+        ))
+    }
+
+    pub fn canvas_to_screen(self, canvas_position: CanvasCoordinate) -> Option<UiPoint> {
+        if self.zoom <= 0.0 || !canvas_position.is_finite() {
+            return None;
+        }
+        Some(UiPoint::new(
+            self.screen_bounds.x + ((canvas_position.x - self.pan.x) * self.zoom) as f32,
+            self.screen_bounds.y + ((canvas_position.y - self.pan.y) * self.zoom) as f32,
+        ))
+    }
+
+    pub fn canvas_rect_to_screen(self, rect: CanvasRect) -> Option<UiRect> {
+        let min = self.canvas_to_screen(rect.min)?;
+        let max = self.canvas_to_screen(rect.max)?;
+        Some(UiRect::new(
+            min.x.min(max.x),
+            min.y.min(max.y),
+            (max.x - min.x).abs(),
+            (max.y - min.y).abs(),
         ))
     }
 }

@@ -13,6 +13,14 @@ type ScissoredViewportEmbedBatch = (
     ViewportSurfaceEmbedSlotId,
     Vec<ViewportEmbedInstanceRaw>,
 );
+type ScissoredProductSurfaceBatch = (
+    u32,
+    u32,
+    u32,
+    (u32, u32, u32, u32),
+    ProductSurfaceTextureBindingSource,
+    Vec<ViewportEmbedInstanceRaw>,
+);
 
 impl Renderer {
     pub(super) fn prepare_ui_draws(
@@ -40,6 +48,11 @@ impl Renderer {
             .submissions
             .iter()
             .flat_map(|submission| Self::extract_viewport_embed_instances(&submission.frame))
+            .collect::<Vec<_>>();
+        let flattened_product_surface_instances = contribution
+            .submissions
+            .iter()
+            .flat_map(|submission| Self::extract_product_surface_instances(&submission.frame))
             .collect::<Vec<_>>();
 
         let rect_batches = group_rect_batches_ordered(
@@ -172,6 +185,34 @@ impl Renderer {
             },
         )
         .collect::<Vec<_>>();
+        let product_surface_batches = group_product_surface_batches_ordered(
+            flattened_product_surface_instances,
+            surface_width_u32,
+            surface_height_u32,
+        )
+        .into_iter()
+        .filter_map(
+            |(layer_order, first_order, last_order, scissor, source, instances)| {
+                if instances.is_empty() {
+                    return None;
+                }
+                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("engine_ui_product_surface_batch_instances"),
+                    contents: bytemuck::cast_slice(&instances),
+                    usage: BufferUsages::VERTEX,
+                });
+                Some(UiProductSurfaceBatch {
+                    layer_order,
+                    first_primitive_order: first_order,
+                    last_primitive_order: last_order,
+                    scissor,
+                    instance_count: instances.len() as u32,
+                    instance_buffer,
+                    source,
+                })
+            },
+        )
+        .collect::<Vec<_>>();
 
         if let Some(rect_pass) = self.rect_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -198,13 +239,30 @@ impl Renderer {
                 bytemuck::bytes_of(&screen),
             );
         }
+        if let Some(product_surface_pass) = self.product_surface_pass.as_ref() {
+            let screen = ScreenUniformRaw {
+                size: [surface_width.max(1.0), surface_height.max(1.0)],
+                _pad: [0.0; 2],
+            };
+            queue.write_buffer(
+                &product_surface_pass.screen_buffer,
+                0,
+                bytemuck::bytes_of(&screen),
+            );
+        }
 
-        let draw_plan = build_ui_draw_plan(&rect_batches, &glyph_batches, &viewport_embed_batches);
+        let draw_plan = build_ui_draw_plan(
+            &rect_batches,
+            &glyph_batches,
+            &viewport_embed_batches,
+            &product_surface_batches,
+        );
 
         UiPreparedDraws {
             rect_batches,
             glyph_batches,
             viewport_embed_batches,
+            product_surface_batches,
             draw_plan,
         }
     }
@@ -264,6 +322,7 @@ impl Renderer {
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
         self.ensure_glyph_pass(device, surface_format);
         self.ensure_viewport_embed_pass(device, surface_format);
+        self.ensure_product_surface_pass(device, surface_format);
         let surface_size = (surface_width_u32.max(1), surface_height_u32.max(1));
         let prepare_ui_start = Instant::now();
         let prepared_ui_current = {
@@ -419,13 +478,66 @@ fn group_viewport_embed_batches_ordered(
     grouped
 }
 
+fn group_product_surface_batches_ordered(
+    flattened_instances: Vec<FlattenedUiProductSurfaceInstance>,
+    surface_width_u32: u32,
+    surface_height_u32: u32,
+) -> Vec<ScissoredProductSurfaceBatch> {
+    let mut grouped = Vec::<ScissoredProductSurfaceBatch>::new();
+    for instance in flattened_instances {
+        let scissor = instance
+            .clip
+            .map(|clip| Renderer::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
+            .unwrap_or_else(|| {
+                Some(Renderer::full_scissor(
+                    surface_width_u32,
+                    surface_height_u32,
+                ))
+            });
+        let Some(scissor) = scissor else {
+            continue;
+        };
+        if let Some((
+            last_layer_order,
+            _first_order,
+            last_order,
+            last_scissor,
+            last_source,
+            instances,
+        )) = grouped.last_mut()
+            && *last_layer_order == instance.layer_order
+            && *last_scissor == scissor
+            && *last_source == instance.source
+            && last_order.saturating_add(1) == instance.primitive_order
+        {
+            instances.push(instance.raw);
+            *last_order = instance.primitive_order;
+        } else {
+            grouped.push((
+                instance.layer_order,
+                instance.primitive_order,
+                instance.primitive_order,
+                scissor,
+                instance.source,
+                vec![instance.raw],
+            ));
+        }
+    }
+    grouped
+}
+
 fn build_ui_draw_plan(
     rect_batches: &[UiRectBatch],
     glyph_batches: &[UiGlyphBatch],
     viewport_embed_batches: &[UiViewportEmbedBatch],
+    product_surface_batches: &[UiProductSurfaceBatch],
 ) -> Vec<UiPreparedDrawCommand> {
-    let mut commands =
-        Vec::with_capacity(rect_batches.len() + glyph_batches.len() + viewport_embed_batches.len());
+    let mut commands = Vec::with_capacity(
+        rect_batches.len()
+            + glyph_batches.len()
+            + viewport_embed_batches.len()
+            + product_surface_batches.len(),
+    );
     commands.extend(
         rect_batches
             .iter()
@@ -439,16 +551,32 @@ fn build_ui_draw_plan(
             .map(|(index, _)| UiPreparedDrawCommand::ViewportEmbed(index)),
     );
     commands.extend(
+        product_surface_batches
+            .iter()
+            .enumerate()
+            .map(|(index, _)| UiPreparedDrawCommand::ProductSurface(index)),
+    );
+    commands.extend(
         glyph_batches
             .iter()
             .enumerate()
             .map(|(index, _)| UiPreparedDrawCommand::Glyph(index)),
     );
     commands.sort_by(|left, right| {
-        let left_key =
-            draw_command_sort_key(*left, rect_batches, glyph_batches, viewport_embed_batches);
-        let right_key =
-            draw_command_sort_key(*right, rect_batches, glyph_batches, viewport_embed_batches);
+        let left_key = draw_command_sort_key(
+            *left,
+            rect_batches,
+            glyph_batches,
+            viewport_embed_batches,
+            product_surface_batches,
+        );
+        let right_key = draw_command_sort_key(
+            *right,
+            rect_batches,
+            glyph_batches,
+            viewport_embed_batches,
+            product_surface_batches,
+        );
         left_key.cmp(&right_key)
     });
     commands
@@ -459,6 +587,7 @@ fn draw_command_sort_key(
     rect_batches: &[UiRectBatch],
     glyph_batches: &[UiGlyphBatch],
     viewport_embed_batches: &[UiViewportEmbedBatch],
+    product_surface_batches: &[UiProductSurfaceBatch],
 ) -> (u32, u32, u32, u8) {
     match command {
         UiPreparedDrawCommand::Rect(index) => {
@@ -472,6 +601,15 @@ fn draw_command_sort_key(
         }
         UiPreparedDrawCommand::ViewportEmbed(index) => {
             let batch = &viewport_embed_batches[index];
+            (
+                batch.layer_order,
+                batch.first_primitive_order,
+                batch.last_primitive_order,
+                1,
+            )
+        }
+        UiPreparedDrawCommand::ProductSurface(index) => {
+            let batch = &product_surface_batches[index];
             (
                 batch.layer_order,
                 batch.first_primitive_order,

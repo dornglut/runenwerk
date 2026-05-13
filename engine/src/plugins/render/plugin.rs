@@ -25,8 +25,8 @@ use super::residency::{
     derive_render_gpu_residency_system,
 };
 use super::runtime::{
-    RenderDynamicTextureTargetRequestRegistryResource, RenderRuntimeSet,
-    collect_runtime_ui_frame_submissions_system, frame_render_prepare_system,
+    RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
+    RenderRuntimeSet, collect_runtime_ui_frame_submissions_system, frame_render_prepare_system,
     frame_render_submit_system,
 };
 use super::shader::ShaderRegistryResource;
@@ -66,6 +66,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderGpuResidencyResource>();
         app.init_resource::<RenderGpuResidencyBudgetResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
+        app.init_resource::<RenderDynamicTextureUploadRegistryResource>();
         app.init_resource::<PipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
         app.init_resource::<RenderDebugOverlayState>();

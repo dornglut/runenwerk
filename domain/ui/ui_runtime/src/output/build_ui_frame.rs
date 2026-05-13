@@ -2708,6 +2708,10 @@ mod tests {
                     "Image(x={:.1} y={:.1} w={:.1} h={:.1})",
                     value.rect.x, value.rect.y, value.rect.width, value.rect.height
                 ),
+                UiPrimitive::ProductSurface(value) => format!(
+                    "ProductSurface(x={:.1} y={:.1} w={:.1} h={:.1})",
+                    value.rect.x, value.rect.y, value.rect.width, value.rect.height
+                ),
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -2720,6 +2724,7 @@ mod tests {
             UiPrimitive::GlyphRun(value) => value.sort_key,
             UiPrimitive::Image(value) => value.sort_key,
             UiPrimitive::ViewportSurfaceEmbed(value) => value.sort_key,
+            UiPrimitive::ProductSurface(value) => value.sort_key,
             UiPrimitive::Clip(ClipPrimitive::Push { sort_key, .. }) => *sort_key,
             UiPrimitive::Clip(ClipPrimitive::Pop { sort_key }) => *sort_key,
         }

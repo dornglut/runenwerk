@@ -1,10 +1,14 @@
 //! Drawing app runtime plugin.
 
+use engine::BarrierKind;
 use engine::SystemSetKey;
 use engine::plugins::render::UiFrameSubmissionRegistryResource;
 use engine::prelude::*;
 use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt};
 
+use crate::runtime::ink::{
+    publish_drawing_ink_products_at_barrier, publish_drawing_ink_query_snapshots_at_barrier,
+};
 use crate::runtime::resources::DrawingHostResource;
 use crate::runtime::systems::{route_draw_input_system, submit_draw_frame_system};
 
@@ -33,6 +37,14 @@ impl Plugin for DrawingAppPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DrawingHostResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
+        app.add_barrier_handler(
+            BarrierKind::ProductPublication,
+            publish_drawing_ink_products_at_barrier,
+        );
+        app.add_barrier_handler(
+            BarrierKind::QuerySnapshotPublication,
+            publish_drawing_ink_query_snapshots_at_barrier,
+        );
 
         app.add_systems(
             Update,

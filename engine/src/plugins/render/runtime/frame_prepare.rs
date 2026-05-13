@@ -110,6 +110,11 @@ pub(crate) fn frame_render_prepare_system(
         .ok()
         .map(|resource| resource.snapshot())
         .unwrap_or_default();
+    let dynamic_texture_uploads = world
+        .resource::<RenderDynamicTextureUploadRegistryResource>()
+        .ok()
+        .map(|resource| resource.snapshot())
+        .unwrap_or_default();
     let product_selections = world
         .resource::<PreparedRenderProductSelectionResource>()
         .ok()
@@ -135,6 +140,7 @@ pub(crate) fn frame_render_prepare_system(
         flows,
         flow_invocations,
         dynamic_texture_targets,
+        dynamic_texture_uploads,
         product_selections,
         viewport_surface_bindings,
         contributions,

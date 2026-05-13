@@ -1,7 +1,9 @@
 //! Runtime assembly for `runenwerk_draw`.
 
 use anyhow::Result;
-use engine::plugins::{RenderFlow, RenderPlugin, SchedulerDiagnosticsPlugin, default_plugins};
+use engine::plugins::{
+    RenderFlow, RenderPlugin, ScenePlugin, SchedulerDiagnosticsPlugin, default_plugins,
+};
 use engine::prelude::*;
 
 use crate::runtime::plugin::DrawingAppPlugin;
@@ -15,6 +17,7 @@ fn configure_app(app: &mut App) {
     app.set_title(WINDOW_TITLE);
     app.add_plugins(default_plugins());
     app.add_plugin(SchedulerDiagnosticsPlugin);
+    app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     register_draw_render_flow(app);
     app.add_plugin(DrawingAppPlugin);

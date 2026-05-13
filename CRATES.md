@@ -41,14 +41,14 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `texture` | `domain/texture` | domain | Texture2D, Texture3D/volume, generated texture product, preview descriptor, sampler, color-space, compression, ratification, and lineage contracts. | evolving |
 | `material_graph` | `domain/material_graph` | domain | Authored material graph documents, node catalog boundaries, ratification, lowering, source maps, cache keys, and formed material product descriptors. | evolving |
 | `procgen` | `domain/procgen` | domain | Deterministic procgen documents, terrain/material node catalog semantics, planning metadata, ratification, lowering to world operation windows, and product job/publication descriptors. | evolving |
-| `drawing` | `domain/drawing` | domain | Drawing document, stroke, brush, paper, layer/composition graph, command, ratification, diagnostic, and tile-lineage contracts. | evolving |
+| `drawing` | `domain/drawing` | domain | Drawing document, stroke, brush, paper, layer/composition graph, command, ratification, diagnostic, deterministic committed/preview ink tile formation, dirty tile invalidation, bounded tile-id formation, product helper, and tile-lineage contracts. | evolving |
 | `scene` | `domain/scene` | domain | Scene transform value contracts and domain-owned transform schema descriptors. | evolving |
 | `ui_math` | `domain/ui/ui_math` | domain | UI geometry primitives. | evolving |
 | `ui_input` | `domain/ui/ui_input` | domain | UI input, focus, routing, keyboard, pointer, stylus-capable packet, and shortcut contracts. | evolving |
 | `ui_layout` | `domain/ui/ui_layout` | domain | Stateless UI layout algorithms and constraints. | evolving |
 | `ui_text` | `domain/ui/ui_text` | domain | Text styles, buffers, atlas metrics, layout, cursor, and selection contracts. | evolving |
 | `ui_theme` | `domain/ui/ui_theme` | domain | UI color, spacing, radius, typography, and theme tokens. | evolving |
-| `ui_render_data` | `domain/ui/ui_render_data` | domain | Renderer-facing UI frame, layer, primitive, color, and batching contracts. | evolving |
+| `ui_render_data` | `domain/ui/ui_render_data` | domain | Renderer-facing UI frame, layer, primitive, neutral product-surface primitive, color, and batching contracts. | evolving |
 | `ui_surface` | `domain/ui/ui_surface` | domain | Surface definition, mount, observation, session, presentation, intent, capability, and ratification contracts. | evolving |
 | `ui_definition` | `domain/ui/ui_definition` | domain | Authored UI templates, slots, repeaters, embeds, menus, availability, validation, normalization, and retained UI formation. | evolving |
 | `ui_tree` | `domain/ui/ui_tree` | domain | Retained UI tree, widget IDs, nodes, and computed layout records. | evolving |
@@ -62,7 +62,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `editor_viewport` | `domain/editor/editor_viewport` | domain | Editor viewport camera, expression, hit, overlay, snap, and viewport contracts. | evolving |
 | `editor_shell` | `domain/editor/editor_shell` | domain | Editor shell composition, workspace identity, observation, expression, command routing, and view models. | evolving |
 | `editor_persistence` | `domain/editor/editor_persistence` | domain | Editor persistence formats, RON codec, scene migration/normalization/formation, and change-log contracts. | evolving |
-| `engine` | `engine` | engine/runtime | App/runtime/plugin composition, render/input/time/scene/world/net integration, and renderer execution. | evolving |
+| `engine` | `engine` | engine/runtime | App/runtime/plugin composition, render/input/time/scene/world/net integration, renderer execution, dynamic texture upload, and product-surface UI sampling. | evolving |
 | `engine_render_macros` | `engine_render_macros` | engine/runtime | Render derive macros for GPU parameter contracts. | evolving |
 | `engine_sim` | `net/engine_sim` | net | Simulation identity, tick, hash, profile, RNG, command-frame, and codec vocabulary. | evolving |
 | `engine_net` | `net/engine_net` | net | Transport-agnostic protocol, replication, session, runtime, simulation, and transport contracts. | evolving |
@@ -70,7 +70,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `engine_net_quic` | `net/engine_net_quic` | net | QUIC transport/runtime adapter for `engine_net`. | evolving |
 | `engine_replay` | `net/engine_history` | net | Replay archive, recorder, controller, policy, and validation substrate. | evolving |
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app, shell bridge, runtime viewport/render integration, persistence, and authoring workflows. | internal/evolving |
-| `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell with canvas-first workspace projection, minimal drawing document bootstrap, input routing, and shared engine/UI/render runtime integration. | internal/evolving |
+| `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell with canvas-first workspace projection, minimal drawing document bootstrap, input routing, real CPU ink preview, dirty tile batching, texture-backed product-surface ink visibility, last-good committed ink preservation, and shared engine/UI/render runtime integration. | internal/evolving |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime preview child process, loopback QUIC bootstrap host, preview/play app shell, and headless preview test harness. | internal/evolving |
 | `godot_chunking_addon` | `adapters/godot_chunking_addon` | adapter/tool | Godot bridge for chunking/spatial integration. | internal |
 | `native_tablet_input` | `adapters/native_tablet_input` | adapter/tool | Native tablet packet normalization proof for platform-neutral `ui_input` stylus events. | internal/evolving |

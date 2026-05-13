@@ -4,8 +4,9 @@ use super::render_flow::{
 };
 use crate::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
-    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetSignature, RenderPassId,
-    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
+    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetSignature,
+    RenderDynamicTextureUploadDescriptor, RenderPassId, RenderTextureSampleMode,
+    RenderTextureTargetFormat, RenderTextureTargetUsage, RenderTextureUploadAlphaMode,
 };
 use anyhow::{Result, bail};
 use std::collections::BTreeMap;
@@ -20,6 +21,7 @@ pub struct RendererDynamicTextureTarget {
     pub signature: RenderDynamicTextureTargetSignature,
     pub history_signature: Option<String>,
     pub generation: u64,
+    pub uploaded_product_generation: Option<u64>,
     pub stale: bool,
     pub last_invalidation_reason: Option<String>,
     unrequested_frames: u32,
@@ -91,6 +93,7 @@ impl RendererDynamicTextureTargetCache {
                         signature,
                         history_signature,
                         generation: previous_generation.saturating_add(1),
+                        uploaded_product_generation: None,
                         stale: false,
                         last_invalidation_reason: invalidation_reason,
                         unrequested_frames: 0,
@@ -121,6 +124,101 @@ impl RendererDynamicTextureTargetCache {
             }
         });
 
+        Ok(())
+    }
+
+    pub fn apply_uploads(
+        &mut self,
+        queue: &Queue,
+        uploads: &[RenderDynamicTextureUploadDescriptor],
+    ) -> RendererDynamicTextureUploadReport {
+        let mut report = RendererDynamicTextureUploadReport::default();
+        for upload in uploads {
+            match self.apply_upload(queue, upload) {
+                Ok(()) => report.applied_count = report.applied_count.saturating_add(1),
+                Err(message) => {
+                    report.rejected_count = report.rejected_count.saturating_add(1);
+                    report
+                        .diagnostics
+                        .push(RendererDynamicTextureUploadDiagnostic {
+                            target_key: upload.target_key.clone(),
+                            message,
+                        });
+                }
+            }
+        }
+        report
+    }
+
+    fn apply_upload(
+        &mut self,
+        queue: &Queue,
+        upload: &RenderDynamicTextureUploadDescriptor,
+    ) -> std::result::Result<(), String> {
+        upload.validate().map_err(|err| err.to_string())?;
+        let target = self.targets.get_mut(&upload.target_key).ok_or_else(|| {
+            format!(
+                "dynamic texture upload references missing target '{}'",
+                upload.target_key
+            )
+        })?;
+        if !target.descriptor.usage.copy_dst {
+            return Err(format!(
+                "dynamic texture upload target '{}' is not copy-dst compatible",
+                upload.target_key
+            ));
+        }
+        if target.descriptor.format != upload.format {
+            return Err(format!(
+                "dynamic texture upload target '{}' format {:?} does not match upload format {:?}",
+                upload.target_key, target.descriptor.format, upload.format
+            ));
+        }
+        let end_x = upload
+            .origin_x
+            .checked_add(upload.width)
+            .ok_or_else(|| "dynamic texture upload x range overflowed".to_string())?;
+        let end_y = upload
+            .origin_y
+            .checked_add(upload.height)
+            .ok_or_else(|| "dynamic texture upload y range overflowed".to_string())?;
+        if end_x > target.size.0 || end_y > target.size.1 {
+            return Err(format!(
+                "dynamic texture upload target '{}' region {}x{} at {},{} exceeds target {}x{}",
+                upload.target_key,
+                upload.width,
+                upload.height,
+                upload.origin_x,
+                upload.origin_y,
+                target.size.0,
+                target.size.1
+            ));
+        }
+        let bytes = upload_bytes_for_gpu(upload);
+        queue.write_texture(
+            TexelCopyTextureInfo {
+                texture: &target.texture,
+                mip_level: 0,
+                origin: Origin3d {
+                    x: upload.origin_x,
+                    y: upload.origin_y,
+                    z: 0,
+                },
+                aspect: TextureAspect::All,
+            },
+            &bytes,
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(upload.width.saturating_mul(4).max(4)),
+                rows_per_image: Some(upload.height.max(1)),
+            },
+            Extent3d {
+                width: upload.width,
+                height: upload.height,
+                depth_or_array_layers: 1,
+            },
+        );
+        target.uploaded_product_generation = Some(upload.product_generation);
         Ok(())
     }
 
@@ -218,6 +316,44 @@ impl RendererDynamicTextureTargetCache {
             .texture
             .create_view(&TextureViewDescriptor::default()))
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RendererDynamicTextureUploadReport {
+    pub applied_count: usize,
+    pub rejected_count: usize,
+    pub diagnostics: Vec<RendererDynamicTextureUploadDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RendererDynamicTextureUploadDiagnostic {
+    pub target_key: RenderDynamicTextureTargetKey,
+    pub message: String,
+}
+
+fn upload_bytes_for_gpu(upload: &RenderDynamicTextureUploadDescriptor) -> Vec<u8> {
+    match upload.alpha_mode {
+        RenderTextureUploadAlphaMode::Straight => upload.rgba8.clone(),
+        RenderTextureUploadAlphaMode::Premultiplied => unpremultiply_rgba8(&upload.rgba8),
+    }
+}
+
+fn unpremultiply_rgba8(bytes: &[u8]) -> Vec<u8> {
+    let mut out = bytes.to_vec();
+    for pixel in out.chunks_exact_mut(4) {
+        let alpha = pixel[3];
+        if alpha == 0 {
+            pixel[0] = 0;
+            pixel[1] = 0;
+            pixel[2] = 0;
+            continue;
+        }
+        for channel in &mut pixel[..3] {
+            let value = (u16::from(*channel) * 255 + u16::from(alpha) / 2) / u16::from(alpha);
+            *channel = value.min(255) as u8;
+        }
+    }
+    out
 }
 
 pub fn dynamic_format_to_wgpu(format: RenderTextureTargetFormat) -> TextureFormat {

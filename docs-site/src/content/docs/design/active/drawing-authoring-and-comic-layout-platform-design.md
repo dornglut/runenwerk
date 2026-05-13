@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-13
 related_docs:
   - ../../guidelines/runenwerk-architecture.md
   - ../../domain/graph/README.md
@@ -29,8 +29,14 @@ related_designs:
 Active design. This document records the target architecture for Runenwerk
 drawing product surfaces. The first pure `domain/drawing` crate, stylus input
 contracts, native tablet packet normalization proof, and focused
-`runenwerk_draw` app shell now exist; deterministic ink formation, package IO,
-export adapters, watercolor, decorative effects, and comic layout remain future
+`runenwerk_draw` app shell now exist. The first deterministic CPU ink tile
+formation path also exists and is visible in `runenwerk_draw` through product
+publication and query snapshot barriers. Live preview now uses the same
+domain-owned CPU rasterizer as committed ink, and the app preserves last-good
+visible ink until a newer committed generation is fully accepted. The app now
+renders accepted and preview ink through the shared engine dynamic texture
+upload and neutral product-surface UI path. Package IO, GPU product formation,
+watercolor, decorative effects, export adapters, and comic layout remain future
 phases.
 
 ## Purpose
@@ -80,8 +86,8 @@ Implemented anchors that this design must respect:
 - `domain/texture` owns texture product descriptors, not GPU upload or shader
   binding policy.
 - `domain/drawing` owns pure drawing document, stroke, brush, paper,
-  layer/composition graph, command, ratification, diagnostic, and tile-lineage
-  contracts.
+  layer/composition graph, command, ratification, diagnostic, deterministic CPU
+  ink tile formation, product-substrate helpers, and tile-lineage contracts.
 - `domain/ui/*` owns reusable UI contracts, input vocabulary, stylus-capable
   pointer packets, layout, text, render data, surface mounting, definitions,
   trees, runtime, and widgets.
@@ -99,7 +105,9 @@ Implemented anchors that this design must respect:
 
 Remaining missing anchors today:
 
-- no rendered ink tile formation or drawing product payloads;
+- no GPU product formation, persistent drawing tile cache, or renderer-owned
+  drawing rasterization;
+- no native package IO or export adapters;
 - no comic/page layout domain.
 
 ## Core Doctrine
@@ -1228,8 +1236,8 @@ Extend `domain/ui/ui_input` and add the native tablet adapter proof.
 Status: implemented as `domain/ui/ui_input` stylus-capable pointer packets and
 `adapters/native_tablet_input` packet normalization proof. Real native OS/Wacom
 event capture remains deferred to the drawing app/platform integration phases.
-Phase 4, `runenwerk_draw` App Shell, is also complete. The next phase is Phase
-5, Deterministic Ink Tile Formation.
+Phase 4, `runenwerk_draw` App Shell, is also complete. Phase 5, Deterministic
+Ink Tile Formation, is now implemented as the first visible ink path.
 
 Completion criteria:
 
@@ -1249,14 +1257,13 @@ Phase 4 created the sibling drawing app shell.
 
 Current status: implemented in `apps/runenwerk_draw` with focused app-shell
 tests. The app starts independently, opens a minimal ratified drawing document,
-projects a canvas-first workspace, submits a simple UI frame through the shared
-render UI path, and routes pointer/stylus-compatible input into preview stroke
-state.
+projects a canvas-first workspace, presents visible paper/chrome shell UI
+through the shared render UI path, and routes pointer/stylus-compatible input
+into preview stroke state.
 
-The phase product is the first visible drawing host. Preview strokes are app
-state only; committed stroke truth, deterministic ink tile products, package IO,
-and export behavior remain deferred to later phases. The next phase is Phase 5,
-Deterministic Ink Tile Formation.
+The phase product is the first visible drawing host, not visible ink output.
+Phase 5 builds on it by committing preview strokes into document truth and
+publishing deterministic ink tile products.
 
 Completion criteria:
 
@@ -1268,6 +1275,20 @@ Completion criteria:
 ### Phase 5: Deterministic Ink Tile Formation
 
 Form ink tiles from stroke truth.
+
+Current status: implemented and hardened as the first visible ink path.
+Pointer-down/move forms non-authoritative preview tiles with the same
+domain-owned CPU brush rasterizer used for committed ink. Pointer-up commits
+preview strokes through drawing commands, `domain/drawing` forms deterministic
+CPU RGBA8 committed tiles, `apps/runenwerk_draw` publishes descriptors through
+the product and query snapshot barriers, and accepted current snapshots stay
+visible as last-good committed ink until a newer generation clears both
+barriers. Formation or publication failure preserves last-good committed tiles
+and records diagnostics.
+
+Phase 5 originally proved visible ink through clipped UI rect projection. That
+was a bootstrap path only; Phase 5.1 replaces it with texture-backed product
+surfaces.
 
 Completion criteria:
 
@@ -1281,6 +1302,34 @@ Completion criteria:
 - the layer panel can manipulate the stack-backed composition path without
   creating hidden app-owned layer state;
 - zoom uses tile levels rather than camera-distance clamps.
+
+### Phase 5.1: Product-Surface Ink Rendering
+
+Replace UI-rect ink projection with the durable product-surface path.
+
+Current status: implemented as a Phase 5 hardening slice. `domain/drawing`
+exposes deterministic whole-stroke invalidation and bounded tile-id formation
+APIs for committed and preview ink. `domain/ui/ui_render_data` exposes a neutral
+`ProductSurfacePrimitive`. `engine/src/plugins/render` owns generic dynamic
+texture upload requests and applies validated RGBA8 uploads before UI sampling.
+`apps/runenwerk_draw` keeps accepted committed tiles, pending dirty tile
+batches, and preview tiles separately; it submits dynamic ink texture targets,
+upload requests, render product selections, and product-surface UI primitives
+without putting payload bytes in `UiFrame`.
+
+Completion criteria:
+
+- long strokes invalidate all touched tiles but form and publish bounded tile-id
+  batches;
+- failed formation, publication, query snapshot, or upload does not clear
+  last-good committed ink;
+- active and released preview ink is visible through the same CPU tile payload
+  path as committed ink;
+- UI frames carry product-surface texture binding keys, not RGBA payload bytes;
+- the engine upload path is generic under `engine/src/plugins/render`, not
+  drawing-specific and not viewport-specific;
+- accepted visible ink draws one product-surface primitive per visible tile,
+  not one UI rect per non-transparent pixel.
 
 ### Phase 6: Paper Height and Procedural Surface Inputs
 
@@ -1466,8 +1515,9 @@ implementation testable and hard to misuse.
 | 1. Documentation and Boundary Acceptance | Active platform design linked from the active design index. | Documentation validation passes; ownership boundaries, stop conditions, and roadmap shape are explicit. Not visual. |
 | 2. Drawing Domain Contracts | Pure `domain/drawing` crate with serialization-ready DTO-shaped drawing contracts, ratifiers, diagnostics, command/transaction helpers, and tile-lineage descriptors. | `cargo test -p drawing` proves valid and invalid documents, stack entries, graph ratification, brush/paper ranges, command results, and tile-lineage descriptors. Not visual. |
 | 3. Stylus Input Contracts | Platform-neutral stylus input vocabulary plus a macOS/Wacom-oriented native tablet adapter proof. | Tests prove pointer fallback, pressure, tilt, twist, eraser/tool kind, barrel buttons, timestamps, coalesced samples, and missing-capability behavior. Practical input foundation, not a drawing app. |
-| 4. `runenwerk_draw` App Shell | Standalone focused app shell reusing the editor/workspace/UI/render/runtime substrate. | App launches, opens a minimal drawing document, routes pointer input, and presents a canvas-first workspace. First visible shell; real ink formation is not required yet. |
-| 5. Deterministic Ink Tile Formation | Stroke-to-ink tile formation with tile keys, invalidation, source lineage, and preview layer composition. | Users can make pressure-sensitive ink strokes and see deterministic ink tiles update while zoom uses pyramid levels. First real drawing output. |
+| 4. `runenwerk_draw` App Shell | Standalone focused app shell reusing the editor/workspace/UI/render/runtime substrate. | App launches, opens a minimal drawing document, routes pointer input, and presents a canvas-first workspace. First visible shell. |
+| 5. Deterministic Ink Tile Formation | Stroke-to-ink tile formation with tile keys, invalidation, source lineage, product publication, query snapshots, real preview tile projection, and last-good committed visibility. | Users can make pressure-sensitive ink strokes, see the live CPU-rasterized preview immediately, and keep prior accepted ink visible until the next committed generation clears the product/query barriers. First real drawing output. |
+| 5.1. Product-Surface Ink Rendering | Generic dynamic texture uploads, neutral product-surface UI primitives, dirty tile batching, and tile-store visibility for accepted/preview ink. | Long or repeated strokes render as texture-backed tile surfaces instead of per-pixel UI rects; active preview remains visible, second strokes do not clear earlier ink, and primitive count scales with visible tiles. |
 | 6. Paper Height and Procedural Surface Inputs | Paper descriptors and procedural surface products that affect deterministic ink formation. | Ink visibly responds to supported paper/noise/SDF-derived height inputs; CPU reference and GPU production paths consume the same descriptors. |
 | 7. Live Layer Composition and Effects | Safe live composition core: layer stack, clipping masks, isolated groups, masks, transforms, cheap adjustments, preview/final products, and last-good fallback. | Stack and effect edits remain live and non-destructive; deterministic final-quality products exist for the safe core without requiring manual bake as the normal workflow. |
 | 8. Technical Drawing Effects | Drawing-level halftone, screentone, hatching, speed-line, pattern, threshold/ramp/remap, and channel-packing effects. | Technical effects form preview and final drawing products without depending on comic layout authority. |

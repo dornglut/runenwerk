@@ -166,6 +166,7 @@ fn prepared_frame_inspection_exposes_render_product_selection_targets_views_invo
             RenderTextureSampleMode::FilterableFloat,
             RenderDynamicTextureRetention::RetainForFrames(2),
         )],
+        dynamic_texture_uploads: Vec::new(),
         product_selections: vec![
             RenderProductSelection::new("viewport.1")
                 .with_selected_product(RenderSelectedProduct {
@@ -296,6 +297,7 @@ fn prepared_frame_rejects_conflicting_dynamic_target_history_signatures() {
             },
         ],
         dynamic_texture_targets: Vec::new(),
+        dynamic_texture_uploads: Vec::new(),
         product_selections: Vec::new(),
         viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
         contributions: PreparedFrameContributions::default(),

@@ -3,8 +3,9 @@ use super::{
     PreparedViewFrame,
 };
 use crate::plugins::render::{
-    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlowId,
-    RenderFrameProducerId, RenderPassId, RenderResourceId,
+    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
+    RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId, RenderPassId,
+    RenderResourceId,
 };
 use product::RenderProductSelection;
 use std::collections::{BTreeMap, BTreeSet};
@@ -57,6 +58,7 @@ pub struct PreparedRenderFrame {
     pub flows: BTreeMap<RenderFlowId, PreparedFlowInputs>,
     pub flow_invocations: Vec<PreparedFlowInvocation>,
     pub dynamic_texture_targets: Vec<RenderDynamicTextureTargetDescriptor>,
+    pub dynamic_texture_uploads: Vec<RenderDynamicTextureUploadDescriptor>,
     pub product_selections: Vec<RenderProductSelection>,
     pub viewport_surface_bindings: ViewportSurfaceBindingRegistry,
     pub contributions: PreparedFrameContributions,
@@ -358,6 +360,7 @@ mod tests {
             flows: BTreeMap::new(),
             flow_invocations: Vec::new(),
             dynamic_texture_targets: Vec::new(),
+            dynamic_texture_uploads: Vec::new(),
             product_selections: Vec::new(),
             viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
             contributions: PreparedFrameContributions::default(),

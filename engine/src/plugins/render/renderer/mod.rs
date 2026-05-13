@@ -17,7 +17,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 use ui_render_data::{
-    ViewportSurfaceBindingRegistry, ViewportSurfaceBindingSource, ViewportSurfaceEmbedSlotId,
+    ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry,
+    ViewportSurfaceBindingSource, ViewportSurfaceEmbedSlotId,
 };
 use wgpu::util::DeviceExt;
 use wgpu::*;
@@ -228,6 +229,73 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
 }
 "#;
 
+pub const DEFAULT_UI_PRODUCT_SURFACE_SHADER: &str = r#"
+struct VsIn {
+    @location(0) rect : vec4<f32>,
+    @location(1) uv_rect : vec4<f32>,
+    @location(2) tint : vec4<f32>,
+};
+
+struct VsOut {
+    @builtin(position) clip_position : vec4<f32>,
+    @location(0) tint : vec4<f32>,
+    @location(1) local : vec2<f32>,
+    @location(2) uv_rect : vec4<f32>,
+};
+
+struct ScreenUniform {
+    size : vec2<f32>,
+    _pad : vec2<f32>,
+};
+
+@group(0) @binding(0)
+var<uniform> screen : ScreenUniform;
+
+@group(1) @binding(0)
+var product_texture : texture_2d<f32>;
+
+@group(1) @binding(1)
+var product_sampler : sampler;
+
+@vertex
+fn vs_main(input: VsIn, @builtin(vertex_index) vertex_index: u32) -> VsOut {
+    let uv = array<vec2<f32>, 6>(
+        vec2<f32>(0.0, 0.0),
+        vec2<f32>(1.0, 0.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(0.0, 0.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(0.0, 1.0),
+    );
+
+    let p = uv[vertex_index];
+    let pixel = vec2<f32>(
+        input.rect.x + input.rect.z * p.x,
+        input.rect.y + input.rect.w * p.y
+    );
+
+    let x_ndc = (pixel.x / screen.size.x) * 2.0 - 1.0;
+    let y_ndc = 1.0 - (pixel.y / screen.size.y) * 2.0;
+
+    var out: VsOut;
+    out.clip_position = vec4<f32>(x_ndc, y_ndc, 0.0, 1.0);
+    out.tint = input.tint;
+    out.local = p;
+    out.uv_rect = input.uv_rect;
+    return out;
+}
+
+@fragment
+fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
+    let sample_uv = vec2<f32>(
+        input.uv_rect.x + input.uv_rect.z * input.local.x,
+        input.uv_rect.y + input.uv_rect.w * input.local.y,
+    );
+    let sample_color = textureSample(product_texture, product_sampler, sample_uv);
+    return sample_color * input.tint;
+}
+"#;
+
 pub const DEFAULT_FULLSCREEN_SHADER: &str = r#"
 struct VsOut {
     @builtin(position) clip_position : vec4<f32>,
@@ -375,6 +443,15 @@ struct FlattenedUiViewportEmbedInstance {
     primitive_order: u32,
 }
 
+#[derive(Debug, Clone)]
+struct FlattenedUiProductSurfaceInstance {
+    raw: ViewportEmbedInstanceRaw,
+    clip: Option<[f32; 4]>,
+    source: ProductSurfaceTextureBindingSource,
+    layer_order: u32,
+    primitive_order: u32,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct ScreenUniformRaw {
@@ -400,6 +477,15 @@ struct GlyphPass {
 
 #[derive(Debug)]
 struct ViewportEmbedPass {
+    pipeline: RenderPipeline,
+    screen_buffer: Buffer,
+    screen_bind_group: BindGroup,
+    texture_bind_group_layout: BindGroupLayout,
+    texture_sampler: Sampler,
+}
+
+#[derive(Debug)]
+struct ProductSurfacePass {
     pipeline: RenderPipeline,
     screen_buffer: Buffer,
     screen_bind_group: BindGroup,
@@ -440,6 +526,17 @@ struct UiViewportEmbedBatch {
     slot: ViewportSurfaceEmbedSlotId,
 }
 
+#[derive(Debug, Clone)]
+struct UiProductSurfaceBatch {
+    layer_order: u32,
+    first_primitive_order: u32,
+    last_primitive_order: u32,
+    scissor: (u32, u32, u32, u32),
+    instance_count: u32,
+    instance_buffer: Buffer,
+    source: ProductSurfaceTextureBindingSource,
+}
+
 #[derive(Debug)]
 struct UiGlyphAtlasGpu {
     _texture: Texture,
@@ -452,6 +549,7 @@ struct UiPreparedDraws {
     rect_batches: Vec<UiRectBatch>,
     glyph_batches: Vec<UiGlyphBatch>,
     viewport_embed_batches: Vec<UiViewportEmbedBatch>,
+    product_surface_batches: Vec<UiProductSurfaceBatch>,
     draw_plan: Vec<UiPreparedDrawCommand>,
 }
 
@@ -459,6 +557,7 @@ struct UiPreparedDraws {
 enum UiPreparedDrawCommand {
     Rect(usize),
     ViewportEmbed(usize),
+    ProductSurface(usize),
     Glyph(usize),
 }
 
@@ -498,6 +597,8 @@ pub struct Renderer {
     glyph_pass_format: Option<TextureFormat>,
     viewport_embed_pass: Option<ViewportEmbedPass>,
     viewport_embed_pass_format: Option<TextureFormat>,
+    product_surface_pass: Option<ProductSurfacePass>,
+    product_surface_pass_format: Option<TextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,

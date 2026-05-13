@@ -2,8 +2,8 @@ use super::*;
 use crate::plugins::render::features::UiFontAtlasResource;
 use ui_math::UiRect;
 use ui_render_data::{
-    BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, RectPrimitive, UiFrame,
-    UiPrimitive, ViewportSurfaceEmbedPrimitive,
+    BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, ProductSurfacePrimitive,
+    RectPrimitive, UiFrame, UiPrimitive, ViewportSurfaceEmbedPrimitive,
 };
 
 impl Renderer {
@@ -46,7 +46,7 @@ impl Renderer {
                                 instances.push(entry);
                             }
                         }
-                        UiPrimitive::GlyphRun(_) => {}
+                        UiPrimitive::GlyphRun(_) | UiPrimitive::ProductSurface(_) => {}
                         UiPrimitive::ViewportSurfaceEmbed(_) => {}
                     }
                 }
@@ -87,6 +87,7 @@ impl Renderer {
                         UiPrimitive::Rect(_)
                         | UiPrimitive::Border(_)
                         | UiPrimitive::Image(_)
+                        | UiPrimitive::ProductSurface(_)
                         | UiPrimitive::ViewportSurfaceEmbed(_) => {}
                     }
                 }
@@ -127,6 +128,48 @@ impl Renderer {
                         UiPrimitive::Rect(_)
                         | UiPrimitive::Border(_)
                         | UiPrimitive::Image(_)
+                        | UiPrimitive::ProductSurface(_)
+                        | UiPrimitive::GlyphRun(_) => {}
+                    }
+                }
+            }
+        }
+        instances
+    }
+
+    pub(super) fn extract_product_surface_instances(
+        frame: &UiFrame,
+    ) -> Vec<FlattenedUiProductSurfaceInstance> {
+        let mut instances = Vec::new();
+        for surface in &frame.surfaces {
+            for layer in &surface.layers {
+                let mut clip_stack: Vec<ClipRegion> = Vec::new();
+                for primitive in &layer.primitives {
+                    match primitive {
+                        UiPrimitive::Clip(ClipPrimitive::Push { rect, .. }) => {
+                            let next = clip_stack
+                                .last()
+                                .copied()
+                                .unwrap_or(ClipRegion::Unbounded)
+                                .intersect(*rect);
+                            clip_stack.push(next);
+                        }
+                        UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => {
+                            let _ = clip_stack.pop();
+                        }
+                        UiPrimitive::ProductSurface(surface) => {
+                            if let Some(entry) = flattened_product_surface(
+                                surface,
+                                current_clip_region(&clip_stack),
+                                None,
+                            ) {
+                                instances.push(entry);
+                            }
+                        }
+                        UiPrimitive::Rect(_)
+                        | UiPrimitive::Border(_)
+                        | UiPrimitive::Image(_)
+                        | UiPrimitive::ViewportSurfaceEmbed(_)
                         | UiPrimitive::GlyphRun(_) => {}
                     }
                 }
@@ -300,6 +343,47 @@ fn flattened_viewport_embed(
         slot: embed.slot,
         layer_order: embed.sort_key.layer_order,
         primitive_order: embed.sort_key.primitive_order,
+    })
+}
+
+fn flattened_product_surface(
+    surface: &ProductSurfacePrimitive,
+    stack_clip: ClipRegion,
+    local_clip: Option<UiRect>,
+) -> Option<FlattenedUiProductSurfaceInstance> {
+    let clip = effective_clip(stack_clip, local_clip, surface.rect)?;
+    if surface.rect.width <= f32::EPSILON
+        || surface.rect.height <= f32::EPSILON
+        || surface.tint.a <= f32::EPSILON
+    {
+        return None;
+    }
+
+    Some(FlattenedUiProductSurfaceInstance {
+        raw: ViewportEmbedInstanceRaw {
+            rect: [
+                surface.rect.x,
+                surface.rect.y,
+                surface.rect.width,
+                surface.rect.height,
+            ],
+            uv_rect: [
+                surface.uv_rect.x,
+                surface.uv_rect.y,
+                surface.uv_rect.width,
+                surface.uv_rect.height,
+            ],
+            tint: [
+                surface.tint.r,
+                surface.tint.g,
+                surface.tint.b,
+                surface.tint.a,
+            ],
+        },
+        clip: clip.map(|value| [value.x, value.y, value.width, value.height]),
+        source: surface.source.clone(),
+        layer_order: surface.sort_key.layer_order,
+        primitive_order: surface.sort_key.primitive_order,
     })
 }
 
