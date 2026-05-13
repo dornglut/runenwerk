@@ -987,12 +987,14 @@ M6 closes by sub-milestone, not as one broad bucket. Remaining M6 implementation
 Current M6 focus:
 
 - Continue M6.2 procgen from the accepted
-  `docs-site/src/content/docs/domain/procgen/README.md` contract and the Phase
-  6A `domain/procgen` crate, which now supplies ratified descriptors, lowering,
-  product jobs, and diagnostics for bounded region terrain/material generation.
-- Keep procgen graph canvas and procgen preview providers code-deferred until
-  Phase 6B explicitly wires them through product publication barriers, query
-  snapshots, render selection, and derived GPU residency.
+  `docs-site/src/content/docs/domain/procgen/README.md` contract, the Phase 6A
+  `domain/procgen` crate, the Phase 6B editor/runtime overlay proof, and the
+  Phase 6C concrete CPU field-preview proof. Procgen bake, rollback,
+  persistence, and runtime preview reload classification are the next procgen
+  slice.
+- Keep procgen bake commands, persistence, runtime preview reload
+  classification, worker pools, and GPU upload deferred
+  until later M6.2 phases explicitly wire them through the product substrate.
 - Keep rendered SDF/GPU overlays and material/SDF preview handoff deferred until
   the renderer product-selection and derived-residency contracts are ready.
 

@@ -127,9 +127,11 @@ The first implemented product track is bounded region terrain/material
 generation that lowers to deterministic `world_ops::OperationRecord` windows
 plus changed-region diagnostics. Phase 6A exposes product job and publication
 descriptor builders for operation-window and field-product candidate outputs,
-but does not generate field payload bytes or execute runtime publication.
-Cave mask/stamp, scatter/distribution, concrete algorithms, editor providers,
-preview execution, and bake commands remain deferred.
+Phase 6B executes the first editor/runtime overlay proof, and Phase 6C forms
+deterministic scalar-distance and material-channel CPU preview payloads through
+`world_sdf` preview contracts. Cave mask/stamp, scatter/distribution, bake
+commands, persistence, runtime preview reload, worker pools, renderer rebuilds,
+and GPU upload remain deferred.
 
 ## Phase 6A Public Surface
 
@@ -221,16 +223,21 @@ local previews are never replicated as authority.
 
 ## Gates
 
-Phase 6A has implemented the domain crate. Future procgen work must still keep
-these gates:
+Phase 6A has implemented the domain crate, Phase 6B has implemented the first
+editor/runtime visible overlay proof, and Phase 6C has implemented the first
+concrete deterministic terrain/material CPU preview proof. Future procgen work
+must still keep these gates:
 
 - this domain contract is the implementation source of truth;
 - product jobs, publication barriers, query snapshots, strict consumers, render
   product selection, and derived GPU residency remain the only runtime product
   path;
 - first-slice tests continue proving deterministic operation-window lowering
-  from the same seed, scope, version, inputs, and overlay generation.
+  and deterministic scalar-distance/material-channel CPU preview products from
+  the same seed, scope, version, inputs, and overlay generation;
+- concrete procgen graph and preview providers remain app-owned consumers of
+  this domain contract rather than owning generator truth.
 
-Do not implement editor procgen providers, preview execution, bake execution,
-worker pools, or concrete generator algorithms until the next accepted
-Phase 6B implementation plan.
+Do not implement bake execution, persistence, runtime preview reload, worker
+pools, caves, stamps, scatter, biome systems, renderer rebuilds, or GPU upload
+until the next accepted Phase 6D+ implementation plans.

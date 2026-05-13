@@ -10,6 +10,7 @@ use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::asset_pipeline::{
     AssetCatalogRuntime, EditorFieldProductPublication, EditorFieldProductPublicationJournalEntry,
 };
+use crate::runtime::procgen::ProcgenRuntimeState;
 use crate::runtime::viewport::{
     EditorViewportGpuResidencyJournalEntry, EditorViewportGpuResidencySummary,
     EditorViewportQuerySnapshotJournalEntry, EditorViewportRenderSelectionJournalEntry,
@@ -38,6 +39,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) last_viewport_render_selection_summary: Option<EditorViewportRenderSelectionSummary>,
     pub(crate) viewport_gpu_residency_journal: Vec<EditorViewportGpuResidencyJournalEntry>,
     pub(crate) last_viewport_gpu_residency_summary: Option<EditorViewportGpuResidencySummary>,
+    pub(crate) procgen_runtime: ProcgenRuntimeState,
 }
 
 impl Default for RunenwerkEditorApp {
@@ -67,6 +69,7 @@ impl RunenwerkEditorApp {
             last_viewport_render_selection_summary: None,
             viewport_gpu_residency_journal: Vec::new(),
             last_viewport_gpu_residency_summary: None,
+            procgen_runtime: ProcgenRuntimeState::new(),
         }
     }
 
@@ -279,6 +282,14 @@ impl RunenwerkEditorApp {
         }
         self.last_viewport_gpu_residency_summary = Some(summary);
         true
+    }
+
+    pub fn procgen_runtime(&self) -> &ProcgenRuntimeState {
+        &self.procgen_runtime
+    }
+
+    pub fn procgen_runtime_mut(&mut self) -> &mut ProcgenRuntimeState {
+        &mut self.procgen_runtime
     }
 }
 

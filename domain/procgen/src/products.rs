@@ -8,6 +8,7 @@ use product::{
     ProductKind, ProductLineage, ProductPublicationOutcome, ProductQueryPolicy, ProductResidency,
     ProductRetentionPolicy, ProductScaleBand,
 };
+use world_sdf::FieldPreviewProduct;
 
 use crate::{
     ProcgenBudgetClass, ProcgenDocument, ProcgenOutputKind, ProcgenRetentionClass,
@@ -17,6 +18,12 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcgenProductContracts {
+    pub product_job: ProductJobDescriptor,
+    pub output_descriptors: Vec<ProductDescriptorCore>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcgenFormedPreviewProductContracts {
     pub product_job: ProductJobDescriptor,
     pub output_descriptors: Vec<ProductDescriptorCore>,
 }
@@ -101,6 +108,58 @@ pub fn build_procgen_publication_outcome(
     ))
 }
 
+pub fn build_procgen_formed_preview_product_contracts(
+    document: &ProcgenDocument,
+    catalog: &crate::ProcgenNodeCatalog,
+    preview_products: &[FieldPreviewProduct],
+) -> Option<ProcgenFormedPreviewProductContracts> {
+    if preview_products.is_empty() {
+        return None;
+    }
+    let report = ratify_procgen_document(document, catalog);
+    if report.has_blocking_issues() {
+        return None;
+    }
+
+    let output_descriptors = procgen_formed_preview_product_descriptors(document, preview_products);
+    Some(ProcgenFormedPreviewProductContracts {
+        product_job: procgen_product_job(document, &output_descriptors),
+        output_descriptors,
+    })
+}
+
+pub fn procgen_formed_preview_product_descriptors(
+    document: &ProcgenDocument,
+    preview_products: &[FieldPreviewProduct],
+) -> Vec<ProductDescriptorCore> {
+    let mut descriptors = procgen_output_product_descriptors(document)
+        .into_iter()
+        .filter(|descriptor| descriptor.kind.as_str() == "procgen.world_ops_window")
+        .collect::<Vec<_>>();
+    let mut preview_descriptors = preview_products
+        .iter()
+        .map(|product| product.descriptor.product_core())
+        .collect::<Vec<_>>();
+    preview_descriptors.sort_by_key(|descriptor| descriptor.identity);
+    descriptors.extend(preview_descriptors);
+    descriptors
+}
+
+pub fn build_procgen_formed_preview_publication_outcome(
+    document: &ProcgenDocument,
+    catalog: &crate::ProcgenNodeCatalog,
+    preview_products: &[FieldPreviewProduct],
+    stage_sequence: u64,
+) -> Option<ProductPublicationOutcome> {
+    let contracts =
+        build_procgen_formed_preview_product_contracts(document, catalog, preview_products)?;
+    Some(ProductPublicationOutcome::ready(
+        contracts.product_job,
+        contracts.output_descriptors,
+        stage_sequence,
+    ))
+}
+
 fn procgen_product_job(
     document: &ProcgenDocument,
     output_descriptors: &[ProductDescriptorCore],
@@ -178,7 +237,10 @@ mod tests {
     use product::{ratify_product_job, ratify_product_publication};
 
     use super::*;
-    use crate::{ProcgenNodeCatalog, test_fixtures::valid_document};
+    use crate::{
+        ProcgenFieldPreviewPolicy, ProcgenNodeCatalog, form_procgen_field_preview_products,
+        test_fixtures::valid_document,
+    };
 
     #[test]
     fn product_contracts_pass_existing_product_ratifiers() {
@@ -230,5 +292,48 @@ mod tests {
             first_contracts.output_descriptors[0].lineage.generation,
             second_contracts.output_descriptors[0].lineage.generation
         );
+    }
+
+    #[test]
+    fn formed_preview_product_contracts_replace_generic_field_candidate_descriptor() {
+        let document = valid_document();
+        let formation = form_procgen_field_preview_products(
+            &document,
+            &ProcgenNodeCatalog::first_slice(),
+            ProcgenFieldPreviewPolicy::default(),
+        );
+        let contracts = build_procgen_formed_preview_product_contracts(
+            &document,
+            &ProcgenNodeCatalog::first_slice(),
+            &formation.products,
+        )
+        .expect("formed preview contracts should build");
+
+        assert_eq!(contracts.output_descriptors.len(), 3);
+        assert!(
+            contracts
+                .output_descriptors
+                .iter()
+                .any(|descriptor| descriptor.kind.as_str() == "procgen.world_ops_window")
+        );
+        assert!(
+            contracts
+                .output_descriptors
+                .iter()
+                .any(|descriptor| descriptor.kind.as_str() == "scalar_distance")
+        );
+        assert!(
+            contracts
+                .output_descriptors
+                .iter()
+                .any(|descriptor| descriptor.kind.as_str() == "material_channel")
+        );
+        assert!(
+            contracts
+                .output_descriptors
+                .iter()
+                .all(|descriptor| descriptor.kind.as_str() != "procgen.field_product_candidate")
+        );
+        assert!(!ratify_product_job(&contracts.product_job).has_blocking_issues());
     }
 }

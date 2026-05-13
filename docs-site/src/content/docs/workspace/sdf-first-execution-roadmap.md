@@ -34,12 +34,12 @@ The target result is not finished open-world gameplay in one jump. The target
 is the substrate that makes open-world gameplay possible without private
 execution paths or renderer-owned world truth.
 
-The immediate priority remains M6.2 procgen, now after the Phase 6A
-domain-first product track. Remaining procgen work must build on the completed
-execution substrate and the new `domain/procgen` contracts so gameplay graph,
-particles, physics, animation, world processes, renderer residency, and strict
-runtime consumers use formed products without inventing private execution
-paths.
+The immediate priority remains M6.2 procgen, now after the Phase 6C concrete
+CPU preview proof. Remaining procgen work must build on the completed execution
+substrate, the new `domain/procgen` contracts, the editor/runtime overlay
+proof, and formed preview products so gameplay graph, particles, physics,
+animation, world processes, renderer residency, and strict runtime consumers use
+formed products without inventing private execution paths.
 
 Owning domain and app roadmaps still own detailed implementation steps. This
 page owns cross-track ordering when those roadmaps overlap.
@@ -70,18 +70,21 @@ Required end-state properties:
 
 ## Current Focus
 
-The current work is the remaining M6.2 procgen proof after Phase 6A. Phases 1
-through 5 are complete, and Phase 6A has added the domain-first procgen crate
-for deterministic documents, ratification, lowering, and product contracts.
+The current work is Phase 6D: procgen bake, rollback, persistence, and runtime
+preview reload classification after the Phase 6C concrete CPU preview proof.
+Phases 1 through 5 are complete, Phase 6A added the domain-first procgen crate
+for deterministic documents, ratification, lowering, and product contracts,
+Phase 6B wired the editor/runtime proof through product publication, query
+snapshots, render selection, and derived GPU residency, and Phase 6C added the
+first deterministic terrain/material generator with formed CPU field-preview
+products.
 
 Current gaps:
 
-- procgen editor providers, preview execution, bake commands, runtime
-  publication, and concrete generator algorithms remain deferred after Phase
-  6A;
-- Phase 6B must consume `domain/procgen` product contracts through product
-  publication barriers, query snapshots, render selection, and derived GPU
-  residency instead of adding private execution paths.
+- procgen bake commands, persistence, rollback, and runtime preview reload
+  classification remain deferred after Phase 6C;
+- Phase 6D must use the existing Phase 6A-6C procgen and product substrate
+  instead of adding private execution paths.
 
 ## Phased Roadmap
 
@@ -247,12 +250,15 @@ Out of scope:
 
 ### Phase 6 - First Procgen Product Track
 
-Status: Phase 6A complete as of 2026-05-13. Remaining Phase 6B work covers the
-editor/runtime proof for preview and bake commands on top of `domain/procgen`.
+Status: Phase 6A, Phase 6B, and Phase 6C complete as of 2026-05-13. Remaining
+Phase 6D work covers procgen bake, rollback, persistence, and runtime preview
+reload classification on top of `domain/procgen`.
 
 Closeout evidence:
 
 - [reports/closeouts/sdf-first-execution-phase-6a/closeout.md](../reports/closeouts/sdf-first-execution-phase-6a/closeout.md)
+- [reports/closeouts/sdf-first-execution-phase-6b/closeout.md](../reports/closeouts/sdf-first-execution-phase-6b/closeout.md)
+- [reports/closeouts/sdf-first-execution-phase-6c/closeout.md](../reports/closeouts/sdf-first-execution-phase-6c/closeout.md)
 
 Intent: implement the first visible open-world producer on top of the completed
 execution substrate. This is a procgen-owned product track, not a generic
@@ -283,15 +289,24 @@ Out of scope:
 Phase 6A completed the domain-first portion of this gate: `domain/procgen`
 documents, first-slice node semantics, ratification, deterministic
 operation-window lowering, planning metadata, product job descriptors, product
-descriptor builders, and ready publication DTOs. Runtime publication, query
-snapshot staging, editor providers, preview execution, bake commands, field
-payload formation, and concrete generator algorithms remain deferred.
+descriptor builders, and ready publication DTOs. Phase 6B completed the first
+editor/runtime visible proof: concrete procgen graph and preview providers,
+app-owned procgen runtime state, product publication and query snapshot staging
+through deterministic barriers, render-selection/residency participation, and
+viewport status overlays for bounded changed regions and reservations. Phase 6C
+completed the first concrete deterministic terrain/material generator: bounded
+procgen documents now form scalar-distance and material-channel CPU
+field-preview products through `world_sdf` preview contracts, publish the formed
+descriptors through product barriers, snapshot them through query barriers, and
+expose preview product summaries in the editor. Bake commands, persistence,
+rollback, and runtime preview reload classification remain deferred.
 
 ## Procgen Code Gate
 
 Further M6.2 procgen code must continue from the accepted
-`docs-site/src/content/docs/domain/procgen/README.md` contract and the Phase 6A
-`domain/procgen` implementation.
+`docs-site/src/content/docs/domain/procgen/README.md` contract, the Phase 6A
+`domain/procgen` implementation, the Phase 6B editor/runtime overlay proof, and
+the Phase 6C formed CPU field-preview product path.
 
 Procgen code must not bypass product jobs, query snapshots, publication
 barriers, strict consumer policy, render product selection, or derived GPU
@@ -375,9 +390,23 @@ Roadmap updates should verify:
   graph-backed deterministic documents, first-slice terrain/material node
   semantics, planning metadata, reservation diagnostics, semantic ratification,
   deterministic lowering to `world_ops::OperationRecord` windows, changed-region
-  explanations, and product job/publication descriptor builders while editor
-  providers, preview/bake execution, field payload bytes, and concrete generator
-  algorithms remain deferred;
+  explanations, and product job/publication descriptor builders; at the Phase
+  6A closeout, editor providers, preview/bake execution, field payload bytes,
+  and concrete generator algorithms remained deferred;
+- Phase 6B visible procgen overlay proof is complete: `runenwerk_editor` owns
+  procgen runtime proof state and concrete graph/preview providers, publishes
+  procgen operation-window and field-candidate descriptors only through
+  product/query barriers, selects accepted snapshots for render/residency, and
+  exposes bounded changed-region/reservation overlays plus diagnostics while
+  concrete terrain/material algorithms, field bytes, bake commands, and
+  persistence remain deferred;
+- Phase 6C concrete terrain/material CPU preview proof is complete:
+  `domain/procgen` forms deterministic scalar-distance and material-channel
+  `world_sdf::FieldPreviewProduct` payloads from bounded procgen documents,
+  publishes the formed preview descriptors through product barriers, snapshots
+  them through query barriers, and exposes editor preview summaries without
+  renderer rebuilds, GPU upload, bake, persistence, worker pools, caves, stamps,
+  or scatter;
 - `world_sdf`, material, texture, asset/import, and editor product surfaces
   align with product-core metadata while preserving their owning-domain APIs;
 - render prepare carries backend-neutral `RenderProductSelection` metadata as

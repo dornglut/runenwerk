@@ -20,7 +20,9 @@ editor_viewport.workspace = true
 editor_persistence.workspace = true
 
 asset.workspace = true
+graph.workspace = true
 material_graph.workspace = true
+procgen.workspace = true
 product.workspace = true
 spatial.workspace = true
 texture.workspace = true

@@ -155,7 +155,7 @@ fn m6_surface_gate_line(kind: ToolSurfaceKind) -> &'static str {
             "gate: texture descriptors exist; Texture3D preview/upload adapter and viewer provider are not implemented"
         }
         ToolSurfaceKind::ProcgenGraphCanvas | ToolSurfaceKind::ProcgenPreview => {
-            "gate: procgen deterministic seed/scope and world_ops lowering are not implemented"
+            "gate: procgen Phase 6B provider was not selected; fallback remains diagnostic only"
         }
         ToolSurfaceKind::GameplayGraphCanvas | ToolSurfaceKind::GameplayCompilerDiagnostics => {
             "gate: gameplay event/action/state/quest contracts are not accepted"

@@ -135,7 +135,7 @@ Before implementation starts on a feature track, create or update the owning des
 - `docs-site/src/content/docs/domain/texture/README.md`
   - define Texture2D, Texture3D/volume, generated texture products, sampler/color-space/compression policy, cache keys, and preview/inspection contracts.
 - `docs-site/src/content/docs/domain/procgen/README.md`
-  - accepted as the procgen domain contract for seed contracts, bounded generator documents, deterministic lowering, bake targets, invalidation behavior, authored overlay preservation, and server-validated authority. Phase 6A implements the domain crate; provider runtime, preview, bake execution, and concrete generator algorithms remain deferred to Phase 6B.
+  - accepted as the procgen domain contract for seed contracts, bounded generator documents, deterministic lowering, bake targets, invalidation behavior, authored overlay preservation, and server-validated authority. Phase 6A implements the domain crate, and Phase 6B implements the first app-owned provider/runtime overlay proof. Concrete generator algorithms, field payload bytes, bake execution, persistence, and runtime preview reload classification remain deferred to later M6.2 phases.
 - `docs-site/src/content/docs/domain/particles/README.md`
   - define emitter documents, particle graph semantics, simulation step contracts, SDF/field coupling, formed particle products, and preview determinism.
 - `docs-site/src/content/docs/domain/physics/README.md`

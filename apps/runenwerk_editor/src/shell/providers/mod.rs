@@ -69,6 +69,8 @@ const TEXTURE_VIEWER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(15);
 const VOLUME_TEXTURE_VIEWER_PROVIDER_ID: SurfaceProviderId = surface_provider_id(16);
 const FIELD_LAYER_STACK_PROVIDER_ID: SurfaceProviderId = surface_provider_id(17);
 const SDF_GRAPH_CANVAS_PROVIDER_ID: SurfaceProviderId = surface_provider_id(18);
+const PROCGEN_GRAPH_CANVAS_PROVIDER_ID: SurfaceProviderId = surface_provider_id(19);
+const PROCGEN_PREVIEW_PROVIDER_ID: SurfaceProviderId = surface_provider_id(20);
 
 const fn surface_provider_id(raw: u64) -> SurfaceProviderId {
     match SurfaceProviderId::try_from_raw(raw) {
@@ -156,6 +158,8 @@ impl EditorSurfaceProviderRegistry {
             Box::new(MaterialPreviewProvider),
             Box::new(TextureViewerProvider),
             Box::new(VolumeTextureViewerProvider),
+            Box::new(ProcgenGraphCanvasProvider),
+            Box::new(ProcgenPreviewProvider),
             Box::new(M6WorkspaceProvider),
         ])
         .expect("default surface providers must have unique ids")
@@ -474,6 +478,7 @@ fn build_viewport_observation_frame(
     tool_state: ViewportToolState,
     source_version: RealityVersion,
     fallback_viewport_id: Option<editor_viewport::ViewportId>,
+    overlay_status_lines: Vec<String>,
 ) -> ViewportObservationFrame {
     let viewport_id = products
         .map(|value| value.viewport_id)
@@ -531,6 +536,7 @@ fn build_viewport_observation_frame(
         hovered_entity: tool_state.hovered_entity,
         drag_in_progress,
         preview_active: tool_state.active_preview.is_some(),
+        overlay_status_lines,
     }
 }
 
@@ -563,6 +569,7 @@ fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportViewMo
         hovered_entity: frame.hovered_entity,
         drag_in_progress: frame.drag_in_progress,
         preview_active: frame.preview_active,
+        overlay_status_lines: frame.overlay_status_lines.clone(),
     }
 }
 
@@ -1405,6 +1412,8 @@ pub mod m6_workspace;
 pub mod material_graph_canvas;
 pub mod material_inspector;
 pub mod material_preview;
+pub mod procgen_graph_canvas;
+pub mod procgen_preview;
 pub mod scene;
 pub mod sdf_brush_browser;
 pub mod sdf_graph_canvas;
@@ -1420,6 +1429,8 @@ use m6_workspace::{M6WorkspaceProvider, is_m6_global_diagnostic_surface};
 use material_graph_canvas::MaterialGraphCanvasProvider;
 use material_inspector::MaterialInspectorProvider;
 use material_preview::MaterialPreviewProvider;
+use procgen_graph_canvas::ProcgenGraphCanvasProvider;
+use procgen_preview::ProcgenPreviewProvider;
 use scene::{
     SceneEntityTableProvider, SceneInspectorProvider, SceneOutlinerProvider, SceneViewportProvider,
 };
@@ -1583,6 +1594,22 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(21).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(21).unwrap(),
+            tool_surface_kind,
+            surface_definition_id: tool_surface_definition_id(tool_surface_kind),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
+        }
+    }
+
+    fn m6_procgen_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            workspace_profile_id: editor_shell::PROCGEN_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::Resolved {
+                document_id: editor_core::DocumentId(9),
+                document_kind: DocumentKind::ProceduralGenerationGraph,
+            },
+            panel_instance_id: PanelInstanceId::try_from_raw(23).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(23).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(23).unwrap(),
             tool_surface_kind,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
@@ -1822,6 +1849,44 @@ mod tests {
         assert_eq!(frame.title, "Material Graph Canvas");
         assert!(provider_frame_text(&frame).contains("canvas state is not material truth"));
         assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn procgen_providers_resolve_before_m6_fallback_with_visible_preview_lines() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let graph_frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_procgen_request(ToolSurfaceKind::ProcgenGraphCanvas),
+            &Default::default(),
+        );
+        assert_eq!(
+            graph_frame.availability,
+            SurfaceProviderAvailability::Available
+        );
+        assert_eq!(
+            graph_frame.provider_id,
+            Some(PROCGEN_GRAPH_CANVAS_PROVIDER_ID)
+        );
+        assert!(provider_frame_text(&graph_frame).contains("domain-backed Phase 6B proof"));
+
+        let preview_frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_procgen_request(ToolSurfaceKind::ProcgenPreview),
+            &Default::default(),
+        );
+        assert_eq!(
+            preview_frame.availability,
+            SurfaceProviderAvailability::Available
+        );
+        assert_eq!(preview_frame.provider_id, Some(PROCGEN_PREVIEW_PROVIDER_ID));
+        let text = provider_frame_text(&preview_frame);
+        assert!(text.contains("concrete terrain/material CPU preview"));
+        assert!(text.contains("changed_regions=2"));
+        assert!(text.contains("procgen field preview products: 0"));
     }
 
     #[test]

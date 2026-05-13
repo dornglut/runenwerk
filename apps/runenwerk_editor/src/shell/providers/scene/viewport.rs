@@ -73,6 +73,10 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             tool_state,
             context.app.runtime().current_scene_reality_version(),
             expected_viewport_id,
+            context
+                .app
+                .procgen_runtime()
+                .viewport_overlay_status_lines(),
         );
         let view_model = build_viewport_view_model(&frame);
         let root = build_viewport_panel(

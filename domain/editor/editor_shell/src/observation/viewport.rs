@@ -39,4 +39,5 @@ pub struct ViewportObservationFrame {
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,
     pub preview_active: bool,
+    pub overlay_status_lines: Vec<String>,
 }

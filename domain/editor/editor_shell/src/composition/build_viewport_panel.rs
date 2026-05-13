@@ -349,7 +349,10 @@ fn viewport_status_overlay(
     theme: &ThemeTokens,
     scope: SurfaceWidgetScope,
 ) -> Option<UiNode> {
-    (view_model.details_visible || view_model.statistics_visible).then(|| {
+    (view_model.details_visible
+        || view_model.statistics_visible
+        || !view_model.overlay_status_lines.is_empty())
+    .then(|| {
         let mut overlay_items = Vec::new();
         if view_model.details_visible {
             overlay_items.push(label(
@@ -362,6 +365,19 @@ fn viewport_status_overlay(
             overlay_items.push(label(
                 scope.widget_id(VIEWPORT_STATISTICS_LABEL_WIDGET_ID),
                 viewport_statistics_text(view_model),
+                theme.body_small_text_style(FontId(1)),
+            ));
+        }
+        if !view_model.overlay_status_lines.is_empty() {
+            overlay_items.push(label(
+                scope.widget_id(crate::WidgetId(90_100)),
+                view_model
+                    .overlay_status_lines
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" | "),
                 theme.body_small_text_style(FontId(1)),
             ));
         }
@@ -646,5 +662,28 @@ mod tests {
             UiNodeKind::Label(label)
                 if label.text.contains("drag=true") && label.text.contains("preview=true")
         ));
+    }
+
+    #[test]
+    fn viewport_status_overlay_projects_generic_overlay_status_lines() {
+        let theme = ThemeTokens::default();
+        let model = ViewportViewModel {
+            overlay_status_lines: vec![
+                "Procgen overlay: 2 region(s)".to_string(),
+                "density-main [0, 0, 0]-[16, 16, 16]".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let visible = build_viewport_panel(
+            &model,
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+
+        let panel = find_node(&visible, VIEWPORT_DETAILS_PANEL_WIDGET_ID)
+            .expect("status overlay should exist for generic overlay lines");
+        assert!(format!("{:?}", panel).contains("Procgen overlay: 2 region(s)"));
     }
 }

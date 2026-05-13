@@ -74,14 +74,15 @@ Operational execution checklist:
 
 ## Current Focus
 
-- Plan and execute the remaining SDF-first Phase 6B / M6.2 editor-runtime
-  procgen proof from `workspace/sdf-first-execution-roadmap.md`. Phase 6A has
-  created `domain/procgen` for graph-backed deterministic documents,
-  terrain/material node semantics, ratification, lowering, and product
-  job/publication descriptors.
+- Plan and execute SDF-first Phase 6D / M6.2C procgen bake, rollback,
+  persistence, and runtime preview reload classification from
+  `workspace/sdf-first-execution-roadmap.md`. Phase 6A created
+  `domain/procgen`, Phase 6B added the visible editor/runtime overlay proof on
+  product publication barriers, query snapshots, render selection, and derived
+  GPU residency, and Phase 6C added deterministic formed CPU field-preview
+  products.
 - Keep remaining M6.2 procgen code scoped to bounded region terrain/material
-  generation through `domain/procgen`, product publication barriers, query
-  snapshots, render selection, and derived GPU residency.
+  generation through `domain/procgen` and the completed Phase 6A-6C substrate.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
   execution substrate lands.
 - Keep render SDF/GPU work on the completed product-selection and derived
@@ -133,6 +134,14 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   domain-first procgen product track for graph-backed deterministic documents,
   terrain/material node semantics, ratification, lowering to world operation
   windows, planning metadata, and product job/publication descriptors;
+- SDF-first execution Phase 6B is complete: `runenwerk_editor` implements the
+  visible procgen overlay proof with concrete graph/preview providers,
+  publication/query barrier wiring, render selection/residency participation,
+  and bounded changed-region/reservation viewport status overlays;
+- SDF-first execution Phase 6C is complete: `domain/procgen` forms
+  deterministic scalar-distance and material-channel CPU preview products,
+  `runenwerk_editor` publishes and snapshots those formed descriptors through
+  the product substrate, and editor preview surfaces expose sample summaries;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

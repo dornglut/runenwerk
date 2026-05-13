@@ -2454,6 +2454,7 @@ dependencies = [
  "ratification",
  "spatial",
  "world_ops",
+ "world_sdf",
 ]
 
 [[package]]
@@ -2799,7 +2800,9 @@ dependencies = [
  "engine_net",
  "engine_net_quic",
  "glam 0.32.1",
+ "graph",
  "material_graph",
+ "procgen",
  "product",
  "ron",
  "rustls",

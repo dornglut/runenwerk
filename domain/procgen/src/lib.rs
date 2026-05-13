@@ -5,6 +5,7 @@
 pub mod catalog;
 pub mod determinism;
 pub mod document;
+pub mod field_preview;
 pub mod ids;
 pub mod lowering;
 pub mod planning;
@@ -25,6 +26,10 @@ pub use document::{
     ProcgenNodeParameters, ProcgenOutputKind, ProcgenOutputProduct, ProcgenRetentionClass,
     ProcgenScope, ProcgenWriteTarget, ProcgenWriteTargetKind,
 };
+pub use field_preview::{
+    ProcgenFieldPreviewDiagnostic, ProcgenFieldPreviewDiagnosticCode, ProcgenFieldPreviewFormation,
+    ProcgenFieldPreviewPolicy, form_procgen_field_preview_products,
+};
 pub use ids::{
     ProcgenCandidateId, ProcgenDocumentId, ProcgenGeneratorId, ProcgenRealizationId,
     ProcgenReservationId,
@@ -35,7 +40,10 @@ pub use planning::{
     ProcgenRealization, ProcgenReservation,
 };
 pub use products::{
-    ProcgenProductContracts, build_procgen_product_contracts, build_procgen_publication_outcome,
+    ProcgenFormedPreviewProductContracts, ProcgenProductContracts,
+    build_procgen_formed_preview_product_contracts,
+    build_procgen_formed_preview_publication_outcome, build_procgen_product_contracts,
+    build_procgen_publication_outcome, procgen_formed_preview_product_descriptors,
     procgen_output_product_descriptors,
 };
 pub use ratification::{

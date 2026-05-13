@@ -10,6 +10,10 @@ use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt};
 use engine::{BarrierKind, ExecutionBarrier, SystemSetKey};
 
 use crate::asset_pipeline::publish_pending_field_product_publications;
+use crate::runtime::procgen::{
+    publish_procgen_products_at_barrier, publish_procgen_query_snapshots_at_barrier,
+    sync_procgen_viewport_overlay_system,
+};
 use crate::runtime::resources::{
     EditorHostResource, EditorInputBridgeState, EditorViewportRenderState,
     RuntimePreviewProcessResource,
@@ -42,6 +46,7 @@ pub enum EditorRuntimeSet {
     FrameSubmit,
     ViewportRenderStateCommands,
     ViewportPresentationSync,
+    ProcgenViewportOverlay,
     ViewportProductTargets,
     ViewportRenderJobs,
     ViewportRenderProductSelection,
@@ -66,6 +71,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             ),
             Self::ViewportPresentationSync => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportPresentationSync")
+            }
+            Self::ProcgenViewportOverlay => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ProcgenViewportOverlay")
             }
             Self::ViewportProductTargets => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportProductTargets")
@@ -113,8 +121,16 @@ impl Plugin for EditorAppPlugin {
             publish_editor_field_products_at_barrier,
         );
         app.add_barrier_handler(
+            BarrierKind::ProductPublication,
+            publish_procgen_products_at_barrier,
+        );
+        app.add_barrier_handler(
             BarrierKind::QuerySnapshotPublication,
             publish_viewport_query_snapshots_at_barrier,
+        );
+        app.add_barrier_handler(
+            BarrierKind::QuerySnapshotPublication,
+            publish_procgen_query_snapshots_at_barrier,
         );
 
         app.add_systems(Startup, bootstrap_editor_demo_system);
@@ -168,9 +184,17 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
+            sync_procgen_viewport_overlay_system
+                .in_set(EditorRuntimeSet::ProcgenViewportOverlay)
+                .after(EditorRuntimeSet::ViewportPresentationSync)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
             sync_viewport_product_targets_system
                 .in_set(EditorRuntimeSet::ViewportProductTargets)
-                .after(EditorRuntimeSet::ViewportPresentationSync)
+                .after(EditorRuntimeSet::ProcgenViewportOverlay)
                 .after(CoreSet::Input)
                 .after(CoreSet::Time),
         );

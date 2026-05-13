@@ -30,6 +30,7 @@ pub struct ViewportViewModel {
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,
     pub preview_active: bool,
+    pub overlay_status_lines: Vec<String>,
 }
 
 impl Default for ViewportViewModel {
@@ -49,6 +50,7 @@ impl Default for ViewportViewModel {
             hovered_entity: None,
             drag_in_progress: false,
             preview_active: false,
+            overlay_status_lines: Vec::new(),
         }
     }
 }
