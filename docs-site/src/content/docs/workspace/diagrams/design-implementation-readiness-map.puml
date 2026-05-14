@@ -1,0 +1,94 @@
+@startuml
+title Runenwerk Design Implementation Readiness And Blocker Map
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+skinparam component {
+  BackgroundColor<<READY>> #DDF5DD
+  BorderColor<<READY>> #1C7C32
+  BackgroundColor<<PARTIAL>> #FFF2CC
+  BorderColor<<PARTIAL>> #AA7700
+  BackgroundColor<<GATED>> #DDEEFF
+  BorderColor<<GATED>> #004488
+  BackgroundColor<<BLOCKED>> #F5DDDD
+  BorderColor<<BLOCKED>> #AA0000
+  BackgroundColor<<DEFERRED>> #EEEEEE
+  BorderColor<<DEFERRED>> #666666
+}
+
+legend right
+  <b>Readiness</b>
+  <#DDF5DD> Ready now or docs-only cleanup
+  <#FFF2CC> Partial substrate, bounded blocker remains
+  <#DDEEFF> Gated by active roadmap priority or runtime productization
+  <#F5DDDD> Blocked by missing domain contracts
+  <#EEEEEE> Deferred by policy
+
+  <b>Weights</b>
+  P0 = current focus
+  P1 = ready next
+  P2 = design-gated
+  P3 = deferred / long horizon
+  B1 = low blocker
+  B5 = policy-deferred blocker
+endlegend
+
+package "P0 Current Focus" {
+  component "SDF Phase 6D\nprocgen bake, rollback,\npersistence, reload classification\npriority=P0 blocker=B1" as SDF6D <<READY>>
+  component "ECS/runtime support\nlifecycle, plan reporting,\nconsumer lag/backpressure\npriority=P0 blocker=B2" as ECSRUNTIME <<PARTIAL>>
+  component "Render contract follow-ups\nR4 / R6 / R7 through\nproduct selection and residency\npriority=P0 blocker=B2" as RENDER <<PARTIAL>>
+  component "UI/editor guards\nstructural routing,\ncapability gates, docs sync\npriority=P0 blocker=B1" as UIGUARDS <<READY>>
+}
+
+package "P1 Ready Next" {
+  component "Draw DRF2-DRF5\ncache, product-surface bridge,\nGPU proof, CPU fallback\npriority=P1 blocker=B2" as DRAW <<PARTIAL>>
+  component "Net replication Phase 1-3\nACK hardening, delta lifecycle,\nbridge convergence\npriority=P1 blocker=B2" as NET <<PARTIAL>>
+  component "Design lifecycle cleanup\npromote implemented active docs\nafter code truth review\npriority=P1 blocker=B1" as DOCS <<READY>>
+}
+
+package "P2 Gated Work" {
+  component "Native tablet acceptance\nbackend arbitration plus\nmanual hardware passes\npriority=P1 blocker=B3" as TABLET <<GATED>>
+  component "Native multi-window\nwindow-scoped runtime,\ninput, UI frame, swapchain\npriority=P2 blocker=B3" as WINDOW <<GATED>>
+  component "Render fragments R10\nfragment assets, merge,\nhot reload, inspection\npriority=P2 blocker=B3" as FRAGMENTS <<GATED>>
+  component "Gameplay Graph ATR IR\nfirst compiler and ECS lowering\npriority=P2 blocker=B4" as GAMEPLAY <<BLOCKED>>
+  component "Semantic graph domain\none concrete owner,\none formed product target\npriority=P2 blocker=B4" as SEMGRAPH <<BLOCKED>>
+  component "Scripting/runtime bridge\nlanguage-neutral contract,\nfirst adapter later\npriority=P2 blocker=B4" as SCRIPTING <<BLOCKED>>
+}
+
+package "P3 Deferred / Long Horizon" {
+  component "Particles, physics,\nanimation, world processes\npriority=P3 blocker=B4" as M6FUTURE <<BLOCKED>>
+  component "SDF detail drafts\nprefabs, character, vegetation,\natmosphere, water, VFX, AI\npriority=P3 blocker=B5" as SDFDETAIL <<DEFERRED>>
+  component "Alternate UI execution\ncompiled-reactive or ECS-driven\npriority=P3 blocker=B5" as UIALT <<DEFERRED>>
+  component "Gameplay powers/actions\nruntime and editor power authoring\npriority=P3 blocker=B5" as POWERS <<DEFERRED>>
+}
+
+ECSRUNTIME --> SDF6D : product-job substrate
+RENDER --> SDF6D : product consumers only
+UIGUARDS --> SDF6D : surface/projection safety
+
+SDF6D --> DRAW : current focus must stabilize first
+RENDER --> DRAW : product-surface / render-flow APIs
+DRAW --> TABLET : production input validation
+
+SDF6D --> GAMEPLAY : formed products first
+SDF6D --> M6FUTURE : shared product substrate first
+SEMGRAPH --> GAMEPLAY : graph policy specialization
+GAMEPLAY --> SCRIPTING : formed gameplay products first
+NET --> GAMEPLAY : authority and replication metadata
+
+RENDER --> WINDOW : render surface foundation
+RENDER --> FRAGMENTS : target aliases and invocations
+
+M6FUTURE --> SDFDETAIL : product family contracts
+GAMEPLAY --> POWERS : narrower gameplay contracts
+UIGUARDS --> UIALT : active retained path remains default
+
+DOCS ..> SDF6D : keep status honest
+DOCS ..> DRAW
+DOCS ..> RENDER
+DOCS ..> UIGUARDS
+
+@enduml
