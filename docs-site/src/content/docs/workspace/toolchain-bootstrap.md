@@ -39,6 +39,13 @@ task roadmap:check
 task puml:validate
 ```
 
+If a new shell still cannot resolve `task` or `uv`, load the known
+tool paths into the current session:
+
+```powershell
+. .\tools\bootstrap\activate.ps1
+```
+
 ## What Bootstrap Owns
 
 The bootstrap script installs or checks the host tools that cannot be provided
@@ -47,7 +54,6 @@ by `uv.lock`:
 - Git;
 - uv;
 - Task;
-- Dagger CLI;
 - Rust/Cargo;
 - cargo-nextest;
 - cargo-deny;
@@ -58,12 +64,14 @@ by `uv.lock`:
 - ast-grep;
 - Renovate CLI.
 
-It also warns when no Docker, Podman, or compatible container runtime command is
-available. Dagger needs a running container runtime for `task ci:local`.
-
 Some WinGet portable packages do not expose a command on `PATH`. The bootstrap
 script creates stable command shims under `%USERPROFILE%\.runenwerk\bin` and
 adds that directory to the user `PATH` when needed.
+
+`tools/bootstrap/activate.ps1` does not install anything. Dot-source it with
+`. .\tools\bootstrap\activate.ps1` so it can prepend the known bootstrap
+locations to the current shell. Taskfile, uv, cargo, PlantUML, lychee, and
+ast-grep can be found without restarting the terminal.
 
 ## Boundaries
 
@@ -74,9 +82,12 @@ Taskfile remains the canonical command surface after bootstrap:
 
 ```powershell
 task --list
-task ci:host
+task batch:validate -- --batch docs-site/src/content/docs/reports/batches/<batch-id>/batch.toml
 task ci:local
 ```
+
+Runenwerk does not configure remote CI. Treat `task ci:local` as the manual
+full validation gate before pushing, opening a PR, or closing out a batch.
 
 ## Maintenance
 

@@ -1136,7 +1136,7 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
 fn validation_gates_have_quick_and_full_paths_with_nextest_fallback() {
     let quick_gate = read_workspace_source("quiet_editor_gate.sh");
     let full_gate = read_workspace_source("quiet_full_gate.sh");
-    let ci = read_workspace_source(".woodpecker.yml");
+    let taskfile = read_workspace_source("Taskfile.yml");
 
     assert!(
         quick_gate.contains("editor_inspector")
@@ -1151,12 +1151,15 @@ fn validation_gates_have_quick_and_full_paths_with_nextest_fallback() {
         "full gate should prefer nextest but keep cargo test as a zero-install fallback",
     );
     assert!(
-        ci.contains("./quiet_full_gate.sh") && ci.contains("tools/docs/validate_docs.py"),
-        "CI should use the repo gate path and include docs validation",
+        taskfile.contains("ci:local:")
+            && taskfile.contains("task docs:validate")
+            && taskfile.contains("task rust:test")
+            && taskfile.contains("task rust:policy"),
+        "local validation should keep one full manual gate with docs, tests, and policy checks",
     );
     assert!(
-        ci.contains("get.nexte.st/latest/linux") && ci.contains("cargo nextest --version"),
-        "CI should install and verify cargo-nextest so the full gate takes the nextest path",
+        taskfile.contains("cargo nextest run") && taskfile.contains("cargo deny check"),
+        "Taskfile should keep cargo-nextest and Rust policy checks on the local validation path",
     );
 }
 

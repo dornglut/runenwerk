@@ -8,8 +8,30 @@ import pytest
 import yaml
 
 from generate_roadmap_docs import render_outputs
-from parallel_batch import build_manifest, render_worker_prompt
-from roadmap_state import RoadmapState, WorkflowError, changed_files_for_worktree, load_roadmap, select_batch_candidates, validate_batch_against_roadmap, validate_changed_paths, validate_existing_write_scope_paths, validate_write_scopes, write_schema_files
+from parallel_batch import (
+    batch_execution_state,
+    build_manifest,
+    run_host_batch_validation,
+    run_official_batch_validation,
+    refresh_base_manifest,
+    render_worker_prompt,
+    validation_commands_for_items,
+    write_validation_result,
+)
+from roadmap_state import (
+    BatchManifest,
+    RoadmapState,
+    WorkflowError,
+    changed_files_for_worktree,
+    load_batch_manifest,
+    load_roadmap,
+    select_batch_candidates,
+    validate_batch_against_roadmap,
+    validate_changed_paths,
+    validate_existing_write_scope_paths,
+    validate_write_scopes,
+    write_schema_files,
+)
 
 
 def valid_state() -> dict:
@@ -224,3 +246,115 @@ def test_changed_files_for_worktree_includes_dirty_staged_and_untracked_files() 
             "tracked.txt",
             "untracked.txt",
         ]
+
+
+def test_batch_validation_rejects_dirty_out_of_scope_worktree(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+
+    monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["docs-site/out.md"])
+
+    _selected, errors = batch_execution_state(approved, roadmap)
+
+    assert errors == ["WR-001: changed path outside approved scope: docs-site/out.md"]
+
+
+def test_batch_validation_invokes_host_commands_only_after_scope_checks_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["tools/workflow/file.py"])
+
+    selected, output = run_official_batch_validation(
+        approved,
+        roadmap,
+        command_runner=lambda command: calls.append(command) or "ok",
+    )
+
+    assert [item.id for item in selected] == ["WR-001"]
+    assert calls == ["cargo test -p test"]
+    assert output == "> cargo test -p test\nok\n"
+
+
+def test_batch_validation_does_not_invoke_host_commands_when_scope_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["docs-site/out.md"])
+
+    with pytest.raises(WorkflowError):
+        run_official_batch_validation(approved, roadmap, command_runner=lambda command: calls.append(command) or "ok")
+
+    assert calls == []
+
+
+def test_host_batch_validation_runs_commands_in_order() -> None:
+    calls: list[str] = []
+
+    output = run_host_batch_validation(
+        ["first command", "second command"],
+        command_runner=lambda command: calls.append(command) or f"{command} output",
+    )
+
+    assert calls == ["first command", "second command"]
+    assert output == "> first command\nfirst command output\n> second command\nsecond command output\n"
+
+
+def test_validation_results_are_written_only_by_explicit_write() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    ).model_copy(update={"approval_state": "approved"})
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        batch_path = Path(temp_dir) / "batch.toml"
+        batch_path.write_text("", encoding="utf-8")
+
+        assert manifest.validation_results == []
+        write_validation_result(batch_path, manifest, "passed", validation_commands_for_items(manifest.items))
+        updated = load_batch_manifest(batch_path)
+
+    assert len(updated.validation_results) == 1
+    assert "batch validate passed" in updated.validation_results[0]
+
+
+def test_refresh_base_is_blocked_after_integration_starts() -> None:
+    manifest = BatchManifest(
+        id="batch-test",
+        goal="test",
+        approval_state="approved",
+        base_branch="main",
+        base_sha="abc123",
+        integration_risk="isolated worktrees",
+        integration_status="integrating",
+        items=[],
+    )
+
+    with pytest.raises(WorkflowError, match="integration_status"):
+        refresh_base_manifest(manifest, base="main")
