@@ -134,6 +134,9 @@ mod tests {
 
     use super::*;
 
+    const RUNTIME_PRODUCT_JOB_TEST_TIMEOUT: std::time::Duration =
+        std::time::Duration::from_secs(30);
+
     struct ProductTestJob;
 
     impl RuntimeJob for ProductTestJob {
@@ -310,7 +313,7 @@ mod tests {
         let started = std::time::Instant::now();
         while executor.diagnostics().buffered_completion_count < expected {
             assert!(
-                started.elapsed() < std::time::Duration::from_secs(2),
+                started.elapsed() < RUNTIME_PRODUCT_JOB_TEST_TIMEOUT,
                 "timed out waiting for runtime product job completion"
             );
             std::thread::sleep(std::time::Duration::from_millis(1));

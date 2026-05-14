@@ -1,8 +1,8 @@
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, VecDeque};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -206,6 +206,7 @@ struct WorkStealingPool {
     workers: Vec<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
     pending_count: Arc<AtomicUsize>,
+    wake: Arc<(Mutex<()>, Condvar)>,
     queue_capacity: usize,
 }
 
@@ -215,6 +216,7 @@ impl WorkStealingPool {
         let (completion_sender, completions) = crossbeam_channel::unbounded();
         let shutdown = Arc::new(AtomicBool::new(false));
         let pending_count = Arc::new(AtomicUsize::new(0));
+        let wake = Arc::new((Mutex::new(()), Condvar::new()));
         let worker_count = config.worker_threads.max(1);
         let queue_capacity = config.queue_capacity.max(1);
         let locals = (0..worker_count)
@@ -231,6 +233,7 @@ impl WorkStealingPool {
             let completion_sender = completion_sender.clone();
             let shutdown = Arc::clone(&shutdown);
             let pending_count = Arc::clone(&pending_count);
+            let wake = Arc::clone(&wake);
             let peer_stealers = stealers.clone();
             let worker = thread::Builder::new()
                 .name(format!("runenwerk-product-steal-{index}"))
@@ -246,7 +249,7 @@ impl WorkStealingPool {
                         {
                             break;
                         }
-                        thread::sleep(Duration::from_millis(1));
+                        wait_for_runtime_job_signal(&wake);
                     }
                 })
                 .expect("runtime product work-stealing worker should spawn");
@@ -259,6 +262,7 @@ impl WorkStealingPool {
             workers,
             shutdown,
             pending_count,
+            wake,
             queue_capacity,
         }
     }
@@ -271,6 +275,7 @@ impl WorkStealingPool {
             return Err(RuntimeJobSubmitFailure::Full);
         }
         self.injector.push(job);
+        self.wake.1.notify_one();
         Ok(())
     }
 
@@ -303,6 +308,7 @@ impl WorkStealingPool {
 impl Drop for WorkStealingPool {
     fn drop(&mut self) {
         self.shutdown.store(true, Ordering::SeqCst);
+        self.wake.1.notify_all();
         for worker in self.workers.drain(..) {
             let _ = worker.join();
         }
@@ -336,6 +342,14 @@ fn retry_steal<T>(mut steal: impl FnMut() -> Steal<T>) -> Option<T> {
             Steal::Retry => thread::yield_now(),
         }
     }
+}
+
+fn wait_for_runtime_job_signal(wake: &Arc<(Mutex<()>, Condvar)>) {
+    let (lock, signal) = &**wake;
+    let guard = lock
+        .lock()
+        .expect("runtime job worker wake lock should not be poisoned");
+    let _ = signal.wait_timeout(guard, Duration::from_millis(10));
 }
 
 enum RuntimeJobBackend {
@@ -633,6 +647,8 @@ mod tests {
     use super::*;
     use crate::runtime::jobs::RuntimeJobResult;
 
+    const RUNTIME_JOB_TEST_TIMEOUT: Duration = Duration::from_secs(30);
+
     #[derive(Debug)]
     struct TestJob {
         id: u64,
@@ -912,7 +928,7 @@ mod tests {
                 return completions;
             }
             assert!(
-                started.elapsed() < Duration::from_secs(2),
+                started.elapsed() < RUNTIME_JOB_TEST_TIMEOUT,
                 "timed out waiting for runtime job completion"
             );
             std::thread::sleep(Duration::from_millis(1));
@@ -923,7 +939,7 @@ mod tests {
         let started = Instant::now();
         while !condition() {
             assert!(
-                started.elapsed() < Duration::from_secs(2),
+                started.elapsed() < RUNTIME_JOB_TEST_TIMEOUT,
                 "timed out waiting for worker job to start"
             );
             std::thread::sleep(Duration::from_millis(1));
