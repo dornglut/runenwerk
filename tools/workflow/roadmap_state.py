@@ -345,6 +345,16 @@ def validate_write_scopes(items: list[RoadmapItem] | list[BatchItem]) -> list[st
     return conflicts
 
 
+def validate_existing_write_scope_paths(items: list[RoadmapItem] | list[BatchItem]) -> list[str]:
+    errors: list[str] = []
+    for item in items:
+        for scope in item.write_scopes:
+            normalized = normalize_repo_path(scope)
+            if not (REPO_ROOT / normalized).exists():
+                errors.append(f"{item.id}:{normalized} does not exist")
+    return errors
+
+
 def validate_batch_against_roadmap(manifest: BatchManifest, roadmap: RoadmapState) -> list[str]:
     errors: list[str] = []
     roadmap_by_id = roadmap.by_id
@@ -372,6 +382,7 @@ def validate_batch_against_roadmap(manifest: BatchManifest, roadmap: RoadmapStat
         if batch_item.validations != roadmap_item.validations:
             errors.append(f"{batch_item.id}: validations are stale")
     errors.extend(f"write-scope conflict: {conflict}" for conflict in validate_write_scopes(manifest.items))
+    errors.extend(f"write-scope path missing: {error}" for error in validate_existing_write_scope_paths(manifest.items))
     return errors
 
 
@@ -524,10 +535,13 @@ def validate(source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML sour
         raise typer.Exit(1) from error
     roadmap = load_roadmap(source)
     conflicts = validate_write_scopes([item for item in roadmap.items if item.can_enter_implementation_batch])
-    if conflicts:
+    missing_scope_paths = validate_existing_write_scope_paths([item for item in roadmap.items if item.can_enter_implementation_batch])
+    if conflicts or missing_scope_paths:
         console.print("[red]roadmap validation failed[/red]")
         for conflict in conflicts:
             console.print(f"- write-scope conflict: {conflict}")
+        for missing_scope_path in missing_scope_paths:
+            console.print(f"- write-scope path missing: {missing_scope_path}")
         raise typer.Exit(1)
     console.print(f"[green]roadmap validation passed:[/green] {len(roadmap.items)} items, {len(roadmap.edges)} edges")
 

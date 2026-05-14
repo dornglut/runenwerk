@@ -34,7 +34,7 @@ items:
   - WR-005
   write_scopes:
   - apps/runenwerk_draw
-  - engine/runtime-product-job
+  - engine/src/runtime
   validations:
   - cargo test -p runenwerk_draw --test app_shell
   - cargo test -p engine
