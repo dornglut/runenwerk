@@ -231,6 +231,11 @@ def refresh_base(
     base: str = typer.Option("main", help="Base branch or ref to refresh from."),
     clear_worktrees: bool = typer.Option(True, help="Clear recorded worker worktree paths in the manifest."),
     recreate_worktrees: bool = typer.Option(False, help="Remove existing worker worktrees and branches after safety checks."),
+    discard_stale_worktrees: bool = typer.Option(
+        False,
+        "--discard-stale-worktrees",
+        help="Allow removing dirty out-of-scope worker worktrees when recreating stale worktrees.",
+    ),
 ) -> None:
     manifest = load_batch_manifest(batch)
     try:
@@ -239,6 +244,7 @@ def refresh_base(
             base=base,
             clear_worktrees=clear_worktrees,
             recreate_worktrees=recreate_worktrees,
+            discard_stale_worktrees=discard_stale_worktrees,
         )
     except WorkflowError as error:
         console.print("[red]batch base refresh is blocked[/red]")
@@ -256,13 +262,24 @@ def refresh_base_manifest(
     base: str,
     clear_worktrees: bool = True,
     recreate_worktrees: bool = False,
+    discard_stale_worktrees: bool = False,
 ) -> BatchManifest:
     if manifest.integration_status != "not_started":
         raise WorkflowError(f"integration_status is {manifest.integration_status!r}, expected 'not_started'")
 
-    in_scope_changes = in_scope_changes_for_manifest(manifest)
+    if discard_stale_worktrees and not recreate_worktrees:
+        raise WorkflowError("--discard-stale-worktrees requires --recreate-worktrees")
+
+    all_changes, in_scope_changes, inspection_errors = worker_change_groups_for_manifest(manifest)
+    if inspection_errors:
+        raise WorkflowError("\n".join(inspection_errors))
     if in_scope_changes:
-        raise WorkflowError("\n".join(in_scope_changes))
+        raise WorkflowError("dirty in-scope worker changes block base refresh:\n" + "\n".join(in_scope_changes))
+    if all_changes and not discard_stale_worktrees:
+        raise WorkflowError(
+            "dirty worker worktree changes block base refresh; rerun with "
+            "--discard-stale-worktrees only for stale out-of-scope dirt:\n" + "\n".join(all_changes)
+        )
 
     base_sha = git_output(["git", "rev-parse", base])
     if not base_sha:
@@ -578,19 +595,27 @@ def write_validation_result(batch: Path, manifest: BatchManifest, status: str, c
 
 
 def in_scope_changes_for_manifest(manifest: BatchManifest) -> list[str]:
+    _all_changes, in_scope_changes, inspection_errors = worker_change_groups_for_manifest(manifest)
+    return [*inspection_errors, *in_scope_changes]
+
+
+def worker_change_groups_for_manifest(manifest: BatchManifest) -> tuple[list[str], list[str], list[str]]:
     changes: list[str] = []
+    in_scope_changes: list[str] = []
+    inspection_errors: list[str] = []
     for item in manifest.items:
         try:
             paths = changed_paths_for_item(item, manifest.base_sha)
         except (OSError, subprocess.CalledProcessError) as error:
-            changes.append(f"{item.id}: cannot inspect worker changes: {error}")
+            inspection_errors.append(f"{item.id}: cannot inspect worker changes: {error}")
             continue
         for path in paths:
             normalized = normalize_repo_path(path)
+            changes.append(f"{item.id}: {normalized}")
             scopes = [normalize_repo_path(scope) for scope in item.write_scopes]
             if any(path_within_scope(normalized, scope) for scope in scopes):
-                changes.append(f"{item.id}: {normalized}")
-    return changes
+                in_scope_changes.append(f"{item.id}: {normalized}")
+    return changes, in_scope_changes, inspection_errors
 
 
 def remove_worker_worktrees_and_branches(manifest: BatchManifest) -> None:
