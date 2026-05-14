@@ -9,7 +9,7 @@ import yaml
 
 from generate_roadmap_docs import render_outputs
 from parallel_batch import build_manifest, render_worker_prompt
-from roadmap_state import RoadmapState, WorkflowError, changed_files_for_worktree, load_roadmap, select_batch_candidates, validate_batch_against_roadmap, validate_changed_paths, validate_write_scopes, write_schema_files
+from roadmap_state import RoadmapState, WorkflowError, changed_files_for_worktree, load_roadmap, select_batch_candidates, validate_batch_against_roadmap, validate_changed_paths, validate_existing_write_scope_paths, validate_write_scopes, write_schema_files
 
 
 def valid_state() -> dict:
@@ -22,8 +22,8 @@ def valid_state() -> dict:
             "triage": "triage.md",
         },
         "items": [
-            item("WR-001", dependencies=[], write_scopes=["apps/a"]),
-            item("WR-002", value=2, blocker=5, dependencies=["WR-001"], write_scopes=["apps/b"]),
+            item("WR-001", dependencies=[], write_scopes=["tools/workflow"]),
+            item("WR-002", value=2, blocker=5, dependencies=["WR-001"], write_scopes=["docs-site"]),
         ],
         "edges": [{"source": "WR-001", "target": "WR-002", "label": "depends"}],
     }
@@ -58,7 +58,7 @@ def item(
         "rice": "N/A",
         "kano": "Neutral",
         "dependencies": dependencies or [],
-        "write_scopes": write_scopes or ["apps/a"],
+        "write_scopes": write_scopes or ["tools/workflow"],
         "validations": ["cargo test -p test"],
         "next_evidence": "Evidence.",
         "current_decision": "Decision.",
@@ -110,9 +110,16 @@ def test_overlapping_write_scopes_are_detected() -> None:
     state = valid_state()
     state["items"][1]["blocker"] = 2
     state["items"][1]["gate"] = "Supporting now"
-    state["items"][1]["write_scopes"] = ["apps/a/subsystem"]
+    state["items"][1]["write_scopes"] = ["tools/workflow/subsystem"]
     roadmap = RoadmapState.model_validate(state)
-    assert validate_write_scopes(roadmap.items) == ["WR-002:apps/a/subsystem overlaps WR-001:apps/a"]
+    assert validate_write_scopes(roadmap.items) == ["WR-002:tools/workflow/subsystem overlaps WR-001:tools/workflow"]
+
+
+def test_missing_write_scope_paths_are_detected() -> None:
+    state = valid_state()
+    state["items"][0]["write_scopes"] = ["apps/a"]
+    roadmap = RoadmapState.model_validate(state)
+    assert validate_existing_write_scope_paths([roadmap.items[0]]) == ["WR-001:apps/a does not exist"]
 
 
 def test_render_check_can_detect_stale_files() -> None:
@@ -176,7 +183,7 @@ def test_batch_approval_validation_rejects_stale_scope() -> None:
         [roadmap.items[0]],
         Path("docs-site/src/content/docs/reports/batches/batch-test"),
     )
-    stale_item = manifest.items[0].model_copy(update={"write_scopes": ["apps/other"]})
+    stale_item = manifest.items[0].model_copy(update={"write_scopes": ["docs-site"]})
     stale_manifest = manifest.model_copy(update={"items": [stale_item]})
 
     assert validate_batch_against_roadmap(stale_manifest, roadmap) == [
