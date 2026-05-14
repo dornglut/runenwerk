@@ -4,7 +4,7 @@ use graph::{
     PortDefinition, PortDirection, PortId,
 };
 use product::{
-    ProductQueryPolicy, ratify_product_job, ratify_product_publication,
+    ProductQueryPolicy, ProductScaleBand, ratify_product_job, ratify_product_publication,
     ratify_query_snapshot_product,
 };
 
@@ -337,6 +337,59 @@ fn pressure_and_formation_version_change_deterministic_outputs() {
         low.products[0].metadata.product_id,
         versioned.products[0].metadata.product_id
     );
+}
+
+#[test]
+fn preview_and_final_tile_identity_include_quality_and_cache_identity() {
+    let document = document_with_stroke(vec![
+        sample(1, 128.0, 128.0, 0.7),
+        sample(2, 180.0, 142.0, 0.9),
+    ]);
+
+    let preview = form_drawing_ink_tiles(&document, DrawingTileFormationPolicy::preview());
+    let final_quality =
+        form_drawing_ink_tiles(&document, DrawingTileFormationPolicy::final_quality());
+
+    assert!(preview.is_accepted(), "{:?}", preview.diagnostics);
+    assert!(
+        final_quality.is_accepted(),
+        "{:?}",
+        final_quality.diagnostics
+    );
+    assert_eq!(
+        preview.products[0].metadata.quality_class,
+        ProductQualityClass::Preview
+    );
+    assert_eq!(
+        final_quality.products[0].metadata.quality_class,
+        ProductQualityClass::Final
+    );
+    assert_eq!(
+        preview.products[0].payload.width,
+        DEFAULT_INK_TILE_PIXEL_WIDTH
+    );
+    assert_eq!(
+        final_quality.products[0].payload.width,
+        DEFAULT_FINAL_INK_TILE_PIXEL_WIDTH
+    );
+    assert_ne!(preview.determinism_key, final_quality.determinism_key);
+    assert_ne!(
+        preview.products[0].metadata.product_id,
+        final_quality.products[0].metadata.product_id
+    );
+    assert!(preview.products[0].cache_key.contains(":preview:"));
+    assert!(final_quality.products[0].cache_key.contains(":final:"));
+
+    let preview_descriptor = drawing_ink_tile_product_descriptor(&preview.products[0]);
+    let final_descriptor = drawing_ink_tile_product_descriptor(&final_quality.products[0]);
+    assert_eq!(preview_descriptor.scale_band, ProductScaleBand::Preview);
+    assert_eq!(final_descriptor.scale_band, ProductScaleBand::Final);
+
+    let preview_cache = drawing_ink_tile_product_cache_identity(&preview.products[0]);
+    let final_cache = drawing_ink_tile_product_cache_identity(&final_quality.products[0]);
+    assert_ne!(preview_cache.stable_key(), final_cache.stable_key());
+    assert_eq!(preview_cache.formation_version.as_deref(), Some("2"));
+    assert_eq!(final_cache.scale_band, ProductScaleBand::Final);
 }
 
 #[test]

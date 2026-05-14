@@ -6,10 +6,19 @@ use crate::{
     DrawingTileProductId, FormationVersion,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ProductQualityClass {
     Preview,
     Final,
+}
+
+impl ProductQualityClass {
+    pub const fn cache_token(self) -> &'static str {
+        match self {
+            Self::Preview => "preview",
+            Self::Final => "final",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

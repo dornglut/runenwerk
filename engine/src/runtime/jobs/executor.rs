@@ -1,9 +1,13 @@
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, VecDeque};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError};
+use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use product::{FieldProductDiagnostic, ProductJobDescriptor};
 
 use crate::runtime::jobs::diagnostics::{
@@ -13,11 +17,13 @@ use crate::runtime::jobs::diagnostics::{
 use crate::runtime::jobs::task::RuntimeJob;
 use crate::runtime::jobs::types::{
     RuntimeJobCompletion, RuntimeJobError, RuntimeJobExecutionMode, RuntimeJobExecutorConfig,
-    RuntimeJobExecutorDiagnostics, RuntimeJobGeneration, RuntimeJobHandle, RuntimeJobKey,
-    RuntimeJobStatus, RuntimeJobSubmissionError,
+    RuntimeJobExecutorDiagnostics, RuntimeJobGeneration, RuntimeJobGenerationSnapshot,
+    RuntimeJobHandle, RuntimeJobIssueKind, RuntimeJobIssueSnapshot, RuntimeJobKey,
+    RuntimeJobPendingSnapshot, RuntimeJobStatus, RuntimeJobSubmissionError,
 };
 
 type ErasedOutput = Box<dyn Any + Send>;
+const RECENT_JOB_ISSUE_LIMIT: usize = 64;
 
 trait ErasedRuntimeJob: Send {
     fn execute_boxed(self: Box<Self>) -> ErasedRuntimeJobOutcome;
@@ -122,6 +128,11 @@ enum WorkerCommand {
     Shutdown,
 }
 
+enum RuntimeJobSubmitFailure {
+    Full,
+    Disconnected,
+}
+
 struct WorkerPool {
     sender: Option<Sender<WorkerCommand>>,
     completions: Receiver<ErasedRuntimeJobOutcome>,
@@ -159,11 +170,16 @@ impl WorkerPool {
         }
     }
 
-    fn submit(&self, job: Box<dyn ErasedRuntimeJob>) -> Result<(), TrySendError<WorkerCommand>> {
+    fn submit(&self, job: Box<dyn ErasedRuntimeJob>) -> Result<(), RuntimeJobSubmitFailure> {
         let Some(sender) = &self.sender else {
-            return Err(TrySendError::Disconnected(WorkerCommand::Run(job)));
+            return Err(RuntimeJobSubmitFailure::Disconnected);
         };
-        sender.try_send(WorkerCommand::Run(job))
+        sender
+            .try_send(WorkerCommand::Run(job))
+            .map_err(|err| match err {
+                TrySendError::Full(_) => RuntimeJobSubmitFailure::Full,
+                TrySendError::Disconnected(_) => RuntimeJobSubmitFailure::Disconnected,
+            })
     }
 
     fn try_recv_completed(&self) -> Result<ErasedRuntimeJobOutcome, TryRecvError> {
@@ -175,7 +191,7 @@ impl Drop for WorkerPool {
     fn drop(&mut self) {
         if let Some(sender) = self.sender.take() {
             for _ in 0..self.workers.len() {
-                let _ = sender.try_send(WorkerCommand::Shutdown);
+                let _ = sender.send(WorkerCommand::Shutdown);
             }
         }
         for worker in self.workers.drain(..) {
@@ -184,15 +200,156 @@ impl Drop for WorkerPool {
     }
 }
 
+struct WorkStealingPool {
+    injector: Arc<Injector<Box<dyn ErasedRuntimeJob>>>,
+    completions: Receiver<ErasedRuntimeJobOutcome>,
+    workers: Vec<JoinHandle<()>>,
+    shutdown: Arc<AtomicBool>,
+    pending_count: Arc<AtomicUsize>,
+    queue_capacity: usize,
+}
+
+impl WorkStealingPool {
+    fn new(config: &RuntimeJobExecutorConfig) -> Self {
+        let injector = Arc::new(Injector::new());
+        let (completion_sender, completions) = crossbeam_channel::unbounded();
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let pending_count = Arc::new(AtomicUsize::new(0));
+        let worker_count = config.worker_threads.max(1);
+        let queue_capacity = config.queue_capacity.max(1);
+        let locals = (0..worker_count)
+            .map(|_| Worker::new_fifo())
+            .collect::<Vec<_>>();
+        let stealers = locals
+            .iter()
+            .map(Worker::stealer)
+            .collect::<Vec<Stealer<Box<dyn ErasedRuntimeJob>>>>();
+        let mut workers = Vec::with_capacity(worker_count);
+
+        for (index, local) in locals.into_iter().enumerate() {
+            let injector = Arc::clone(&injector);
+            let completion_sender = completion_sender.clone();
+            let shutdown = Arc::clone(&shutdown);
+            let pending_count = Arc::clone(&pending_count);
+            let peer_stealers = stealers.clone();
+            let worker = thread::Builder::new()
+                .name(format!("runenwerk-product-steal-{index}"))
+                .spawn(move || {
+                    loop {
+                        if let Some(job) = steal_next_job(&local, &injector, &peer_stealers) {
+                            let _ = completion_sender.send(job.execute_boxed());
+                            pending_count.fetch_sub(1, Ordering::SeqCst);
+                            continue;
+                        }
+                        if shutdown.load(Ordering::SeqCst)
+                            && pending_count.load(Ordering::SeqCst) == 0
+                        {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                })
+                .expect("runtime product work-stealing worker should spawn");
+            workers.push(worker);
+        }
+
+        Self {
+            injector,
+            completions,
+            workers,
+            shutdown,
+            pending_count,
+            queue_capacity,
+        }
+    }
+
+    fn submit(&self, job: Box<dyn ErasedRuntimeJob>) -> Result<(), RuntimeJobSubmitFailure> {
+        if self.shutdown.load(Ordering::SeqCst) {
+            return Err(RuntimeJobSubmitFailure::Disconnected);
+        }
+        if !self.try_reserve_slot() {
+            return Err(RuntimeJobSubmitFailure::Full);
+        }
+        self.injector.push(job);
+        Ok(())
+    }
+
+    fn try_recv_completed(&self) -> Result<ErasedRuntimeJobOutcome, TryRecvError> {
+        self.completions.try_recv()
+    }
+
+    fn try_reserve_slot(&self) -> bool {
+        loop {
+            let pending = self.pending_count.load(Ordering::SeqCst);
+            if pending >= self.queue_capacity {
+                return false;
+            }
+            if self
+                .pending_count
+                .compare_exchange(
+                    pending,
+                    pending.saturating_add(1),
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                )
+                .is_ok()
+            {
+                return true;
+            }
+        }
+    }
+}
+
+impl Drop for WorkStealingPool {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::SeqCst);
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
+}
+
+fn steal_next_job(
+    local: &Worker<Box<dyn ErasedRuntimeJob>>,
+    injector: &Injector<Box<dyn ErasedRuntimeJob>>,
+    stealers: &[Stealer<Box<dyn ErasedRuntimeJob>>],
+) -> Option<Box<dyn ErasedRuntimeJob>> {
+    if let Some(job) = local.pop() {
+        return Some(job);
+    }
+    if let Some(job) = retry_steal(|| injector.steal()) {
+        return Some(job);
+    }
+    for stealer in stealers {
+        if let Some(job) = retry_steal(|| stealer.steal()) {
+            return Some(job);
+        }
+    }
+    None
+}
+
+fn retry_steal<T>(mut steal: impl FnMut() -> Steal<T>) -> Option<T> {
+    loop {
+        match steal() {
+            Steal::Success(value) => return Some(value),
+            Steal::Empty => return None,
+            Steal::Retry => thread::yield_now(),
+        }
+    }
+}
+
 enum RuntimeJobBackend {
     Serial,
     WorkerPool(WorkerPool),
+    WorkStealing(WorkStealingPool),
 }
 
 pub struct RuntimeJobExecutorResource {
     config: RuntimeJobExecutorConfig,
     backend: RuntimeJobBackend,
     latest_generations: BTreeMap<RuntimeJobKey, RuntimeJobGeneration>,
+    pending_jobs: BTreeMap<RuntimeJobHandle, RuntimeJobHandle>,
+    recent_issues: VecDeque<RuntimeJobIssueSnapshot>,
     completed: VecDeque<ErasedRuntimeJobOutcome>,
     next_submission_sequence: u64,
     submitted_count: u64,
@@ -200,6 +357,8 @@ pub struct RuntimeJobExecutorResource {
     failed_count: u64,
     stale_count: u64,
     rejected_count: u64,
+    last_drain_count: usize,
+    last_drain_limit_hit: bool,
 }
 
 impl Default for RuntimeJobExecutorResource {
@@ -218,11 +377,16 @@ impl RuntimeJobExecutorResource {
             RuntimeJobExecutionMode::WorkerPool => {
                 RuntimeJobBackend::WorkerPool(WorkerPool::new(&config))
             }
+            RuntimeJobExecutionMode::WorkStealing => {
+                RuntimeJobBackend::WorkStealing(WorkStealingPool::new(&config))
+            }
         };
         Self {
             config,
             backend,
             latest_generations: BTreeMap::new(),
+            pending_jobs: BTreeMap::new(),
+            recent_issues: VecDeque::new(),
             completed: VecDeque::new(),
             next_submission_sequence: 0,
             submitted_count: 0,
@@ -230,6 +394,8 @@ impl RuntimeJobExecutorResource {
             failed_count: 0,
             stale_count: 0,
             rejected_count: 0,
+            last_drain_count: 0,
+            last_drain_limit_hit: false,
         }
     }
 
@@ -259,36 +425,18 @@ impl RuntimeJobExecutorResource {
 
         match &self.backend {
             RuntimeJobBackend::Serial => {
-                self.latest_generations.insert(key, generation);
-                self.submitted_count = self.submitted_count.saturating_add(1);
+                self.record_submitted(handle);
                 self.completed.push_back(Box::new(envelope).execute_boxed());
                 Ok(handle)
             }
-            RuntimeJobBackend::WorkerPool(pool) => match pool.submit(Box::new(envelope)) {
-                Ok(()) => {
-                    self.latest_generations.insert(key, generation);
-                    self.submitted_count = self.submitted_count.saturating_add(1);
-                    Ok(handle)
-                }
-                Err(TrySendError::Full(_)) => {
-                    self.rejected_count = self.rejected_count.saturating_add(1);
-                    Err(RuntimeJobSubmissionError::new(
-                        key,
-                        generation,
-                        [runtime_job_backpressure_diagnostic(
-                            self.config.queue_capacity,
-                        )],
-                    ))
-                }
-                Err(TrySendError::Disconnected(_)) => {
-                    self.rejected_count = self.rejected_count.saturating_add(1);
-                    Err(RuntimeJobSubmissionError::new(
-                        key,
-                        generation,
-                        [runtime_job_disconnected_diagnostic()],
-                    ))
-                }
-            },
+            RuntimeJobBackend::WorkerPool(pool) => {
+                let result = pool.submit(Box::new(envelope));
+                self.record_pool_submission_result(handle, key, generation, result)
+            }
+            RuntimeJobBackend::WorkStealing(pool) => {
+                let result = pool.submit(Box::new(envelope));
+                self.record_pool_submission_result(handle, key, generation, result)
+            }
         }
     }
 
@@ -301,17 +449,21 @@ impl RuntimeJobExecutorResource {
         let mut completions = Vec::new();
         let mut remaining = VecDeque::new();
         let output_type_id = TypeId::of::<T>();
+        self.last_drain_count = 0;
+        self.last_drain_limit_hit = false;
         while let Some(mut outcome) = self.completed.pop_front() {
             if outcome.output_type_id != output_type_id {
                 remaining.push_back(outcome);
                 continue;
             }
             if completions.len() >= self.config.completion_drain_budget {
+                self.last_drain_limit_hit = true;
                 remaining.push_back(outcome);
                 continue;
             }
             self.apply_staleness(&mut outcome);
-            self.record_completion_status(outcome.status);
+            self.record_completion_outcome(&outcome);
+            self.last_drain_count = self.last_drain_count.saturating_add(1);
             completions.push(outcome.into_typed::<T>());
         }
         self.completed = remaining;
@@ -320,26 +472,50 @@ impl RuntimeJobExecutorResource {
 
     pub fn diagnostics(&mut self) -> RuntimeJobExecutorDiagnostics {
         self.collect_worker_completions();
-        let consumed = self
-            .completed_count
-            .saturating_add(self.failed_count)
-            .saturating_add(self.stale_count)
-            .saturating_add(self.rejected_count);
         RuntimeJobExecutorDiagnostics {
+            execution_mode: self.config.execution_mode,
+            worker_threads: self.config.worker_threads,
+            queue_capacity: self.config.queue_capacity,
+            completion_drain_budget: self.config.completion_drain_budget,
             submitted_count: self.submitted_count,
             completed_count: self.completed_count,
             failed_count: self.failed_count,
             stale_count: self.stale_count,
             rejected_count: self.rejected_count,
-            pending_count: self.submitted_count.saturating_sub(consumed),
+            pending_count: self.pending_jobs.len() as u64,
             buffered_completion_count: self.completed.len(),
+            last_drain_count: self.last_drain_count,
+            last_drain_limit_hit: self.last_drain_limit_hit,
+            latest_generations: self
+                .latest_generations
+                .iter()
+                .map(|(key, generation)| RuntimeJobGenerationSnapshot {
+                    key: *key,
+                    generation: *generation,
+                })
+                .collect(),
+            pending_jobs: self
+                .pending_jobs
+                .values()
+                .copied()
+                .map(|handle| RuntimeJobPendingSnapshot { handle })
+                .collect(),
+            recent_issues: self.recent_issues.iter().cloned().collect(),
         }
     }
 
     fn collect_worker_completions(&mut self) {
-        if let RuntimeJobBackend::WorkerPool(pool) = &self.backend {
-            while let Ok(outcome) = pool.try_recv_completed() {
-                self.completed.push_back(outcome);
+        match &self.backend {
+            RuntimeJobBackend::Serial => {}
+            RuntimeJobBackend::WorkerPool(pool) => {
+                while let Ok(outcome) = pool.try_recv_completed() {
+                    self.completed.push_back(outcome);
+                }
+            }
+            RuntimeJobBackend::WorkStealing(pool) => {
+                while let Ok(outcome) = pool.try_recv_completed() {
+                    self.completed.push_back(outcome);
+                }
             }
         }
     }
@@ -353,17 +529,93 @@ impl RuntimeJobExecutorResource {
         }
     }
 
-    fn record_completion_status(&mut self, status: RuntimeJobStatus) {
-        match status {
+    fn record_submitted(&mut self, handle: RuntimeJobHandle) {
+        self.latest_generations
+            .insert(handle.key, handle.generation);
+        self.pending_jobs.insert(handle, handle);
+        self.submitted_count = self.submitted_count.saturating_add(1);
+    }
+
+    fn record_pool_submission_result(
+        &mut self,
+        handle: RuntimeJobHandle,
+        key: RuntimeJobKey,
+        generation: RuntimeJobGeneration,
+        result: Result<(), RuntimeJobSubmitFailure>,
+    ) -> Result<RuntimeJobHandle, RuntimeJobSubmissionError> {
+        match result {
+            Ok(()) => {
+                self.record_submitted(handle);
+                Ok(handle)
+            }
+            Err(RuntimeJobSubmitFailure::Full) => {
+                let diagnostics = vec![runtime_job_backpressure_diagnostic(
+                    self.config.queue_capacity,
+                )];
+                self.record_rejection(key, generation, handle.product_job_id, diagnostics.clone());
+                Err(RuntimeJobSubmissionError::new(key, generation, diagnostics))
+            }
+            Err(RuntimeJobSubmitFailure::Disconnected) => {
+                let diagnostics = vec![runtime_job_disconnected_diagnostic()];
+                self.record_rejection(key, generation, handle.product_job_id, diagnostics.clone());
+                Err(RuntimeJobSubmissionError::new(key, generation, diagnostics))
+            }
+        }
+    }
+
+    fn record_rejection(
+        &mut self,
+        key: RuntimeJobKey,
+        generation: RuntimeJobGeneration,
+        product_job_id: product::ProductJobId,
+        diagnostics: Vec<FieldProductDiagnostic>,
+    ) {
+        self.rejected_count = self.rejected_count.saturating_add(1);
+        self.push_issue(RuntimeJobIssueSnapshot {
+            kind: RuntimeJobIssueKind::Rejected,
+            handle: None,
+            key,
+            generation,
+            product_job_id: Some(product_job_id),
+            diagnostics,
+        });
+    }
+
+    fn record_completion_outcome(&mut self, outcome: &ErasedRuntimeJobOutcome) {
+        self.pending_jobs.remove(&outcome.handle);
+        match outcome.status {
             RuntimeJobStatus::Completed => {
                 self.completed_count = self.completed_count.saturating_add(1);
             }
             RuntimeJobStatus::Failed => {
                 self.failed_count = self.failed_count.saturating_add(1);
+                self.push_issue(RuntimeJobIssueSnapshot {
+                    kind: RuntimeJobIssueKind::Failed,
+                    handle: Some(outcome.handle),
+                    key: outcome.handle.key,
+                    generation: outcome.handle.generation,
+                    product_job_id: Some(outcome.product_job.job_id),
+                    diagnostics: outcome.diagnostics.clone(),
+                });
             }
             RuntimeJobStatus::Stale => {
                 self.stale_count = self.stale_count.saturating_add(1);
+                self.push_issue(RuntimeJobIssueSnapshot {
+                    kind: RuntimeJobIssueKind::Stale,
+                    handle: Some(outcome.handle),
+                    key: outcome.handle.key,
+                    generation: outcome.handle.generation,
+                    product_job_id: Some(outcome.product_job.job_id),
+                    diagnostics: outcome.diagnostics.clone(),
+                });
             }
+        }
+    }
+
+    fn push_issue(&mut self, issue: RuntimeJobIssueSnapshot) {
+        self.recent_issues.push_back(issue);
+        if self.recent_issues.len() > RECENT_JOB_ISSUE_LIMIT {
+            self.recent_issues.pop_front();
         }
     }
 }
@@ -448,6 +700,34 @@ mod tests {
     }
 
     #[test]
+    fn runtime_job_work_stealing_executor_matches_serial_results() {
+        let mut executor =
+            RuntimeJobExecutorResource::with_config(RuntimeJobExecutorConfig::work_stealing(2, 8));
+
+        for id in 1..=4 {
+            executor
+                .submit(TestJob {
+                    id,
+                    generation: 1,
+                    value: id * 10,
+                })
+                .expect("work-stealing job should submit");
+        }
+
+        let mut values = wait_for_completions::<u64>(&mut executor, 4)
+            .into_iter()
+            .map(|completion| {
+                assert_eq!(completion.status, RuntimeJobStatus::Completed);
+                completion
+                    .output
+                    .expect("completed job should carry output")
+            })
+            .collect::<Vec<_>>();
+        values.sort_unstable();
+        assert_eq!(values, vec![10, 20, 30, 40]);
+    }
+
+    #[test]
     fn runtime_job_newer_generation_marks_older_completion_stale() {
         let mut executor = RuntimeJobExecutorResource::default();
 
@@ -509,6 +789,50 @@ mod tests {
         assert_eq!(completions[0].status, RuntimeJobStatus::Failed);
         assert!(completions[0].output.is_none());
         assert!(!completions[0].diagnostics.is_empty());
+    }
+
+    #[test]
+    fn runtime_job_diagnostics_expose_pending_and_recent_issues() {
+        struct PanicJob;
+
+        impl RuntimeJob for PanicJob {
+            type Output = u64;
+
+            fn product_job(&self) -> ProductJobDescriptor {
+                ProductJobDescriptor::new(
+                    product::ProductJobId::new(40),
+                    ProductKind::new("runtime_test"),
+                    "engine.runtime.test",
+                    ProductIdentity::new(40),
+                    ProductScope::non_spatial("runtime-test"),
+                    ProductScaleBand::Preview,
+                )
+            }
+
+            fn generation(&self) -> RuntimeJobGeneration {
+                RuntimeJobGeneration::new(1)
+            }
+
+            fn execute(self) -> RuntimeJobResult<Self::Output> {
+                panic!("intentional runtime job panic")
+            }
+        }
+
+        let mut executor = RuntimeJobExecutorResource::default();
+        executor.submit(PanicJob).unwrap();
+        assert_eq!(executor.diagnostics().pending_jobs.len(), 1);
+
+        let completions = executor.drain_completed::<u64>();
+        assert_eq!(completions[0].status, RuntimeJobStatus::Failed);
+        let diagnostics = executor.diagnostics();
+        assert_eq!(diagnostics.pending_jobs.len(), 0);
+        assert_eq!(diagnostics.failed_count, 1);
+        assert!(
+            diagnostics
+                .recent_issues
+                .iter()
+                .any(|issue| issue.kind == RuntimeJobIssueKind::Failed)
+        );
     }
 
     #[test]

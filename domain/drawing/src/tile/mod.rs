@@ -10,6 +10,7 @@ mod product_contracts;
 pub use coordinate::{CanvasCoordinate, CanvasRect, CanvasTileId, TilePyramidLevel};
 pub(crate) use determinism::StableDrawingHasher;
 pub use formation::{
+    DEFAULT_FINAL_INK_TILE_PIXEL_HEIGHT, DEFAULT_FINAL_INK_TILE_PIXEL_WIDTH,
     DEFAULT_INK_TILE_PIXEL_HEIGHT, DEFAULT_INK_TILE_PIXEL_WIDTH,
     DEFAULT_INK_TILE_SIZE_CANVAS_UNITS, DEFAULT_MAX_AFFECTED_INK_TILES, DrawingInkPreviewStroke,
     DrawingInkTileFormation, DrawingInkTileInvalidation, DrawingInkTilePayload,
@@ -24,5 +25,6 @@ pub use product_contracts::{
     DRAWING_INK_TILE_JOB_KIND, DRAWING_INK_TILE_PRODUCER, DRAWING_INK_TILE_PRODUCT_KIND,
     DrawingInkTileProductContracts, build_drawing_ink_tile_product_contracts,
     build_drawing_ink_tile_publication_outcome, drawing_ink_tile_diagnostic_to_field_product,
-    drawing_ink_tile_product_descriptor, drawing_ink_tile_query_snapshot_for_descriptor,
+    drawing_ink_tile_product_cache_identity, drawing_ink_tile_product_descriptor,
+    drawing_ink_tile_query_snapshot_for_descriptor, drawing_quality_scale_band,
 };

@@ -127,7 +127,8 @@ mod tests {
     };
 
     use crate::runtime::jobs::{
-        RuntimeJob, RuntimeJobExecutorResource, RuntimeJobGeneration, RuntimeJobResult,
+        RuntimeJob, RuntimeJobExecutorConfig, RuntimeJobExecutorResource, RuntimeJobGeneration,
+        RuntimeJobResult,
     };
     use crate::runtime::{ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource};
 
@@ -240,6 +241,41 @@ mod tests {
         assert_eq!(staged_job_ids, vec![1, 2]);
     }
 
+    #[test]
+    fn runtime_job_product_helper_keeps_staging_order_across_executor_modes() {
+        let serial = staged_job_ids_for_config(RuntimeJobExecutorConfig::serial());
+        let worker = staged_job_ids_for_config(RuntimeJobExecutorConfig::worker_pool(2, 8));
+        let stealing = staged_job_ids_for_config(RuntimeJobExecutorConfig::work_stealing(2, 8));
+
+        assert_eq!(serial, vec![2, 1, 3]);
+        assert_eq!(worker, serial);
+        assert_eq!(stealing, serial);
+    }
+
+    fn staged_job_ids_for_config(config: RuntimeJobExecutorConfig) -> Vec<u64> {
+        let mut executor = RuntimeJobExecutorResource::with_config(config);
+        for (job_id, generation, stage_sequence) in [(3, 2, 30), (1, 1, 20), (2, 1, 10)] {
+            executor
+                .submit(OrderedProductTestJob {
+                    job_id,
+                    generation,
+                    stage_sequence,
+                })
+                .unwrap();
+        }
+        wait_for_product_completions(&mut executor, 3);
+        let mut publications = ProductPublicationRuntimeResource::default();
+        let mut snapshots = QuerySnapshotRuntimeResource::default();
+
+        stage_completed_product_jobs(&mut executor, &mut publications, &mut snapshots);
+
+        publications
+            .staged()
+            .iter()
+            .map(|outcome| outcome.product_job.job_id.raw())
+            .collect()
+    }
+
     fn product_job() -> ProductJobDescriptor {
         product_job_with_id(100)
     }
@@ -268,5 +304,16 @@ mod tests {
             ProductScaleBand::Preview,
             ProductLineage::new("engine.runtime.test", generation),
         )
+    }
+
+    fn wait_for_product_completions(executor: &mut RuntimeJobExecutorResource, expected: usize) {
+        let started = std::time::Instant::now();
+        while executor.diagnostics().buffered_completion_count < expected {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(2),
+                "timed out waiting for runtime product job completion"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
     }
 }

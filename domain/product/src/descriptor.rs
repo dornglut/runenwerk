@@ -159,6 +159,7 @@ pub enum ProductScaleBand {
     Far,
     Summary,
     Preview,
+    Final,
     CollisionStrictQuery,
     Offline,
     FamilySpecific,
@@ -254,5 +255,9 @@ impl ProductDescriptorCore {
     pub fn query_policy_allows_consumption(&self) -> bool {
         self.query_policy
             .allows(self.freshness, self.residency, self.authority_class)
+    }
+
+    pub fn cache_identity(&self) -> crate::ProductCacheIdentity {
+        crate::ProductCacheIdentity::from_descriptor(self)
     }
 }

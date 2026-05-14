@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use drawing::{CanvasTileId, DrawingInkTileProduct};
+use drawing::{CanvasTileId, DrawingInkTileProduct, ProductQualityClass};
 
 use crate::app::{DrawingInkSurfaceKind, RunenwerkDrawApp};
 
@@ -13,8 +13,23 @@ pub struct DrawingHostResource {
 
 #[derive(Debug, Default, ecs::Resource)]
 pub struct DrawingInkUploadTrackerResource {
-    committed_generations: BTreeMap<CanvasTileId, u64>,
-    preview_generations: BTreeMap<CanvasTileId, u64>,
+    committed_generations: BTreeMap<DrawingInkUploadKey, u64>,
+    preview_generations: BTreeMap<DrawingInkUploadKey, u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct DrawingInkUploadKey {
+    quality_class: ProductQualityClass,
+    tile_id: CanvasTileId,
+}
+
+impl DrawingInkUploadKey {
+    fn from_product(product: &DrawingInkTileProduct) -> Self {
+        Self {
+            quality_class: product.metadata.quality_class,
+            tile_id: product.metadata.tile_id,
+        }
+    }
 }
 
 impl DrawingInkUploadTrackerResource {
@@ -25,10 +40,10 @@ impl DrawingInkUploadTrackerResource {
     ) {
         let retained_tile_ids = products
             .iter()
-            .map(|product| product.metadata.tile_id)
+            .map(DrawingInkUploadKey::from_product)
             .collect::<BTreeSet<_>>();
         self.generations_mut(surface_kind)
-            .retain(|tile_id, _| retained_tile_ids.contains(tile_id));
+            .retain(|key, _| retained_tile_ids.contains(key));
     }
 
     pub fn products_requiring_upload<'a>(
@@ -40,7 +55,9 @@ impl DrawingInkUploadTrackerResource {
         products
             .iter()
             .filter(|product| {
-                generations.get(&product.metadata.tile_id).copied()
+                generations
+                    .get(&DrawingInkUploadKey::from_product(product))
+                    .copied()
                     != Some(product.descriptor_generation)
             })
             .collect()
@@ -53,11 +70,17 @@ impl DrawingInkUploadTrackerResource {
     ) {
         let generations = self.generations_mut(surface_kind);
         for product in products {
-            generations.insert(product.metadata.tile_id, product.descriptor_generation);
+            generations.insert(
+                DrawingInkUploadKey::from_product(product),
+                product.descriptor_generation,
+            );
         }
     }
 
-    fn generations(&self, surface_kind: DrawingInkSurfaceKind) -> &BTreeMap<CanvasTileId, u64> {
+    fn generations(
+        &self,
+        surface_kind: DrawingInkSurfaceKind,
+    ) -> &BTreeMap<DrawingInkUploadKey, u64> {
         match surface_kind {
             DrawingInkSurfaceKind::Committed => &self.committed_generations,
             DrawingInkSurfaceKind::Preview => &self.preview_generations,
@@ -67,7 +90,7 @@ impl DrawingInkUploadTrackerResource {
     fn generations_mut(
         &mut self,
         surface_kind: DrawingInkSurfaceKind,
-    ) -> &mut BTreeMap<CanvasTileId, u64> {
+    ) -> &mut BTreeMap<DrawingInkUploadKey, u64> {
         match surface_kind {
             DrawingInkSurfaceKind::Committed => &mut self.committed_generations,
             DrawingInkSurfaceKind::Preview => &mut self.preview_generations,

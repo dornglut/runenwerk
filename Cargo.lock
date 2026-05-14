@@ -914,6 +914,7 @@ dependencies = [
  "bytemuck",
  "criterion",
  "crossbeam-channel",
+ "crossbeam-deque",
  "ecs",
  "engine_net",
  "engine_render_macros",

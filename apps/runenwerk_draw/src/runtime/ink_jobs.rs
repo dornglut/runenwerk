@@ -4,14 +4,15 @@ use drawing::tile::{DRAWING_INK_TILE_JOB_KIND, DRAWING_INK_TILE_PRODUCER};
 use drawing::{
     CanvasTileId, DrawingDocument, DrawingDocumentRevision, DrawingInkPreviewStroke,
     DrawingInkTileFormation, DrawingTileFormationPolicy,
-    drawing_ink_tile_invalidation_for_preview_stroke, drawing_tile_determinism_key,
-    form_drawing_ink_preview_tiles_for_ids, form_drawing_ink_tiles_for_ids,
+    drawing_ink_tile_invalidation_for_preview_stroke, drawing_quality_scale_band,
+    drawing_tile_determinism_key, form_drawing_ink_preview_tiles_for_ids,
+    form_drawing_ink_tiles_for_ids,
 };
 use engine::runtime::{RuntimeJob, RuntimeJobGeneration, RuntimeJobKey, RuntimeJobResult};
 use product::{
     ProductAccessDescriptor, ProductAuthorityClass, ProductDeterminismClass, ProductIdentity,
     ProductJobAccess, ProductJobAffinity, ProductJobBudgetClass, ProductJobDescriptor,
-    ProductJobFailurePolicy, ProductJobId, ProductKind, ProductScaleBand, ProductScope,
+    ProductJobFailurePolicy, ProductJobId, ProductKind, ProductScope,
 };
 
 #[derive(Debug, Clone)]
@@ -291,7 +292,7 @@ fn drawing_preview_ink_runtime_job_key(
 fn drawing_committed_ink_runtime_job_descriptor(
     document: &DrawingDocument,
     dirty_tiles: &[CanvasTileId],
-    _policy: DrawingTileFormationPolicy,
+    policy: DrawingTileFormationPolicy,
     formation_key: &str,
 ) -> ProductJobDescriptor {
     let product_id = ProductIdentity::new(stable_nonzero_key(formation_key));
@@ -306,7 +307,7 @@ fn drawing_committed_ink_runtime_job_descriptor(
             document.revision.raw(),
             dirty_tiles.len()
         )),
-        ProductScaleBand::Preview,
+        drawing_quality_scale_band(policy.quality_class),
     );
     product_job.access = ProductJobAccess {
         products: vec![ProductAccessDescriptor::write(product_id)],
@@ -324,7 +325,7 @@ fn drawing_preview_ink_runtime_job_descriptor(
     document: &DrawingDocument,
     stroke_id: drawing::StrokeId,
     preview_generation: u64,
-    _policy: DrawingTileFormationPolicy,
+    policy: DrawingTileFormationPolicy,
     formation_key: &str,
 ) -> ProductJobDescriptor {
     let product_id = ProductIdentity::new(stable_nonzero_key(formation_key));
@@ -340,7 +341,7 @@ fn drawing_preview_ink_runtime_job_descriptor(
             stroke_id.raw(),
             preview_generation,
         )),
-        ProductScaleBand::Preview,
+        drawing_quality_scale_band(policy.quality_class),
     );
     product_job.access = ProductJobAccess {
         products: vec![ProductAccessDescriptor::write(product_id)],

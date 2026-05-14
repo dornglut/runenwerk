@@ -1,6 +1,6 @@
 //! Canvas-first UI frame projection for the drawing app shell and ink product surfaces.
 
-use drawing::{CanvasTileId, DrawingInkTileProduct};
+use drawing::{CanvasTileId, DrawingInkTileProduct, ProductQualityClass};
 use ui_math::{UiPoint, UiRect, UiSize};
 use ui_render_data::{
     ProductSurfaceAlphaMode, ProductSurfacePrimitive, ProductSurfaceTextureBindingSource,
@@ -330,7 +330,11 @@ fn push_ink_surfaces(
         layer.push(UiPrimitive::ProductSurface(ProductSurfacePrimitive::new(
             ProductSurfaceTextureBindingSource::dynamic_texture(
                 DRAWING_INK_TEXTURE_NAMESPACE,
-                drawing_ink_texture_target_id(surface_kind, product.metadata.tile_id),
+                drawing_ink_texture_target_id(
+                    surface_kind,
+                    product.metadata.quality_class,
+                    product.metadata.tile_id,
+                ),
             ),
             rect,
             UiRect::new(0.0, 0.0, 1.0, 1.0),
@@ -344,11 +348,13 @@ fn push_ink_surfaces(
 
 pub fn drawing_ink_texture_target_id(
     surface_kind: DrawingInkSurfaceKind,
+    quality_class: ProductQualityClass,
     tile_id: CanvasTileId,
 ) -> String {
     format!(
-        "{}.L{}.{}.{}",
+        "{}.{}.L{}.{}.{}",
         surface_kind.label(),
+        quality_class.cache_token(),
         tile_id.level.raw(),
         tile_id.x,
         tile_id.y

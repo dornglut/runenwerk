@@ -12,6 +12,8 @@ related_designs:
   - ../../design/active/runenwerk-draw-pen-first-radial-tablet-ux-design.md
 related_roadmaps:
   - ./roadmap.md
+related_reports:
+  - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
 ---
 
 # Runenwerk Draw
@@ -87,14 +89,17 @@ The Phase 5 ink path is now present and hardened for last-good visibility:
 The first visible ink path still uses deterministic CPU brush formation for
 preview-quality products. `StrokePrimitive` is immediate UI projection only; it
 is not authoritative drawing state, not a tile product, and not cache identity.
-The renderer path is texture-backed for tile products, but this is not yet GPU
+Preview/final quality is already part of tile identity, descriptor generation,
+cache identity, texture target keys, and committed render selection. The
+renderer path is texture-backed for tile products, but this is not yet GPU
 product formation, persistent tile cache, watercolor/paper simulation, eraser
 compositing, package save format, or advanced layer/effect renderer.
 
 ## Current Limits / Known Gaps
 
 - The visible app path is immediate CPU/UI stroke feedback plus deterministic
-  CPU preview-quality ink tiles. Final-quality profiles, persistent tile cache,
+  CPU preview-quality ink tiles. Final-quality CPU tile contracts and cache
+  identity exist, but app-visible final tile lifecycle, persistent tile cache,
   GPU formation, and GPU promotion/fallback are planned by the roadmap, not
   implemented app behavior yet.
 - Touch input currently routes through the same drawing path as fallback pointer

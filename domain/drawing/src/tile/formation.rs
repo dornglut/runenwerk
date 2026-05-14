@@ -18,6 +18,8 @@ use super::determinism::StableDrawingHasher;
 pub const DEFAULT_INK_TILE_SIZE_CANVAS_UNITS: f64 = 256.0;
 pub const DEFAULT_INK_TILE_PIXEL_WIDTH: u32 = 64;
 pub const DEFAULT_INK_TILE_PIXEL_HEIGHT: u32 = 64;
+pub const DEFAULT_FINAL_INK_TILE_PIXEL_WIDTH: u32 = 256;
+pub const DEFAULT_FINAL_INK_TILE_PIXEL_HEIGHT: u32 = 256;
 pub const DEFAULT_MAX_AFFECTED_INK_TILES: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,6 +46,19 @@ impl Default for DrawingTileFormationPolicy {
 }
 
 impl DrawingTileFormationPolicy {
+    pub fn preview() -> Self {
+        Self::default()
+    }
+
+    pub fn final_quality() -> Self {
+        Self {
+            quality_class: ProductQualityClass::Final,
+            tile_pixel_width: DEFAULT_FINAL_INK_TILE_PIXEL_WIDTH,
+            tile_pixel_height: DEFAULT_FINAL_INK_TILE_PIXEL_HEIGHT,
+            ..Self::default()
+        }
+    }
+
     pub fn is_valid(self) -> bool {
         self.formation_version.raw() > 0
             && self.tile_size_canvas_units.is_finite()
@@ -536,12 +551,16 @@ fn form_drawing_ink_tile_records_inner(
             metadata,
             payload,
             cache_key: format!(
-                "{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:L{}:{}:{}:v{}",
                 kind.cache_key_prefix(),
+                policy.quality_class.cache_token(),
                 document.document_id.raw(),
                 document.revision.raw(),
+                source_output.raw(),
+                tile_id.level.raw(),
                 tile_id.x,
-                tile_id.y
+                tile_id.y,
+                policy.formation_version.raw()
             ),
             descriptor_generation,
             diagnostics: Vec::new(),
@@ -1152,6 +1171,7 @@ fn hash_formation_inputs(
     hasher.write_f64(document.canvas_bounds.max.x);
     hasher.write_f64(document.canvas_bounds.max.y);
     hasher.write_u32(policy.formation_version.raw());
+    hasher.write_str(policy.quality_class.cache_token());
     hasher.write_f64(policy.tile_size_canvas_units);
     hasher.write_u32(policy.tile_pixel_width);
     hasher.write_u32(policy.tile_pixel_height);

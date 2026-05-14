@@ -18,7 +18,7 @@ use native_tablet_input::{
 };
 use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
-    ProductScaleBand, RenderProductSelection, RenderSelectedProduct, RenderTargetDescriptor,
+    RenderProductSelection, RenderSelectedProduct, RenderTargetDescriptor,
 };
 use ui_input::{
     Modifiers, PointerButton, PointerContactState, PointerDeviceCapabilities, PointerDeviceId,
@@ -365,7 +365,7 @@ fn ink_target_descriptors(
         .iter()
         .map(|product| {
             RenderDynamicTextureTargetDescriptor::new(
-                ink_target_key(surface_kind, product.metadata.tile_id),
+                ink_target_key(surface_kind, product),
                 product.payload.width.max(1),
                 product.payload.height.max(1),
                 RenderTextureTargetFormat::Rgba8Unorm,
@@ -385,7 +385,7 @@ fn ink_uploads(
         .iter()
         .map(|product| {
             RenderDynamicTextureUploadDescriptor::rgba8(
-                ink_target_key(surface_kind, product.metadata.tile_id),
+                ink_target_key(surface_kind, product),
                 0,
                 0,
                 product.payload.width.max(1),
@@ -403,12 +403,13 @@ fn ink_product_selection(products: &[drawing::DrawingInkTileProduct]) -> RenderP
     for product in products {
         let target_id = drawing_ink_texture_target_id(
             DrawingInkSurfaceKind::Committed,
+            product.metadata.quality_class,
             product.metadata.tile_id,
         );
         selection = selection
             .with_selected_product(RenderSelectedProduct {
                 product_id: ProductIdentity::new(product.metadata.product_id.raw()),
-                scale_band: ProductScaleBand::Preview,
+                scale_band: drawing::drawing_quality_scale_band(product.metadata.quality_class),
                 generation: product.descriptor_generation,
                 freshness: ProductFreshness::Current,
                 residency: ProductResidency::NotApplicable,
@@ -427,11 +428,15 @@ fn ink_product_selection(products: &[drawing::DrawingInkTileProduct]) -> RenderP
 
 fn ink_target_key(
     surface_kind: DrawingInkSurfaceKind,
-    tile_id: drawing::CanvasTileId,
+    product: &drawing::DrawingInkTileProduct,
 ) -> RenderDynamicTextureTargetKey {
     RenderDynamicTextureTargetKey::new(
         DRAWING_INK_TEXTURE_NAMESPACE,
-        drawing_ink_texture_target_id(surface_kind, tile_id),
+        drawing_ink_texture_target_id(
+            surface_kind,
+            product.metadata.quality_class,
+            product.metadata.tile_id,
+        ),
     )
 }
 

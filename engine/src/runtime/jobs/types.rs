@@ -35,7 +35,7 @@ impl RuntimeJobKey {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RuntimeJobHandle {
     pub key: RuntimeJobKey,
     pub generation: RuntimeJobGeneration,
@@ -43,10 +43,12 @@ pub struct RuntimeJobHandle {
     pub product_job_id: ProductJobId,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
 pub enum RuntimeJobExecutionMode {
+    #[default]
     Serial,
     WorkerPool,
+    WorkStealing,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +70,15 @@ impl RuntimeJobExecutorConfig {
     pub fn worker_pool(worker_threads: usize, queue_capacity: usize) -> Self {
         Self {
             execution_mode: RuntimeJobExecutionMode::WorkerPool,
+            worker_threads: worker_threads.max(1),
+            queue_capacity: queue_capacity.max(1),
+            ..Self::default()
+        }
+    }
+
+    pub fn work_stealing(worker_threads: usize, queue_capacity: usize) -> Self {
+        Self {
+            execution_mode: RuntimeJobExecutionMode::WorkStealing,
             worker_threads: worker_threads.max(1),
             queue_capacity: queue_capacity.max(1),
             ..Self::default()
@@ -101,7 +112,39 @@ pub enum RuntimeJobStatus {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuntimeJobGenerationSnapshot {
+    pub key: RuntimeJobKey,
+    pub generation: RuntimeJobGeneration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeJobPendingSnapshot {
+    pub handle: RuntimeJobHandle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RuntimeJobIssueKind {
+    Rejected,
+    Failed,
+    Stale,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeJobIssueSnapshot {
+    pub kind: RuntimeJobIssueKind,
+    pub handle: Option<RuntimeJobHandle>,
+    pub key: RuntimeJobKey,
+    pub generation: RuntimeJobGeneration,
+    pub product_job_id: Option<ProductJobId>,
+    pub diagnostics: Vec<FieldProductDiagnostic>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeJobExecutorDiagnostics {
+    pub execution_mode: RuntimeJobExecutionMode,
+    pub worker_threads: usize,
+    pub queue_capacity: usize,
+    pub completion_drain_budget: usize,
     pub submitted_count: u64,
     pub completed_count: u64,
     pub failed_count: u64,
@@ -109,6 +152,11 @@ pub struct RuntimeJobExecutorDiagnostics {
     pub rejected_count: u64,
     pub pending_count: u64,
     pub buffered_completion_count: usize,
+    pub last_drain_count: usize,
+    pub last_drain_limit_hit: bool,
+    pub latest_generations: Vec<RuntimeJobGenerationSnapshot>,
+    pub pending_jobs: Vec<RuntimeJobPendingSnapshot>,
+    pub recent_issues: Vec<RuntimeJobIssueSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

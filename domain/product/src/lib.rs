@@ -5,6 +5,7 @@
 //! product registry and does not own runtime execution, renderer resources,
 //! app workflows, or concrete asset catalogs.
 
+pub mod cache_identity;
 pub mod consumption;
 pub mod descriptor;
 pub mod diagnostics;
@@ -16,6 +17,7 @@ pub mod query_snapshot;
 pub mod ratification;
 pub mod render_selection;
 
+pub use cache_identity::*;
 pub use consumption::*;
 pub use descriptor::*;
 pub use diagnostics::*;

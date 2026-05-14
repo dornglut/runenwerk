@@ -12,6 +12,8 @@ related_designs:
   - ../../design/accepted/field-product-contracts-diagnostics-and-residency-design.md
 related_roadmaps:
   - ../../workspace/sdf-first-execution-roadmap.md
+related_reports:
+  - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
 ---
 
 # Runtime Product Job Executor Roadmap
@@ -42,10 +44,12 @@ implementation batch, not excluded from the program.
 - Draw preview-quality CPU ink now splits immediate UI feedback from visual
   tile catch-up: `StrokePrimitive` is screen-space feedback, while preview tile
   products are asynchronous catch-up output.
-- RPJ1-RPJ3 are implemented. RPJ4 is implemented for the current Draw
-  responsiveness proof, but final-quality tile semantics, persistent cache
-  identity, GPU jobs, work stealing, ECS parallel waves, and distributed jobs
-  remain later phases.
+- RPJ1-RPJ6 are implemented for the local runtime substrate. Draw
+  responsiveness, backend-neutral cache identity, preview/final tile identity
+  separation, fixed worker-pool execution, work-stealing execution, and runtime
+  job inspection diagnostics exist.
+- Persistent disk caches/package sidecars, GPU jobs, ECS parallel waves, and
+  cross-process/distributed jobs remain later phases.
 
 ## Phase RPJ0 - Roadmap And Status Alignment
 
@@ -136,8 +140,7 @@ cargo test -p product
 
 Owner: `apps/runenwerk_draw`.
 
-Status: implemented for the current Draw responsiveness proof; broader Draw
-rendering quality and cache identity work remains deferred.
+Status: implemented for the current Draw responsiveness proof.
 
 Requirements:
 
@@ -165,10 +168,23 @@ Validation:
 cargo test -p runenwerk_draw --test app_shell
 ```
 
-## Phase RPJ5 - Persistent Product Caches And Package Sidecars
+Closeout:
+
+- [Runtime Product Job RPJ4-RPJ6 Closeout](../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md)
+
+## Phase RPJ5 - Cache Identity Before Persistence
+
+Owner: `domain/product`, `domain/drawing`, and owning apps.
+
+Status: implemented for backend-neutral cache identity; persistent caches and
+package sidecars remain deferred.
 
 Requirements:
 
+- expose a typed product cache identity derived from product descriptors and
+  lineage;
+- make Draw preview/final quality participate in deterministic tile identity,
+  product scale band, descriptor generation, cache key, and render selection;
 - add persistent cache only after product job identity, descriptor generation,
   lineage, and stale-result behavior are stable;
 - keep generic cache primitives backend-neutral in engine/runtime;
@@ -176,16 +192,38 @@ Requirements:
 - include product id, kind, quality or scale band, descriptor generation, source
   revision, formation version, and producer lineage in cache identity.
 
+Validation:
+
+```text
+cargo test -p product
+cargo test -p drawing --test ink_tile
+```
+
 ## Phase RPJ6 - Work-Stealing Executor
+
+Owner: `engine/src/runtime/jobs`.
+
+Status: implemented for local runtime jobs.
 
 Requirements:
 
 - add work stealing as an executor backend, not a new product-job API;
 - preserve serial and fixed-worker modes for debugging and deterministic tests;
+- expose runtime job inspection diagnostics for executor mode, worker
+  configuration, pending jobs, latest generations, recent issues, and drain
+  activity;
 - prove serial, fixed-worker, and work-stealing execution publish equivalent
   authoritative products.
 
+Validation:
+
+```text
+cargo test -p engine runtime_job
+```
+
 ## Phase RPJ7 - GPU Job Execution
+
+Status: deferred.
 
 Requirements:
 
@@ -199,6 +237,8 @@ Requirements:
 
 ## Phase RPJ8 - Full ECS Parallel Execution
 
+Status: deferred.
+
 Requirements:
 
 - parallelize ECS waves only after product jobs no longer depend on this step;
@@ -208,6 +248,8 @@ Requirements:
   enablement.
 
 ## Phase RPJ9 - Cross-Process And Distributed Jobs
+
+Status: deferred.
 
 Requirements:
 

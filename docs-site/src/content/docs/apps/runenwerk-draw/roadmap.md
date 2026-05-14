@@ -15,6 +15,7 @@ related_roadmaps:
   - ../../workspace/roadmap-index.md
 related_reports:
   - ../../reports/closeouts/drawing-phase-5/closeout.md
+  - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
 ---
 
 # Runenwerk Draw Rendering Foundation Roadmap
@@ -25,13 +26,15 @@ Make `runenwerk_draw` ink rendering production-ready enough for later paper,
 watercolor, live effects, and export work without moving drawing semantics into
 the renderer.
 
-The current baseline is Phase 5.1 plus the runtime-job responsiveness proof:
+The current baseline is Phase 5.1 plus the runtime-job responsiveness and cache
+identity proof:
 immediate pen feedback is projected through `UiPrimitive::Stroke`, while
 deterministic CPU RGBA8 preview and committed ink tiles are formed by
 `domain/drawing` through runtime jobs, published through product and query
 snapshot barriers, uploaded through generic engine dynamic texture uploads, and
-projected as neutral product-surface UI primitives. This roadmap starts from
-that baseline.
+projected as neutral product-surface UI primitives. Preview/final quality now
+participates in tile identity, descriptor generation, cache identity, and render
+selection; app-visible final tile lifecycle is still a later phase.
 
 ## Foundation Policy
 
@@ -51,13 +54,14 @@ that baseline.
 - `apps/runenwerk_draw` owns app cache policy, visibility promotion, CPU/GPU
   validation state, fallback policy, and Draw-specific render-flow requests.
 
-## Contract Alignment Prerequisites
+## Contract Alignment Status
 
-Before DRF1/DRF2 implementation starts, align the current Phase 5.1 contracts
-with the future preview/final split:
+The current contracts are aligned with the future preview/final split:
 
 - Preview/final quality must participate in product identity, descriptor
-  generation, cache key construction, and render product scale/selection.
+  generation, cache key construction, and render product scale/selection. This
+  is implemented in `domain/drawing`, `domain/product`, and Draw render
+  selection/upload keys.
 - Final-quality ink tiles are a roadmap target, not current app-visible
   behavior.
 - Publication and query-snapshot rejection diagnostics must remain visible and
@@ -67,6 +71,8 @@ with the future preview/final split:
 ## Phase DRF1 - Preview And Final Tile Profiles
 
 Owner: `domain/drawing`.
+
+Status: implemented for deterministic CPU tile contracts.
 
 Target modules:
 
@@ -96,6 +102,8 @@ Acceptance:
 ## Phase DRF2 - App-Derived Tile Cache
 
 Owner: `apps/runenwerk_draw`.
+
+Status: next app-owned runtime cache phase; not persistent storage.
 
 Target modules:
 

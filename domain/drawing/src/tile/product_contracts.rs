@@ -3,15 +3,18 @@
 
 use product::{
     FieldProductDiagnostic, FieldProductDiagnosticCode, FieldProductDiagnosticSeverity,
-    ProductAccessDescriptor, ProductAuthorityClass, ProductConsumerClass, ProductDescriptorCore,
-    ProductDeterminismClass, ProductFamily, ProductFreshness, ProductIdentity, ProductJobAccess,
-    ProductJobAffinity, ProductJobBudgetClass, ProductJobDescriptor, ProductJobFailurePolicy,
-    ProductJobId, ProductKind, ProductLineage, ProductPublicationOutcome, ProductQueryPolicy,
-    ProductRebuildPolicy, ProductResidency, ProductRetentionPolicy, ProductScaleBand, ProductScope,
-    QuerySnapshotProductDescriptor,
+    ProductAccessDescriptor, ProductAuthorityClass, ProductCacheIdentity, ProductConsumerClass,
+    ProductDescriptorCore, ProductDeterminismClass, ProductFamily, ProductFreshness,
+    ProductIdentity, ProductJobAccess, ProductJobAffinity, ProductJobBudgetClass,
+    ProductJobDescriptor, ProductJobFailurePolicy, ProductJobId, ProductKind, ProductLineage,
+    ProductPublicationOutcome, ProductQueryPolicy, ProductRebuildPolicy, ProductResidency,
+    ProductRetentionPolicy, ProductScaleBand, ProductScope, QuerySnapshotProductDescriptor,
 };
 
-use crate::{DrawingDocument, DrawingTileFormationDiagnostic, DrawingTileFormationDiagnosticCode};
+use crate::{
+    DrawingDocument, DrawingTileFormationDiagnostic, DrawingTileFormationDiagnosticCode,
+    ProductQualityClass,
+};
 
 use super::{DrawingInkTileProduct, StableDrawingHasher};
 
@@ -46,7 +49,7 @@ pub fn build_drawing_ink_tile_product_contracts(
             document.document_id.raw(),
             document.revision.raw()
         )),
-        ProductScaleBand::Preview,
+        drawing_quality_scale_band(products[0].metadata.quality_class),
     );
     product_job.output_products = output_descriptors
         .iter()
@@ -134,6 +137,19 @@ pub fn drawing_ink_tile_diagnostic_to_field_product(
     field
 }
 
+pub fn drawing_quality_scale_band(quality_class: ProductQualityClass) -> ProductScaleBand {
+    match quality_class {
+        ProductQualityClass::Preview => ProductScaleBand::Preview,
+        ProductQualityClass::Final => ProductScaleBand::Final,
+    }
+}
+
+pub fn drawing_ink_tile_product_cache_identity(
+    product: &DrawingInkTileProduct,
+) -> ProductCacheIdentity {
+    ProductCacheIdentity::from_descriptor(&drawing_ink_tile_product_descriptor(product))
+}
+
 pub fn drawing_ink_tile_product_descriptor(
     product: &DrawingInkTileProduct,
 ) -> ProductDescriptorCore {
@@ -148,7 +164,7 @@ pub fn drawing_ink_tile_product_descriptor(
             product.metadata.tile_id.x,
             product.metadata.tile_id.y
         )),
-        ProductScaleBand::Preview,
+        drawing_quality_scale_band(product.metadata.quality_class),
         ProductLineage::new(DRAWING_INK_TILE_PRODUCER, product.descriptor_generation)
             .with_source_key(product.cache_key.clone())
             .with_source_revision(product.metadata.source_document_revision.raw().to_string()),

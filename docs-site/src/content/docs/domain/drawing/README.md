@@ -35,9 +35,9 @@ own app-visible tile lifecycle.
 
 App/runtime layers own current/preview visibility, dynamic texture upload
 tracking, cache policy, fallback/promotion decisions, and renderer submission.
-Final-quality profile semantics are not complete until drawing quality class
-also participates consistently in product scale, descriptor generation, cache
-identity, and render selection.
+Drawing quality class participates in product scale, descriptor generation,
+cache identity, and render selection. App-visible final-quality lifecycle,
+persistent caches, and package sidecars remain app/package work.
 
 ## Current Scope
 
