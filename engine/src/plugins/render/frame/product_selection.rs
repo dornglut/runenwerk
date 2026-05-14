@@ -19,6 +19,11 @@ pub enum PreparedRenderProductSelectionError {
         producer_id: RenderFrameProducerId,
         view_id: String,
     },
+    DuplicateViewAcrossProducers {
+        existing_producer_id: RenderFrameProducerId,
+        replacement_producer_id: RenderFrameProducerId,
+        view_id: String,
+    },
     InvalidSelection {
         producer_id: RenderFrameProducerId,
         view_id: String,
@@ -35,6 +40,14 @@ impl fmt::Display for PreparedRenderProductSelectionError {
             } => write!(
                 f,
                 "render product selection producer '{producer_id:?}' published duplicate view '{view_id}'"
+            ),
+            Self::DuplicateViewAcrossProducers {
+                existing_producer_id,
+                replacement_producer_id,
+                view_id,
+            } => write!(
+                f,
+                "render product selection producer '{replacement_producer_id:?}' published view '{view_id}' already owned by producer '{existing_producer_id:?}'"
             ),
             Self::InvalidSelection {
                 producer_id,
@@ -99,6 +112,30 @@ impl PreparedRenderProductSelectionResource {
             }
         }
 
+        for (existing_producer_id, existing_selections) in &self.contributions {
+            if *existing_producer_id == producer_id {
+                continue;
+            }
+            for selection in &selections {
+                if existing_selections
+                    .iter()
+                    .any(|existing| existing.view_id == selection.view_id)
+                {
+                    let err = PreparedRenderProductSelectionError::DuplicateViewAcrossProducers {
+                        existing_producer_id: *existing_producer_id,
+                        replacement_producer_id: producer_id,
+                        view_id: selection.view_id.clone(),
+                    };
+                    self.diagnostics.push(diagnostic_for_error(
+                        producer_id,
+                        selection.view_id.clone(),
+                        &err,
+                    ));
+                    return Err(err);
+                }
+            }
+        }
+
         selections.sort_by(|left, right| left.view_id.cmp(&right.view_id));
         Ok(self
             .contributions
@@ -148,7 +185,8 @@ fn diagnostic_for_error(
     err: &PreparedRenderProductSelectionError,
 ) -> PreparedRenderProductSelectionDiagnostic {
     let issue_count = match err {
-        PreparedRenderProductSelectionError::DuplicateView { .. } => 1,
+        PreparedRenderProductSelectionError::DuplicateView { .. }
+        | PreparedRenderProductSelectionError::DuplicateViewAcrossProducers { .. } => 1,
         PreparedRenderProductSelectionError::InvalidSelection { report, .. } => report.len(),
     };
     PreparedRenderProductSelectionDiagnostic {
@@ -199,6 +237,25 @@ mod tests {
         assert_eq!(snapshot[0].view_id, "a");
         assert_eq!(snapshot[1].view_id, "b");
         assert_eq!(snapshot[1].selected_products[0].generation, 9);
+    }
+
+    #[test]
+    fn render_product_selection_rejects_duplicate_view_across_producers() {
+        let mut resource = PreparedRenderProductSelectionResource::default();
+        resource
+            .replace_contribution(producer(1), [selection("main", 42, 9)])
+            .expect("initial selection should be valid");
+
+        let err = resource
+            .replace_contribution(producer(2), [selection("main", 43, 1)])
+            .expect_err("one render view must have one product selection producer");
+
+        assert!(matches!(
+            err,
+            PreparedRenderProductSelectionError::DuplicateViewAcrossProducers { .. }
+        ));
+        assert_eq!(resource.snapshot().len(), 1);
+        assert_eq!(resource.diagnostics().len(), 1);
     }
 
     #[test]

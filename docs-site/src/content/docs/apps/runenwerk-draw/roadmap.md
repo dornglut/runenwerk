@@ -39,6 +39,9 @@ selection; app-visible final tile lifecycle is still a later phase.
 Draw also has the first in-memory committed-tile cache proof: engine runtime
 owns metadata-only cache decisions, while the app owns cached tile payloads and
 stages accepted cache hits through the normal product/query barriers.
+The DRF2 app-derived cache slice now records preview/final cache metadata,
+enforces a 512 MiB default memory budget where possible, refreshes LRU access on
+cache hits, and protects visible, pending, and last-good tiles from eviction.
 
 ## Foundation Policy
 
@@ -107,9 +110,9 @@ Acceptance:
 
 Owner: `apps/runenwerk_draw`.
 
-Status: partially implemented for in-memory committed-tile cache hits;
-preview/final memory budgeting, eviction, and persistent storage remain later
-work.
+Status: implemented for in-memory preview/final app-derived cache budgeting,
+LRU eviction, committed-tile cache hits, and protected last-good fallback.
+Persistent storage remains later work.
 
 Target modules:
 

@@ -25,6 +25,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - [Crate Design](./crate-design.md)
 - [Documentation Refactor](./docs-refactor.md)
 - [Implementation Batch](./implementation-batch.md)
+- [Parallel Roadmap Batch](./parallel-roadmap-batch.md)
 - [Phase Completion Drift Check](./phase-completion-drift-check.md)
 - [Roadmap Milestone Kickoff](./roadmap-milestone-kickoff.md)
 
@@ -37,6 +38,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - Stop when validation fails and report the concrete failure.
 - Do not use templates to bypass domain ownership, ratification, diagnostics, or dependency rules.
 - Use architecture audit for findings-only review and architecture governance review for pre-implementation decision gates.
+- Use parallel roadmap batch for approved fan-out work across independent roadmap slices.
 
 ## Related Docs
 

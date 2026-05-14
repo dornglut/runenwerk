@@ -46,7 +46,7 @@ Before implementation:
 cargo fmt --all -- --check
 cargo test -p <crate>
 cargo check --workspace
-python3 tools/docs/validate_docs.py
+task docs:validate
 ```
 
 ## Stop Conditions

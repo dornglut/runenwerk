@@ -2,10 +2,31 @@
 
 Canonical documentation lives under `docs-site/src/content/docs`.
 
+## First Clone Bootstrap
+
+Runenwerk uses Taskfile as the human command entrypoint. A clone cannot safely
+install tools automatically, so run the explicit bootstrap once after clone:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/bootstrap/bootstrap.ps1
+```
+
+Then open a new shell and verify:
+
+```powershell
+task toolchain:doctor
+task roadmap:validate
+task roadmap:check
+task puml:validate
+```
+
+Details: `docs-site/src/content/docs/workspace/toolchain-bootstrap.md`.
+
 Start with:
 
 - `docs-site/src/content/docs/index.mdx`
 - `docs-site/src/content/docs/workspace/overview.md`
+- `docs-site/src/content/docs/workspace/toolchain-bootstrap.md`
 - `docs-site/src/content/docs/guidelines/architecture.md`
 - `CRATES.md`
 - `DOMAIN_MAP.md`
@@ -29,14 +50,14 @@ python3 tools/context/export_repo_context.py --output ./Runenwerk-content.txt
 Use this to generate a task-shaped AI workflow prompt and checklist:
 
 ```bash
-./workflow list
-./workflow implementation --task "<task>" --scope "<scope>"
-./workflow closeout --task "<completed phase>" --roadmap "<roadmap/design>"
+task ai:list
+task ai:implementation -- --task "<task>" --scope "<scope>"
+task ai:closeout -- --task "<completed phase>" --roadmap "<roadmap/design>"
 ```
 
 Use these validation shortcuts from the repository root:
 
 ```bash
-./workflow docs
-./workflow full-gate
+task docs:validate
+task ci:host
 ```

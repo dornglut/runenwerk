@@ -7,7 +7,7 @@ layer: app
 canonical: true
 last_reviewed: 2026-05-08
 related:
-  - ../../../design/active/surface-workflow-contract-redesign.md
+  - ../../../design/implemented/surface-workflow-contract-redesign.md
   - ../../../domain/ui/roadmap.md
   - ../../../apps/runenwerk-editor/roadmap.md
   - ../../../workspace/repo-execution-priority-checklist.md

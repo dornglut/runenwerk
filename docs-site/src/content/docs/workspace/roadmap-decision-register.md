@@ -11,6 +11,8 @@ related:
   - ./design-implementation-triage.md
   - ./repo-execution-priority-checklist.md
   - ./roadmap-index.md
+  - ./roadmap-items.yaml
+  - ./schemas/roadmap-items.schema.json
   - ./diagrams/value-weighted-dependency-roadmap.puml
 ---
 
@@ -23,6 +25,10 @@ implementation triage, but it does not replace owning domain or app roadmaps.
 
 Scores are first-pass relative estimates. Update them when code evidence,
 closeout reports, product evidence, or owning roadmaps change.
+
+The scorecard table below is generated from
+[roadmap-items.yaml](./roadmap-items.yaml). Do not edit the table directly;
+update the YAML source and run `task roadmap:render`.
 
 ## Score Model
 
@@ -44,17 +50,17 @@ Priority resolution order:
 
 | ID | Track | Lane | Dependency level | Gate | V | B | TC | RR/OE | DU | E | C | A-WSJF | RICE | Kano | Next evidence | Current decision |
 |---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|
-| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | Core delivery | L0 | Implement next | 5 | 2 | 4 | 4 | 5 | 3 | 0.8 | 4.8 | Candidate after Draw reach exists | Performance | Runtime product-job and Draw cache code truth. | Primary post-6D implementation candidate. |
-| WR-002 | ECS/runtime convergence support for product jobs and diagnostics | Core support | L0 | Supporting now | 4 | 2 | 3 | 5 | 5 | 5 | 0.8 | 2.7 | N/A | Neutral | Lifecycle, plan reporting, and lag diagnostics evidence. | Do only where it unblocks product jobs or diagnostics. |
-| WR-003 | Render contract follow-ups through product selection and derived residency | Core support | L0 | Supporting now | 4 | 2 | 3 | 4 | 4 | 5 | 0.8 | 2.4 | N/A | Neutral | R4/R6/R7 code-truth audit against product contracts. | Continue as contract-following support, not renderer-owned world truth. |
-| WR-004 | UI/editor guard and sequencing maintenance | Guardrail | L0 | Always-on guard | 4 | 1 | 4 | 4 | 3 | 2 | 1.0 | 7.5 | N/A | Basic | Guard suites and docs alignment after surface changes. | Keep active in parallel; score does not make it the main roadmap. |
-| WR-005 | Design lifecycle cleanup for implemented active designs | Docs | L0 | Docs now | 3 | 1 | 2 | 3 | 2 | 2 | 0.8 | 4.0 | N/A | Neutral | Code-truth review for implemented active designs. | Useful now when documentation capacity is available. |
-| WR-006 | Runenwerk Draw DRF2 through DRF5 | Core delivery | L1 | Ready next | 4 | 2 | 3 | 3 | 4 | 8 | 0.8 | 1.4 | Candidate after workflow reach exists | Performance | DRF2 cache status, public render-flow proof, CPU fallback tests. | Ready next after WR-001 stabilizes. |
+| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | Core delivery | L0 | Continue next slice | 5 | 2 | 4 | 4 | 5 | 3 | 0.8 | 4.8 | Candidate after Draw reach exists | Performance | 2026-05-14 DRF2 app-derived cache slice landed; next evidence is DRF3 bridge or next runtime product-job follow-up. | Continue as primary post-6D candidate, but do not reopen procgen bake/rollback. |
+| WR-002 | ECS/runtime convergence support for product jobs and diagnostics | Core support | L0 | Supporting now | 4 | 2 | 3 | 5 | 5 | 5 | 0.8 | 2.7 | N/A | Neutral | 2026-05-14 M5 consumer lag/backpressure diagnostics landed; F2/F3 remain. | Continue only where lifecycle/finalization or plan reporting unblocks product jobs or diagnostics. |
+| WR-003 | Render contract follow-ups through product selection and derived residency | Core support | L0 | Supporting now | 4 | 2 | 3 | 4 | 4 | 5 | 0.8 | 2.4 | N/A | Neutral | 2026-05-14 duplicate prepared-view producer ownership is rejected; R4/R6/R7 audit passed current contract shape. | Continue as contract-following support, not renderer-owned world truth. |
+| WR-004 | UI/editor guard and sequencing maintenance | Guardrail | L0 | Always-on guard | 4 | 1 | 4 | 4 | 3 | 2 | 1.0 | 7.5 | N/A | Basic | 2026-05-14 entity-table and SDF surface routing/capability guards landed. | Keep active in parallel; score does not make it the main roadmap. |
+| WR-005 | Design lifecycle cleanup for implemented active designs | Docs | L0 | Docs now | 3 | 1 | 2 | 3 | 2 | 2 | 0.8 | 4.0 | N/A | Neutral | 2026-05-14 surface workflow design moved to implemented lifecycle; more candidates remain. | Useful now when documentation capacity is available. |
+| WR-006 | Runenwerk Draw DRF3 through DRF5 | Core delivery | L1 | Ready next | 4 | 2 | 3 | 3 | 4 | 8 | 0.8 | 1.4 | Candidate after workflow reach exists | Performance | DRF3 product-surface bridge, public render-flow proof, CPU fallback tests. | Ready next after the post-DRF2 WR-001 slice stabilizes. |
 | WR-007 | Multiplayer replication Phase 1 to Phase 3 | Core delivery | L1 | Ready next | 4 | 2 | 2 | 4 | 4 | 8 | 0.8 | 1.4 | N/A | Neutral | ACK/baseline hardening and delta lifecycle tests. | Ready next for net hardening after current product substrate work. |
 | WR-008 | Native tablet input backend arbitration and diagnostics | Product discovery | L1 | Product evidence gate | 3 | 3 | 2 | 3 | 2 | 5 | 0.5 | 1.0 | Candidate after hardware target exists | Basic | Hardware validation across Windows Ink, Wacom Wintab, and macOS Wacom. | Code can continue, but product acceptance is hardware-blocked. |
 | WR-009 | Native multi-window editor presentation | Productization | L2 | Runtime gate | 3 | 3 | 2 | 3 | 3 | 8 | 0.5 | 0.7 | Candidate after workflow reach exists | Performance | Window-scoped runtime, input, UI frame, and swapchain ownership proof. | Keep gated behind runtime/window-scope contracts. |
 | WR-010 | Render fragment and data-driven maturity R10 | Productization | L2 | Product priority gate | 3 | 3 | 2 | 3 | 3 | 8 | 0.5 | 0.7 | N/A | Neutral | Stable aliases, prepared flow invocation, hot reload, diagnostics, and inspection evidence. | Queue after render surface, ergonomics, persistence, and inspection priorities. |
-| WR-011 | Gameplay Graph ATR IR and ECS lowering | Contract | L2 | Domain contract gate | 4 | 4 | 2 | 4 | 4 | 13 | 0.3 | 0.3 | N/A | Neutral | `domain/gameplay` event, action, state, quest, authority, and lowering contracts. | Blocked until narrower gameplay contracts exist. |
+| WR-011 | Gameplay Graph ATR IR and ECS lowering | Contract | L2 | Domain contract gate | 4 | 4 | 2 | 4 | 4 | 13 | 0.3 | 0.3 | N/A | Neutral | domain/gameplay event, action, state, quest, authority, and lowering contracts. | Blocked until narrower gameplay contracts exist. |
 | WR-012 | General semantic graph implementation | Contract | L2 | Domain contract gate | 3 | 4 | 1 | 3 | 3 | 13 | 0.3 | 0.2 | N/A | Neutral | One owning domain and one formed product target. | Do not build a broad graph platform first. |
 | WR-013 | Scripting and runtime gameplay bridge | Contract | L3 | Domain contract gate | 3 | 4 | 2 | 3 | 3 | 13 | 0.3 | 0.3 | N/A | Neutral | Language-neutral runtime boundary and formed gameplay products. | Rhai can be first adapter only after the domain contract exists. |
 | WR-014 | Particles, physics, animation, and world-process product tracks | Contract | L3 | Product contract gate | 3 | 4 | 1 | 3 | 3 | 13 | 0.3 | 0.2 | N/A | Neutral | Owning domain docs and formed product contracts. | Follow product-job, query snapshot, and publication substrate maturity. |

@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-14
 related_designs:
   - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
   - ../../../../design/active/editor-native-multi-window-presentation-design.md
@@ -490,7 +490,7 @@ Current proof/inspection notes:
 - `engine/src/plugins/render/runtime/dynamic_targets.rs` owns deterministic request snapshots and request diagnostics.
 - `engine/src/plugins/render/frame/packet.rs::PreparedRenderFrame` carries `dynamic_texture_targets`, `views`, and `flow_invocations`.
 - `engine::plugins::render::inspect::inspect_prepared_render_frame` exposes dynamic targets, prepared views, target alias bindings, flow invocations, and history signatures without reading renderer internals.
-- Renderer dynamic target cache allocation and pass attachment resolution are not complete.
+- Renderer dynamic target cache allocation and pass attachment resolution are implemented in `engine/src/plugins/render/renderer/dynamic_targets.rs` and `engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs`.
 
 ## Verification
 

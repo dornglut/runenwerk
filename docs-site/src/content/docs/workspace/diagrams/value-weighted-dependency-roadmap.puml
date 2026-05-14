@@ -46,39 +46,43 @@ legend right
 endlegend
 
 package "Level 0 - Parallel Now" {
-  component "WR-001 Post-Phase 6D\nproduct-job / Draw cache\nscore=4.8 gate=implement next\nV5 B2\ncall=bounded Draw cache,\nproduct-job follow-ups" as DRAWNEXT <<V5>>
+  component "WR-001 Post-Phase 6D product-job / Draw bridge\nscore=4.8 gate=continue next slice\nV5 B2\ncall=post-DRF2 bridge or\nproduct-job follow-up" as DRAWNEXT <<V5>>
 
-  component "WR-002 ECS/runtime support\nscore=2.7 gate=supporting now\nV4 B2\ncall=lifecycle, plan reporting,\nconsumer lag/backpressure" as ECSRUNTIME <<V4>>
+  component "WR-002 ECS/runtime support\nscore=2.7 gate=supporting now\nV4 B2\ncall=F2 lifecycle and\nF3 plan reporting" as ECSRUNTIME <<V4>>
 
   component "WR-003 Render contract follow-ups\nscore=2.4 gate=supporting now\nV4 B2\ncall=product selection and\nruntime-derived residency only" as RENDER <<V4>>
 
   component "WR-004 UI/editor guards\nscore=7.5 gate=always-on guard\nV4 B1\ncall=structural routing,\ncapability gates, docs sync" as UIGUARDS <<V4>>
 
   component "WR-005 Design lifecycle cleanup\nscore=4.0 gate=docs now\nV3 B1\ncall=promote implemented active docs\nafter code-truth review" as DOCS <<V3>>
+
 }
 
 package "Level 1 - Depends On Current Stabilization" {
-  component "WR-006 Draw DRF2-DRF5\nscore=1.4 gate=ready next\nV4 B2\ncall=cache, product-surface bridge,\nGPU proof, CPU fallback" as DRAW <<V4>>
+  component "WR-006 Draw DRF3-DRF5\nscore=1.4 gate=ready next\nV4 B2\ncall=product-surface bridge,\nGPU proof, CPU fallback" as DRAW <<V4>>
 
   component "WR-007 Net replication Phase 1-3\nscore=1.4 gate=ready next\nV4 B2\ncall=ACK hardening, delta lifecycle,\nbridge convergence" as NET <<V4>>
 
-  component "WR-008 Native tablet input\nscore=1.0 gate=product evidence\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
+  component "WR-008 Native tablet input\nscore=1.0 gate=product evidence gate\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
+
 }
 
 package "Level 2 - Productization / Contract-Gated" {
   component "WR-009 Native multi-window editor\nscore=0.7 gate=runtime gate\nV3 B3\ncall=window-scoped runtime,\ninput, UI frame, swapchain" as WINDOW <<V3>>
 
-  component "WR-010 Render fragments R10\nscore=0.7 gate=product priority\nV3 B3\ncall=fragment assets, merge,\nhot reload, inspection" as FRAGMENTS <<V3>>
+  component "WR-010 Render fragments R10\nscore=0.7 gate=product priority gate\nV3 B3\ncall=fragment assets, merge,\nhot reload, inspection" as FRAGMENTS <<V3>>
 
-  component "WR-011 Gameplay Graph ATR IR\nscore=0.3 gate=domain contract\nV4 B4\ncall=first compiler and ECS lowering\nafter gameplay contracts" as GAMEPLAY <<V4>>
+  component "WR-011 Gameplay Graph ATR IR\nscore=0.3 gate=domain contract gate\nV4 B4\ncall=first compiler and ECS lowering\nafter gameplay contracts" as GAMEPLAY <<V4>>
 
-  component "WR-012 Concrete semantic graph\nscore=0.2 gate=domain contract\nV3 B4\ncall=one owning domain,\none formed product target" as SEMGRAPH <<V3>>
+  component "WR-012 Concrete semantic graph\nscore=0.2 gate=domain contract gate\nV3 B4\ncall=one owning domain,\none formed product target" as SEMGRAPH <<V3>>
+
 }
 
 package "Level 3 - Downstream Domain Tracks" {
-  component "WR-013 Scripting/runtime bridge\nscore=0.3 gate=domain contract\nV3 B4\ncall=language-neutral contract,\nfirst adapter later" as SCRIPTING <<V3>>
+  component "WR-013 Scripting/runtime bridge\nscore=0.3 gate=domain contract gate\nV3 B4\ncall=language-neutral contract,\nfirst adapter later" as SCRIPTING <<V3>>
 
-  component "WR-014 Particles / physics /\nanimation / world processes\nscore=0.2 gate=product contract\nV3 B4\ncall=formed product contracts\nand product substrate first" as M6FUTURE <<V3>>
+  component "WR-014 Particles / physics / animation / world processes\nscore=0.2 gate=product contract gate\nV3 B4\ncall=formed product contracts\nand product substrate first" as M6FUTURE <<V3>>
+
 }
 
 package "Level 4 - Deferred Policy Tracks" {
@@ -87,30 +91,25 @@ package "Level 4 - Deferred Policy Tracks" {
   component "WR-016 Alternate UI execution\nscore=0.1 gate=policy deferred\nV2 B5\ncall=compiled-reactive or ECS-driven\nonly after ADR/design promotion" as UIALT <<V2>>
 
   component "WR-017 Gameplay powers/actions\nscore=0.2 gate=policy deferred\nV2 B5\ncall=runtime and editor power authoring\nafter narrower gameplay contracts" as POWERS <<V2>>
+
 }
 
 ECSRUNTIME -down-> DRAWNEXT : product-job substrate
 RENDER -down-> DRAWNEXT : product consumers only
 UIGUARDS -down-> DRAWNEXT : surface/projection safety
 DOCS -down-> DRAWNEXT : status alignment
-
-DRAWNEXT -down-> DRAW : DRF2-DRF5 sequence
+DRAWNEXT -down-> DRAW : DRF3-DRF5 sequence
 RENDER -down-> DRAW : product-surface APIs
 DRAW -down-> TABLET : production input acceptance
-
 DRAWNEXT -down-> NET : product authority context
 NET -down-> GAMEPLAY : replication metadata / authority
-
 DRAWNEXT -down-> GAMEPLAY : formed products first
 SEMGRAPH -down-> GAMEPLAY : graph policy specialization
 GAMEPLAY -down-> SCRIPTING : formed gameplay products first
-
 DRAWNEXT -down-> M6FUTURE : shared product substrate
 M6FUTURE -down-> SDFDETAIL : product family contracts
-
 RENDER -down-> WINDOW : render surface foundation
 RENDER -down-> FRAGMENTS : aliases / invocations / inspection
-
 GAMEPLAY -down-> POWERS : narrower gameplay contracts
 UIGUARDS -down-> UIALT : retained UI path remains default
 

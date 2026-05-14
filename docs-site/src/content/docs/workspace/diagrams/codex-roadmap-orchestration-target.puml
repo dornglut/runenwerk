@@ -1,0 +1,59 @@
+@startuml
+title Codex Roadmap Orchestration Target
+
+left to right direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+actor User
+
+database "roadmap-items.yaml\ncanonical WR data" as RoadmapYaml
+component "roadmap_state.py validate\nscore, gate, deps,\nwrite scopes" as Validate
+component "generate_roadmap_docs.py\nMarkdown + PUML sync" as Render
+component "propose-batch\nbatch.toml" as Propose
+component "worker-prompt\nbounded prompts" as Prompts
+component "prepare-worktrees\nisolated branches" as Worktrees
+component "Codex workers\nimplementation slices" as Workers
+component "integration review\ncombined diff" as Integrate
+component "validation\npuml, docs, tests" as Validation
+component "closeout\nregister, triage,\nowning roadmaps" as Closeout
+
+artifact "roadmap-decision-register.md" as Register
+artifact "value-weighted-dependency-roadmap.puml" as DependencyPuml
+artifact "design-implementation-triage.md" as Triage
+artifact "batch.toml" as BatchToml
+
+User --> Propose : approve goal / scope
+RoadmapYaml --> Validate
+RoadmapYaml --> Render
+Validate --> Propose : eligible rows
+Render --> Register
+Render --> DependencyPuml
+Render --> Triage
+Propose --> BatchToml
+BatchToml --> Prompts
+BatchToml --> Worktrees
+Prompts --> Workers
+Worktrees --> Workers
+Workers --> Integrate
+Integrate --> Validation
+Validation --> Closeout
+Closeout --> RoadmapYaml : update evidence / status
+Closeout --> Register
+Closeout --> Triage
+
+note bottom of User
+  User gates remain explicit:
+  approve batch proposal,
+  review final result,
+  decide merge/commit.
+end note
+
+note bottom of RoadmapYaml
+  Scores guide sequencing.
+  Gates and dependencies win.
+end note
+
+@enduml

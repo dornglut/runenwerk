@@ -9,11 +9,14 @@ last_reviewed: 2026-05-08
 related_docs:
   - ./agents.md
   - ./architecture-governance-review.md
+  - ./parallel-roadmap-batch-automation.md
   - ./documentation-structure.md
   - ./routines/README.md
   - ./routines/architecture-governance-review-routine.md
+  - ./routines/parallel-roadmap-batch-routine.md
   - ./prompt-templates/README.md
   - ./prompt-templates/architecture-governance-review.md
+  - ./prompt-templates/parallel-roadmap-batch.md
   - ../guidelines/architecture.md
 ---
 
@@ -28,26 +31,36 @@ This guide routes existing rules. It does not override `AGENTS.md`, `AI_GUIDE.md
 Use the workflow kickoff helper when starting a new AI-assisted task:
 
 ```sh
-./workflow list
-./workflow architecture-governance --task "<decision>" --scope "<crate/files/subsystem>"
-./workflow implementation --task "<task>" --scope "<crate/files/subsystem>"
-./workflow milestone --task "<milestone>" --roadmap "<owning roadmap/design path>"
-./workflow closeout --task "<completed phase>" --roadmap "<owning roadmap/design path>"
-./workflow docs
-./workflow full-gate
+task --list
+task ai:architecture-governance -- --task "<decision>" --scope "<crate/files/subsystem>"
+task ai:parallel-roadmap-batch -- --task "<batch goal>" --scope "<roadmap rows or docs>"
+task ai:implementation -- --task "<task>" --scope "<crate/files/subsystem>"
+task ai:closeout -- --task "<completed phase>" --roadmap "<owning roadmap/design path>"
+task roadmap:validate
+task roadmap:check
+task puml:validate
+task batch:propose -- --goal "<batch goal>" --scope "L0"
+task docs:validate
+task ci:local
 ```
 
-Task-shape commands such as `architecture-governance`, `implementation`,
-`milestone`, and `closeout` are non-mutating. They print the relevant docs,
-first inspection commands, a ready-to-use prompt, validation expectations, and
-stop conditions for the chosen task shape.
+Task-shape commands such as `architecture-governance`,
+`parallel-roadmap-batch`, `implementation`, `milestone`, and `closeout` are
+non-mutating. They print the relevant docs, first inspection commands, a
+ready-to-use prompt, validation expectations, and stop conditions for the chosen
+task shape.
 
 Validation commands execute checks:
 
-- `./workflow docs` runs `python3 tools/docs/validate_docs.py`.
-- `./workflow full-gate` runs `./quiet_full_gate.sh`.
+- `task docs:validate` runs the repository docs validation.
+- `task ci:local` runs the Dagger validation pipeline.
+- `task roadmap:validate` checks `roadmap-items.yaml` score math,
+  dependencies, gates, and write-scope overlap.
+- `task roadmap:check` rejects stale generated roadmap Markdown
+  and PUML.
+- `task puml:validate` validates workspace PlantUML diagrams with PlantUML.
 
-The lower-level prompt generator remains available at `python3 tools/workflow/ai_task.py`, but the stable repo entrypoint is `./workflow`.
+The lower-level prompt generator remains available at `uv run python tools/workflow/ai_task.py`, but the stable repo entrypoint is `task`.
 
 The historical `tools/docs/add_agent_workflow_docs.sh` entrypoint is also non-mutating. It exists only for compatibility and validates docs instead of regenerating workflow pages.
 
@@ -55,11 +68,24 @@ Use workflow commands to automate Codex prompt, checklist, and gate setup, not
 blind mutation. A typical architecture-sensitive flow is:
 
 ```sh
-python3 tools/workflow/ai_task.py architecture-governance --task "<decision>" --scope "<scope>"
-python3 tools/workflow/ai_task.py planning --task "<change>" --scope "<scope>"
-python3 tools/workflow/ai_task.py implementation --task "<bounded implementation>" --scope "<scope>"
-python3 tools/workflow/ai_task.py phase-closeout --task "<completed phase>" --roadmap "<roadmap>"
+task ai:architecture-governance -- --task "<decision>" --scope "<scope>"
+task ai:planning -- --task "<change>" --scope "<scope>"
+task ai:implementation -- --task "<bounded implementation>" --scope "<scope>"
+task ai:closeout -- --task "<completed phase>" --roadmap "<roadmap>"
 ```
+
+A typical parallel roadmap batch flow is:
+
+```sh
+task roadmap:validate
+task batch:propose -- --goal "<batch goal>" --scope L0 --out docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
+task batch:approve -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
+task batch:prepare -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
+task batch:scope-check -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
+```
+
+The coordinator proposes candidate rows, worker scopes, validations, and
+closeout docs first. Implementation starts only after explicit user approval.
 
 ## Purpose
 
@@ -98,6 +124,7 @@ Preserve unrelated dirty work. If a dirty file is relevant, inspect its current 
 | Documentation refactor | The goal is moving, renaming, pruning, or restructuring docs. | `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md` |
 | Public API review | The goal is to review usability, discoverability, examples, and public entrypoints. | `docs-site/src/content/docs/workspace/routines/public-api-review-routine.md` |
 | Architecture governance review | The goal is to check dependency direction, domain ownership, ADR need, tradeoffs, migration shape, enforcement, or ownership mode. | `docs-site/src/content/docs/workspace/architecture-governance-review.md`, `docs-site/src/content/docs/workspace/routines/architecture-governance-review-routine.md` |
+| Parallel roadmap batch | The goal is to propose, approve, fan out, integrate, and close out independent roadmap slices. | `docs-site/src/content/docs/workspace/parallel-roadmap-batch-automation.md`, `docs-site/src/content/docs/workspace/routines/parallel-roadmap-batch-routine.md` |
 | Phase closeout | A phased implementation just completed. | `docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md` |
 | Commit organization | The working tree has mixed changes that need coherent commits. | `docs-site/src/content/docs/workspace/routines/commit-splitting-routine.md` |
 
@@ -152,6 +179,10 @@ For bounded implementation:
 
 Use subagents or parallel workers only when the task prompt and current environment explicitly allow them, and only for bounded exploration or disjoint write scopes.
 
+Use the parallel roadmap batch routine when the user wants Codex to inspect
+current roadmap work, propose concurrent tasks, wait for approval, then fan out
+subagents or worktrees and integrate the result.
+
 ## Closeout Pass
 
 Every implementation closeout should report:
@@ -184,6 +215,7 @@ Use these existing templates instead of writing new one-off instructions:
 
 - `docs-site/src/content/docs/workspace/prompt-templates/architecture-governance-review.md` for pre-implementation architecture decision gates.
 - `docs-site/src/content/docs/workspace/prompt-templates/architecture-audit.md` for findings-only architecture audits.
+- `docs-site/src/content/docs/workspace/prompt-templates/parallel-roadmap-batch.md` for approved parallel roadmap fan-out.
 - `docs-site/src/content/docs/workspace/prompt-templates/crate-design.md` for crate boundary design.
 - `docs-site/src/content/docs/workspace/prompt-templates/implementation-batch.md` for bounded implementation.
 - `docs-site/src/content/docs/workspace/prompt-templates/roadmap-milestone-kickoff.md` for named roadmap milestones.

@@ -80,7 +80,7 @@ Confirm whether validation ran:
 
 - focused tests for the changed crate or domain;
 - feature-matrix tests when features changed;
-- `python3 tools/docs/validate_docs.py`;
+- `task docs:validate`;
 - `./quiet_full_gate.sh` when code or workspace behavior changed.
 
 If any command was skipped, record the reason.

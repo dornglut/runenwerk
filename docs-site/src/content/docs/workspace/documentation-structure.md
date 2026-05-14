@@ -1380,7 +1380,7 @@ After applying any row in this matrix, run the narrowest relevant validation com
 For documentation-only refactors, prefer:
 
 ```text
-python3 tools/docs/validate_docs.py
+task docs:validate
 ```
 If the command is unavailable or incomplete, state that validation could not be run and document what remains unverified.
 
@@ -1391,7 +1391,7 @@ When documentation structure changes, run the repository docs validation command
 Recommended command:
 
 ```text
-python tools/docs/validate_docs.py
+task docs:validate
 ```
 
 If that script is missing or incomplete, update this section after the docs tooling is formalized.

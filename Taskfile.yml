@@ -1,0 +1,142 @@
+version: '3'
+
+tasks:
+  default:
+    desc: List available tasks.
+    cmds:
+      - task --list
+
+  toolchain:bootstrap:
+    desc: Install or update the Windows host toolchain for this repository.
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File tools/bootstrap/bootstrap.ps1 {{.CLI_ARGS}}
+
+  toolchain:doctor:
+    desc: Check that required host tools are available.
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File tools/bootstrap/bootstrap.ps1 -CheckOnly {{.CLI_ARGS}}
+
+  roadmap:validate:
+    desc: Validate structured roadmap YAML and generated JSON Schema.
+    cmds:
+      - uv run python tools/workflow/roadmap_state.py validate
+
+  roadmap:render:
+    desc: Render generated roadmap Markdown and PlantUML from YAML.
+    cmds:
+      - uv run python tools/workflow/generate_roadmap_docs.py render
+
+  roadmap:check:
+    desc: Check roadmap generated files and schemas are in sync.
+    cmds:
+      - uv run python tools/workflow/roadmap_state.py schema --check
+      - uv run python tools/workflow/generate_roadmap_docs.py check
+
+  batch:propose:
+    desc: Propose a parallel roadmap batch.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py propose {{.CLI_ARGS}}
+
+  batch:approve:
+    desc: Mark a batch manifest as approved.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py approve {{.CLI_ARGS}}
+
+  batch:prepare:
+    desc: Create worker prompts and git worktrees for an approved batch.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py prepare {{.CLI_ARGS}}
+
+  batch:scope-check:
+    desc: Validate worker changed files against approved write scopes.
+    cmds:
+      - uv run python tools/workflow/scope_enforcement.py check {{.CLI_ARGS}}
+
+  batch:closeout:
+    desc: Check or write batch closeout report.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py closeout {{.CLI_ARGS}}
+
+  docs:validate:
+    desc: Validate docs-site structure and links handled by repository docs validation.
+    cmds:
+      - python tools/docs/validate_docs.py
+
+  puml:validate:
+    desc: Validate every PlantUML diagram in the repository.
+    cmds:
+      - uv run python tools/workflow/roadmap_state.py puml
+
+  python:test:
+    desc: Run workflow Python tests.
+    cmds:
+      - uv run --group dev python -m pytest tools/workflow
+
+  ai:list:
+    desc: List AI prompt/checklist shapes.
+    cmds:
+      - uv run python tools/workflow/ai_task.py --list
+
+  ai:architecture-governance:
+    desc: Generate an architecture governance prompt/checklist.
+    cmds:
+      - uv run python tools/workflow/ai_task.py architecture-governance {{.CLI_ARGS}}
+
+  ai:planning:
+    desc: Generate a planning prompt/checklist.
+    cmds:
+      - uv run python tools/workflow/ai_task.py planning {{.CLI_ARGS}}
+
+  ai:implementation:
+    desc: Generate an implementation prompt/checklist.
+    cmds:
+      - uv run python tools/workflow/ai_task.py implementation {{.CLI_ARGS}}
+
+  ai:parallel-roadmap-batch:
+    desc: Generate a parallel roadmap batch prompt/checklist.
+    cmds:
+      - uv run python tools/workflow/ai_task.py parallel-roadmap-batch {{.CLI_ARGS}}
+
+  ai:closeout:
+    desc: Generate a phase closeout prompt/checklist.
+    cmds:
+      - uv run python tools/workflow/ai_task.py phase-closeout {{.CLI_ARGS}}
+
+  rust:test:
+    desc: Run Rust tests with cargo-nextest.
+    cmds:
+      - cargo nextest run
+
+  rust:policy:
+    desc: Run Rust dependency policy and unused dependency checks.
+    cmds:
+      - cargo deny check
+      - cargo machete
+
+  links:check:
+    desc: Run external Markdown/link validation with lychee.
+    cmds:
+      - lychee docs-site/src/content/docs
+
+  ast:scan:
+    desc: Run structural source policy checks.
+    cmds:
+      - ast-grep scan
+
+  ci:local:
+    desc: Run the local Dagger validation pipeline.
+    cmds:
+      - dagger call ci-local --source .
+
+  ci:host:
+    desc: Run host validation without Dagger.
+    deps:
+      - roadmap:validate
+      - roadmap:check
+      - puml:validate
+      - docs:validate
+      - python:test
+      - rust:test
+      - rust:policy
+      - links:check
+      - ast:scan

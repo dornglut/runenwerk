@@ -1,0 +1,711 @@
+version: 1
+roadmap:
+  title: Runenwerk Value-Weighted Dependency Roadmap
+  last_reviewed: '2026-05-14'
+  owner: workspace
+render:
+  decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  dependency_roadmap: docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  triage: docs-site/src/content/docs/workspace/design-implementation-triage.md
+items:
+- id: WR-001
+  title: Post-Phase 6D product-job and Draw cache follow-up
+  diagram_title: Post-Phase 6D product-job / Draw bridge
+  alias: DRAWNEXT
+  lane: Core delivery
+  dependency_level: L0
+  gate: Continue next slice
+  status: implement_now
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 5
+  effort: 3
+  confidence: 0.8
+  expected_score: 4.8
+  rice: Candidate after Draw reach exists
+  kano: Performance
+  dependencies:
+  - WR-002
+  - WR-003
+  - WR-004
+  - WR-005
+  write_scopes:
+  - apps/runenwerk_draw
+  - engine/runtime-product-job
+  validations:
+  - cargo test -p runenwerk_draw --test app_shell
+  - cargo test -p engine
+  next_evidence: 2026-05-14 DRF2 app-derived cache slice landed; next evidence is DRF3 bridge or next runtime product-job
+    follow-up.
+  current_decision: Continue as primary post-6D candidate, but do not reopen procgen bake/rollback.
+  current_call: Continue next bounded slice. The 2026-05-14 parallel batch landed Draw DRF2 app-derived tile cache behavior;
+    the next code track should choose the next runtime product-job or Draw bridge slice without reopening procgen bake/rollback.
+  first_move: Continue from runtime-product-job-executor-roadmap.md, runenwerk-draw/roadmap.md, and sdf-first-execution-roadmap.md.
+  diagram_call:
+  - post-DRF2 bridge or
+  - product-job follow-up
+  ddd_owner: apps/runenwerk_draw with engine runtime product-job support
+  adr_requirement: No new ADR for the next bounded slice; require ADR only if product-job ownership changes.
+  fitness_function_requirement: Focused Draw/runtime tests plus roadmap render check.
+  ownership_mode: Stream-aligned Draw work with enabling engine support.
+- id: WR-002
+  title: ECS/runtime convergence support for product jobs and diagnostics
+  diagram_title: ECS/runtime support
+  alias: ECSRUNTIME
+  lane: Core support
+  dependency_level: L0
+  gate: Supporting now
+  status: implement_now
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.7
+  rice: N/A
+  kano: Neutral
+  dependencies: []
+  write_scopes:
+  - domain/ecs
+  - docs-site/src/content/docs/net/ecs-runtime-prioritized-roadmap.md
+  validations:
+  - cargo test -p ecs
+  - cargo test -p scheduler
+  next_evidence: 2026-05-14 M5 consumer lag/backpressure diagnostics landed; F2/F3 remain.
+  current_decision: Continue only where lifecycle/finalization or plan reporting unblocks product jobs or diagnostics.
+  current_call: Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 parallel
+    batch landed M5 consumer lag/backpressure diagnostics; F2 and F3 remain open.
+  first_move: Close remaining lifecycle finalization and deterministic registration/plan reporting from net/ecs-runtime-prioritized-roadmap.md.
+  diagram_call:
+  - F2 lifecycle and
+  - F3 plan reporting
+  ddd_owner: domain/ecs
+  adr_requirement: No new ADR for diagnostics-only convergence.
+  fitness_function_requirement: ECS runtime diagnostics tests and workspace roadmap checks.
+  ownership_mode: Complicated-subsystem owner supporting stream-aligned product work.
+- id: WR-003
+  title: Render contract follow-ups through product selection and derived residency
+  diagram_title: Render contract follow-ups
+  alias: RENDER
+  lane: Core support
+  dependency_level: L0
+  gate: Supporting now
+  status: implement_now
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.4
+  rice: N/A
+  kano: Neutral
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  - docs-site/src/content/docs/engine/plugins/render
+  validations:
+  - cargo test -p engine render_product_selection
+  - cargo test -p engine
+  next_evidence: 2026-05-14 duplicate prepared-view producer ownership is rejected; R4/R6/R7 audit passed current contract
+    shape.
+  current_decision: Continue as contract-following support, not renderer-owned world truth.
+  current_call: Implement only as contract-following follow-up, not as renderer-owned world truth. The 2026-05-14 parallel
+    batch added a prepared-view ownership guard across producers.
+  first_move: Continue current R4/R6/R7 support from engine/plugins/render/docs/roadmap.md and render-product-surface-foundation-bundle-design.md.
+  diagram_call:
+  - product selection and
+  - runtime-derived residency only
+  ddd_owner: engine render plugin
+  adr_requirement: No new ADR unless render ownership crosses into product/world truth.
+  fitness_function_requirement: Render product-selection tests and public render-flow contract checks.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned product work.
+- id: WR-004
+  title: UI/editor guard and sequencing maintenance
+  diagram_title: UI/editor guards
+  alias: UIGUARDS
+  lane: Guardrail
+  dependency_level: L0
+  gate: Always-on guard
+  status: implement_now
+  priority: P0
+  value: 4
+  blocker: 1
+  tc: 4
+  rr_oe: 4
+  du: 3
+  effort: 2
+  confidence: 1.0
+  expected_score: 7.5
+  rice: N/A
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - apps/runenwerk_editor
+  - domain/ui
+  validations:
+  - cargo test -p runenwerk_editor
+  - cargo test -p runenwerk_editor --test viewport_architecture_guards
+  next_evidence: 2026-05-14 entity-table and SDF surface routing/capability guards landed.
+  current_decision: Keep active in parallel; score does not make it the main roadmap.
+  current_call: Keep active while any editor surface work lands. The 2026-05-14 parallel batch added entity-table and SDF
+    operation routing/capability guards.
+  first_move: Preserve structural routing, capability gating, and surface ownership guard coverage from domain/ui/roadmap.md.
+  diagram_call:
+  - structural routing,
+  - capability gates, docs sync
+  ddd_owner: apps/runenwerk_editor with domain/ui contracts
+  adr_requirement: No new ADR for guard maintenance.
+  fitness_function_requirement: Editor guard tests and docs validation.
+  ownership_mode: Enabling guardrail work owned by editor/UI maintainers.
+- id: WR-005
+  title: Design lifecycle cleanup for implemented active designs
+  diagram_title: Design lifecycle cleanup
+  alias: DOCS
+  lane: Docs
+  dependency_level: L0
+  gate: Docs now
+  status: implement_now
+  priority: P1
+  value: 3
+  blocker: 1
+  tc: 2
+  rr_oe: 3
+  du: 2
+  effort: 2
+  confidence: 0.8
+  expected_score: 4.0
+  rice: N/A
+  kano: Neutral
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/design
+  - docs-site/src/content/docs/reports
+  validations:
+  - task docs:validate
+  next_evidence: 2026-05-14 surface workflow design moved to implemented lifecycle; more candidates remain.
+  current_decision: Useful now when documentation capacity is available.
+  current_call: Can be done now as documentation work. The 2026-05-14 parallel batch moved the surface workflow contract redesign
+    to implemented lifecycle; more candidates remain.
+  first_move: Review active designs that already say implemented, then promote or move them according to design/README.md.
+  diagram_call:
+  - promote implemented active docs
+  - after code-truth review
+  ddd_owner: workspace documentation
+  adr_requirement: No ADR; follow documentation lifecycle policy.
+  fitness_function_requirement: Docs validation and link checks.
+  ownership_mode: Enabling documentation cleanup.
+- id: WR-006
+  title: Runenwerk Draw DRF3 through DRF5
+  diagram_title: Draw DRF3-DRF5
+  alias: DRAW
+  lane: Core delivery
+  dependency_level: L1
+  gate: Ready next
+  status: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 3
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.4
+  rice: Candidate after workflow reach exists
+  kano: Performance
+  dependencies:
+  - WR-001
+  - WR-003
+  write_scopes:
+  - apps/runenwerk_draw
+  - engine/src/plugins/render
+  validations:
+  - cargo test -p runenwerk_draw
+  - cargo test -p engine
+  next_evidence: DRF3 product-surface bridge, public render-flow proof, CPU fallback tests.
+  current_decision: Ready next after the post-DRF2 WR-001 slice stabilizes.
+  current_call: Ready next after the current post-DRF2 product-job and Draw cache work is stable.
+  main_blocker: DRF3 to DRF5 must keep CPU tile formation canonical and use public render-flow/product-surface APIs.
+  diagram_call:
+  - product-surface bridge,
+  - GPU proof, CPU fallback
+  ddd_owner: apps/runenwerk_draw with render product-surface contracts
+  adr_requirement: No new ADR if existing render product-surface decision holds.
+  fitness_function_requirement: Draw public flow proof tests and CPU fallback tests.
+  ownership_mode: Stream-aligned Draw owner with render enabling support.
+- id: WR-007
+  title: Multiplayer replication Phase 1 to Phase 3
+  diagram_title: Net replication Phase 1-3
+  alias: NET
+  lane: Core delivery
+  dependency_level: L1
+  gate: Ready next
+  status: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 2
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.4
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-001
+  write_scopes:
+  - net
+  - domain/ecs
+  validations:
+  - cargo test -p ecs
+  - cargo test -p scheduler
+  next_evidence: ACK/baseline hardening and delta lifecycle tests.
+  current_decision: Ready next for net hardening after current product substrate work.
+  current_call: Ready next for net hardening.
+  main_blocker: ACK/baseline hardening and delta lifecycle rules need tests and code evidence before broader declarative replication.
+  diagram_call:
+  - ACK hardening, delta lifecycle,
+  - bridge convergence
+  ddd_owner: net replication with ECS authority metadata
+  adr_requirement: No new ADR for Phase 1-3 hardening unless authority ownership changes.
+  fitness_function_requirement: Replication lifecycle tests and ECS authority diagnostics.
+  ownership_mode: Stream-aligned net owner with ECS enabling support.
+- id: WR-008
+  title: Native tablet input backend arbitration and diagnostics
+  diagram_title: Native tablet input
+  alias: TABLET
+  lane: Product discovery
+  dependency_level: L1
+  gate: Product evidence gate
+  status: ready_next
+  priority: P1
+  value: 3
+  blocker: 3
+  tc: 2
+  rr_oe: 3
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: Candidate after hardware target exists
+  kano: Basic
+  dependencies:
+  - WR-006
+  write_scopes:
+  - apps/runenwerk_editor
+  - adapters
+  validations:
+  - cargo test -p runenwerk_editor
+  next_evidence: Hardware validation across Windows Ink, Wacom Wintab, and macOS Wacom.
+  current_decision: Code can continue, but product acceptance is hardware-blocked.
+  current_call: Code work can continue, but product acceptance remains blocked.
+  main_blocker: Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices.
+  diagram_call:
+  - backend arbitration,
+  - diagnostics, hardware acceptance
+  ddd_owner: apps/editor input adapters
+  adr_requirement: ADR only if backend arbitration policy becomes platform-wide.
+  fitness_function_requirement: Hardware-backed diagnostics or explicit manual validation record.
+  ownership_mode: Stream-aligned editor owner with platform adapter support.
+- id: WR-009
+  title: Native multi-window editor presentation
+  diagram_title: Native multi-window editor
+  alias: WINDOW
+  lane: Productization
+  dependency_level: L2
+  gate: Runtime gate
+  status: ready_next
+  priority: P2
+  value: 3
+  blocker: 3
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Candidate after workflow reach exists
+  kano: Performance
+  dependencies:
+  - WR-003
+  write_scopes:
+  - apps/runenwerk_editor
+  - engine/src/plugins/render
+  validations:
+  - cargo test -p runenwerk_editor
+  - cargo test -p engine
+  next_evidence: Window-scoped runtime, input, UI frame, and swapchain ownership proof.
+  current_decision: Keep gated behind runtime/window-scope contracts.
+  current_call: Design is active, but it should not preempt current product-surface and post-6D work.
+  main_blocker: Runtime window state and render surface handling are still singleton-shaped; second-window productization
+    needs window-scoped runtime, input, UI frame, and swapchain ownership.
+  diagram_call:
+  - window-scoped runtime,
+  - input, UI frame, swapchain
+  ddd_owner: apps/runenwerk_editor
+  adr_requirement: ADR required if runtime/window ownership policy changes globally.
+  fitness_function_requirement: Window-scoped runtime guards and render surface tests.
+  ownership_mode: Stream-aligned editor owner with platform/render collaboration.
+- id: WR-010
+  title: Render fragment and data-driven maturity R10
+  diagram_title: Render fragments R10
+  alias: FRAGMENTS
+  lane: Productization
+  dependency_level: L2
+  gate: Product priority gate
+  status: ready_next
+  priority: P2
+  value: 3
+  blocker: 3
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.7
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-003
+  write_scopes:
+  - engine/src/plugins/render
+  - docs-site/src/content/docs/engine/plugins/render
+  validations:
+  - cargo test -p engine
+  next_evidence: Stable aliases, prepared flow invocation, hot reload, diagnostics, and inspection evidence.
+  current_decision: Queue after render surface, ergonomics, persistence, and inspection priorities.
+  current_call: Keep queued after render surface, ergonomics, persistence, and inspection follow-ups.
+  main_blocker: Fragment assets and hot reload need stable target aliases, prepared flow invocations, diagnostics, and a product
+    priority.
+  diagram_call:
+  - fragment assets, merge,
+  - hot reload, inspection
+  ddd_owner: engine render plugin
+  adr_requirement: ADR only if data-driven fragments become a cross-domain contract.
+  fitness_function_requirement: Render fragment flow and hot-reload diagnostics tests.
+  ownership_mode: Complicated-subsystem render owner.
+- id: WR-011
+  title: Gameplay Graph ATR IR and ECS lowering
+  diagram_title: Gameplay Graph ATR IR
+  alias: GAMEPLAY
+  lane: Contract
+  dependency_level: L2
+  gate: Domain contract gate
+  status: blocked_deferred
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 4
+  du: 4
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.3
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-001
+  - WR-007
+  - WR-012
+  write_scopes:
+  - domain/gameplay
+  - domain/ecs
+  validations:
+  - cargo test -p ecs
+  next_evidence: domain/gameplay event, action, state, quest, authority, and lowering contracts.
+  current_decision: Blocked until narrower gameplay contracts exist.
+  why_not_ready: Missing domain/gameplay/events, domain/gameplay/actions, domain/gameplay/state, and domain/gameplay/quests;
+    SDF physics relation readiness and authority diagnostics also need owning contracts.
+  diagram_call:
+  - first compiler and ECS lowering
+  - after gameplay contracts
+  ddd_owner: future domain/gameplay
+  adr_requirement: ADR or accepted design required before implementation.
+  fitness_function_requirement: Dependency-direction and gameplay lowering fitness functions required.
+  ownership_mode: Complicated subsystem not yet owned.
+- id: WR-012
+  title: General semantic graph implementation
+  diagram_title: Concrete semantic graph
+  alias: SEMGRAPH
+  lane: Contract
+  dependency_level: L2
+  gate: Domain contract gate
+  status: blocked_deferred
+  priority: P2
+  value: 3
+  blocker: 4
+  tc: 1
+  rr_oe: 3
+  du: 3
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Neutral
+  dependencies: []
+  write_scopes:
+  - domain
+  validations:
+  - cargo check --workspace
+  next_evidence: One owning domain and one formed product target.
+  current_decision: Do not build a broad graph platform first.
+  why_not_ready: The policy is active, but implementation must start from one concrete owning domain and one formed product
+    target, not a broad graph platform.
+  diagram_call:
+  - one owning domain,
+  - one formed product target
+  ddd_owner: unassigned concrete domain
+  adr_requirement: ADR or accepted design required before implementation.
+  fitness_function_requirement: Ownership and dependency-direction checks required.
+  ownership_mode: Discovery until a domain owner exists.
+- id: WR-013
+  title: Scripting and runtime gameplay bridge
+  diagram_title: Scripting/runtime bridge
+  alias: SCRIPTING
+  lane: Contract
+  dependency_level: L3
+  gate: Domain contract gate
+  status: blocked_deferred
+  priority: P2
+  value: 3
+  blocker: 4
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.3
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-011
+  write_scopes:
+  - engine
+  - domain/gameplay
+  - adapters
+  validations:
+  - cargo check --workspace
+  next_evidence: Language-neutral runtime boundary and formed gameplay products.
+  current_decision: Rhai can be first adapter only after the domain contract exists.
+  why_not_ready: It depends on M6 formed procedural/gameplay product contracts and a language-neutral runtime boundary. Rhai
+    can be the first adapter only after the domain contract exists.
+  diagram_call:
+  - language-neutral contract,
+  - first adapter later
+  ddd_owner: future gameplay runtime boundary
+  adr_requirement: ADR required for scripting runtime boundary.
+  fitness_function_requirement: Adapter boundary and dependency-direction fitness functions required.
+  ownership_mode: Platform/enabling work after domain contract.
+- id: WR-014
+  title: Particles, physics, animation, and world-process product tracks
+  diagram_title: Particles / physics / animation / world processes
+  alias: M6FUTURE
+  lane: Contract
+  dependency_level: L3
+  gate: Product contract gate
+  status: blocked_deferred
+  priority: P3
+  value: 3
+  blocker: 4
+  tc: 1
+  rr_oe: 3
+  du: 3
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-001
+  write_scopes:
+  - domain
+  - engine
+  validations:
+  - cargo check --workspace
+  next_evidence: Owning domain docs and formed product contracts.
+  current_decision: Follow product-job, query snapshot, and publication substrate maturity.
+  why_not_ready: Their domain docs and formed product contracts are still missing or deferred. They follow the product-job/query
+    snapshot/publication barrier substrate.
+  diagram_call:
+  - formed product contracts
+  - and product substrate first
+  ddd_owner: unassigned future product domains
+  adr_requirement: Accepted design or ADR required per product track.
+  fitness_function_requirement: Product boundary and dependency-direction checks required.
+  ownership_mode: Discovery until domain owners exist.
+- id: WR-015
+  title: SDF prefab, character, vegetation, atmosphere, water, VFX, and influence AI drafts
+  diagram_title: SDF detail drafts
+  alias: SDFDETAIL
+  lane: Deferred
+  dependency_level: L4
+  gate: Policy deferred
+  status: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 2
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Exciter
+  dependencies:
+  - WR-014
+  write_scopes:
+  - docs-site/src/content/docs/design/deferred
+  validations:
+  - task docs:validate
+  next_evidence: Active design, ADR, or roadmap promotion.
+  current_decision: Keep deferred until product ownership and handoff contracts are promoted.
+  why_not_ready: These are explicitly deferred detail drafts. Reactivate only after the relevant product ownership, renderer/runtime
+    handoff, query policy, and authority contracts are promoted.
+  diagram_call:
+  - prefab, character, vegetation,
+  - atmosphere, water, VFX, AI
+  ddd_owner: deferred SDF product domains
+  adr_requirement: Promotion requires accepted design or ADR.
+  fitness_function_requirement: Docs lifecycle checks before implementation.
+  ownership_mode: Deferred discovery.
+- id: WR-016
+  title: Compiled-reactive UI and ECS-driven UI execution strategies
+  diagram_title: Alternate UI execution
+  alias: UIALT
+  lane: Deferred
+  dependency_level: L4
+  gate: Policy deferred
+  status: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.1
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-004
+  write_scopes:
+  - domain/ui
+  - docs-site/src/content/docs/design/deferred
+  validations:
+  - task docs:validate
+  next_evidence: Accepted ADR or active design changing the retained UI default.
+  current_decision: Keep deferred; retained UI remains the active implementation path.
+  why_not_ready: The current retained UI path is the active implementation. Alternative execution strategies require a new
+    active design or accepted ADR before code.
+  diagram_call:
+  - compiled-reactive or ECS-driven
+  - only after ADR/design promotion
+  ddd_owner: domain/ui
+  adr_requirement: Accepted ADR required to change UI execution default.
+  fitness_function_requirement: UI boundary fitness functions required before implementation.
+  ownership_mode: Deferred architecture exploration.
+- id: WR-017
+  title: Gameplay actions, powers, runtime, and power editor
+  diagram_title: Gameplay powers/actions
+  alias: POWERS
+  lane: Deferred
+  dependency_level: L4
+  gate: Policy deferred
+  status: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 2
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Exciter
+  dependencies:
+  - WR-011
+  write_scopes:
+  - domain/gameplay
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/design/deferred
+  validations:
+  - task docs:validate
+  next_evidence: Narrower gameplay graph and domain contract sequence.
+  current_decision: Keep deferred behind gameplay contract work.
+  why_not_ready: These deferred designs still need remaining decisions and must not precede the narrower gameplay graph and
+    domain contract sequence.
+  diagram_call:
+  - runtime and editor power authoring
+  - after narrower gameplay contracts
+  ddd_owner: future domain/gameplay with editor product support
+  adr_requirement: Accepted gameplay design/ADR required before implementation.
+  fitness_function_requirement: Gameplay dependency-direction and editor boundary checks required.
+  ownership_mode: Deferred stream-aligned product work.
+edges:
+- source: WR-002
+  target: WR-001
+  label: product-job substrate
+- source: WR-003
+  target: WR-001
+  label: product consumers only
+- source: WR-004
+  target: WR-001
+  label: surface/projection safety
+- source: WR-005
+  target: WR-001
+  label: status alignment
+- source: WR-001
+  target: WR-006
+  label: DRF3-DRF5 sequence
+- source: WR-003
+  target: WR-006
+  label: product-surface APIs
+- source: WR-006
+  target: WR-008
+  label: production input acceptance
+- source: WR-001
+  target: WR-007
+  label: product authority context
+- source: WR-007
+  target: WR-011
+  label: replication metadata / authority
+- source: WR-001
+  target: WR-011
+  label: formed products first
+- source: WR-012
+  target: WR-011
+  label: graph policy specialization
+- source: WR-011
+  target: WR-013
+  label: formed gameplay products first
+- source: WR-001
+  target: WR-014
+  label: shared product substrate
+- source: WR-014
+  target: WR-015
+  label: product family contracts
+- source: WR-003
+  target: WR-009
+  label: render surface foundation
+- source: WR-003
+  target: WR-010
+  label: aliases / invocations / inspection
+- source: WR-011
+  target: WR-017
+  label: narrower gameplay contracts
+- source: WR-004
+  target: WR-016
+  label: retained UI path remains default

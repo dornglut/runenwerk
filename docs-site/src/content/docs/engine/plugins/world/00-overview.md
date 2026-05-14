@@ -65,4 +65,4 @@ last_reviewed: 2026-04-27
   - collision authority misses
   - last world revision
 
-- [Module Readme](./readme)
+- [Module Readme](./README.md)

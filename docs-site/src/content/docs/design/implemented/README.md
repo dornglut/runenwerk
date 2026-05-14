@@ -5,14 +5,15 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-29
+last_reviewed: 2026-05-14
 ---
 
 # Implemented Designs
 
 Use this folder only for accepted designs that have been verified against the implementation.
 
-No implemented design documents are currently tracked in this folder.
+Implemented design documents are living architecture references that have been
+checked against code, tests, closeout evidence, and known drift.
 
 ## Planned Domain Groups
 
@@ -22,7 +23,7 @@ No implemented foundation design documents are currently tracked in this folder.
 
 ### Editor Domain
 
-No implemented editor-domain design documents are currently tracked in this folder.
+- [Surface Workflow Contract Redesign](surface-workflow-contract-redesign.md)
 
 ### UI Domain
 

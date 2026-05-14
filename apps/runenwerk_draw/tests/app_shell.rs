@@ -2,7 +2,8 @@ use std::collections::BTreeSet;
 
 use drawing::{
     CanvasCoordinate, CanvasTileId, DrawingTileFormationDiagnostic,
-    DrawingTileFormationDiagnosticCode, StrokeToolKind, ratify_drawing_document,
+    DrawingTileFormationDiagnosticCode, DrawingTileFormationPolicy, ProductQualityClass,
+    StrokeToolKind, form_drawing_ink_tiles, ratify_drawing_document,
 };
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedUiFrameResource, RenderDynamicTextureUploadRegistryResource,
@@ -19,7 +20,8 @@ use native_tablet_input::{
     NativeTabletPacket, NativeTabletSample, map_native_tablet_packet,
 };
 use runenwerk_draw::app::{
-    DRAWING_UI_SURFACE_ID, DrawingToolRouteKind, RunenwerkDrawApp, minimal_drawing_document,
+    DRAWING_UI_SURFACE_ID, DrawingInkRuntimeState, DrawingToolRouteKind, RunenwerkDrawApp,
+    minimal_drawing_document,
 };
 use runenwerk_draw::runtime::{
     DRAWING_UI_FRAME_PRODUCER_ID, DrawingHostResource, build_headless_app,
@@ -1202,6 +1204,7 @@ fn committed_ink_cache_hit_stages_products_without_job_submission() {
     let mut snapshots = QuerySnapshotRuntimeResource::default();
     let mut executor = RuntimeJobExecutorResource::with_config(RuntimeJobExecutorConfig::serial());
     let mut cache = RuntimeProductCacheResource::default();
+    app.ink_runtime_mut().set_tile_cache_budget_bytes(1);
     let start = screen_point_for_canvas(&app, 512.0, 512.0);
     let end = screen_point_for_canvas(&app, 620.0, 560.0);
 
@@ -1223,8 +1226,23 @@ fn committed_ink_cache_hit_stages_products_without_job_submission() {
     let submitted_after_first = executor.diagnostics().submitted_count;
     let cached_entries = cache.snapshot().entry_count;
     assert_eq!(cached_entries, app.ink_runtime().visible_product_count());
+    assert_eq!(
+        app.ink_runtime().tile_cache_entry_count(),
+        app.ink_runtime().visible_product_count(),
+        "current visible committed tiles stay protected even when the cache is over budget"
+    );
+    assert!(
+        app.ink_runtime().tile_cache_payload_bytes() > app.ink_runtime().tile_cache_budget_bytes()
+    );
 
     let cached_tiles = visible_tile_ids(&app);
+    let last_access_before = app
+        .ink_runtime()
+        .tile_cache_metadata()
+        .iter()
+        .map(|metadata| metadata.last_access_frame)
+        .max()
+        .unwrap_or(0);
     app.ink_runtime_mut().mark_dirty_tiles(cached_tiles.clone());
     let second_report = publish_drawing_ink_products_with_executor_and_cache(
         &mut app,
@@ -1259,6 +1277,159 @@ fn committed_ink_cache_hit_stages_products_without_job_submission() {
             .iter()
             .any(|entry| entry.summary.contains("committed ink cache hit"))
     );
+    assert!(
+        app.ink_runtime()
+            .tile_cache_metadata()
+            .iter()
+            .all(|metadata| metadata.last_access_frame > last_access_before),
+        "cache hits should refresh tile LRU metadata"
+    );
+}
+
+#[test]
+fn app_derived_tile_cache_records_preview_and_final_metadata() {
+    let mut app = RunenwerkDrawApp::new();
+    let start = screen_point_for_canvas(&app, 512.0, 512.0);
+    let end = screen_point_for_canvas(&app, 1_420.0, 1_160.0);
+    draw_stroke(&mut app, start, end);
+    let document = app
+        .document()
+        .expect("stroke commit should keep the document open")
+        .clone();
+    let preview_policy = DrawingTileFormationPolicy::preview();
+    let final_policy = DrawingTileFormationPolicy::final_quality();
+    let preview = form_drawing_ink_tiles(&document, preview_policy);
+    let final_quality = form_drawing_ink_tiles(&document, final_policy);
+    assert!(preview.is_accepted(), "{:?}", preview.diagnostics);
+    assert!(
+        final_quality.is_accepted(),
+        "{:?}",
+        final_quality.diagnostics
+    );
+    assert!(!preview.products.is_empty());
+    assert!(!final_quality.products.is_empty());
+
+    let mut ink = DrawingInkRuntimeState::default();
+    ink.record_cached_products(preview.products.iter());
+    ink.record_cached_products(final_quality.products.iter());
+
+    let metadata = ink.tile_cache_metadata();
+    let preview_metadata = metadata
+        .iter()
+        .find(|metadata| metadata.quality_class == ProductQualityClass::Preview)
+        .expect("preview cache metadata should be recorded");
+    let preview_product = preview
+        .products
+        .iter()
+        .find(|product| product.metadata.tile_id == preview_metadata.tile_id)
+        .expect("preview metadata should point at a preview product");
+    assert_eq!(
+        preview_metadata.descriptor_generation,
+        preview_product.descriptor_generation
+    );
+    assert_eq!(
+        preview_metadata.source_revision,
+        preview_product.metadata.source_document_revision
+    );
+    assert_eq!(
+        preview_metadata.formation_version,
+        preview_policy.formation_version
+    );
+    assert_eq!(
+        preview_metadata.payload_size_bytes,
+        preview_product.payload.byte_len()
+    );
+
+    let final_metadata = metadata
+        .iter()
+        .find(|metadata| metadata.quality_class == ProductQualityClass::Final)
+        .expect("final cache metadata should be recorded");
+    let final_product = final_quality
+        .products
+        .iter()
+        .find(|product| product.metadata.tile_id == final_metadata.tile_id)
+        .expect("final metadata should point at a final product");
+    assert_eq!(
+        final_metadata.descriptor_generation,
+        final_product.descriptor_generation
+    );
+    assert_eq!(
+        final_metadata.source_revision,
+        final_product.metadata.source_document_revision
+    );
+    assert_eq!(
+        final_metadata.formation_version,
+        final_policy.formation_version
+    );
+    assert_eq!(
+        final_metadata.payload_size_bytes,
+        final_product.payload.byte_len()
+    );
+}
+
+#[test]
+fn app_derived_tile_cache_evicts_least_recent_unprotected_tile() {
+    let products = formed_committed_products_for_cache_tests();
+    assert!(
+        products.len() >= 3,
+        "cache eviction coverage needs at least three formed tiles"
+    );
+    let payload_size = products[0].payload.byte_len();
+    let mut ink = DrawingInkRuntimeState::default();
+    ink.set_tile_cache_budget_bytes(payload_size * 2);
+    ink.record_cached_products(products[..2].iter());
+    assert_eq!(ink.tile_cache_entry_count(), 2);
+
+    let first_source_key = products[0].cache_key.clone();
+    let first_tile = products[0].metadata.tile_id;
+    let second_tile = products[1].metadata.tile_id;
+    let third_tile = products[2].metadata.tile_id;
+    assert!(
+        ink.cached_product_for_source_key(&first_source_key)
+            .is_some()
+    );
+
+    ink.record_cached_products([&products[2]]);
+    let cached_tiles = ink
+        .tile_cache_metadata()
+        .iter()
+        .map(|metadata| metadata.tile_id)
+        .collect::<BTreeSet<_>>();
+
+    assert!(cached_tiles.contains(&first_tile));
+    assert!(cached_tiles.contains(&third_tile));
+    assert!(
+        !cached_tiles.contains(&second_tile),
+        "the older unprotected tile should be evicted before the refreshed tile"
+    );
+    assert!(ink.tile_cache_payload_bytes() <= ink.tile_cache_budget_bytes());
+}
+
+#[test]
+fn app_derived_tile_cache_keeps_pending_candidates_over_budget() {
+    let products = formed_committed_products_for_cache_tests();
+    assert!(
+        products.len() >= 2,
+        "candidate protection coverage needs multiple formed tiles"
+    );
+    let payload_size = products[0].payload.byte_len();
+    let mut ink = DrawingInkRuntimeState::default();
+    ink.set_tile_cache_budget_bytes(payload_size);
+    ink.record_candidate_products(
+        "candidate-cache-protection".to_string(),
+        products.iter().map(|product| product.metadata.tile_id),
+        products.clone(),
+        Vec::new(),
+        Vec::new(),
+    );
+    ink.record_cached_products(products.iter());
+
+    assert_eq!(
+        ink.tile_cache_entry_count(),
+        products.len(),
+        "pending candidate tiles should not be evicted to satisfy the memory budget"
+    );
+    assert!(ink.tile_cache_payload_bytes() > ink.tile_cache_budget_bytes());
 }
 
 #[test]
@@ -1424,6 +1595,20 @@ fn publish_visible_ink_until_clean(
             &barrier(BarrierKind::QuerySnapshotPublication),
         );
     }
+}
+
+fn formed_committed_products_for_cache_tests() -> Vec<drawing::DrawingInkTileProduct> {
+    let mut app = RunenwerkDrawApp::new();
+    let start = screen_point_for_canvas(&app, 64.0, 64.0);
+    let end = screen_point_for_canvas(&app, 1_920.0, 1_760.0);
+    draw_stroke(&mut app, start, end);
+    let formation = form_drawing_ink_tiles(
+        app.document()
+            .expect("stroke commit should keep the document open"),
+        DrawingTileFormationPolicy::preview(),
+    );
+    assert!(formation.is_accepted(), "{:?}", formation.diagnostics);
+    formation.products
 }
 
 fn ink_upload_count(app: &engine::App) -> usize {

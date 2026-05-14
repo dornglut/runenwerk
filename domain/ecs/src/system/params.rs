@@ -123,8 +123,8 @@ impl<T: 'static> BroadcastReader<T> {
         // Safety: extraction guarantees a live world pointer during system execution.
         let (messages, next_sequence) = unsafe {
             self.world
-                .as_ref()
-                .read_broadcast_since::<T>(state.next_sequence)
+                .as_mut()
+                .read_broadcast_since_for_consumer::<T>(state.next_sequence)
         };
         state.next_sequence = next_sequence;
         telemetry::record_event_reader(start.elapsed().as_nanos() as u64, messages.len() as u64);

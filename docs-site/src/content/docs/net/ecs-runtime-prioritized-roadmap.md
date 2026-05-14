@@ -195,7 +195,7 @@ Primary ownership locations:
 Checklist:
 
 - [x] per-stream/per-queue/per-tick-buffer counters.
-- [ ] consumer lag and backpressure counters.
+- [x] consumer lag and backpressure counters.
 - [x] correction/replay counters in net diagnostics resources (`PredictionDiagnostics` / `ReplicationDiagnostics`).
 
 ## Priority 3: Advanced / Later

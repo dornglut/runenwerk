@@ -159,11 +159,11 @@ Required Validation
 
 For documentation-only refactors, prefer:
 
-python tools/docs/validate_docs.py
+task docs:validate
 
 If the repository currently uses python3, use:
 
-python3 tools/docs/validate_docs.py
+task docs:validate
 
 If validation cannot be run, state that explicitly.
 

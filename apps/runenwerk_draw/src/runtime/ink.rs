@@ -411,11 +411,9 @@ fn try_publish_cached_drawing_ink_products(
     let mut products = Vec::with_capacity(dirty_tiles.len());
     for tile_id in &dirty_tiles {
         let source_key = drawing_committed_ink_tile_source_cache_key(&document, policy, *tile_id)?;
-        let product_key = app
-            .ink_runtime()
-            .cached_product_key_for_source_key(&source_key)?
-            .clone();
-        let product = app.ink_runtime().cached_product(&product_key)?.clone();
+        let (_product_key, product) = app
+            .ink_runtime_mut()
+            .cached_product_for_source_key(&source_key)?;
         let identity = drawing_ink_tile_product_cache_identity(&product);
         let decision = cache.lookup(&identity);
         match decision.kind {
@@ -618,11 +616,8 @@ fn publish_formed_drawing_ink_products(
     let report = publications.publish_staged(barrier);
 
     if report.published_count > 0 && report.rejected_count == 0 {
-        if let Some(cache) = cache {
-            app.ink_runtime_mut()
-                .record_cached_products(formation.products.iter());
-            cache.record_accepted_descriptors(contracts.output_descriptors.iter().cloned());
-        }
+        let cache_products = formation.products.clone();
+        let cache_descriptors = contracts.output_descriptors.clone();
         app.ink_runtime_mut().record_candidate_products(
             formation_key.clone(),
             dirty_tiles,
@@ -632,6 +627,11 @@ fn publish_formed_drawing_ink_products(
         );
         app.ink_runtime_mut()
             .record_published_descriptors(formation_key, contracts.output_descriptors);
+        if let Some(cache) = cache {
+            app.ink_runtime_mut()
+                .record_cached_products(cache_products.iter());
+            cache.record_accepted_descriptors(cache_descriptors);
+        }
     } else if report.rejected_count > 0 {
         let clear_preview_products = should_clear_failed_preview(app);
         app.ink_runtime_mut().record_failed_generation(

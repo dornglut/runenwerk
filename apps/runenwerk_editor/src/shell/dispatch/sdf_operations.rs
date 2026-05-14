@@ -6,6 +6,7 @@ use editor_shell::{
     SdfOperationDomainMutation, SdfOperationSessionMutation, StructuralCommandTarget,
     ToolSurfaceKind,
 };
+use ui_surface::SurfaceCapability;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::shell::RunenwerkEditorShellState;
@@ -17,7 +18,11 @@ pub(crate) fn dispatch_session_mutation(
     target: StructuralCommandTarget,
     mutation: SdfOperationSessionMutation,
 ) -> Result<(), EditorMutationError> {
-    ensure_sdf_surface(shell_state, target)?;
+    ensure_sdf_surface(
+        shell_state,
+        target,
+        &[SurfaceCapability::Observe, SurfaceCapability::Interact],
+    )?;
     match mutation {
         SdfOperationSessionMutation::SelectLayer { layer_id } => {
             app.sdf_operation_workspace_mut().select_layer(layer_id)
@@ -34,7 +39,15 @@ pub(crate) fn dispatch_domain_mutation(
     target: StructuralCommandTarget,
     mutation: SdfOperationDomainMutation,
 ) -> Result<(), EditorMutationError> {
-    ensure_sdf_surface(shell_state, target)?;
+    ensure_sdf_surface(
+        shell_state,
+        target,
+        &[
+            SurfaceCapability::Observe,
+            SurfaceCapability::Interact,
+            SurfaceCapability::RequestMutation,
+        ],
+    )?;
     match mutation {
         SdfOperationDomainMutation::ApplyCommand { intent } => {
             app.sdf_operation_workspace_mut().apply_command(intent)?;
@@ -75,6 +88,7 @@ pub(crate) fn dispatch_domain_mutation(
 fn ensure_sdf_surface(
     shell_state: Option<&RunenwerkEditorShellState>,
     target: StructuralCommandTarget,
+    required_capabilities: &[SurfaceCapability],
 ) -> Result<(), EditorMutationError> {
     let Some(contract) =
         resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::FieldLayerStack)
@@ -87,12 +101,19 @@ fn ensure_sdf_surface(
         contract.tool_surface_kind,
         ToolSurfaceKind::FieldLayerStack | ToolSurfaceKind::SdfGraphCanvas
     ) {
-        Ok(())
     } else {
-        Err(EditorMutationError::session_rejected(
+        return Err(EditorMutationError::session_rejected(
             "SDF operation mutation targeted a non-SDF surface",
-        ))
+        ));
     }
+    for required_capability in required_capabilities {
+        if !contract.capabilities.allows(*required_capability) {
+            return Err(EditorMutationError::session_rejected(
+                "SDF operation mutation missing required surface capability",
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -106,6 +127,30 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(1).unwrap(),
             active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(2).unwrap()),
             tab_stack_id: TabStackId::try_from_raw(3).unwrap(),
+        }
+    }
+
+    fn target_for_surface_kind(
+        shell_state: &RunenwerkEditorShellState,
+        kind: ToolSurfaceKind,
+    ) -> StructuralCommandTarget {
+        let (panel_instance_id, tool_surface_id) = shell_state
+            .workspace_state()
+            .panels()
+            .filter_map(|panel| {
+                let tool_surface_id = panel.active_tool_surface?;
+                let surface = shell_state
+                    .workspace_state()
+                    .tool_surface(tool_surface_id)?;
+                (surface.tool_surface_kind == kind).then_some((panel.id, tool_surface_id))
+            })
+            .next()
+            .expect("default shell state should contain requested surface kind");
+
+        StructuralCommandTarget {
+            panel_instance_id,
+            active_tool_surface: Some(tool_surface_id),
+            tab_stack_id: TabStackId::try_from_raw(1).unwrap(),
         }
     }
 
@@ -215,6 +260,27 @@ mod tests {
             app.asset_catalog_runtime()
                 .selected_field_product()
                 .is_some()
+        );
+    }
+
+    #[test]
+    fn sdf_operation_dispatch_rejects_non_sdf_surface_target() {
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let console_target = target_for_surface_kind(&shell_state, ToolSurfaceKind::Console);
+        let layer_id = app.sdf_operation_workspace().document().layers()[0].id;
+
+        let error = dispatch_session_mutation(
+            &mut app,
+            Some(&shell_state),
+            console_target,
+            SdfOperationSessionMutation::SelectLayer { layer_id },
+        )
+        .expect_err("SDF dispatch must reject non-SDF surface targets");
+
+        assert_eq!(
+            error.message,
+            "SDF operation mutation targeted a non-SDF surface",
         );
     }
 }

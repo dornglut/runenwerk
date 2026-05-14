@@ -99,7 +99,15 @@ For planning, implementation, routine selection, and closeout shape, follow `doc
 For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
 
 For architecture-sensitive changes, run the architecture governance review before implementation when the task may affect dependency direction, domain ownership, ADR-worthy decisions, migration strategy, tradeoffs, enforcement, or ownership mode.
-Use `./workflow architecture-governance --task "<task>" --scope "<scope>"` as the kickoff checklist when shell support is available, or `python3 tools/workflow/ai_task.py architecture-governance --task "<task>" --scope "<scope>"` directly.
+Use `task ai:architecture-governance -- --task "<task>" --scope "<scope>"` as the kickoff checklist.
+
+For approved concurrent roadmap work, use the parallel roadmap batch routine.
+The coordinator must first propose candidate roadmap rows, disjoint write
+scopes, worker prompts, validation, and closeout docs, then wait for explicit
+user approval before spawning or coordinating workers.
+Use `docs-site/src/content/docs/workspace/roadmap-items.yaml` as the structured
+roadmap source and `task roadmap:render` to update
+generated roadmap tables and PUML after roadmap evidence changes.
 
 Treat workflow output as prompt/checklist/gate automation. It does not replace repository inspection, accepted ADR/design gates, validation, or human/agent judgment.
 
@@ -110,7 +118,7 @@ For documentation moves, renames, pruning, or restructuring, follow `docs-site/s
 For documentation-only validation, run:
 
 ```text
-python3 tools/docs/validate_docs.py
+task docs:validate
 ```
 
 Raw benchmark artifacts should live in dedicated artifact folders near the owning crate, not mixed into prose docs.

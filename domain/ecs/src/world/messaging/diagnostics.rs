@@ -18,6 +18,11 @@ pub struct BroadcastDiagnosticsSnapshot {
     pub drained: u64,
     pub dropped: u64,
     pub pending: usize,
+    pub consumer_reads: u64,
+    pub consumer_lagged_reads: u64,
+    pub consumer_missed_messages: u64,
+    pub consumer_lag_latest: u64,
+    pub consumer_lag_max: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -82,6 +87,11 @@ impl World {
                 drained: stream.drained,
                 dropped: stream.dropped,
                 pending: stream.messages_len_any(),
+                consumer_reads: stream.consumer_reads,
+                consumer_lagged_reads: stream.consumer_lagged_reads,
+                consumer_missed_messages: stream.consumer_missed_messages,
+                consumer_lag_latest: stream.consumer_lag_latest,
+                consumer_lag_max: stream.consumer_lag_max,
             })
             .collect::<Vec<_>>();
         broadcasts.sort_by_key(|entry| entry.key);

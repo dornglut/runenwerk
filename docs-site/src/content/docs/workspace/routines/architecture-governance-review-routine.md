@@ -85,7 +85,7 @@ For a review-only pass, validation is normally inspection-only. If documentation
 changes are made after the review, run:
 
 ```text
-python3 tools/docs/validate_docs.py
+task docs:validate
 ```
 
 If code changes follow, run the focused tests or architecture guards named by

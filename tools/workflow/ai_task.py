@@ -149,6 +149,64 @@ def build_shapes() -> dict[str, WorkflowShape]:
                 "Evidence is too weak to promote the work beyond discovery.",
             ),
         ),
+        "parallel-roadmap-batch": WorkflowShape(
+            name="parallel-roadmap-batch",
+            description="Propose, approve, fan out, integrate, and close out parallel roadmap implementation batches.",
+            primary_docs=common_docs
+            + (
+                "docs-site/src/content/docs/workspace/parallel-roadmap-batch-automation.md",
+                "docs-site/src/content/docs/workspace/roadmap-items.yaml",
+                "docs-site/src/content/docs/workspace/prompt-templates/parallel-roadmap-batch.md",
+                "docs-site/src/content/docs/workspace/routines/parallel-roadmap-batch-routine.md",
+                "docs-site/src/content/docs/workspace/roadmap-decision-register.md",
+                "docs-site/src/content/docs/workspace/design-implementation-triage.md",
+                "docs-site/src/content/docs/workspace/repo-execution-priority-checklist.md",
+                "docs-site/src/content/docs/workspace/architecture-governance-review.md",
+            ),
+            prompt=dedent(
+                """\
+                Coordinate a Runenwerk parallel roadmap batch.
+
+                Batch goal:
+                - {task}
+
+                Scope:
+                - {scope}
+
+                Requirements:
+                1. Read AGENTS.md and AI_GUIDE.md first, then the referenced root docs.
+                2. Inspect git state, roadmap docs, owning roadmaps, and current code truth before proposing work.
+                3. Treat roadmap-items.yaml as the structured roadmap source of truth; use roadmap-decision-register.md and triage as generated/readable views.
+                4. Run or account for task roadmap:validate before selecting candidates.
+                5. Phase 1 is proposal-only: identify parallelizable candidates, write scopes, worker prompts, validations, closeout docs, and stop conditions.
+                6. Stop for explicit user approval before implementation.
+                7. After approval, prefer isolated git worktrees or worker branches; if workers share one dirty workspace, use one integration branch and review the combined diff.
+                8. Fan out only disjoint bounded work. Do not mix blocked B5 designs or unaccepted ADR/design work into implementation.
+                9. Require every worker to report exact files, functions/modules, validation, blockers, and deferred work.
+                10. Integrate worker outputs by ownership area and run focused plus broad validation when cross-domain contracts changed.
+                11. Update roadmap-items.yaml first after integration, render generated roadmap docs, then update priority checklist and owning roadmaps.
+                12. Report completed slices, remaining blockers, and the next recommended batch.
+                """
+            ),
+            validation=(
+                "task roadmap:validate",
+                "task roadmap:check",
+                "task puml:validate",
+                "task docs:validate",
+                "cargo fmt --all -- --check",
+                "cargo check --workspace",
+                "cargo test -p <changed-crate>",
+                "./quiet_full_gate.sh  # when the batch changes broad workspace behavior",
+            ),
+            stop_conditions=(
+                "The user has not approved the batch proposal.",
+                "Candidate write scopes overlap in a way that creates merge risk.",
+                "A candidate requires an unaccepted ADR or design.",
+                "A candidate crosses dependency levels without an explicit sequencing reason.",
+                "Current code truth contradicts the roadmap enough to invalidate the batch.",
+                "Worker outputs cannot be integrated without reverting unrelated work.",
+            ),
+        ),
         "implementation": WorkflowShape(
             name="implementation",
             description="Make a bounded code/docs change and verify it.",
@@ -476,7 +534,7 @@ def main() -> int:
         if args.shape is None and not args.list:
             print("")
             print("Pass one shape to generate a prompt, for example:")
-            print('  python3 tools/workflow/ai_task.py implementation --task "<task>" --scope "<scope>"')
+            print('  task ai:implementation -- --task "<task>" --scope "<scope>"')
         return 0
 
     print(render_shape(shapes[args.shape], args.task, args.scope, args.roadmap))

@@ -46,12 +46,31 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 ## Now (Current Cross-Repo Priorities)
 
-- [ ] `WR-001`: Continue post-Phase 6D product-job follow-ups from the runtime product job and Draw roadmaps. Status: SDF-first Phase 6D / M6.2C is complete; next work should not reopen procgen bake/rollback unless validation regresses or the owning roadmap accepts a new procgen slice (source: `workspace/sdf-first-execution-roadmap.md`, `engine/roadmaps/runtime-product-job-executor-roadmap.md`, and `apps/runenwerk-draw/roadmap.md`).
-- [ ] `WR-002`: Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) as inputs to the SDF-first execution fabric. Status: remaining lifecycle/finalization, deterministic registration/plan reporting, and diagnostics work now feeds product jobs, query snapshots, and publication barriers (source: `workspace/sdf-first-execution-roadmap.md` and `net/ecs-runtime-prioritized-roadmap.md`).
-- [ ] `WR-003`: Execute render immediate remaining phases only through product-selection and derived GPU-residency contracts. Status: backend-neutral `RenderProductSelection` producers and logical derived GPU residency are in place; `R4` binding model expansion, `R6` boids proof, and `R7` SDF renderer rebuild must consume those contracts rather than bypassing them (source: `workspace/sdf-first-execution-roadmap.md` and `engine/plugins/render/docs/roadmap.md`).
-- [ ] `WR-004`: Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: active; current guard suites pass (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
-- [ ] `WR-005`: Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: active; docs validation currently passes (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
+- [ ] `WR-001`: Continue post-Phase 6D product-job follow-ups from the runtime product job and Draw roadmaps. Status: 2026-05-14 parallel batch completed the Draw DRF2 app-derived tile cache slice: cache metadata, 512 MiB default budget, LRU eviction, protected visible/pending/last-good tiles, and cache-hit access refresh. Next work should choose the next bounded Draw/product-job slice without reopening procgen bake/rollback unless validation regresses or an owning roadmap accepts a new procgen slice (source: `workspace/sdf-first-execution-roadmap.md`, `engine/roadmaps/runtime-product-job-executor-roadmap.md`, and `apps/runenwerk-draw/roadmap.md`).
+- [ ] `WR-002`: Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) as inputs to the SDF-first execution fabric. Status: 2026-05-14 parallel batch completed the M5 consumer lag/backpressure diagnostics slice for ECS broadcast consumers; F2 lifecycle/finalization and F3 deterministic registration/plan reporting remain open (source: `workspace/sdf-first-execution-roadmap.md` and `net/ecs-runtime-prioritized-roadmap.md`).
+- [ ] `WR-003`: Execute render immediate remaining phases only through product-selection and derived GPU-residency contracts. Status: 2026-05-14 parallel batch tightened prepared render product selection so one prepared view cannot be owned by two producers; R4/R6/R7 code-truth audit found current proofs on the compiled flow path, so later render work remains contract-following support rather than renderer-owned world truth (source: `workspace/sdf-first-execution-roadmap.md` and `engine/plugins/render/docs/roadmap.md`).
+- [ ] `WR-004`: Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: 2026-05-14 parallel batch added entity-table and SDF operation surface routing/capability guard coverage; keep this always-on while editor surface work lands (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
+- [ ] `WR-005`: Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: 2026-05-14 parallel batch moved the implemented surface workflow contract redesign from active to implemented lifecycle and updated inbound links; more design lifecycle cleanup remains available when docs capacity exists (source: `domain/ui/roadmap.md`, `workspace/roadmap-index.md`, and `design/implemented/surface-workflow-contract-redesign.md`).
 - [ ] Keep architecture guards and docs synchronized while these tracks land (source: `workspace/roadmap-index.md`).
+
+## Latest Parallel Batch Closeout
+
+The 2026-05-14 `codex/roadmap-parallel-integration` batch completed bounded
+slices for `WR-001` through `WR-005` and validated them with focused tests,
+docs validation, formatting, `cargo check --workspace`, and broad `engine` and
+`runenwerk_editor` test passes.
+
+Remaining near-term blockers:
+
+- `WR-001`: DRF3 product-surface bridge, GPU proof, GPU promotion/fallback, and
+  persistent sidecars remain later Draw phases.
+- `WR-002`: F2 runtime-owned frame finalization and F3 deterministic plan
+  reporting remain open.
+- `WR-003`: further render work should continue through product-selection,
+  dynamic target, and derived residency contracts.
+- `WR-004`: guard work remains always-on.
+- `WR-005`: additional active-design lifecycle candidates still need evidence
+  review before promotion.
 
 ## Other Tracked And Gated Work
 

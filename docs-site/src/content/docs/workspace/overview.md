@@ -26,8 +26,14 @@ This page is a lightweight orientation map for the active Runenwerk repository.
 ## Start Here
 
 - Workspace agent rules: [`agents.md`](agents.md)
+- First-clone toolchain bootstrap: [`toolchain-bootstrap.md`](toolchain-bootstrap.md)
 - Planning and implementation workflow: [`planning-and-implementation-workflow.md`](planning-and-implementation-workflow.md)
 - Roadmap planning methods: [`planning-methods.md`](planning-methods.md)
+- Structured roadmap source: [`roadmap-items.yaml`](roadmap-items.yaml)
+- Roadmap JSON Schema: [`schemas/roadmap-items.schema.json`](schemas/roadmap-items.schema.json)
+- Parallel roadmap batch automation: [`parallel-roadmap-batch-automation.md`](parallel-roadmap-batch-automation.md)
+- Codex roadmap orchestration target: [`diagrams/codex-roadmap-orchestration-target.puml`](diagrams/codex-roadmap-orchestration-target.puml)
+- Parallel batch automation diagram: [`diagrams/parallel-roadmap-batch-automation.puml`](diagrams/parallel-roadmap-batch-automation.puml)
 - Architecture governance review: [`architecture-governance-review.md`](architecture-governance-review.md)
 - Workspace routines: [`routines/README.md`](routines/README.md)
 - Workspace roadmap index: [`roadmap-index.md`](roadmap-index.md)

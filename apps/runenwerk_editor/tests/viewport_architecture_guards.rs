@@ -1201,6 +1201,48 @@ fn surface_dispatch_facade_delegates_to_surface_handlers() {
 }
 
 #[test]
+fn surface_session_mutations_are_structurally_gated_before_session_state_access() {
+    let entity_table =
+        read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/entity_table.rs");
+    let inspector = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/inspector.rs");
+    let viewport = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/viewport.rs");
+    let sdf_operations =
+        read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/sdf_operations.rs");
+
+    for (surface, source, expected_kind_marker) in [
+        (
+            "entity_table",
+            &entity_table,
+            "ToolSurfaceKind::EntityTable",
+        ),
+        ("inspector", &inspector, "ToolSurfaceKind::Inspector"),
+        ("viewport", &viewport, "ToolSurfaceKind::Viewport"),
+    ] {
+        assert!(
+            source.contains("resolve_surface_command_contract")
+                && source.contains(expected_kind_marker)
+                && source.contains("surface-kind mismatch")
+                && source.contains("SurfaceCapability::Observe")
+                && source.contains("SurfaceCapability::Interact"),
+            "{surface} session mutations must resolve the structural target, reject wrong surface kinds, and gate interactive state changes by capability",
+        );
+    }
+    assert!(
+        !entity_table.contains(
+            "resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::EntityTable).is_none()"
+        ),
+        "entity-table session dispatch must not treat any existing active tool surface as an entity-table session target",
+    );
+    assert!(
+        sdf_operations.contains("ToolSurfaceKind::FieldLayerStack")
+            && sdf_operations.contains("ToolSurfaceKind::SdfGraphCanvas")
+            && sdf_operations.contains("SurfaceCapability::RequestMutation")
+            && sdf_operations.contains("contract.capabilities.allows"),
+        "SDF operation dispatch must stay routed to SDF-owned surfaces and require mutation capability for domain changes",
+    );
+}
+
+#[test]
 fn ui_definition_does_not_import_editor_provider_behavior() {
     let sources = read_workspace_source_tree("domain/ui/ui_definition/src");
     let forbidden_terms = [

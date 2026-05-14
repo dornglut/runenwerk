@@ -48,6 +48,11 @@ pub struct BroadcastStreamStats {
     pub drained: u64,
     pub dropped: u64,
     pub pending: usize,
+    pub consumer_reads: u64,
+    pub consumer_lagged_reads: u64,
+    pub consumer_missed_messages: u64,
+    pub consumer_lag_latest: u64,
+    pub consumer_lag_max: u64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -95,6 +100,11 @@ pub(crate) struct BroadcastStreamStorage {
     pub(super) emitted: u64,
     pub(super) drained: u64,
     pub(super) dropped: u64,
+    pub(super) consumer_reads: u64,
+    pub(super) consumer_lagged_reads: u64,
+    pub(super) consumer_missed_messages: u64,
+    pub(super) consumer_lag_latest: u64,
+    pub(super) consumer_lag_max: u64,
 }
 
 impl BroadcastStreamStorage {
@@ -129,6 +139,11 @@ impl BroadcastStreamStorage {
             emitted: 0,
             drained: 0,
             dropped: 0,
+            consumer_reads: 0,
+            consumer_lagged_reads: 0,
+            consumer_missed_messages: 0,
+            consumer_lag_latest: 0,
+            consumer_lag_max: 0,
         }
     }
 
@@ -178,6 +193,20 @@ impl BroadcastStreamStorage {
             .start_sequence
             .saturating_add(removed)
             .min(self.next_sequence);
+    }
+
+    pub(super) fn record_consumer_read_from(&mut self, sequence: u64) {
+        let clamped_sequence = sequence.min(self.next_sequence);
+        let lag = self.next_sequence.saturating_sub(clamped_sequence);
+        let missed = self.start_sequence.saturating_sub(sequence);
+
+        self.consumer_reads = self.consumer_reads.saturating_add(1);
+        self.consumer_lag_latest = lag;
+        self.consumer_lag_max = self.consumer_lag_max.max(lag);
+        if lag > 0 {
+            self.consumer_lagged_reads = self.consumer_lagged_reads.saturating_add(1);
+        }
+        self.consumer_missed_messages = self.consumer_missed_messages.saturating_add(missed);
     }
 }
 
@@ -304,14 +333,16 @@ impl World {
             .unwrap_or(&[])
     }
 
-    pub(crate) fn read_broadcast_since<T: 'static>(&self, sequence: u64) -> (&[T], u64) {
-        let Some(stream) = self.broadcast_streams.get(&TypeId::of::<T>()) else {
+    pub(crate) fn read_broadcast_since_for_consumer<T: 'static>(
+        &mut self,
+        sequence: u64,
+    ) -> (&[T], u64) {
+        let Some(stream) = self.broadcast_streams.get_mut(&TypeId::of::<T>()) else {
             return (&[], 0);
         };
-        (
-            stream.messages_ref_since::<T>(sequence),
-            stream.next_sequence,
-        )
+        let next_sequence = stream.next_sequence;
+        stream.record_consumer_read_from(sequence);
+        (stream.messages_ref_since::<T>(sequence), next_sequence)
     }
 
     pub fn drain_broadcast_admin<T: 'static>(&mut self) -> Vec<T> {
@@ -366,6 +397,11 @@ impl World {
                 drained: stream.drained,
                 dropped: stream.dropped,
                 pending: stream.messages_ref::<T>().len(),
+                consumer_reads: stream.consumer_reads,
+                consumer_lagged_reads: stream.consumer_lagged_reads,
+                consumer_missed_messages: stream.consumer_missed_messages,
+                consumer_lag_latest: stream.consumer_lag_latest,
+                consumer_lag_max: stream.consumer_lag_max,
             })
     }
 

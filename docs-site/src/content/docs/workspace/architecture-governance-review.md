@@ -11,6 +11,7 @@ related:
   - ./planning-and-implementation-workflow.md
   - ./prompt-templates/architecture-governance-review.md
   - ./routines/architecture-governance-review-routine.md
+  - ./diagrams/design-intake-roadmap-automation.puml
   - ./roadmap-decision-register.md
   - ./design-implementation-triage.md
   - ../guidelines/domain-map.md
@@ -103,7 +104,7 @@ change one of those long-term decisions.
 
 The current enforcement stack already includes:
 
-- `python tools/docs/validate_docs.py`;
+- `task docs:validate`;
 - `./quiet_full_gate.sh`;
 - Rust architecture guard tests such as editor viewport and runtime boundary
   guards;
@@ -186,11 +187,14 @@ strategy, tradeoffs, enforcement, or ownership mode.
 - Prompt template: [prompt-templates/architecture-governance-review.md](./prompt-templates/architecture-governance-review.md)
 - Routine: [routines/architecture-governance-review-routine.md](./routines/architecture-governance-review-routine.md)
 - Workflow helper:
-  `python3 tools/workflow/ai_task.py architecture-governance --task "<task>" --scope "<scope>"`
+  `task ai:architecture-governance -- --task "<task>" --scope "<scope>"`
 
 This automation may generate prompts, checklists, first commands, validation
 expectations, and stop conditions. It must not bypass repository inspection,
 accepted ADR/design gates, or human/agent review of architecture decisions.
+
+Design intake into the roadmap system is shown in
+[design-intake-roadmap-automation.puml](./diagrams/design-intake-roadmap-automation.puml).
 
 ## References
 

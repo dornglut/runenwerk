@@ -69,7 +69,7 @@ Required updates:
 - Preserve deferred-work boundaries.
 
 Validation:
-- Run python3 tools/docs/validate_docs.py.
+- Run task docs:validate.
 - Run ./quiet_full_gate.sh when code or workspace behavior changed.
 
 Output:

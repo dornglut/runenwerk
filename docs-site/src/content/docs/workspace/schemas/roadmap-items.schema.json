@@ -1,0 +1,322 @@
+{
+  "$defs": {
+    "RenderTargets": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_register": {
+          "title": "Decision Register",
+          "type": "string"
+        },
+        "dependency_roadmap": {
+          "title": "Dependency Roadmap",
+          "type": "string"
+        },
+        "triage": {
+          "title": "Triage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_register",
+        "dependency_roadmap",
+        "triage"
+      ],
+      "title": "RenderTargets",
+      "type": "object"
+    },
+    "RoadmapEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "label"
+      ],
+      "title": "RoadmapEdge",
+      "type": "object"
+    },
+    "RoadmapItem": {
+      "additionalProperties": false,
+      "properties": {
+        "adr_requirement": {
+          "title": "Adr Requirement",
+          "type": "string"
+        },
+        "alias": {
+          "title": "Alias",
+          "type": "string"
+        },
+        "blocker": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Blocker",
+          "type": "integer"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "current_call": {
+          "default": "",
+          "title": "Current Call",
+          "type": "string"
+        },
+        "current_decision": {
+          "title": "Current Decision",
+          "type": "string"
+        },
+        "ddd_owner": {
+          "title": "Ddd Owner",
+          "type": "string"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "dependency_level": {
+          "enum": [
+            "L0",
+            "L1",
+            "L2",
+            "L3",
+            "L4"
+          ],
+          "title": "Dependency Level",
+          "type": "string"
+        },
+        "diagram_call": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Diagram Call",
+          "type": "array"
+        },
+        "diagram_title": {
+          "title": "Diagram Title",
+          "type": "string"
+        },
+        "du": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Du",
+          "type": "integer"
+        },
+        "effort": {
+          "title": "Effort",
+          "type": "integer"
+        },
+        "expected_score": {
+          "title": "Expected Score",
+          "type": "number"
+        },
+        "first_move": {
+          "default": "",
+          "title": "First Move",
+          "type": "string"
+        },
+        "fitness_function_requirement": {
+          "title": "Fitness Function Requirement",
+          "type": "string"
+        },
+        "gate": {
+          "title": "Gate",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kano": {
+          "title": "Kano",
+          "type": "string"
+        },
+        "lane": {
+          "title": "Lane",
+          "type": "string"
+        },
+        "main_blocker": {
+          "default": "",
+          "title": "Main Blocker",
+          "type": "string"
+        },
+        "next_evidence": {
+          "title": "Next Evidence",
+          "type": "string"
+        },
+        "ownership_mode": {
+          "title": "Ownership Mode",
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "rice": {
+          "title": "Rice",
+          "type": "string"
+        },
+        "rr_oe": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Rr Oe",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "implement_now",
+            "ready_next",
+            "blocked_deferred"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tc": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Tc",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "validations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Validations",
+          "type": "array"
+        },
+        "value": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Value",
+          "type": "integer"
+        },
+        "why_not_ready": {
+          "default": "",
+          "title": "Why Not Ready",
+          "type": "string"
+        },
+        "write_scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Write Scopes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "diagram_title",
+        "alias",
+        "lane",
+        "dependency_level",
+        "gate",
+        "status",
+        "priority",
+        "value",
+        "blocker",
+        "tc",
+        "rr_oe",
+        "du",
+        "effort",
+        "confidence",
+        "expected_score",
+        "rice",
+        "kano",
+        "next_evidence",
+        "current_decision",
+        "ddd_owner",
+        "adr_requirement",
+        "fitness_function_requirement",
+        "ownership_mode"
+      ],
+      "title": "RoadmapItem",
+      "type": "object"
+    },
+    "RoadmapMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "last_reviewed": {
+          "title": "Last Reviewed",
+          "type": "string"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "last_reviewed",
+        "owner"
+      ],
+      "title": "RoadmapMeta",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/RoadmapEdge"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/RoadmapItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "render": {
+      "$ref": "#/$defs/RenderTargets"
+    },
+    "roadmap": {
+      "$ref": "#/$defs/RoadmapMeta"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "version",
+    "roadmap",
+    "render",
+    "items",
+    "edges"
+  ],
+  "title": "RoadmapState",
+  "type": "object"
+}

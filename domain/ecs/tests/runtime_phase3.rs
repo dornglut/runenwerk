@@ -1130,3 +1130,49 @@ fn event_channel_iter_new_survives_drop_oldest_overflow() {
     assert_eq!(world.broadcast_pending_count::<DamageEvent>(), 1);
     assert_eq!(world.read_broadcast::<DamageEvent>(), &[DamageEvent(3)]);
 }
+
+#[test]
+fn event_channel_iter_new_reports_consumer_lag_and_missed_messages() {
+    fn consume_unread(mut reader: BroadcastReader<DamageEvent>, mut history: ResMut<EventHistory>) {
+        history.0.push(reader.iter_new().count());
+    }
+
+    let mut world = World::new();
+    world.configure_broadcast_stream::<DamageEvent>(BroadcastStreamConfig {
+        capacity: Some(2),
+        overflow: BroadcastOverflowPolicy::DropOldest,
+        lifetime: BroadcastLifetime::Manual,
+        tracing: BroadcastTracingPolicy::Disabled,
+    });
+    world.insert_resource(EventHistory(Vec::new()));
+    world.publish_broadcast(DamageEvent(1));
+    world.publish_broadcast(DamageEvent(2));
+    world.publish_broadcast(DamageEvent(3));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, consume_unread);
+
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<EventHistory>().unwrap().0, vec![2, 0]);
+
+    let stats = world.broadcast_stats::<DamageEvent>().unwrap();
+    assert_eq!(stats.consumer_reads, 2);
+    assert_eq!(stats.consumer_lagged_reads, 1);
+    assert_eq!(stats.consumer_missed_messages, 1);
+    assert_eq!(stats.consumer_lag_latest, 0);
+    assert_eq!(stats.consumer_lag_max, 3);
+
+    let diagnostics = world.messaging_diagnostics_snapshot();
+    let stream = diagnostics
+        .broadcasts
+        .iter()
+        .find(|stream| stream.stream_type == std::any::type_name::<DamageEvent>())
+        .expect("damage event stream should be reported");
+    assert_eq!(stream.consumer_reads, 2);
+    assert_eq!(stream.consumer_lagged_reads, 1);
+    assert_eq!(stream.consumer_missed_messages, 1);
+    assert_eq!(stream.consumer_lag_latest, 0);
+    assert_eq!(stream.consumer_lag_max, 3);
+}

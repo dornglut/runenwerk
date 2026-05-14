@@ -10,7 +10,7 @@ related:
   - ../../apps/runenwerk-editor/current-architecture.md
   - ../../apps/runenwerk-editor/execution-priority-checklist.md
   - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./surface-workflow-contract-redesign.md
+  - ../implemented/surface-workflow-contract-redesign.md
 ---
 
 # Editor UI Popup, Adornment, And Drop Preview Contract

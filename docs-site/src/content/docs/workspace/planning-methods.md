@@ -9,6 +9,7 @@ last_reviewed: 2026-05-14
 related:
   - ./architecture-governance-review.md
   - ./design-implementation-triage.md
+  - ./roadmap-items.yaml
   - ./roadmap-decision-register.md
   - ./repo-execution-priority-checklist.md
   - ./roadmap-index.md

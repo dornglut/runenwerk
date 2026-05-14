@@ -288,16 +288,10 @@ cd docs-site
 npm run build
 ```
 
-Run repository docs validation if available:
+Run the repository docs validation through the canonical Taskfile entrypoint:
 
 ```bash
-python3 tools/docs/validate_docs.py
-```
-
-If the repository workflow wrapper is available, also run:
-
-```bash
-./workflow docs
+task docs:validate
 ```
 
 ## Closeout format for Codex

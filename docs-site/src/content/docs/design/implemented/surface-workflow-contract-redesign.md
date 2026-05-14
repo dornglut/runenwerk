@@ -1,16 +1,16 @@
 ---
 title: Surface Workflow Contract Redesign
 description: Long-term provider-backed editor surface action, session mutation, and domain mutation contracts for outliner, entity table, inspector, viewport, and editor definition surfaces.
-status: active
+status: implemented
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-14
 related:
   - ../../domain/ui/roadmap.md
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../reports/closeouts/surface-workflow-contract-redesign/closeout.md
-  - ./ui-definition-formation-foundation-design.md
+  - ../active/ui-definition-formation-foundation-design.md
 ---
 
 # Surface Workflow Contract Redesign

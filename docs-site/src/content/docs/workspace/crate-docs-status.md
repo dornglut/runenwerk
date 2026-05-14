@@ -82,4 +82,4 @@ When workspace crates are added, removed, split, or renamed:
 2. Update root `CRATES.md`.
 3. Update root `DOMAIN_MAP.md` when ownership changes.
 4. Update this status page.
-5. Run `python3 tools/docs/validate_docs.py`.
+5. Run `task docs:validate`.

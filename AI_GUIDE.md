@@ -31,14 +31,35 @@ decision history, migration strategy, tradeoffs, enforcement, or ownership
 mode, run the architecture governance workflow before implementation:
 
 ```text
-python3 tools/workflow/ai_task.py architecture-governance --task "<task>" --scope "<scope>"
+task ai:architecture-governance -- --task "<task>" --scope "<scope>"
 ```
 
 Where shell support is available, the stable wrapper is:
 
 ```text
-./workflow architecture-governance --task "<task>" --scope "<scope>"
+task ai:architecture-governance -- --task "<task>" --scope "<scope>"
 ```
+
+For approved concurrent roadmap work, use:
+
+```text
+task roadmap:validate
+task batch:propose -- --goal "<batch goal>" --scope "L0"
+task ai:parallel-roadmap-batch -- --task "<batch goal>" --scope "<WR rows or roadmap docs>"
+```
+
+Roadmap rows are structured in
+`docs-site/src/content/docs/workspace/roadmap-items.yaml`. After changing
+roadmap evidence or topology, run:
+
+```text
+task roadmap:render
+task roadmap:check
+task puml:validate
+```
+
+The batch coordinator must propose work and wait for approval before spawning
+or coordinating workers.
 
 ## Automation Boundary
 

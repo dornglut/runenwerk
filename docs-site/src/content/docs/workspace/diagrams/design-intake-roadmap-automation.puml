@@ -1,0 +1,79 @@
+@startuml
+title Design Intake To Roadmap Automation - User Gates And Codex Automation
+
+|User|
+start
+:Describe new design,
+idea, concern, or change request;
+
+|Codex Coordinator|
+:Inspect AGENTS, AI_GUIDE,
+architecture docs, roadmap docs,
+and current code truth;
+:Run architecture-governance
+workflow kickoff;
+:Identify DDD owner,
+Clean Architecture direction,
+ADR need, ATAM-lite tradeoffs,
+Strangler migration shape,
+fitness functions, and ownership mode;
+
+if (Intent or product tradeoff unclear?) then (yes)
+  |User|
+  :Answer targeted clarification
+  or choose tradeoff;
+  |Codex Coordinator|
+  :Update governance recommendation;
+else (no)
+endif
+
+if (Accepted owner and path exist?) then (yes)
+  |Codex Coordinator|
+  :Add or update design,
+  ADR, or owning roadmap;
+  :Assign value, blocker,
+  dependency level, gate,
+  and next evidence;
+  :Update decision register,
+  triage, and PUML roadmap
+  if topology changes;
+else (no)
+  :Keep as discovery,
+  proposed design, or B5 gate;
+  :Record missing owner,
+  evidence, ADR, or contract;
+endif
+
+|User|
+:Review proposed placement
+and promotion level;
+
+if (Approve promotion?) then (yes)
+  |Codex Coordinator|
+  :Make docs/register/diagram
+  updates;
+  :Run docs validation;
+  :Recommend whether it can enter
+  the next parallel batch;
+  stop
+else (no)
+  |Codex Coordinator|
+  :Leave design gated
+  or revise proposal;
+  stop
+endif
+
+legend right
+  <b>User responsibilities</b>
+  - Bring an idea, design, or change request
+  - Clarify product intent when needed
+  - Approve promotion into implementation planning
+
+  <b>Codex automation</b>
+  - Investigate repo truth
+  - Run architecture governance review
+  - Draft or update docs/register/diagram
+  - Keep unaccepted work gated
+endlegend
+
+@enduml

@@ -57,7 +57,7 @@ Implementation requirements:
 
 Validation expectations:
 - Run the smallest relevant tests for changed crates.
-- Run `python3 tools/docs/validate_docs.py` when docs change.
+- Run `task docs:validate` when docs change.
 - Run `cargo fmt --all -- --check`.
 - Run broader checks from TESTING.md when code paths or workspace behavior changed.
 - Use `./quiet_full_gate.sh` for milestone closeout when appropriate.
