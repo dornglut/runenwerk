@@ -1,0 +1,26 @@
+id = "2026-05-14-wr-001-post-drf2-product-job-and-draw-br"
+goal = "WR-001 post-DRF2 product-job and Draw bridge stabilization"
+approval_state = "approved"
+base_branch = "main"
+base_sha = "fd4791a6ed604a22f01f580982068fe2142dc7e3"
+execution_mode = "worktree"
+integration_risk = "isolated worktrees"
+integration_status = "not_started"
+closeout_status = "not_started"
+validation_results = []
+roadmap_evidence_updates = []
+tooling_hardening = []
+
+[[items]]
+id = "WR-001"
+title = "Post-Phase 6D product-job and Draw cache follow-up"
+lane = "Core delivery"
+dependency_level = "L0"
+gate = "Continue next slice"
+score = 4.8
+branch = "codex/2026-05-14-wr-001-post-drf2-product-job-and-draw-br-wr-001"
+worktree = "C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-14-wr-001-post-drf2-product-job-and-draw-br/WR-001"
+prompt_path = "docs-site/src/content/docs/reports/batches/2026-05-14-wr-001-product-job-draw-bridge/prompts/wr-001.md"
+status = "approved"
+write_scopes = ["apps/runenwerk_draw", "engine/src/runtime"]
+validations = ["cargo test -p runenwerk_draw --test app_shell", "cargo test -p engine"]
