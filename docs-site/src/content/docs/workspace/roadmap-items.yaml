@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-05-14'
+  last_reviewed: '2026-05-15'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
@@ -38,11 +38,13 @@ items:
   validations:
   - cargo test -p runenwerk_draw --test app_shell
   - cargo test -p engine
-  next_evidence: 2026-05-14 DRF2 app-derived cache slice landed; next evidence is DRF3 bridge or next runtime product-job
-    follow-up.
-  current_decision: Continue as primary post-6D candidate, but do not reopen procgen bake/rollback.
-  current_call: Continue next bounded slice. The 2026-05-14 parallel batch landed Draw DRF2 app-derived tile cache behavior;
-    the next code track should choose the next runtime product-job or Draw bridge slice without reopening procgen bake/rollback.
+  next_evidence: 2026-05-15 DRF3 preview/final product-surface bridge landed; next evidence is either WR-006
+    DRF4/DRF5 GPU proof and promotion or a separately scoped runtime product-job support slice.
+  current_decision: DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and
+    do not reopen procgen bake/rollback.
+  current_call: Continue only if the next bounded slice has fresh product-job evidence. The 2026-05-15 WR-001 batch
+    bridged preview and final Draw tile surfaces through existing render APIs; re-score WR-006 versus WR-007 before
+    starting the next L1 batch.
   first_move: Continue from runtime-product-job-executor-roadmap.md, runenwerk-draw/roadmap.md, and sdf-first-execution-roadmap.md.
   diagram_call:
   - post-DRF2 bridge or
@@ -205,8 +207,8 @@ items:
   fitness_function_requirement: Docs validation and link checks.
   ownership_mode: Enabling documentation cleanup.
 - id: WR-006
-  title: Runenwerk Draw DRF3 through DRF5
-  diagram_title: Draw DRF3-DRF5
+  title: Runenwerk Draw DRF4 through DRF5
+  diagram_title: Draw DRF4-DRF5
   alias: DRAW
   lane: Core delivery
   dependency_level: L1
@@ -218,9 +220,9 @@ items:
   tc: 3
   rr_oe: 3
   du: 4
-  effort: 8
+  effort: 5
   confidence: 0.8
-  expected_score: 1.4
+  expected_score: 2.2
   rice: Candidate after workflow reach exists
   kano: Performance
   dependencies:
@@ -232,13 +234,15 @@ items:
   validations:
   - cargo test -p runenwerk_draw
   - cargo test -p engine
-  next_evidence: DRF3 product-surface bridge, public render-flow proof, CPU fallback tests.
-  current_decision: Ready next after the post-DRF2 WR-001 slice stabilizes.
-  current_call: Ready next after the current post-DRF2 product-job and Draw cache work is stable.
-  main_blocker: DRF3 to DRF5 must keep CPU tile formation canonical and use public render-flow/product-surface APIs.
+  next_evidence: DRF4 GPU ink proof, DRF5 GPU promotion/fallback, public render-flow proof, and CPU fallback tests.
+  current_decision: Preferred next L1 candidate if product-surface continuity remains the focus after WR-001 DRF3.
+  current_call: Ready as a focused Draw/render L1 batch after WR-001 DRF3 landed. Keep CPU tile formation canonical
+    and do not combine with net replication unless a fresh batch proves disjoint gates and scopes.
+  main_blocker: Remaining DRF4 to DRF5 work must keep CPU tile formation canonical and use public render-flow/product-surface
+    APIs.
   diagram_call:
-  - product-surface bridge,
-  - GPU proof, CPU fallback
+  - GPU proof,
+  - GPU promotion, CPU fallback
   ddd_owner: apps/runenwerk_draw with render product-surface contracts
   adr_requirement: No new ADR if existing render product-surface decision holds.
   fitness_function_requirement: Draw public flow proof tests and CPU fallback tests.
@@ -271,8 +275,9 @@ items:
   - cargo test -p ecs
   - cargo test -p scheduler
   next_evidence: ACK/baseline hardening and delta lifecycle tests.
-  current_decision: Ready next for net hardening after current product substrate work.
-  current_call: Ready next for net hardening.
+  current_decision: Comparable L1 candidate after WR-001 DRF3, but currently behind WR-006 if product-surface continuity
+    remains the selected focus.
+  current_call: Ready for a focused net hardening batch when replication evidence is the selected next product risk.
   main_blocker: ACK/baseline hardening and delta lifecycle rules need tests and code evidence before broader declarative replication.
   diagram_call:
   - ACK hardening, delta lifecycle,

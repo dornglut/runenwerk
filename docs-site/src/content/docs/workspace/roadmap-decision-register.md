@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-15
 related:
   - ./planning-methods.md
   - ./design-implementation-triage.md
@@ -50,13 +50,13 @@ Priority resolution order:
 
 | ID | Track | Lane | Dependency level | Gate | V | B | TC | RR/OE | DU | E | C | A-WSJF | RICE | Kano | Next evidence | Current decision |
 |---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|
-| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | Core delivery | L0 | Continue next slice | 5 | 2 | 4 | 4 | 5 | 3 | 0.8 | 4.8 | Candidate after Draw reach exists | Performance | 2026-05-14 DRF2 app-derived cache slice landed; next evidence is DRF3 bridge or next runtime product-job follow-up. | Continue as primary post-6D candidate, but do not reopen procgen bake/rollback. |
+| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | Core delivery | L0 | Continue next slice | 5 | 2 | 4 | 4 | 5 | 3 | 0.8 | 4.8 | Candidate after Draw reach exists | Performance | 2026-05-15 DRF3 preview/final product-surface bridge landed; next evidence is either WR-006 DRF4/DRF5 GPU proof and promotion or a separately scoped runtime product-job support slice. | DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and do not reopen procgen bake/rollback. |
 | WR-002 | ECS/runtime convergence support for product jobs and diagnostics | Core support | L0 | Supporting now | 4 | 2 | 3 | 5 | 5 | 5 | 0.8 | 2.7 | N/A | Neutral | 2026-05-14 L0 substrate pilot added ECS-owned runtime plan reporting; M5 diagnostics are landed and F2 lifecycle/finalization remains. | Continue only where lifecycle/finalization unblocks product jobs or diagnostics. |
 | WR-003 | Render contract follow-ups through product selection and derived residency | Core support | L0 | Supporting now | 4 | 2 | 3 | 4 | 4 | 5 | 0.8 | 2.4 | N/A | Neutral | 2026-05-14 L0 substrate pilot added view-ordered product selection snapshots, selected-source residency invalidation, and conflict rejection for selected source state. | Continue as contract-following support, not renderer-owned world truth. |
 | WR-004 | UI/editor guard and sequencing maintenance | Guardrail | L0 | Always-on guard | 4 | 1 | 4 | 4 | 3 | 2 | 1.0 | 7.5 | N/A | Basic | 2026-05-14 entity-table and SDF surface routing/capability guards landed. | Keep active in parallel; score does not make it the main roadmap. |
 | WR-005 | Design lifecycle cleanup for implemented active designs | Docs | L0 | Docs now | 3 | 1 | 2 | 3 | 2 | 2 | 0.8 | 4.0 | N/A | Neutral | 2026-05-14 surface workflow design moved to implemented lifecycle; more candidates remain. | Useful now when documentation capacity is available. |
-| WR-006 | Runenwerk Draw DRF3 through DRF5 | Core delivery | L1 | Ready next | 4 | 2 | 3 | 3 | 4 | 8 | 0.8 | 1.4 | Candidate after workflow reach exists | Performance | DRF3 product-surface bridge, public render-flow proof, CPU fallback tests. | Ready next after the post-DRF2 WR-001 slice stabilizes. |
-| WR-007 | Multiplayer replication Phase 1 to Phase 3 | Core delivery | L1 | Ready next | 4 | 2 | 2 | 4 | 4 | 8 | 0.8 | 1.4 | N/A | Neutral | ACK/baseline hardening and delta lifecycle tests. | Ready next for net hardening after current product substrate work. |
+| WR-006 | Runenwerk Draw DRF4 through DRF5 | Core delivery | L1 | Ready next | 4 | 2 | 3 | 3 | 4 | 5 | 0.8 | 2.2 | Candidate after workflow reach exists | Performance | DRF4 GPU ink proof, DRF5 GPU promotion/fallback, public render-flow proof, and CPU fallback tests. | Preferred next L1 candidate if product-surface continuity remains the focus after WR-001 DRF3. |
+| WR-007 | Multiplayer replication Phase 1 to Phase 3 | Core delivery | L1 | Ready next | 4 | 2 | 2 | 4 | 4 | 8 | 0.8 | 1.4 | N/A | Neutral | ACK/baseline hardening and delta lifecycle tests. | Comparable L1 candidate after WR-001 DRF3, but currently behind WR-006 if product-surface continuity remains the selected focus. |
 | WR-008 | Native tablet input backend arbitration and diagnostics | Product discovery | L1 | Product evidence gate | 3 | 3 | 2 | 3 | 2 | 5 | 0.5 | 1.0 | Candidate after hardware target exists | Basic | Hardware validation across Windows Ink, Wacom Wintab, and macOS Wacom. | Code can continue, but product acceptance is hardware-blocked. |
 | WR-009 | Native multi-window editor presentation | Productization | L2 | Runtime gate | 3 | 3 | 2 | 3 | 3 | 8 | 0.5 | 0.7 | Candidate after workflow reach exists | Performance | Window-scoped runtime, input, UI frame, and swapchain ownership proof. | Keep gated behind runtime/window-scope contracts. |
 | WR-010 | Render fragment and data-driven maturity R10 | Productization | L2 | Product priority gate | 3 | 3 | 2 | 3 | 3 | 8 | 0.5 | 0.7 | N/A | Neutral | Stable aliases, prepared flow invocation, hot reload, diagnostics, and inspection evidence. | Queue after render surface, ergonomics, persistence, and inspection priorities. |
