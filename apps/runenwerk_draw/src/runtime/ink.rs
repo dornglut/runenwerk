@@ -124,7 +124,7 @@ pub fn publish_drawing_ink_products(
     let Some(document) = app.document().cloned() else {
         return ProductPublicationReport::default();
     };
-    let policy = DrawingTileFormationPolicy::default();
+    let policy = committed_ink_tile_policy();
     let dirty_tiles = app
         .ink_runtime()
         .next_dirty_tile_batch(policy.max_affected_tiles);
@@ -336,7 +336,7 @@ fn publish_drawing_ink_products_with_optional_cache(
     let Some(document) = app.document().cloned() else {
         return ProductPublicationReport::default();
     };
-    let policy = DrawingTileFormationPolicy::default();
+    let policy = committed_ink_tile_policy();
     let dirty_tiles = app
         .ink_runtime()
         .next_dirty_tile_batch(policy.max_affected_tiles);
@@ -677,6 +677,10 @@ fn merge_product_publication_report(
 
 fn should_clear_failed_preview(app: &RunenwerkDrawApp) -> bool {
     app.preview_stroke().is_none_or(|preview| !preview.active)
+}
+
+fn committed_ink_tile_policy() -> DrawingTileFormationPolicy {
+    DrawingTileFormationPolicy::final_quality()
 }
 
 pub fn publish_drawing_ink_query_snapshots(
