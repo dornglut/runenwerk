@@ -30,8 +30,11 @@ pub use reflect::*;
 pub use system::{
     BroadcastReader, BroadcastReaderState, BroadcastWriter, ConfiguredSystem, IntoSystem,
     IntoSystemConfigs, IntoSystemSetKey, ParamSlotId, ParamSlotMetadata, Res, ResMut, ResView,
-    Runtime, SystemConfigExt, SystemId, SystemParam, SystemParamError, TickBufferDrainer,
-    TickBufferReader, TickBufferWriter, WorkQueueDrainer, WorkQueueReader, WorkQueueWriter,
+    Runtime, RuntimePlanBarrierReport, RuntimePlanConflictReport, RuntimePlanDiagnosticReport,
+    RuntimePlanPhaseReport, RuntimePlanReport, RuntimePlanStageReport, RuntimePlanSystemReport,
+    RuntimePlanWaveReport, SystemConfigExt, SystemId, SystemParam, SystemParamError,
+    TickBufferDrainer, TickBufferReader, TickBufferWriter, WorkQueueDrainer, WorkQueueReader,
+    WorkQueueWriter,
 };
 pub use world::{
     BroadcastDiagnosticsSnapshot, BroadcastKey, BroadcastLifetime, BroadcastObserverNotification,

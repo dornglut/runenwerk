@@ -2,6 +2,10 @@
 name = "runenwerk_editor"
 version = "0.1.0"
 edition = "2024"
+publish = false
+
+[package.metadata.cargo-machete]
+ignored = ["bytemuck"]
 
 [dependencies]
 anyhow = "1.0.100"

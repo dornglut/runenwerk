@@ -242,6 +242,9 @@ class BatchManifest(StrictModel):
     integration_risk: str
     integration_status: str = "not_started"
     closeout_status: str = "not_started"
+    validation_results: list[str] = Field(default_factory=list)
+    roadmap_evidence_updates: list[str] = Field(default_factory=list)
+    tooling_hardening: list[str] = Field(default_factory=list)
     items: list[BatchItem]
 
     @model_validator(mode="after")
@@ -342,6 +345,36 @@ def validate_write_scopes(items: list[RoadmapItem] | list[BatchItem]) -> list[st
     return conflicts
 
 
+def validate_batch_against_roadmap(manifest: BatchManifest, roadmap: RoadmapState) -> list[str]:
+    errors: list[str] = []
+    roadmap_by_id = roadmap.by_id
+    for batch_item in manifest.items:
+        roadmap_item = roadmap_by_id.get(batch_item.id)
+        if roadmap_item is None:
+            errors.append(f"{batch_item.id}: not present in roadmap source")
+            continue
+        if not roadmap_item.can_enter_implementation_batch:
+            errors.append(f"{batch_item.id}: roadmap gate is not implementation-ready")
+        if batch_item.title != roadmap_item.title:
+            errors.append(f"{batch_item.id}: title is stale")
+        if batch_item.lane != roadmap_item.lane:
+            errors.append(f"{batch_item.id}: lane is stale")
+        if batch_item.dependency_level != roadmap_item.dependency_level:
+            errors.append(f"{batch_item.id}: dependency_level is stale")
+        if batch_item.gate != roadmap_item.gate:
+            errors.append(f"{batch_item.id}: gate is stale")
+        if abs(batch_item.score - roadmap_item.score) > 0.05:
+            errors.append(f"{batch_item.id}: score is stale")
+        if [normalize_repo_path(scope) for scope in batch_item.write_scopes] != [
+            normalize_repo_path(scope) for scope in roadmap_item.write_scopes
+        ]:
+            errors.append(f"{batch_item.id}: write_scopes are stale")
+        if batch_item.validations != roadmap_item.validations:
+            errors.append(f"{batch_item.id}: validations are stale")
+    errors.extend(f"write-scope conflict: {conflict}" for conflict in validate_write_scopes(manifest.items))
+    return errors
+
+
 def parse_scope_selector(scope: str) -> tuple[str | None, tuple[str, ...]]:
     cleaned = scope.strip()
     if not cleaned or cleaned == "<level/items>":
@@ -379,14 +412,28 @@ def validate_changed_paths(paths: list[str], scopes: list[str]) -> list[str]:
 
 
 def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
-    completed = subprocess.run(
-        ["git", "-C", str(worktree), "diff", "--name-only", f"{base_sha}...HEAD"],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=True,
-    )
-    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    commands = [
+        ["diff", "--name-only", f"{base_sha}...HEAD"],
+        ["diff", "--name-only", "--cached"],
+        ["diff", "--name-only"],
+        ["ls-files", "--others", "--exclude-standard"],
+    ]
+    changed: list[str] = []
+    seen: set[str] = set()
+    for command in commands:
+        completed = subprocess.run(
+            ["git", "-C", str(worktree), "-c", "core.longpaths=true", *command],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        for line in completed.stdout.splitlines():
+            path = normalize_repo_path(line)
+            if path and path not in seen:
+                changed.append(path)
+                seen.add(path)
+    return changed
 
 
 def validate_puml_files() -> int:

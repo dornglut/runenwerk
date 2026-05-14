@@ -4,9 +4,9 @@ use ecs::{
     QueryAccess, SystemParam, SystemParamError,
 };
 use scheduler::ScheduleLabel;
-use scheduler::access::ConflictKind;
+use scheduler::access::{AccessDomain, ConflictKind};
 use scheduler::label::SystemSet;
-use scheduler::plan::BarrierKind;
+use scheduler::plan::{BarrierKind, ExecutionPhaseKind};
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -330,6 +330,98 @@ fn system_ids_and_param_slot_ids_are_stable_and_skip_failed_registration() {
     assert_eq!(second_slots[1].id.slot_index, 1);
     assert_eq!(second_slots[0].kind, "res");
     assert_eq!(second_slots[1].kind, "broadcast_reader");
+}
+
+#[test]
+fn runtime_plan_report_exposes_system_slots_and_product_barriers() {
+    fn stage_product(_step: Res<Step>, mut writer: BroadcastWriter<DamageEvent>) {
+        writer.send(DamageEvent(1));
+    }
+
+    fn consume_product(_reader: BroadcastReader<DamageEvent>) {}
+
+    let mut world = World::new();
+    world.insert_resource(Step(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, stage_product.in_set(GameplaySet));
+    runtime.add_systems::<Update, _, _>(
+        &mut world,
+        consume_product.in_set(PostGameplaySet).after(GameplaySet),
+    );
+
+    let report = runtime
+        .plan_report_for::<Update>()
+        .expect("update plan report should exist");
+
+    assert_eq!(report.schedule_label, "Update");
+    assert_eq!(report.phase.kind, ExecutionPhaseKind::Update);
+    assert_eq!(report.stages.len(), 2);
+    assert_eq!(report.waves.len(), 2);
+    assert!(report.stages[0].missing_system_indices.is_empty());
+    assert!(report.waves[0].missing_system_indices.is_empty());
+
+    let producer = &report.stages[0].systems[0];
+    assert_eq!(producer.system_id.as_raw(), 0);
+    assert!(producer.name.contains("stage_product"));
+    assert_eq!(producer.param_slots.len(), 2);
+    assert_eq!(producer.param_slots[0].kind, "res");
+    assert_eq!(producer.param_slots[0].id.system_id, producer.system_id);
+    assert_eq!(producer.param_slots[0].id.slot_index, 0);
+    assert_eq!(producer.param_slots[1].kind, "broadcast_writer");
+    assert_eq!(producer.param_slots[1].id.system_id, producer.system_id);
+    assert_eq!(producer.param_slots[1].id.slot_index, 1);
+
+    let consumer = &report.stages[1].systems[0];
+    assert_eq!(consumer.system_id.as_raw(), 1);
+    assert!(consumer.name.contains("consume_product"));
+    assert_eq!(consumer.param_slots.len(), 1);
+    assert_eq!(consumer.param_slots[0].kind, "broadcast_reader");
+
+    for wave in &report.waves {
+        assert_eq!(wave.barriers.len(), 3);
+        assert_eq!(wave.barriers[0].kind, BarrierKind::ApplyDeferredCommands);
+        assert_eq!(wave.barriers[1].kind, BarrierKind::ProductPublication);
+        assert_eq!(wave.barriers[2].kind, BarrierKind::QuerySnapshotPublication);
+    }
+
+    let product_barrier_waves = report
+        .product_publication_barriers()
+        .map(|barrier| barrier.after_wave_index)
+        .collect::<Vec<_>>();
+    assert_eq!(product_barrier_waves, vec![Some(0), Some(1)]);
+
+    let query_snapshot_barrier_waves = report
+        .query_snapshot_publication_barriers()
+        .map(|barrier| barrier.after_wave_index)
+        .collect::<Vec<_>>();
+    assert_eq!(query_snapshot_barrier_waves, vec![Some(0), Some(1)]);
+}
+
+#[test]
+fn runtime_plan_report_exposes_conflict_diagnostics_with_access_labels() {
+    fn read_events(_reader: BroadcastReader<DamageEvent>) {}
+    fn write_events(_writer: BroadcastWriter<DamageEvent>) {}
+
+    let mut world = World::new();
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, (read_events, write_events));
+
+    let report = runtime
+        .plan_report_for::<Update>()
+        .expect("update plan report should exist");
+    assert_eq!(report.conflicts.len(), 1);
+
+    let conflict = &report.conflicts[0];
+    assert_eq!(conflict.first_system_id.as_raw(), 0);
+    assert_eq!(conflict.second_system_id.as_raw(), 1);
+    assert!(conflict.first_system.contains("read_events"));
+    assert!(conflict.second_system.contains("write_events"));
+    assert_eq!(conflict.access_domain, AccessDomain::BroadcastStream);
+    assert!(conflict.access_name.ends_with("DamageEvent"));
+    assert_eq!(conflict.conflict_kind, ConflictKind::ReadWrite);
+    assert!(conflict.message.contains("read/write conflict"));
+    assert!(conflict.message.contains("broadcast stream"));
 }
 
 #[test]

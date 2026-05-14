@@ -2,9 +2,9 @@
 name = "material_graph"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 graph = { path = "../graph" }
 product.workspace = true
 ratification = { path = "../../foundation/ratification" }
-texture = { path = "../texture" }

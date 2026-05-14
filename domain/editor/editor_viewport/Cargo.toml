@@ -2,9 +2,8 @@
 name = "editor_viewport"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 editor_core.workspace = true
-editor_scene.workspace = true
 ui_math.workspace = true
-ui_input.workspace = true

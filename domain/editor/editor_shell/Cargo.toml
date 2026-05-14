@@ -2,11 +2,14 @@
 name = "editor_shell"
 version = "0.1.0"
 edition = "2024"
+publish = false
+
+[package.metadata.cargo-machete]
+ignored = ["id"]
 
 [dependencies]
 editor_core.workspace = true
 editor_definition.workspace = true
-editor_inspector.workspace = true
 editor_scene.workspace = true
 editor_viewport.workspace = true
 ui_input.workspace = true

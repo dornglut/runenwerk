@@ -172,10 +172,13 @@ impl PreparedRenderProductSelectionResource {
     }
 
     pub fn snapshot(&self) -> Vec<RenderProductSelection> {
-        self.contributions
+        let mut snapshot = self
+            .contributions
             .values()
             .flat_map(|selections| selections.iter().cloned())
-            .collect()
+            .collect::<Vec<_>>();
+        snapshot.sort_by(|left, right| left.view_id.cmp(&right.view_id));
+        snapshot
     }
 }
 
@@ -226,17 +229,17 @@ mod tests {
         let mut resource = PreparedRenderProductSelectionResource::default();
 
         resource
-            .replace_contribution(producer(2), [selection("b", 42, 9)])
+            .replace_contribution(producer(2), [selection("a", 42, 9)])
             .expect("selection should be valid");
         resource
-            .replace_contribution(producer(1), [selection("a", 41, 8)])
+            .replace_contribution(producer(1), [selection("b", 41, 8)])
             .expect("selection should be valid");
 
         let snapshot = resource.snapshot();
 
         assert_eq!(snapshot[0].view_id, "a");
         assert_eq!(snapshot[1].view_id, "b");
-        assert_eq!(snapshot[1].selected_products[0].generation, 9);
+        assert_eq!(snapshot[0].selected_products[0].generation, 9);
     }
 
     #[test]

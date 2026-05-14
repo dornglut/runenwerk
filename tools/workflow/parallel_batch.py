@@ -31,6 +31,7 @@ from roadmap_state import (
     repo_path,
     select_batch_candidates,
     slash_path,
+    validate_batch_against_roadmap,
     validate_write_scopes,
 )
 
@@ -79,8 +80,18 @@ def propose(
 
 
 @app.command()
-def approve(batch: Path = typer.Option(..., help="Batch manifest path.")) -> None:
+def approve(
+    batch: Path = typer.Option(..., help="Batch manifest path."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+) -> None:
     manifest = load_batch_manifest(batch)
+    roadmap = load_roadmap(source)
+    validation_errors = validate_batch_against_roadmap(manifest, roadmap)
+    if validation_errors:
+        console.print("[red]batch approval failed[/red]")
+        for error in validation_errors:
+            console.print(f"- {error}")
+        raise typer.Exit(1)
     updated = manifest.model_copy(update={"approval_state": "approved"})
     batch.write_text(render_batch_manifest(updated), encoding="utf-8", newline="\n")
     console.print(f"[green]approved batch:[/green] {repo_path(batch)}")
@@ -117,29 +128,40 @@ def prepare(
     root: Path = typer.Option(DEFAULT_WORKTREE_ROOT, help="Worktree root directory."),
     allow_unapproved: bool = typer.Option(False, help="Allow preparing a proposed batch."),
     dry_run: bool = typer.Option(False, help="Print worktree actions without executing git."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
 ) -> None:
     manifest = load_batch_manifest(batch)
     if manifest.approval_state != "approved" and not allow_unapproved:
         raise WorkflowError("batch must be approved before preparing worktrees")
 
+    roadmap = load_roadmap(source)
+    validation_errors = validate_batch_against_roadmap(manifest, roadmap)
+    if validation_errors:
+        console.print("[red]batch prepare failed[/red]")
+        for error in validation_errors:
+            console.print(f"- {error}")
+        raise typer.Exit(1)
     updated_items: list[BatchItem] = []
     for item in manifest.items:
         prompt_target = REPO_ROOT / item.prompt_path
-        prompt_target.parent.mkdir(parents=True, exist_ok=True)
         if not prompt_target.exists():
-            console.print(f"[yellow]missing prompt artifact; generate it with worker-prompt --write:[/yellow] {item.id}")
+            roadmap_item = roadmap.by_id.get(item.id)
+            if roadmap_item is None:
+                raise WorkflowError(f"{item.id} is not present in roadmap source")
+            if dry_run:
+                console.print(f"would write worker prompt: {repo_path(prompt_target)}")
+            else:
+                prompt_target.parent.mkdir(parents=True, exist_ok=True)
+                prompt_target.write_text(render_worker_prompt(manifest, roadmap_item, item), encoding="utf-8", newline="\n")
+                console.print(f"[green]wrote worker prompt:[/green] {repo_path(prompt_target)}")
 
         worktree = root / manifest.id / item.id
         if dry_run:
-            console.print(f"git worktree add -b {item.branch} {worktree} {manifest.base_sha}")
+            console.print(" ".join(worktree_add_command(item.branch, worktree, manifest.base_sha)))
         elif worktree.exists() and any(worktree.iterdir()):
             console.print(f"[yellow]worktree exists:[/yellow] {worktree}")
         else:
-            subprocess.run(
-                ["git", "worktree", "add", "-b", item.branch, str(worktree), manifest.base_sha],
-                cwd=REPO_ROOT,
-                check=True,
-            )
+            subprocess.run(worktree_add_command(item.branch, worktree, manifest.base_sha), cwd=REPO_ROOT, check=True)
         updated_items.append(item.model_copy(update={"worktree": slash_path(worktree), "status": "approved"}))
 
     updated = manifest.model_copy(
@@ -152,6 +174,18 @@ def prepare(
     if not dry_run:
         batch.write_text(render_batch_manifest(updated), encoding="utf-8", newline="\n")
     console.print(f"[green]prepared batch:[/green] {manifest.id}")
+
+
+def worktree_add_command(branch: str, worktree: Path, base_sha: str) -> list[str]:
+    existing_branch_sha = git_output(["git", "rev-parse", "--verify", branch])
+    command = ["git", "-c", "core.longpaths=true", "worktree", "add"]
+    if existing_branch_sha:
+        if existing_branch_sha != base_sha:
+            raise WorkflowError(
+                f"branch {branch} already exists at {existing_branch_sha}, expected batch base {base_sha}"
+            )
+        return [*command, str(worktree), branch]
+    return [*command, "-b", branch, str(worktree), base_sha]
 
 
 @app.command()
@@ -187,7 +221,7 @@ def build_manifest(batch_id: str, goal: str, items: list[RoadmapItem], batch_dir
                 gate=item.gate,
                 score=item.score,
                 branch=f"codex/{batch_id}-{item.id.lower()}",
-                prompt_path=slash_path(batch_dir / "prompts" / f"{item.id}.md"),
+                prompt_path=slash_path(batch_dir / "prompts" / f"{item.id.lower()}.md"),
                 write_scopes=item.write_scopes,
                 validations=item.validations,
             )
@@ -206,6 +240,16 @@ def build_manifest(batch_id: str, goal: str, items: list[RoadmapItem], batch_dir
 
 def render_worker_prompt(manifest: BatchManifest, item: RoadmapItem, batch_item: BatchItem) -> str:
     lines = [
+        "---",
+        f"title: Worker Prompt {item.id}",
+        f"description: Generated worker prompt for batch {manifest.id}.",
+        "status: active",
+        "owner: workspace",
+        "layer: workspace",
+        "canonical: false",
+        f"last_reviewed: {dt.date.today().isoformat()}",
+        "---",
+        "",
         f"# Runenwerk Parallel Worker: {item.id}",
         "",
         f"Batch: {manifest.id}",
@@ -270,9 +314,42 @@ def render_batch_report(manifest: BatchManifest) -> str:
         f"Integration status: {manifest.integration_status}",
         f"Closeout status: {manifest.closeout_status}",
         "",
-        "## Items",
+        "## Validation Results",
         "",
     ]
+    if manifest.validation_results:
+        lines.extend(f"- {result}" for result in manifest.validation_results)
+    else:
+        lines.append("- Not recorded.")
+    lines.extend(
+        [
+            "",
+            "## Roadmap Evidence Updates",
+            "",
+        ]
+    )
+    if manifest.roadmap_evidence_updates:
+        lines.extend(f"- {update}" for update in manifest.roadmap_evidence_updates)
+    else:
+        lines.append("- Not recorded.")
+    lines.extend(
+        [
+            "",
+            "## Tooling Hardening",
+            "",
+        ]
+    )
+    if manifest.tooling_hardening:
+        lines.extend(f"- {item}" for item in manifest.tooling_hardening)
+    else:
+        lines.append("- Not recorded.")
+    lines.extend(
+        [
+            "",
+            "## Items",
+            "",
+        ]
+    )
     for item in manifest.items:
         lines.extend(
             [
