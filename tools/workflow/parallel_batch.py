@@ -525,7 +525,7 @@ def run_official_batch_validation(
     selected, errors = batch_execution_state(manifest, roadmap, item_id)
     if errors:
         raise WorkflowError("\n".join(errors))
-    return selected, run_host_batch_validation(validation_commands_for_items(selected), command_runner=command_runner)
+    return selected, run_worker_batch_validation(selected, command_runner=command_runner)
 
 
 def selected_manifest_items(manifest: BatchManifest, item_id: str | None = None) -> list[BatchItem]:
@@ -552,6 +552,33 @@ def validation_commands_for_items(items: list[BatchItem]) -> list[str]:
     return commands
 
 
+def run_worker_batch_validation(items: list[BatchItem], command_runner=None) -> str:
+    runner = command_runner or run_host_validation_command
+    output: list[str] = []
+    for item in items:
+        if not item.validations:
+            continue
+        cwd = worktree_path_for_validation(item)
+        output.append(f"[{item.id}] {slash_path(cwd)}\n")
+        for command in item.validations:
+            output.append(f"> {command}\n")
+            command_output = runner(command, cwd)
+            if command_output:
+                output.append(command_output)
+                if not command_output.endswith(("\n", "\r")):
+                    output.append("\n")
+    return "".join(output) if output else "no worker validation commands\n"
+
+
+def worktree_path_for_validation(item: BatchItem) -> Path:
+    if not item.worktree:
+        return REPO_ROOT
+    worktree = Path(item.worktree)
+    if not worktree.is_absolute():
+        worktree = REPO_ROOT / worktree
+    return worktree
+
+
 def run_host_batch_validation(validation_commands: list[str], command_runner=None) -> str:
     if not validation_commands:
         return "no worker validation commands\n"
@@ -568,10 +595,10 @@ def run_host_batch_validation(validation_commands: list[str], command_runner=Non
     return "".join(output)
 
 
-def run_host_validation_command(command: str) -> str:
+def run_host_validation_command(command: str, cwd: Path = REPO_ROOT) -> str:
     completed = subprocess.run(
         command,
-        cwd=REPO_ROOT,
+        cwd=cwd,
         shell=True,
         check=True,
         text=True,

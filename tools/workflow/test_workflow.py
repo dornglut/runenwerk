@@ -20,6 +20,7 @@ from parallel_batch import (
     worktree_path_for_item,
 )
 from roadmap_state import (
+    REPO_ROOT,
     BatchManifest,
     RoadmapState,
     WorkflowError,
@@ -306,19 +307,21 @@ def test_batch_validation_invokes_host_commands_only_after_scope_checks_pass(mon
     )
     batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
     approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
-    calls: list[list[str]] = []
+    calls: list[tuple[str, Path]] = []
 
     monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["tools/workflow/file.py"])
 
     selected, output = run_official_batch_validation(
         approved,
         roadmap,
-        command_runner=lambda command: calls.append(command) or "ok",
+        command_runner=lambda command, cwd: calls.append((command, cwd)) or "ok",
     )
 
     assert [item.id for item in selected] == ["WR-001"]
-    assert calls == ["cargo test -p test"]
-    assert output == "> cargo test -p test\nok\n"
+    expected_cwd = REPO_ROOT / "worker"
+    expected_label = str(expected_cwd).replace("\\", "/")
+    assert calls == [("cargo test -p test", expected_cwd)]
+    assert output == f"[WR-001] {expected_label}\n> cargo test -p test\nok\n"
 
 
 def test_batch_validation_does_not_invoke_host_commands_when_scope_fails(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -331,12 +334,16 @@ def test_batch_validation_does_not_invoke_host_commands_when_scope_fails(monkeyp
     )
     batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
     approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
-    calls: list[list[str]] = []
+    calls: list[tuple[str, Path]] = []
 
     monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["docs-site/out.md"])
 
     with pytest.raises(WorkflowError):
-        run_official_batch_validation(approved, roadmap, command_runner=lambda command: calls.append(command) or "ok")
+        run_official_batch_validation(
+            approved,
+            roadmap,
+            command_runner=lambda command, cwd: calls.append((command, cwd)) or "ok",
+        )
 
     assert calls == []
 
