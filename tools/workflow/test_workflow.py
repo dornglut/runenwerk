@@ -358,3 +358,79 @@ def test_refresh_base_is_blocked_after_integration_starts() -> None:
 
     with pytest.raises(WorkflowError, match="integration_status"):
         refresh_base_manifest(manifest, base="main")
+
+
+def test_refresh_base_rejects_dirty_worker_changes_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+
+    monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["docs-site/out.md"])
+
+    with pytest.raises(WorkflowError, match="dirty worker worktree changes"):
+        refresh_base_manifest(approved, base="main", recreate_worktrees=True)
+
+
+def test_refresh_base_discards_stale_out_of_scope_worktrees_when_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+    removed: list[str] = []
+
+    monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["docs-site/out.md"])
+    monkeypatch.setattr("parallel_batch.git_output", lambda _args: "newbase")
+    monkeypatch.setattr("parallel_batch.remove_worker_worktrees_and_branches", lambda _manifest: removed.append("removed"))
+
+    refreshed = refresh_base_manifest(
+        approved,
+        base="main",
+        recreate_worktrees=True,
+        discard_stale_worktrees=True,
+    )
+
+    assert removed == ["removed"]
+    assert refreshed.base_sha == "newbase"
+    assert refreshed.items[0].worktree == ""
+    assert "base refreshed" in refreshed.integration_risk
+
+
+def test_refresh_base_still_rejects_dirty_in_scope_changes_with_discard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+    removed: list[str] = []
+
+    monkeypatch.setattr("parallel_batch.changed_paths_for_item", lambda _item, _base_sha: ["tools/workflow/file.py"])
+    monkeypatch.setattr("parallel_batch.remove_worker_worktrees_and_branches", lambda _manifest: removed.append("removed"))
+
+    with pytest.raises(WorkflowError, match="dirty in-scope worker changes"):
+        refresh_base_manifest(
+            approved,
+            base="main",
+            recreate_worktrees=True,
+            discard_stale_worktrees=True,
+        )
+
+    assert removed == []
