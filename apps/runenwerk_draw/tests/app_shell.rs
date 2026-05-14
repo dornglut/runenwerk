@@ -6,7 +6,8 @@ use drawing::{
     StrokeToolKind, form_drawing_ink_tiles, ratify_drawing_document,
 };
 use engine::plugins::render::{
-    FeatureContributionStatus, PreparedUiFrameResource, RenderDynamicTextureUploadRegistryResource,
+    FeatureContributionStatus, PreparedRenderProductSelectionResource, PreparedUiFrameResource,
+    RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
     UiFrameSubmissionRegistryResource,
 };
 use engine::plugins::{InputState, TouchInputPhase};
@@ -19,6 +20,7 @@ use native_tablet_input::{
     NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletFrameResource,
     NativeTabletPacket, NativeTabletSample, map_native_tablet_packet,
 };
+use product::ProductScaleBand;
 use runenwerk_draw::app::{
     DRAWING_UI_SURFACE_ID, DrawingInkRuntimeState, DrawingToolRouteKind, RunenwerkDrawApp,
     minimal_drawing_document,
@@ -1122,6 +1124,102 @@ fn runtime_uploads_preview_products_only_when_generation_changes() {
 }
 
 #[test]
+fn runtime_bridges_preview_and_final_tiles_to_product_surfaces() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    runtime.insert_resource(RuntimeJobExecutorResource::with_config(
+        RuntimeJobExecutorConfig::serial(),
+    ));
+
+    let end = {
+        let host = runtime
+            .world_mut()
+            .resource_mut::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let start = screen_point_for_canvas(&host.app, 512.0, 512.0);
+        let end = screen_point_for_canvas(&host.app, 704.0, 640.0);
+        host.app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+            PointerEventKind::Down,
+            start,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            1,
+        )));
+        end
+    };
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("preview product-surface frame should run");
+    assert!(
+        dynamic_target_ids(&runtime)
+            .iter()
+            .any(|target_id| target_id.starts_with("preview.preview.")),
+        "active preview tiles should request preview dynamic texture targets"
+    );
+
+    let final_visible_count = {
+        let host = runtime
+            .world_mut()
+            .resource_mut::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let mut publications = ProductPublicationRuntimeResource::default();
+        let mut snapshots = QuerySnapshotRuntimeResource::default();
+        host.app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+            PointerEventKind::Up,
+            end,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            0,
+        )));
+        publish_visible_ink_until_clean(&mut host.app, &mut publications, &mut snapshots);
+        assert!(host.app.ink_runtime().visible_products().all(|product| {
+            product.metadata.quality_class == ProductQualityClass::Final
+        }));
+        let final_visible_count = host.app.ink_runtime().visible_product_count();
+        assert!(final_visible_count > 0);
+        final_visible_count
+    };
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("final product-surface frame should run");
+    assert!(
+        dynamic_target_ids(&runtime)
+            .iter()
+            .any(|target_id| target_id.starts_with("committed.final.")),
+        "accepted committed tiles should request final-quality dynamic texture targets"
+    );
+
+    let product_selections = runtime
+        .world()
+        .resource::<PreparedRenderProductSelectionResource>()
+        .expect("prepared product selection resource should exist")
+        .snapshot();
+    let canvas_selection = product_selections
+        .iter()
+        .find(|selection| selection.view_id == "runenwerk.draw.canvas")
+        .expect("drawing canvas should publish one product selection");
+    assert_eq!(canvas_selection.selected_products.len(), final_visible_count);
+    assert!(canvas_selection.selected_products.iter().all(|product| {
+        product.scale_band == ProductScaleBand::Final
+    }));
+
+    let host = runtime
+        .world()
+        .resource::<DrawingHostResource>()
+        .expect("drawing host resource should exist");
+    assert_eq!(
+        product_surface_primitive_count(host.app.last_frame()),
+        final_visible_count,
+        "final accepted tiles should remain projected as product-surface UI primitives"
+    );
+}
+
+#[test]
 fn runtime_uploads_only_new_committed_products_after_more_strokes() {
     let mut runtime = build_headless_app()
         .run_for_frames(1)
@@ -1617,6 +1715,16 @@ fn ink_upload_count(app: &engine::App) -> usize {
         .expect("dynamic texture upload registry should exist")
         .snapshot()
         .len()
+}
+
+fn dynamic_target_ids(app: &engine::App) -> Vec<String> {
+    app.world()
+        .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
+        .expect("dynamic target registry should exist")
+        .snapshot()
+        .into_iter()
+        .map(|descriptor| descriptor.key.target_id)
+        .collect()
 }
 
 fn barrier(kind: BarrierKind) -> ExecutionBarrier {
