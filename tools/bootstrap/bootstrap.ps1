@@ -197,10 +197,6 @@ Ensure-Tool -Name "task" -DisplayName "Task" -Install {
     Install-WingetPackage -Id "Task.Task" -DisplayName "Task"
 }
 
-Ensure-Tool -Name "dagger" -DisplayName "Dagger CLI" -Install {
-    Install-WingetPackage -Id "Dagger.Cli" -DisplayName "Dagger CLI"
-} -ProbeArgs @("version")
-
 Ensure-Tool -Name "cargo" -DisplayName "Rust Cargo" -Install {
     Install-WingetPackage -Id "Rustlang.Rustup" -DisplayName "Rustup"
     if (Test-Tool "rustup") {
@@ -253,12 +249,6 @@ if (-not $SkipNodeTools) {
         }
         npm install -g "renovate"
     }
-}
-
-if ((Test-Tool "docker") -or (Test-Tool "podman")) {
-    Write-Ok "container runtime command is available"
-} else {
-    Write-Warn "Dagger also needs Docker Desktop, Podman, or another compatible container runtime running."
 }
 
 Write-Host ""

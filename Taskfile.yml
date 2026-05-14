@@ -52,6 +52,16 @@ tasks:
     cmds:
       - uv run python tools/workflow/scope_enforcement.py check {{.CLI_ARGS}}
 
+  batch:validate:
+    desc: Run the official host-backed validation gate for an approved batch.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py validate {{.CLI_ARGS}}
+
+  batch:refresh-base:
+    desc: Refresh a not-started batch base before recreating worker worktrees.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py refresh-base {{.CLI_ARGS}}
+
   batch:closeout:
     desc: Check or write batch closeout report.
     cmds:
@@ -105,13 +115,13 @@ tasks:
   rust:test:
     desc: Run Rust tests with cargo-nextest.
     cmds:
-      - cargo nextest run
+      - cargo nextest run --test-threads 4
 
   rust:policy:
     desc: Run Rust dependency policy and unused dependency checks.
     cmds:
       - cargo deny check
-      - cargo machete
+      - cargo machete --skip-target-dir
 
   links:check:
     desc: Run external Markdown/link validation with lychee.
@@ -124,21 +134,14 @@ tasks:
       - ast-grep scan
 
   ci:local:
-    desc: Run the local Dagger validation pipeline.
-    env:
-      DAGGER_NO_NAG: "1"
+    desc: Run the full local host validation pipeline.
     cmds:
-      - dagger call ci-local
-
-  ci:host:
-    desc: Run host validation without Dagger.
-    deps:
-      - roadmap:validate
-      - roadmap:check
-      - puml:validate
-      - docs:validate
-      - python:test
-      - rust:test
-      - rust:policy
-      - links:check
-      - ast:scan
+      - task roadmap:validate
+      - task roadmap:check
+      - task puml:validate
+      - task docs:validate
+      - task python:test
+      - task rust:test
+      - task rust:policy
+      - task links:check
+      - task ast:scan

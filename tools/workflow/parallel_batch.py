@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import typer
@@ -23,15 +24,19 @@ from roadmap_state import (
     BatchManifest,
     RoadmapItem,
     WorkflowError,
+    changed_files_for_worktree,
     git_output,
     load_batch_manifest,
     load_roadmap,
+    normalize_repo_path,
+    path_within_scope,
     parse_scope_selector,
     render_batch_manifest,
     repo_path,
     select_batch_candidates,
     slash_path,
     validate_batch_against_roadmap,
+    validate_changed_paths,
     validate_write_scopes,
 )
 
@@ -187,6 +192,98 @@ def worktree_add_command(branch: str, worktree: Path, base_sha: str) -> list[str
         return [*command, str(worktree), branch]
     return [*command, "-b", branch, str(worktree), base_sha]
 
+
+@app.command()
+def validate(
+    batch: Path = typer.Option(..., help="Batch manifest path."),
+    item: str | None = typer.Option(None, help="Limit worker validation to one WR item."),
+    write: bool = typer.Option(False, help="Record the host validation result in batch.toml."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+) -> None:
+    manifest = load_batch_manifest(batch)
+    roadmap = load_roadmap(source)
+    selected: list[BatchItem] = []
+    try:
+        selected, output = run_official_batch_validation(manifest, roadmap, item)
+    except WorkflowError as error:
+        console.print("[red]batch validation failed before host validation[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1)
+    except subprocess.CalledProcessError as error:
+        if error.stdout:
+            print(error.stdout, end="")
+        if write and selected:
+            write_validation_result(batch, manifest, "failed", validation_commands_for_items(selected))
+        raise typer.Exit(error.returncode or 1) from error
+
+    commands = validation_commands_for_items(selected)
+    if output:
+        emit_tool_output(output)
+    if write:
+        write_validation_result(batch, manifest, "passed", commands)
+    console.print("[green]batch validation passed[/green]")
+
+
+@app.command("refresh-base")
+def refresh_base(
+    batch: Path = typer.Option(..., help="Batch manifest path."),
+    base: str = typer.Option("main", help="Base branch or ref to refresh from."),
+    clear_worktrees: bool = typer.Option(True, help="Clear recorded worker worktree paths in the manifest."),
+    recreate_worktrees: bool = typer.Option(False, help="Remove existing worker worktrees and branches after safety checks."),
+) -> None:
+    manifest = load_batch_manifest(batch)
+    try:
+        updated = refresh_base_manifest(
+            manifest,
+            base=base,
+            clear_worktrees=clear_worktrees,
+            recreate_worktrees=recreate_worktrees,
+        )
+    except WorkflowError as error:
+        console.print("[red]batch base refresh is blocked[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+
+    batch.write_text(render_batch_manifest(updated), encoding="utf-8", newline="\n")
+    console.print(f"[green]refreshed batch base:[/green] {updated.base_branch}@{updated.base_sha}")
+
+
+def refresh_base_manifest(
+    manifest: BatchManifest,
+    *,
+    base: str,
+    clear_worktrees: bool = True,
+    recreate_worktrees: bool = False,
+) -> BatchManifest:
+    if manifest.integration_status != "not_started":
+        raise WorkflowError(f"integration_status is {manifest.integration_status!r}, expected 'not_started'")
+
+    in_scope_changes = in_scope_changes_for_manifest(manifest)
+    if in_scope_changes:
+        raise WorkflowError("\n".join(in_scope_changes))
+
+    base_sha = git_output(["git", "rev-parse", base])
+    if not base_sha:
+        raise WorkflowError(f"could not resolve base ref {base!r}")
+
+    if recreate_worktrees:
+        remove_worker_worktrees_and_branches(manifest)
+        clear_worktrees = True
+
+    items = manifest.items
+    if clear_worktrees:
+        items = [candidate.model_copy(update={"worktree": "", "status": "approved"}) for candidate in manifest.items]
+
+    return manifest.model_copy(
+        update={
+            "base_branch": base,
+            "base_sha": base_sha,
+            "items": items,
+            "integration_risk": "isolated worktrees; base refreshed, prepare required",
+        }
+    )
 
 @app.command()
 def closeout(batch: Path = typer.Option(..., help="Batch manifest path."), write: bool = typer.Option(False, help="Write batch.md report.")) -> None:
@@ -369,6 +466,147 @@ def default_batch_id(goal: str) -> str:
     today = dt.date.today().isoformat()
     slug = re.sub(r"[^a-z0-9]+", "-", goal.lower()).strip("-")[:40] or "roadmap-batch"
     return f"{today}-{slug}"
+
+
+def batch_execution_state(
+    manifest: BatchManifest,
+    roadmap,
+    item_id: str | None = None,
+) -> tuple[list[BatchItem], list[str]]:
+    errors = validate_batch_against_roadmap(manifest, roadmap)
+    if manifest.approval_state != "approved":
+        errors.append("batch must be approved before validation")
+
+    selected = selected_manifest_items(manifest, item_id)
+    if item_id and not selected:
+        errors.append(f"{item_id}: not present in batch {manifest.id}")
+
+    for candidate in selected:
+        try:
+            paths = changed_paths_for_item(candidate, manifest.base_sha)
+        except (OSError, subprocess.CalledProcessError) as error:
+            errors.append(f"{candidate.id}: cannot inspect worker changes: {error}")
+            continue
+        for path in validate_changed_paths(paths, candidate.write_scopes):
+            errors.append(f"{candidate.id}: changed path outside approved scope: {path}")
+    return selected, errors
+
+
+def run_official_batch_validation(
+    manifest: BatchManifest,
+    roadmap,
+    item_id: str | None = None,
+    command_runner=None,
+) -> tuple[list[BatchItem], str]:
+    selected, errors = batch_execution_state(manifest, roadmap, item_id)
+    if errors:
+        raise WorkflowError("\n".join(errors))
+    return selected, run_host_batch_validation(validation_commands_for_items(selected), command_runner=command_runner)
+
+
+def selected_manifest_items(manifest: BatchManifest, item_id: str | None = None) -> list[BatchItem]:
+    return [candidate for candidate in manifest.items if item_id is None or candidate.id == item_id]
+
+
+def changed_paths_for_item(item: BatchItem, base_sha: str) -> list[str]:
+    if not item.worktree:
+        return []
+    worktree = Path(item.worktree)
+    if not worktree.is_absolute():
+        worktree = REPO_ROOT / worktree
+    return changed_files_for_worktree(worktree, base_sha)
+
+
+def validation_commands_for_items(items: list[BatchItem]) -> list[str]:
+    commands: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        for command in item.validations:
+            if command not in seen:
+                commands.append(command)
+                seen.add(command)
+    return commands
+
+
+def run_host_batch_validation(validation_commands: list[str], command_runner=None) -> str:
+    if not validation_commands:
+        return "no worker validation commands\n"
+
+    runner = command_runner or run_host_validation_command
+    output: list[str] = []
+    for command in validation_commands:
+        output.append(f"> {command}\n")
+        command_output = runner(command)
+        if command_output:
+            output.append(command_output)
+            if not command_output.endswith(("\n", "\r")):
+                output.append("\n")
+    return "".join(output)
+
+
+def run_host_validation_command(command: str) -> str:
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        shell=True,
+        check=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    return completed.stdout
+
+
+def emit_tool_output(output: str) -> None:
+    text = output if output.endswith(("\n", "\r")) else f"{output}\n"
+    stream = getattr(sys.stdout, "buffer", None)
+    if stream is not None:
+        stream.write(text.encode("utf-8", errors="replace"))
+        stream.flush()
+    else:
+        print(text, end="")
+
+
+def write_validation_result(batch: Path, manifest: BatchManifest, status: str, commands: list[str]) -> None:
+    timestamp = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat()
+    command_summary = ", ".join(commands) if commands else "no worker commands"
+    result = f"{timestamp} batch validate {status}: host batch validation; {command_summary}"
+    updated = manifest.model_copy(update={"validation_results": [*manifest.validation_results, result]})
+    batch.write_text(render_batch_manifest(updated), encoding="utf-8", newline="\n")
+
+
+def in_scope_changes_for_manifest(manifest: BatchManifest) -> list[str]:
+    changes: list[str] = []
+    for item in manifest.items:
+        try:
+            paths = changed_paths_for_item(item, manifest.base_sha)
+        except (OSError, subprocess.CalledProcessError) as error:
+            changes.append(f"{item.id}: cannot inspect worker changes: {error}")
+            continue
+        for path in paths:
+            normalized = normalize_repo_path(path)
+            scopes = [normalize_repo_path(scope) for scope in item.write_scopes]
+            if any(path_within_scope(normalized, scope) for scope in scopes):
+                changes.append(f"{item.id}: {normalized}")
+    return changes
+
+
+def remove_worker_worktrees_and_branches(manifest: BatchManifest) -> None:
+    for item in manifest.items:
+        if item.worktree:
+            worktree = Path(item.worktree)
+            if not worktree.is_absolute():
+                worktree = REPO_ROOT / worktree
+            if worktree.exists():
+                subprocess.run(
+                    ["git", "-c", "core.longpaths=true", "worktree", "remove", "--force", str(worktree)],
+                    cwd=REPO_ROOT,
+                    check=True,
+                )
+        if git_output(["git", "rev-parse", "--verify", item.branch]):
+            subprocess.run(["git", "branch", "-D", item.branch], cwd=REPO_ROOT, check=True)
 
 
 if __name__ == "__main__":

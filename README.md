@@ -20,6 +20,13 @@ task roadmap:check
 task puml:validate
 ```
 
+If the shell cannot find `task` or `uv` after bootstrap, activate the
+known tool paths in the current PowerShell session:
+
+```powershell
+. .\tools\bootstrap\activate.ps1
+```
+
 Details: `docs-site/src/content/docs/workspace/toolchain-bootstrap.md`.
 
 Start with:
@@ -55,9 +62,11 @@ task ai:implementation -- --task "<task>" --scope "<scope>"
 task ai:closeout -- --task "<completed phase>" --roadmap "<roadmap/design>"
 ```
 
-Use these validation shortcuts from the repository root:
+Runenwerk does not configure remote CI. Run these validation shortcuts from the
+repository root before pushing, opening a PR, or closing out a batch:
 
 ```bash
 task docs:validate
-task ci:host
+task batch:validate -- --batch docs-site/src/content/docs/reports/batches/<batch-id>/batch.toml
+task ci:local
 ```

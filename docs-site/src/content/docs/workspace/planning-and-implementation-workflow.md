@@ -53,12 +53,15 @@ task shape.
 Validation commands execute checks:
 
 - `task docs:validate` runs the repository docs validation.
-- `task ci:local` runs the Dagger validation pipeline.
+- `task ci:local` runs the full local host validation pipeline.
 - `task roadmap:validate` checks `roadmap-items.yaml` score math,
   dependencies, gates, and write-scope overlap.
 - `task roadmap:check` rejects stale generated roadmap Markdown
   and PUML.
 - `task puml:validate` validates workspace PlantUML diagrams with PlantUML.
+
+There is no repository-managed remote CI. Run `task ci:local` explicitly before
+push, PR, integration, and batch closeout when a broad gate is required.
 
 The lower-level prompt generator remains available at `uv run python tools/workflow/ai_task.py`, but the stable repo entrypoint is `task`.
 

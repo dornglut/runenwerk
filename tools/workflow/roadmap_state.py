@@ -423,6 +423,13 @@ def validate_changed_paths(paths: list[str], scopes: list[str]) -> list[str]:
 
 
 def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
+    status_completed = subprocess.run(
+        ["git", "-C", str(worktree), "-c", "core.longpaths=true", "status", "--porcelain=v1", "--untracked-files=all"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
     commands = [
         ["diff", "--name-only", f"{base_sha}...HEAD"],
         ["diff", "--name-only", "--cached"],
@@ -431,6 +438,14 @@ def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
     ]
     changed: list[str] = []
     seen: set[str] = set()
+
+    for line in status_completed.stdout.splitlines():
+        for raw_path in porcelain_status_paths(line):
+            path = normalize_repo_path(raw_path)
+            if path and path not in seen:
+                changed.append(path)
+                seen.add(path)
+
     for command in commands:
         completed = subprocess.run(
             ["git", "-C", str(worktree), "-c", "core.longpaths=true", *command],
@@ -445,6 +460,17 @@ def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
                 changed.append(path)
                 seen.add(path)
     return changed
+
+
+def porcelain_status_paths(line: str) -> list[str]:
+    if len(line) < 4:
+        return []
+    raw_path = line[3:].strip()
+    if not raw_path:
+        return []
+    if " -> " in raw_path:
+        return [part.strip().strip('"') for part in raw_path.split(" -> ", maxsplit=1)]
+    return [raw_path.strip('"')]
 
 
 def validate_puml_files() -> int:
