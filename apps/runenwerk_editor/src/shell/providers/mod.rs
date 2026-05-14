@@ -1877,7 +1877,10 @@ mod tests {
             graph_frame.provider_id,
             Some(PROCGEN_GRAPH_CANVAS_PROVIDER_ID)
         );
-        assert!(provider_frame_text(&graph_frame).contains("domain-backed Phase 6C CPU preview"));
+        assert!(
+            provider_frame_text(&graph_frame)
+                .contains("domain-backed Phase 6D bake-capable CPU preview")
+        );
 
         let preview_frame = registry.resolve_frame(
             &context(&app, &shell_state, &theme),

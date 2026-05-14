@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-14
 ---
 
 # Runenwerk Workspace
@@ -27,10 +27,13 @@ This page is a lightweight orientation map for the active Runenwerk repository.
 
 - Workspace agent rules: [`agents.md`](agents.md)
 - Planning and implementation workflow: [`planning-and-implementation-workflow.md`](planning-and-implementation-workflow.md)
+- Roadmap planning methods: [`planning-methods.md`](planning-methods.md)
+- Architecture governance review: [`architecture-governance-review.md`](architecture-governance-review.md)
 - Workspace routines: [`routines/README.md`](routines/README.md)
 - Workspace roadmap index: [`roadmap-index.md`](roadmap-index.md)
 - Repository execution checklist: [`repo-execution-priority-checklist.md`](repo-execution-priority-checklist.md)
 - Design implementation triage: [`design-implementation-triage.md`](design-implementation-triage.md)
+- Roadmap decision register: [`roadmap-decision-register.md`](roadmap-decision-register.md)
 - Prompt templates: [`prompt-templates/README.md`](prompt-templates/README.md)
 - Documentation templates: [`templates/README.md`](templates/README.md)
 - Docs root index: [`../index.mdx`](../index.mdx)

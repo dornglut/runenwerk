@@ -26,6 +26,32 @@ TESTING.md
 
 For architectural changes, update or add a design doc under `docs-site/src/content/docs/design/`. For long-term decisions, update or add an ADR under `docs-site/src/content/docs/adr/`.
 
+For changes that may affect dependency direction, domain ownership, durable
+decision history, migration strategy, tradeoffs, enforcement, or ownership
+mode, run the architecture governance workflow before implementation:
+
+```text
+python3 tools/workflow/ai_task.py architecture-governance --task "<task>" --scope "<scope>"
+```
+
+Where shell support is available, the stable wrapper is:
+
+```text
+./workflow architecture-governance --task "<task>" --scope "<scope>"
+```
+
+## Automation Boundary
+
+Codex and AI workflow automation may generate prompts, checklists, first
+commands, validation expectations, stop conditions, and closeout reminders. It
+must not create a privileged AI mutation path or bypass repository inspection,
+accepted ADR/design gates, domain ownership, dependency rules, or validation.
+
+Keep AI prompts, workflow templates, and checklist automation in workspace docs
+or `tools/`. Runtime AI integrations belong in `apps/`, `tools/`, or
+`adapters/`. Do not add LLM clients, prompts, or autonomous agents to
+`foundation` or `domain` crates.
+
 ## Where Concepts Belong
 
 ```text

@@ -7,6 +7,7 @@ use world_sdf::{FieldProductId, SdfChunkPayload, WorldSdfPayloadRef};
 pub enum RuntimeProductKind {
     Scene,
     FieldProduct,
+    ProcgenPreview,
     WorldSdfPayload,
     Material,
     Texture,

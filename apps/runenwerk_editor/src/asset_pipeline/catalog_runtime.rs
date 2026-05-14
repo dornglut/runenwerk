@@ -447,6 +447,7 @@ fn reload_decision_for_kind(kind: AssetKind) -> ReloadDecision {
         | AssetKind::WorldEditLog
         | AssetKind::FieldMaterialChannelSet
         | AssetKind::FormedFieldProduct
+        | AssetKind::ProcgenGraph
         | AssetKind::WorldSdfChunkPageArtifact
         | AssetKind::ClipmapBrickmapProduct
         | AssetKind::Shader
@@ -477,7 +478,6 @@ fn reload_decision_for_kind(kind: AssetKind) -> ReloadDecision {
         | AssetKind::PhysicsConfig
         | AssetKind::AnimationClip
         | AssetKind::AnimationGraph
-        | AssetKind::ProcgenGraph
         | AssetKind::Graph
         | AssetKind::Script => ReloadDecision::Unsupported,
         AssetKind::DiagnosticsCapture => ReloadDecision::Rejected,
@@ -512,6 +512,7 @@ fn runtime_product_kind_for_asset(kind: AssetKind) -> RuntimeProductKind {
     match kind {
         AssetKind::Scene => RuntimeProductKind::Scene,
         AssetKind::FormedFieldProduct => RuntimeProductKind::FieldProduct,
+        AssetKind::ProcgenGraph => RuntimeProductKind::ProcgenPreview,
         AssetKind::WorldSdfChunkPageArtifact | AssetKind::ClipmapBrickmapProduct => {
             RuntimeProductKind::WorldSdfPayload
         }
@@ -588,6 +589,28 @@ mod tests {
         assert_eq!(
             reload_decision_for_kind(AssetKind::Script),
             ReloadDecision::Unsupported
+        );
+    }
+
+    #[test]
+    fn procgen_graph_reload_classifies_as_live_preview_product() {
+        let artifact = AssetArtifactDescriptor::new(
+            asset_artifact_id(6),
+            asset_id(3),
+            AssetKind::ProcgenGraph,
+            ArtifactPayloadKind::RuntimePackage {
+                package_id: "procgen".to_string(),
+            },
+            ArtifactCacheKey::new("procgen"),
+        );
+        let runtime = AssetCatalogRuntime::new();
+
+        let status = runtime.classify_artifact_reload(&artifact);
+
+        assert_eq!(status.decision, ReloadDecision::LiveReload);
+        assert_eq!(
+            status.runtime_product.as_ref().map(|product| product.kind),
+            Some(RuntimeProductKind::ProcgenPreview)
         );
     }
 

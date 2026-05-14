@@ -16,6 +16,7 @@ Use routines when a task needs repeated inspection, patching, validation, and re
 
 ## Available Routines
 
+- [Architecture Governance Review Routine](./architecture-governance-review-routine.md)
 - [Code Refactor Routine](./code-refactor-routine.md)
 - [Commit Splitting Routine](./commit-splitting-routine.md)
 - [Crate Implementation Routine](./crate-implementation-routine.md)

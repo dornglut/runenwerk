@@ -19,6 +19,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 ## Available Templates
 
 - [Architecture Audit](./architecture-audit.md)
+- [Architecture Governance Review](./architecture-governance-review.md)
 - [Code Review](./code-review.md)
 - [Commit Organization](./commit-organization.md)
 - [Crate Design](./crate-design.md)
@@ -35,6 +36,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - Run the smallest relevant validation commands.
 - Stop when validation fails and report the concrete failure.
 - Do not use templates to bypass domain ownership, ratification, diagnostics, or dependency rules.
+- Use architecture audit for findings-only review and architecture governance review for pre-implementation decision gates.
 
 ## Related Docs
 

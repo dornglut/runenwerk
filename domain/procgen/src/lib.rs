@@ -2,6 +2,7 @@
 //! Purpose: Domain contracts for deterministic procedural generator documents,
 //! ratification, lowering, planning metadata, and product descriptors.
 
+pub mod bake;
 pub mod catalog;
 pub mod determinism;
 pub mod document;
@@ -15,6 +16,10 @@ pub mod ratification;
 #[cfg(test)]
 mod test_fixtures;
 
+pub use bake::{
+    ProcgenBakeDiagnostic, ProcgenBakeDiagnosticCode, ProcgenBakeOutcome, ProcgenBakeRollbackPoint,
+    bake_procgen_document,
+};
 pub use catalog::{ProcgenNodeCatalog, ProcgenNodeDescriptor};
 pub use determinism::{
     ProcgenDeterminismKey, determinism_key_for_document, parameter_hash_for_document,

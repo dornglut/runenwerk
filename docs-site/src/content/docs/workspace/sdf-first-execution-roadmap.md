@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-05-14
 related_adrs:
   - ../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
 related_designs:
@@ -34,12 +34,13 @@ The target result is not finished open-world gameplay in one jump. The target
 is the substrate that makes open-world gameplay possible without private
 execution paths or renderer-owned world truth.
 
-The immediate priority remains M6.2 procgen, now after the Phase 6C concrete
-CPU preview proof. Remaining procgen work must build on the completed execution
-substrate, the new `domain/procgen` contracts, the editor/runtime overlay
-proof, and formed preview products so gameplay graph, particles, physics,
-animation, world processes, renderer residency, and strict runtime consumers use
-formed products without inventing private execution paths.
+The immediate M6.2C procgen bake/rollback/persistence gate is complete after
+the Phase 6C concrete CPU preview proof. Future procgen work must continue to
+build on the completed execution substrate, the `domain/procgen` contracts, the
+editor/runtime overlay proof, formed preview products, and Phase 6D bake
+evidence so gameplay graph, particles, physics, animation, world processes,
+renderer residency, and strict runtime consumers use formed products without
+inventing private execution paths.
 
 Owning domain and app roadmaps still own detailed implementation steps. This
 page owns cross-track ordering when those roadmaps overlap.
@@ -70,21 +71,18 @@ Required end-state properties:
 
 ## Current Focus
 
-The current work is Phase 6D: procgen bake, rollback, persistence, and runtime
-preview reload classification after the Phase 6C concrete CPU preview proof.
-Phases 1 through 5 are complete, Phase 6A added the domain-first procgen crate
-for deterministic documents, ratification, lowering, and product contracts,
-Phase 6B wired the editor/runtime proof through product publication, query
-snapshots, render selection, and derived GPU residency, and Phase 6C added the
-first deterministic terrain/material generator with formed CPU field-preview
-products.
+The current SDF-first M6.2C gate is complete: Phase 6D adds procgen offline
+bake outcome formation, last-good bake rollback, app-owned bake archive
+persistence, and runtime preview reload classification on top of the Phase
+6A-6C procgen and product substrate.
 
 Current gaps:
 
-- procgen bake commands, persistence, rollback, and runtime preview reload
-  classification remain deferred after Phase 6C;
-- Phase 6D must use the existing Phase 6A-6C procgen and product substrate
-  instead of adding private execution paths.
+- worker pools, renderer rebuilds, GPU upload, caves, stamps, scatter, and
+  biome systems remain deferred to later owning phases;
+- future procgen phases must keep using product publication/query barriers,
+  strict consumer policy, render selection, and derived GPU residency instead
+  of adding private execution paths.
 
 ## Phased Roadmap
 
@@ -250,15 +248,16 @@ Out of scope:
 
 ### Phase 6 - First Procgen Product Track
 
-Status: Phase 6A, Phase 6B, and Phase 6C complete as of 2026-05-13. Remaining
-Phase 6D work covers procgen bake, rollback, persistence, and runtime preview
-reload classification on top of `domain/procgen`.
+Status: Phase 6A, Phase 6B, and Phase 6C complete as of 2026-05-13. Phase 6D
+complete as of 2026-05-14 for procgen bake, rollback, persistence, and runtime
+preview reload classification on top of `domain/procgen`.
 
 Closeout evidence:
 
 - [reports/closeouts/sdf-first-execution-phase-6a/closeout.md](../reports/closeouts/sdf-first-execution-phase-6a/closeout.md)
 - [reports/closeouts/sdf-first-execution-phase-6b/closeout.md](../reports/closeouts/sdf-first-execution-phase-6b/closeout.md)
 - [reports/closeouts/sdf-first-execution-phase-6c/closeout.md](../reports/closeouts/sdf-first-execution-phase-6c/closeout.md)
+- [reports/closeouts/sdf-first-execution-phase-6d/closeout.md](../reports/closeouts/sdf-first-execution-phase-6d/closeout.md)
 
 Intent: implement the first visible open-world producer on top of the completed
 execution substrate. This is a procgen-owned product track, not a generic
@@ -277,6 +276,9 @@ Acceptance gate:
   operation windows and diagnostics;
 - bake-to-`world_ops` and bake-to-field-product flows preserve authored edits
   and produce changed-region diagnostics.
+- offline bake outcomes preserve rollback evidence, publish through product
+  barriers, persist app-owned bake archives, and keep procgen graph reload
+  classification live and typed.
 
 Out of scope:
 
@@ -298,15 +300,20 @@ completed the first concrete deterministic terrain/material generator: bounded
 procgen documents now form scalar-distance and material-channel CPU
 field-preview products through `world_sdf` preview contracts, publish the formed
 descriptors through product barriers, snapshot them through query barriers, and
-expose preview product summaries in the editor. Bake commands, persistence,
-rollback, and runtime preview reload classification remain deferred.
+expose preview product summaries in the editor. Phase 6D completed the
+bake/rollback/persistence/reload slice: `domain/procgen` forms offline bake
+outcomes and rollback evidence, `runenwerk_editor` publishes accepted bakes
+through product barriers, restores the last accepted bake on rollback, persists
+bake archives as app-owned RON, and classifies procgen graph reloads as live
+`ProcgenPreview` products.
 
 ## Procgen Code Gate
 
 Further M6.2 procgen code must continue from the accepted
 `docs-site/src/content/docs/domain/procgen/README.md` contract, the Phase 6A
 `domain/procgen` implementation, the Phase 6B editor/runtime overlay proof, and
-the Phase 6C formed CPU field-preview product path.
+the Phase 6C formed CPU field-preview product path plus the Phase 6D
+bake/rollback/persistence proof.
 
 Procgen code must not bypass product jobs, query snapshots, publication
 barriers, strict consumer policy, render product selection, or derived GPU
@@ -405,8 +412,14 @@ Roadmap updates should verify:
   `world_sdf::FieldPreviewProduct` payloads from bounded procgen documents,
   publishes the formed preview descriptors through product barriers, snapshots
   them through query barriers, and exposes editor preview summaries without
-  renderer rebuilds, GPU upload, bake, persistence, worker pools, caves, stamps,
-  or scatter;
+  renderer rebuilds, GPU upload, worker pools, caves, stamps, or scatter;
+- Phase 6D procgen bake/rollback/persistence proof is complete:
+  `domain/procgen` forms offline bake outcomes with `world_ops` operation
+  records, formed field-preview products, product descriptors, changed regions,
+  explanations, and rollback evidence; `runenwerk_editor` publishes accepted
+  bakes through product barriers, restores last-good bake products on rollback,
+  persists app-owned bake archives, and classifies `ProcgenGraph` reloads as
+  live `ProcgenPreview` products;
 - `world_sdf`, material, texture, asset/import, and editor product surfaces
   align with product-core metadata while preserving their owning-domain APIs;
 - render prepare carries backend-neutral `RenderProductSelection` metadata as

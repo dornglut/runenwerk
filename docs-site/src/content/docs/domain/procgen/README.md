@@ -5,7 +5,7 @@ status: accepted
 owner: procgen
 layer: domain
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-05-14
 related_docs:
   - ../../workspace/sdf-first-execution-roadmap.md
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
@@ -127,11 +127,13 @@ The first implemented product track is bounded region terrain/material
 generation that lowers to deterministic `world_ops::OperationRecord` windows
 plus changed-region diagnostics. Phase 6A exposes product job and publication
 descriptor builders for operation-window and field-product candidate outputs,
-Phase 6B executes the first editor/runtime overlay proof, and Phase 6C forms
+Phase 6B executes the first editor/runtime overlay proof, Phase 6C forms
 deterministic scalar-distance and material-channel CPU preview payloads through
-`world_sdf` preview contracts. Cave mask/stamp, scatter/distribution, bake
-commands, persistence, runtime preview reload, worker pools, renderer rebuilds,
-and GPU upload remain deferred.
+`world_sdf` preview contracts, and Phase 6D adds offline bake outcome formation
+with rollback evidence. `runenwerk_editor` owns the app/runtime bake command
+boundary, last-good rollback, bake archive persistence, and procgen graph
+runtime reload classification. Cave mask/stamp, scatter/distribution, worker
+pools, renderer rebuilds, and GPU upload remain deferred.
 
 ## Phase 6A Public Surface
 
@@ -190,14 +192,18 @@ product publication barriers, expose query snapshots, obey strict consumer
 policy, feed render selection as backend-neutral product descriptors, and
 request GPU residency only through derived renderer residency contracts.
 
-Runtime preview and offline bake use the same future contract. They differ only
+Runtime preview and offline bake use the same product contract. They differ only
 by budget, retention, and command boundary:
 
 - runtime preview is bounded, diagnosable, and non-authoritative until accepted;
-- offline bake can produce retained candidates but still needs ratification and
-  governed publication;
+- offline bake produces retained candidates through `ProcgenExecutionPolicy`,
+  still needs ratification, and publishes through governed product barriers;
 - bake-to-`world_ops` and bake-to-field-product paths preserve source lineage,
   changed regions, diagnostics, and rollback evidence.
+
+`domain/procgen` owns the deterministic bake outcome and rollback evidence
+types. Apps own commands, persistence locations, archive formats, package
+policy, and runtime visibility promotion.
 
 ## Shared Contract Promotion
 
@@ -224,9 +230,10 @@ local previews are never replicated as authority.
 ## Gates
 
 Phase 6A has implemented the domain crate, Phase 6B has implemented the first
-editor/runtime visible overlay proof, and Phase 6C has implemented the first
-concrete deterministic terrain/material CPU preview proof. Future procgen work
-must still keep these gates:
+editor/runtime visible overlay proof, Phase 6C has implemented the first
+concrete deterministic terrain/material CPU preview proof, and Phase 6D has
+implemented the first bake/rollback/persistence/reload proof. Future procgen
+work must still keep these gates:
 
 - this domain contract is the implementation source of truth;
 - product jobs, publication barriers, query snapshots, strict consumers, render
@@ -235,9 +242,11 @@ must still keep these gates:
 - first-slice tests continue proving deterministic operation-window lowering
   and deterministic scalar-distance/material-channel CPU preview products from
   the same seed, scope, version, inputs, and overlay generation;
+- offline bake tests continue proving retained/cacheable product descriptors,
+  rollback evidence, and deterministic archive payloads;
 - concrete procgen graph and preview providers remain app-owned consumers of
   this domain contract rather than owning generator truth.
 
-Do not implement bake execution, persistence, runtime preview reload, worker
-pools, caves, stamps, scatter, biome systems, renderer rebuilds, or GPU upload
-until the next accepted Phase 6D+ implementation plans.
+Do not implement worker pools, caves, stamps, scatter, biome systems, renderer
+rebuilds, GPU upload, or package-level persistent cache sidecars until the next
+accepted implementation plans.

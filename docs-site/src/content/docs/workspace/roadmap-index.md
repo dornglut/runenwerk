@@ -18,6 +18,10 @@ This page is an index, not the source of truth for domain-specific execution ste
 
 Operational execution checklist:
 
+- [workspace/architecture-governance-review.md](./architecture-governance-review.md)
+- [workspace/planning-methods.md](./planning-methods.md)
+- [workspace/roadmap-decision-register.md](./roadmap-decision-register.md)
+- [workspace/design-implementation-triage.md](./design-implementation-triage.md)
 - [workspace/sdf-first-execution-roadmap.md](./sdf-first-execution-roadmap.md)
 - [workspace/repo-execution-priority-checklist.md](./repo-execution-priority-checklist.md)
 - [engine/roadmaps/runtime-product-job-executor-roadmap.md](../engine/roadmaps/runtime-product-job-executor-roadmap.md)
@@ -27,6 +31,14 @@ Operational execution checklist:
 
 ## Source-of-Truth Tracks
 
+- Workspace architecture governance review:
+  - [workspace/architecture-governance-review.md](./architecture-governance-review.md)
+- Workspace planning method and scorecard policy:
+  - [workspace/planning-methods.md](./planning-methods.md)
+- Workspace roadmap scorecard and decision register:
+  - [workspace/roadmap-decision-register.md](./roadmap-decision-register.md)
+- Current value-weighted dependency roadmap:
+  - [workspace/design-implementation-triage.md](./design-implementation-triage.md)
 - SDF-first cross-track execution order:
   - [workspace/sdf-first-execution-roadmap.md](./sdf-first-execution-roadmap.md)
 - SDF-first execution Phase 1 closeout evidence:
@@ -39,6 +51,14 @@ Operational execution checklist:
   - [reports/closeouts/sdf-first-execution-phase-4/closeout.md](../reports/closeouts/sdf-first-execution-phase-4/closeout.md)
 - SDF-first execution Phase 5 closeout evidence:
   - [reports/closeouts/sdf-first-execution-phase-5/closeout.md](../reports/closeouts/sdf-first-execution-phase-5/closeout.md)
+- SDF-first execution Phase 6A closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-6a/closeout.md](../reports/closeouts/sdf-first-execution-phase-6a/closeout.md)
+- SDF-first execution Phase 6B closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-6b/closeout.md](../reports/closeouts/sdf-first-execution-phase-6b/closeout.md)
+- SDF-first execution Phase 6C closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-6c/closeout.md](../reports/closeouts/sdf-first-execution-phase-6c/closeout.md)
+- SDF-first execution Phase 6D closeout evidence:
+  - [reports/closeouts/sdf-first-execution-phase-6d/closeout.md](../reports/closeouts/sdf-first-execution-phase-6d/closeout.md)
 - Runtime product job executor roadmap:
   - [engine/roadmaps/runtime-product-job-executor-roadmap.md](../engine/roadmaps/runtime-product-job-executor-roadmap.md)
 - Runtime product job RPJ4-RPJ6 closeout evidence:
@@ -84,15 +104,14 @@ Operational execution checklist:
 
 ## Current Focus
 
-- Plan and execute SDF-first Phase 6D / M6.2C procgen bake, rollback,
-  persistence, and runtime preview reload classification from
-  `workspace/sdf-first-execution-roadmap.md`. Phase 6A created
-  `domain/procgen`, Phase 6B added the visible editor/runtime overlay proof on
-  product publication barriers, query snapshots, render selection, and derived
-  GPU residency, and Phase 6C added deterministic formed CPU field-preview
-  products.
-- Keep remaining M6.2 procgen code scoped to bounded region terrain/material
-  generation through `domain/procgen` and the completed Phase 6A-6C substrate.
+- SDF-first Phase 6D / M6.2C is complete: procgen now has offline bake
+  outcomes, last-good rollback, app-owned bake archive persistence, and live
+  procgen graph reload classification on the completed Phase 6A-6C substrate.
+- With Phase 6D closed, keep any further M6.2 procgen code scoped to bounded
+  region terrain/material generation through `domain/procgen`; near-term
+  product-job follow-ups should resume from the runtime product job roadmap.
+- Use the roadmap decision register to compare same-gate, same-level candidates;
+  blocker gates and owning roadmap order still win before score.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
   execution substrate lands.
 - Keep render SDF/GPU work on the completed product-selection and derived
@@ -155,6 +174,11 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   deterministic scalar-distance and material-channel CPU preview products,
   `runenwerk_editor` publishes and snapshots those formed descriptors through
   the product substrate, and editor preview surfaces expose sample summaries;
+- SDF-first execution Phase 6D is complete: `domain/procgen` forms offline
+  bake outcomes and rollback evidence, `runenwerk_editor` publishes accepted
+  bakes through product barriers, restores last-good bake products on rollback,
+  persists app-owned bake archives, and classifies procgen graph reloads as
+  live `ProcgenPreview` products;
 - runtime product job RPJ4-RPJ7A is complete for local execution substrate:
   Draw responsiveness uses immediate stroke feedback plus async tile jobs,
   product cache identity is typed and lineage-derived, Draw preview/final tile

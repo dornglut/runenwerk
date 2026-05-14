@@ -15,12 +15,13 @@ use graph::{
     PortDefinition, PortDirection, PortId, PortTypeId,
 };
 use procgen::{
-    ProcgenDocument, ProcgenDocumentId, ProcgenFieldPreviewDiagnostic,
-    ProcgenFieldPreviewFormation, ProcgenFieldPreviewPolicy, ProcgenGeneratorId,
-    ProcgenInputProduct, ProcgenLoweringPolicy, ProcgenNodeCatalog, ProcgenNodeKind,
-    ProcgenNodeParameters, ProcgenOutputKind, ProcgenOutputProduct, ProcgenRatificationReport,
-    ProcgenReservation, ProcgenReservationId, ProcgenScope, ProcgenWorldOpsLoweringResult,
-    ProcgenWriteTarget, build_procgen_formed_preview_product_contracts,
+    ProcgenBakeDiagnostic, ProcgenBakeOutcome, ProcgenDocument, ProcgenDocumentId,
+    ProcgenFieldPreviewDiagnostic, ProcgenFieldPreviewFormation, ProcgenFieldPreviewPolicy,
+    ProcgenGeneratorId, ProcgenInputProduct, ProcgenLoweringPolicy, ProcgenNodeCatalog,
+    ProcgenNodeKind, ProcgenNodeParameters, ProcgenOutputKind, ProcgenOutputProduct,
+    ProcgenRatificationReport, ProcgenReservation, ProcgenReservationId, ProcgenScope,
+    ProcgenWorldOpsLoweringResult, ProcgenWriteTarget, bake_procgen_document,
+    build_procgen_formed_preview_product_contracts,
     build_procgen_formed_preview_publication_outcome,
     catalog::{
         FIELD_PRODUCT_OUTPUT_NODE, HEIGHT_NOISE_NODE, MATERIAL_RULE_NODE, WORLD_OPS_OUTPUT_NODE,
@@ -30,8 +31,8 @@ use procgen::{
 };
 use product::{
     ProductConsumerClass, ProductDescriptorCore, ProductFamily, ProductFreshness, ProductIdentity,
-    ProductPublicationReport, ProductQueryPolicy, ProductResidency, QuerySnapshotProductDescriptor,
-    QuerySnapshotPublicationReport, QuerySnapshotPublicationStatus,
+    ProductPublicationOutcome, ProductPublicationReport, ProductQueryPolicy, ProductResidency,
+    QuerySnapshotProductDescriptor, QuerySnapshotPublicationReport, QuerySnapshotPublicationStatus,
 };
 use spatial::{ChunkCoord3, ChunkId, RegionCoord3, RegionId, WorldId};
 use world_ops::{QuantizedAabb, QuantizedVec3, WorldRevision};
@@ -45,6 +46,7 @@ pub const PROCGEN_WORLD_OPS_PRODUCT_ID: ExpressionProductId = ExpressionProductI
 pub const PROCGEN_FIELD_CANDIDATE_PRODUCT_ID: ExpressionProductId = ExpressionProductId(8_002);
 
 const PROCGEN_PUBLICATION_STAGE_SEQUENCE: u64 = 6_200;
+const PROCGEN_BAKE_PUBLICATION_STAGE_SEQUENCE: u64 = 6_260;
 const PROCGEN_JOURNAL_LIMIT: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +54,8 @@ pub enum EditorProcgenJournalStage {
     Ratification,
     Lowering,
     FieldPreviewFormation,
+    Bake,
+    Rollback,
     ProductPublication,
     QuerySnapshotPublication,
 }
@@ -61,6 +65,55 @@ pub struct EditorProcgenJournalEntry {
     pub stage: EditorProcgenJournalStage,
     pub accepted: bool,
     pub summary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorProcgenBakeRecord {
+    pub determinism_key: String,
+    pub source_revision: String,
+    pub authored_overlay_generation: u64,
+    pub operation_records: Vec<world_ops::OperationRecord>,
+    pub changed_regions: Vec<procgen::ProcgenChangedRegion>,
+    pub explanations: Vec<procgen::ProcgenExplanationEntry>,
+    pub field_preview_products: Vec<FieldPreviewProduct>,
+    pub product_descriptors: Vec<ProductDescriptorCore>,
+    pub diagnostics: Vec<ProcgenBakeDiagnostic>,
+}
+
+impl EditorProcgenBakeRecord {
+    fn from_outcome(outcome: &ProcgenBakeOutcome) -> Option<Self> {
+        let rollback = outcome.rollback_point.as_ref()?;
+        Some(Self {
+            determinism_key: rollback.determinism_key.clone(),
+            source_revision: rollback.source_revision.clone(),
+            authored_overlay_generation: rollback.authored_overlay_generation,
+            operation_records: rollback.operation_records.clone(),
+            changed_regions: rollback.changed_regions.clone(),
+            explanations: rollback.explanations.clone(),
+            field_preview_products: outcome.field_preview_products.clone(),
+            product_descriptors: rollback.product_descriptors.clone(),
+            diagnostics: outcome.diagnostics.clone(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EditorProcgenBakeReport {
+    pub accepted: bool,
+    pub published_count: usize,
+    pub rejected_count: usize,
+    pub operation_count: usize,
+    pub product_count: usize,
+    pub descriptor_count: usize,
+    pub diagnostics_count: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EditorProcgenRollbackReport {
+    pub accepted: bool,
+    pub restored_product_count: usize,
+    pub restored_descriptor_count: usize,
+    pub diagnostics_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +129,7 @@ pub struct ProcgenRuntimeState {
     last_publication_key: Option<String>,
     last_query_snapshot_key: Option<String>,
     last_console_summary: Option<String>,
+    last_bake: Option<EditorProcgenBakeRecord>,
     journal: Vec<EditorProcgenJournalEntry>,
 }
 
@@ -99,6 +153,7 @@ impl ProcgenRuntimeState {
             last_publication_key: None,
             last_query_snapshot_key: None,
             last_console_summary: None,
+            last_bake: None,
             journal: Vec::new(),
         }
     }
@@ -117,6 +172,10 @@ impl ProcgenRuntimeState {
 
     pub fn journal(&self) -> &[EditorProcgenJournalEntry] {
         &self.journal
+    }
+
+    pub fn last_bake(&self) -> Option<&EditorProcgenBakeRecord> {
+        self.last_bake.as_ref()
     }
 
     pub fn published_descriptors(&self) -> &[ProductDescriptorCore] {
@@ -175,7 +234,7 @@ impl ProcgenRuntimeState {
             .collect::<Vec<_>>()
             .join(", ");
         let mut lines = vec![
-            "procgen graph canvas: domain-backed Phase 6C CPU preview".to_string(),
+            "procgen graph canvas: domain-backed Phase 6D bake-capable CPU preview".to_string(),
             format!(
                 "document: {} #{}",
                 self.document.label,
@@ -312,6 +371,16 @@ impl ProcgenRuntimeState {
                     )
                 }),
         );
+        if let Some(bake) = &self.last_bake {
+            lines.push(format!(
+                "last procgen bake: key={} operations={} products={}",
+                bake.determinism_key,
+                bake.operation_records.len(),
+                bake.field_preview_products.len()
+            ));
+        } else {
+            lines.push("last procgen bake: none".to_string());
+        }
         lines
     }
 
@@ -352,9 +421,15 @@ impl ProcgenRuntimeState {
         } else {
             "waiting"
         };
+        let bake = self
+            .last_bake
+            .as_ref()
+            .map(|record| record.determinism_key.as_str())
+            .unwrap_or("waiting");
         vec![
             format!("product publication: {publication}"),
             format!("query snapshot: {query}"),
+            format!("offline bake: {bake}"),
             format!("journal entries: {}", self.journal.len()),
         ]
     }
@@ -393,12 +468,33 @@ impl ProcgenRuntimeState {
         self.last_field_preview_key = formation.determinism_key;
         self.last_field_preview_diagnostics = formation.diagnostics;
         self.formed_preview_products = formation.products;
+        self.select_first_formed_preview_product();
+        self.track_active_overlay_products();
+    }
+
+    fn record_baked_products(
+        &mut self,
+        key: String,
+        products: Vec<FieldPreviewProduct>,
+        diagnostics: Vec<ProcgenFieldPreviewDiagnostic>,
+    ) {
+        self.last_field_preview_key = Some(key);
+        self.last_field_preview_diagnostics = diagnostics;
+        self.formed_preview_products = products;
+        self.select_first_formed_preview_product();
+        self.track_active_overlay_products();
+    }
+
+    fn select_first_formed_preview_product(&mut self) {
         self.selected_preview_product_id = self
             .formed_preview_products
             .iter()
             .find(|product| matches!(product.payload, FieldPreviewPayload::ScalarDistance { .. }))
             .or_else(|| self.formed_preview_products.first())
             .map(|product| product.descriptor.product_id);
+    }
+
+    fn track_active_overlay_products(&mut self) {
         self.known_overlay_product_ids
             .extend(self.active_overlay_product_ids());
         self.known_overlay_product_ids.sort();
@@ -410,6 +506,76 @@ impl ProcgenRuntimeState {
         self.selected_preview_product_id = None;
         self.last_field_preview_key = None;
         self.last_field_preview_diagnostics = diagnostics;
+    }
+
+    fn record_accepted_bake(&mut self, outcome: &ProcgenBakeOutcome, publication_key: String) {
+        let Some(record) = EditorProcgenBakeRecord::from_outcome(outcome) else {
+            return;
+        };
+        let key = record.determinism_key.clone();
+        self.record_published_descriptors(record.product_descriptors.clone());
+        self.record_baked_products(key, record.field_preview_products.clone(), Vec::new());
+        self.last_publication_key = Some(publication_key);
+        self.last_query_snapshot_key = None;
+        self.last_bake = Some(record);
+    }
+
+    fn restore_last_bake(&mut self) -> EditorProcgenRollbackReport {
+        let Some(record) = self.last_bake.clone() else {
+            self.record_journal(
+                EditorProcgenJournalStage::Rollback,
+                false,
+                "no accepted bake is available",
+            );
+            return EditorProcgenRollbackReport::default();
+        };
+
+        self.record_published_descriptors(record.product_descriptors.clone());
+        self.record_baked_products(
+            record.determinism_key.clone(),
+            record.field_preview_products.clone(),
+            Vec::new(),
+        );
+        self.last_publication_key = Some(format!("bake:{}", record.determinism_key));
+        self.last_query_snapshot_key = None;
+        self.record_journal(
+            EditorProcgenJournalStage::Rollback,
+            true,
+            format!(
+                "restored_products={} descriptors={}",
+                record.field_preview_products.len(),
+                record.product_descriptors.len()
+            ),
+        );
+        EditorProcgenRollbackReport {
+            accepted: true,
+            restored_product_count: record.field_preview_products.len(),
+            restored_descriptor_count: record.product_descriptors.len(),
+            diagnostics_count: record.diagnostics.len(),
+        }
+    }
+
+    fn last_bake_is_current(&self) -> bool {
+        let Some(record) = &self.last_bake else {
+            return false;
+        };
+        self.last_publication_key.as_deref()
+            == Some(format!("bake:{}", record.determinism_key).as_str())
+            && self.published_descriptors == record.product_descriptors
+            && self.formed_preview_products == record.field_preview_products
+    }
+
+    fn preserve_last_bake_after_rejection(&mut self) -> Option<EditorProcgenRollbackReport> {
+        let record = self.last_bake.as_ref()?;
+        if self.last_bake_is_current() {
+            return Some(EditorProcgenRollbackReport {
+                accepted: true,
+                restored_product_count: record.field_preview_products.len(),
+                restored_descriptor_count: record.product_descriptors.len(),
+                diagnostics_count: record.diagnostics.len(),
+            });
+        }
+        Some(self.restore_last_bake())
     }
 }
 
@@ -479,12 +645,36 @@ pub fn publish_procgen_products(
     let key = determinism_key_for_document(app.procgen_runtime().document())
         .as_str()
         .to_string();
-    if app.procgen_runtime().last_publication_key.as_ref() == Some(&key) {
+    let bake_key = format!("bake:{key}");
+    if app.procgen_runtime().last_publication_key.as_ref() == Some(&key)
+        || app.procgen_runtime().last_publication_key.as_ref() == Some(&bake_key)
+    {
         return ProductPublicationReport::default();
     }
 
     let report = app.procgen_runtime().ratification_report();
     if report.has_blocking_issues() {
+        let issue_count = report.len();
+        if let Some(preserved) = app
+            .procgen_runtime_mut()
+            .preserve_last_bake_after_rejection()
+        {
+            app.procgen_runtime_mut().record_journal(
+                EditorProcgenJournalStage::Ratification,
+                false,
+                format!(
+                    "rejected issues={} preserved_last_bake_products={}",
+                    issue_count, preserved.restored_product_count
+                ),
+            );
+            if let Some(summary) = app.procgen_runtime_mut().update_console_summary(format!(
+                "[procgen] rejected issues={issue_count}; preserved last accepted bake products={}",
+                preserved.restored_product_count
+            )) {
+                app.append_console_warning(summary);
+            }
+            return ProductPublicationReport::default();
+        }
         app.procgen_runtime_mut().published_descriptors.clear();
         app.procgen_runtime_mut().last_publication_key = None;
         app.procgen_runtime_mut().last_query_snapshot_key = None;
@@ -493,11 +683,11 @@ pub fn publish_procgen_products(
         app.procgen_runtime_mut().record_journal(
             EditorProcgenJournalStage::Ratification,
             false,
-            format!("rejected issues={}", report.len()),
+            format!("rejected issues={issue_count}"),
         );
         if let Some(summary) = app
             .procgen_runtime_mut()
-            .update_console_summary(format!("[procgen] rejected issues={}", report.len()))
+            .update_console_summary(format!("[procgen] rejected issues={issue_count}"))
         {
             app.append_console_warning(summary);
         }
@@ -601,6 +791,126 @@ pub fn publish_procgen_products(
         ));
     }
 
+    report
+}
+
+pub fn bake_procgen_products(
+    app: &mut RunenwerkEditorApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    barrier: &ExecutionBarrier,
+) -> EditorProcgenBakeReport {
+    if barrier.kind != BarrierKind::ProductPublication {
+        return EditorProcgenBakeReport::default();
+    }
+
+    let outcome = bake_procgen_document(
+        app.procgen_runtime().document(),
+        app.procgen_runtime().catalog(),
+        ProcgenFieldPreviewPolicy::default(),
+    );
+    let mut bake_report = EditorProcgenBakeReport {
+        accepted: outcome.is_accepted(),
+        published_count: 0,
+        rejected_count: 0,
+        operation_count: outcome.operation_records.len(),
+        product_count: outcome.field_preview_products.len(),
+        descriptor_count: outcome.output_descriptors.len(),
+        diagnostics_count: outcome.diagnostics.len(),
+    };
+
+    let Some(product_job) = outcome.product_job.clone() else {
+        app.procgen_runtime_mut().record_journal(
+            EditorProcgenJournalStage::Bake,
+            false,
+            format!("rejected diagnostics={}", outcome.diagnostics.len()),
+        );
+        if let Some(summary) = app.procgen_runtime_mut().update_console_summary(format!(
+            "[procgen] bake rejected diagnostics={}",
+            outcome.diagnostics.len()
+        )) {
+            app.append_console_warning(summary);
+        }
+        for diagnostic in outcome.diagnostics.iter().take(5) {
+            app.append_console_warning(format!(
+                "[procgen] bake {:?}: {}",
+                diagnostic.code, diagnostic.message
+            ));
+        }
+        bake_report.accepted = false;
+        return bake_report;
+    };
+
+    let outcome_for_publication = ProductPublicationOutcome::ready(
+        product_job,
+        outcome.output_descriptors.clone(),
+        PROCGEN_BAKE_PUBLICATION_STAGE_SEQUENCE,
+    );
+    publications.stage(outcome_for_publication);
+    let publication_report = publications.publish_staged(barrier);
+    bake_report.published_count = publication_report.published_count;
+    bake_report.rejected_count = publication_report.rejected_count;
+    bake_report.accepted =
+        publication_report.published_count > 0 && publication_report.rejected_count == 0;
+
+    if bake_report.accepted {
+        let publication_key = outcome
+            .determinism_key
+            .as_ref()
+            .map(|key| format!("bake:{key}"))
+            .unwrap_or_else(|| format!("bake:barrier:{}", barrier.index));
+        app.procgen_runtime_mut()
+            .record_accepted_bake(&outcome, publication_key);
+    }
+
+    app.procgen_runtime_mut().record_journal(
+        EditorProcgenJournalStage::Bake,
+        bake_report.accepted,
+        format!(
+            "published={} rejected={} operations={} products={} diagnostics={}",
+            bake_report.published_count,
+            bake_report.rejected_count,
+            bake_report.operation_count,
+            bake_report.product_count,
+            bake_report.diagnostics_count
+        ),
+    );
+
+    if let Some(summary) = app.procgen_runtime_mut().update_console_summary(format!(
+        "[procgen] bake barrier {}: published={} rejected={} operations={} products={}",
+        barrier.index,
+        bake_report.published_count,
+        bake_report.rejected_count,
+        bake_report.operation_count,
+        bake_report.product_count
+    )) {
+        if bake_report.accepted {
+            app.append_console_line(summary);
+        } else {
+            app.append_console_warning(summary);
+        }
+    }
+    for diagnostic in publication_report.diagnostics.iter().take(5) {
+        app.append_console_warning(format!(
+            "[procgen] bake publication {:?}: {}",
+            diagnostic.code, diagnostic.message
+        ));
+    }
+
+    bake_report
+}
+
+pub fn rollback_procgen_bake(app: &mut RunenwerkEditorApp) -> EditorProcgenRollbackReport {
+    let report = app.procgen_runtime_mut().restore_last_bake();
+    if let Some(summary) = app.procgen_runtime_mut().update_console_summary(format!(
+        "[procgen] rollback bake: accepted={} products={} descriptors={}",
+        report.accepted, report.restored_product_count, report.restored_descriptor_count
+    )) {
+        if report.accepted {
+            app.append_console_line(summary);
+        } else {
+            app.append_console_warning(summary);
+        }
+    }
     report
 }
 
@@ -944,7 +1254,7 @@ mod tests {
     use super::*;
     use editor_viewport::ViewportPresentationState;
     use engine::runtime::QuerySnapshotRuntimeResource;
-    use product::evaluate_product_consumption;
+    use product::{ProductScaleBand, evaluate_product_consumption};
 
     fn barrier(kind: BarrierKind) -> ExecutionBarrier {
         ExecutionBarrier {
@@ -993,6 +1303,92 @@ mod tests {
         assert_eq!(app.procgen_runtime().published_descriptors().len(), 3);
         assert_eq!(app.procgen_runtime().formed_preview_products().len(), 2);
         assert!(publications.staged().is_empty());
+    }
+
+    #[test]
+    fn procgen_bake_publishes_offline_products_only_at_product_publication_barrier() {
+        let mut app = RunenwerkEditorApp::new();
+        let mut publications = ProductPublicationRuntimeResource::default();
+
+        let skipped = bake_procgen_products(
+            &mut app,
+            &mut publications,
+            &barrier(BarrierKind::QuerySnapshotPublication),
+        );
+        assert!(!skipped.accepted);
+        assert!(app.procgen_runtime().last_bake().is_none());
+
+        let report = bake_procgen_products(
+            &mut app,
+            &mut publications,
+            &barrier(BarrierKind::ProductPublication),
+        );
+
+        assert!(report.accepted);
+        assert_eq!(report.published_count, 1);
+        assert_eq!(report.operation_count, 2);
+        assert_eq!(report.product_count, 2);
+        assert_eq!(app.procgen_runtime().published_descriptors().len(), 3);
+        assert!(
+            app.procgen_runtime()
+                .published_descriptors()
+                .iter()
+                .any(|descriptor| descriptor.scale_band == ProductScaleBand::Offline)
+        );
+        assert!(app.procgen_runtime().last_bake().is_some());
+        assert!(app.procgen_runtime().last_query_snapshot_key.is_none());
+    }
+
+    #[test]
+    fn procgen_rollback_restores_last_good_bake_after_invalid_document() {
+        let mut app = RunenwerkEditorApp::new();
+        let mut publications = ProductPublicationRuntimeResource::default();
+
+        let bake_report = bake_procgen_products(
+            &mut app,
+            &mut publications,
+            &barrier(BarrierKind::ProductPublication),
+        );
+        assert!(bake_report.accepted);
+        let baked_descriptor_count = app.procgen_runtime().published_descriptors().len();
+        let baked_product_count = app.procgen_runtime().formed_preview_products().len();
+
+        app.procgen_runtime_mut().document_mut().scope = ProcgenScope::new(WorldId(1), [], []);
+        publish_procgen_products(
+            &mut app,
+            &mut publications,
+            &barrier(BarrierKind::ProductPublication),
+        );
+        assert_eq!(
+            app.procgen_runtime().published_descriptors().len(),
+            baked_descriptor_count
+        );
+        assert_eq!(
+            app.procgen_runtime().formed_preview_products().len(),
+            baked_product_count
+        );
+
+        app.procgen_runtime_mut().published_descriptors.clear();
+        app.procgen_runtime_mut()
+            .clear_formed_preview_products(Vec::new());
+        app.procgen_runtime_mut().last_publication_key = None;
+
+        let rollback_report = rollback_procgen_bake(&mut app);
+
+        assert!(rollback_report.accepted);
+        assert_eq!(
+            rollback_report.restored_descriptor_count,
+            baked_descriptor_count
+        );
+        assert_eq!(rollback_report.restored_product_count, baked_product_count);
+        assert_eq!(
+            app.procgen_runtime().published_descriptors().len(),
+            baked_descriptor_count
+        );
+        assert_eq!(
+            app.procgen_runtime().formed_preview_products().len(),
+            baked_product_count
+        );
     }
 
     #[test]

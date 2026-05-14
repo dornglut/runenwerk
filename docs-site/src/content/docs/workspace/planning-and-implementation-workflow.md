@@ -8,9 +8,12 @@ canonical: true
 last_reviewed: 2026-05-08
 related_docs:
   - ./agents.md
+  - ./architecture-governance-review.md
   - ./documentation-structure.md
   - ./routines/README.md
+  - ./routines/architecture-governance-review-routine.md
   - ./prompt-templates/README.md
+  - ./prompt-templates/architecture-governance-review.md
   - ../guidelines/architecture.md
 ---
 
@@ -26,6 +29,7 @@ Use the workflow kickoff helper when starting a new AI-assisted task:
 
 ```sh
 ./workflow list
+./workflow architecture-governance --task "<decision>" --scope "<crate/files/subsystem>"
 ./workflow implementation --task "<task>" --scope "<crate/files/subsystem>"
 ./workflow milestone --task "<milestone>" --roadmap "<owning roadmap/design path>"
 ./workflow closeout --task "<completed phase>" --roadmap "<owning roadmap/design path>"
@@ -33,7 +37,10 @@ Use the workflow kickoff helper when starting a new AI-assisted task:
 ./workflow full-gate
 ```
 
-Task-shape commands such as `implementation`, `milestone`, and `closeout` are non-mutating. They print the relevant docs, first inspection commands, a ready-to-use prompt, validation expectations, and stop conditions for the chosen task shape.
+Task-shape commands such as `architecture-governance`, `implementation`,
+`milestone`, and `closeout` are non-mutating. They print the relevant docs,
+first inspection commands, a ready-to-use prompt, validation expectations, and
+stop conditions for the chosen task shape.
 
 Validation commands execute checks:
 
@@ -43,6 +50,16 @@ Validation commands execute checks:
 The lower-level prompt generator remains available at `python3 tools/workflow/ai_task.py`, but the stable repo entrypoint is `./workflow`.
 
 The historical `tools/docs/add_agent_workflow_docs.sh` entrypoint is also non-mutating. It exists only for compatibility and validates docs instead of regenerating workflow pages.
+
+Use workflow commands to automate Codex prompt, checklist, and gate setup, not
+blind mutation. A typical architecture-sensitive flow is:
+
+```sh
+python3 tools/workflow/ai_task.py architecture-governance --task "<decision>" --scope "<scope>"
+python3 tools/workflow/ai_task.py planning --task "<change>" --scope "<scope>"
+python3 tools/workflow/ai_task.py implementation --task "<bounded implementation>" --scope "<scope>"
+python3 tools/workflow/ai_task.py phase-closeout --task "<completed phase>" --roadmap "<roadmap>"
+```
 
 ## Purpose
 
@@ -80,6 +97,7 @@ Preserve unrelated dirty work. If a dirty file is relevant, inspect its current 
 | New crate or major crate phase | The goal is a crate-level implementation from an accepted boundary. | `docs-site/src/content/docs/workspace/routines/crate-implementation-routine.md` |
 | Documentation refactor | The goal is moving, renaming, pruning, or restructuring docs. | `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md` |
 | Public API review | The goal is to review usability, discoverability, examples, and public entrypoints. | `docs-site/src/content/docs/workspace/routines/public-api-review-routine.md` |
+| Architecture governance review | The goal is to check dependency direction, domain ownership, ADR need, tradeoffs, migration shape, enforcement, or ownership mode. | `docs-site/src/content/docs/workspace/architecture-governance-review.md`, `docs-site/src/content/docs/workspace/routines/architecture-governance-review-routine.md` |
 | Phase closeout | A phased implementation just completed. | `docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md` |
 | Commit organization | The working tree has mixed changes that need coherent commits. | `docs-site/src/content/docs/workspace/routines/commit-splitting-routine.md` |
 
@@ -111,6 +129,12 @@ Use the right document type:
 - A closeout report records evidence after work is complete.
 
 If the work creates a long-term architecture rule, add or update an ADR or guideline instead of burying the decision in an implementation plan.
+
+If the work changes dependency direction, domain ownership, migration strategy,
+or quality-attribute tradeoffs, run the architecture governance review before
+implementation. Use Clean Architecture dependency direction, DDD ownership,
+ADRs, fitness functions, ATAM-lite, Strangler Fig migration, and Team
+Topologies labels only where they change the decision.
 
 ## Implementation Pass
 
@@ -158,6 +182,8 @@ Stop and report instead of continuing when:
 
 Use these existing templates instead of writing new one-off instructions:
 
+- `docs-site/src/content/docs/workspace/prompt-templates/architecture-governance-review.md` for pre-implementation architecture decision gates.
+- `docs-site/src/content/docs/workspace/prompt-templates/architecture-audit.md` for findings-only architecture audits.
 - `docs-site/src/content/docs/workspace/prompt-templates/crate-design.md` for crate boundary design.
 - `docs-site/src/content/docs/workspace/prompt-templates/implementation-batch.md` for bounded implementation.
 - `docs-site/src/content/docs/workspace/prompt-templates/roadmap-milestone-kickoff.md` for named roadmap milestones.

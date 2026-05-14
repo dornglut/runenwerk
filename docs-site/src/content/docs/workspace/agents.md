@@ -44,19 +44,19 @@ Follow the module organization rules defined in `docs-site/src/content/docs/guid
 
 ```text
 render/
-├── mod.rs
-├── renderer/
-│   ├── mod.rs
-│   ├── config.rs
-│   └── runtime.rs
-├── frame_graph/
-│   ├── mod.rs
-│   ├── builder.rs
-│   └── registry.rs
-└── shader_manager/
-    ├── mod.rs
-    ├── compiler.rs
-    └── types.rs
+|-- mod.rs
+|-- renderer/
+|   |-- mod.rs
+|   |-- config.rs
+|   `-- runtime.rs
+|-- frame_graph/
+|   |-- mod.rs
+|   |-- builder.rs
+|   `-- registry.rs
+`-- shader_manager/
+    |-- mod.rs
+    |-- compiler.rs
+    `-- types.rs
 ```
 
 ### Avoid the following patterns
@@ -97,6 +97,11 @@ For bounded repository workflows, follow `docs-site/src/content/docs/workspace/r
 For planning, implementation, routine selection, and closeout shape, follow `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
 
 For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
+
+For architecture-sensitive changes, run the architecture governance review before implementation when the task may affect dependency direction, domain ownership, ADR-worthy decisions, migration strategy, tradeoffs, enforcement, or ownership mode.
+Use `./workflow architecture-governance --task "<task>" --scope "<scope>"` as the kickoff checklist when shell support is available, or `python3 tools/workflow/ai_task.py architecture-governance --task "<task>" --scope "<scope>"` directly.
+
+Treat workflow output as prompt/checklist/gate automation. It does not replace repository inspection, accepted ADR/design gates, validation, or human/agent judgment.
 
 After completing any phased implementation, run the phase completion drift-check routine before starting the next phase.
 

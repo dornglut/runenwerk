@@ -99,6 +99,56 @@ def build_shapes() -> dict[str, WorkflowShape]:
                 "The owner or dependency direction is unclear.",
             ),
         ),
+        "architecture-governance": WorkflowShape(
+            name="architecture-governance",
+            description="Review dependency direction, domain ownership, ADR need, tradeoffs, migration, enforcement, and ownership mode.",
+            primary_docs=common_docs
+            + (
+                "docs-site/src/content/docs/workspace/architecture-governance-review.md",
+                "docs-site/src/content/docs/workspace/prompt-templates/architecture-governance-review.md",
+                "docs-site/src/content/docs/workspace/routines/architecture-governance-review-routine.md",
+                "docs-site/src/content/docs/workspace/planning-methods.md",
+                "docs-site/src/content/docs/guidelines/domain-map.md",
+                "docs-site/src/content/docs/guidelines/module-structure-guidelines.md",
+                "docs-site/src/content/docs/adr/README.md",
+            ),
+            prompt=dedent(
+                """\
+                Run an architecture governance review for this Runenwerk change.
+
+                Task:
+                - {task}
+
+                Scope:
+                - {scope}
+
+                Requirements:
+                1. Read AGENTS.md and AI_GUIDE.md first, then the referenced root docs.
+                2. Inspect current code, tests, docs, and git state before recommending implementation.
+                3. Do not edit files.
+                4. Name the DDD bounded context owner, vocabulary, invariants, and translation boundaries.
+                5. Check Clean Architecture dependency direction and required boundary contracts.
+                6. Decide whether an ADR or design update is required.
+                7. Use ATAM-lite when quality attributes conflict.
+                8. Use Strangler Fig only when replacing an existing path.
+                9. Name required fitness functions before treating a boundary as enforceable.
+                10. Assign a Team Topologies ownership label.
+                11. Recommend one next action: implement, prototype, write/update ADR, update design, defer, or reject.
+                """
+            ),
+            validation=(
+                "No validation required for review-only work.",
+                "python3 tools/docs/validate_docs.py  # when docs changed after the review",
+                "cargo test -p <changed-crate>  # when code changes follow and the review names focused guards",
+            ),
+            stop_conditions=(
+                "Ownership cannot be determined from current code or docs.",
+                "A forbidden dependency would be required.",
+                "A durable architecture decision lacks an accepted ADR or design path.",
+                "A replacement migration cannot safely route old and new paths side by side.",
+                "Evidence is too weak to promote the work beyond discovery.",
+            ),
+        ),
         "implementation": WorkflowShape(
             name="implementation",
             description="Make a bounded code/docs change and verify it.",
