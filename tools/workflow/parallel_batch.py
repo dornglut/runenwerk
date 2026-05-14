@@ -131,6 +131,7 @@ def worker_prompt(
 def prepare(
     batch: Path = typer.Option(..., help="Batch manifest path."),
     root: Path = typer.Option(DEFAULT_WORKTREE_ROOT, help="Worktree root directory."),
+    flat_worktrees: bool = typer.Option(False, help="Place worktrees directly under --root by item id."),
     allow_unapproved: bool = typer.Option(False, help="Allow preparing a proposed batch."),
     dry_run: bool = typer.Option(False, help="Print worktree actions without executing git."),
     source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
@@ -160,7 +161,7 @@ def prepare(
                 prompt_target.write_text(render_worker_prompt(manifest, roadmap_item, item), encoding="utf-8", newline="\n")
                 console.print(f"[green]wrote worker prompt:[/green] {repo_path(prompt_target)}")
 
-        worktree = root / manifest.id / item.id
+        worktree = worktree_path_for_item(root, manifest, item, flat_worktrees=flat_worktrees)
         if dry_run:
             console.print(" ".join(worktree_add_command(item.branch, worktree, manifest.base_sha)))
         elif worktree.exists() and any(worktree.iterdir()):
@@ -179,6 +180,12 @@ def prepare(
     if not dry_run:
         batch.write_text(render_batch_manifest(updated), encoding="utf-8", newline="\n")
     console.print(f"[green]prepared batch:[/green] {manifest.id}")
+
+
+def worktree_path_for_item(root: Path, manifest: BatchManifest, item: BatchItem, *, flat_worktrees: bool) -> Path:
+    if flat_worktrees:
+        return root / item.id
+    return root / manifest.id / item.id
 
 
 def worktree_add_command(branch: str, worktree: Path, base_sha: str) -> list[str]:

@@ -17,6 +17,7 @@ from parallel_batch import (
     render_worker_prompt,
     validation_commands_for_items,
     write_validation_result,
+    worktree_path_for_item,
 )
 from roadmap_state import (
     BatchManifest,
@@ -183,6 +184,21 @@ def test_batch_manifest_and_worker_prompt() -> None:
     assert "roadmap-items.yaml" in prompt
 
 
+def test_flat_worktree_path_avoids_batch_id_nesting() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "very-long-batch-id",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/very-long-batch-id"),
+    )
+
+    assert worktree_path_for_item(Path("C:/w"), manifest, manifest.items[0], flat_worktrees=True) == Path("C:/w/WR-001")
+    assert worktree_path_for_item(Path("C:/w"), manifest, manifest.items[0], flat_worktrees=False) == Path(
+        "C:/w/very-long-batch-id/WR-001"
+    )
+
+
 def test_batch_approval_validation_rejects_blocked_items() -> None:
     roadmap = RoadmapState.model_validate(valid_state())
     manifest = build_manifest(
@@ -246,6 +262,20 @@ def test_changed_files_for_worktree_includes_dirty_staged_and_untracked_files() 
             "tracked.txt",
             "untracked.txt",
         ]
+
+
+def test_changed_files_for_worktree_keeps_standard_status_long_path_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(command: list[str], **_kwargs) -> subprocess.CompletedProcess[str]:
+        stdout = ""
+        if "status" in command and "-c" not in command:
+            stdout = " D too/long/cache/file.cache\n"
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    monkeypatch.setattr("roadmap_state.subprocess.run", fake_run)
+
+    assert changed_files_for_worktree(Path("worker"), "base") == ["too/long/cache/file.cache"]
 
 
 def test_batch_validation_rejects_dirty_out_of_scope_worktree(monkeypatch: pytest.MonkeyPatch) -> None:
