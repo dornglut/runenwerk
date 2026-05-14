@@ -51,4 +51,27 @@ mod tests {
         assert_eq!(namespace, "viewport");
         assert_eq!(target_id, "target.overlay");
     }
+
+    #[test]
+    fn stroke_primitive_constructs_and_exports_as_ui_primitive() {
+        let primitive = StrokePrimitive::new(
+            [
+                ui_math::UiPoint::new(1.0, 2.0),
+                ui_math::UiPoint::new(5.0, 7.0),
+            ],
+            3.0,
+            UiPaint::rgba(0.1, 0.2, 0.3, 1.0),
+            UiDrawKey::new(9, None),
+            UiSortKey::new(0, 2, 4),
+        )
+        .with_clip(ui_math::UiRect::new(0.0, 0.0, 10.0, 10.0));
+
+        let UiPrimitive::Stroke(stroke) = UiPrimitive::from(primitive) else {
+            panic!("stroke primitive should convert into UiPrimitive::Stroke");
+        };
+        assert_eq!(stroke.points.len(), 2);
+        assert_eq!(stroke.width, 3.0);
+        assert_eq!(stroke.draw_key.material_id, 9);
+        assert!(stroke.clip.is_some());
+    }
 }

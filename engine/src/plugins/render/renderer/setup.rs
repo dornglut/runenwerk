@@ -13,6 +13,8 @@ impl Renderer {
             rect_pass: None,
             rect_pass_format: None,
             rect_pass_shader_revision: 0,
+            stroke_pass: None,
+            stroke_pass_format: None,
             glyph_pass: None,
             glyph_pass_format: None,
             viewport_embed_pass: None,
@@ -187,6 +189,119 @@ impl Renderer {
         });
         self.rect_pass_format = Some(format);
         self.rect_pass_shader_revision = shader_revision;
+    }
+
+    pub(super) fn ensure_stroke_pass(&mut self, device: &Device, format: TextureFormat) {
+        if self.stroke_pass.is_some() && self.stroke_pass_format == Some(format) {
+            return;
+        }
+
+        let shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("engine_ui_stroke_shader"),
+            source: ShaderSource::Wgsl(DEFAULT_UI_STROKE_SHADER.into()),
+        });
+
+        let screen_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("engine_ui_stroke_screen_uniform"),
+            size: std::mem::size_of::<ScreenUniformRaw>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("engine_ui_stroke_bind_group_layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let screen_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("engine_ui_stroke_bind_group"),
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: screen_buffer.as_entire_binding(),
+            }],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("engine_ui_stroke_pipeline_layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("engine_ui_stroke_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
+                buffers: &[VertexBufferLayout {
+                    array_stride: std::mem::size_of::<StrokeSegmentInstanceRaw>() as u64,
+                    step_mode: VertexStepMode::Instance,
+                    attributes: &[
+                        VertexAttribute {
+                            format: VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32x2,
+                            offset: 8,
+                            shader_location: 1,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32x4,
+                            offset: 16,
+                            shader_location: 2,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32,
+                            offset: 32,
+                            shader_location: 3,
+                        },
+                    ],
+                }],
+            },
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
+                targets: &[Some(ColorTargetState {
+                    format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: None,
+                polygon_mode: PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        self.stroke_pass = Some(StrokePass {
+            pipeline,
+            screen_buffer,
+            screen_bind_group,
+        });
+        self.stroke_pass_format = Some(format);
     }
 
     pub(super) fn ensure_glyph_pass(&mut self, device: &Device, format: TextureFormat) {
@@ -746,6 +861,24 @@ impl Renderer {
                     };
                     pass.set_pipeline(&rect_pass.pipeline);
                     pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
+                    pass.set_scissor_rect(
+                        batch.scissor.0,
+                        batch.scissor.1,
+                        batch.scissor.2,
+                        batch.scissor.3,
+                    );
+                    pass.set_vertex_buffer(0, batch.instance_buffer.slice(..));
+                    pass.draw(0..6, 0..batch.instance_count);
+                }
+                UiPreparedDrawCommand::Stroke(index) => {
+                    let Some(stroke_pass) = self.stroke_pass.as_ref() else {
+                        continue;
+                    };
+                    let Some(batch) = prepared.stroke_batches.get(index) else {
+                        continue;
+                    };
+                    pass.set_pipeline(&stroke_pass.pipeline);
+                    pass.set_bind_group(0, &stroke_pass.screen_bind_group, &[]);
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,

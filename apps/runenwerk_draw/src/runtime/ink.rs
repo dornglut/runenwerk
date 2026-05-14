@@ -17,13 +17,25 @@ use product::{
     QuerySnapshotPublicationStatus,
 };
 
-use crate::app::{DrawingInkJournalStage, RunenwerkDrawApp};
+use crate::app::{
+    DrawingInkJournalStage, DrawingPreviewTileJobSnapshot, DrawingPreviewTileJobTracker,
+    RunenwerkDrawApp,
+};
 use crate::runtime::ink_jobs::{
-    DrawingCommittedInkTileJob, DrawingCommittedInkTileJobOutput, drawing_committed_ink_job_key,
+    DrawingCommittedInkTileJob, DrawingCommittedInkTileJobOutput, DrawingPreviewInkTileJob,
+    DrawingPreviewInkTileJobOutput, drawing_committed_ink_job_key,
 };
 use crate::runtime::resources::DrawingHostResource;
 
 const DRAWING_INK_PUBLICATION_STAGE_SEQUENCE: u64 = 5_100;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct DrawingPreviewInkJobProcessReport {
+    pub submitted_count: usize,
+    pub applied_count: usize,
+    pub failed_count: usize,
+    pub stale_count: usize,
+}
 
 pub fn publish_drawing_ink_products_at_barrier(
     barrier: &ExecutionBarrier,
@@ -109,6 +121,149 @@ pub fn publish_drawing_ink_products(
         dirty_tiles,
         formation,
     )
+}
+
+pub fn process_drawing_preview_ink_jobs(
+    app: &mut RunenwerkDrawApp,
+    executor: &mut RuntimeJobExecutorResource,
+) -> DrawingPreviewInkJobProcessReport {
+    let mut report = DrawingPreviewInkJobProcessReport::default();
+    drain_completed_preview_ink_jobs(app, executor, &mut report);
+    submit_next_preview_ink_job(app, executor, &mut report);
+    drain_completed_preview_ink_jobs(app, executor, &mut report);
+    report
+}
+
+fn submit_next_preview_ink_job(
+    app: &mut RunenwerkDrawApp,
+    executor: &mut RuntimeJobExecutorResource,
+    report: &mut DrawingPreviewInkJobProcessReport,
+) {
+    let Some(snapshot) = app.next_preview_tile_job_snapshot() else {
+        return;
+    };
+    let job = preview_job_from_snapshot(snapshot);
+    let tracker = DrawingPreviewTileJobTracker {
+        stroke_id: job.preview_stroke.stroke_id,
+        document_revision: job.document.revision,
+        preview_generation: job.preview_generation,
+        dirty_start_sample_index: job.dirty_start_sample_index,
+        formation_key: job.formation_key.clone(),
+    };
+    match executor.submit(job) {
+        Ok(_) => {
+            app.record_pending_preview_tile_job(tracker);
+            report.submitted_count = report.submitted_count.saturating_add(1);
+        }
+        Err(err) => {
+            app.ink_runtime_mut().record_journal(
+                DrawingInkJournalStage::Formation,
+                false,
+                format!(
+                    "runtime preview ink job submission failed diagnostics={}",
+                    err.diagnostics.len()
+                ),
+            );
+            report.failed_count = report.failed_count.saturating_add(1);
+        }
+    }
+}
+
+fn preview_job_from_snapshot(snapshot: DrawingPreviewTileJobSnapshot) -> DrawingPreviewInkTileJob {
+    DrawingPreviewInkTileJob::new(
+        snapshot.document,
+        snapshot.preview_stroke,
+        snapshot.dirty_preview_stroke,
+        snapshot.dirty_start_sample_index,
+        snapshot.preview_generation,
+        snapshot.policy,
+    )
+}
+
+fn drain_completed_preview_ink_jobs(
+    app: &mut RunenwerkDrawApp,
+    executor: &mut RuntimeJobExecutorResource,
+    report: &mut DrawingPreviewInkJobProcessReport,
+) {
+    let completions = executor.drain_completed::<DrawingPreviewInkTileJobOutput>();
+    for completion in completions {
+        match completion.status {
+            RuntimeJobStatus::Completed => {
+                let Some(output) = completion.output else {
+                    continue;
+                };
+                app.clear_pending_preview_tile_job(&output.formation_key);
+                if !app.preview_tile_job_is_current(
+                    output.stroke_id,
+                    output.document_revision,
+                    output.preview_generation,
+                ) {
+                    app.ink_runtime_mut().record_journal(
+                        DrawingInkJournalStage::Formation,
+                        false,
+                        "stale preview ink job ignored",
+                    );
+                    report.stale_count = report.stale_count.saturating_add(1);
+                    continue;
+                }
+                if !output.formation.is_accepted() {
+                    app.ink_runtime_mut()
+                        .record_preview_failure(output.formation.diagnostics.clone());
+                    app.ink_runtime_mut().record_journal(
+                        DrawingInkJournalStage::Formation,
+                        false,
+                        format!(
+                            "preview products=0 diagnostics={}",
+                            output.formation.diagnostics.len()
+                        ),
+                    );
+                    app.rebuild_visible_frame();
+                    report.failed_count = report.failed_count.saturating_add(1);
+                    continue;
+                }
+
+                let product_count = output.formation.products.len();
+                let diagnostic_count = output.formation.diagnostics.len();
+                app.ink_runtime_mut().replace_preview_products_for_tiles(
+                    output.dirty_tile_ids,
+                    output.formation.products,
+                    output.formation.cleared_tiles,
+                    output.formation.diagnostics,
+                );
+                app.ink_runtime_mut().record_journal(
+                    DrawingInkJournalStage::Formation,
+                    true,
+                    format!(
+                        "preview products={} diagnostics={}",
+                        product_count, diagnostic_count
+                    ),
+                );
+                app.rebuild_visible_frame();
+                report.applied_count = report.applied_count.saturating_add(1);
+            }
+            RuntimeJobStatus::Failed => {
+                app.clear_pending_preview_tile_job_generation(completion.handle.generation.raw());
+                app.ink_runtime_mut().record_journal(
+                    DrawingInkJournalStage::Formation,
+                    false,
+                    format!(
+                        "runtime preview ink job failed diagnostics={}",
+                        completion.diagnostics.len()
+                    ),
+                );
+                report.failed_count = report.failed_count.saturating_add(1);
+            }
+            RuntimeJobStatus::Stale => {
+                app.clear_pending_preview_tile_job_generation(completion.handle.generation.raw());
+                app.ink_runtime_mut().record_journal(
+                    DrawingInkJournalStage::Formation,
+                    false,
+                    "stale preview ink job ignored",
+                );
+                report.stale_count = report.stale_count.saturating_add(1);
+            }
+        }
+    }
 }
 
 pub fn publish_drawing_ink_products_with_executor(
@@ -409,7 +564,7 @@ pub fn publish_drawing_ink_query_snapshots(
             .ink_runtime_mut()
             .record_accepted_snapshots(snapshot_key, accepted);
         if accepted {
-            app.rebuild_visible_frame();
+            app.clear_preview_after_committed_acceptance();
         }
     }
     app.ink_runtime_mut().record_journal(

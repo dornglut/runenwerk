@@ -25,10 +25,13 @@ Make `runenwerk_draw` ink rendering production-ready enough for later paper,
 watercolor, live effects, and export work without moving drawing semantics into
 the renderer.
 
-The current baseline is Phase 5.1: deterministic CPU RGBA8 ink tiles are formed
-by `domain/drawing`, published through product and query snapshot barriers,
-uploaded through generic engine dynamic texture uploads, and projected as
-neutral product-surface UI primitives. This roadmap starts from that baseline.
+The current baseline is Phase 5.1 plus the runtime-job responsiveness proof:
+immediate pen feedback is projected through `UiPrimitive::Stroke`, while
+deterministic CPU RGBA8 preview and committed ink tiles are formed by
+`domain/drawing` through runtime jobs, published through product and query
+snapshot barriers, uploaded through generic engine dynamic texture uploads, and
+projected as neutral product-surface UI primitives. This roadmap starts from
+that baseline.
 
 ## Foundation Policy
 
@@ -87,7 +90,8 @@ Acceptance:
 - `cargo test -p drawing --test ink_tile` proves preview and final profile
   determinism, descriptor separation, invalidation bounds, and quality-class
   lineage.
-- Existing Phase 5.1 preview behavior remains unchanged.
+- Existing visible preview behavior remains immediate through
+  `UiPrimitive::Stroke`, with preview tile products catching up asynchronously.
 
 ## Phase DRF2 - App-Derived Tile Cache
 

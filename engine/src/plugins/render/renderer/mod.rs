@@ -95,6 +95,80 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
 }
 "#;
 
+pub const DEFAULT_UI_STROKE_SHADER: &str = r#"
+struct VsIn {
+    @location(0) start : vec2<f32>,
+    @location(1) end : vec2<f32>,
+    @location(2) color : vec4<f32>,
+    @location(3) width : f32,
+};
+
+struct VsOut {
+    @builtin(position) clip_position : vec4<f32>,
+    @location(0) pixel : vec2<f32>,
+    @location(1) segment_start : vec2<f32>,
+    @location(2) segment_end : vec2<f32>,
+    @location(3) color : vec4<f32>,
+    @location(4) half_width : f32,
+};
+
+struct ScreenUniform {
+    size : vec2<f32>,
+    _pad : vec2<f32>,
+};
+
+@group(0) @binding(0)
+var<uniform> screen : ScreenUniform;
+
+@vertex
+fn vs_main(input: VsIn, @builtin(vertex_index) vertex_index: u32) -> VsOut {
+    let local = array<vec2<f32>, 6>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, -1.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, 1.0),
+    )[vertex_index];
+
+    let half_width = max(input.width * 0.5, 0.5);
+    let delta = input.end - input.start;
+    let raw_segment_length = length(delta);
+    let segment_length = max(raw_segment_length, 0.0001);
+    let direction = select(vec2<f32>(1.0, 0.0), delta / segment_length, raw_segment_length > 0.0001);
+    let normal = vec2<f32>(-direction.y, direction.x);
+    let along = ((local.x + 1.0) * 0.5) * segment_length + local.x * half_width;
+    let pixel = input.start + direction * along + normal * local.y * half_width;
+
+    let x_ndc = (pixel.x / screen.size.x) * 2.0 - 1.0;
+    let y_ndc = 1.0 - (pixel.y / screen.size.y) * 2.0;
+
+    var out: VsOut;
+    out.clip_position = vec4<f32>(x_ndc, y_ndc, 0.0, 1.0);
+    out.pixel = pixel;
+    out.segment_start = input.start;
+    out.segment_end = input.end;
+    out.color = input.color;
+    out.half_width = half_width;
+    return out;
+}
+
+@fragment
+fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
+    let segment = input.segment_end - input.segment_start;
+    let segment_len2 = max(dot(segment, segment), 0.0001);
+    let t = clamp(dot(input.pixel - input.segment_start, segment) / segment_len2, 0.0, 1.0);
+    let nearest = input.segment_start + segment * t;
+    let dist = length(input.pixel - nearest);
+    let aa = max(fwidth(dist), 0.75);
+    let coverage = 1.0 - smoothstep(input.half_width - aa, input.half_width + aa, dist);
+    if (coverage <= 0.001) {
+        discard;
+    }
+    return vec4<f32>(input.color.rgb, input.color.a * coverage);
+}
+"#;
+
 pub const DEFAULT_UI_GLYPH_SHADER: &str = r#"
 struct VsIn {
     @location(0) rect : vec4<f32>,
@@ -410,6 +484,24 @@ struct FlattenedUiRectInstance {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct StrokeSegmentInstanceRaw {
+    start: [f32; 2],
+    end: [f32; 2],
+    color: [f32; 4],
+    width: f32,
+    _pad: [f32; 3],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FlattenedUiStrokeSegmentInstance {
+    raw: StrokeSegmentInstanceRaw,
+    clip: Option<[f32; 4]>,
+    layer_order: u32,
+    primitive_order: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct GlyphInstanceRaw {
     rect: [f32; 4],
     uv_rect: [f32; 4],
@@ -467,6 +559,13 @@ struct RectPass {
 }
 
 #[derive(Debug)]
+struct StrokePass {
+    pipeline: RenderPipeline,
+    screen_buffer: Buffer,
+    screen_bind_group: BindGroup,
+}
+
+#[derive(Debug)]
 struct GlyphPass {
     pipeline: RenderPipeline,
     screen_buffer: Buffer,
@@ -495,6 +594,16 @@ struct ProductSurfacePass {
 
 #[derive(Debug, Clone)]
 struct UiRectBatch {
+    layer_order: u32,
+    first_primitive_order: u32,
+    last_primitive_order: u32,
+    scissor: (u32, u32, u32, u32),
+    instance_count: u32,
+    instance_buffer: Buffer,
+}
+
+#[derive(Debug, Clone)]
+struct UiStrokeBatch {
     layer_order: u32,
     first_primitive_order: u32,
     last_primitive_order: u32,
@@ -547,6 +656,7 @@ struct UiGlyphAtlasGpu {
 #[derive(Debug, Clone, Default)]
 struct UiPreparedDraws {
     rect_batches: Vec<UiRectBatch>,
+    stroke_batches: Vec<UiStrokeBatch>,
     glyph_batches: Vec<UiGlyphBatch>,
     viewport_embed_batches: Vec<UiViewportEmbedBatch>,
     product_surface_batches: Vec<UiProductSurfaceBatch>,
@@ -556,6 +666,7 @@ struct UiPreparedDraws {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UiPreparedDrawCommand {
     Rect(usize),
+    Stroke(usize),
     ViewportEmbed(usize),
     ProductSurface(usize),
     Glyph(usize),
@@ -593,6 +704,8 @@ pub struct Renderer {
     rect_pass: Option<RectPass>,
     rect_pass_format: Option<TextureFormat>,
     rect_pass_shader_revision: u64,
+    stroke_pass: Option<StrokePass>,
+    stroke_pass_format: Option<TextureFormat>,
     glyph_pass: Option<GlyphPass>,
     glyph_pass_format: Option<TextureFormat>,
     viewport_embed_pass: Option<ViewportEmbedPass>,

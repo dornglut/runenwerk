@@ -1,14 +1,14 @@
 //! Canvas-first UI frame projection for the drawing app shell and ink product surfaces.
 
 use drawing::{CanvasTileId, DrawingInkTileProduct};
-use ui_math::{UiRect, UiSize};
+use ui_math::{UiPoint, UiRect, UiSize};
 use ui_render_data::{
     ProductSurfaceAlphaMode, ProductSurfacePrimitive, ProductSurfaceTextureBindingSource,
-    RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
-    UiSurface, UiSurfaceId,
+    RectPrimitive, StrokePrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive,
+    UiSortKey, UiSurface, UiSurfaceId,
 };
 
-use crate::app::DrawingWorkspaceProjection;
+use crate::app::{DrawingPreviewStroke, DrawingWorkspaceProjection};
 
 pub const DRAWING_UI_SURFACE_ID: UiSurfaceId = UiSurfaceId(4_001);
 pub const DRAWING_CANVAS_LAYER_ID: UiLayerId = UiLayerId(4_010);
@@ -16,6 +16,7 @@ pub const DRAWING_CANVAS_LAYER_ID: UiLayerId = UiLayerId(4_010);
 const DRAW_KEY_SOLID: UiDrawKey = UiDrawKey::new(1, None);
 
 pub const DRAWING_INK_TEXTURE_NAMESPACE: &str = "runenwerk.draw.ink";
+const IMMEDIATE_STROKE_PRIMITIVE_ORDER: u32 = 25_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DrawingInkSurfaceKind {
@@ -32,6 +33,12 @@ impl DrawingInkSurfaceKind {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct DrawingImmediateStrokeProjection<'a> {
+    pub stroke: &'a DrawingPreviewStroke,
+    pub width_px: f32,
+}
+
 pub fn build_workspace_frame(workspace: &DrawingWorkspaceProjection) -> UiFrame {
     build_workspace_frame_with_ink(workspace, &[], &[])
 }
@@ -40,6 +47,33 @@ pub fn build_workspace_frame_with_ink(
     workspace: &DrawingWorkspaceProjection,
     ink_tiles: &[DrawingInkTileProduct],
     preview_tiles: &[DrawingInkTileProduct],
+) -> UiFrame {
+    let ink_tiles = ink_tiles.iter().collect::<Vec<_>>();
+    let preview_tiles = preview_tiles.iter().collect::<Vec<_>>();
+    build_workspace_frame_with_ink_refs_and_stroke(workspace, &ink_tiles, &preview_tiles, None)
+}
+
+pub fn build_workspace_frame_with_ink_and_stroke(
+    workspace: &DrawingWorkspaceProjection,
+    ink_tiles: &[DrawingInkTileProduct],
+    preview_tiles: &[DrawingInkTileProduct],
+    immediate_stroke: Option<DrawingImmediateStrokeProjection<'_>>,
+) -> UiFrame {
+    let ink_tiles = ink_tiles.iter().collect::<Vec<_>>();
+    let preview_tiles = preview_tiles.iter().collect::<Vec<_>>();
+    build_workspace_frame_with_ink_refs_and_stroke(
+        workspace,
+        &ink_tiles,
+        &preview_tiles,
+        immediate_stroke,
+    )
+}
+
+pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
+    workspace: &DrawingWorkspaceProjection,
+    ink_tiles: &[&DrawingInkTileProduct],
+    preview_tiles: &[&DrawingInkTileProduct],
+    immediate_stroke: Option<DrawingImmediateStrokeProjection<'_>>,
 ) -> UiFrame {
     let mut layer = UiLayer::new(DRAWING_CANVAS_LAYER_ID);
     push_rect(
@@ -88,12 +122,42 @@ pub fn build_workspace_frame_with_ink(
         DrawingInkSurfaceKind::Preview,
         20_000,
     );
+    if let Some(stroke) = immediate_stroke {
+        push_immediate_stroke(&mut layer, workspace, stroke);
+    }
 
     UiFrame::with_surfaces(vec![UiSurface::with_layers(
         DRAWING_UI_SURFACE_ID,
         workspace.window_size,
         vec![layer],
     )])
+}
+
+fn push_immediate_stroke(
+    layer: &mut UiLayer,
+    workspace: &DrawingWorkspaceProjection,
+    projection: DrawingImmediateStrokeProjection<'_>,
+) {
+    let points = projection
+        .stroke
+        .samples
+        .iter()
+        .filter_map(|sample| workspace.canvas_view.canvas_to_screen(sample.position))
+        .collect::<Vec<UiPoint>>();
+    if points.is_empty() {
+        return;
+    }
+
+    layer.push(UiPrimitive::Stroke(
+        StrokePrimitive::new(
+            points,
+            projection.width_px.max(1.0),
+            UiPaint::rgba(0.04, 0.035, 0.03, 1.0),
+            DRAW_KEY_SOLID,
+            UiSortKey::new(0, 0, IMMEDIATE_STROKE_PRIMITIVE_ORDER),
+        )
+        .with_clip(workspace.canvas_view.screen_bounds),
+    ));
 }
 
 fn push_tablet_panel(
@@ -247,7 +311,7 @@ fn push_rect(layer: &mut UiLayer, rect: UiRect, paint: UiPaint, primitive_order:
 fn push_ink_surfaces(
     layer: &mut UiLayer,
     workspace: &DrawingWorkspaceProjection,
-    ink_tiles: &[DrawingInkTileProduct],
+    ink_tiles: &[&DrawingInkTileProduct],
     surface_kind: DrawingInkSurfaceKind,
     primitive_order_start: u32,
 ) {

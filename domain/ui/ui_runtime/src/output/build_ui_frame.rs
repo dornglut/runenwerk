@@ -2712,6 +2712,13 @@ mod tests {
                     "ProductSurface(x={:.1} y={:.1} w={:.1} h={:.1})",
                     value.rect.x, value.rect.y, value.rect.width, value.rect.height
                 ),
+                UiPrimitive::Stroke(value) => {
+                    format!(
+                        "Stroke(points={} width={:.1})",
+                        value.points.len(),
+                        value.width
+                    )
+                }
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -2723,6 +2730,7 @@ mod tests {
             UiPrimitive::Border(value) => value.sort_key,
             UiPrimitive::GlyphRun(value) => value.sort_key,
             UiPrimitive::Image(value) => value.sort_key,
+            UiPrimitive::Stroke(value) => value.sort_key,
             UiPrimitive::ViewportSurfaceEmbed(value) => value.sort_key,
             UiPrimitive::ProductSurface(value) => value.sort_key,
             UiPrimitive::Clip(ClipPrimitive::Push { sort_key, .. }) => *sort_key,

@@ -34,9 +34,18 @@ implementation batch, not excluded from the program.
 - `domain/scheduler` emits execution waves and deterministic barriers.
 - `domain/ecs` owns `WorkQueue<T>` as world messaging. It is not the product
   job executor.
-- `engine` owns product publication and query snapshot runtime resources, but
-  current product work is still formed serially by app/runtime systems before
-  those barriers.
+- `engine/src/runtime/jobs` owns the serial and bounded worker runtime job
+  executor, typed handles, generations, stale suppression, panic capture,
+  queue backpressure diagnostics, and clean shutdown.
+- Runtime product publication helpers and Draw committed tile jobs publish
+  through existing product publication and query snapshot barriers.
+- Draw preview-quality CPU ink now splits immediate UI feedback from visual
+  tile catch-up: `StrokePrimitive` is screen-space feedback, while preview tile
+  products are asynchronous catch-up output.
+- RPJ1-RPJ3 are implemented. RPJ4 is implemented for the current Draw
+  responsiveness proof, but final-quality tile semantics, persistent cache
+  identity, GPU jobs, work stealing, ECS parallel waves, and distributed jobs
+  remain later phases.
 
 ## Phase RPJ0 - Roadmap And Status Alignment
 
@@ -60,7 +69,7 @@ python tools/docs/validate_docs.py
 
 Owner: `engine/src/runtime/jobs`.
 
-Status: initial implementation target.
+Status: implemented.
 
 Requirements:
 
@@ -85,6 +94,8 @@ cargo test -p ecs runtime_phase3
 
 Owner: `engine/src/runtime/jobs`.
 
+Status: implemented.
+
 Requirements:
 
 - add a bounded worker backend behind the same executor API;
@@ -103,6 +114,8 @@ cargo test -p engine runtime_job
 ## Phase RPJ3 - Product Publication Integration
 
 Owner: `engine/src/runtime/jobs/product.rs`.
+
+Status: implemented.
 
 Requirements:
 
@@ -123,13 +136,28 @@ cargo test -p product
 
 Owner: `apps/runenwerk_draw`.
 
+Status: implemented for the current Draw responsiveness proof; broader Draw
+rendering quality and cache identity work remains deferred.
+
 Requirements:
 
 - move CPU preview and committed ink tile formation off the input hot path;
-- keep immediate stroke feedback separate from tile catch-up;
+- keep immediate `StrokePrimitive` feedback separate from preview tile
+  catch-up;
 - submit owned drawing document, stroke, and tile snapshots as runtime jobs;
 - drain completions on the main thread and stage outputs through existing
   product/query barriers.
+
+Implementation Notes:
+
+- committed tile jobs form authoritative preview-quality CPU tiles behind the
+  product publication barrier;
+- preview tile jobs form visual catch-up products behind the runtime job
+  executor and update app-owned preview products on the main thread;
+- Draw installs a bounded worker executor by default while the engine default
+  remains serial;
+- preview tiles are not authoritative drawing state, and `StrokePrimitive` is
+  not a product cache entry.
 
 Validation:
 

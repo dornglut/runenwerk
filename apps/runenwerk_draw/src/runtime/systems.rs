@@ -11,6 +11,7 @@ use engine::plugins::render::{
     UiFrameProducerId, UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
     UiFrameSubmissionRegistryResource,
 };
+use engine::runtime::RuntimeJobExecutorResource;
 use engine::runtime::{Res, ResMut};
 use native_tablet_input::{
     NativeTabletBackendStatus, NativeTabletDeviceControlResource, NativeTabletFrameResource,
@@ -30,6 +31,7 @@ use crate::app::{
     DRAWING_INK_TEXTURE_NAMESPACE, DrawingInkSurfaceKind, DrawingTabletPanelProjection,
     drawing_ink_texture_target_id,
 };
+use crate::runtime::ink::process_drawing_preview_ink_jobs;
 use crate::runtime::resources::{DrawingHostResource, DrawingInkUploadTrackerResource};
 
 pub const DRAWING_UI_FRAME_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(4_001);
@@ -146,6 +148,13 @@ pub fn route_draw_input_system(
                 PointerPacket::mouse(),
             )));
     }
+}
+
+pub fn process_draw_preview_ink_jobs_system(
+    mut host: ResMut<DrawingHostResource>,
+    mut executor: ResMut<RuntimeJobExecutorResource>,
+) {
+    process_drawing_preview_ink_jobs(&mut host.app, &mut executor);
 }
 
 fn tablet_panel_projection(

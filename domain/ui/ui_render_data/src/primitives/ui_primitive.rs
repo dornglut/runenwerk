@@ -3,7 +3,7 @@
 
 use crate::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, ProductSurfacePrimitive,
-    RectPrimitive, ViewportSurfaceEmbedPrimitive,
+    RectPrimitive, StrokePrimitive, ViewportSurfaceEmbedPrimitive,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -12,6 +12,7 @@ pub enum UiPrimitive {
     Border(BorderPrimitive),
     GlyphRun(GlyphRunPrimitive),
     Image(ImagePrimitive),
+    Stroke(StrokePrimitive),
     ViewportSurfaceEmbed(ViewportSurfaceEmbedPrimitive),
     ProductSurface(ProductSurfacePrimitive),
     Clip(ClipPrimitive),
@@ -38,6 +39,12 @@ impl From<GlyphRunPrimitive> for UiPrimitive {
 impl From<ImagePrimitive> for UiPrimitive {
     fn from(value: ImagePrimitive) -> Self {
         Self::Image(value)
+    }
+}
+
+impl From<StrokePrimitive> for UiPrimitive {
+    fn from(value: StrokePrimitive) -> Self {
+        Self::Stroke(value)
     }
 }
 

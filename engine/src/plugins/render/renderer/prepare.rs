@@ -4,6 +4,13 @@ use crate::plugins::{PreparedUiFrameContribution, RenderFeatureId};
 use std::hash::{Hash, Hasher};
 
 type ScissoredRectBatch = (u32, u32, u32, (u32, u32, u32, u32), Vec<RectInstanceRaw>);
+type ScissoredStrokeBatch = (
+    u32,
+    u32,
+    u32,
+    (u32, u32, u32, u32),
+    Vec<StrokeSegmentInstanceRaw>,
+);
 type ScissoredViewportEmbedBatch = (
     u32,
     u32,
@@ -39,6 +46,11 @@ impl Renderer {
             .iter()
             .flat_map(|submission| Self::extract_rect_instances(&submission.frame))
             .collect::<Vec<_>>();
+        let flattened_stroke_instances = contribution
+            .submissions
+            .iter()
+            .flat_map(|submission| Self::extract_stroke_instances(&submission.frame))
+            .collect::<Vec<_>>();
         let flattened_glyph_instances = contribution
             .submissions
             .iter()
@@ -72,6 +84,34 @@ impl Renderer {
                     usage: BufferUsages::VERTEX,
                 });
                 Some(UiRectBatch {
+                    layer_order,
+                    first_primitive_order: first_order,
+                    last_primitive_order: last_order,
+                    scissor,
+                    instance_count: instances.len() as u32,
+                    instance_buffer,
+                })
+            },
+        )
+        .collect::<Vec<_>>();
+
+        let stroke_batches = group_stroke_batches_ordered(
+            flattened_stroke_instances,
+            surface_width_u32,
+            surface_height_u32,
+        )
+        .into_iter()
+        .filter_map(
+            |(layer_order, first_order, last_order, scissor, instances)| {
+                if instances.is_empty() {
+                    return None;
+                }
+                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("engine_ui_stroke_batch_instances"),
+                    contents: bytemuck::cast_slice(&instances),
+                    usage: BufferUsages::VERTEX,
+                });
+                Some(UiStrokeBatch {
                     layer_order,
                     first_primitive_order: first_order,
                     last_primitive_order: last_order,
@@ -221,6 +261,13 @@ impl Renderer {
             };
             queue.write_buffer(&rect_pass.screen_buffer, 0, bytemuck::bytes_of(&screen));
         }
+        if let Some(stroke_pass) = self.stroke_pass.as_ref() {
+            let screen = ScreenUniformRaw {
+                size: [surface_width.max(1.0), surface_height.max(1.0)],
+                _pad: [0.0; 2],
+            };
+            queue.write_buffer(&stroke_pass.screen_buffer, 0, bytemuck::bytes_of(&screen));
+        }
         if let Some(glyph_pass) = self.glyph_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
@@ -253,6 +300,7 @@ impl Renderer {
 
         let draw_plan = build_ui_draw_plan(
             &rect_batches,
+            &stroke_batches,
             &glyph_batches,
             &viewport_embed_batches,
             &product_surface_batches,
@@ -260,6 +308,7 @@ impl Renderer {
 
         UiPreparedDraws {
             rect_batches,
+            stroke_batches,
             glyph_batches,
             viewport_embed_batches,
             product_surface_batches,
@@ -320,6 +369,7 @@ impl Renderer {
             .unwrap_or(0);
 
         self.ensure_rect_pass(device, surface_format, &ui_rect_shader, ui_rect_revision);
+        self.ensure_stroke_pass(device, surface_format);
         self.ensure_glyph_pass(device, surface_format);
         self.ensure_viewport_embed_pass(device, surface_format);
         self.ensure_product_surface_pass(device, surface_format);
@@ -411,6 +461,47 @@ fn group_rect_batches_ordered(
             && *last_layer_order == instance.layer_order
             && *last_scissor == scissor
             && last_order.saturating_add(1) == instance.primitive_order
+        {
+            instances.push(instance.raw);
+            *last_order = instance.primitive_order;
+        } else {
+            grouped.push((
+                instance.layer_order,
+                instance.primitive_order,
+                instance.primitive_order,
+                scissor,
+                vec![instance.raw],
+            ));
+        }
+    }
+    grouped
+}
+
+fn group_stroke_batches_ordered(
+    flattened_instances: Vec<FlattenedUiStrokeSegmentInstance>,
+    surface_width_u32: u32,
+    surface_height_u32: u32,
+) -> Vec<ScissoredStrokeBatch> {
+    let mut grouped = Vec::<ScissoredStrokeBatch>::new();
+    for instance in flattened_instances {
+        let scissor = instance
+            .clip
+            .map(|clip| Renderer::clip_to_scissor(clip, surface_width_u32, surface_height_u32))
+            .unwrap_or_else(|| {
+                Some(Renderer::full_scissor(
+                    surface_width_u32,
+                    surface_height_u32,
+                ))
+            });
+        let Some(scissor) = scissor else {
+            continue;
+        };
+        if let Some((last_layer_order, _first_order, last_order, last_scissor, instances)) =
+            grouped.last_mut()
+            && *last_layer_order == instance.layer_order
+            && *last_scissor == scissor
+            && (*last_order == instance.primitive_order
+                || last_order.saturating_add(1) == instance.primitive_order)
         {
             instances.push(instance.raw);
             *last_order = instance.primitive_order;
@@ -528,12 +619,14 @@ fn group_product_surface_batches_ordered(
 
 fn build_ui_draw_plan(
     rect_batches: &[UiRectBatch],
+    stroke_batches: &[UiStrokeBatch],
     glyph_batches: &[UiGlyphBatch],
     viewport_embed_batches: &[UiViewportEmbedBatch],
     product_surface_batches: &[UiProductSurfaceBatch],
 ) -> Vec<UiPreparedDrawCommand> {
     let mut commands = Vec::with_capacity(
         rect_batches.len()
+            + stroke_batches.len()
             + glyph_batches.len()
             + viewport_embed_batches.len()
             + product_surface_batches.len(),
@@ -543,6 +636,12 @@ fn build_ui_draw_plan(
             .iter()
             .enumerate()
             .map(|(index, _)| UiPreparedDrawCommand::Rect(index)),
+    );
+    commands.extend(
+        stroke_batches
+            .iter()
+            .enumerate()
+            .map(|(index, _)| UiPreparedDrawCommand::Stroke(index)),
     );
     commands.extend(
         viewport_embed_batches
@@ -566,6 +665,7 @@ fn build_ui_draw_plan(
         let left_key = draw_command_sort_key(
             *left,
             rect_batches,
+            stroke_batches,
             glyph_batches,
             viewport_embed_batches,
             product_surface_batches,
@@ -573,6 +673,7 @@ fn build_ui_draw_plan(
         let right_key = draw_command_sort_key(
             *right,
             rect_batches,
+            stroke_batches,
             glyph_batches,
             viewport_embed_batches,
             product_surface_batches,
@@ -585,6 +686,7 @@ fn build_ui_draw_plan(
 fn draw_command_sort_key(
     command: UiPreparedDrawCommand,
     rect_batches: &[UiRectBatch],
+    stroke_batches: &[UiStrokeBatch],
     glyph_batches: &[UiGlyphBatch],
     viewport_embed_batches: &[UiViewportEmbedBatch],
     product_surface_batches: &[UiProductSurfaceBatch],
@@ -599,13 +701,22 @@ fn draw_command_sort_key(
                 0,
             )
         }
+        UiPreparedDrawCommand::Stroke(index) => {
+            let batch = &stroke_batches[index];
+            (
+                batch.layer_order,
+                batch.first_primitive_order,
+                batch.last_primitive_order,
+                1,
+            )
+        }
         UiPreparedDrawCommand::ViewportEmbed(index) => {
             let batch = &viewport_embed_batches[index];
             (
                 batch.layer_order,
                 batch.first_primitive_order,
                 batch.last_primitive_order,
-                1,
+                2,
             )
         }
         UiPreparedDrawCommand::ProductSurface(index) => {
@@ -614,7 +725,7 @@ fn draw_command_sort_key(
                 batch.layer_order,
                 batch.first_primitive_order,
                 batch.last_primitive_order,
-                1,
+                2,
             )
         }
         UiPreparedDrawCommand::Glyph(index) => {
@@ -623,7 +734,7 @@ fn draw_command_sort_key(
                 batch.layer_order,
                 batch.first_primitive_order,
                 batch.last_primitive_order,
-                2,
+                3,
             )
         }
     }

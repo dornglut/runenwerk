@@ -9,7 +9,10 @@ use engine::plugins::render::{
     UiFrameSubmissionRegistryResource,
 };
 use engine::plugins::{InputState, TouchInputPhase};
-use engine::runtime::{ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource};
+use engine::runtime::{
+    ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource, RuntimeJobExecutorConfig,
+    RuntimeJobExecutorResource,
+};
 use engine::{BarrierKind, ExecutionBarrier, SceneRuntimeState};
 use native_tablet_input::{
     NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletFrameResource,
@@ -20,7 +23,8 @@ use runenwerk_draw::app::{
 };
 use runenwerk_draw::runtime::{
     DRAWING_UI_FRAME_PRODUCER_ID, DrawingHostResource, build_headless_app,
-    publish_drawing_ink_products, publish_drawing_ink_query_snapshots,
+    process_drawing_preview_ink_jobs, publish_drawing_ink_products,
+    publish_drawing_ink_query_snapshots,
 };
 use ui_input::{
     Modifiers, PointerButton, PointerContactState, PointerDeviceId, PointerEvent, PointerEventKind,
@@ -97,18 +101,25 @@ fn stylus_input_routes_to_preview_stroke_without_committing_document_truth() {
             .len(),
         0
     );
+    assert!(app.ink_runtime().preview_products().is_empty());
+    assert_eq!(
+        app.ink_runtime().last_preview_dirty_tile_count(),
+        0,
+        "dispatch_input must not form preview ink tiles synchronously"
+    );
     assert!(
-        !app.ink_runtime().preview_products().is_empty(),
-        "active preview should be formed from domain ink tile products"
+        stroke_primitive_count(app.last_frame()) > 0,
+        "active preview should use an immediate stroke primitive"
     );
     assert_eq!(
         rect_primitive_count(app.last_frame()),
         shell_rect_count,
         "ink preview must not use the old per-pixel rect projection path"
     );
-    assert!(
-        product_surface_primitive_count(app.last_frame()) > 0,
-        "active preview tile products should be visible before authoritative commit"
+    assert_eq!(
+        product_surface_primitive_count(app.last_frame()),
+        0,
+        "preview tile catch-up must not run on the input hot path"
     );
 }
 
@@ -631,9 +642,10 @@ fn pointer_up_commits_preview_stroke_into_authoritative_document() {
         1
     );
     assert!(app.ink_runtime().formed_products().is_empty());
+    assert!(app.ink_runtime().preview_products().is_empty());
     assert!(
-        !app.ink_runtime().preview_products().is_empty(),
-        "released preview should remain visible until committed ink is accepted"
+        stroke_primitive_count(app.last_frame()) > 0,
+        "released preview should remain visible through the immediate stroke primitive"
     );
 }
 
@@ -669,7 +681,8 @@ fn committed_ink_products_publish_snapshot_and_become_visible_only_after_barrier
 
     assert_eq!(app.document().unwrap().strokes.len(), 1);
     assert!(app.ink_runtime().formed_products().is_empty());
-    assert!(!app.ink_runtime().preview_products().is_empty());
+    assert!(app.ink_runtime().preview_products().is_empty());
+    assert!(stroke_primitive_count(app.last_frame()) > 0);
 
     let mut publications = ProductPublicationRuntimeResource::default();
     let mut snapshots = QuerySnapshotRuntimeResource::default();
@@ -697,6 +710,7 @@ fn committed_ink_products_publish_snapshot_and_become_visible_only_after_barrier
     assert!(query.published_count > 0);
     assert!(!app.ink_runtime().accepted_snapshot_ids().is_empty());
     assert!(app.ink_runtime().preview_products().is_empty());
+    assert_eq!(stroke_primitive_count(app.last_frame()), 0);
     assert!(app.ink_runtime().visible_products().next().is_some());
 
     let size = app.workspace().window_size;
@@ -749,9 +763,10 @@ fn pointer_release_keeps_last_accepted_ink_visible_before_new_barriers() {
     );
 
     assert_eq!(app.ink_runtime().visible_products().count(), accepted_count);
+    assert!(app.ink_runtime().preview_products().is_empty());
     assert!(
-        !app.ink_runtime().preview_products().is_empty(),
-        "new released preview should overlay the last accepted committed ink"
+        stroke_primitive_count(app.last_frame()) > 0,
+        "new released preview should overlay the last accepted committed ink immediately"
     );
 }
 
@@ -909,6 +924,7 @@ fn long_stroke_batches_dirty_tiles_instead_of_clearing_canvas() {
 #[test]
 fn long_active_preview_updates_only_dirty_tail_tiles() {
     let mut app = RunenwerkDrawApp::new();
+    let mut executor = RuntimeJobExecutorResource::with_config(RuntimeJobExecutorConfig::serial());
     let start = screen_point_for_canvas(&app, 64.0, 64.0);
     app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
         PointerEventKind::Down,
@@ -918,6 +934,7 @@ fn long_active_preview_updates_only_dirty_tail_tiles() {
         Modifiers::default(),
         1,
     )));
+    process_drawing_preview_ink_jobs(&mut app, &mut executor);
 
     let mut max_dirty_tiles = app.ink_runtime().last_preview_dirty_tile_count();
     for step in 1..=20 {
@@ -931,6 +948,11 @@ fn long_active_preview_updates_only_dirty_tail_tiles() {
             Modifiers::default(),
             0,
         )));
+        let report = process_drawing_preview_ink_jobs(&mut app, &mut executor);
+        assert!(
+            report.submitted_count <= 1,
+            "preview scheduling should keep at most one catch-up job per update"
+        );
         max_dirty_tiles = max_dirty_tiles.max(app.ink_runtime().last_preview_dirty_tile_count());
         assert!(
             app.ink_runtime().last_preview_dirty_tile_count() <= 8,
@@ -942,6 +964,10 @@ fn long_active_preview_updates_only_dirty_tail_tiles() {
         .preview_stroke()
         .expect("long active stroke should still be previewing");
     assert_eq!(preview.samples.len(), 21);
+    assert!(
+        stroke_primitive_count(app.last_frame()) > 0,
+        "immediate stroke feedback should remain present while tiles catch up"
+    );
     assert!(
         app.ink_runtime().preview_products().len() > max_dirty_tiles,
         "the accumulated preview may span more tiles than any single dirty-tail update"
@@ -956,7 +982,11 @@ fn runtime_uploads_preview_products_only_when_generation_changes() {
     let mut runtime = build_headless_app()
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
-    let (preview_count, first_dirty_tail_count) = {
+    runtime.insert_resource(RuntimeJobExecutorResource::with_config(
+        RuntimeJobExecutorConfig::serial(),
+    ));
+
+    {
         let host = runtime
             .world_mut()
             .resource_mut::<DrawingHostResource>()
@@ -971,9 +1001,29 @@ fn runtime_uploads_preview_products_only_when_generation_changes() {
             Modifiers::default(),
             1,
         )));
+    }
 
-        for step in 1..=20 {
-            let canvas_position = 64.0 + step as f64 * 192.0;
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("initial preview job frame should run");
+
+    let mut first_dirty_tail_count = {
+        let host = runtime
+            .world()
+            .resource::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        assert!(!host.app.ink_runtime().preview_products().is_empty());
+        host.app.ink_runtime().last_preview_dirty_tile_count()
+    };
+
+    for step in 1..=8 {
+        {
+            let host = runtime
+                .world_mut()
+                .resource_mut::<DrawingHostResource>()
+                .expect("drawing host resource should exist");
+            let app = &mut host.app;
+            let canvas_position = 64.0 + step as f64 * 96.0;
             let screen_position = screen_point_for_canvas(app, canvas_position, canvas_position);
             app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
                 PointerEventKind::Move,
@@ -985,23 +1035,33 @@ fn runtime_uploads_preview_products_only_when_generation_changes() {
             )));
         }
 
-        let preview_count = app.ink_runtime().preview_products().len();
-        let dirty_tail_count = app.ink_runtime().last_preview_dirty_tile_count();
-        assert!(
-            preview_count > dirty_tail_count,
-            "the active preview should span more tiles than the latest dirty tail"
-        );
-        (preview_count, dirty_tail_count)
-    };
+        runtime = runtime
+            .run_for_frames(1)
+            .expect("preview catch-up frame should run");
 
-    runtime = runtime
-        .run_for_frames(1)
-        .expect("initial preview upload frame should run");
-    assert_eq!(
-        ink_upload_count(&runtime),
-        preview_count,
-        "the first render frame must upload every retained preview product once"
-    );
+        let dirty_tail_count = {
+            let host = runtime
+                .world()
+                .resource::<DrawingHostResource>()
+                .expect("drawing host resource should exist");
+            host.app.ink_runtime().last_preview_dirty_tile_count()
+        };
+        first_dirty_tail_count = first_dirty_tail_count.max(dirty_tail_count);
+        assert!(dirty_tail_count <= 8);
+    }
+
+    let preview_count = {
+        let host = runtime
+            .world()
+            .resource::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let preview_count = host.app.ink_runtime().preview_products().len();
+        assert!(
+            preview_count > first_dirty_tail_count,
+            "the active preview should accumulate more tiles than the latest dirty tail"
+        );
+        preview_count
+    };
 
     runtime = runtime
         .run_for_frames(1)
@@ -1013,26 +1073,33 @@ fn runtime_uploads_preview_products_only_when_generation_changes() {
     );
 
     let next_dirty_tail_count = {
+        {
+            let host = runtime
+                .world_mut()
+                .resource_mut::<DrawingHostResource>()
+                .expect("drawing host resource should exist");
+            let app = &mut host.app;
+            let screen_position = screen_point_for_canvas(app, 1_000.0, 1_000.0);
+            app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+                PointerEventKind::Move,
+                screen_position,
+                UiVector::ZERO,
+                Some(PointerButton::Primary),
+                Modifiers::default(),
+                0,
+            )));
+        }
+
+        runtime = runtime
+            .run_for_frames(1)
+            .expect("dirty preview tail upload frame should run");
         let host = runtime
-            .world_mut()
-            .resource_mut::<DrawingHostResource>()
+            .world()
+            .resource::<DrawingHostResource>()
             .expect("drawing host resource should exist");
-        let app = &mut host.app;
-        let screen_position = screen_point_for_canvas(app, 4_000.0, 4_000.0);
-        app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
-            PointerEventKind::Move,
-            screen_position,
-            UiVector::ZERO,
-            Some(PointerButton::Primary),
-            Modifiers::default(),
-            0,
-        )));
-        app.ink_runtime().last_preview_dirty_tile_count()
+        host.app.ink_runtime().last_preview_dirty_tile_count()
     };
 
-    runtime = runtime
-        .run_for_frames(1)
-        .expect("dirty preview tail upload frame should run");
     let upload_count = ink_upload_count(&runtime);
     assert!(
         upload_count > 0,
@@ -1164,6 +1231,20 @@ fn headless_runtime_starts_and_submits_canvas_first_frame() {
         .expect("drawing app should submit a UI frame");
     assert_eq!(submission.frame.surfaces[0].id, DRAWING_UI_SURFACE_ID);
     assert!(submission.primitive_count_hint() >= 4);
+}
+
+#[test]
+fn drawing_runtime_uses_worker_backed_jobs_by_default() {
+    let app = build_headless_app();
+    let executor = app
+        .world()
+        .resource::<RuntimeJobExecutorResource>()
+        .expect("runtime job executor should exist");
+    assert_eq!(
+        executor.config(),
+        &RuntimeJobExecutorConfig::worker_pool(2, 64),
+        "Draw should use worker-backed jobs unless the app replaces the executor"
+    );
 }
 
 #[test]
@@ -1313,6 +1394,16 @@ fn product_surface_primitive_count(frame: &ui_render_data::UiFrame) -> usize {
         .flat_map(|surface| surface.layers.iter())
         .flat_map(|layer| layer.primitives.iter())
         .filter(|primitive| matches!(primitive, UiPrimitive::ProductSurface(_)))
+        .count()
+}
+
+fn stroke_primitive_count(frame: &ui_render_data::UiFrame) -> usize {
+    frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .filter(|primitive| matches!(primitive, UiPrimitive::Stroke(_)))
         .count()
 }
 

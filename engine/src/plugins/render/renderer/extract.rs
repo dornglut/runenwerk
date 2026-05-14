@@ -3,7 +3,7 @@ use crate::plugins::render::features::UiFontAtlasResource;
 use ui_math::UiRect;
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, ProductSurfacePrimitive,
-    RectPrimitive, UiFrame, UiPrimitive, ViewportSurfaceEmbedPrimitive,
+    RectPrimitive, StrokePrimitive, UiFrame, UiPrimitive, ViewportSurfaceEmbedPrimitive,
 };
 
 impl Renderer {
@@ -46,8 +46,50 @@ impl Renderer {
                                 instances.push(entry);
                             }
                         }
-                        UiPrimitive::GlyphRun(_) | UiPrimitive::ProductSurface(_) => {}
+                        UiPrimitive::GlyphRun(_)
+                        | UiPrimitive::Stroke(_)
+                        | UiPrimitive::ProductSurface(_) => {}
                         UiPrimitive::ViewportSurfaceEmbed(_) => {}
+                    }
+                }
+            }
+        }
+        instances
+    }
+
+    pub(super) fn extract_stroke_instances(
+        frame: &UiFrame,
+    ) -> Vec<FlattenedUiStrokeSegmentInstance> {
+        let mut instances = Vec::new();
+        for surface in &frame.surfaces {
+            for layer in &surface.layers {
+                let mut clip_stack: Vec<ClipRegion> = Vec::new();
+                for primitive in &layer.primitives {
+                    match primitive {
+                        UiPrimitive::Clip(ClipPrimitive::Push { rect, .. }) => {
+                            let next = clip_stack
+                                .last()
+                                .copied()
+                                .unwrap_or(ClipRegion::Unbounded)
+                                .intersect(*rect);
+                            clip_stack.push(next);
+                        }
+                        UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => {
+                            let _ = clip_stack.pop();
+                        }
+                        UiPrimitive::Stroke(stroke) => {
+                            flatten_stroke(
+                                stroke,
+                                current_clip_region(&clip_stack),
+                                &mut instances,
+                            );
+                        }
+                        UiPrimitive::Rect(_)
+                        | UiPrimitive::Border(_)
+                        | UiPrimitive::Image(_)
+                        | UiPrimitive::GlyphRun(_)
+                        | UiPrimitive::ProductSurface(_)
+                        | UiPrimitive::ViewportSurfaceEmbed(_) => {}
                     }
                 }
             }
@@ -87,6 +129,7 @@ impl Renderer {
                         UiPrimitive::Rect(_)
                         | UiPrimitive::Border(_)
                         | UiPrimitive::Image(_)
+                        | UiPrimitive::Stroke(_)
                         | UiPrimitive::ProductSurface(_)
                         | UiPrimitive::ViewportSurfaceEmbed(_) => {}
                     }
@@ -128,6 +171,7 @@ impl Renderer {
                         UiPrimitive::Rect(_)
                         | UiPrimitive::Border(_)
                         | UiPrimitive::Image(_)
+                        | UiPrimitive::Stroke(_)
                         | UiPrimitive::ProductSurface(_)
                         | UiPrimitive::GlyphRun(_) => {}
                     }
@@ -169,6 +213,7 @@ impl Renderer {
                         UiPrimitive::Rect(_)
                         | UiPrimitive::Border(_)
                         | UiPrimitive::Image(_)
+                        | UiPrimitive::Stroke(_)
                         | UiPrimitive::ViewportSurfaceEmbed(_)
                         | UiPrimitive::GlyphRun(_) => {}
                     }
@@ -177,6 +222,71 @@ impl Renderer {
         }
         instances
     }
+}
+
+fn flatten_stroke(
+    stroke: &StrokePrimitive,
+    stack_clip: ClipRegion,
+    instances: &mut Vec<FlattenedUiStrokeSegmentInstance>,
+) {
+    if stroke.width <= f32::EPSILON || stroke.paint.a <= f32::EPSILON || stroke.points.is_empty() {
+        return;
+    }
+
+    if stroke.points.len() == 1 {
+        push_stroke_segment(
+            stroke,
+            stack_clip,
+            stroke.points[0],
+            stroke.points[0],
+            instances,
+        );
+        return;
+    }
+
+    for pair in stroke.points.windows(2) {
+        push_stroke_segment(stroke, stack_clip, pair[0], pair[1], instances);
+    }
+}
+
+fn push_stroke_segment(
+    stroke: &StrokePrimitive,
+    stack_clip: ClipRegion,
+    start: ui_math::UiPoint,
+    end: ui_math::UiPoint,
+    instances: &mut Vec<FlattenedUiStrokeSegmentInstance>,
+) {
+    let bounds = stroke_segment_bounds(start, end, stroke.width);
+    let Some(clip) = effective_clip(stack_clip, stroke.clip, bounds) else {
+        return;
+    };
+    instances.push(FlattenedUiStrokeSegmentInstance {
+        raw: StrokeSegmentInstanceRaw {
+            start: [start.x, start.y],
+            end: [end.x, end.y],
+            color: [
+                stroke.paint.r,
+                stroke.paint.g,
+                stroke.paint.b,
+                stroke.paint.a,
+            ],
+            width: stroke.width,
+            _pad: [0.0; 3],
+        },
+        clip: clip.map(|value| [value.x, value.y, value.width, value.height]),
+        layer_order: stroke.sort_key.layer_order,
+        primitive_order: stroke.sort_key.primitive_order,
+    });
+}
+
+fn stroke_segment_bounds(start: ui_math::UiPoint, end: ui_math::UiPoint, width: f32) -> UiRect {
+    let half = (width * 0.5).max(0.5);
+    UiRect::new(
+        start.x.min(end.x) - half,
+        start.y.min(end.y) - half,
+        (start.x - end.x).abs() + width.max(1.0),
+        (start.y - end.y).abs() + width.max(1.0),
+    )
 }
 
 fn flatten_glyph_run(
@@ -488,8 +598,8 @@ mod tests {
     use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
     use ui_math::UiSize;
     use ui_render_data::{
-        ClipPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiLayer, UiLayerId, UiPaint,
-        UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
+        ClipPrimitive, GlyphRunPrimitive, RectPrimitive, StrokePrimitive, UiDrawKey, UiLayer,
+        UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
     };
     use ui_text::{
         AtlasTextLayouter, TextAlign, TextLayoutRequest, TextLayouter, TextOverflow, TextStyle,
@@ -577,6 +687,40 @@ mod tests {
             instances.is_empty(),
             "rect should be culled when nested clip intersection is empty",
         );
+    }
+
+    #[test]
+    fn extract_stroke_instances_preserves_order_clip_and_width() {
+        let clip = UiRect::new(0.0, 0.0, 80.0, 80.0);
+        let stroke = StrokePrimitive::new(
+            [
+                ui_math::UiPoint::new(10.0, 10.0),
+                ui_math::UiPoint::new(20.0, 12.0),
+                ui_math::UiPoint::new(28.0, 20.0),
+            ],
+            6.0,
+            UiPaint::rgba(0.1, 0.2, 0.3, 0.8),
+            UiDrawKey::new(1, None),
+            UiSortKey::new(0, 7, 13),
+        )
+        .with_clip(clip);
+        let layer = UiLayer::with_primitives(UiLayerId(0), vec![UiPrimitive::Stroke(stroke)]);
+        let frame = UiFrame::with_surfaces(vec![UiSurface::with_layers(
+            UiSurfaceId(0),
+            UiSize::new(200.0, 200.0),
+            vec![layer],
+        )]);
+
+        let instances = Renderer::extract_stroke_instances(&frame);
+        assert_eq!(instances.len(), 2);
+        assert_eq!(instances[0].raw.width, 6.0);
+        assert_eq!(instances[0].raw.start, [10.0, 10.0]);
+        assert_eq!(instances[0].raw.end, [20.0, 12.0]);
+        assert_eq!(instances[1].raw.start, [20.0, 12.0]);
+        assert_eq!(instances[1].raw.end, [28.0, 20.0]);
+        assert_eq!(instances[0].clip, Some([0.0, 0.0, 80.0, 80.0]));
+        assert_eq!(instances[0].layer_order, 7);
+        assert_eq!(instances[0].primitive_order, 13);
     }
 
     #[test]

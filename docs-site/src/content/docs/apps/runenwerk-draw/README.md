@@ -33,9 +33,13 @@ shared engine runtime, UI frame contracts, render submission registry, and pure
 - `apps/runenwerk_draw/src/app/ink.rs`: app-owned ink product publication and
   query snapshot journals.
 - `apps/runenwerk_draw/src/app/presentation.rs`: canvas chrome, paper, and
-  accepted/preview ink projection into product-surface UI primitives.
+  accepted/preview ink projection into product-surface UI primitives plus
+  immediate `StrokePrimitive` feedback.
 - `apps/runenwerk_draw/src/runtime/ink.rs`: product publication and query
-  snapshot barrier handlers for drawing ink tiles.
+  snapshot barrier handlers for drawing ink tiles and preview catch-up job
+  processing.
+- `apps/runenwerk_draw/src/runtime/ink_jobs.rs`: committed and preview CPU ink
+  tile runtime jobs.
 - `apps/runenwerk_draw/src/runtime/systems.rs`: runtime submission of UI frames,
   dynamic ink texture targets, upload requests, and committed render product
   selections.
@@ -56,43 +60,49 @@ through the shared render UI pipeline, and routes pointer/stylus-compatible
 
 The Phase 5 ink path is now present and hardened for last-good visibility:
 
-- pointer-down/move creates a low-latency preview overlay from domain-formed
-  ink tile products;
+- pointer-down/move appends ordered preview samples, marks preview tile catch-up
+  dirty, and projects immediate screen-space pen feedback through
+  `UiPrimitive::Stroke`;
+- preview ink tile products are visual catch-up products formed asynchronously
+  by runtime jobs from owned document/stroke snapshots, then applied on the main
+  thread;
 - pointer-up commits the preview into `DrawingDocument` through
   `DrawingTransaction` and `DrawingCommand::{BeginStroke, AppendStrokeSample,
   CommitStroke}`;
-- deterministic CPU ink tiles form from committed stroke truth in bounded dirty
-  tile batches;
+- deterministic CPU ink tiles form from committed stroke truth in bounded
+  runtime job batches;
 - formed tile descriptors publish through the `ProductPublication` barrier;
 - strict renderer query snapshots publish through the `QuerySnapshotPublication`
   barrier;
 - last accepted committed ink stays visible until a newer committed generation
   is accepted by both product publication and query snapshot publication;
 - a just-released preview overlay remains visible above last accepted ink until
-  the committed generation replaces it, and formation or publication failure
-  preserves the last-good committed tiles with diagnostics;
+  the committed generation replaces it through immediate stroke feedback and,
+  when available, preview tile catch-up products; formation or publication
+  failure preserves the last-good committed tiles with diagnostics;
 - accepted current and preview tile payloads are uploaded through the generic
   engine dynamic texture upload path and projected as neutral product-surface UI
   primitives, one primitive per visible tile.
 
-The first visible ink and live preview still use deterministic CPU brush
-formation as the source of truth. The renderer path is now texture-backed, but
-this is not yet GPU product formation, persistent tile cache, watercolor/paper
-simulation, eraser compositing, package save format, or advanced layer/effect
-renderer.
+The first visible ink path still uses deterministic CPU brush formation for
+preview-quality products. `StrokePrimitive` is immediate UI projection only; it
+is not authoritative drawing state, not a tile product, and not cache identity.
+The renderer path is texture-backed for tile products, but this is not yet GPU
+product formation, persistent tile cache, watercolor/paper simulation, eraser
+compositing, package save format, or advanced layer/effect renderer.
 
 ## Current Limits / Known Gaps
 
-- The visible app path is deterministic CPU preview-quality ink tiles.
-  Final-quality profiles, persistent tile cache, GPU formation, and GPU
-  promotion/fallback are planned by the roadmap, not implemented app behavior
-  yet.
+- The visible app path is immediate CPU/UI stroke feedback plus deterministic
+  CPU preview-quality ink tiles. Final-quality profiles, persistent tile cache,
+  GPU formation, and GPU promotion/fallback are planned by the roadmap, not
+  implemented app behavior yet.
 - Touch input currently routes through the same drawing path as fallback pointer
   input. The pen-first UX target is different: touch drawing should be disabled
   by default and enabled only through explicit profile/input policy.
-- Pointer release outside the canvas still needs capture/release handling so an
-  active preview stroke cannot remain stranded when the pen/mouse leaves the
-  canvas bounds before `PointerEventKind::Up`.
+- Active strokes keep app-level capture for outside-canvas move/up samples.
+  Window/OS lost-capture diagnostics and recovery policy are still not a full
+  UX surface.
 - Native tablet packet routing and fallback suppression exist, but backend
   arbitration, real Windows Ink/Wacom/macOS hardware acceptance, and device
   setup UX are still open.
