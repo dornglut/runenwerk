@@ -14,6 +14,7 @@ related_roadmaps:
   - ../../workspace/sdf-first-execution-roadmap.md
 related_reports:
   - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
+  - ../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md
 ---
 
 # Runtime Product Job Executor Roadmap
@@ -44,10 +45,11 @@ implementation batch, not excluded from the program.
 - Draw preview-quality CPU ink now splits immediate UI feedback from visual
   tile catch-up: `StrokePrimitive` is screen-space feedback, while preview tile
   products are asynchronous catch-up output.
-- RPJ1-RPJ6 are implemented for the local runtime substrate. Draw
+- RPJ1-RPJ7A are implemented for the local runtime substrate. Draw
   responsiveness, backend-neutral cache identity, preview/final tile identity
   separation, fixed worker-pool execution, work-stealing execution, and runtime
-  job inspection diagnostics exist.
+  job inspection diagnostics exist. Engine now owns metadata-only runtime cache
+  decisions, while Draw owns the in-memory tile payload cache proof.
 - Persistent disk caches/package sidecars, GPU jobs, ECS parallel waves, and
   cross-process/distributed jobs remain later phases.
 
@@ -221,7 +223,53 @@ Validation:
 cargo test -p engine runtime_job
 ```
 
-## Phase RPJ7 - GPU Job Execution
+## Phase RPJ7A - Cache Policy And Last-Good Semantics
+
+Owner: `domain/product`, `engine/src/runtime/product_cache.rs`, and owning apps.
+
+Status: implemented for backend-neutral runtime cache policy and Draw
+in-memory cache proof; persistent storage remains deferred.
+
+Requirements:
+
+- derive typed `ProductCacheKey` values from `ProductCacheIdentity`;
+- expose backend-neutral cache decisions for hit, miss, stale, rejected,
+  write-failed, and preserved last-good states;
+- keep engine runtime cache state metadata-only, with no Draw tile bytes,
+  package paths, or renderer handles;
+- let Draw check an app-owned source-key-to-payload cache before submitting a
+  committed tile job;
+- update runtime cache metadata only after product publication accepts formed
+  descriptors;
+- preserve last-good committed products when cache lookup, formation,
+  publication, or query snapshot handling fails.
+
+Validation:
+
+```text
+cargo test -p product
+cargo test -p engine runtime_product_cache
+cargo test -p runenwerk_draw --test app_shell committed_ink_cache_hit
+```
+
+Closeout:
+
+- [Runtime Product Job RPJ7A Cache Policy Closeout](../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md)
+
+## Phase RPJ7B - Persistent Product Caches And Package Sidecars
+
+Status: deferred.
+
+Requirements:
+
+- add disk persistence only after cache acceptance/rejection, last-good
+  behavior, and app-owned payload lookup are stable;
+- keep Draw sidecar manifests, pruning, package migration, and artifact IO
+  app/package-owned;
+- reject corrupt, stale, incompatible, or untrusted entries with diagnostics
+  and without clearing last-good visible products.
+
+## Phase RPJ8 - GPU Job Execution
 
 Status: deferred.
 
@@ -235,7 +283,7 @@ Requirements:
 - never bypass CPU reference or fallback policy where an owning domain requires
   it.
 
-## Phase RPJ8 - Full ECS Parallel Execution
+## Phase RPJ9 - Full ECS Parallel Execution
 
 Status: deferred.
 
@@ -247,7 +295,7 @@ Requirements:
 - preserve serial fallback and prove serial/parallel equivalence before default
   enablement.
 
-## Phase RPJ9 - Cross-Process And Distributed Jobs
+## Phase RPJ10 - Cross-Process And Distributed Jobs
 
 Status: deferred.
 

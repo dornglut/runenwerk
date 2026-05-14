@@ -15,10 +15,10 @@ pub use formation::{
     DEFAULT_INK_TILE_SIZE_CANVAS_UNITS, DEFAULT_MAX_AFFECTED_INK_TILES, DrawingInkPreviewStroke,
     DrawingInkTileFormation, DrawingInkTileInvalidation, DrawingInkTilePayload,
     DrawingInkTileProduct, DrawingTileFormationDiagnostic, DrawingTileFormationDiagnosticCode,
-    DrawingTileFormationPolicy, drawing_ink_tile_invalidation_for_preview_stroke,
-    drawing_ink_tile_invalidation_for_strokes, drawing_tile_determinism_key,
-    form_drawing_ink_preview_tiles, form_drawing_ink_preview_tiles_for_ids, form_drawing_ink_tiles,
-    form_drawing_ink_tiles_for_ids,
+    DrawingTileFormationPolicy, drawing_committed_ink_tile_source_cache_key,
+    drawing_ink_tile_invalidation_for_preview_stroke, drawing_ink_tile_invalidation_for_strokes,
+    drawing_tile_determinism_key, form_drawing_ink_preview_tiles,
+    form_drawing_ink_preview_tiles_for_ids, form_drawing_ink_tiles, form_drawing_ink_tiles_for_ids,
 };
 pub use product::{DrawingTileProduct, DrawingTileProductSource, ProductQualityClass};
 pub use product_contracts::{

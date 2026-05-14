@@ -16,6 +16,7 @@ related_roadmaps:
 related_reports:
   - ../../reports/closeouts/drawing-phase-5/closeout.md
   - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
+  - ../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md
 ---
 
 # Runenwerk Draw Rendering Foundation Roadmap
@@ -35,6 +36,9 @@ snapshot barriers, uploaded through generic engine dynamic texture uploads, and
 projected as neutral product-surface UI primitives. Preview/final quality now
 participates in tile identity, descriptor generation, cache identity, and render
 selection; app-visible final tile lifecycle is still a later phase.
+Draw also has the first in-memory committed-tile cache proof: engine runtime
+owns metadata-only cache decisions, while the app owns cached tile payloads and
+stages accepted cache hits through the normal product/query barriers.
 
 ## Foundation Policy
 
@@ -103,7 +107,9 @@ Acceptance:
 
 Owner: `apps/runenwerk_draw`.
 
-Status: next app-owned runtime cache phase; not persistent storage.
+Status: partially implemented for in-memory committed-tile cache hits;
+preview/final memory budgeting, eviction, and persistent storage remain later
+work.
 
 Target modules:
 
@@ -114,6 +120,8 @@ Implementation requirements:
 
 - Add an app-derived tile cache for preview and final products with a 512 MiB
   default memory budget.
+- Use `ProductCacheKey` and engine runtime cache metadata for accepted
+  committed-tile cache hits before submitting a tile job.
 - Track cache entries by tile id, quality class, descriptor generation, source
   revision, formation version, payload size, and last access frame.
 - Evict with LRU-style policy while protecting current visible tiles, active

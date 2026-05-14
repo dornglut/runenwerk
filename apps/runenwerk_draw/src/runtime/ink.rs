@@ -2,19 +2,20 @@
 
 use anyhow::Result;
 use drawing::{
-    DrawingTileFormationPolicy, build_drawing_ink_tile_product_contracts,
-    build_drawing_ink_tile_publication_outcome, drawing_ink_tile_query_snapshot_for_descriptor,
+    DrawingInkTileFormation, DrawingTileFormationPolicy, build_drawing_ink_tile_product_contracts,
+    build_drawing_ink_tile_publication_outcome, drawing_committed_ink_tile_source_cache_key,
+    drawing_ink_tile_product_cache_identity, drawing_ink_tile_query_snapshot_for_descriptor,
     form_drawing_ink_tiles_for_ids,
 };
 use ecs::World;
 use engine::runtime::{
     ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource, RuntimeJobExecutorResource,
-    RuntimeJobStatus,
+    RuntimeJobStatus, RuntimeProductCacheResource,
 };
 use engine::{BarrierKind, ExecutionBarrier};
 use product::{
-    ProductDescriptorCore, ProductPublicationReport, QuerySnapshotPublicationReport,
-    QuerySnapshotPublicationStatus,
+    ProductCacheDecisionKind, ProductDescriptorCore, ProductPublicationReport,
+    QuerySnapshotPublicationReport, QuerySnapshotPublicationStatus,
 };
 
 use crate::app::{
@@ -28,6 +29,13 @@ use crate::runtime::ink_jobs::{
 use crate::runtime::resources::DrawingHostResource;
 
 const DRAWING_INK_PUBLICATION_STAGE_SEQUENCE: u64 = 5_100;
+
+struct DrawingInkCacheLookupRequest {
+    document: drawing::DrawingDocument,
+    dirty_tiles: Vec<drawing::CanvasTileId>,
+    policy: DrawingTileFormationPolicy,
+    formation_key: String,
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct DrawingPreviewInkJobProcessReport {
@@ -55,12 +63,23 @@ pub fn publish_drawing_ink_products_at_barrier(
     };
 
     if let Some(mut executor) = world.remove_resource::<RuntimeJobExecutorResource>() {
-        publish_drawing_ink_products_with_executor(
-            &mut host.app,
-            &mut publications,
-            &mut executor,
-            barrier,
-        );
+        if let Some(mut cache) = world.remove_resource::<RuntimeProductCacheResource>() {
+            publish_drawing_ink_products_with_executor_and_cache(
+                &mut host.app,
+                &mut publications,
+                &mut executor,
+                &mut cache,
+                barrier,
+            );
+            world.insert_resource(cache);
+        } else {
+            publish_drawing_ink_products_with_executor(
+                &mut host.app,
+                &mut publications,
+                &mut executor,
+                barrier,
+            );
+        }
         world.insert_resource(executor);
     } else {
         publish_drawing_ink_products(&mut host.app, &mut publications, barrier);
@@ -116,6 +135,7 @@ pub fn publish_drawing_ink_products(
     publish_formed_drawing_ink_products(
         app,
         publications,
+        None,
         barrier,
         document,
         dirty_tiles,
@@ -272,11 +292,43 @@ pub fn publish_drawing_ink_products_with_executor(
     executor: &mut RuntimeJobExecutorResource,
     barrier: &ExecutionBarrier,
 ) -> ProductPublicationReport {
+    publish_drawing_ink_products_with_optional_cache(app, publications, executor, None, barrier)
+}
+
+pub fn publish_drawing_ink_products_with_executor_and_cache(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    executor: &mut RuntimeJobExecutorResource,
+    cache: &mut RuntimeProductCacheResource,
+    barrier: &ExecutionBarrier,
+) -> ProductPublicationReport {
+    publish_drawing_ink_products_with_optional_cache(
+        app,
+        publications,
+        executor,
+        Some(cache),
+        barrier,
+    )
+}
+
+fn publish_drawing_ink_products_with_optional_cache(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    executor: &mut RuntimeJobExecutorResource,
+    mut cache: Option<&mut RuntimeProductCacheResource>,
+    barrier: &ExecutionBarrier,
+) -> ProductPublicationReport {
     if barrier.kind != BarrierKind::ProductPublication {
         return ProductPublicationReport::default();
     }
 
-    let completed_report = publish_completed_drawing_ink_jobs(app, publications, executor, barrier);
+    let completed_report = publish_completed_drawing_ink_jobs(
+        app,
+        publications,
+        executor,
+        cache.as_deref_mut(),
+        barrier,
+    );
     if product_publication_report_has_activity(&completed_report) {
         return completed_report;
     }
@@ -293,8 +345,27 @@ pub fn publish_drawing_ink_products_with_executor(
     }
 
     let formation_key = drawing_committed_ink_job_key(&document, &dirty_tiles, policy);
-    if app.ink_runtime().last_publication_key() == Some(formation_key.as_str())
-        || app.ink_runtime().pending_formation_key() == Some(formation_key.as_str())
+    if app.ink_runtime().pending_formation_key() == Some(formation_key.as_str()) {
+        return ProductPublicationReport::default();
+    }
+    if let Some(cache) = cache.as_deref_mut()
+        && let Some(report) = try_publish_cached_drawing_ink_products(
+            app,
+            publications,
+            cache,
+            barrier,
+            DrawingInkCacheLookupRequest {
+                document: document.clone(),
+                dirty_tiles: dirty_tiles.clone(),
+                policy,
+                formation_key: formation_key.clone(),
+            },
+        )
+    {
+        return report;
+    }
+    if dirty_tiles.is_empty()
+        && app.ink_runtime().last_publication_key() == Some(formation_key.as_str())
     {
         return ProductPublicationReport::default();
     }
@@ -321,13 +392,90 @@ pub fn publish_drawing_ink_products_with_executor(
         }
     }
 
-    publish_completed_drawing_ink_jobs(app, publications, executor, barrier)
+    publish_completed_drawing_ink_jobs(app, publications, executor, cache, barrier)
+}
+
+fn try_publish_cached_drawing_ink_products(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    cache: &mut RuntimeProductCacheResource,
+    barrier: &ExecutionBarrier,
+    request: DrawingInkCacheLookupRequest,
+) -> Option<ProductPublicationReport> {
+    let DrawingInkCacheLookupRequest {
+        document,
+        dirty_tiles,
+        policy,
+        formation_key,
+    } = request;
+    let mut products = Vec::with_capacity(dirty_tiles.len());
+    for tile_id in &dirty_tiles {
+        let source_key = drawing_committed_ink_tile_source_cache_key(&document, policy, *tile_id)?;
+        let product_key = app
+            .ink_runtime()
+            .cached_product_key_for_source_key(&source_key)?
+            .clone();
+        let product = app.ink_runtime().cached_product(&product_key)?.clone();
+        let identity = drawing_ink_tile_product_cache_identity(&product);
+        let decision = cache.lookup(&identity);
+        match decision.kind {
+            ProductCacheDecisionKind::Hit => products.push(product),
+            ProductCacheDecisionKind::Stale | ProductCacheDecisionKind::Rejected => {
+                cache.record_preserved_last_good(&identity, decision.diagnostics.clone());
+                app.ink_runtime_mut().record_journal(
+                    DrawingInkJournalStage::Formation,
+                    false,
+                    format!(
+                        "committed ink cache {:?}; preserving last-good",
+                        decision.kind
+                    ),
+                );
+                return None;
+            }
+            ProductCacheDecisionKind::Miss
+            | ProductCacheDecisionKind::WriteFailed
+            | ProductCacheDecisionKind::PreservedLastGood => {
+                app.ink_runtime_mut().record_journal(
+                    DrawingInkJournalStage::Formation,
+                    false,
+                    format!("committed ink cache {:?}; submitting job", decision.kind),
+                );
+                return None;
+            }
+        }
+    }
+
+    if products.is_empty() {
+        return None;
+    }
+
+    app.ink_runtime_mut().record_journal(
+        DrawingInkJournalStage::Formation,
+        true,
+        format!("committed ink cache hit products={}", products.len()),
+    );
+    let formation = DrawingInkTileFormation {
+        products,
+        cleared_tiles: Vec::new(),
+        diagnostics: Vec::new(),
+        determinism_key: formation_key,
+    };
+    Some(publish_formed_drawing_ink_products(
+        app,
+        publications,
+        Some(cache),
+        barrier,
+        document,
+        dirty_tiles,
+        formation,
+    ))
 }
 
 fn publish_completed_drawing_ink_jobs(
     app: &mut RunenwerkDrawApp,
     publications: &mut ProductPublicationRuntimeResource,
     executor: &mut RuntimeJobExecutorResource,
+    mut cache: Option<&mut RuntimeProductCacheResource>,
     barrier: &ExecutionBarrier,
 ) -> ProductPublicationReport {
     let completions = executor.drain_completed::<DrawingCommittedInkTileJobOutput>();
@@ -354,6 +502,7 @@ fn publish_completed_drawing_ink_jobs(
                 let report = publish_formed_drawing_ink_products(
                     app,
                     publications,
+                    cache.as_deref_mut(),
                     barrier,
                     output.document,
                     output.dirty_tiles,
@@ -386,6 +535,7 @@ fn publish_completed_drawing_ink_jobs(
 fn publish_formed_drawing_ink_products(
     app: &mut RunenwerkDrawApp,
     publications: &mut ProductPublicationRuntimeResource,
+    cache: Option<&mut RuntimeProductCacheResource>,
     barrier: &ExecutionBarrier,
     document: drawing::DrawingDocument,
     dirty_tiles: Vec<drawing::CanvasTileId>,
@@ -393,7 +543,9 @@ fn publish_formed_drawing_ink_products(
 ) -> ProductPublicationReport {
     let formation_key = formation.determinism_key.clone();
 
-    if app.ink_runtime().last_publication_key() == Some(formation_key.as_str()) {
+    if dirty_tiles.is_empty()
+        && app.ink_runtime().last_publication_key() == Some(formation_key.as_str())
+    {
         return ProductPublicationReport::default();
     }
 
@@ -466,6 +618,11 @@ fn publish_formed_drawing_ink_products(
     let report = publications.publish_staged(barrier);
 
     if report.published_count > 0 && report.rejected_count == 0 {
+        if let Some(cache) = cache {
+            app.ink_runtime_mut()
+                .record_cached_products(formation.products.iter());
+            cache.record_accepted_descriptors(contracts.output_descriptors.iter().cloned());
+        }
         app.ink_runtime_mut().record_candidate_products(
             formation_key.clone(),
             dirty_tiles,
@@ -535,7 +692,9 @@ pub fn publish_drawing_ink_query_snapshots(
     else {
         return QuerySnapshotPublicationReport::default();
     };
-    if app.ink_runtime().last_query_snapshot_key() == Some(snapshot_key.as_str()) {
+    if app.ink_runtime().last_query_snapshot_key() == Some(snapshot_key.as_str())
+        && app.ink_runtime().formed_products().is_empty()
+    {
         return QuerySnapshotPublicationReport::default();
     }
 

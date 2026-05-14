@@ -43,6 +43,8 @@ Operational execution checklist:
   - [engine/roadmaps/runtime-product-job-executor-roadmap.md](../engine/roadmaps/runtime-product-job-executor-roadmap.md)
 - Runtime product job RPJ4-RPJ6 closeout evidence:
   - [reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md](../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md)
+- Runtime product job RPJ7A cache policy closeout evidence:
+  - [reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md](../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md)
 - Editor final end-to-end implementation roadmap:
   - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - Runenwerk Draw rendering foundation roadmap:
@@ -153,11 +155,14 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   deterministic scalar-distance and material-channel CPU preview products,
   `runenwerk_editor` publishes and snapshots those formed descriptors through
   the product substrate, and editor preview surfaces expose sample summaries;
-- runtime product job RPJ4-RPJ6 is complete for local execution substrate:
+- runtime product job RPJ4-RPJ7A is complete for local execution substrate:
   Draw responsiveness uses immediate stroke feedback plus async tile jobs,
   product cache identity is typed and lineage-derived, Draw preview/final tile
   identities are separated before persistence, and the engine runtime exposes
   serial, fixed worker-pool, and work-stealing executor modes with diagnostics;
+  engine runtime cache policy is metadata-only, and Draw has an in-memory
+  committed-tile cache proof that stages cache hits through the normal product
+  and query barriers without submitting a new runtime job;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

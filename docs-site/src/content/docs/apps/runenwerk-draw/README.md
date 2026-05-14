@@ -14,6 +14,7 @@ related_roadmaps:
   - ./roadmap.md
 related_reports:
   - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
+  - ../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md
 ---
 
 # Runenwerk Draw
@@ -73,6 +74,8 @@ The Phase 5 ink path is now present and hardened for last-good visibility:
   CommitStroke}`;
 - deterministic CPU ink tiles form from committed stroke truth in bounded
   runtime job batches;
+- committed tiles can be served from the app-owned in-memory tile payload cache
+  when engine runtime cache metadata accepts the matching `ProductCacheKey`;
 - formed tile descriptors publish through the `ProductPublication` barrier;
 - strict renderer query snapshots publish through the `QuerySnapshotPublication`
   barrier;
@@ -99,9 +102,10 @@ compositing, package save format, or advanced layer/effect renderer.
 
 - The visible app path is immediate CPU/UI stroke feedback plus deterministic
   CPU preview-quality ink tiles. Final-quality CPU tile contracts and cache
-  identity exist, but app-visible final tile lifecycle, persistent tile cache,
-  GPU formation, and GPU promotion/fallback are planned by the roadmap, not
-  implemented app behavior yet.
+  identity exist, and committed preview tiles have an in-memory cache-hit proof.
+  App-visible final tile lifecycle, preview/final cache budgeting and eviction,
+  persistent tile cache, GPU formation, and GPU promotion/fallback are planned
+  by the roadmap, not implemented app behavior yet.
 - Touch input currently routes through the same drawing path as fallback pointer
   input. The pen-first UX target is different: touch drawing should be disabled
   by default and enabled only through explicit profile/input policy.

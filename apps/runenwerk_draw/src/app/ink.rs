@@ -2,8 +2,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use drawing::{CanvasTileId, DrawingInkTileProduct, DrawingTileFormationDiagnostic};
-use product::{ProductDescriptorCore, ProductIdentity};
+use drawing::{
+    CanvasTileId, DrawingInkTileProduct, DrawingTileFormationDiagnostic,
+    drawing_ink_tile_product_cache_identity,
+};
+use product::{ProductCacheKey, ProductDescriptorCore, ProductIdentity};
 
 const DRAWING_INK_JOURNAL_LIMIT: usize = 64;
 
@@ -28,6 +31,8 @@ pub struct DrawingInkRuntimeState {
     candidate_cleared_tiles: BTreeSet<CanvasTileId>,
     candidate_dirty_tiles: BTreeSet<CanvasTileId>,
     preview_products: Vec<DrawingInkTileProduct>,
+    cached_products: BTreeMap<ProductCacheKey, DrawingInkTileProduct>,
+    cached_source_keys: BTreeMap<String, ProductCacheKey>,
     dirty_tiles: BTreeSet<CanvasTileId>,
     published_descriptors: Vec<ProductDescriptorCore>,
     accepted_snapshot_ids: BTreeSet<ProductIdentity>,
@@ -52,6 +57,14 @@ impl DrawingInkRuntimeState {
 
     pub fn preview_products(&self) -> &[DrawingInkTileProduct] {
         &self.preview_products
+    }
+
+    pub fn cached_product_key_for_source_key(&self, source_key: &str) -> Option<&ProductCacheKey> {
+        self.cached_source_keys.get(source_key)
+    }
+
+    pub fn cached_product(&self, key: &ProductCacheKey) -> Option<&DrawingInkTileProduct> {
+        self.cached_products.get(key)
     }
 
     pub fn published_descriptors(&self) -> &[ProductDescriptorCore] {
@@ -175,6 +188,18 @@ impl DrawingInkRuntimeState {
     pub fn clear_preview_products(&mut self) {
         self.preview_products.clear();
         self.last_preview_dirty_tile_count = 0;
+    }
+
+    pub fn record_cached_products<'a>(
+        &mut self,
+        products: impl IntoIterator<Item = &'a DrawingInkTileProduct>,
+    ) {
+        for product in products {
+            let cache_key = drawing_ink_tile_product_cache_identity(product).cache_key();
+            self.cached_source_keys
+                .insert(product.cache_key.clone(), cache_key.clone());
+            self.cached_products.insert(cache_key, product.clone());
+        }
     }
 
     pub fn record_preview_failure(&mut self, diagnostics: Vec<DrawingTileFormationDiagnostic>) {

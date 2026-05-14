@@ -74,6 +74,10 @@ impl App {
             self.world
                 .insert_resource(RuntimeJobExecutorResource::default());
         }
+        if !self.world.has_resource::<RuntimeProductCacheResource>() {
+            self.world
+                .insert_resource(RuntimeProductCacheResource::default());
+        }
         if !self.world.has_resource::<SimulationProfileConfig>() {
             self.world
                 .insert_resource(SimulationProfileConfig::default());

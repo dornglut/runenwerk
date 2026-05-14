@@ -30,14 +30,16 @@ state.
 ## Tile Ownership
 
 `domain/drawing` owns deterministic CPU tile formation, tile metadata,
-lineage, invalidation, and product-substrate descriptor helpers. It does not
-own app-visible tile lifecycle.
+lineage, invalidation, source cache key construction, and product-substrate
+descriptor helpers. It does not own app-visible tile lifecycle or runtime cache
+state.
 
 App/runtime layers own current/preview visibility, dynamic texture upload
 tracking, cache policy, fallback/promotion decisions, and renderer submission.
 Drawing quality class participates in product scale, descriptor generation,
 cache identity, and render selection. App-visible final-quality lifecycle,
-persistent caches, and package sidecars remain app/package work.
+runtime cache acceptance, persistent caches, and package sidecars remain
+app/package or engine-runtime work according to the product cache roadmap.
 
 ## Current Scope
 
@@ -65,6 +67,8 @@ The current public API covers:
   `form_drawing_ink_preview_tiles_for_ids`, and
   `drawing_ink_tile_invalidation_for_strokes` for deterministic committed and
   live preview CPU ink tile formation;
+- `drawing_committed_ink_tile_source_cache_key` for app/runtime cache lookup
+  without moving payload cache policy into the drawing domain;
 - drawing ink tile product helpers that build `domain/product`
   `ProductJobDescriptor`, `ProductDescriptorCore`, `ProductPublicationOutcome`,
   and `QuerySnapshotProductDescriptor` values for renderer strict consumption;

@@ -11,7 +11,7 @@ use engine::plugins::render::{
 use engine::plugins::{InputState, TouchInputPhase};
 use engine::runtime::{
     ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource, RuntimeJobExecutorConfig,
-    RuntimeJobExecutorResource,
+    RuntimeJobExecutorResource, RuntimeProductCacheResource,
 };
 use engine::{BarrierKind, ExecutionBarrier, SceneRuntimeState};
 use native_tablet_input::{
@@ -24,7 +24,7 @@ use runenwerk_draw::app::{
 use runenwerk_draw::runtime::{
     DRAWING_UI_FRAME_PRODUCER_ID, DrawingHostResource, build_headless_app,
     process_drawing_preview_ink_jobs, publish_drawing_ink_products,
-    publish_drawing_ink_query_snapshots,
+    publish_drawing_ink_products_with_executor_and_cache, publish_drawing_ink_query_snapshots,
 };
 use ui_input::{
     Modifiers, PointerButton, PointerContactState, PointerDeviceId, PointerEvent, PointerEventKind,
@@ -1193,6 +1193,72 @@ fn runtime_uploads_only_new_committed_products_after_more_strokes() {
         .run_for_frames(1)
         .expect("second stable committed frame should run");
     assert_eq!(ink_upload_count(&runtime), 0);
+}
+
+#[test]
+fn committed_ink_cache_hit_stages_products_without_job_submission() {
+    let mut app = RunenwerkDrawApp::new();
+    let mut publications = ProductPublicationRuntimeResource::default();
+    let mut snapshots = QuerySnapshotRuntimeResource::default();
+    let mut executor = RuntimeJobExecutorResource::with_config(RuntimeJobExecutorConfig::serial());
+    let mut cache = RuntimeProductCacheResource::default();
+    let start = screen_point_for_canvas(&app, 512.0, 512.0);
+    let end = screen_point_for_canvas(&app, 620.0, 560.0);
+
+    draw_stroke(&mut app, start, end);
+    let first_report = publish_drawing_ink_products_with_executor_and_cache(
+        &mut app,
+        &mut publications,
+        &mut executor,
+        &mut cache,
+        &barrier(BarrierKind::ProductPublication),
+    );
+    assert!(first_report.published_count > 0);
+    publish_drawing_ink_query_snapshots(
+        &mut app,
+        &mut snapshots,
+        &barrier(BarrierKind::QuerySnapshotPublication),
+    );
+    assert!(app.ink_runtime().visible_product_count() > 0);
+    let submitted_after_first = executor.diagnostics().submitted_count;
+    let cached_entries = cache.snapshot().entry_count;
+    assert_eq!(cached_entries, app.ink_runtime().visible_product_count());
+
+    let cached_tiles = visible_tile_ids(&app);
+    app.ink_runtime_mut().mark_dirty_tiles(cached_tiles.clone());
+    let second_report = publish_drawing_ink_products_with_executor_and_cache(
+        &mut app,
+        &mut publications,
+        &mut executor,
+        &mut cache,
+        &barrier(BarrierKind::ProductPublication),
+    );
+
+    assert!(second_report.published_count > 0);
+    assert_eq!(
+        executor.diagnostics().submitted_count,
+        submitted_after_first,
+        "cache hit should stage cached products without submitting another runtime job"
+    );
+    publish_drawing_ink_query_snapshots(
+        &mut app,
+        &mut snapshots,
+        &barrier(BarrierKind::QuerySnapshotPublication),
+    );
+    assert!(cached_tiles.is_disjoint(app.ink_runtime().dirty_tiles()));
+    assert!(
+        cache
+            .snapshot()
+            .decisions
+            .iter()
+            .any(|decision| decision.kind == product::ProductCacheDecisionKind::Hit)
+    );
+    assert!(
+        app.ink_runtime()
+            .journal()
+            .iter()
+            .any(|entry| entry.summary.contains("committed ink cache hit"))
+    );
 }
 
 #[test]

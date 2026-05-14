@@ -298,6 +298,19 @@ pub fn form_drawing_ink_tiles_for_ids(
     )
 }
 
+pub fn drawing_committed_ink_tile_source_cache_key(
+    document: &DrawingDocument,
+    policy: DrawingTileFormationPolicy,
+    tile_id: CanvasTileId,
+) -> Option<String> {
+    drawing_ink_tile_source_cache_key(
+        document,
+        policy,
+        DrawingInkTileFormationKind::Committed,
+        tile_id,
+    )
+}
+
 pub fn form_drawing_ink_preview_tiles(
     document: &DrawingDocument,
     preview_stroke: &DrawingInkPreviewStroke,
@@ -670,6 +683,30 @@ fn active_output_id(document: &DrawingDocument) -> Option<CompositeOutputId> {
                 _ => None,
             })
     })
+}
+
+fn drawing_ink_tile_source_cache_key(
+    document: &DrawingDocument,
+    policy: DrawingTileFormationPolicy,
+    kind: DrawingInkTileFormationKind,
+    tile_id: CanvasTileId,
+) -> Option<String> {
+    if !policy.is_valid() {
+        return None;
+    }
+    let source_output = active_output_id(document)?;
+    Some(format!(
+        "{}:{}:{}:{}:{}:L{}:{}:{}:v{}",
+        kind.cache_key_prefix(),
+        policy.quality_class.cache_token(),
+        document.document_id.raw(),
+        document.revision.raw(),
+        source_output.raw(),
+        tile_id.level.raw(),
+        tile_id.x,
+        tile_id.y,
+        policy.formation_version.raw()
+    ))
 }
 
 fn supported_strokes<'a>(

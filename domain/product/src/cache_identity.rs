@@ -1,9 +1,33 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::{
-    ProductDescriptorCore, ProductIdentity, ProductKind, ProductProducerKey, ProductScaleBand,
-    ProductSourceKey,
+    FieldProductDiagnostic, ProductDescriptorCore, ProductIdentity, ProductKind,
+    ProductProducerKey, ProductScaleBand, ProductSourceKey,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ProductCacheKey(String);
+
+impl ProductCacheKey {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn from_identity(identity: &ProductCacheIdentity) -> Self {
+        Self(identity.stable_key())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ProductCacheKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ProductCacheIdentity {
@@ -38,6 +62,10 @@ impl ProductCacheIdentity {
             source_keys,
             upstream_products,
         }
+    }
+
+    pub fn cache_key(&self) -> ProductCacheKey {
+        ProductCacheKey::from_identity(self)
     }
 
     pub fn stable_key(&self) -> String {
@@ -76,6 +104,59 @@ fn keyed_part(value: &str) -> String {
     format!("{}:{value}", value.len())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProductCacheDecisionKind {
+    Hit,
+    Miss,
+    Stale,
+    Rejected,
+    WriteFailed,
+    PreservedLastGood,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProductCacheDecision {
+    pub kind: ProductCacheDecisionKind,
+    pub key: ProductCacheKey,
+    pub product_id: Option<ProductIdentity>,
+    pub stored_generation: Option<u64>,
+    pub requested_generation: Option<u64>,
+    pub diagnostics: Vec<FieldProductDiagnostic>,
+}
+
+impl ProductCacheDecision {
+    pub fn new(kind: ProductCacheDecisionKind, key: ProductCacheKey) -> Self {
+        Self {
+            kind,
+            key,
+            product_id: None,
+            stored_generation: None,
+            requested_generation: None,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    pub fn for_identity(mut self, identity: &ProductCacheIdentity) -> Self {
+        self.product_id = Some(identity.product_id);
+        self.requested_generation = Some(identity.descriptor_generation);
+        self
+    }
+
+    pub fn with_stored_generation(mut self, generation: u64) -> Self {
+        self.stored_generation = Some(generation);
+        self
+    }
+
+    pub fn with_diagnostics(
+        mut self,
+        diagnostics: impl IntoIterator<Item = FieldProductDiagnostic>,
+    ) -> Self {
+        self.diagnostics = diagnostics.into_iter().collect();
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -112,5 +193,6 @@ mod tests {
                 .stable_key()
                 .contains("producer=16:drawing.ink_tile")
         );
+        assert_eq!(identity.cache_key().as_str(), identity.stable_key());
     }
 }
