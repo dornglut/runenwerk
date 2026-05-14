@@ -34,7 +34,7 @@ impl Default for DrawingTileFormationPolicy {
     fn default() -> Self {
         Self {
             quality_class: ProductQualityClass::Preview,
-            formation_version: FormationVersion::new(1),
+            formation_version: FormationVersion::new(2),
             tile_size_canvas_units: DEFAULT_INK_TILE_SIZE_CANVAS_UNITS,
             tile_pixel_width: DEFAULT_INK_TILE_PIXEL_WIDTH,
             tile_pixel_height: DEFAULT_INK_TILE_PIXEL_HEIGHT,
@@ -734,78 +734,222 @@ fn rasterize_stroke(
     brush: &BrushDescriptor,
     policy: DrawingTileFormationPolicy,
 ) {
+    let context = StrokeRasterContext {
+        tile_bounds,
+        stroke,
+        brush,
+        policy,
+    };
     match stroke.samples.as_slice() {
         [] => {}
-        [sample] => rasterize_stamp(payload, tile_bounds, stroke, brush, sample, sample, policy),
+        [sample] => {
+            let radius = f64::from(sample_size(brush, sample) * 0.5).max(0.5);
+            rasterize_dab(
+                payload,
+                context,
+                DabRaster {
+                    center: sample.position,
+                    radius,
+                    opacity: sample_opacity(brush, sample),
+                    flow: sample_flow(brush, sample),
+                    edge_softness: brush.ink.edge_softness,
+                },
+            );
+        }
         samples => {
-            for pair in samples.windows(2) {
-                rasterize_stamp(
-                    payload,
-                    tile_bounds,
-                    stroke,
-                    brush,
-                    &pair[0],
-                    &pair[1],
-                    policy,
-                );
+            for (index, pair) in samples.windows(2).enumerate() {
+                rasterize_segment_dabs(payload, context, &pair[0], &pair[1], index == 0);
             }
         }
     }
 }
 
-fn rasterize_stamp(
-    payload: &mut DrawingInkTilePayload,
+#[derive(Clone, Copy)]
+struct StrokeRasterContext<'a> {
     tile_bounds: CanvasRect,
-    stroke: &StrokeRecord,
-    brush: &BrushDescriptor,
+    stroke: &'a StrokeRecord,
+    brush: &'a BrushDescriptor,
+    policy: DrawingTileFormationPolicy,
+}
+
+#[derive(Clone, Copy)]
+struct DabRaster {
+    center: CanvasCoordinate,
+    radius: f64,
+    opacity: f32,
+    flow: f32,
+    edge_softness: f32,
+}
+
+fn rasterize_segment_dabs(
+    payload: &mut DrawingInkTilePayload,
+    context: StrokeRasterContext<'_>,
     start: &StrokeSample,
     end: &StrokeSample,
-    policy: DrawingTileFormationPolicy,
+    include_start: bool,
 ) {
+    let brush = context.brush;
     let start_radius = f64::from(sample_size(brush, start) * 0.5).max(0.5);
     let end_radius = f64::from(sample_size(brush, end) * 0.5).max(0.5);
-    let radius = start_radius.max(end_radius);
-    let min_x = start.position.x.min(end.position.x) - radius;
-    let max_x = start.position.x.max(end.position.x) + radius;
-    let min_y = start.position.y.min(end.position.y) - radius;
-    let max_y = start.position.y.max(end.position.y) + radius;
-
-    let pixel_w = policy.tile_size_canvas_units / f64::from(payload.width);
-    let pixel_h = policy.tile_size_canvas_units / f64::from(payload.height);
-    let min_px = (((min_x - tile_bounds.min.x) / pixel_w).floor() as i64)
-        .clamp(0, i64::from(payload.width.saturating_sub(1))) as u32;
-    let max_px = (((max_x - tile_bounds.min.x) / pixel_w).floor() as i64)
-        .clamp(0, i64::from(payload.width.saturating_sub(1))) as u32;
-    let min_py = (((min_y - tile_bounds.min.y) / pixel_h).floor() as i64)
-        .clamp(0, i64::from(payload.height.saturating_sub(1))) as u32;
-    let max_py = (((max_y - tile_bounds.min.y) / pixel_h).floor() as i64)
-        .clamp(0, i64::from(payload.height.saturating_sub(1))) as u32;
-
-    let opacity = ((sample_opacity(brush, start) + sample_opacity(brush, end)) * 0.5)
-        * stroke.color.a.clamp(0.0, 1.0);
-    if opacity <= 0.0 {
+    let max_radius = start_radius.max(end_radius);
+    let segment_bounds = CanvasRect::new(
+        CanvasCoordinate::new(
+            start.position.x.min(end.position.x) - max_radius,
+            start.position.y.min(end.position.y) - max_radius,
+        ),
+        CanvasCoordinate::new(
+            start.position.x.max(end.position.x) + max_radius,
+            start.position.y.max(end.position.y) + max_radius,
+        ),
+    );
+    if !rects_intersect(segment_bounds, context.tile_bounds) {
         return;
     }
 
+    let dx = end.position.x - start.position.x;
+    let dy = end.position.y - start.position.y;
+    let length = (dx * dx + dy * dy).sqrt();
+    if length <= f64::EPSILON {
+        if include_start {
+            rasterize_dab(
+                payload,
+                context,
+                DabRaster {
+                    center: start.position,
+                    radius: start_radius,
+                    opacity: sample_opacity(brush, start),
+                    flow: sample_flow(brush, start),
+                    edge_softness: brush.ink.edge_softness,
+                },
+            );
+        }
+        return;
+    }
+
+    let clip_bounds = expanded_rect(context.tile_bounds, max_radius);
+    let Some((clip_t0, clip_t1)) =
+        segment_rect_parameter_range(start.position, end.position, clip_bounds)
+    else {
+        return;
+    };
+    let spacing = dab_spacing(brush, start, end);
+    let min_index = if include_start { 0 } else { 1 };
+    let first_index = ((clip_t0 * length - 0.000_001) / spacing)
+        .ceil()
+        .max(min_index as f64) as u32;
+    let last_index = ((clip_t1 * length + 0.000_001) / spacing).floor() as u32;
+    let mut drew_end = false;
+    for index in first_index..=last_index {
+        let distance = (f64::from(index) * spacing).min(length);
+        let t = (distance / length).clamp(0.0, 1.0);
+        if (1.0 - t).abs() <= 0.000_001 {
+            drew_end = true;
+        }
+        rasterize_dab_at_t(payload, context, start, end, t);
+    }
+    if clip_t1 >= 1.0 - 0.000_001 && !drew_end {
+        rasterize_dab_at_t(payload, context, start, end, 1.0);
+    }
+}
+
+fn rasterize_dab_at_t(
+    payload: &mut DrawingInkTilePayload,
+    context: StrokeRasterContext<'_>,
+    start: &StrokeSample,
+    end: &StrokeSample,
+    t: f64,
+) {
+    let brush = context.brush;
+    let center = CanvasCoordinate::new(
+        lerp_f64(start.position.x, end.position.x, t),
+        lerp_f64(start.position.y, end.position.y, t),
+    );
+    let radius = lerp_f64(
+        f64::from(sample_size(brush, start) * 0.5).max(0.5),
+        f64::from(sample_size(brush, end) * 0.5).max(0.5),
+        t,
+    );
+    let opacity = lerp_f32(sample_opacity(brush, start), sample_opacity(brush, end), t);
+    let flow = lerp_f32(sample_flow(brush, start), sample_flow(brush, end), t);
+    rasterize_dab(
+        payload,
+        context,
+        DabRaster {
+            center,
+            radius,
+            opacity,
+            flow,
+            edge_softness: brush.ink.edge_softness,
+        },
+    );
+}
+
+fn rasterize_dab(
+    payload: &mut DrawingInkTilePayload,
+    context: StrokeRasterContext<'_>,
+    dab: DabRaster,
+) {
+    let radius = dab.radius.max(0.5);
+    let min_x = dab.center.x - radius;
+    let max_x = dab.center.x + radius;
+    let min_y = dab.center.y - radius;
+    let max_y = dab.center.y + radius;
+    let dab_bounds = CanvasRect::new(
+        CanvasCoordinate::new(min_x, min_y),
+        CanvasCoordinate::new(max_x, max_y),
+    );
+    if !rects_intersect(dab_bounds, context.tile_bounds) {
+        return;
+    }
+
+    let pixel_w = context.policy.tile_size_canvas_units / f64::from(payload.width);
+    let pixel_h = context.policy.tile_size_canvas_units / f64::from(payload.height);
+    let min_px = (((min_x - context.tile_bounds.min.x) / pixel_w).floor() as i64)
+        .clamp(0, i64::from(payload.width.saturating_sub(1))) as u32;
+    let max_px = (((max_x - context.tile_bounds.min.x) / pixel_w).floor() as i64)
+        .clamp(0, i64::from(payload.width.saturating_sub(1))) as u32;
+    let min_py = (((min_y - context.tile_bounds.min.y) / pixel_h).floor() as i64)
+        .clamp(0, i64::from(payload.height.saturating_sub(1))) as u32;
+    let max_py = (((max_y - context.tile_bounds.min.y) / pixel_h).floor() as i64)
+        .clamp(0, i64::from(payload.height.saturating_sub(1))) as u32;
+
+    let opacity = dab.opacity.clamp(0.0, 1.0)
+        * dab.flow.clamp(0.0, 1.0)
+        * context.stroke.color.a.clamp(0.0, 1.0);
+    if opacity <= 0.0 {
+        return;
+    }
+    let edge_softness = dab.edge_softness.clamp(0.0, 1.0);
+    let fade_width = (radius * f64::from(edge_softness))
+        .max(pixel_w.max(pixel_h) * 0.5)
+        .min(radius);
+    let hard_radius = (radius - fade_width).max(0.0);
+
     for py in min_py..=max_py {
         for px in min_px..=max_px {
-            let center = CanvasCoordinate::new(
-                tile_bounds.min.x + (f64::from(px) + 0.5) * pixel_w,
-                tile_bounds.min.y + (f64::from(py) + 0.5) * pixel_h,
+            let pixel_center = CanvasCoordinate::new(
+                context.tile_bounds.min.x + (f64::from(px) + 0.5) * pixel_w,
+                context.tile_bounds.min.y + (f64::from(py) + 0.5) * pixel_h,
             );
-            let distance = distance_to_segment(center, start.position, end.position);
+            let distance = distance_between(pixel_center, dab.center);
             if distance > radius {
                 continue;
             }
-            let coverage = (1.0 - (distance / radius)).clamp(0.0, 1.0) as f32;
+            let coverage = if distance <= hard_radius {
+                1.0
+            } else if fade_width <= f64::EPSILON {
+                0.0
+            } else {
+                1.0 - ((distance - hard_radius) / fade_width).clamp(0.0, 1.0)
+            } as f32;
             let alpha = (opacity * coverage).clamp(0.0, 1.0);
             blend_pixel(
                 payload,
                 px,
                 py,
-                stroke.color.r,
-                stroke.color.g,
-                stroke.color.b,
+                context.stroke.color.r,
+                context.stroke.color.g,
+                context.stroke.color.b,
                 alpha,
             );
         }
@@ -828,6 +972,14 @@ fn sample_opacity(brush: &BrushDescriptor, sample: &StrokeSample) -> f32 {
     )
 }
 
+fn sample_flow(brush: &BrushDescriptor, sample: &StrokeSample) -> f32 {
+    range_value(
+        brush.ink.flow.min,
+        brush.ink.flow.max,
+        pressure_value(sample, brush.ink.dynamics.pressure_to_opacity),
+    )
+}
+
 fn pressure_value(sample: &StrokeSample, curve: crate::DynamicsCurve) -> f32 {
     let pressure = sample.pressure.unwrap_or(1.0).clamp(0.0, 1.0);
     if !curve.enabled {
@@ -840,23 +992,68 @@ fn range_value(min: f32, max: f32, t: f32) -> f32 {
     min + (max - min) * t.clamp(0.0, 1.0)
 }
 
-fn distance_to_segment(
-    point: CanvasCoordinate,
+fn dab_spacing(brush: &BrushDescriptor, start: &StrokeSample, end: &StrokeSample) -> f64 {
+    let start_size = f64::from(sample_size(brush, start)).max(1.0);
+    let end_size = f64::from(sample_size(brush, end)).max(1.0);
+    (start_size.min(end_size) * 0.25).clamp(0.75, 8.0)
+}
+
+fn expanded_rect(rect: CanvasRect, amount: f64) -> CanvasRect {
+    CanvasRect::new(
+        CanvasCoordinate::new(rect.min.x - amount, rect.min.y - amount),
+        CanvasCoordinate::new(rect.max.x + amount, rect.max.y + amount),
+    )
+}
+
+fn segment_rect_parameter_range(
     start: CanvasCoordinate,
     end: CanvasCoordinate,
-) -> f64 {
-    let vx = end.x - start.x;
-    let vy = end.y - start.y;
-    let wx = point.x - start.x;
-    let wy = point.y - start.y;
-    let len_sq = vx * vx + vy * vy;
-    if len_sq <= f64::EPSILON {
-        return ((point.x - start.x).powi(2) + (point.y - start.y).powi(2)).sqrt();
+    rect: CanvasRect,
+) -> Option<(f64, f64)> {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let mut t0 = 0.0;
+    let mut t1 = 1.0;
+    clip_segment_axis(-dx, start.x - rect.min.x, &mut t0, &mut t1)?;
+    clip_segment_axis(dx, rect.max.x - start.x, &mut t0, &mut t1)?;
+    clip_segment_axis(-dy, start.y - rect.min.y, &mut t0, &mut t1)?;
+    clip_segment_axis(dy, rect.max.y - start.y, &mut t0, &mut t1)?;
+    Some((t0, t1))
+}
+
+fn clip_segment_axis(p: f64, q: f64, t0: &mut f64, t1: &mut f64) -> Option<()> {
+    if p.abs() <= f64::EPSILON {
+        return (q >= 0.0).then_some(());
     }
-    let t = ((wx * vx + wy * vy) / len_sq).clamp(0.0, 1.0);
-    let proj_x = start.x + t * vx;
-    let proj_y = start.y + t * vy;
-    ((point.x - proj_x).powi(2) + (point.y - proj_y).powi(2)).sqrt()
+    let r = q / p;
+    if p < 0.0 {
+        if r > *t1 {
+            return None;
+        }
+        if r > *t0 {
+            *t0 = r;
+        }
+    } else {
+        if r < *t0 {
+            return None;
+        }
+        if r < *t1 {
+            *t1 = r;
+        }
+    }
+    Some(())
+}
+
+fn lerp_f64(start: f64, end: f64, t: f64) -> f64 {
+    start + (end - start) * t.clamp(0.0, 1.0)
+}
+
+fn lerp_f32(start: f32, end: f32, t: f64) -> f32 {
+    start + (end - start) * t.clamp(0.0, 1.0) as f32
+}
+
+fn distance_between(a: CanvasCoordinate, b: CanvasCoordinate) -> f64 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
 }
 
 fn blend_pixel(
@@ -945,7 +1142,7 @@ fn hash_formation_inputs(
     kind: DrawingInkTileFormationKind,
     strokes: &[StrokeRecord],
 ) {
-    hasher.write_str("drawing.ink_tile.v1");
+    hasher.write_str("drawing.ink_tile.v2");
     hasher.write_str(kind.hash_tag());
     hasher.write_u64(document.document_id.raw());
     hasher.write_u64(document.revision.raw());
@@ -968,6 +1165,15 @@ fn hash_formation_inputs(
         hasher.write_f32(brush.ink.opacity.max);
         hasher.write_f32(brush.ink.flow.min);
         hasher.write_f32(brush.ink.flow.max);
+        hasher.write_f32(brush.ink.edge_softness);
+        hasher.write_f32(brush.ink.viscosity);
+        hasher.write_f32(brush.ink.absorption_response);
+        hasher.write_bool(brush.ink.dynamics.pressure_to_size.enabled);
+        hasher.write_f32(brush.ink.dynamics.pressure_to_size.minimum_scale);
+        hasher.write_f32(brush.ink.dynamics.pressure_to_size.gamma);
+        hasher.write_bool(brush.ink.dynamics.pressure_to_opacity.enabled);
+        hasher.write_f32(brush.ink.dynamics.pressure_to_opacity.minimum_scale);
+        hasher.write_f32(brush.ink.dynamics.pressure_to_opacity.gamma);
     }
     for stroke in strokes {
         hasher.write_u64(stroke.stroke_id.raw());

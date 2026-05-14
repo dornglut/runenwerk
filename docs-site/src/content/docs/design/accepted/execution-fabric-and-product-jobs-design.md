@@ -13,6 +13,8 @@ related_designs:
   - ./sdf-first-field-world-platform-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md
+related_roadmaps:
+  - ../../engine/roadmaps/runtime-product-job-executor-roadmap.md
 supersedes:
   - ../superseded/ecs-scheduler-execution-fabric-design.md
 ---
@@ -25,6 +27,11 @@ Accepted execution architecture.
 
 This design defines the long-term target without requiring immediate
 multithreading. Serial fallback remains mandatory.
+
+Implementation sequence is tracked by the
+[Runtime Product Job Executor Roadmap](../../engine/roadmaps/runtime-product-job-executor-roadmap.md).
+That roadmap turns this accepted architecture into engine runtime phases while
+keeping this document focused on ownership and invariants.
 
 ## Purpose
 

@@ -1,11 +1,47 @@
 use crate::plugins::{
     InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord, action,
 };
-use std::collections::HashSet;
-use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use std::collections::{HashMap, HashSet};
+use winit::event::{
+    DeviceEvent, ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent,
+};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 // Owner: Engine Input Plugin - Input State and Event Processing
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MouseMotionSample {
+    pub position: (f32, f32),
+    pub delta: (f32, f32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TouchInputPhase {
+    Started,
+    Moved,
+    Ended,
+    Cancelled,
+}
+
+impl From<TouchPhase> for TouchInputPhase {
+    fn from(value: TouchPhase) -> Self {
+        match value {
+            TouchPhase::Started => Self::Started,
+            TouchPhase::Moved => Self::Moved,
+            TouchPhase::Ended => Self::Ended,
+            TouchPhase::Cancelled => Self::Cancelled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TouchInputSample {
+    pub id: u64,
+    pub phase: TouchInputPhase,
+    pub position: (f32, f32),
+    pub delta: (f32, f32),
+    pub pressure: Option<f32>,
+}
+
 #[derive(Debug, ecs::Component, ecs::Resource)]
 pub struct InputState {
     pub(crate) keys_down: HashSet<KeyCode>,
@@ -43,6 +79,10 @@ pub struct InputState {
     pub overlay_consumed: bool,
     pub mouse_delta: (f32, f32),
     pub mouse_position: (f32, f32),
+    mouse_motion_samples: Vec<MouseMotionSample>,
+    touch_samples: Vec<TouchInputSample>,
+    touch_positions: HashMap<u64, (f32, f32)>,
+    primary_touch_id: Option<u64>,
     pub scroll_delta: f32,
     mouse_buttons_down: HashSet<MouseButton>,
     left_mouse_pressed: bool,
@@ -91,6 +131,10 @@ impl Default for InputState {
             overlay_consumed: false,
             mouse_delta: (0.0, 0.0),
             mouse_position: (0.0, 0.0),
+            mouse_motion_samples: Vec::new(),
+            touch_samples: Vec::new(),
+            touch_positions: HashMap::new(),
+            primary_touch_id: None,
             scroll_delta: 0.0,
             mouse_buttons_down: HashSet::new(),
             left_mouse_pressed: false,
@@ -206,6 +250,15 @@ impl InputState {
             WindowEvent::MouseInput { state, button, .. } => {
                 self.handle_mouse_input(*state, *button);
             }
+            WindowEvent::Touch(touch) => {
+                self.handle_touch_input(
+                    TouchInputPhase::from(touch.phase),
+                    touch.id,
+                    touch.location.x as f32,
+                    touch.location.y as f32,
+                    touch.force.map(|force| force.normalized() as f32),
+                );
+            }
             _ => {}
         }
     }
@@ -253,7 +306,12 @@ impl InputState {
     }
 
     pub fn handle_cursor_moved(&mut self, x: f32, y: f32) {
+        let delta = (x - self.mouse_position.0, y - self.mouse_position.1);
         self.mouse_position = (x, y);
+        self.mouse_motion_samples.push(MouseMotionSample {
+            position: (x, y),
+            delta,
+        });
     }
 
     pub fn handle_mouse_input(&mut self, state: ElementState, button: MouseButton) {
@@ -286,11 +344,53 @@ impl InputState {
         self.mouse_delta.1 += dy;
     }
 
+    pub fn handle_touch_input(
+        &mut self,
+        phase: TouchInputPhase,
+        id: u64,
+        x: f32,
+        y: f32,
+        pressure: Option<f32>,
+    ) {
+        let accepted = match phase {
+            TouchInputPhase::Started if self.primary_touch_id.is_none() => {
+                self.primary_touch_id = Some(id);
+                true
+            }
+            _ => self.primary_touch_id == Some(id),
+        };
+
+        let previous = self.touch_positions.get(&id).copied().unwrap_or((x, y));
+        match phase {
+            TouchInputPhase::Started | TouchInputPhase::Moved => {
+                self.touch_positions.insert(id, (x, y));
+            }
+            TouchInputPhase::Ended | TouchInputPhase::Cancelled => {
+                self.touch_positions.remove(&id);
+            }
+        }
+
+        if accepted {
+            self.touch_samples.push(TouchInputSample {
+                id,
+                phase,
+                position: (x, y),
+                delta: (x - previous.0, y - previous.1),
+                pressure: pressure.map(|value| value.clamp(0.0, 1.0)),
+            });
+            if matches!(phase, TouchInputPhase::Ended | TouchInputPhase::Cancelled) {
+                self.primary_touch_id = None;
+            }
+        }
+    }
+
     pub fn clear_frame(&mut self) {
         self.typed_text.clear();
         self.actions_pressed.clear();
         self.overlay_consumed = false;
         self.mouse_delta = (0.0, 0.0);
+        self.mouse_motion_samples.clear();
+        self.touch_samples.clear();
         self.scroll_delta = 0.0;
         self.left_mouse_pressed = false;
         self.left_mouse_released = false;
@@ -303,6 +403,14 @@ impl InputState {
 
     pub fn left_mouse_down(&self) -> bool {
         self.mouse_buttons_down.contains(&MouseButton::Left)
+    }
+
+    pub fn mouse_motion_samples(&self) -> &[MouseMotionSample] {
+        &self.mouse_motion_samples
+    }
+
+    pub fn touch_samples(&self) -> &[TouchInputSample] {
+        &self.touch_samples
     }
 
     pub fn right_mouse_down(&self) -> bool {

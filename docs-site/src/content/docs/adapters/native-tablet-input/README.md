@@ -5,17 +5,18 @@ status: active
 owner: adapter
 layer: adapter/tool
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-14
 ---
 
 # Native Tablet Input
 
-`native_tablet_input` is the first native tablet packet adapter proof for
+`native_tablet_input` is the native tablet packet normalization boundary for
 Runenwerk drawing workflows.
 
-It maps macOS/Wacom-oriented packet facts into platform-neutral
-`domain/ui/ui_input` pointer events. The crate is intentionally a normalization
-boundary only. It does not bind to a Wacom SDK or operating-system API yet.
+It maps Windows Pointer/Ink packets, optional Wintab DTOs, and macOS NSEvent
+DTOs into platform-neutral `domain/ui/ui_input` pointer events. winit
+mouse/touch remains the app/runtime fallback path through the same `ui_input`
+vocabulary. The crate is intentionally a normalization boundary only.
 
 ## Ownership
 
@@ -28,10 +29,12 @@ formation.
 
 ## Current Contract
 
-The current adapter proof supports:
+The current adapter contract supports:
 
-- macOS/Wacom-oriented packet metadata;
-- tablet platform and vendor tags;
+- Windows Pointer/Ink DTO mapping, including chronological coalesced samples;
+- optional Wintab DTO mapping and backend health/probe reporting;
+- macOS NSEvent tablet point and proximity DTO mapping;
+- tablet platform, vendor, backend, and device tags;
 - tool kind mapping for pen, brush, marker, airbrush, eraser, and unknown tools;
 - device id preservation;
 - pressure, tilt, twist, tangential pressure, hover, eraser, barrel-button,
@@ -40,6 +43,17 @@ The current adapter proof supports:
 - missing-capability diagnostics;
 - low-latency preview packet classification.
 
+## Known Gaps
+
+- `AutoOsFirst` still needs explicit backend arbitration before production
+  hardware use; it should choose one active native stream instead of publishing
+  duplicate packets from every available backend.
+- Wintab and macOS DTOs must represent contact separately from proximity. Being
+  in range or hovering may drive cursor/diagnostic state, but it must not be
+  normalized as stroke contact.
+- Real hardware acceptance is still required for Windows Ink, Wacom Wintab, and
+  macOS tablet devices before the adapter should be treated as production-ready.
+
 ## Adapter Boundary
 
 In scope:
@@ -47,14 +61,14 @@ In scope:
 - native tablet packet DTOs;
 - mapping packet facts into `PointerEvent` and `PointerPacket`;
 - preserving supported stylus facts without inventing unsupported values;
-- reporting missing tablet capabilities through adapter diagnostics.
+- reporting missing tablet capabilities through adapter diagnostics;
+- backend health, capability, calibration, and fallback metadata.
 
 Out of scope:
 
-- real macOS event tap or Wacom SDK integration;
 - drawing stroke creation;
 - brush dynamics and smoothing policy;
-- app shell routing;
+- app shell routing and profile/input-policy UX;
 - renderer or GPU resources;
 - package persistence.
 

@@ -9,6 +9,7 @@ drawing.workspace = true
 ecs.workspace = true
 engine = { path = "../../engine" }
 graph.workspace = true
+native_tablet_input.workspace = true
 product.workspace = true
 tracing = "0.1.44"
 ui_input.workspace = true

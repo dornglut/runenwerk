@@ -89,7 +89,7 @@ fn layout_panel(
             .with_cross_align(CrossAxisAlignment::Stretch);
 
         let arranged = layout.arrange(content_bounds, &child_items);
-        for (child, child_bounds) in normal_children.iter().zip(arranged.into_iter()) {
+        for (child, child_bounds) in normal_children.iter().zip(arranged) {
             layout_node(child, child_bounds, state, out);
         }
 
@@ -571,7 +571,7 @@ fn layout_stack(
 
     let arranged = layout.arrange(content_bounds, &child_items);
 
-    for (child, child_bounds) in normal_children.iter().zip(arranged.into_iter()) {
+    for (child, child_bounds) in normal_children.iter().zip(arranged) {
         layout_node(child, child_bounds, state, out);
     }
 
@@ -678,7 +678,7 @@ fn layout_popup(
         .children
         .iter()
         .filter(|child| !is_popup_node(child))
-        .zip(arranged.into_iter())
+        .zip(arranged)
     {
         layout_node(child, child_bounds, state, out);
     }
@@ -926,7 +926,7 @@ fn layout_overlay_adornment(
             .with_main_align(MainAxisAlignment::Start)
             .with_cross_align(CrossAxisAlignment::Stretch)
             .arrange(adornment_bounds, &child_items);
-        for (child, child_bounds) in children.into_iter().zip(arranged.into_iter()) {
+        for (child, child_bounds) in children.into_iter().zip(arranged) {
             layout_node(child, child_bounds, state, out);
         }
     }

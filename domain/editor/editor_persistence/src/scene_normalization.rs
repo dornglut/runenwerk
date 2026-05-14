@@ -54,9 +54,7 @@ pub fn normalize_scene_file(
         ));
     }
 
-    scene_file
-        .entities
-        .sort_by(|left, right| left.id.cmp(&right.id));
+    scene_file.entities.sort_by_key(|entity| entity.id);
 
     for pair in scene_file.entities.windows(2) {
         if pair[0].id == pair[1].id {

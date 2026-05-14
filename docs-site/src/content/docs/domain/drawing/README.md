@@ -5,7 +5,7 @@ status: active
 owner: drawing
 layer: domain
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-05-14
 related_docs:
   - ../../design/active/drawing-domain-crate-design.md
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
@@ -26,6 +26,18 @@ payloads from committed stroke truth and from non-authoritative preview stroke
 facts through the same rasterization path, but it does not own runtime
 presentation, GPU upload, native tablet APIs, package IO, or app workflow
 state.
+
+## Tile Ownership
+
+`domain/drawing` owns deterministic CPU tile formation, tile metadata,
+lineage, invalidation, and product-substrate descriptor helpers. It does not
+own app-visible tile lifecycle.
+
+App/runtime layers own current/preview visibility, dynamic texture upload
+tracking, cache policy, fallback/promotion decisions, and renderer submission.
+Final-quality profile semantics are not complete until drawing quality class
+also participates consistently in product scale, descriptor generation, cache
+identity, and render selection.
 
 ## Current Scope
 

@@ -11,9 +11,9 @@ use ui_math::UiSize;
 use ui_render_data::UiFrame;
 
 use crate::app::{
-    DrawingInkRuntimeState, DrawingPreviewStroke, DrawingToolInputEvent, DrawingToolRouteKind,
-    DrawingWorkspaceProjection, build_workspace_frame, build_workspace_frame_with_ink,
-    minimal_drawing_document,
+    DrawingInkRuntimeState, DrawingPreviewStroke, DrawingTabletPanelProjection,
+    DrawingToolInputEvent, DrawingToolRouteKind, DrawingWorkspaceProjection, build_workspace_frame,
+    build_workspace_frame_with_ink, minimal_drawing_document,
 };
 
 pub const DEFAULT_DRAWING_BRUSH_ID: BrushId = BrushId::new(1);
@@ -73,10 +73,12 @@ impl RunenwerkDrawApp {
             return Err(report);
         }
 
+        let tablet_panel = self.workspace.tablet_panel.clone();
         self.workspace = DrawingWorkspaceProjection::canvas_first(
             self.workspace.window_size,
             document.canvas_bounds,
-        );
+        )
+        .with_tablet_panel(tablet_panel);
         self.document = Some(document);
         self.routed_inputs.clear();
         self.preview_stroke = None;
@@ -133,8 +135,17 @@ impl RunenwerkDrawApp {
             .as_ref()
             .map(|document| document.canvas_bounds)
             .unwrap_or(self.workspace.canvas_view.canvas_bounds);
-        self.workspace = DrawingWorkspaceProjection::canvas_first(size, canvas_bounds);
+        let tablet_panel = self.workspace.tablet_panel.clone();
+        self.workspace = DrawingWorkspaceProjection::canvas_first(size, canvas_bounds)
+            .with_tablet_panel(tablet_panel);
         self.rebuild_last_frame();
+    }
+
+    pub fn update_tablet_panel(&mut self, tablet_panel: DrawingTabletPanelProjection) {
+        if self.workspace.tablet_panel != tablet_panel {
+            self.workspace.tablet_panel = tablet_panel;
+            self.rebuild_last_frame();
+        }
     }
 
     pub fn rebuild_frame(&mut self, size: UiSize) -> &UiFrame {
@@ -150,7 +161,15 @@ impl RunenwerkDrawApp {
         let UiInputEvent::Pointer(pointer) = event else {
             return false;
         };
-        let routed = DrawingToolInputEvent::from_pointer(pointer, self.workspace.canvas_view);
+        let capture_active = self
+            .preview_stroke
+            .as_ref()
+            .is_some_and(|preview| preview.active);
+        let routed = DrawingToolInputEvent::from_pointer_with_capture(
+            pointer,
+            self.workspace.canvas_view,
+            capture_active,
+        );
         let handled = routed.route_kind != DrawingToolRouteKind::Ignored;
         self.apply_routed_input(routed.clone());
         self.rebuild_last_frame();
@@ -164,15 +183,21 @@ impl RunenwerkDrawApp {
                 let mut preview =
                     DrawingPreviewStroke::new(StrokeId::new(self.next_preview_stroke_id));
                 self.next_preview_stroke_id = self.next_preview_stroke_id.saturating_add(1);
-                self.append_preview_sample(&mut preview, routed);
-                self.rebuild_preview_products(&preview);
+                let dirty_start_sample_index = preview.samples.len();
+                let appended = self.append_preview_samples(&mut preview, &routed);
+                if appended > 0 {
+                    self.rebuild_preview_products(&preview, dirty_start_sample_index);
+                }
                 self.preview_stroke = Some(preview);
             }
             DrawingToolRouteKind::UpdatePreviewStroke => {
                 if let Some(mut preview) = self.preview_stroke.take() {
                     if preview.active {
-                        self.append_preview_sample(&mut preview, routed);
-                        self.rebuild_preview_products(&preview);
+                        let dirty_start_sample_index = preview.samples.len().saturating_sub(1);
+                        let appended = self.append_preview_samples(&mut preview, &routed);
+                        if appended > 0 {
+                            self.rebuild_preview_products(&preview, dirty_start_sample_index);
+                        }
                     }
                     self.preview_stroke = Some(preview);
                 }
@@ -181,8 +206,11 @@ impl RunenwerkDrawApp {
                 if let Some(mut preview) = self.preview_stroke.take() {
                     let pointer_up = routed.pointer_kind == PointerEventKind::Up;
                     if preview.active && pointer_up {
-                        self.append_preview_sample(&mut preview, routed);
-                        self.rebuild_preview_products(&preview);
+                        let dirty_start_sample_index = preview.samples.len().saturating_sub(1);
+                        let appended = self.append_preview_samples(&mut preview, &routed);
+                        if appended > 0 {
+                            self.rebuild_preview_products(&preview, dirty_start_sample_index);
+                        }
                     }
                     preview.finish();
                     if pointer_up {
@@ -197,29 +225,51 @@ impl RunenwerkDrawApp {
         }
     }
 
-    fn rebuild_preview_products(&mut self, preview: &DrawingPreviewStroke) {
+    fn rebuild_preview_products(
+        &mut self,
+        preview: &DrawingPreviewStroke,
+        dirty_start_sample_index: usize,
+    ) {
         let Some(document) = self.document.as_ref() else {
             self.ink_runtime.clear_preview_products();
             return;
         };
+        if preview.samples.is_empty() {
+            self.ink_runtime.clear_preview_products();
+            return;
+        }
         let policy = DrawingTileFormationPolicy::default();
-        let preview_stroke = self.preview_ink_stroke(preview, document.revision);
-        let invalidation =
-            drawing_ink_tile_invalidation_for_preview_stroke(document, &preview_stroke, policy);
+        let dirty_start_sample_index = dirty_start_sample_index.min(preview.samples.len());
+        let preview_stroke = self.preview_ink_stroke_for_samples(
+            preview.stroke_id,
+            preview.samples.iter().copied(),
+            document.revision,
+        );
+        let dirty_preview_stroke = self.preview_ink_stroke_for_samples(
+            preview.stroke_id,
+            preview.samples[dirty_start_sample_index..].iter().copied(),
+            document.revision,
+        );
+        let invalidation = drawing_ink_tile_invalidation_for_preview_stroke(
+            document,
+            &dirty_preview_stroke,
+            policy,
+        );
         if !invalidation.is_accepted() {
             self.ink_runtime
                 .record_preview_failure(invalidation.diagnostics);
             return;
         }
         if invalidation.tile_ids.is_empty() {
-            self.ink_runtime.clear_preview_products();
             return;
         }
 
         let mut products = Vec::new();
+        let mut cleared_tiles = Vec::new();
+        let dirty_tile_ids = invalidation.tile_ids.clone();
         let mut diagnostics = invalidation.diagnostics;
         let batch_size = policy.max_affected_tiles.max(1);
-        for tile_batch in invalidation.tile_ids.chunks(batch_size) {
+        for tile_batch in dirty_tile_ids.chunks(batch_size) {
             let formation = form_drawing_ink_preview_tiles_for_ids(
                 document,
                 &preview_stroke,
@@ -231,21 +281,28 @@ impl RunenwerkDrawApp {
                 self.ink_runtime.record_preview_failure(diagnostics);
                 return;
             }
+            cleared_tiles.extend(formation.cleared_tiles);
             products.extend(formation.products);
         }
-        self.ink_runtime
-            .record_preview_products(products, diagnostics);
+        self.ink_runtime.replace_preview_products_for_tiles(
+            dirty_tile_ids,
+            products,
+            cleared_tiles,
+            diagnostics,
+        );
     }
 
-    fn append_preview_sample(
+    fn append_preview_samples(
         &mut self,
         preview: &mut DrawingPreviewStroke,
-        routed: DrawingToolInputEvent,
-    ) {
-        if let Some(sample) = routed.to_stroke_sample(self.next_preview_sequence) {
-            self.next_preview_sequence = self.next_preview_sequence.saturating_add(1);
+        routed: &DrawingToolInputEvent,
+    ) -> usize {
+        let samples = routed.to_stroke_samples(&mut self.next_preview_sequence);
+        let appended = samples.len();
+        for sample in samples {
             preview.append_sample(sample);
         }
+        appended
     }
 
     fn commit_preview_stroke(&mut self, preview: &DrawingPreviewStroke) {
@@ -295,14 +352,27 @@ impl RunenwerkDrawApp {
         preview: &DrawingPreviewStroke,
         source_revision: drawing::DrawingDocumentRevision,
     ) -> DrawingInkPreviewStroke {
-        DrawingInkPreviewStroke::new(
+        self.preview_ink_stroke_for_samples(
             preview.stroke_id,
+            preview.samples.iter().copied(),
+            source_revision,
+        )
+    }
+
+    fn preview_ink_stroke_for_samples(
+        &self,
+        stroke_id: StrokeId,
+        samples: impl IntoIterator<Item = drawing::StrokeSample>,
+        source_revision: drawing::DrawingDocumentRevision,
+    ) -> DrawingInkPreviewStroke {
+        DrawingInkPreviewStroke::new(
+            stroke_id,
             PaintTarget::StackEntry(self.active_layer_entry_id),
             self.active_brush_id,
             ColorRgba::new(0.04, 0.035, 0.03, 1.0),
             source_revision,
         )
-        .with_samples(preview.samples.iter().copied())
+        .with_samples(samples)
     }
 
     fn rebuild_last_frame(&mut self) {

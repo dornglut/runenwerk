@@ -7,7 +7,10 @@ use drawing::{
     form_drawing_ink_tiles_for_ids,
 };
 use ecs::World;
-use engine::runtime::{ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource};
+use engine::runtime::{
+    ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource, RuntimeJobExecutorResource,
+    RuntimeJobStatus,
+};
 use engine::{BarrierKind, ExecutionBarrier};
 use product::{
     ProductDescriptorCore, ProductPublicationReport, QuerySnapshotPublicationReport,
@@ -15,6 +18,9 @@ use product::{
 };
 
 use crate::app::{DrawingInkJournalStage, RunenwerkDrawApp};
+use crate::runtime::ink_jobs::{
+    DrawingCommittedInkTileJob, DrawingCommittedInkTileJobOutput, drawing_committed_ink_job_key,
+};
 use crate::runtime::resources::DrawingHostResource;
 
 const DRAWING_INK_PUBLICATION_STAGE_SEQUENCE: u64 = 5_100;
@@ -36,7 +42,17 @@ pub fn publish_drawing_ink_products_at_barrier(
         return Ok(());
     };
 
-    publish_drawing_ink_products(&mut host.app, &mut publications, barrier);
+    if let Some(mut executor) = world.remove_resource::<RuntimeJobExecutorResource>() {
+        publish_drawing_ink_products_with_executor(
+            &mut host.app,
+            &mut publications,
+            &mut executor,
+            barrier,
+        );
+        world.insert_resource(executor);
+    } else {
+        publish_drawing_ink_products(&mut host.app, &mut publications, barrier);
+    }
 
     world.insert_resource(publications);
     world.insert_resource(host);
@@ -85,6 +101,141 @@ pub fn publish_drawing_ink_products(
         return ProductPublicationReport::default();
     }
     let formation = form_drawing_ink_tiles_for_ids(&document, dirty_tiles.iter().copied(), policy);
+    publish_formed_drawing_ink_products(
+        app,
+        publications,
+        barrier,
+        document,
+        dirty_tiles,
+        formation,
+    )
+}
+
+pub fn publish_drawing_ink_products_with_executor(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    executor: &mut RuntimeJobExecutorResource,
+    barrier: &ExecutionBarrier,
+) -> ProductPublicationReport {
+    if barrier.kind != BarrierKind::ProductPublication {
+        return ProductPublicationReport::default();
+    }
+
+    let completed_report = publish_completed_drawing_ink_jobs(app, publications, executor, barrier);
+    if product_publication_report_has_activity(&completed_report) {
+        return completed_report;
+    }
+
+    let Some(document) = app.document().cloned() else {
+        return ProductPublicationReport::default();
+    };
+    let policy = DrawingTileFormationPolicy::default();
+    let dirty_tiles = app
+        .ink_runtime()
+        .next_dirty_tile_batch(policy.max_affected_tiles);
+    if dirty_tiles.is_empty() {
+        return ProductPublicationReport::default();
+    }
+
+    let formation_key = drawing_committed_ink_job_key(&document, &dirty_tiles, policy);
+    if app.ink_runtime().last_publication_key() == Some(formation_key.as_str())
+        || app.ink_runtime().pending_formation_key() == Some(formation_key.as_str())
+    {
+        return ProductPublicationReport::default();
+    }
+
+    match executor.submit(DrawingCommittedInkTileJob::new(
+        document,
+        dirty_tiles,
+        policy,
+    )) {
+        Ok(_) => {
+            app.ink_runtime_mut()
+                .record_pending_formation_job(formation_key);
+        }
+        Err(err) => {
+            app.ink_runtime_mut().record_journal(
+                DrawingInkJournalStage::Formation,
+                false,
+                format!(
+                    "runtime job submission failed diagnostics={}",
+                    err.diagnostics.len()
+                ),
+            );
+            return ProductPublicationReport::default();
+        }
+    }
+
+    publish_completed_drawing_ink_jobs(app, publications, executor, barrier)
+}
+
+fn publish_completed_drawing_ink_jobs(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    executor: &mut RuntimeJobExecutorResource,
+    barrier: &ExecutionBarrier,
+) -> ProductPublicationReport {
+    let completions = executor.drain_completed::<DrawingCommittedInkTileJobOutput>();
+    let mut aggregate = ProductPublicationReport::default();
+    for completion in completions {
+        match completion.status {
+            RuntimeJobStatus::Completed => {
+                let Some(output) = completion.output else {
+                    continue;
+                };
+                app.ink_runtime_mut()
+                    .clear_pending_formation_job(&output.formation_key);
+                if app
+                    .document()
+                    .is_some_and(|document| document.revision != output.document_revision)
+                {
+                    app.ink_runtime_mut().record_journal(
+                        DrawingInkJournalStage::Formation,
+                        false,
+                        "stale committed ink job ignored after document revision changed",
+                    );
+                    continue;
+                }
+                let report = publish_formed_drawing_ink_products(
+                    app,
+                    publications,
+                    barrier,
+                    output.document,
+                    output.dirty_tiles,
+                    output.formation,
+                );
+                merge_product_publication_report(&mut aggregate, report);
+            }
+            RuntimeJobStatus::Failed => {
+                app.ink_runtime_mut().record_journal(
+                    DrawingInkJournalStage::Formation,
+                    false,
+                    format!(
+                        "runtime committed ink job failed diagnostics={}",
+                        completion.diagnostics.len()
+                    ),
+                );
+            }
+            RuntimeJobStatus::Stale => {
+                app.ink_runtime_mut().record_journal(
+                    DrawingInkJournalStage::Formation,
+                    false,
+                    "stale committed ink job ignored",
+                );
+            }
+        }
+    }
+    aggregate
+}
+
+fn publish_formed_drawing_ink_products(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    barrier: &ExecutionBarrier,
+    document: drawing::DrawingDocument,
+    dirty_tiles: Vec<drawing::CanvasTileId>,
+    formation: drawing::DrawingInkTileFormation,
+) -> ProductPublicationReport {
     let formation_key = formation.determinism_key.clone();
 
     if app.ink_runtime().last_publication_key() == Some(formation_key.as_str()) {
@@ -187,6 +338,29 @@ pub fn publish_drawing_ink_products(
     );
 
     report
+}
+
+fn product_publication_report_has_activity(report: &ProductPublicationReport) -> bool {
+    report.published_count > 0
+        || report.failed_preserved_count > 0
+        || report.rejected_count > 0
+        || !report.diagnostics.is_empty()
+}
+
+fn merge_product_publication_report(
+    aggregate: &mut ProductPublicationReport,
+    report: ProductPublicationReport,
+) {
+    aggregate.published_count = aggregate
+        .published_count
+        .saturating_add(report.published_count);
+    aggregate.failed_preserved_count = aggregate
+        .failed_preserved_count
+        .saturating_add(report.failed_preserved_count);
+    aggregate.rejected_count = aggregate
+        .rejected_count
+        .saturating_add(report.rejected_count);
+    aggregate.diagnostics.extend(report.diagnostics);
 }
 
 fn should_clear_failed_preview(app: &RunenwerkDrawApp) -> bool {

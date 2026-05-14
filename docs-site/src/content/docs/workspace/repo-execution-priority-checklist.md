@@ -5,11 +5,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-05-14
 related:
   - ./sdf-first-execution-roadmap.md
   - ./roadmap-index.md
   - ../apps/runenwerk-editor/execution-priority-checklist.md
+  - ../apps/runenwerk-draw/roadmap.md
   - ../domain/ui/roadmap.md
   - ../engine/plugins/render/docs/roadmap.md
   - ../net/ecs-runtime-prioritized-roadmap.md
@@ -57,6 +58,7 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 ## Next (After Now Is Stable)
 
 - [ ] Execute render usability/data-maturity phases `R5`, `R8`, `R9`, `R10` (source: `engine/plugins/render/docs/roadmap.md`).
+- [ ] Execute the Runenwerk Draw rendering foundation roadmap after current SDF-first Now items are stable. Status: planned as a Next app/render track; it must keep CPU ink formation canonical, add preview/final tile profiles, app-derived tile caching, GPU proof through public render-flow APIs, and CPU current or last-good fallback without package sidecars, paper response, watercolor, eraser compositing, export, or comic layout in this foundation slice (source: `apps/runenwerk-draw/roadmap.md`).
 - [ ] Execute Phase 6D / M6.2C procgen bake, rollback, persistence, and runtime preview reload classification on top of the completed Phase 6C concrete deterministic terrain/material previews (source: `workspace/sdf-first-execution-roadmap.md`, `domain/procgen/README.md`, and `apps/runenwerk-editor/roadmap.md`).
 - [ ] Drive multiplayer replication through Milestone A (authoritative replication core) with the existing phase plan (source: `net/multiplayer-replication-implementation-roadmap.md`).
 - [ ] Continue ECS runtime multiplayer-enabling checklist items (`M1`-`M5`) in Priority 2 (source: `net/ecs-runtime-prioritized-roadmap.md`).

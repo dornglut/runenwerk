@@ -1894,7 +1894,12 @@ checksum = "a846cbc04412cf509efcd8f3694b114fc700a035fb5a37f21517f9fb019f1ebc"
 name = "native_tablet_input"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "ecs",
+ "engine",
  "ui_input",
+ "windows-sys 0.61.2",
+ "winit",
 ]
 
 [[package]]
@@ -2776,6 +2781,7 @@ dependencies = [
  "ecs",
  "engine",
  "graph",
+ "native_tablet_input",
  "product",
  "tracing",
  "ui_input",

@@ -16,4 +16,4 @@ pub use presentation::{
     default_surface_size, drawing_ink_texture_target_id,
 };
 pub use state::RunenwerkDrawApp;
-pub use workspace::{DrawingCanvasView, DrawingWorkspaceProjection};
+pub use workspace::{DrawingCanvasView, DrawingTabletPanelProjection, DrawingWorkspaceProjection};

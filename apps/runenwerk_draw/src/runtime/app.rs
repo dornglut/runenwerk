@@ -5,6 +5,7 @@ use engine::plugins::{
     RenderFlow, RenderPlugin, ScenePlugin, SchedulerDiagnosticsPlugin, default_plugins,
 };
 use engine::prelude::*;
+use native_tablet_input::NativeTabletRuntimePlugin;
 
 use crate::runtime::plugin::DrawingAppPlugin;
 
@@ -19,6 +20,7 @@ fn configure_app(app: &mut App) {
     app.add_plugin(SchedulerDiagnosticsPlugin);
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
+    app.add_plugin(NativeTabletRuntimePlugin);
     register_draw_render_flow(app);
     app.add_plugin(DrawingAppPlugin);
 }

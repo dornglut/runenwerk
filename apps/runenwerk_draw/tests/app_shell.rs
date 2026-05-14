@@ -5,10 +5,16 @@ use drawing::{
     DrawingTileFormationDiagnosticCode, StrokeToolKind, ratify_drawing_document,
 };
 use engine::plugins::render::{
-    FeatureContributionStatus, PreparedUiFrameResource, UiFrameSubmissionRegistryResource,
+    FeatureContributionStatus, PreparedUiFrameResource, RenderDynamicTextureUploadRegistryResource,
+    UiFrameSubmissionRegistryResource,
 };
+use engine::plugins::{InputState, TouchInputPhase};
 use engine::runtime::{ProductPublicationRuntimeResource, QuerySnapshotRuntimeResource};
 use engine::{BarrierKind, ExecutionBarrier, SceneRuntimeState};
+use native_tablet_input::{
+    NativeTabletBackendHealth, NativeTabletBackendKind, NativeTabletFrameResource,
+    NativeTabletPacket, NativeTabletSample, map_native_tablet_packet,
+};
 use runenwerk_draw::app::{
     DRAWING_UI_SURFACE_ID, DrawingToolRouteKind, RunenwerkDrawApp, minimal_drawing_document,
 };
@@ -17,8 +23,9 @@ use runenwerk_draw::runtime::{
     publish_drawing_ink_products, publish_drawing_ink_query_snapshots,
 };
 use ui_input::{
-    Modifiers, PointerButton, PointerDeviceId, PointerEvent, PointerEventKind, PointerLatencyClass,
-    PointerPacket, PointerTilt, PointerToolKind, UiInputEvent,
+    Modifiers, PointerButton, PointerContactState, PointerDeviceId, PointerEvent, PointerEventKind,
+    PointerLatencyClass, PointerPacket, PointerSample, PointerSampleRole, PointerTilt,
+    PointerToolKind, UiInputEvent,
 };
 use ui_math::{UiPoint, UiVector};
 use ui_render_data::UiPrimitive;
@@ -103,6 +110,490 @@ fn stylus_input_routes_to_preview_stroke_without_committing_document_truth() {
         product_surface_primitive_count(app.last_frame()) > 0,
         "active preview tile products should be visible before authoritative commit"
     );
+}
+
+#[test]
+fn coalesced_pointer_samples_append_ordered_preview_samples_before_current_sample() {
+    let mut app = RunenwerkDrawApp::new();
+    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+        PointerEventKind::Down,
+        position,
+        UiVector::ZERO,
+        Some(PointerButton::Primary),
+        Modifiers::default(),
+        1,
+    )));
+
+    let packet = PointerPacket::stylus(PointerDeviceId(7), PointerToolKind::Pen)
+        .with_coalesced_samples([
+            PointerSample::new(
+                PointerSampleRole::Coalesced,
+                UiPoint::new(position.x + 4.0, position.y + 1.0),
+                UiVector::new(4.0, 1.0),
+            )
+            .with_timestamp_micros(10_100)
+            .with_pressure(0.4),
+            PointerSample::new(
+                PointerSampleRole::Coalesced,
+                UiPoint::new(position.x + 8.0, position.y + 3.0),
+                UiVector::new(4.0, 2.0),
+            )
+            .with_timestamp_micros(10_200)
+            .with_pressure(0.6),
+        ])
+        .with_timestamp_micros(10_300)
+        .with_pressure(0.8);
+
+    app.dispatch_input(&UiInputEvent::Pointer(
+        PointerEvent::new(
+            PointerEventKind::Move,
+            UiPoint::new(position.x + 12.0, position.y + 6.0),
+            UiVector::new(4.0, 3.0),
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            0,
+        )
+        .with_packet(packet),
+    ));
+
+    let preview = app
+        .preview_stroke()
+        .expect("move should update the active preview stroke");
+    assert_eq!(
+        preview.samples.len(),
+        4,
+        "down sample plus two coalesced samples plus the current move sample should be retained"
+    );
+    assert_eq!(preview.samples[0].sequence, 1);
+    assert_eq!(preview.samples[1].sequence, 2);
+    assert_eq!(preview.samples[2].sequence, 3);
+    assert_eq!(preview.samples[3].sequence, 4);
+    assert_eq!(preview.samples[1].timestamp_micros, Some(10_100));
+    assert_eq!(preview.samples[2].timestamp_micros, Some(10_200));
+    assert_eq!(preview.samples[3].timestamp_micros, Some(10_300));
+    assert_eq!(preview.samples[1].pressure, Some(0.4));
+    assert_eq!(preview.samples[2].pressure, Some(0.6));
+    assert_eq!(preview.samples[3].pressure, Some(0.8));
+    assert_eq!(app.routed_inputs()[1].coalesced_sample_count, 2);
+    assert_eq!(app.routed_inputs()[1].coalesced_samples.len(), 2);
+}
+
+#[test]
+fn active_stroke_continues_outside_canvas_and_commits_on_outside_release() {
+    let mut app = RunenwerkDrawApp::new();
+    let start = screen_point_for_canvas(&app, 64.0, 64.0);
+    let outside = app
+        .workspace()
+        .canvas_view
+        .canvas_to_screen(CanvasCoordinate::new(-128.0, -96.0))
+        .expect("unbounded canvas point should project to screen space");
+    let reenter = screen_point_for_canvas(&app, 128.0, 128.0);
+
+    app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+        PointerEventKind::Down,
+        start,
+        UiVector::ZERO,
+        Some(PointerButton::Primary),
+        Modifiers::default(),
+        1,
+    )));
+    app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+        PointerEventKind::Move,
+        outside,
+        UiVector::ZERO,
+        Some(PointerButton::Primary),
+        Modifiers::default(),
+        0,
+    )));
+    app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+        PointerEventKind::Move,
+        reenter,
+        UiVector::ZERO,
+        Some(PointerButton::Primary),
+        Modifiers::default(),
+        0,
+    )));
+    app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+        PointerEventKind::Up,
+        outside,
+        UiVector::ZERO,
+        Some(PointerButton::Primary),
+        Modifiers::default(),
+        0,
+    )));
+
+    assert_eq!(
+        app.document()
+            .expect("document should remain open")
+            .strokes
+            .len(),
+        1,
+        "release outside the canvas should commit the captured stroke"
+    );
+    let preview = app
+        .preview_stroke()
+        .expect("captured release should keep the released preview available");
+    assert!(!preview.active);
+    assert_eq!(preview.samples.len(), 4);
+    assert!(
+        preview.samples[1].position.x < 0.0 && preview.samples[1].position.y < 0.0,
+        "the outside-canvas move should remain part of the same stroke"
+    );
+    assert_eq!(
+        app.routed_inputs()[1].route_kind,
+        DrawingToolRouteKind::UpdatePreviewStroke
+    );
+    assert_eq!(
+        app.routed_inputs()[3].route_kind,
+        DrawingToolRouteKind::EndPreviewStroke
+    );
+}
+
+#[test]
+fn window_touch_history_routes_as_ordered_preview_samples() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let (start, mid, end) = {
+        let host = runtime
+            .world()
+            .resource::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        (
+            screen_point_for_canvas(&host.app, 800.0, 800.0),
+            screen_point_for_canvas(&host.app, 900.0, 920.0),
+            screen_point_for_canvas(&host.app, 1_000.0, 980.0),
+        )
+    };
+    {
+        let input = runtime
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input state should exist");
+        input.handle_touch_input(TouchInputPhase::Started, 91, start.x, start.y, Some(0.4));
+        input.handle_touch_input(TouchInputPhase::Moved, 91, mid.x, mid.y, Some(0.6));
+        input.handle_touch_input(TouchInputPhase::Moved, 91, end.x, end.y, Some(0.8));
+    }
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("touch history route frame should run");
+
+    let host = runtime
+        .world()
+        .resource::<DrawingHostResource>()
+        .expect("drawing host resource should exist");
+    let preview = host
+        .app
+        .preview_stroke()
+        .expect("touch input should create a preview stroke");
+    assert_eq!(
+        preview.samples.len(),
+        3,
+        "touch history should be routed as down plus coalesced move samples"
+    );
+    assert_eq!(preview.samples[0].pressure, Some(0.4));
+    assert_eq!(preview.samples[1].pressure, Some(0.6));
+    assert_eq!(preview.samples[2].pressure, Some(0.8));
+    assert_eq!(preview.samples[0].sequence, 1);
+    assert_eq!(preview.samples[1].sequence, 2);
+    assert_eq!(preview.samples[2].sequence, 3);
+    assert_eq!(host.app.routed_inputs().len(), 2);
+    assert_eq!(host.app.routed_inputs()[1].coalesced_sample_count, 1);
+}
+
+#[test]
+fn native_tablet_move_burst_routes_as_one_coalesced_preview_update() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let positions = {
+        let host = runtime
+            .world()
+            .resource::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        [
+            screen_point_for_canvas(&host.app, 600.0, 600.0),
+            screen_point_for_canvas(&host.app, 650.0, 620.0),
+            screen_point_for_canvas(&host.app, 700.0, 650.0),
+            screen_point_for_canvas(&host.app, 760.0, 700.0),
+        ]
+    };
+
+    {
+        let native_frame = runtime
+            .world_mut()
+            .resource_mut::<NativeTabletFrameResource>()
+            .expect("native tablet frame resource should exist");
+        native_frame.events.push(stylus_pointer_event(
+            PointerEventKind::Down,
+            positions[0],
+            10_000,
+            0.3,
+        ));
+        native_frame.events.push(stylus_pointer_event(
+            PointerEventKind::Move,
+            positions[1],
+            10_100,
+            0.5,
+        ));
+        native_frame.events.push(stylus_pointer_event(
+            PointerEventKind::Move,
+            positions[2],
+            10_200,
+            0.7,
+        ));
+        native_frame.events.push(stylus_pointer_event(
+            PointerEventKind::Move,
+            positions[3],
+            10_300,
+            0.9,
+        ));
+    }
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("native tablet move burst route frame should run");
+
+    let host = runtime
+        .world()
+        .resource::<DrawingHostResource>()
+        .expect("drawing host resource should exist");
+    assert_eq!(
+        host.app.routed_inputs().len(),
+        2,
+        "same-frame native move bursts should be routed as one coalesced move"
+    );
+    assert_eq!(host.app.routed_inputs()[1].coalesced_sample_count, 2);
+    let preview = host
+        .app
+        .preview_stroke()
+        .expect("native burst should start a preview stroke");
+    assert_eq!(preview.samples.len(), 4);
+    assert_eq!(preview.samples[1].timestamp_micros, Some(10_100));
+    assert_eq!(preview.samples[2].timestamp_micros, Some(10_200));
+    assert_eq!(preview.samples[3].timestamp_micros, Some(10_300));
+    assert_eq!(preview.samples[1].pressure, Some(0.5));
+    assert_eq!(preview.samples[2].pressure, Some(0.7));
+    assert_eq!(preview.samples[3].pressure, Some(0.9));
+}
+
+#[test]
+fn native_tablet_events_route_before_winit_touch_fallback() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let (native_start, fallback_start) = {
+        let host = runtime
+            .world()
+            .resource::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        (
+            screen_point_for_canvas(&host.app, 700.0, 700.0),
+            screen_point_for_canvas(&host.app, 1_000.0, 1_000.0),
+        )
+    };
+    {
+        let native_frame = runtime
+            .world_mut()
+            .resource_mut::<NativeTabletFrameResource>()
+            .expect("native tablet frame resource should exist");
+        let packet = NativeTabletPacket::windows_pointer(
+            501,
+            PointerEventKind::Down,
+            native_start,
+            UiVector::ZERO,
+        )
+        .with_pressure(0.7);
+        native_frame
+            .events
+            .push(map_native_tablet_packet(&packet).event);
+    }
+    {
+        let input = runtime
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input state should exist");
+        input.handle_touch_input(
+            TouchInputPhase::Started,
+            91,
+            fallback_start.x,
+            fallback_start.y,
+            Some(0.2),
+        );
+    }
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("native tablet input route frame should run");
+
+    let host = runtime
+        .world()
+        .resource::<DrawingHostResource>()
+        .expect("drawing host resource should exist");
+    assert_eq!(host.app.routed_inputs().len(), 1);
+    assert_eq!(
+        host.app.routed_inputs()[0].device_id,
+        Some(PointerDeviceId(501)),
+        "native tablet packet should route and suppress duplicate fallback touch for the frame"
+    );
+}
+
+#[test]
+fn active_native_contact_suppresses_fallback_without_new_native_samples() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let fallback_start = {
+        let host = runtime
+            .world()
+            .resource::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        screen_point_for_canvas(&host.app, 1_000.0, 1_000.0)
+    };
+    {
+        let native_frame = runtime
+            .world_mut()
+            .resource_mut::<NativeTabletFrameResource>()
+            .expect("native tablet frame resource should exist");
+        native_frame.active_native_contact = true;
+    }
+    {
+        let input = runtime
+            .world_mut()
+            .resource_mut::<InputState>()
+            .expect("input state should exist");
+        input.handle_touch_input(
+            TouchInputPhase::Started,
+            92,
+            fallback_start.x,
+            fallback_start.y,
+            Some(0.3),
+        );
+    }
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("native active-contact suppression frame should run");
+
+    let host = runtime
+        .world()
+        .resource::<DrawingHostResource>()
+        .expect("drawing host resource should exist");
+    assert!(
+        host.app.routed_inputs().is_empty(),
+        "winit fallback input should not duplicate an active native stylus contact"
+    );
+}
+
+#[test]
+fn native_tablet_coalesced_samples_become_ordered_preview_samples() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let (start, c1, c2, current) = {
+        let host = runtime
+            .world()
+            .resource::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        (
+            screen_point_for_canvas(&host.app, 600.0, 600.0),
+            screen_point_for_canvas(&host.app, 650.0, 620.0),
+            screen_point_for_canvas(&host.app, 700.0, 650.0),
+            screen_point_for_canvas(&host.app, 760.0, 700.0),
+        )
+    };
+    {
+        let native_frame = runtime
+            .world_mut()
+            .resource_mut::<NativeTabletFrameResource>()
+            .expect("native tablet frame resource should exist");
+        let down =
+            NativeTabletPacket::windows_pointer(502, PointerEventKind::Down, start, UiVector::ZERO)
+                .with_pressure(0.4);
+        let movement = NativeTabletPacket::windows_pointer(
+            502,
+            PointerEventKind::Move,
+            current,
+            UiVector::new(current.x - c2.x, current.y - c2.y),
+        )
+        .with_pressure(0.9)
+        .with_timestamp_micros(40)
+        .with_coalesced_samples([
+            NativeTabletSample::new(c1, UiVector::new(c1.x - start.x, c1.y - start.y))
+                .with_timestamp_micros(20)
+                .with_pressure(0.5),
+            NativeTabletSample::new(c2, UiVector::new(c2.x - c1.x, c2.y - c1.y))
+                .with_timestamp_micros(30)
+                .with_pressure(0.7),
+        ]);
+        native_frame
+            .events
+            .push(map_native_tablet_packet(&down).event);
+        native_frame
+            .events
+            .push(map_native_tablet_packet(&movement).event);
+    }
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("native tablet coalesced route frame should run");
+
+    let host = runtime
+        .world()
+        .resource::<DrawingHostResource>()
+        .expect("drawing host resource should exist");
+    let preview = host
+        .app
+        .preview_stroke()
+        .expect("native input should start a preview stroke");
+    assert_eq!(preview.samples.len(), 4);
+    assert_eq!(preview.samples[0].sequence, 1);
+    assert_eq!(preview.samples[1].sequence, 2);
+    assert_eq!(preview.samples[2].sequence, 3);
+    assert_eq!(preview.samples[3].sequence, 4);
+    assert_eq!(preview.samples[1].pressure, Some(0.5));
+    assert_eq!(preview.samples[2].pressure, Some(0.7));
+    assert_eq!(preview.samples[3].pressure, Some(0.9));
+}
+
+#[test]
+fn native_tablet_diagnostics_project_into_workspace_panel() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    {
+        let native_frame = runtime
+            .world_mut()
+            .resource_mut::<NativeTabletFrameResource>()
+            .expect("native tablet frame resource should exist");
+        native_frame
+            .backend_health
+            .push(NativeTabletBackendHealth::active(
+                NativeTabletBackendKind::WindowsPointer,
+                "test active backend",
+            ));
+        native_frame.telemetry.sample_rate_hz = 180.0;
+        native_frame.telemetry.max_segment_gap_px = 18.0;
+        native_frame.telemetry.pressure_available = true;
+        native_frame.telemetry.tilt_available = true;
+    }
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("native tablet diagnostics frame should run");
+
+    let host = runtime
+        .world()
+        .resource::<DrawingHostResource>()
+        .expect("drawing host resource should exist");
+    let panel = &host.app.workspace().tablet_panel;
+    assert_eq!(panel.active_backend, "Windows Pointer/Ink");
+    assert_eq!(panel.sample_rate_hz, 180.0);
+    assert_eq!(panel.max_segment_gap_px, 18.0);
+    assert!(panel.pressure_available);
+    assert!(panel.tilt_available);
 }
 
 #[test]
@@ -416,6 +907,228 @@ fn long_stroke_batches_dirty_tiles_instead_of_clearing_canvas() {
 }
 
 #[test]
+fn long_active_preview_updates_only_dirty_tail_tiles() {
+    let mut app = RunenwerkDrawApp::new();
+    let start = screen_point_for_canvas(&app, 64.0, 64.0);
+    app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+        PointerEventKind::Down,
+        start,
+        UiVector::ZERO,
+        Some(PointerButton::Primary),
+        Modifiers::default(),
+        1,
+    )));
+
+    let mut max_dirty_tiles = app.ink_runtime().last_preview_dirty_tile_count();
+    for step in 1..=20 {
+        let canvas_position = 64.0 + step as f64 * 192.0;
+        let screen_position = screen_point_for_canvas(&app, canvas_position, canvas_position);
+        app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+            PointerEventKind::Move,
+            screen_position,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            0,
+        )));
+        max_dirty_tiles = max_dirty_tiles.max(app.ink_runtime().last_preview_dirty_tile_count());
+        assert!(
+            app.ink_runtime().last_preview_dirty_tile_count() <= 8,
+            "each small preview update should only reform the current stroke tail tiles"
+        );
+    }
+
+    let preview = app
+        .preview_stroke()
+        .expect("long active stroke should still be previewing");
+    assert_eq!(preview.samples.len(), 21);
+    assert!(
+        app.ink_runtime().preview_products().len() > max_dirty_tiles,
+        "the accumulated preview may span more tiles than any single dirty-tail update"
+    );
+    assert!(app.ink_runtime().diagnostics().iter().all(|diagnostic| {
+        diagnostic.code != DrawingTileFormationDiagnosticCode::TooManyAffectedTiles
+    }));
+}
+
+#[test]
+fn runtime_uploads_preview_products_only_when_generation_changes() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let (preview_count, first_dirty_tail_count) = {
+        let host = runtime
+            .world_mut()
+            .resource_mut::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let app = &mut host.app;
+        let start = screen_point_for_canvas(app, 64.0, 64.0);
+        app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+            PointerEventKind::Down,
+            start,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            1,
+        )));
+
+        for step in 1..=20 {
+            let canvas_position = 64.0 + step as f64 * 192.0;
+            let screen_position = screen_point_for_canvas(app, canvas_position, canvas_position);
+            app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+                PointerEventKind::Move,
+                screen_position,
+                UiVector::ZERO,
+                Some(PointerButton::Primary),
+                Modifiers::default(),
+                0,
+            )));
+        }
+
+        let preview_count = app.ink_runtime().preview_products().len();
+        let dirty_tail_count = app.ink_runtime().last_preview_dirty_tile_count();
+        assert!(
+            preview_count > dirty_tail_count,
+            "the active preview should span more tiles than the latest dirty tail"
+        );
+        (preview_count, dirty_tail_count)
+    };
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("initial preview upload frame should run");
+    assert_eq!(
+        ink_upload_count(&runtime),
+        preview_count,
+        "the first render frame must upload every retained preview product once"
+    );
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("stable preview frame should run");
+    assert_eq!(
+        ink_upload_count(&runtime),
+        0,
+        "unchanged preview products must not be re-uploaded every frame"
+    );
+
+    let next_dirty_tail_count = {
+        let host = runtime
+            .world_mut()
+            .resource_mut::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let app = &mut host.app;
+        let screen_position = screen_point_for_canvas(app, 4_000.0, 4_000.0);
+        app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+            PointerEventKind::Move,
+            screen_position,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            0,
+        )));
+        app.ink_runtime().last_preview_dirty_tile_count()
+    };
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("dirty preview tail upload frame should run");
+    let upload_count = ink_upload_count(&runtime);
+    assert!(
+        upload_count > 0,
+        "moving the active stroke should upload the changed preview tail"
+    );
+    assert!(
+        upload_count <= next_dirty_tail_count,
+        "preview uploads should be bounded by the latest dirty tail"
+    );
+    assert!(
+        upload_count < preview_count,
+        "preview uploads should not scale with the whole long active stroke"
+    );
+    assert!(
+        next_dirty_tail_count <= first_dirty_tail_count.max(8),
+        "the follow-up move should stay within the bounded dirty-tail policy"
+    );
+}
+
+#[test]
+fn runtime_uploads_only_new_committed_products_after_more_strokes() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let mut publications = ProductPublicationRuntimeResource::default();
+    let mut snapshots = QuerySnapshotRuntimeResource::default();
+
+    let first_visible_count = {
+        let host = runtime
+            .world_mut()
+            .resource_mut::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let first_start = screen_point_for_canvas(&host.app, 512.0, 512.0);
+        let first_end = screen_point_for_canvas(&host.app, 620.0, 560.0);
+        draw_and_accept_stroke(
+            &mut host.app,
+            &mut publications,
+            &mut snapshots,
+            first_start,
+            first_end,
+        );
+        host.app.ink_runtime().visible_product_count()
+    };
+    assert!(first_visible_count > 0);
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("first committed upload frame should run");
+    assert_eq!(
+        ink_upload_count(&runtime),
+        first_visible_count,
+        "the first visible generation should upload once"
+    );
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("stable committed frame should run");
+    assert_eq!(
+        ink_upload_count(&runtime),
+        0,
+        "unchanged committed ink must not be re-uploaded every frame"
+    );
+
+    let total_visible_count = {
+        let host = runtime
+            .world_mut()
+            .resource_mut::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let second_start = screen_point_for_canvas(&host.app, 3_100.0, 3_100.0);
+        let second_end = screen_point_for_canvas(&host.app, 3_240.0, 3_180.0);
+        draw_and_accept_stroke(
+            &mut host.app,
+            &mut publications,
+            &mut snapshots,
+            second_start,
+            second_end,
+        );
+        host.app.ink_runtime().visible_product_count()
+    };
+    assert!(total_visible_count > first_visible_count);
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("second committed upload frame should run");
+    let upload_count = ink_upload_count(&runtime);
+    assert!(upload_count > 0);
+    assert!(
+        upload_count < total_visible_count,
+        "adding another stroke should upload only new or changed products, not all existing ink"
+    );
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("second stable committed frame should run");
+    assert_eq!(ink_upload_count(&runtime), 0);
+}
+
+#[test]
 fn query_snapshots_wait_for_product_publication() {
     let mut app = RunenwerkDrawApp::new();
     let mut snapshots = QuerySnapshotRuntimeResource::default();
@@ -493,6 +1206,31 @@ fn screen_point_for_canvas(app: &RunenwerkDrawApp, x: f64, y: f64) -> UiPoint {
         .expect("test canvas point should project into the workspace")
 }
 
+fn stylus_pointer_event(
+    kind: PointerEventKind,
+    position: UiPoint,
+    timestamp_micros: u64,
+    pressure: f32,
+) -> UiInputEvent {
+    UiInputEvent::Pointer(
+        PointerEvent::new(
+            kind,
+            position,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            if kind == PointerEventKind::Down { 1 } else { 0 },
+        )
+        .with_packet(
+            PointerPacket::stylus(PointerDeviceId(901), PointerToolKind::Pen)
+                .with_contact(PointerContactState::Contact)
+                .with_timestamp_micros(timestamp_micros)
+                .with_pressure(pressure)
+                .with_latency_class(PointerLatencyClass::LowLatencyPreview),
+        ),
+    )
+}
+
 fn draw_stroke(app: &mut RunenwerkDrawApp, start: UiPoint, end: UiPoint) {
     app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
         PointerEventKind::Down,
@@ -510,6 +1248,43 @@ fn draw_stroke(app: &mut RunenwerkDrawApp, start: UiPoint, end: UiPoint) {
         Modifiers::default(),
         0,
     )));
+}
+
+fn draw_and_accept_stroke(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    snapshots: &mut QuerySnapshotRuntimeResource,
+    start: UiPoint,
+    end: UiPoint,
+) {
+    draw_stroke(app, start, end);
+    publish_visible_ink_until_clean(app, publications, snapshots);
+}
+
+fn publish_visible_ink_until_clean(
+    app: &mut RunenwerkDrawApp,
+    publications: &mut ProductPublicationRuntimeResource,
+    snapshots: &mut QuerySnapshotRuntimeResource,
+) {
+    let mut batches = 0;
+    while !app.ink_runtime().dirty_tiles().is_empty() {
+        batches += 1;
+        assert!(batches <= 8, "dirty tile batches should drain promptly");
+        publish_drawing_ink_products(app, publications, &barrier(BarrierKind::ProductPublication));
+        publish_drawing_ink_query_snapshots(
+            app,
+            snapshots,
+            &barrier(BarrierKind::QuerySnapshotPublication),
+        );
+    }
+}
+
+fn ink_upload_count(app: &engine::App) -> usize {
+    app.world()
+        .resource::<RenderDynamicTextureUploadRegistryResource>()
+        .expect("dynamic texture upload registry should exist")
+        .snapshot()
+        .len()
 }
 
 fn barrier(kind: BarrierKind) -> ExecutionBarrier {

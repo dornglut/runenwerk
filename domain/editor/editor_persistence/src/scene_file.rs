@@ -85,7 +85,7 @@ pub struct SceneFileV2 {
 
 impl SceneFileV2 {
     pub fn new(mut entities: Vec<SceneEntityRecordV2>) -> Self {
-        entities.sort_by(|left, right| left.id.cmp(&right.id));
+        entities.sort_by_key(|entity| entity.id);
         Self {
             version: SCENE_FILE_VERSION_V2,
             entities,

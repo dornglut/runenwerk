@@ -4,6 +4,7 @@ use crate::plugins::render::renderer::Gfx;
 use crate::runtime::frame_lifecycle::{
     prepare_world_for_run, run_frame as run_runtime_frame, run_startup_if_needed,
 };
+use crate::runtime::native_window_hooks::with_native_window_hooks;
 use crate::runtime::platform::{PlatformEvent, apply_platform_event};
 use crate::runtime::window::{WindowCursorIcon, WindowState};
 use anyhow::{Context, Result, anyhow};
@@ -13,8 +14,12 @@ use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
-pub(crate) fn run(state: WindowedAppState) -> Result<()> {
-    let event_loop = EventLoop::new()?;
+pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
+    let mut event_loop_builder = EventLoop::builder();
+    with_native_window_hooks(&mut state.world, |registry, _world| {
+        registry.configure_event_loop(&mut event_loop_builder);
+    });
+    let event_loop = event_loop_builder.build()?;
     event_loop.set_control_flow(state.control_flow);
     let mut runner = WinitRunner {
         state,
@@ -24,7 +29,7 @@ pub(crate) fn run(state: WindowedAppState) -> Result<()> {
     event_loop
         .run_app(&mut runner)
         .map_err(anyhow::Error::from)?;
-    if let Some(err) = runner.fatal_error {
+    if let Some(err) = runner.fatal_error.take() {
         Err(err)
     } else {
         Ok(())
@@ -71,7 +76,8 @@ impl WinitRunner {
             | PlatformEvent::MouseWheel { .. }
             | PlatformEvent::CursorMoved { .. }
             | PlatformEvent::MouseInput { .. }
-            | PlatformEvent::MouseMotion { .. } => {
+            | PlatformEvent::MouseMotion { .. }
+            | PlatformEvent::Touch { .. } => {
                 let mut window_state = WindowState::headless("");
                 let input = self
                     .state
@@ -96,7 +102,30 @@ impl WinitRunner {
 
     fn run_frame(&mut self) -> Result<()> {
         // Windowed flow uses the same per-frame schedule order as headless.
+        if let Some(window) = self.window.clone() {
+            with_native_window_hooks(&mut self.state.world, |registry, world| {
+                registry.dispatch_frame(&window, world);
+            });
+        }
         run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)
+    }
+
+    fn attach_native_window_hooks(&mut self, window: &Window) {
+        with_native_window_hooks(&mut self.state.world, |registry, world| {
+            registry.attach_hooks(window, world);
+        });
+    }
+
+    fn dispatch_native_window_event(&mut self, window: &Window, event: &WindowEvent) {
+        with_native_window_hooks(&mut self.state.world, |registry, world| {
+            registry.dispatch_window_event(window, event, world);
+        });
+    }
+
+    fn dispatch_native_device_event(&mut self, event: &DeviceEvent) {
+        with_native_window_hooks(&mut self.state.world, |registry, world| {
+            registry.dispatch_device_event(event, world);
+        });
     }
 
     fn apply_window_effects(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
@@ -135,6 +164,14 @@ impl WinitRunner {
         tracing::error!(error = %format!("{err:#}"), "runtime windowed execution failed");
         self.fatal_error = Some(err);
         event_loop.exit();
+    }
+}
+
+impl Drop for WinitRunner {
+    fn drop(&mut self) {
+        with_native_window_hooks(&mut self.state.world, |registry, world| {
+            registry.detach_hooks(world);
+        });
     }
 }
 
@@ -195,6 +232,8 @@ impl ApplicationHandler for WinitRunner {
             return;
         }
 
+        self.attach_native_window_hooks(&window);
+
         if let Err(err) = self.run_startup_if_needed() {
             self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
             return;
@@ -210,6 +249,10 @@ impl ApplicationHandler for WinitRunner {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        if let Some(window) = self.window.clone() {
+            self.dispatch_native_window_event(&window, &event);
+        }
+
         let result = match event {
             WindowEvent::CloseRequested => self.apply_event(PlatformEvent::CloseRequested),
             WindowEvent::Resized(size) => self.apply_event(PlatformEvent::Resized {
@@ -253,6 +296,13 @@ impl ApplicationHandler for WinitRunner {
             WindowEvent::MouseInput { state, button, .. } => {
                 self.apply_event(PlatformEvent::MouseInput { state, button })
             }
+            WindowEvent::Touch(touch) => self.apply_event(PlatformEvent::Touch {
+                phase: touch.phase.into(),
+                id: touch.id,
+                x: touch.location.x as f32,
+                y: touch.location.y as f32,
+                pressure: touch.force.map(|force| force.normalized() as f32),
+            }),
             WindowEvent::RedrawRequested => {
                 let frame_result = self
                     .apply_event(PlatformEvent::RedrawRequested)
@@ -277,6 +327,8 @@ impl ApplicationHandler for WinitRunner {
         _device_id: winit::event::DeviceId,
         event: DeviceEvent,
     ) {
+        self.dispatch_native_device_event(&event);
+
         let result = match event {
             DeviceEvent::MouseMotion { delta } => self.apply_event(PlatformEvent::MouseMotion {
                 delta_x: delta.0 as f32,

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-05-14
 ---
 
 # Workspace Roadmap Index
@@ -20,7 +20,9 @@ Operational execution checklist:
 
 - [workspace/sdf-first-execution-roadmap.md](./sdf-first-execution-roadmap.md)
 - [workspace/repo-execution-priority-checklist.md](./repo-execution-priority-checklist.md)
+- [engine/roadmaps/runtime-product-job-executor-roadmap.md](../engine/roadmaps/runtime-product-job-executor-roadmap.md)
 - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
+- [apps/runenwerk-draw/roadmap.md](../apps/runenwerk-draw/roadmap.md)
 - [reports/audits/editor-ui-priority-code-audit-2026-05-05.md](../reports/audits/editor-ui-priority-code-audit-2026-05-05.md)
 
 ## Source-of-Truth Tracks
@@ -37,8 +39,12 @@ Operational execution checklist:
   - [reports/closeouts/sdf-first-execution-phase-4/closeout.md](../reports/closeouts/sdf-first-execution-phase-4/closeout.md)
 - SDF-first execution Phase 5 closeout evidence:
   - [reports/closeouts/sdf-first-execution-phase-5/closeout.md](../reports/closeouts/sdf-first-execution-phase-5/closeout.md)
+- Runtime product job executor roadmap:
+  - [engine/roadmaps/runtime-product-job-executor-roadmap.md](../engine/roadmaps/runtime-product-job-executor-roadmap.md)
 - Editor final end-to-end implementation roadmap:
   - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
+- Runenwerk Draw rendering foundation roadmap:
+  - [apps/runenwerk-draw/roadmap.md](../apps/runenwerk-draw/roadmap.md)
 - UI substrate and surface execution roadmap:
   - [domain/ui/roadmap.md](../domain/ui/roadmap.md)
 - UI current-state architecture:
@@ -90,6 +96,9 @@ Operational execution checklist:
 
 ## Other Tracked Work
 
+- Treat the Runenwerk Draw rendering foundation as a Next app/render track after
+  the current SDF-first Now items are stable. Its owning sequence is
+  [apps/runenwerk-draw/roadmap.md](../apps/runenwerk-draw/roadmap.md).
 - Sequence gameplay graph, particles, physics, animation, and simulation domains
   after each owning design can consume product jobs, query snapshots,
   publication barriers, and diagnostics.

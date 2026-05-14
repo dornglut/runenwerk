@@ -1,5 +1,7 @@
 // Owner: Engine Input Plugin - Tests
-use crate::plugins::{InputBindingChange, InputBindingChangeResult, InputState, KeyChord, action};
+use crate::plugins::{
+    InputBindingChange, InputBindingChangeResult, InputState, KeyChord, TouchInputPhase, action,
+};
 use winit::keyboard::KeyCode;
 
 #[test]
@@ -121,4 +123,87 @@ fn apply_binding_changes_batches_operations() {
     state.recompute_action_down_states();
     state.sync_legacy_flags();
     assert!(state.world_move_right);
+}
+
+#[test]
+fn cursor_motion_samples_preserve_all_positions_until_frame_end() {
+    let mut state = InputState::new();
+
+    state.handle_cursor_moved(10.0, 12.0);
+    state.handle_cursor_moved(14.0, 15.0);
+    state.handle_cursor_moved(21.0, 19.0);
+
+    assert_eq!(
+        state.mouse_motion_samples(),
+        &[
+            crate::plugins::MouseMotionSample {
+                position: (10.0, 12.0),
+                delta: (10.0, 12.0),
+            },
+            crate::plugins::MouseMotionSample {
+                position: (14.0, 15.0),
+                delta: (4.0, 3.0),
+            },
+            crate::plugins::MouseMotionSample {
+                position: (21.0, 19.0),
+                delta: (7.0, 4.0),
+            },
+        ]
+    );
+    assert_eq!(state.mouse_position, (21.0, 19.0));
+
+    state.clear_frame();
+
+    assert!(state.mouse_motion_samples().is_empty());
+    assert_eq!(state.mouse_position, (21.0, 19.0));
+}
+
+#[test]
+fn touch_samples_preserve_primary_pointer_history_until_frame_end() {
+    let mut state = InputState::new();
+
+    state.handle_touch_input(TouchInputPhase::Started, 7, 10.0, 12.0, Some(0.4));
+    state.handle_touch_input(TouchInputPhase::Moved, 7, 14.0, 16.0, Some(0.5));
+    state.handle_touch_input(TouchInputPhase::Started, 8, 50.0, 60.0, Some(0.8));
+    state.handle_touch_input(TouchInputPhase::Moved, 7, 21.0, 20.0, Some(1.2));
+    state.handle_touch_input(TouchInputPhase::Ended, 7, 25.0, 24.0, Some(0.0));
+
+    assert_eq!(
+        state.touch_samples(),
+        &[
+            crate::plugins::TouchInputSample {
+                id: 7,
+                phase: TouchInputPhase::Started,
+                position: (10.0, 12.0),
+                delta: (0.0, 0.0),
+                pressure: Some(0.4),
+            },
+            crate::plugins::TouchInputSample {
+                id: 7,
+                phase: TouchInputPhase::Moved,
+                position: (14.0, 16.0),
+                delta: (4.0, 4.0),
+                pressure: Some(0.5),
+            },
+            crate::plugins::TouchInputSample {
+                id: 7,
+                phase: TouchInputPhase::Moved,
+                position: (21.0, 20.0),
+                delta: (7.0, 4.0),
+                pressure: Some(1.0),
+            },
+            crate::plugins::TouchInputSample {
+                id: 7,
+                phase: TouchInputPhase::Ended,
+                position: (25.0, 24.0),
+                delta: (4.0, 4.0),
+                pressure: Some(0.0),
+            },
+        ],
+        "only the first active touch should be routed as the primary drawing pointer"
+    );
+
+    state.clear_frame();
+
+    assert!(state.touch_samples().is_empty());
 }

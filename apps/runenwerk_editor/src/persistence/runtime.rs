@@ -60,7 +60,7 @@ fn apply_scene_entities_to_runtime(
     }
 
     let mut pending = entities.to_vec();
-    pending.sort_by(|left, right| left.id.cmp(&right.id));
+    pending.sort_by_key(|entity| entity.id);
 
     let mut restored = BTreeSet::new();
 

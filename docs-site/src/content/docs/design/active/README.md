@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-14
 ---
 
 # Active Designs
@@ -46,9 +46,14 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 
 - [Gameplay Graph ATR IR and ECS Lowering Design](gameplay-graph-atr-ir-and-ecs-lowering-design.md)
 
+### Drawing / Apps
+
+- [Runenwerk Draw Pen-First Radial Tablet UX Design](runenwerk-draw-pen-first-radial-tablet-ux-design.md)
+
 ### Workspace / Cross-Domain
 
 - [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
+- [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
 - [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)

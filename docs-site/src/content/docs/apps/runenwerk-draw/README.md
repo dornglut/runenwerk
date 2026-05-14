@@ -5,10 +5,13 @@ status: active
 owner: drawing
 layer: app
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-05-14
 related_designs:
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
   - ../../design/active/drawing-domain-crate-design.md
+  - ../../design/active/runenwerk-draw-pen-first-radial-tablet-ux-design.md
+related_roadmaps:
+  - ./roadmap.md
 ---
 
 # Runenwerk Draw
@@ -36,6 +39,13 @@ shared engine runtime, UI frame contracts, render submission registry, and pure
 - `apps/runenwerk_draw/src/runtime/systems.rs`: runtime submission of UI frames,
   dynamic ink texture targets, upload requests, and committed render product
   selections.
+
+## Next Rendering Foundation
+
+- [Runenwerk Draw Rendering Foundation Roadmap](./roadmap.md): preview/final
+  tile profiles, app-derived tile caching, product-surface bridging, GPU ink
+  proof through public render-flow APIs, and CPU current or last-good fallback
+  when GPU validation fails.
 
 ## Current Behavior
 
@@ -70,6 +80,22 @@ formation as the source of truth. The renderer path is now texture-backed, but
 this is not yet GPU product formation, persistent tile cache, watercolor/paper
 simulation, eraser compositing, package save format, or advanced layer/effect
 renderer.
+
+## Current Limits / Known Gaps
+
+- The visible app path is deterministic CPU preview-quality ink tiles.
+  Final-quality profiles, persistent tile cache, GPU formation, and GPU
+  promotion/fallback are planned by the roadmap, not implemented app behavior
+  yet.
+- Touch input currently routes through the same drawing path as fallback pointer
+  input. The pen-first UX target is different: touch drawing should be disabled
+  by default and enabled only through explicit profile/input policy.
+- Pointer release outside the canvas still needs capture/release handling so an
+  active preview stroke cannot remain stranded when the pen/mouse leaves the
+  canvas bounds before `PointerEventKind::Up`.
+- Native tablet packet routing and fallback suppression exist, but backend
+  arbitration, real Windows Ink/Wacom/macOS hardware acceptance, and device
+  setup UX are still open.
 
 ## Ownership Boundary
 

@@ -25,6 +25,13 @@ impl App {
             };
             self.world.insert_resource(state);
         }
+        if !self
+            .world
+            .has_resource::<NativeWindowHookRegistryResource>()
+        {
+            self.world
+                .insert_resource(NativeWindowHookRegistryResource::default());
+        }
         if !self.world.has_resource::<SceneCatalog>() {
             self.world.insert_resource(SceneCatalog::default());
         }
@@ -62,6 +69,10 @@ impl App {
         if !self.world.has_resource::<QuerySnapshotRuntimeResource>() {
             self.world
                 .insert_resource(QuerySnapshotRuntimeResource::default());
+        }
+        if !self.world.has_resource::<RuntimeJobExecutorResource>() {
+            self.world
+                .insert_resource(RuntimeJobExecutorResource::default());
         }
         if !self.world.has_resource::<SimulationProfileConfig>() {
             self.world

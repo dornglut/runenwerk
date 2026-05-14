@@ -36,18 +36,18 @@ M5 adopts an external runtime preview process for preview, simulate, and play ex
 
 ## Current Repository Anchors (Implemented Today)
 
-- Workspace ownership/layering is defined by current members in [`Cargo.toml`](/Users/joshua/Projekte/gamedev/Runenwerk/Cargo.toml) and root domain ownership in [`DOMAIN_MAP.md`](/Users/joshua/Projekte/gamedev/Runenwerk/DOMAIN_MAP.md).
-- Runtime app composition currently flows through `engine::App` (`add_plugin`, `add_systems`, `add_scene`, `add_scene_template`, `run`) in [`engine/src/app/domain/app.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/engine/src/app/domain/app.rs).
-- Runnable editor composition is in [`apps/runenwerk_editor/src/runtime/app.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/apps/runenwerk_editor/src/runtime/app.rs).
-- M5 external runtime preview protocol contracts live in [`domain/editor/editor_preview/src/lib.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/domain/editor/editor_preview/src/lib.rs).
-- The runtime preview child app lives in [`apps/runenwerk_runtime_preview/src/lib.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/apps/runenwerk_runtime_preview/src/lib.rs) and has a headless command/event loop plus child-process heartbeat/shutdown coverage.
-- Editor-side preview process management lives in [`apps/runenwerk_editor/src/runtime/preview_process/mod.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/apps/runenwerk_editor/src/runtime/preview_process/mod.rs), including bounded command queueing, event ingestion, heartbeat state, bootstrap timeout, and graceful shutdown fallback.
-- Project-owned reload classification and status projection live in [`apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs).
-- Ratified `world_sdf` runtime payload intake flows through [`engine/src/plugins/world/build/integration.rs::enqueue_ratified_world_sdf_payload_package`](/Users/joshua/Projekte/gamedev/Runenwerk/engine/src/plugins/world/build/integration.rs).
-- Editor runtime already exposes explicit authored/instantiated/simulated/session reality views in [`apps/runenwerk_editor/src/editor_runtime/runtime.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/apps/runenwerk_editor/src/editor_runtime/runtime.rs).
-- Scene persistence format today is `SceneFileV2` RON records in [`domain/editor/editor_persistence/src/scene_file.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/domain/editor/editor_persistence/src/scene_file.rs), not `.rwscene/.rwprefab/.rwinput` assets.
-- Scene manifest discovery currently reads `.ron` files from `assets/scenes` and `game/assets/scenes` in [`engine/src/plugins/scene/manifest/catalog.rs`](/Users/joshua/Projekte/gamedev/Runenwerk/engine/src/plugins/scene/manifest/catalog.rs).
-- Current app-level editor MVP scope intentionally excludes prefab/material/scripting tooling for the first milestone, per [`docs-site/src/content/docs/apps/runenwerk-editor/mvp/first-3d-editor-mvp.md`](/Users/joshua/Projekte/gamedev/Runenwerk/docs-site/src/content/docs/apps/runenwerk-editor/mvp/first-3d-editor-mvp.md).
+- Workspace ownership/layering is defined by current members in [`Cargo.toml`](../../../../../../Cargo.toml) and root domain ownership in [`DOMAIN_MAP.md`](../../../../../../DOMAIN_MAP.md).
+- Runtime app composition currently flows through `engine::App` (`add_plugin`, `add_systems`, `add_scene`, `add_scene_template`, `run`) in [`engine/src/app/domain/app.rs`](../../../../../../engine/src/app/domain/app.rs).
+- Runnable editor composition is in [`apps/runenwerk_editor/src/runtime/app.rs`](../../../../../../apps/runenwerk_editor/src/runtime/app.rs).
+- M5 external runtime preview protocol contracts live in [`domain/editor/editor_preview/src/lib.rs`](../../../../../../domain/editor/editor_preview/src/lib.rs).
+- The runtime preview child app lives in [`apps/runenwerk_runtime_preview/src/lib.rs`](../../../../../../apps/runenwerk_runtime_preview/src/lib.rs) and has a headless command/event loop plus child-process heartbeat/shutdown coverage.
+- Editor-side preview process management lives in [`apps/runenwerk_editor/src/runtime/preview_process/mod.rs`](../../../../../../apps/runenwerk_editor/src/runtime/preview_process/mod.rs), including bounded command queueing, event ingestion, heartbeat state, bootstrap timeout, and graceful shutdown fallback.
+- Project-owned reload classification and status projection live in [`apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs`](../../../../../../apps/runenwerk_editor/src/asset_pipeline/catalog_runtime.rs).
+- Ratified `world_sdf` runtime payload intake flows through [`engine/src/plugins/world/build/integration.rs::enqueue_ratified_world_sdf_payload_package`](../../../../../../engine/src/plugins/world/build/integration.rs).
+- Editor runtime already exposes explicit authored/instantiated/simulated/session reality views in [`apps/runenwerk_editor/src/editor_runtime/runtime.rs`](../../../../../../apps/runenwerk_editor/src/editor_runtime/runtime.rs).
+- Scene persistence format today is `SceneFileV2` RON records in [`domain/editor/editor_persistence/src/scene_file.rs`](../../../../../../domain/editor/editor_persistence/src/scene_file.rs), not `.rwscene/.rwprefab/.rwinput` assets.
+- Scene manifest discovery currently reads `.ron` files from `assets/scenes` and `game/assets/scenes` in [`engine/src/plugins/scene/manifest/catalog.rs`](../../../../../../engine/src/plugins/scene/manifest/catalog.rs).
+- Current app-level editor MVP scope intentionally excludes prefab/material/scripting tooling for the first milestone, per [`docs-site/src/content/docs/apps/runenwerk-editor/mvp/first-3d-editor-mvp.md`](../../apps/runenwerk-editor/mvp/first-3d-editor-mvp.md).
 
 ## Current-to-Target Gap Matrix
 

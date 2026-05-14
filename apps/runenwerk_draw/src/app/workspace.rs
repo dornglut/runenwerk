@@ -22,6 +22,17 @@ impl DrawingCanvasView {
             return None;
         }
 
+        self.screen_to_canvas_unbounded(screen_position)
+    }
+
+    pub fn screen_to_canvas_unbounded(
+        self,
+        screen_position: ui_math::UiPoint,
+    ) -> Option<CanvasCoordinate> {
+        if self.zoom <= 0.0 || !screen_position.x.is_finite() || !screen_position.y.is_finite() {
+            return None;
+        }
+
         let local_x = f64::from(screen_position.x - self.screen_bounds.x);
         let local_y = f64::from(screen_position.y - self.screen_bounds.y);
         Some(CanvasCoordinate::new(
@@ -52,12 +63,50 @@ impl DrawingCanvasView {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DrawingWorkspaceProjection {
     pub window_size: UiSize,
     pub toolbar_bounds: UiRect,
     pub layer_panel_bounds: UiRect,
     pub canvas_view: DrawingCanvasView,
+    pub tablet_panel: DrawingTabletPanelProjection,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrawingTabletPanelProjection {
+    pub active_backend: String,
+    pub active_device: String,
+    pub sample_rate_hz: f32,
+    pub max_segment_gap_px: f32,
+    pub pressure_available: bool,
+    pub tilt_available: bool,
+    pub dropped_samples: u32,
+    pub duplicate_samples: u32,
+    pub warning_count: usize,
+    pub backend_mode: String,
+    pub pressure_scale: f32,
+    pub pressure_bias: f32,
+    pub cursor_offset: ui_math::UiVector,
+}
+
+impl Default for DrawingTabletPanelProjection {
+    fn default() -> Self {
+        Self {
+            active_backend: "winit fallback".to_string(),
+            active_device: "mouse or trackpad".to_string(),
+            sample_rate_hz: 0.0,
+            max_segment_gap_px: 0.0,
+            pressure_available: false,
+            tilt_available: false,
+            dropped_samples: 0,
+            duplicate_samples: 0,
+            warning_count: 0,
+            backend_mode: "AutoOsFirst".to_string(),
+            pressure_scale: 1.0,
+            pressure_bias: 0.0,
+            cursor_offset: ui_math::UiVector::ZERO,
+        }
+    }
 }
 
 impl DrawingWorkspaceProjection {
@@ -97,10 +146,16 @@ impl DrawingWorkspaceProjection {
                 zoom: zoom_x.min(zoom_y),
                 pan: canvas_bounds.min,
             },
+            tablet_panel: DrawingTabletPanelProjection::default(),
         }
     }
 
-    pub fn canvas_area_ratio(self) -> f32 {
+    pub fn with_tablet_panel(mut self, tablet_panel: DrawingTabletPanelProjection) -> Self {
+        self.tablet_panel = tablet_panel;
+        self
+    }
+
+    pub fn canvas_area_ratio(&self) -> f32 {
         let window_area = (self.window_size.width * self.window_size.height).max(1.0);
         (self.canvas_view.screen_bounds.width * self.canvas_view.screen_bounds.height) / window_area
     }

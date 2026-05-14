@@ -1,4 +1,4 @@
-use crate::plugins::InputState;
+use crate::plugins::{InputState, TouchInputPhase};
 use crate::runtime::window::WindowState;
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
@@ -35,6 +35,13 @@ pub enum PlatformEvent {
     MouseMotion {
         delta_x: f32,
         delta_y: f32,
+    },
+    Touch {
+        phase: TouchInputPhase,
+        id: u64,
+        x: f32,
+        y: f32,
+        pressure: Option<f32>,
     },
     RedrawRequested,
 }
@@ -78,6 +85,15 @@ pub fn apply_platform_event(
         }
         PlatformEvent::MouseMotion { delta_x, delta_y } => {
             input.handle_mouse_motion(*delta_x, *delta_y);
+        }
+        PlatformEvent::Touch {
+            phase,
+            id,
+            x,
+            y,
+            pressure,
+        } => {
+            input.handle_touch_input(*phase, *id, *x, *y, *pressure);
         }
         PlatformEvent::RedrawRequested => {
             window.redraw_requested = false;
@@ -151,9 +167,22 @@ mod tests {
                 delta_y: -2.0,
             },
         );
+        apply_platform_event(
+            &mut window,
+            &mut input,
+            &PlatformEvent::Touch {
+                phase: super::TouchInputPhase::Started,
+                id: 7,
+                x: 10.0,
+                y: 12.0,
+                pressure: Some(0.6),
+            },
+        );
 
         assert!(input.world_move_right);
         assert!(input.left_mouse_pressed());
         assert_eq!(input.mouse_delta, (5.0, -2.0));
+        assert_eq!(input.touch_samples().len(), 1);
+        assert_eq!(input.touch_samples()[0].pressure, Some(0.6));
     }
 }

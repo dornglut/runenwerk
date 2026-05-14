@@ -324,13 +324,65 @@ fn pressure_and_formation_version_change_deterministic_outputs() {
     );
 
     let policy = DrawingTileFormationPolicy {
-        formation_version: FormationVersion::new(2),
+        formation_version: FormationVersion::new(
+            DrawingTileFormationPolicy::default()
+                .formation_version
+                .raw()
+                + 1,
+        ),
         ..DrawingTileFormationPolicy::default()
     };
     let versioned = form_drawing_ink_tiles(&low_pressure, policy);
     assert_ne!(
         low.products[0].metadata.product_id,
         versioned.products[0].metadata.product_id
+    );
+}
+
+#[test]
+fn brush_flow_and_edge_softness_change_deterministic_payloads() {
+    let mut low_flow = document_with_stroke(vec![
+        sample(1, 40.0, 128.0, 1.0),
+        sample(2, 220.0, 128.0, 1.0),
+    ]);
+    low_flow.brushes[0].ink.flow = BrushRange::new(0.2, 0.2);
+    low_flow.brushes[0].ink.edge_softness = 0.2;
+
+    let mut high_flow = document_with_stroke(vec![
+        sample(1, 40.0, 128.0, 1.0),
+        sample(2, 220.0, 128.0, 1.0),
+    ]);
+    high_flow.brushes[0].ink.flow = BrushRange::new(1.0, 1.0);
+    high_flow.brushes[0].ink.edge_softness = 0.8;
+
+    let low = form_drawing_ink_tiles(&low_flow, DrawingTileFormationPolicy::default());
+    let high = form_drawing_ink_tiles(&high_flow, DrawingTileFormationPolicy::default());
+
+    assert!(low.is_accepted(), "{:?}", low.diagnostics);
+    assert!(high.is_accepted(), "{:?}", high.diagnostics);
+    assert_ne!(low.determinism_key, high.determinism_key);
+    assert_ne!(low.products[0].payload, high.products[0].payload);
+    assert!(
+        alpha_sum(&high.products[0].payload) > alpha_sum(&low.products[0].payload),
+        "higher brush flow should deposit more ink"
+    );
+}
+
+#[test]
+fn sparse_fast_segment_deposits_ink_between_input_samples() {
+    let document = document_with_stroke(vec![
+        sample(1, 40.0, 128.0, 1.0),
+        sample(2, 220.0, 128.0, 1.0),
+    ]);
+
+    let formation = form_drawing_ink_tiles(&document, DrawingTileFormationPolicy::default());
+
+    assert!(formation.is_accepted(), "{:?}", formation.diagnostics);
+    let payload = &formation.products[0].payload;
+    let row = 32;
+    assert!(
+        max_transparent_gap_in_row(payload, row) <= 2,
+        "a fast sparse stroke must form a continuous dab-spaced ink path, not only endpoint blobs"
     );
 }
 
@@ -347,6 +399,41 @@ fn oversized_tile_sets_reject_with_diagnostics() {
     assert!(formation.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == DrawingTileFormationDiagnosticCode::TooManyAffectedTiles
     }));
+}
+
+fn alpha_sum(payload: &DrawingInkTilePayload) -> u64 {
+    payload
+        .rgba8_premultiplied
+        .chunks_exact(4)
+        .map(|pixel| u64::from(pixel[3]))
+        .sum()
+}
+
+fn max_transparent_gap_in_row(payload: &DrawingInkTilePayload, row: u32) -> usize {
+    let row_start = row as usize * payload.width as usize * 4;
+    let row_end = row_start + payload.width as usize * 4;
+    let alphas = payload.rgba8_premultiplied[row_start..row_end]
+        .chunks_exact(4)
+        .map(|pixel| pixel[3])
+        .collect::<Vec<_>>();
+    let Some(first) = alphas.iter().position(|alpha| *alpha > 0) else {
+        return payload.width as usize;
+    };
+    let last = alphas
+        .iter()
+        .rposition(|alpha| *alpha > 0)
+        .expect("first non-transparent alpha exists");
+    let mut current = 0usize;
+    let mut max_gap = 0usize;
+    for alpha in &alphas[first..=last] {
+        if *alpha == 0 {
+            current = current.saturating_add(1);
+            max_gap = max_gap.max(current);
+        } else {
+            current = 0;
+        }
+    }
+    max_gap
 }
 
 #[test]

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-13
+last_reviewed: 2026-05-14
 related_docs:
   - ../../guidelines/runenwerk-architecture.md
   - ../../domain/graph/README.md
@@ -20,6 +20,9 @@ related_designs:
   - ./render-fragment-data-driven-maturity-design.md
   - ./viewport-dynamic-product-target-allocation-design.md
   - ./render-product-surface-foundation-bundle-design.md
+  - ./native-tablet-input-and-latency-contract.md
+related_roadmaps:
+  - ../../apps/runenwerk-draw/roadmap.md
 ---
 
 # Drawing Authoring and Comic Layout Platform Design
@@ -98,8 +101,9 @@ Implemented anchors that this design must respect:
   compute, fullscreen, graphics, copy, and present passes.
 - `apps/runenwerk_editor` wires the current editor runtime and should remain the
   existing editor app rather than becoming the semantic owner of drawing.
-- `adapters/native_tablet_input` owns the first macOS/Wacom-oriented tablet
-  packet normalization proof into platform-neutral `ui_input` events.
+- `adapters/native_tablet_input` owns native tablet packet normalization and
+  backend diagnostics for Windows Pointer/Ink, optional Wintab, macOS NSEvent,
+  and winit fallback paths into platform-neutral `ui_input` events.
 - Existing SDF authoring and `world_ops` brush concepts are field/world editing
   operations, not natural-media drawing strokes.
 
@@ -221,9 +225,11 @@ Native tablet integration affects shipping. Operating-system permissions, Wacom
 SDK linkage, signing requirements, and capability diagnostics belong in the
 native tablet adapter and app packaging layer, not in `domain/drawing`.
 
-The MVP platform target is macOS with Wacom/native tablet support and mouse
-fallback. Windows tablet support is important, but it should not block the first
-macOS-focused public release.
+The MVP tablet target is OS-native input on both Windows and macOS, with Wacom
+backends available as richer or fallback providers. Windows Pointer/Ink and
+macOS AppKit/NSEvent are the default OS paths; Wintab and documented Wacom
+driver integrations stay isolated behind adapters. Mouse and trackpad fallback
+remain valid on every platform.
 
 ### Drawing app experience
 
@@ -678,11 +684,11 @@ reported as capabilities instead of silently normalized into fake values.
 
 ### `adapters/native_tablet_input`
 
-`adapters/native_tablet_input` owns the first native tablet input adapter proof.
+`adapters/native_tablet_input` owns native tablet input adapters.
 
 This adapter owns:
 
-- macOS/Wacom-oriented packet DTOs;
+- Windows Pointer/Ink, Wintab, macOS NSEvent, and Wacom-oriented packet DTOs;
 - capability detection;
 - packet normalization;
 - mapping into `domain/ui/ui_input` events;
@@ -690,8 +696,8 @@ This adapter owns:
 
 It should not own drawing semantics. It produces input facts.
 
-Real macOS event tap, Wacom SDK, installer permission, and device-management
-integration remain later adapter/app work.
+Backend-specific device management, installer permission, and hardware
+acceptance remain adapter/app work.
 
 ### `apps/runenwerk_draw`
 
@@ -1234,10 +1240,12 @@ Completion criteria:
 Extend `domain/ui/ui_input` and add the native tablet adapter proof.
 
 Status: implemented as `domain/ui/ui_input` stylus-capable pointer packets and
-`adapters/native_tablet_input` packet normalization proof. Real native OS/Wacom
-event capture remains deferred to the drawing app/platform integration phases.
-Phase 4, `runenwerk_draw` App Shell, is also complete. Phase 5, Deterministic
-Ink Tile Formation, is now implemented as the first visible ink path.
+`adapters/native_tablet_input` native tablet packet normalization. The first
+native window hook and Windows Pointer history drain exist, with optional Wintab
+and macOS NSEvent DTO paths in place. Hardware acceptance remains required for
+Windows Ink, Wacom Wintab, and macOS Wacom devices. Phase 4, `runenwerk_draw`
+App Shell, is also complete. Phase 5, Deterministic Ink Tile Formation, is now
+implemented as the first visible ink path.
 
 Completion criteria:
 
@@ -1248,7 +1256,8 @@ Completion criteria:
   behavior is specified as input capabilities;
 - low-latency preview stroke behavior is separate from committed ratified
   strokes;
-- adapter maps macOS/Wacom-oriented packets into platform-neutral input events;
+- adapter maps OS-native and Wacom-oriented packets into platform-neutral input
+  events;
 - tests cover missing capability behavior and preservation of pressure/tilt.
 
 ### Phase 4: `runenwerk_draw` App Shell
@@ -1330,6 +1339,14 @@ Completion criteria:
   drawing-specific and not viewport-specific;
 - accepted visible ink draws one product-surface primitive per visible tile,
   not one UI rect per non-transparent pixel.
+
+The focused implementation sequence between Phase 5.1 and paper response is
+owned by the
+[Runenwerk Draw Rendering Foundation Roadmap](../../apps/runenwerk-draw/roadmap.md).
+That roadmap locks preview/final tile profiles, app-derived tile caching,
+product-surface bridging, GPU ink proof through public render-flow APIs, and CPU
+last-good fallback policy without moving drawing semantics into
+`engine/src/plugins/render`.
 
 ### Phase 6: Paper Height and Procedural Surface Inputs
 
@@ -1514,7 +1531,7 @@ implementation testable and hard to misuse.
 | --- | --- | --- |
 | 1. Documentation and Boundary Acceptance | Active platform design linked from the active design index. | Documentation validation passes; ownership boundaries, stop conditions, and roadmap shape are explicit. Not visual. |
 | 2. Drawing Domain Contracts | Pure `domain/drawing` crate with serialization-ready DTO-shaped drawing contracts, ratifiers, diagnostics, command/transaction helpers, and tile-lineage descriptors. | `cargo test -p drawing` proves valid and invalid documents, stack entries, graph ratification, brush/paper ranges, command results, and tile-lineage descriptors. Not visual. |
-| 3. Stylus Input Contracts | Platform-neutral stylus input vocabulary plus a macOS/Wacom-oriented native tablet adapter proof. | Tests prove pointer fallback, pressure, tilt, twist, eraser/tool kind, barrel buttons, timestamps, coalesced samples, and missing-capability behavior. Practical input foundation, not a drawing app. |
+| 3. Stylus Input Contracts | Platform-neutral stylus input vocabulary plus OS-native Windows/macOS tablet adapter contracts and Wacom fallback/enrichment paths. | Tests prove pointer fallback, pressure, tilt, twist, eraser/tool kind, barrel buttons, timestamps, coalesced samples, missing-capability behavior, native-before-fallback routing, and ordered fast-stroke samples. Practical input foundation, not a drawing app. |
 | 4. `runenwerk_draw` App Shell | Standalone focused app shell reusing the editor/workspace/UI/render/runtime substrate. | App launches, opens a minimal drawing document, routes pointer input, and presents a canvas-first workspace. First visible shell. |
 | 5. Deterministic Ink Tile Formation | Stroke-to-ink tile formation with tile keys, invalidation, source lineage, product publication, query snapshots, real preview tile projection, and last-good committed visibility. | Users can make pressure-sensitive ink strokes, see the live CPU-rasterized preview immediately, and keep prior accepted ink visible until the next committed generation clears the product/query barriers. First real drawing output. |
 | 5.1. Product-Surface Ink Rendering | Generic dynamic texture uploads, neutral product-surface UI primitives, dirty tile batching, and tile-store visibility for accepted/preview ink. | Long or repeated strokes render as texture-backed tile surfaces instead of per-pixel UI rects; active preview remains visible, second strokes do not clear earlier ink, and primitive count scales with visible tiles. |
@@ -1552,10 +1569,12 @@ the high-risk areas into focused designs:
   export approximation diagnostics;
 - native package contract for manifest, schema version, migrations, operation
   logs, cache sidecars, recovery, and partial-load diagnostics;
-- tablet input and latency contract for stylus capabilities, sampling,
-  prediction, calibration, low-latency preview strokes, and adapter diagnostics;
-- tile formation contract for tile identity, invalidation, cache policy, CPU
-  reference formation, GPU production formation, and golden/tolerance testing;
+- [native tablet input and latency contract](native-tablet-input-and-latency-contract.md)
+  for stylus capabilities, sampling, prediction, calibration, low-latency preview
+  strokes, and adapter diagnostics;
+- [Runenwerk Draw Rendering Foundation Roadmap](../../apps/runenwerk-draw/roadmap.md)
+  for tile identity, invalidation, cache policy, CPU reference formation, GPU
+  production formation, and golden/tolerance testing before paper response;
 - drawing app UX design for canvas-first layout, tablet setup, brush/paper/color
   workflows, layers, recovery, tile status, and export profile UX;
 - workflow packaging and specialized app profile design for hosting the same
@@ -1676,7 +1695,19 @@ Stop and redesign before implementation if:
 
 ## Open Decisions
 
-These decisions should be made when their implementation phase starts:
+The ink-rendering foundation subset is now sequenced by
+[Runenwerk Draw Rendering Foundation Roadmap](../../apps/runenwerk-draw/roadmap.md).
+That roadmap resolves only the post-Phase 5.1 rendering foundation: 64x64
+preview tiles, 256x256 final tiles, a 512 MiB app-derived tile cache, CPU
+reference formation as canonical truth, strict GPU/CPU tolerance, GPU output as
+the default visible path only after shadow validation, and CPU current or
+last-good fallback on GPU failure.
+
+Native package IO, package sidecars, visible paper response, watercolor, eraser
+compositing, export, comic layout, and reader choices remain open until their
+own implementation phases start.
+
+### Still Open For Later Phases
 
 - exact native document extension and internal package layout;
 - save profile names and default history retention policy;
@@ -1684,27 +1715,21 @@ These decisions should be made when their implementation phase starts:
 - exact descriptor field shapes for the first safe live composition core;
 - accepted v1 blend modes, alpha rules, clipping rules, and layer-group
   behavior;
-- pass-through group blending semantics and whether they are needed before or
-  after isolated group blending is stable;
+- pass-through group blending semantics after isolated group blending is stable;
 - first cheap adjustment layer parameter ranges and interpolation policy;
 - first live-effect performance budgets for preview tiles, final tiles, and
   last-good fallback;
+- first paper descriptor parameter set;
+- cache sidecar location, pruning, and archive-embed policy;
+- layered interchange degradation, flattening, and diagnostic report policy;
+- exact native tablet API or Wacom SDK integration path;
 - first decorative finish descriptor set and material-map channel policy;
 - first technical drawing effect ordering and which halftone, screentone,
   hatching, speed-line, pattern, or channel effects are v1 versus deferred;
-- effect maturity promotion rules from declared to descriptor, preview, final,
-  and shippable;
-- composition graph serialization location inside the native package and its
-  migration policy;
-- graph-to-stack projection rules and when the advanced composition graph view
-  becomes visible;
-- layered interchange degradation, flattening, and diagnostic report policy;
-- exact native tablet API or Wacom SDK integration path;
-- tile size and tile cache budget defaults;
-- cache sidecar location, pruning, and archive-embed policy;
-- first paper descriptor parameter set;
+- effect maturity promotion rules for later painterly, watercolor, decorative,
+  technical, and reader effect families;
+- first visible paper-height response parameter set;
 - first viscosity, diffusion, absorption, and evaporation parameter ranges;
-- CPU reference precision, GPU tolerance, and formation golden policy;
 - whether graph-authored brushes need a separate `domain/drawing_graph` crate in
   the first watercolor phase or later;
 - exact Blender texture-set manifest schema;

@@ -1,11 +1,12 @@
 //! Minimal drawing document construction for the app shell.
 
 use drawing::{
-    BrushDescriptor, BrushId, BrushRange, CanvasCoordinate, CanvasRect, CompositeOutput,
-    CompositeOutputId, CompositeOutputSemantics, CompositePortSemantic, DrawingCompositeGraph,
-    DrawingCompositeNode, DrawingDocument, DrawingDocumentId, InkBrushDescriptor, LayerStackEntry,
-    LayerStackEntryContent, LayerStackEntryId, LayerStackNode, PaintLayerSource, PaintSourceId,
-    PaperDescriptor, PaperHeightSource, PaperId, ProductQualityClass,
+    BrushDescriptor, BrushDynamics, BrushId, BrushRange, CanvasCoordinate, CanvasRect,
+    CompositeOutput, CompositeOutputId, CompositeOutputSemantics, CompositePortSemantic,
+    DrawingCompositeGraph, DrawingCompositeNode, DrawingDocument, DrawingDocumentId, DynamicsCurve,
+    InkBrushDescriptor, LayerStackEntry, LayerStackEntryContent, LayerStackEntryId, LayerStackNode,
+    PaintLayerSource, PaintSourceId, PaperDescriptor, PaperHeightSource, PaperId,
+    ProductQualityClass,
 };
 use graph::{
     CyclePolicy, EdgeDefinition, EdgeId, GraphDefinition, GraphId, NodeDefinition, NodeId,
@@ -104,15 +105,19 @@ pub fn minimal_drawing_document() -> DrawingDocument {
         ),
         composition,
     );
-    document.brushes.push(BrushDescriptor::new(
-        BrushId::new(1),
-        "Pressure Ink",
-        InkBrushDescriptor::new(
-            BrushRange::new(1.0, 24.0),
-            BrushRange::new(0.05, 1.0),
-            BrushRange::new(0.05, 1.0),
-        ),
-    ));
+    let mut ink = InkBrushDescriptor::new(
+        BrushRange::new(7.0, 24.0),
+        BrushRange::new(0.35, 1.0),
+        BrushRange::new(0.35, 0.85),
+    );
+    ink.edge_softness = 0.32;
+    ink.dynamics = BrushDynamics {
+        pressure_to_size: DynamicsCurve::pressure(0.25, 0.85),
+        pressure_to_opacity: DynamicsCurve::pressure(0.35, 1.0),
+    };
+    document
+        .brushes
+        .push(BrushDescriptor::new(BrushId::new(1), "Pressure Ink", ink));
     document.papers.push(PaperDescriptor::new(
         PaperId::new(1),
         "Smooth Paper",

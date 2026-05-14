@@ -7,6 +7,8 @@
 pub(crate) mod fixed_step_executor;
 pub mod fixed_time;
 pub(crate) mod frame_lifecycle;
+pub mod jobs;
+pub mod native_window_hooks;
 pub mod param;
 pub mod platform;
 pub mod product_publication;
@@ -17,6 +19,8 @@ pub mod window;
 pub mod winit_runner;
 
 pub use fixed_time::*;
+pub use jobs::*;
+pub use native_window_hooks::*;
 pub use param::*;
 pub use product_publication::*;
 pub use query_snapshot::*;

@@ -34,7 +34,9 @@ pub struct DrawingInkRuntimeState {
     last_formation_key: Option<String>,
     last_publication_key: Option<String>,
     last_query_snapshot_key: Option<String>,
+    pending_formation_key: Option<String>,
     document_dirty: bool,
+    last_preview_dirty_tile_count: usize,
     diagnostics: Vec<DrawingTileFormationDiagnostic>,
     journal: Vec<DrawingInkJournalEntry>,
 }
@@ -80,6 +82,10 @@ impl DrawingInkRuntimeState {
         self.last_query_snapshot_key.as_deref()
     }
 
+    pub fn pending_formation_key(&self) -> Option<&str> {
+        self.pending_formation_key.as_deref()
+    }
+
     pub fn document_dirty(&self) -> bool {
         self.document_dirty
     }
@@ -94,6 +100,10 @@ impl DrawingInkRuntimeState {
 
     pub fn dirty_tiles(&self) -> &BTreeSet<CanvasTileId> {
         &self.dirty_tiles
+    }
+
+    pub fn last_preview_dirty_tile_count(&self) -> usize {
+        self.last_preview_dirty_tile_count
     }
 
     pub fn next_dirty_tile_batch(&self, limit: usize) -> Vec<CanvasTileId> {
@@ -120,6 +130,7 @@ impl DrawingInkRuntimeState {
         self.last_formation_key = None;
         self.last_publication_key = None;
         self.last_query_snapshot_key = None;
+        self.pending_formation_key = None;
         self.candidate_products.clear();
         self.candidate_cleared_tiles.clear();
         self.candidate_dirty_tiles.clear();
@@ -132,16 +143,43 @@ impl DrawingInkRuntimeState {
         products: Vec<DrawingInkTileProduct>,
         diagnostics: Vec<DrawingTileFormationDiagnostic>,
     ) {
+        self.last_preview_dirty_tile_count = products.len();
         self.preview_products = products;
+        self.diagnostics = diagnostics;
+    }
+
+    pub fn replace_preview_products_for_tiles(
+        &mut self,
+        tile_ids: impl IntoIterator<Item = CanvasTileId>,
+        products: Vec<DrawingInkTileProduct>,
+        cleared_tiles: impl IntoIterator<Item = CanvasTileId>,
+        diagnostics: Vec<DrawingTileFormationDiagnostic>,
+    ) {
+        let mut replacement_tile_ids = tile_ids.into_iter().collect::<BTreeSet<_>>();
+        replacement_tile_ids.extend(cleared_tiles);
+        self.preview_products
+            .retain(|product| !replacement_tile_ids.contains(&product.metadata.tile_id));
+        self.preview_products.extend(products);
+        self.preview_products.sort_by_key(|product| {
+            (
+                product.metadata.tile_id.level.raw(),
+                product.metadata.tile_id.x,
+                product.metadata.tile_id.y,
+                product.metadata.product_id.raw(),
+            )
+        });
+        self.last_preview_dirty_tile_count = replacement_tile_ids.len();
         self.diagnostics = diagnostics;
     }
 
     pub fn clear_preview_products(&mut self) {
         self.preview_products.clear();
+        self.last_preview_dirty_tile_count = 0;
     }
 
     pub fn record_preview_failure(&mut self, diagnostics: Vec<DrawingTileFormationDiagnostic>) {
         self.preview_products.clear();
+        self.last_preview_dirty_tile_count = 0;
         self.diagnostics = diagnostics;
     }
 
@@ -153,6 +191,7 @@ impl DrawingInkRuntimeState {
         cleared_tiles: impl IntoIterator<Item = CanvasTileId>,
         diagnostics: Vec<DrawingTileFormationDiagnostic>,
     ) {
+        self.pending_formation_key = None;
         self.last_formation_key = Some(formation_key);
         self.candidate_products = products;
         self.candidate_cleared_tiles = cleared_tiles.into_iter().collect();
@@ -167,6 +206,7 @@ impl DrawingInkRuntimeState {
         cleared_tiles: impl IntoIterator<Item = CanvasTileId>,
         diagnostics: Vec<DrawingTileFormationDiagnostic>,
     ) {
+        self.pending_formation_key = None;
         let dirty_tiles = dirty_tiles.into_iter().collect::<BTreeSet<_>>();
         for tile_id in cleared_tiles {
             self.visible_products.remove(&tile_id);
@@ -178,6 +218,7 @@ impl DrawingInkRuntimeState {
         self.candidate_cleared_tiles.clear();
         self.candidate_dirty_tiles.clear();
         self.preview_products.clear();
+        self.last_preview_dirty_tile_count = 0;
         self.published_descriptors.clear();
         self.accepted_snapshot_ids.clear();
         self.last_formation_key = Some(formation_key);
@@ -193,6 +234,7 @@ impl DrawingInkRuntimeState {
         diagnostics: Vec<DrawingTileFormationDiagnostic>,
         clear_preview_products: bool,
     ) {
+        self.pending_formation_key = None;
         self.last_formation_key = Some(formation_key.clone());
         self.last_publication_key = Some(formation_key);
         self.last_query_snapshot_key = None;
@@ -214,6 +256,16 @@ impl DrawingInkRuntimeState {
     ) {
         self.last_publication_key = Some(publication_key);
         self.published_descriptors = descriptors;
+    }
+
+    pub fn record_pending_formation_job(&mut self, formation_key: String) {
+        self.pending_formation_key = Some(formation_key);
+    }
+
+    pub fn clear_pending_formation_job(&mut self, formation_key: &str) {
+        if self.pending_formation_key.as_deref() == Some(formation_key) {
+            self.pending_formation_key = None;
+        }
     }
 
     pub fn record_accepted_snapshots(
