@@ -125,8 +125,10 @@ tasks:
 
   ci:local:
     desc: Run the local Dagger validation pipeline.
+    env:
+      DAGGER_NO_NAG: "1"
     cmds:
-      - dagger call ci-local --source .
+      - dagger call ci-local
 
   ci:host:
     desc: Run host validation without Dagger.

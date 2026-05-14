@@ -145,6 +145,27 @@
       },
       "title": "Items",
       "type": "array"
+    },
+    "roadmap_evidence_updates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Roadmap Evidence Updates",
+      "type": "array"
+    },
+    "tooling_hardening": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tooling Hardening",
+      "type": "array"
+    },
+    "validation_results": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Validation Results",
+      "type": "array"
     }
   },
   "required": [

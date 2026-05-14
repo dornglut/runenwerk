@@ -49,6 +49,21 @@ are complete. Procgen, SDF terrain rendering, and material/SDF preview GPU work
 must consume those contracts and should still wait for their owning product
 family upload/render designs unless the work is explicitly documentation-only.
 
+## WR-003 Contract Evidence
+
+The 2026-05-14 WR-003 slice keeps render as a contract consumer:
+
+- `PreparedRenderProductSelectionResource::snapshot` emits a view-ordered
+  selection snapshot so prepared-frame and residency consumers do not inherit
+  producer-registration order.
+- `RenderGpuResidencyResource` records a
+  `RenderGpuResidencySourceState` copied from selected product contract fields
+  and invalidates derived GPU cache entries when those contract fields change.
+- Conflicting selected source state for the same product is rejected before
+  residency allocation, preserving product/world authority outside render.
+- GPU residency inspection exposes the selected-source fields as read-only DTO
+  data without exposing backend handles or making renderer caches authoritative.
+
 ## Status Baseline
 
 Already complete:

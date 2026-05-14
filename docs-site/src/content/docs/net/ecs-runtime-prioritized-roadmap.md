@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-14
 related_roadmaps:
   - ../workspace/sdf-first-execution-roadmap.md
 ---
@@ -28,6 +28,10 @@ feeds the [SDF-first execution roadmap](../workspace/sdf-first-execution-roadmap
 The old editor MVP sequencing notes below are historical; the active priority
 is product jobs, query snapshots, deterministic barriers, and diagnostics that
 support SDF-first formed products.
+2026-05-14 WR-002 added an ECS-owned runtime plan report API so product-job
+diagnostics can inspect deterministic system IDs, param slots, waves,
+publication barriers, and conflicts without depending on scheduler internals as
+their primary reporting surface.
 
 Reason:
 
@@ -108,12 +112,15 @@ Checklist:
 
 - [x] add stable system IDs separate from type-name strings.
 - [x] expose stable param-slot IDs for diagnostic tooling and stream cursor tracking.
-- [ ] keep deterministic registration and plan reporting.
+- [x] keep deterministic registration and plan reporting.
 
 Current scope note: system and param-slot IDs are first-class runtime diagnostics
 surfaces. Richer external identity for every scheduler access key remains constrained by
 TypeId-backed domains, so conflict ordering uses deterministic registration order rather
-than human-readable names as canonical identity.
+than human-readable names as canonical identity. `Runtime::plan_report_for`
+is the ECS-owned reporting surface for product-job diagnostics that need
+stable registration order, wave/barrier placement, param-slot metadata, and
+conflict labels.
 
 ### F4. Add first-class work-queue/stream conflict semantics to scheduler
 

@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use product::{
     FieldProductDiagnostic, FieldProductDiagnosticCode, FieldProductDiagnosticSeverity,
-    ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductResidency,
-    RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
+    ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
+    ProductScaleBand, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
 };
 
 use crate::plugins::render::{PreparedRenderProductSelectionResource, RenderGpuCacheHandle};
@@ -24,10 +24,32 @@ pub enum RenderGpuResidencyJournalAction {
     Rejected,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderGpuResidencySourceState {
+    pub scale_band: ProductScaleBand,
+    pub freshness: ProductFreshness,
+    pub product_residency: ProductResidency,
+    pub authority_class: ProductAuthorityClass,
+    pub query_policy: ProductQueryPolicy,
+}
+
+impl RenderGpuResidencySourceState {
+    fn from_selected_product(selected: &RenderSelectedProduct) -> Self {
+        Self {
+            scale_band: selected.scale_band,
+            freshness: selected.freshness,
+            product_residency: selected.residency,
+            authority_class: selected.authority_class,
+            query_policy: selected.query_policy,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderGpuResidencyEntry {
     pub product_id: ProductIdentity,
     pub generation: u64,
+    pub source: RenderGpuResidencySourceState,
     pub requested_residency: ProductResidency,
     pub priority: i32,
     pub hard_pin: bool,
@@ -41,6 +63,7 @@ pub struct RenderGpuResidencyJournalEntry {
     pub action: RenderGpuResidencyJournalAction,
     pub product_id: ProductIdentity,
     pub generation: u64,
+    pub source: Option<RenderGpuResidencySourceState>,
     pub requested_residency: ProductResidency,
     pub priority: i32,
     pub hard_pin: bool,
@@ -129,14 +152,9 @@ impl RenderGpuResidencyResource {
             self.push_rejected(product_id, diagnostics.clone());
             if let Some(entry) = self.entries.remove(&product_id) {
                 summary.evicted_count = summary.evicted_count.saturating_add(1);
-                self.push_journal(
+                self.push_entry_journal(
                     RenderGpuResidencyJournalAction::Evicted,
-                    entry.product_id,
-                    entry.generation,
-                    entry.requested_residency,
-                    entry.priority,
-                    entry.hard_pin,
-                    Some(entry.cache_handle),
+                    &entry,
                     Vec::new(),
                 );
             }
@@ -156,14 +174,9 @@ impl RenderGpuResidencyResource {
         for product_id in unrequested_products {
             if let Some(entry) = self.entries.remove(&product_id) {
                 summary.evicted_count = summary.evicted_count.saturating_add(1);
-                self.push_journal(
+                self.push_entry_journal(
                     RenderGpuResidencyJournalAction::Evicted,
-                    entry.product_id,
-                    entry.generation,
-                    entry.requested_residency,
-                    entry.priority,
-                    entry.hard_pin,
-                    Some(entry.cache_handle),
+                    &entry,
                     Vec::new(),
                 );
             }
@@ -171,10 +184,11 @@ impl RenderGpuResidencyResource {
 
         for item in residency_plan.accepted.into_values() {
             if let Some(previous) = self.entries.get(&item.product_id).cloned() {
-                if previous.generation == item.generation {
+                if previous.generation == item.generation && previous.source == item.source {
                     let entry = RenderGpuResidencyEntry {
                         product_id: item.product_id,
                         generation: item.generation,
+                        source: item.source,
                         requested_residency: item.requested_residency,
                         priority: item.priority,
                         hard_pin: item.hard_pin,
@@ -184,29 +198,29 @@ impl RenderGpuResidencyResource {
                     };
                     self.entries.insert(item.product_id, entry.clone());
                     summary.preserved_count = summary.preserved_count.saturating_add(1);
-                    self.push_journal(
+                    self.push_entry_journal(
                         RenderGpuResidencyJournalAction::Preserved,
-                        entry.product_id,
-                        entry.generation,
-                        entry.requested_residency,
-                        entry.priority,
-                        entry.hard_pin,
-                        Some(entry.cache_handle),
+                        &entry,
                         Vec::new(),
                     );
                 } else {
-                    let diagnostic = generation_invalidated_diagnostic(&previous, item.generation);
+                    let mut diagnostics = Vec::new();
+                    if previous.generation != item.generation {
+                        diagnostics.push(generation_invalidated_diagnostic(
+                            &previous,
+                            item.generation,
+                        ));
+                    }
+                    if previous.source != item.source {
+                        diagnostics
+                            .push(source_state_invalidated_diagnostic(&previous, item.source));
+                    }
                     self.entries.remove(&item.product_id);
                     summary.invalidated_count = summary.invalidated_count.saturating_add(1);
-                    self.push_journal(
+                    self.push_entry_journal(
                         RenderGpuResidencyJournalAction::Invalidated,
-                        previous.product_id,
-                        previous.generation,
-                        previous.requested_residency,
-                        previous.priority,
-                        previous.hard_pin,
-                        Some(previous.cache_handle),
-                        vec![diagnostic],
+                        &previous,
+                        diagnostics,
                     );
                     self.allocate_entry(item, &mut summary);
                 }
@@ -227,6 +241,7 @@ impl RenderGpuResidencyResource {
         let entry = RenderGpuResidencyEntry {
             product_id: item.product_id,
             generation: item.generation,
+            source: item.source,
             requested_residency: item.requested_residency,
             priority: item.priority,
             hard_pin: item.hard_pin,
@@ -236,14 +251,9 @@ impl RenderGpuResidencyResource {
         };
         self.entries.insert(item.product_id, entry.clone());
         summary.allocated_count = summary.allocated_count.saturating_add(1);
-        self.push_journal(
+        self.push_entry_journal(
             RenderGpuResidencyJournalAction::Allocated,
-            entry.product_id,
-            entry.generation,
-            entry.requested_residency,
-            entry.priority,
-            entry.hard_pin,
-            Some(entry.cache_handle),
+            &entry,
             Vec::new(),
         );
     }
@@ -275,14 +285,9 @@ impl RenderGpuResidencyResource {
             };
             if let Some(entry) = self.entries.remove(&product_id) {
                 summary.evicted_count = summary.evicted_count.saturating_add(1);
-                self.push_journal(
+                self.push_entry_journal(
                     RenderGpuResidencyJournalAction::Evicted,
-                    entry.product_id,
-                    entry.generation,
-                    entry.requested_residency,
-                    entry.priority,
-                    entry.hard_pin,
-                    Some(entry.cache_handle),
+                    &entry,
                     Vec::new(),
                 );
             }
@@ -294,41 +299,42 @@ impl RenderGpuResidencyResource {
         product_id: ProductIdentity,
         diagnostics: Vec<FieldProductDiagnostic>,
     ) {
-        self.push_journal(
-            RenderGpuResidencyJournalAction::Rejected,
+        self.push_journal(RenderGpuResidencyJournalEntry {
+            action: RenderGpuResidencyJournalAction::Rejected,
             product_id,
-            0,
-            ProductResidency::Missing,
-            0,
-            false,
-            None,
-            diagnostics,
-        );
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn push_journal(
-        &mut self,
-        action: RenderGpuResidencyJournalAction,
-        product_id: ProductIdentity,
-        generation: u64,
-        requested_residency: ProductResidency,
-        priority: i32,
-        hard_pin: bool,
-        cache_handle: Option<RenderGpuCacheHandle>,
-        diagnostics: Vec<FieldProductDiagnostic>,
-    ) {
-        self.diagnostics.extend(diagnostics.iter().cloned());
-        self.journal.push(RenderGpuResidencyJournalEntry {
-            action,
-            product_id,
-            generation,
-            requested_residency,
-            priority,
-            hard_pin,
-            cache_handle,
+            generation: 0,
+            source: None,
+            requested_residency: ProductResidency::Missing,
+            priority: 0,
+            hard_pin: false,
+            cache_handle: None,
             diagnostics,
         });
+    }
+
+    fn push_entry_journal(
+        &mut self,
+        action: RenderGpuResidencyJournalAction,
+        entry: &RenderGpuResidencyEntry,
+        diagnostics: Vec<FieldProductDiagnostic>,
+    ) {
+        self.push_journal(RenderGpuResidencyJournalEntry {
+            action,
+            product_id: entry.product_id,
+            generation: entry.generation,
+            source: Some(entry.source),
+            requested_residency: entry.requested_residency,
+            priority: entry.priority,
+            hard_pin: entry.hard_pin,
+            cache_handle: Some(entry.cache_handle),
+            diagnostics,
+        });
+    }
+
+    fn push_journal(&mut self, entry: RenderGpuResidencyJournalEntry) {
+        let diagnostics = &entry.diagnostics;
+        self.diagnostics.extend(diagnostics.iter().cloned());
+        self.journal.push(entry);
     }
 }
 
@@ -342,6 +348,7 @@ struct ResidencyPlan {
 struct ResidencyPlanItem {
     product_id: ProductIdentity,
     generation: u64,
+    source: RenderGpuResidencySourceState,
     requested_residency: ProductResidency,
     priority: i32,
     hard_pin: bool,
@@ -401,6 +408,7 @@ fn build_residency_plan(selections: &[RenderProductSelection]) -> ResidencyPlan 
                 .or_insert_with(|| ResidencyPlanItem {
                     product_id: request.product_id,
                     generation: product.generation,
+                    source: RenderGpuResidencySourceState::from_selected_product(product),
                     requested_residency: request.residency,
                     priority: request.priority,
                     hard_pin: request.hard_pin,
@@ -419,10 +427,8 @@ fn build_residency_plan(selections: &[RenderProductSelection]) -> ResidencyPlan 
 
 fn selected_state_conflicts(left: &RenderSelectedProduct, right: &RenderSelectedProduct) -> bool {
     left.generation != right.generation
-        || left.freshness != right.freshness
-        || left.residency != right.residency
-        || left.authority_class != right.authority_class
-        || left.query_policy != right.query_policy
+        || RenderGpuResidencySourceState::from_selected_product(left)
+            != RenderGpuResidencySourceState::from_selected_product(right)
 }
 
 fn residency_request_diagnostics(
@@ -485,10 +491,12 @@ fn selected_state_conflict_diagnostic(
     FieldProductDiagnostic::blocking(
         FieldProductDiagnosticCode::GenerationMismatch,
         format!(
-            "render gpu residency received conflicting selected product state for product {} (generation {} vs {})",
+            "render gpu residency received conflicting selected product state for product {} (generation {} vs {}, source {:?} vs {:?})",
             previous.product_id.raw(),
             previous.generation,
-            next.generation
+            next.generation,
+            RenderGpuResidencySourceState::from_selected_product(previous),
+            RenderGpuResidencySourceState::from_selected_product(next)
         ),
     )
     .for_product(previous.product_id)
@@ -512,6 +520,21 @@ fn generation_invalidated_diagnostic(
         format!(
             "renderer gpu cache generation changed from {} to {}",
             previous.generation, next_generation
+        ),
+    )
+    .for_product(previous.product_id)
+}
+
+fn source_state_invalidated_diagnostic(
+    previous: &RenderGpuResidencyEntry,
+    next_source: RenderGpuResidencySourceState,
+) -> FieldProductDiagnostic {
+    FieldProductDiagnostic::new(
+        FieldProductDiagnosticCode::GenerationMismatch,
+        FieldProductDiagnosticSeverity::Warning,
+        format!(
+            "renderer gpu cache source contract changed for generation {} ({:?} -> {:?})",
+            previous.generation, previous.source, next_source
         ),
     )
     .for_product(previous.product_id)
@@ -589,6 +612,11 @@ mod tests {
         let entry = residency.entry(ProductIdentity::new(7)).unwrap();
         assert_eq!(entry.generation, 1);
         assert_eq!(entry.cache_handle, RenderGpuCacheHandle::new(1));
+        assert_eq!(entry.source.scale_band, ProductScaleBand::Preview);
+        assert_eq!(
+            entry.source.query_policy,
+            ProductQueryPolicy::StrictCurrentOnly
+        );
         assert!(entry.hard_pin);
     }
 
@@ -626,6 +654,53 @@ mod tests {
         assert!(residency.journal().iter().any(|entry| {
             entry.action == RenderGpuResidencyJournalAction::Invalidated
                 && entry.product_id == ProductIdentity::new(7)
+        }));
+    }
+
+    #[test]
+    fn render_product_selection_source_contract_changes_invalidate_derived_residency() {
+        let mut residency = RenderGpuResidencyResource::default();
+        let budget = RenderGpuResidencyBudgetResource::default();
+        residency.derive_from_selections(&[selection("main", 7, 1, 100, true)], &budget);
+
+        let mut changed = selection("main", 7, 1, 100, true);
+        changed.selected_products[0].scale_band = ProductScaleBand::Final;
+        let summary = residency.derive_from_selections(&[changed], &budget);
+
+        assert_eq!(summary.invalidated_count, 1);
+        assert_eq!(summary.allocated_count, 1);
+        assert_eq!(summary.diagnostic_count, 1);
+        let entry = residency.entry(ProductIdentity::new(7)).unwrap();
+        assert_eq!(entry.generation, 1);
+        assert_eq!(entry.cache_handle, RenderGpuCacheHandle::new(2));
+        assert_eq!(entry.source.scale_band, ProductScaleBand::Final);
+        assert!(residency.journal().iter().any(|entry| {
+            entry.action == RenderGpuResidencyJournalAction::Invalidated
+                && entry.source.is_some()
+                && entry.diagnostics.iter().any(|diagnostic| {
+                    diagnostic.code == FieldProductDiagnosticCode::GenerationMismatch
+                })
+        }));
+    }
+
+    #[test]
+    fn render_product_selection_conflicting_source_state_rejected_by_derived_residency() {
+        let mut residency = RenderGpuResidencyResource::default();
+        let budget = RenderGpuResidencyBudgetResource::default();
+        let mut conflicting = selection("b", 7, 1, 100, true);
+        conflicting.selected_products[0].scale_band = ProductScaleBand::Final;
+
+        let summary = residency
+            .derive_from_selections(&[selection("a", 7, 1, 100, true), conflicting], &budget);
+
+        assert_eq!(summary.rejected_count, 1);
+        assert_eq!(summary.resident_count, 0);
+        assert_eq!(summary.diagnostic_count, 1);
+        assert!(residency.entry(ProductIdentity::new(7)).is_none());
+        assert!(residency.journal().iter().any(|entry| {
+            entry.action == RenderGpuResidencyJournalAction::Rejected
+                && entry.product_id == ProductIdentity::new(7)
+                && entry.source.is_none()
         }));
     }
 

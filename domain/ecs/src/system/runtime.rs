@@ -1,4 +1,5 @@
 use super::extract::{SystemParam, SystemParamError};
+use super::plan_report::RuntimePlanReport;
 use anyhow::{Result, anyhow};
 use scheduler::access::{AccessKey, SystemAccess};
 use scheduler::label::{ScheduleLabel, SystemSet, SystemSetKey};
@@ -712,6 +713,14 @@ impl Runtime {
 
     pub fn plan_for<L: ScheduleLabel>(&mut self) -> Option<&ExecutionPlan> {
         self.scheduler.plan_for::<L>()
+    }
+
+    pub fn plan_report_for<L: ScheduleLabel>(&mut self) -> Option<RuntimePlanReport> {
+        let plan = self.scheduler.plan_for::<L>()?.clone();
+        Some(RuntimePlanReport::from_plan(
+            &plan,
+            self.scheduler.systems(),
+        ))
     }
 
     pub fn scheduler(&mut self) -> &mut ExecutionScheduler<World> {

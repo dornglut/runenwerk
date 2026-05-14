@@ -77,11 +77,12 @@ items:
   validations:
   - cargo test -p ecs
   - cargo test -p scheduler
-  next_evidence: 2026-05-14 M5 consumer lag/backpressure diagnostics landed; F2/F3 remain.
-  current_decision: Continue only where lifecycle/finalization or plan reporting unblocks product jobs or diagnostics.
-  current_call: Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 parallel
-    batch landed M5 consumer lag/backpressure diagnostics; F2 and F3 remain open.
-  first_move: Close remaining lifecycle finalization and deterministic registration/plan reporting from net/ecs-runtime-prioritized-roadmap.md.
+  next_evidence: 2026-05-14 L0 substrate pilot added ECS-owned runtime plan reporting; M5 diagnostics are landed
+    and F2 lifecycle/finalization remains.
+  current_decision: Continue only where lifecycle/finalization unblocks product jobs or diagnostics.
+  current_call: Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 pilot
+    landed M5 consumer lag/backpressure diagnostics and F3 plan reporting; F2 remains open.
+  first_move: Close remaining lifecycle finalization from net/ecs-runtime-prioritized-roadmap.md.
   diagram_call:
   - F2 lifecycle and
   - F3 plan reporting
@@ -115,11 +116,11 @@ items:
   validations:
   - cargo test -p engine render_product_selection
   - cargo test -p engine
-  next_evidence: 2026-05-14 duplicate prepared-view producer ownership is rejected; R4/R6/R7 audit passed current contract
-    shape.
+  next_evidence: 2026-05-14 L0 substrate pilot added view-ordered product selection snapshots, selected-source
+    residency invalidation, and conflict rejection for selected source state.
   current_decision: Continue as contract-following support, not renderer-owned world truth.
-  current_call: Implement only as contract-following follow-up, not as renderer-owned world truth. The 2026-05-14 parallel
-    batch added a prepared-view ownership guard across producers.
+  current_call: Implement only as contract-following follow-up, not as renderer-owned world truth. The 2026-05-14 pilot
+    added prepared-view ownership guards plus selected-source residency derivation and invalidation.
   first_move: Continue current R4/R6/R7 support from engine/plugins/render/docs/roadmap.md and render-product-surface-foundation-bundle-design.md.
   diagram_call:
   - product selection and

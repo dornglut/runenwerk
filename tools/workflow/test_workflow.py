@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,7 @@ import yaml
 
 from generate_roadmap_docs import render_outputs
 from parallel_batch import build_manifest, render_worker_prompt
-from roadmap_state import RoadmapState, WorkflowError, load_roadmap, select_batch_candidates, validate_changed_paths, validate_write_scopes, write_schema_files
+from roadmap_state import RoadmapState, WorkflowError, changed_files_for_worktree, load_roadmap, select_batch_candidates, validate_batch_against_roadmap, validate_changed_paths, validate_write_scopes, write_schema_files
 
 
 def valid_state() -> dict:
@@ -147,10 +148,72 @@ def test_batch_manifest_and_worker_prompt() -> None:
     roadmap = RoadmapState.model_validate(valid_state())
     manifest = build_manifest("batch-test", "test", [roadmap.items[0]], Path("docs-site/src/content/docs/reports/batches/batch-test"))
     assert manifest.items[0].branch == "codex/batch-test-wr-001"
+    assert manifest.items[0].prompt_path.endswith("/wr-001.md")
     prompt = render_worker_prompt(manifest, roadmap.items[0], manifest.items[0])
+    assert prompt.startswith("---\ntitle: Worker Prompt WR-001")
     assert "roadmap-items.yaml" in prompt
+
+
+def test_batch_approval_validation_rejects_blocked_items() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[1]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+
+    assert validate_batch_against_roadmap(manifest, roadmap) == [
+        "WR-002: roadmap gate is not implementation-ready"
+    ]
+
+
+def test_batch_approval_validation_rejects_stale_scope() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    stale_item = manifest.items[0].model_copy(update={"write_scopes": ["apps/other"]})
+    stale_manifest = manifest.model_copy(update={"items": [stale_item]})
+
+    assert validate_batch_against_roadmap(stale_manifest, roadmap) == [
+        "WR-001: write_scopes are stale"
+    ]
 
 
 def test_scope_enforcement_rejects_out_of_scope_paths() -> None:
     violations = validate_changed_paths(["apps/a/file.rs", "engine/src/lib.rs"], ["apps/a"])
     assert violations == ["engine/src/lib.rs"]
+
+
+def test_changed_files_for_worktree_includes_dirty_staged_and_untracked_files() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        worktree = Path(temp_dir)
+        subprocess.run(["git", "init"], cwd=worktree, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "config", "user.name", "Workflow Test"], cwd=worktree, check=True)
+        subprocess.run(["git", "config", "user.email", "workflow@example.invalid"], cwd=worktree, check=True)
+
+        (worktree / "tracked.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "tracked.txt"], cwd=worktree, check=True)
+        subprocess.run(["git", "commit", "-m", "base"], cwd=worktree, check=True, stdout=subprocess.DEVNULL)
+        base_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=worktree,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.strip()
+
+        (worktree / "tracked.txt").write_text("dirty\n", encoding="utf-8")
+        (worktree / "staged.txt").write_text("staged\n", encoding="utf-8")
+        subprocess.run(["git", "add", "staged.txt"], cwd=worktree, check=True)
+        (worktree / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+
+        assert changed_files_for_worktree(worktree, base_sha) == [
+            "staged.txt",
+            "tracked.txt",
+            "untracked.txt",
+        ]

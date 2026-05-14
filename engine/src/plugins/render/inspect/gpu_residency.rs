@@ -19,6 +19,11 @@ pub struct RenderGpuResidencyInspection {
 pub struct RenderGpuResidencyInspectionEntry {
     pub product_id: u64,
     pub generation: u64,
+    pub source_scale_band: String,
+    pub source_freshness: String,
+    pub source_residency: String,
+    pub source_authority_class: String,
+    pub source_query_policy: String,
     pub requested_residency: String,
     pub priority: i32,
     pub hard_pin: bool,
@@ -64,6 +69,11 @@ fn inspect_entry(entry: &RenderGpuResidencyEntry) -> RenderGpuResidencyInspectio
     RenderGpuResidencyInspectionEntry {
         product_id: entry.product_id.raw(),
         generation: entry.generation,
+        source_scale_band: format!("{:?}", entry.source.scale_band),
+        source_freshness: format!("{:?}", entry.source.freshness),
+        source_residency: format!("{:?}", entry.source.product_residency),
+        source_authority_class: format!("{:?}", entry.source.authority_class),
+        source_query_policy: format!("{:?}", entry.source.query_policy),
         requested_residency: format!("{:?}", entry.requested_residency),
         priority: entry.priority,
         hard_pin: entry.hard_pin,

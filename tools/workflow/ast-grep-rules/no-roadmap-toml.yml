@@ -3,4 +3,5 @@ language: Python
 message: roadmap-items.yaml is the canonical roadmap source; do not reintroduce roadmap-items.toml references in workflow code.
 severity: error
 rule:
+  kind: string
   regex: roadmap-items\.toml
