@@ -32,10 +32,30 @@ tasks:
       - uv run python tools/workflow/roadmap_state.py schema --check
       - uv run python tools/workflow/generate_roadmap_docs.py check
 
+  roadmap:intake:
+    desc: Create a roadmap intake proposal for a new design or change idea.
+    cmds:
+      - uv run python tools/workflow/roadmap_intake.py intake {{.CLI_ARGS}}
+
+  roadmap:apply-intake:
+    desc: Apply an approved roadmap intake proposal, then regenerate roadmap docs and PUML.
+    cmds:
+      - uv run python tools/workflow/roadmap_intake.py apply-intake {{.CLI_ARGS}}
+
+  roadmap:promote:
+    desc: Promote an existing roadmap item to a new planning state with evidence.
+    cmds:
+      - uv run python tools/workflow/roadmap_intake.py promote {{.CLI_ARGS}}
+
   batch:propose:
     desc: Propose a parallel roadmap batch.
     cmds:
       - uv run python tools/workflow/parallel_batch.py propose {{.CLI_ARGS}}
+
+  batch:kickoff:
+    desc: Create a one-line next-roadmap batch proposal and print the generated workflow.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py kickoff {{.CLI_ARGS}}
 
   batch:approve:
     desc: Mark a batch manifest as approved.
@@ -46,6 +66,11 @@ tasks:
     desc: Create worker prompts and git worktrees for an approved batch.
     cmds:
       - uv run python tools/workflow/parallel_batch.py prepare {{.CLI_ARGS}}
+
+  batch:worker-prompt:
+    desc: Print or write a generated worker prompt for one batch item.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py worker-prompt {{.CLI_ARGS}}
 
   batch:scope-check:
     desc: Validate worker changed files against approved write scopes.

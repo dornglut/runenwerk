@@ -25,6 +25,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - [Crate Design](./crate-design.md)
 - [Documentation Refactor](./docs-refactor.md)
 - [Implementation Batch](./implementation-batch.md)
+- [New Design Intake](./new-design-intake.md)
 - [Parallel Roadmap Batch](./parallel-roadmap-batch.md)
 - [Phase Completion Drift Check](./phase-completion-drift-check.md)
 - [Roadmap Milestone Kickoff](./roadmap-milestone-kickoff.md)
