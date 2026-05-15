@@ -18,9 +18,10 @@ use crate::{
 };
 use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
-    AuthoredUiNodePath, AuthoredUiTemplate, FormedInteractionModel, FormedMenuStackScope,
-    FormedRetainedUiProduct, FormedScrollOwner, FormedUiRoute, NormalizedUiTemplate,
-    UiAvailability, UiAvailabilityBinding, UiDefinitionContext, UiMenuDismissPolicyDefinition,
+    AuthoredUiNodePath, AuthoredUiTemplate, FormedInteractionModel, FormedMenuSizing,
+    FormedMenuStackScope, FormedRetainedUiProduct, FormedScrollOwner, FormedUiRoute,
+    NormalizedUiTemplate, UiAvailability, UiAvailabilityBinding, UiDefinitionContext,
+    UiMenuDismissPolicyDefinition, UiMenuItemWidthDefinition, UiMenuOverflowDefinition,
     UiRouteSlotId, UiScrollBoundaryPolicyDefinition, UiValue, form_retained_ui,
     normalize_authored_template,
 };
@@ -187,6 +188,12 @@ pub fn build_defined_toolbar_menu_popup_with_binding(
         parent_scope_id: None,
         dismiss: UiMenuDismissPolicyDefinition::OutsidePointerDown,
         focus_return: Some(anchor),
+    });
+    interaction_model.push_menu_sizing(FormedMenuSizing {
+        popup_widget_id: TOOLBAR_MENU_POPUP_WIDGET_ID,
+        list_widget_id: TOOLBAR_MENU_POPUP_LIST_WIDGET_ID,
+        item_width: UiMenuItemWidthDefinition::FillToMenuWidth,
+        overflow: UiMenuOverflowDefinition::ScrollWhenClamped,
     });
     interaction_model.push_scroll_owner(FormedScrollOwner {
         widget_id: TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID,

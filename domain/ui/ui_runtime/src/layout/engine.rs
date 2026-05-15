@@ -1658,6 +1658,95 @@ mod tests {
     }
 
     #[test]
+    fn popup_menu_stretches_scroll_list_items_after_clamp() {
+        let anchor_id = WidgetId(2);
+        let popup_id = WidgetId(3);
+        let scroll_id = WidgetId(4);
+        let list_id = WidgetId(5);
+        let theme = ui_theme::ThemeTokens::default();
+        let text_style = ui_text::TextStyle::default();
+        let mut menu_items = Vec::new();
+        for index in 0..10 {
+            let mut button = ButtonNode::new(
+                format!("Long menu item label {index}"),
+                text_style.clone(),
+                theme.clone(),
+            );
+            button.fill_width = true;
+            menu_items.push(UiNode::new(
+                WidgetId(20 + index),
+                UiNodeKind::Button(button),
+            ));
+        }
+
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![
+                UiNode::new(
+                    anchor_id,
+                    UiNodeKind::Button(ButtonNode::new("Menu", text_style, theme.clone())),
+                ),
+                UiNode::with_children(
+                    popup_id,
+                    UiNodeKind::Popup(PopupNode::anchored_outside(
+                        anchor_id,
+                        PopupSide::Bottom,
+                        PopupAlign::Start,
+                        PopupFlipPolicy::FlipToFit,
+                        theme.clone(),
+                    )),
+                    vec![UiNode::with_children(
+                        scroll_id,
+                        UiNodeKind::Scroll(ScrollNode::vertical(theme.clone())),
+                        vec![UiNode::with_children(
+                            list_id,
+                            UiNodeKind::Stack(StackNode::vertical(theme.spacing.xs)),
+                            menu_items,
+                        )],
+                    )],
+                ),
+            ],
+        ));
+
+        let bounds = UiRect::new(0.0, 0.0, 180.0, 128.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let popup = layouts.get(&popup_id).expect("popup should lay out");
+        let scroll = layouts
+            .get(&scroll_id)
+            .expect("scroll fallback should lay out");
+        let list = layouts.get(&list_id).expect("menu list should lay out");
+        let first_item = layouts
+            .get(&WidgetId(20))
+            .expect("first menu item should lay out");
+
+        assert!(
+            popup.bounds.width <= bounds.width,
+            "popup width should clamp to available frame width"
+        );
+        assert!(
+            popup.bounds.height < popup.measured_size.height,
+            "popup should retain measured height while clamping visible height"
+        );
+        assert_eq!(
+            scroll.bounds, popup.content_bounds,
+            "single scroll child should stretch to popup content bounds after clamp"
+        );
+        assert_eq!(
+            list.bounds.width, scroll.content_bounds.width,
+            "menu list should fill the clamped scroll viewport width"
+        );
+        assert_eq!(
+            first_item.bounds.width, list.content_bounds.width,
+            "fill-width menu items should stretch to measured menu width"
+        );
+        assert!(
+            list.bounds.height > scroll.content_bounds.height,
+            "menu list should preserve overflow for scroll fallback"
+        );
+    }
+
+    #[test]
     fn divider_layout_respects_axis_thickness_and_fixed_length() {
         let horizontal_id = WidgetId(10);
         let vertical_id = WidgetId(11);

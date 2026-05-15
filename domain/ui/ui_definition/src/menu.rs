@@ -1,8 +1,11 @@
 //! Generic menu definitions.
 
 use crate::{
-    availability::UiAvailabilityBinding, identity::UiNodeId,
-    interaction::UiMenuStackScopeDefinition, slot::UiRouteSlotRef, value::UiValueBinding,
+    availability::UiAvailabilityBinding,
+    identity::UiNodeId,
+    interaction::{UiMenuSizingDefinition, UiMenuStackScopeDefinition},
+    slot::UiRouteSlotRef,
+    value::UiValueBinding,
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,5 +22,7 @@ pub struct UiMenuDefinition {
     pub id: String,
     #[serde(default)]
     pub scope: Option<UiMenuStackScopeDefinition>,
+    #[serde(default)]
+    pub sizing: Option<UiMenuSizingDefinition>,
     pub items: Vec<UiMenuItemDefinition>,
 }

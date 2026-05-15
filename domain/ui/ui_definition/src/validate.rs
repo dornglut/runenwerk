@@ -29,6 +29,15 @@ fn validate_menu(menu: &UiMenuDefinition, diagnostics: &mut Vec<UiDefinitionDiag
             "menu id must not be empty",
         ));
     }
+    if !menu.items.is_empty() && menu.sizing.is_none() {
+        diagnostics.push(UiDefinitionDiagnostic::error(
+            "ui.definition.menu.sizing.missing",
+            format!(
+                "menu '{}' with items must declare menu sizing policy",
+                menu.id
+            ),
+        ));
+    }
     let Some(scope) = menu.scope.as_ref() else {
         return;
     };
@@ -133,6 +142,7 @@ mod tests {
                     dismiss: UiMenuDismissPolicyDefinition::OutsidePointerDown,
                     focus_return: UiMenuFocusReturnDefinition::Anchor,
                 }),
+                sizing: None,
                 items: Vec::new(),
             }],
         };
@@ -144,6 +154,39 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.code == "ui.definition.menu_scope.parent.self"),
             "menu stack validation should reject self-parented scopes: {diagnostics:?}",
+        );
+    }
+
+    #[test]
+    fn menu_items_require_sizing_policy() {
+        let template = AuthoredUiTemplate {
+            id: "test.menu".into(),
+            root: UiNodeDefinition::Panel {
+                id: "root".into(),
+                children: Vec::new(),
+                availability: None,
+            },
+            templates: Vec::new(),
+            menus: vec![UiMenuDefinition {
+                id: "file".to_string(),
+                scope: None,
+                sizing: None,
+                items: vec![crate::UiMenuItemDefinition {
+                    id: "save".into(),
+                    label: crate::UiValueBinding::Static(crate::UiValue::Text("Save".to_string())),
+                    route: None,
+                    availability: None,
+                }],
+            }],
+        };
+
+        let diagnostics = validate_authored_template(&template);
+
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "ui.definition.menu.sizing.missing"),
+            "menu validation should reject item menus without sizing policy: {diagnostics:?}",
         );
     }
 }

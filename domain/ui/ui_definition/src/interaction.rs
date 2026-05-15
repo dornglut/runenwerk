@@ -47,17 +47,23 @@ pub struct UiMenuStackScopeDefinition {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FormedInteractionModel {
     pub menu_scopes: Vec<FormedMenuStackScope>,
+    pub menu_sizing: Vec<FormedMenuSizing>,
     pub scroll_owners: Vec<FormedScrollOwner>,
 }
 
 impl FormedInteractionModel {
     pub fn extend(&mut self, other: FormedInteractionModel) {
         self.menu_scopes.extend(other.menu_scopes);
+        self.menu_sizing.extend(other.menu_sizing);
         self.scroll_owners.extend(other.scroll_owners);
     }
 
     pub fn push_menu_scope(&mut self, scope: FormedMenuStackScope) {
         self.menu_scopes.push(scope);
+    }
+
+    pub fn push_menu_sizing(&mut self, sizing: FormedMenuSizing) {
+        self.menu_sizing.push(sizing);
     }
 
     pub fn push_scroll_owner(&mut self, owner: FormedScrollOwner) {
@@ -76,8 +82,36 @@ pub struct FormedMenuStackScope {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormedMenuSizing {
+    pub popup_widget_id: WidgetId,
+    pub list_widget_id: WidgetId,
+    pub item_width: UiMenuItemWidthDefinition,
+    pub overflow: UiMenuOverflowDefinition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormedScrollOwner {
     pub widget_id: WidgetId,
     pub axes: Vec<Axis>,
     pub boundary: UiScrollBoundaryPolicyDefinition,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiMenuItemWidthDefinition {
+    #[default]
+    FillToMenuWidth,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiMenuOverflowDefinition {
+    #[default]
+    ScrollWhenClamped,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UiMenuSizingDefinition {
+    #[serde(default)]
+    pub item_width: UiMenuItemWidthDefinition,
+    #[serde(default)]
+    pub overflow: UiMenuOverflowDefinition,
 }

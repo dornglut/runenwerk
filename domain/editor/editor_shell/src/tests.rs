@@ -26,10 +26,11 @@ use crate::{
     tab_close_button_widget_id, tab_stack_action_menu_popup_widget_id,
     tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
     tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_popup_widget_id,
-    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
-    tool_surface_definition_id, tool_surface_kind_definition_key,
-    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_list_widget_id,
+    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
+    tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
+    tool_surface_kind_definition_key, toolbar_workspace_close_widget_id,
+    workspace_split_host_widget_id,
 };
 
 #[test]
@@ -346,6 +347,21 @@ fn active_top_bar_menu_projects_as_popup_without_pushing_content_down() {
             .iter()
             .any(|owner| owner.widget_id == crate::TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID),
         "toolbar popup scroll should expose a formed Interaction V2 scroll owner",
+    );
+    assert!(
+        active
+            .projection_artifacts
+            .interaction_model
+            .menu_sizing
+            .iter()
+            .any(|sizing| {
+                sizing.popup_widget_id == crate::TOOLBAR_MENU_POPUP_WIDGET_ID
+                    && sizing.list_widget_id == crate::TOOLBAR_MENU_POPUP_LIST_WIDGET_ID
+                    && sizing.item_width
+                        == ui_definition::UiMenuItemWidthDefinition::FillToMenuWidth
+                    && sizing.overflow == ui_definition::UiMenuOverflowDefinition::ScrollWhenClamped
+            }),
+        "toolbar popup should expose formed Interaction V2 menu sizing",
     );
 }
 
@@ -1272,6 +1288,22 @@ fn tab_stack_surface_submenu_keeps_parent_menu_stack_scope() {
             .iter()
             .any(|owner| owner.widget_id == tab_stack_surface_menu_scroll_widget_id(viewport_stack)),
         "surface submenu scroll should be a formed Interaction V2 scroll owner",
+    );
+    assert!(
+        active_build
+            .projection_artifacts
+            .interaction_model
+            .menu_sizing
+            .iter()
+            .any(|sizing| {
+                sizing.popup_widget_id == tab_stack_surface_menu_popup_widget_id(viewport_stack)
+                    && sizing.list_widget_id
+                        == tab_stack_surface_menu_list_widget_id(viewport_stack)
+                    && sizing.item_width
+                        == ui_definition::UiMenuItemWidthDefinition::FillToMenuWidth
+                    && sizing.overflow == ui_definition::UiMenuOverflowDefinition::ScrollWhenClamped
+            }),
+        "surface submenu should expose formed Interaction V2 menu sizing",
     );
 }
 

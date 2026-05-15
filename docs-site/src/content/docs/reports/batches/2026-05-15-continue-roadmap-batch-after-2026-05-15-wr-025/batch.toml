@@ -1,6 +1,6 @@
 id = "2026-05-15-continue-roadmap-batch-after-2026-05-15-wr-025"
 goal = "Continue roadmap batch after 2026-05-15-wr-025-iv2-menu-scroll: WR-025"
-approval_state = "proposed"
+approval_state = "approved"
 base_branch = "main"
 base_sha = "e14acfe234b29743142ed0c770f0297a2602ec88"
 execution_mode = "worktree"
@@ -9,8 +9,8 @@ integration_status = "not_started"
 closeout_status = "not_started"
 integrated_target = ""
 integrated_sha = ""
-validation_results = []
-roadmap_evidence_updates = []
+validation_results = ["2026-05-15T20:31:46+00:00 batch validate passed: host batch validation; cargo test -p ui_definition, cargo test -p ui_runtime scroll, cargo test -p ui_runtime popup, cargo test -p ui_runtime menu, cargo test -p editor_shell, cargo test -p runenwerk_editor viewport, cargo test -p runenwerk_editor input_bridge, cargo check -p runenwerk_editor, task roadmap:render, task roadmap:validate, task roadmap:check, task docs:validate"]
+roadmap_evidence_updates = ["Recorded IV2-menu-sizing as a landed Interaction V2 slice in UI/editor roadmaps and roadmap source."]
 tooling_hardening = []
 
 [[items]]

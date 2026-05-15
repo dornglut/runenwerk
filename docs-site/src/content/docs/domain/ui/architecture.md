@@ -162,6 +162,13 @@ Landed slice status as of 2026-05-15:
   `domain/ui/ui_definition/src/form.rs::form_retained_ui` and reports wheel
   boundary ownership in
   `domain/ui/ui_runtime/src/input/pointer.rs::apply_scroll_wheel_delta`.
+- `IV2-menu-sizing` now carries formed menu-sizing records in
+  `domain/ui/ui_definition/src/interaction.rs`, rejects item menus without
+  sizing policy in `domain/ui/ui_definition/src/validate.rs::validate_menu`,
+  and proves retained popup clamp plus fill-width scroll fallback in
+  `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`. Toolbar and
+  tab-stack adapters publish the formed sizing records from
+  `domain/editor/editor_shell/src/composition/`.
 - App production viewport input remains app-owned. The guard is
   `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`.
 

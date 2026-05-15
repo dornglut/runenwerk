@@ -4,8 +4,9 @@
 use std::collections::BTreeMap;
 
 use ui_definition::{
-    FormedInteractionModel, FormedMenuStackScope, FormedScrollOwner, FormedUiRoute,
-    UiMenuDismissPolicyDefinition, UiScrollBoundaryPolicyDefinition,
+    FormedInteractionModel, FormedMenuSizing, FormedMenuStackScope, FormedScrollOwner,
+    FormedUiRoute, UiMenuDismissPolicyDefinition, UiMenuItemWidthDefinition,
+    UiMenuOverflowDefinition, UiScrollBoundaryPolicyDefinition,
 };
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiInsets};
@@ -633,6 +634,11 @@ fn tab_stack_popup_interaction_model(
                 active_menu.anchor_widget_id,
                 None,
             );
+            push_tab_stack_menu_sizing(
+                &mut model,
+                tab_stack_action_menu_popup_widget_id(active_menu.tab_stack_id),
+                tab_stack_action_menu_list_widget_id(active_menu.tab_stack_id),
+            );
             push_tab_stack_scroll_owner(
                 &mut model,
                 tab_stack_action_menu_scroll_widget_id(active_menu.tab_stack_id),
@@ -647,12 +653,22 @@ fn tab_stack_popup_interaction_model(
                 tab_stack_container_widget_id(active_menu.tab_stack_id),
                 None,
             );
+            push_tab_stack_menu_sizing(
+                &mut model,
+                tab_stack_action_menu_popup_widget_id(active_menu.tab_stack_id),
+                tab_stack_action_menu_list_widget_id(active_menu.tab_stack_id),
+            );
             push_tab_stack_menu_scope(
                 &mut model,
                 tab_stack_surface_kind_scope_id(active_menu.tab_stack_id),
                 tab_stack_surface_menu_popup_widget_id(active_menu.tab_stack_id),
                 active_menu.anchor_widget_id,
                 Some(parent_scope),
+            );
+            push_tab_stack_menu_sizing(
+                &mut model,
+                tab_stack_surface_menu_popup_widget_id(active_menu.tab_stack_id),
+                tab_stack_surface_menu_list_widget_id(active_menu.tab_stack_id),
             );
             push_tab_stack_scroll_owner(
                 &mut model,
@@ -670,6 +686,11 @@ fn tab_stack_popup_interaction_model(
                 tab_stack_new_surface_menu_popup_widget_id(active_menu.tab_stack_id),
                 active_menu.anchor_widget_id,
                 None,
+            );
+            push_tab_stack_menu_sizing(
+                &mut model,
+                tab_stack_new_surface_menu_popup_widget_id(active_menu.tab_stack_id),
+                tab_stack_new_surface_menu_list_widget_id(active_menu.tab_stack_id),
             );
             push_tab_stack_scroll_owner(
                 &mut model,
@@ -702,6 +723,19 @@ fn push_tab_stack_scroll_owner(model: &mut FormedInteractionModel, widget_id: Wi
         widget_id,
         axes: vec![Axis::Vertical],
         boundary: UiScrollBoundaryPolicyDefinition::ConsumeAtBoundary,
+    });
+}
+
+fn push_tab_stack_menu_sizing(
+    model: &mut FormedInteractionModel,
+    popup_widget_id: WidgetId,
+    list_widget_id: WidgetId,
+) {
+    model.push_menu_sizing(FormedMenuSizing {
+        popup_widget_id,
+        list_widget_id,
+        item_width: UiMenuItemWidthDefinition::FillToMenuWidth,
+        overflow: UiMenuOverflowDefinition::ScrollWhenClamped,
     });
 }
 

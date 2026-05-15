@@ -94,10 +94,11 @@ Each slice is defined in
 [Editor UI Runtime V2 and Interaction Formation Design](../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md)
 and must be consumed as a contract by downstream retained UI work.
 
-As of 2026-05-15, the first code-bearing retained slice has landed for
-`IV2-menu-stack` and `IV2-scroll-ownership`. The owning implementation entry
+As of 2026-05-15, code-bearing retained slices have landed for
+`IV2-menu-stack`, `IV2-scroll-ownership`, and `IV2-menu-sizing`. The owning implementation entry
 points are `domain/ui/ui_definition/src/interaction.rs`,
 `domain/ui/ui_runtime/src/input/pointer.rs::dispatch_pointer_event`,
+`domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`,
 `domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`, and
 the toolbar/tab-stack adapters in `domain/editor/editor_shell/src/composition/`.
 The remaining Interaction V2 slices are still design-gated before WR-024 shell

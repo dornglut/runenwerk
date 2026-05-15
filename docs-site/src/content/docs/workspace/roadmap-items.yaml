@@ -1028,17 +1028,17 @@ items:
   - task roadmap:validate
   - task roadmap:check
   - task docs:validate
-  next_evidence: Remaining retained UI migration slices after the first code-bearing IV2-menu-stack and IV2-scroll-ownership
-    guard slice landed; next work should consume those contracts for WR-024 shell polish or define the next named Interaction
-    V2 contract slice before implementation.
+  next_evidence: Remaining retained UI migration slices after code-bearing IV2-menu-stack, IV2-scroll-ownership, and
+    IV2-menu-sizing guard slices landed; next work should consume those contracts for WR-024 shell polish or define the
+    next named Interaction V2 contract slice before implementation.
   current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
     while keeping retained UI as the first execution target and renderer output as derived product data.
-  current_call: Accepted architecture gate with first runtime-backed slice implemented for IV2-menu-stack plus IV2-scroll-ownership.
-    WR-024 shell polish may consume only the landed menu-stack/scroll-ownership contracts, while IV2-menu-sizing,
-    IV2-chrome-slots, dock/drop-zone, and status/viewport arbitration remain WR-025-gated.
-  first_move: Use the landed generic menu-stack and scroll-ownership spine before WR-024 touches popup dismissal, focus
-    return, popup layering, submenu anchoring, or viewport wheel fallback; define the next named Interaction V2 contract
-    slice before extending shell polish beyond those behaviors.
+  current_call: Accepted architecture gate with runtime-backed slices implemented for IV2-menu-stack, IV2-scroll-ownership,
+    and IV2-menu-sizing. WR-024 shell polish may consume only those landed contracts, while IV2-chrome-slots,
+    dock/drop-zone, and status/viewport arbitration remain WR-025-gated.
+  first_move: Use the landed generic menu-stack, scroll-ownership, and menu-sizing spine before WR-024 touches popup dismissal,
+    focus return, popup layering, submenu anchoring, viewport wheel fallback, popup clamp, or item fill; define the next named
+    Interaction V2 contract slice before extending shell polish beyond those behaviors.
   diagram_call:
   - retained UI first
   - named interaction slices

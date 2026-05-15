@@ -171,11 +171,20 @@ without recreating the same policy in several layers.
 - `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`
   guards the production bridge boundary without moving viewport input authority
   into `domain/ui`.
+- `IV2-menu-sizing` has its first code-bearing retained slice.
+  `domain/ui/ui_definition/src/interaction.rs` defines formed menu-sizing
+  records, `domain/ui/ui_definition/src/validate.rs::validate_menu` rejects
+  item menus without sizing policy, and
+  `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup` preserves clamped
+  menu measurement while stretching scroll-backed fill-width menu items.
+  `domain/editor/editor_shell/src/composition/toolbar_definition.rs::build_defined_toolbar_menu_popup_with_binding`
+  and `domain/editor/editor_shell/src/composition/build_editor_shell.rs::tab_stack_popup_interaction_model`
+  adapt toolbar and tab-stack menus into formed menu-sizing records.
 
-The viewport tools/options/details popup adapters, menu sizing, chrome slots,
+The viewport tools/options/details popup adapters, chrome slots,
 dock/drop-zone policy, and status/viewport arbitration remain separate WR-025
-slices. WR-024 may consume only the landed menu-stack and scroll-ownership
-behaviors until those later slices exist.
+slices. WR-024 may consume only the landed menu-stack, scroll-ownership, and
+menu-sizing behaviors until those later slices exist.
 
 ## Strangler Migration
 
@@ -190,10 +199,11 @@ Phase 2 - Menus And Scroll
 
 - Introduce popup stack/menu scope contracts.
 - Update retained runtime wheel dispatch to report ownership separately from mutation.
+- Introduce menu sizing policy for item fill, popup clamp, and scroll fallback.
 - Migrate toolbar menus, viewport tools/options/details, tab action menus, and Switch Type submenu.
 - Exit only after tests prove outside-dismiss, focus return, menu layer order,
-  nearest scroll owner selection, and viewport wheel rejection when UI owns the
-  event.
+  nearest scroll owner selection, menu item fill after popup clamp, and viewport
+  wheel rejection when UI owns the event.
 
 Phase 3 - Chrome
 
